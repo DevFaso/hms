@@ -179,20 +179,38 @@ extension KeycloakAuthService {
         idToken: String? = nil,
         expiresIn: TimeInterval = 3600
     ) {
+        // Fall back to a docker-compose default when the build is unconfigured
+        // (test harnesses, CI without scheme env vars). Never crash the host
+        // process — assertion-fail and bail so the caller sees a no-op.
         let issuerString = KeycloakConfig.isConfigured
             ? KeycloakConfig.issuer
             : "http://localhost:8081/realms/hms"
+        let redirectString = KeycloakConfig.redirectURI.isEmpty
+            ? "com.bitnesttechs.hms.patient.native:/oauth2redirect"
+            : KeycloakConfig.redirectURI
+        let clientId = KeycloakConfig.clientID.isEmpty
+            ? "hms-patient-ios"
+            : KeycloakConfig.clientID
+
+        guard
+            let authEndpoint = URL(string: "\(issuerString)/protocol/openid-connect/auth"),
+            let tokenEndpoint = URL(string: "\(issuerString)/protocol/openid-connect/token"),
+            let redirectURL = URL(string: redirectString)
+        else {
+            assertionFailure("acceptDebugSession: KeycloakConfig produced an unparseable URL (issuer=\(issuerString), redirect=\(redirectString)).")
+            return
+        }
         let serviceConfig = OIDServiceConfiguration(
-            authorizationEndpoint: URL(string: "\(issuerString)/protocol/openid-connect/auth")!,
-            tokenEndpoint: URL(string: "\(issuerString)/protocol/openid-connect/token")!
+            authorizationEndpoint: authEndpoint,
+            tokenEndpoint: tokenEndpoint
         )
 
         let authRequest = OIDAuthorizationRequest(
             configuration: serviceConfig,
-            clientId: KeycloakConfig.clientID,
+            clientId: clientId,
             clientSecret: nil,
             scopes: [OIDScopeOpenID, OIDScopeProfile, OIDScopeEmail],
-            redirectURL: URL(string: KeycloakConfig.redirectURI)!,
+            redirectURL: redirectURL,
             responseType: OIDResponseTypeCode,
             additionalParameters: nil
         )

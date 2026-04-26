@@ -16,9 +16,16 @@ import XCTest
 @MainActor
 final class KeycloakDebugBypassTests: XCTestCase {
 
+    override func setUp() {
+        super.setUp()
+        // KeycloakAuthService is a @MainActor singleton backed by the
+        // system Keychain — clear in setUp too so this suite is
+        // order-independent against any prior test that may have left
+        // a session behind (parallel execution, prior crash, etc.).
+        KeycloakAuthService.shared.clear()
+    }
+
     override func tearDown() {
-        // Clean up any session this test injected so other tests in the
-        // bundle do not see a populated keychain (parallel execution etc.).
         KeycloakAuthService.shared.clear()
         super.tearDown()
     }

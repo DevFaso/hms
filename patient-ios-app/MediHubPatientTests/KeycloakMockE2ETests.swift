@@ -142,21 +142,45 @@ final class KeycloakMockE2ETests: XCTestCase {
         request: URLRequest,
         timeout: TimeInterval
     ) throws -> (Data?, URLResponse?) {
-        let expectation = expectation(description: "URLSession dataTask")
+        // Captured shared state is written from the URLSession delegate
+        // queue and read on the test thread — guard the handoff with a
+        // lock to keep Thread Sanitizer happy and use XCTWaiter so a
+        // timeout fails fast with an actionable message instead of
+        // letting downstream unwraps confuse triage.
+        let responseLock = NSLock()
         var responseData: Data?
         var responseURLResponse: URLResponse?
         var responseError: Error?
 
+        let expectation = expectation(description: "URLSession dataTask: \(request.url?.absoluteString ?? "<unknown URL>")")
         URLSession.shared.dataTask(with: request) { data, urlResponse, error in
+            responseLock.lock()
             responseData = data
             responseURLResponse = urlResponse
             responseError = error
+            responseLock.unlock()
             expectation.fulfill()
         }.resume()
 
-        wait(for: [expectation], timeout: timeout)
-        if let error = responseError { throw error }
-        return (responseData, responseURLResponse)
+        let waitResult = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        guard waitResult == .completed else {
+            throw NSError(
+                domain: "KeycloakMockE2ETests",
+                code: 1,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Timed out after \(timeout)s waiting for \(request.url?.absoluteString ?? "<unknown URL>")",
+                ]
+            )
+        }
+
+        responseLock.lock()
+        let data = responseData
+        let urlResponse = responseURLResponse
+        let error = responseError
+        responseLock.unlock()
+        if let error { throw error }
+        return (data, urlResponse)
     }
 
     private static func getenvString(_ name: String) -> String? {
