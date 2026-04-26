@@ -21,7 +21,7 @@ function resolveFaroEnvironment(): { url: string; envName: string } | null {
   const configuredUrl = environment.faroCollectorUrl;
   if (!configuredUrl) return null;
 
-  const host = typeof globalThis !== 'undefined' ? globalThis.location?.hostname ?? '' : '';
+  const host = typeof globalThis !== 'undefined' ? (globalThis.location?.hostname ?? '') : '';
   const inferred = inferEnvFromHost(host);
 
   if (inferred && inferred !== environment.name) {
