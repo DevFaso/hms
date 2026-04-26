@@ -1,5 +1,9 @@
 export const environment = {
   production: false,
+  // Drives the `app.environment` tag on Faro telemetry. Must NOT be derived from
+  // the `production` boolean — UAT can ship as a production-mode Angular build
+  // (minified, no source maps) while still wanting the `uat` telemetry tag.
+  name: 'local' as 'local' | 'dev' | 'uat' | 'production',
   apiUrl: '/api',
   apiBase: '/api',
   gaTrackingId: '',

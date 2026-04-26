@@ -1,5 +1,6 @@
 export const environment = {
   production: true,
+  name: 'production' as 'local' | 'dev' | 'uat' | 'production',
   apiUrl: '/api',
   apiBase: '/api',
   gaTrackingId: 'G-XXXXXXXXXX',

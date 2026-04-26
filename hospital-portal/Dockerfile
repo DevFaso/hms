@@ -13,10 +13,16 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build for production (default config)
-# Override with --build-arg BUILD_CONFIG=uat for UAT builds
+# Build for production by default. Per-environment Railway services MUST set
+# BUILD_CONFIG as a Service Variable so it is exposed at build time:
+#   hms-frontend-uat  → BUILD_CONFIG=uat
+#   hms-frontend-dev  → BUILD_CONFIG=dev
+#   hms-frontend-prod → BUILD_CONFIG=production (or unset)
+# A wrong BUILD_CONFIG ships UAT/dev with environment.prod.ts, which routes
+# Faro RUM to the prod collector and tags traffic as `production`.
 ARG BUILD_CONFIG=production
-RUN npm run build -- --configuration ${BUILD_CONFIG}
+RUN echo ">>> Building hospital-portal with --configuration=${BUILD_CONFIG}" \
+ && npm run build -- --configuration ${BUILD_CONFIG}
 
 # Runtime stage — nginx to serve static files
 FROM nginx:alpine

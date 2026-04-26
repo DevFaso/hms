@@ -1,5 +1,6 @@
 export const environment = {
   production: false,
+  name: 'dev' as 'local' | 'dev' | 'uat' | 'production',
   apiUrl: '/api',
   apiBase: '/api',
   faroCollectorUrl: '',
