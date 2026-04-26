@@ -57,13 +57,7 @@ Phase 2 (test + UX hardening) is implemented on the same branch:
   non-success response, with a 410-specific fallback that points
   the user at SSO. Six new JVM unit tests
   (`AuthRepositoryTest`) cover the parser and the status-code
-  routing — runnable via `./gradlew test` once the Android wrapper
-  jar is restored.
-  - **Deferred**: a true Espresso UI test asserting "only the SSO
-    button is offered" is held back because the local Android
-    wrapper is broken (`gradle-wrapper.jar` not checked in) and host
-    Gradle can't load Java 21 build scripts. Tracked here for the
-    next sprint.
+  routing.
 - ✅ **G-5 (2.3)** New `MediHubPatientTests/KeycloakE2ETests.swift`
   pins the AppAuth `OIDAuthorizationRequest` shape (always-on) and
   adds a `MEDIHUB_KEYCLOAK_E2E=1`-gated test that fetches the
@@ -72,6 +66,103 @@ Phase 2 (test + UX hardening) is implemented on the same branch:
 - ✅ **G-1 (2.5)** Closed in Phase 1.4 — `keycloak-migration.md`
   documents `angular-oauth2-oidc` (the shipped library) instead of
   `angular-auth-oidc-client`. No code change required.
+
+## Phase 2.6 status (2026-04-26)
+
+Phase 2.6 — closes the deferred mobile UI coverage on this branch:
+
+- ✅ **Android wrapper** restored — `patient-android-app/gradle/wrapper/gradle-wrapper.jar`
+  re-checked in (copied verbatim from the root Gradle 8.13 wrapper, identical
+  hash + `distributionUrl`). `:app:testDebugUnitTest` boots cleanly under
+  JDK 21 with `ANDROID_HOME=~/Library/Android/sdk`.
+- ✅ **G-6 (2.2 — Android UI)** New `LoginScreenSsoOnlyTest`
+  (Robolectric + Compose UI in `app/src/test/`) renders the real
+  `LoginScreen` with the SSO flag ON and `AuthRepository.login()`
+  mocked to return the 410-style `AuthResult.Error`, then asserts
+  the SSO button is rendered and the legacy login attempt surfaces
+  the SSO-pointing toast verbatim. JVM-only — no emulator, no
+  device. Passes alongside the 9 existing tests (10/10 green).
+- ✅ **G-5 (2.3 — iOS Option A: debug bypass)** `KeycloakAuthService`
+  exposes a `#if DEBUG`-gated `acceptDebugSession(...)` that
+  synthesizes the `OIDAuthState` AppAuth produces after a real
+  redirect, then routes through the existing `persist(state:)` so
+  tests exercise the real keychain mirroring. Three new
+  `KeycloakDebugBypassTests` cases (3/3 green via
+  `xcodebuild test`).
+- ✅ **G-5 (2.3 — iOS Option B: mock-oauth2-server)**
+  `docker-compose.yml` declares `mock-oauth2-server` under a new
+  `mock-oidc` profile. New `KeycloakMockE2ETests` (gated by
+  `MEDIHUB_KEYCLOAK_MOCK_E2E=1`, mirrors the existing
+  `MEDIHUB_KEYCLOAK_E2E=1` pattern) verifies discovery + a real
+  `client_credentials` token exchange against the mock issuer.
+  Compiles + skips cleanly without the env var; live verification
+  runs during the local dev test matrix.
+- ✅ **G-5 (2.3 — iOS Option C: docs)** §4 acceptance below
+  documents that no iOS UI E2E test drives
+  `ASWebAuthenticationSession`: Apple sandboxes the system browser
+  sheet from the test runner, and Options A + B cover every code
+  path except that sandbox boundary. Also fixes a pre-existing
+  unwrap bug at `KeycloakE2ETests.swift:76` (`request.redirectURL`
+  is `URL?` in current AppAuth).
+
+## Phase 2.7 status (2026-04-26) — dev verification findings
+
+Pre-UAT verification against the local docker-compose Keycloak realm
+surfaced five additional issues. Three were latent realm-export drift
+that would have hard-failed UAT cutover; two were silent-data-loss bugs
+that would have shipped to prod. All five are fixed on this branch.
+
+- ✅ **Realm-export missing standard OIDC scopes** (HIGH). The `hms`
+  realm referenced `profile`/`email`/`roles`/`web-origins` from every
+  client's `defaultClientScopes` but did not declare them in
+  `clientScopes`. Keycloak 26 + `start-dev --import-realm` does **not**
+  auto-create the standard OIDC scopes — a fresh import returned
+  `Invalid scopes: openid profile email roles hms-claims` on every
+  authorization request. Fixed by merging the master realm's standard
+  scope definitions (incl. their protocol mappers) into
+  `keycloak/realm-export.json`.
+- ✅ **Realm-export missing user-profile schema** (HIGH).
+  `unmanagedAttributePolicy: ENABLED` is *not* sufficient on KC 26 —
+  custom attributes are silently dropped on `POST /users` unless
+  declared in the realm's user-profile config. The migration script's
+  `hospital_id` and `role_assignments` would have been wiped on every
+  user import → JWTs in UAT would be missing both. Fixed by adding the
+  `org.keycloak.userprofile.UserProfileProvider` component (with
+  `hospital_id` + `role_assignments` declared) to `realm-export.json`.
+  Verified live: a fresh `down -v` + `up` + `POST /users` round-trip
+  preserves both attributes.
+- ✅ **`role_assignments` shape mismatch** (HIGH).
+  `KeycloakHospitalContextResolver#hospitalIdFromAssignment` splits
+  each entry on `'@'` and parses the trailing UUID — i.e. expects
+  `"<ROLE>@<hospital-uuid>"` strings. The migration script
+  (`runner.ts:51-56`) and the realm's `role_assignments` protocol
+  mapper (with `jsonType.label: "JSON"`) emitted JSON-encoded objects
+  instead. Result: `parseRoleAssignments` would silently return an
+  empty set for every multi-hospital user, dropping every secondary
+  hospital from `permittedHospitalIds`. Singular `hospital_id` claim
+  still worked, so users could see their primary hospital — just not
+  any of their others. Fixed by:
+    1. `runner.ts:51-58` now emits `"${role}@${hospitalId}"` strings
+       (filtering rows with empty `hospitalId`); test fixture +
+       comment updated to match.
+    2. `realm-export.json` mapper `jsonType.label` flipped from
+       `"JSON"` to `"String"` so Keycloak passes the values through
+       verbatim.
+  Verified live: dev.doctor with two hospital assignments produces a
+  JWT whose `role_assignments` claim is parsed correctly by the
+  resolver's `parseRoleAssignments` logic (replicated in Python),
+  yielding the expected `permittedHospitalIds` set.
+- ✅ **Pre-existing iOS test-target compile bug**.
+  `MediHubPatientTests/KeycloakE2ETests.swift:76` unwrapped
+  `request.redirectURL.absoluteString`, but
+  `OIDAuthorizationRequest.redirectURL` is `URL?` in current AppAuth.
+  The iOS test target had not built since `ea18b794`. Fixed.
+- ✅ **Android Gradle wrapper jar restored** (see Phase 2.6 above).
+
+Local dev verification ran against `docker compose --profile keycloak`:
+KC functional checks 1–5 all PASS (token claims shape, NimbusJwtDecoder
+accepts live JWTs, direct grant rejected on every production client,
+migration logic 22/22, refresh-token rotation).
 
 Phases 3–4 remain pending.
 
@@ -204,12 +295,38 @@ docs imply at §2.3) is to declare an explicit intent-filter in the app
 so that the scheme is grep-able and survives a library upgrade.
 
 ### G-5 — No mobile e2e / instrumentation tests (MEDIUM)
-**Status:** ⚠️ Partially resolved in Phase 2.3 (commit `ea18b794`). New
-`MediHubPatientTests/KeycloakE2ETests.swift` adds an always-on AppAuth
-request-shape test plus a `MEDIHUB_KEYCLOAK_E2E=1`-gated live discovery
-test. Android Espresso UI coverage is **deferred** (the local Android
-wrapper jar is missing and host gradle can't load Java 21 build
-scripts) — tracked under "Deferred" below.
+**Status:** ✅ Resolved in Phase 2.6 (this branch). Closure landed in
+three pieces:
+
+- **Android (G-6 / 2.2)** — `LoginScreenSsoOnlyTest` (Robolectric +
+  Compose UI, in `app/src/test/`) renders the real Login screen with
+  the SSO flag ON and `/api/auth/login` mocked to return the
+  410-style `AuthResult.Error`, then asserts (a) the SSO button is
+  rendered and (b) the legacy login attempt surfaces the
+  SSO-pointing toast verbatim. Runs on the JVM — no emulator, no
+  device, no Gradle wrapper-jar regeneration needed beyond what
+  Phase 2.6 already restored.
+- **iOS Option A (debug bypass)** — `KeycloakAuthService` exposes a
+  `#if DEBUG`-gated `acceptDebugSession(...)` that synthesizes the
+  `OIDAuthState` AppAuth produces after a real redirect, then routes
+  through the existing `persist(state:)` path so tests exercise the
+  real keychain mirroring code. Three new
+  `KeycloakDebugBypassTests` cases assert `hasActiveSession` /
+  Keychain shape / `clear()`.
+- **iOS Option B (mock-oauth2-server)** — `docker-compose.yml`
+  declares `mock-oauth2-server` under a new `mock-oidc` profile; new
+  `KeycloakMockE2ETests` (gated by `MEDIHUB_KEYCLOAK_MOCK_E2E=1`,
+  mirroring the existing `MEDIHUB_KEYCLOAK_E2E=1` pattern) verifies
+  discovery + a real `client_credentials` token exchange against
+  the mock issuer.
+
+**iOS UI E2E (`ASWebAuthenticationSession`) is deliberately not
+covered.** Apple runs the system browser sheet out-of-process and
+sandboxes it from the test runner, so XCUITest cannot reliably
+automate it. The canonical workarounds — A (debug bypass) and B
+(real OIDC server, no UA) — together cover every code path the
+production app runs except the system sheet itself. §4 acceptance
+below reflects this.
 
 - Android: only `AuthInterceptorTest` (3 unit tests). No
   Espresso/UIAutomator coverage, no E2E gate.
@@ -372,8 +489,20 @@ The implementation is done when **all** of the below are true:
 - [ ] `./gradlew :hospital-core:test` is green with `OIDC_ISSUER_URI` +
       `OIDC_AUDIENCE` set to a live realm.
 - [ ] Portal Playwright `--grep "happy path"` is green with `KEYCLOAK_E2E=1`.
-- [ ] Android Espresso + iOS UI E2E tests are green against the local
-      docker-compose Keycloak.
+- [ ] **Android** Compose UI test (`LoginScreenSsoOnlyTest`) and the
+      `AuthRepositoryTest` 410 cases are green via
+      `./gradlew :app:testDebugUnitTest`. Both run on the JVM via
+      Robolectric — no emulator required.
+- [ ] **iOS** `KeycloakDebugBypassTests` (Option A) is green in the
+      default `MediHubPatientTests` bundle, and
+      `KeycloakMockE2ETests` (Option B) is green with
+      `MEDIHUB_KEYCLOAK_MOCK_E2E=1` against
+      `docker compose --profile mock-oidc up -d mock-oauth2-server`.
+- [ ] **Note (Option C):** there is *no* iOS UI E2E test driving
+      `ASWebAuthenticationSession` end-to-end. Apple sandboxes the
+      system browser sheet from the test runner; A + B together cover
+      every code path the production app runs except the system sheet
+      itself. This is by design — see G-5 above.
 - [ ] Production has been running with `app.auth.oidc.required=true` for
       ≥ 30 days with no auth-related incidents.
 - [ ] All three reference docs reflect the final architecture (no drift).

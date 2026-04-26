@@ -1,6 +1,6 @@
 {
   "realm": "hms",
-  "displayName": "HMS — Hospital Management System",
+  "displayName": "HMS \u2014 Hospital Management System",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -22,7 +22,6 @@
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
-
   "accessTokenLifespan": 900,
   "ssoSessionIdleTimeout": 1800,
   "ssoSessionMaxLifespan": 172800,
@@ -30,54 +29,127 @@
   "accessCodeLifespan": 60,
   "accessCodeLifespanUserAction": 300,
   "accessCodeLifespanLogin": 1800,
-
   "otpPolicyType": "totp",
   "otpPolicyAlgorithm": "HmacSHA1",
   "otpPolicyInitialCounter": 0,
   "otpPolicyDigits": 6,
   "otpPolicyLookAheadWindow": 1,
   "otpPolicyPeriod": 30,
-
   "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername() and passwordHistory(5)",
-
   "defaultRole": {
     "name": "default-roles-hms",
     "composite": true,
     "clientRole": false,
     "containerId": "hms"
   },
-
   "roles": {
     "realm": [
-      { "name": "ROLE_SUPER_ADMIN",          "description": "Platform super administrator (no tenant scope)" },
-      { "name": "ROLE_HOSPITAL_ADMIN",       "description": "Hospital-scoped administrator" },
-      { "name": "ROLE_DOCTOR",               "description": "Physician / attending provider" },
-      { "name": "ROLE_NURSE",                "description": "Registered nurse" },
-      { "name": "ROLE_PATIENT",              "description": "Patient portal user" },
-      { "name": "ROLE_RECEPTIONIST",         "description": "Front-desk / registration" },
-      { "name": "ROLE_STAFF",                "description": "Generic staff (baseline)" },
-      { "name": "ROLE_LAB_SCIENTIST",        "description": "Lab scientist" },
-      { "name": "ROLE_LAB_DIRECTOR",         "description": "Lab director" },
-      { "name": "ROLE_QUALITY_MANAGER",      "description": "Quality / compliance manager" },
-      { "name": "ROLE_PHARMACIST",           "description": "Pharmacy dispensing" },
-      { "name": "ROLE_LAB_TECHNICIAN",       "description": "Lab technician" },
-      { "name": "ROLE_LAB_MANAGER",          "description": "Lab manager" },
-      { "name": "ROLE_ACCOUNTANT",           "description": "Finance / accounting" },
-      { "name": "ROLE_RADIOLOGIST",          "description": "Imaging / radiology" },
-      { "name": "ROLE_SURGEON",              "description": "Surgeon" },
-      { "name": "ROLE_DENTIST",              "description": "Dentist" },
-      { "name": "ROLE_MIDWIFE",              "description": "Midwifery staff" },
-      { "name": "ROLE_BILLING_SPECIALIST",   "description": "Billing specialist" },
-      { "name": "ROLE_ADMINISTRATIVE_STAFF", "description": "Administrative staff" },
-      { "name": "ROLE_SUPPORT_STAFF",        "description": "Support staff" },
-      { "name": "ROLE_IT_STAFF",             "description": "IT staff" },
-      { "name": "ROLE_PHARMACY_VERIFIER",    "description": "Pharmacy dispense verifier" },
-      { "name": "ROLE_INVENTORY_CLERK",      "description": "Pharmacy inventory clerk" },
-      { "name": "ROLE_STORE_MANAGER",        "description": "Pharmacy store manager" },
-      { "name": "ROLE_CLAIMS_REVIEWER",      "description": "Insurance claims reviewer" }
+      {
+        "name": "ROLE_SUPER_ADMIN",
+        "description": "Platform super administrator (no tenant scope)"
+      },
+      {
+        "name": "ROLE_HOSPITAL_ADMIN",
+        "description": "Hospital-scoped administrator"
+      },
+      {
+        "name": "ROLE_DOCTOR",
+        "description": "Physician / attending provider"
+      },
+      {
+        "name": "ROLE_NURSE",
+        "description": "Registered nurse"
+      },
+      {
+        "name": "ROLE_PATIENT",
+        "description": "Patient portal user"
+      },
+      {
+        "name": "ROLE_RECEPTIONIST",
+        "description": "Front-desk / registration"
+      },
+      {
+        "name": "ROLE_STAFF",
+        "description": "Generic staff (baseline)"
+      },
+      {
+        "name": "ROLE_LAB_SCIENTIST",
+        "description": "Lab scientist"
+      },
+      {
+        "name": "ROLE_LAB_DIRECTOR",
+        "description": "Lab director"
+      },
+      {
+        "name": "ROLE_QUALITY_MANAGER",
+        "description": "Quality / compliance manager"
+      },
+      {
+        "name": "ROLE_PHARMACIST",
+        "description": "Pharmacy dispensing"
+      },
+      {
+        "name": "ROLE_LAB_TECHNICIAN",
+        "description": "Lab technician"
+      },
+      {
+        "name": "ROLE_LAB_MANAGER",
+        "description": "Lab manager"
+      },
+      {
+        "name": "ROLE_ACCOUNTANT",
+        "description": "Finance / accounting"
+      },
+      {
+        "name": "ROLE_RADIOLOGIST",
+        "description": "Imaging / radiology"
+      },
+      {
+        "name": "ROLE_SURGEON",
+        "description": "Surgeon"
+      },
+      {
+        "name": "ROLE_DENTIST",
+        "description": "Dentist"
+      },
+      {
+        "name": "ROLE_MIDWIFE",
+        "description": "Midwifery staff"
+      },
+      {
+        "name": "ROLE_BILLING_SPECIALIST",
+        "description": "Billing specialist"
+      },
+      {
+        "name": "ROLE_ADMINISTRATIVE_STAFF",
+        "description": "Administrative staff"
+      },
+      {
+        "name": "ROLE_SUPPORT_STAFF",
+        "description": "Support staff"
+      },
+      {
+        "name": "ROLE_IT_STAFF",
+        "description": "IT staff"
+      },
+      {
+        "name": "ROLE_PHARMACY_VERIFIER",
+        "description": "Pharmacy dispense verifier"
+      },
+      {
+        "name": "ROLE_INVENTORY_CLERK",
+        "description": "Pharmacy inventory clerk"
+      },
+      {
+        "name": "ROLE_STORE_MANAGER",
+        "description": "Pharmacy store manager"
+      },
+      {
+        "name": "ROLE_CLAIMS_REVIEWER",
+        "description": "Insurance claims reviewer"
+      }
     ]
   },
-
   "clientScopes": [
     {
       "name": "hms-profile",
@@ -174,7 +246,7 @@
           "config": {
             "user.attribute": "role_assignments",
             "claim.name": "role_assignments",
-            "jsonType.label": "JSON",
+            "jsonType.label": "String",
             "multivalued": "true",
             "id.token.claim": "true",
             "access.token.claim": "true",
@@ -196,9 +268,341 @@
           }
         }
       ]
+    },
+    {
+      "name": "web-origins",
+      "description": "OpenID Connect scope for add allowed web origins to the access token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "consent.screen.text": "",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "allowed web origins",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-allowed-origins-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "description": "OpenID Connect built-in scope: email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "${emailScopeConsentText}",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "email",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "email verified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "emailVerified",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "description": "OpenID Connect built-in scope: profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "consent.screen.text": "${profileScopeConsentText}",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "birthdate",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "birthdate",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "birthdate",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "username",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "updated at",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "updatedAt",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "updated_at",
+            "jsonType.label": "long"
+          }
+        },
+        {
+          "name": "given name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "firstName",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "given_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "picture",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "picture",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "picture",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "website",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "website",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "website",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "middle name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "middleName",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "middle_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "nickname",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "nickname",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "nickname",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "locale",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "locale",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "locale",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "family name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "lastName",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "family_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "profile",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "profile",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "profile",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "zoneinfo",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "zoneinfo",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "zoneinfo",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "full name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "gender",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "gender",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "gender",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "name": "roles",
+      "description": "OpenID Connect scope for add user roles to the access token",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "consent.screen.text": "${rolesScopeConsentText}",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        },
+        {
+          "name": "client roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        },
+        {
+          "name": "audience resolve",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-resolve-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
-
   "defaultDefaultClientScopes": [
     "profile",
     "email",
@@ -207,12 +611,11 @@
     "hms-claims",
     "hms-profile"
   ],
-
   "clients": [
     {
       "clientId": "hms-backend",
       "name": "HMS Backend (resource server)",
-      "description": "Spring Boot resource server. Bearer-only — never initiates a login flow.",
+      "description": "Spring Boot resource server. Bearer-only \u2014 never initiates a login flow.",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -223,7 +626,13 @@
       "secret": "REPLACE_ME_hms_backend_secret",
       "redirectUris": [],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"],
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "hms-claims",
+        "hms-profile"
+      ],
       "attributes": {
         "access.token.lifespan": "900"
       }
@@ -254,7 +663,14 @@
         "https://uat.hms.example.com",
         "https://hms.example.com"
       ],
-      "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims", "hms-profile"]
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "web-origins",
+        "hms-claims",
+        "hms-profile"
+      ]
     },
     {
       "clientId": "hms-patient-android",
@@ -276,7 +692,13 @@
         "com.bitnesttechs.hms.patient:/oauth2redirect"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "hms-claims",
+        "hms-profile"
+      ]
     },
     {
       "clientId": "hms-patient-ios",
@@ -298,7 +720,26 @@
         "com.bitnesttechs.hms.patient.native:/oauth2redirect"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "hms-claims",
+        "hms-profile"
+      ]
     }
-  ]
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"hospital_id\",\"displayName\":\"Hospital ID\",\"annotations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"role_assignments\",\"displayName\":\"Role assignments\",\"annotations\":{},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":true}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  }
 }
