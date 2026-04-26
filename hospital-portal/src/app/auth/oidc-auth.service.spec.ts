@@ -116,6 +116,27 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
     expect(service.isAvailable()).toBeFalse();
   });
 
+  it('retrying initialize after a discovery failure clears discoveryFailed when discovery succeeds', async () => {
+    environment.oidc.enabled = true;
+
+    // First attempt: issuer unreachable.
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.rejectWith(new Error('issuer unreachable'));
+    await service.initialize();
+    expect(service.discoveryFailed())
+      .withContext('first attempt should flag discovery failure')
+      .toBeTrue();
+    expect(service.isAvailable()).toBeFalse();
+
+    // Second attempt: issuer recovered. The flag must reset so the
+    // SSO button comes back without a hard refresh.
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.resolveTo(true);
+    await service.initialize();
+    expect(service.discoveryFailed())
+      .withContext('successful retry must clear the flag')
+      .toBeFalse();
+    expect(service.isAvailable()).toBeTrue();
+  });
+
   it('isAvailable mirrors isEnabled when discovery has not yet run or has succeeded', async () => {
     environment.oidc.enabled = false;
     expect(service.isAvailable()).toBeFalse();

@@ -72,6 +72,14 @@ export class OidcAuthService {
       return;
     }
 
+    // KC-2b (G-8): clear any prior discoveryFailed flag at the start
+    // so a retry — e.g. after the issuer comes back online or an
+    // operator hot-fixes the realm — can succeed without forcing the
+    // user to hard-refresh. Without this, a transient startup failure
+    // would permanently hide the SSO button for the lifetime of the
+    // SPA.
+    this.discoveryFailed.set(false);
+
     const cfg = environment.oidc;
     const authConfig: AuthConfig = {
       issuer: cfg.issuer,

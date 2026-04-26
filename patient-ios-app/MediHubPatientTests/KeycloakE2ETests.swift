@@ -115,17 +115,41 @@ final class KeycloakE2ETests: XCTestCase {
                 fetchError = error
                 return
             }
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-                  let data,
+            // Surface non-200 status + a body snippet into fetchError so a
+            // realm misconfiguration (e.g. wrong path, 401 from a guarded
+            // endpoint) shows up in CI as a specific failure rather than a
+            // generic "missing or unparseable" unwrap error.
+            guard let http = response as? HTTPURLResponse else {
+                fetchError = Self.testError(code: -1, "non-HTTP response")
+                return
+            }
+            let bodySnippet = Self.bodySnippet(data)
+            guard http.statusCode == 200 else {
+                fetchError = Self.testError(
+                    code: http.statusCode,
+                    "HTTP \(http.statusCode) from discovery endpoint. Body: \(bodySnippet)"
+                )
+                return
+            }
+            guard let data,
                   let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
-            else { return }
+            else {
+                fetchError = Self.testError(
+                    code: http.statusCode,
+                    "HTTP 200 but body was empty or not a JSON object. Body: \(bodySnippet)"
+                )
+                return
+            }
             fetched = json
         }.resume()
 
         wait(for: [expectation], timeout: 10.0)
 
         XCTAssertNil(fetchError, "discovery fetch failed: \(String(describing: fetchError))")
-        let json = try XCTUnwrap(fetched, "discovery document missing or unparseable")
+        let json = try XCTUnwrap(
+            fetched,
+            "discovery document missing or unparseable. fetchError: \(String(describing: fetchError))"
+        )
         // The three endpoints AppAuth needs at runtime — if any drift
         // away from the same issuer prefix the realm is misconfigured.
         for key in ["authorization_endpoint", "token_endpoint", "jwks_uri"] {
@@ -156,5 +180,21 @@ final class KeycloakE2ETests: XCTestCase {
         } else {
             unsetenv(name)
         }
+    }
+
+    private static func testError(code: Int, _ message: String) -> NSError {
+        NSError(
+            domain: "KeycloakE2ETests",
+            code: code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
+    }
+
+    /// Render up to 500 bytes of the response body as a UTF-8 snippet so a
+    /// realm-misconfig failure carries enough context to triage in CI.
+    private static func bodySnippet(_ data: Data?) -> String {
+        guard let data, !data.isEmpty else { return "<empty body>" }
+        let body = String(data: data, encoding: .utf8) ?? "<non-UTF8 body: \(data.count) bytes>"
+        return String(body.prefix(500))
     }
 }

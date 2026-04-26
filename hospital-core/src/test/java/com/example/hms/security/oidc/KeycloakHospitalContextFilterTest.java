@@ -2,11 +2,14 @@ package com.example.hms.security.oidc;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -66,6 +69,65 @@ class KeycloakHospitalContextFilterTest {
         assertThat(HospitalContextHolder.getContext())
                 .as("context must be cleared after the chain completes")
                 .isEmpty();
+    }
+
+    @Test
+    void honoursXHospitalIdHeaderOverrideForMultiHospitalUsers() throws Exception {
+        UUID primary = UUID.randomUUID();
+        UUID secondary = UUID.randomUUID();
+
+        Jwt jwt = jwt(Map.of(
+            "preferred_username", "dr.alice",
+            "hospital_id", primary.toString(),
+            "role_assignments", List.of(
+                "DOCTOR@" + primary,
+                "DOCTOR@" + secondary)));
+
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+            jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR")), "dr.alice"));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HospitalContextRequestOverrides.HEADER_HOSPITAL_ID, secondary.toString());
+
+        AtomicReference<HospitalContext> seenInsideChain = new AtomicReference<>();
+        FilterChain chain = (req, resp) ->
+            seenInsideChain.set(HospitalContextHolder.getContextOrEmpty());
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(seenInsideChain.get().getActiveHospitalId())
+            .as("X-Hospital-Id must override hospital_id claim when in permitted scope")
+            .isEqualTo(secondary);
+        assertThat(seenInsideChain.get().getPermittedHospitalIds())
+            .as("permitted scope is preserved across the override")
+            .containsExactlyInAnyOrder(primary, secondary);
+    }
+
+    @Test
+    void ignoresXHospitalIdHeaderOutsidePermittedScope() throws Exception {
+        UUID primary = UUID.randomUUID();
+        UUID outOfScope = UUID.randomUUID();
+
+        Jwt jwt = jwt(Map.of(
+            "preferred_username", "dr.alice",
+            "hospital_id", primary.toString(),
+            "role_assignments", List.of("DOCTOR@" + primary)));
+
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(
+            jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR")), "dr.alice"));
+
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(HospitalContextRequestOverrides.HEADER_HOSPITAL_ID, outOfScope.toString());
+
+        AtomicReference<HospitalContext> seenInsideChain = new AtomicReference<>();
+        FilterChain chain = (req, resp) ->
+            seenInsideChain.set(HospitalContextHolder.getContextOrEmpty());
+
+        filter.doFilter(request, new MockHttpServletResponse(), chain);
+
+        assertThat(seenInsideChain.get().getActiveHospitalId())
+            .as("out-of-scope hospital must not become active even with the header set")
+            .isEqualTo(primary);
     }
 
     @Test

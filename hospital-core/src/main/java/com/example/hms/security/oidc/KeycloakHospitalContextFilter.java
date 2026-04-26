@@ -2,6 +2,7 @@ package com.example.hms.security.oidc;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -55,6 +56,12 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof JwtAuthenticationToken jwtAuth && auth.isAuthenticated()) {
                 HospitalContext context = resolver.resolve(jwtAuth.getToken(), jwtAuth.getAuthorities());
+                // Apply the same X-Hospital-Id header override the legacy
+                // JwtAuthenticationFilter applies, so multi-hospital users
+                // who pick an active hospital in the portal still see it
+                // honoured under OIDC. Shared helper guarantees the two
+                // filters cannot drift.
+                context = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
                 HospitalContextHolder.setContext(context);
                 populated = true;
             }

@@ -101,7 +101,7 @@ lines below — copy them into the change log:
 
 ```
 [OIDC] Keycloak resource-server is enabled — accepting JWTs alongside internal tokens
-[OIDC] app.auth.oidc.required=true — legacy /auth/login + /auth/token/refresh will return 410 Gone
+[OIDC] app.auth.oidc.required=true — legacy POST /api/auth/login + POST /api/auth/token/refresh will return 410 Gone
 ```
 
 ### 3. Smoke verify (T+0 to T+5)
