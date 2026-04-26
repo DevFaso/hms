@@ -396,9 +396,15 @@ public class EncounterServiceImpl implements EncounterService {
             } catch (RuntimeException ex) {
                 // Persistence of the summary must not abort the encounter update — log
                 // and fall back on the patient-portal backfill which will retry on
-                // first AVS query.
-                log.warn("Failed to persist DischargeSummary on COMPLETED transition for encounter {}: {}",
-                        saved.getId(), ex.getMessage());
+                // first AVS query. Pass the throwable so the full cause/stack is captured;
+                // include patient/hospital IDs to make constraint-violation diagnosis
+                // tractable without grepping by encounter ID.
+                log.warn(
+                    "Failed to persist DischargeSummary on COMPLETED transition for encounter {}, patient {}, hospital {}",
+                    saved.getId(),
+                    saved.getPatient() != null ? saved.getPatient().getId() : null,
+                    saved.getHospital() != null ? saved.getHospital().getId() : null,
+                    ex);
             }
         }
 
