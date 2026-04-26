@@ -14,10 +14,12 @@ describe('Login — KC-2b SSO entry point', () => {
   const originalOidcEnabled = environment.oidc.enabled;
 
   beforeEach(() => {
-    oidcSpy = jasmine.createSpyObj<OidcAuthService>(
-      'OidcAuthService',
-      ['isEnabled', 'isAvailable', 'discoveryFailed', 'login'],
-    );
+    oidcSpy = jasmine.createSpyObj<OidcAuthService>('OidcAuthService', [
+      'isEnabled',
+      'isAvailable',
+      'discoveryFailed',
+      'login',
+    ]);
     oidcSpy.isEnabled.and.callFake(() => environment.oidc.enabled);
     // KC-2b (G-8): the SSO button now binds to isAvailable() — i.e.
     // enabled AND discovery succeeded. In these tests there's no
