@@ -102,6 +102,15 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        unitTests {
+            // Required for Robolectric Compose UI tests so the test
+            // manifest from androidx.compose.ui:ui-test-manifest
+            // (which declares ComponentActivity) is on the classpath.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -166,6 +175,9 @@ dependencies {
     testImplementation(libs.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.ui.test.junit4)
+    testImplementation(libs.androidx.ui.test.manifest)
 
     // Instrumented tests
     androidTestImplementation(libs.androidx.test.runner)
