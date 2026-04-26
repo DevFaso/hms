@@ -97,6 +97,61 @@ describe('OidcAuthService — KC-2b PKCE driver', () => {
     expect(auth.getToken()).toBeNull();
   });
 
+  it('initialize sets discoveryFailed and hides isAvailable when discovery rejects', async () => {
+    environment.oidc.enabled = true;
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.rejectWith(new Error('issuer unreachable'));
+
+    expect(service.discoveryFailed()).toBeFalse();
+    expect(service.isAvailable()).toBeTrue();
+
+    await service.initialize();
+
+    expect(service.discoveryFailed())
+      .withContext('discoveryFailed flag must flip after a failed bootstrap')
+      .toBeTrue();
+    // isEnabled stays true (the flag is configured) but isAvailable hides
+    // the SSO button so users fall back to the legacy form rather than
+    // tripping over a 502 mid-flow.
+    expect(service.isEnabled()).toBeTrue();
+    expect(service.isAvailable()).toBeFalse();
+  });
+
+  it('retrying initialize after a discovery failure clears discoveryFailed when discovery succeeds', async () => {
+    environment.oidc.enabled = true;
+
+    // First attempt: issuer unreachable.
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.rejectWith(new Error('issuer unreachable'));
+    await service.initialize();
+    expect(service.discoveryFailed())
+      .withContext('first attempt should flag discovery failure')
+      .toBeTrue();
+    expect(service.isAvailable()).toBeFalse();
+
+    // Second attempt: issuer recovered. The flag must reset so the
+    // SSO button comes back without a hard refresh.
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.resolveTo(true);
+    await service.initialize();
+    expect(service.discoveryFailed())
+      .withContext('successful retry must clear the flag')
+      .toBeFalse();
+    expect(service.isAvailable()).toBeTrue();
+  });
+
+  it('isAvailable mirrors isEnabled when discovery has not yet run or has succeeded', async () => {
+    environment.oidc.enabled = false;
+    expect(service.isAvailable()).toBeFalse();
+
+    environment.oidc.enabled = true;
+    expect(service.isAvailable())
+      .withContext('available before initialize() — discoveryFailed defaults to false')
+      .toBeTrue();
+
+    oauthMock.loadDiscoveryDocumentAndTryLogin.and.resolveTo(true);
+    await service.initialize();
+    expect(service.isAvailable()).toBeTrue();
+    expect(service.discoveryFailed()).toBeFalse();
+  });
+
   it('login() kicks off the PKCE code flow only when enabled', () => {
     environment.oidc.enabled = false;
     service.login();

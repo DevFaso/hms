@@ -38,8 +38,28 @@ export class OidcAuthService {
   /** True when an OIDC session is currently active (valid access token). */
   readonly authenticated = signal(false);
 
+  /**
+   * True when {@code environment.oidc.enabled} is set but the issuer's
+   * discovery document could not be fetched (network down, realm
+   * misconfigured, container not yet healthy, etc.). Login UIs should
+   * hide the SSO button and surface a "temporarily unavailable" banner
+   * so users fall back to the legacy form rather than tripping over a
+   * 502 mid-flow.
+   */
+  readonly discoveryFailed = signal(false);
+
+  /** True when the SSO feature flag is on. */
   isEnabled(): boolean {
     return !!environment.oidc?.enabled;
+  }
+
+  /**
+   * True when SSO is enabled <em>and</em> the issuer is reachable.
+   * Login templates should bind to this — not {@link isEnabled} — when
+   * deciding whether to render the SSO button.
+   */
+  isAvailable(): boolean {
+    return this.isEnabled() && !this.discoveryFailed();
   }
 
   /**
@@ -51,6 +71,14 @@ export class OidcAuthService {
       this.ready.set(true);
       return;
     }
+
+    // KC-2b (G-8): clear any prior discoveryFailed flag at the start
+    // so a retry — e.g. after the issuer comes back online or an
+    // operator hot-fixes the realm — can succeed without forcing the
+    // user to hard-refresh. Without this, a transient startup failure
+    // would permanently hide the SSO button for the lifetime of the
+    // SPA.
+    this.discoveryFailed.set(false);
 
     const cfg = environment.oidc;
     const authConfig: AuthConfig = {
@@ -77,7 +105,10 @@ export class OidcAuthService {
       await this.oauth.loadDiscoveryDocumentAndTryLogin();
     } catch (error) {
       // Discovery failure is recoverable — legacy login still works.
+      // Flag it so the UI can hide the SSO button and surface a banner
+      // rather than letting users click into a 502.
       console.warn('[OidcAuthService] discovery / token exchange failed', error);
+      this.discoveryFailed.set(true);
       this.ready.set(true);
       return;
     }

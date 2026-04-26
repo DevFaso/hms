@@ -615,3 +615,18 @@
     padding: 0 0.75rem;
   }
 }
+
+// KC-2b (G-8): "SSO temporarily unavailable" banner shown when
+// environment.oidc.enabled is true but the issuer's discovery
+// document could not be fetched at bootstrap.
+.sso-unavailable {
+  display: block;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #fde68a;
+  background: #fef3c7;
+  color: #78350f;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}

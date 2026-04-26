@@ -32,7 +32,9 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
         // a steady drip of usernames + role sets into log aggregators. Demoted to
         // DEBUG and stripped of identifying info on the hot path; the lookup
         // failure is the only branch that retains operator-actionable detail
-        // (and it's still WARN-level without surfacing the username).
+        // (and it's still DEBUG-level without surfacing the username — the
+        // upstream JwtAuthenticationFilter already emits a redacted WARN line
+        // when authentication ultimately fails).
         log.debug("🔍 loadUserByUsername invoked");
 
         User user = userRepository.findByUsernameIgnoreCase(username)

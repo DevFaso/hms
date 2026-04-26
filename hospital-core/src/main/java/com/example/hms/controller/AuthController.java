@@ -144,6 +144,18 @@ public class AuthController {
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles;
         this.oidcRequired = oidcRequired;
+
+        // KC-5 cutover signal: surface the gate state in the startup log so the
+        // ops on-call running the cutover runbook can confirm the flip took
+        // effect without grepping request-time WARN lines. Paths are reported
+        // with the /api context-path (server.servlet.context-path=/api), which
+        // is what hits the load balancer — the message must match the URL ops
+        // are actually curling in their smoke checks.
+        if (oidcRequired) {
+            log.info("[OIDC] app.auth.oidc.required=true — legacy POST /api/auth/login + POST /api/auth/token/refresh will return 410 Gone");
+        } else {
+            log.info("[OIDC] app.auth.oidc.required=false — legacy POST /api/auth/login + POST /api/auth/token/refresh accept username/password");
+        }
     }
 
     /**

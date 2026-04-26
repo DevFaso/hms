@@ -53,6 +53,60 @@ test.describe('KC-2b — Keycloak SSO entry point (default OFF)', () => {
   });
 });
 
+test.describe('KC-3 — legacy /api/auth/login returns 410 Gone (cutover soak)', () => {
+  // Phase 2.1 (G-6): once `app.auth.oidc.required=true` flips on the
+  // backend, /api/auth/login responds 410 Gone with the runbook
+  // message. The portal must surface that message verbatim so users
+  // see "Sign in via Single Sign-On" rather than the generic
+  // "Login failed. Please try again." fallback.
+  const legacyDisabledMessage =
+    'Legacy username/password login is disabled. Sign in via Single Sign-On.';
+
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/api/auth/csrf-token', (route) => route.fulfill({ status: 204 }));
+    await page.route('**/api/auth/bootstrap-status', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ allowed: false }),
+      }),
+    );
+    await page.route('**/api/auth/login', (route) =>
+      route.fulfill({
+        status: 410,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: legacyDisabledMessage }),
+      }),
+    );
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  });
+
+  test('legacy form surfaces the runbook message verbatim on 410 Gone', async ({ page }) => {
+    await page.locator('#username').fill('any.user');
+    await page.locator('#password').fill('any-password');
+    await page.locator('button[type="submit"]').click();
+
+    const errorBanner = page.locator('.error-banner');
+    await expect(errorBanner).toBeVisible();
+    await expect(errorBanner).toContainText(legacyDisabledMessage);
+  });
+
+  test('error message points the user at SSO instead of generic "try again"', async ({
+    page,
+  }) => {
+    await page.locator('#username').fill('any.user');
+    await page.locator('#password').fill('any-password');
+    await page.locator('button[type="submit"]').click();
+
+    const errorBanner = page.locator('.error-banner');
+    await expect(errorBanner).toBeVisible();
+    await expect(errorBanner).toContainText('Single Sign-On');
+    // The generic copy must NOT appear — that would mean the portal
+    // ignored err.error.message and fell back to the catch-all.
+    await expect(errorBanner).not.toContainText('Login failed. Please try again.');
+  });
+});
+
 const keycloakE2EEnabled = process.env.KEYCLOAK_E2E === '1';
 const issuer = process.env.KEYCLOAK_ISSUER_URL ?? 'http://localhost:8081/realms/hms';
 const devUser = process.env.KEYCLOAK_DEV_USER ?? 'dev.doctor';
