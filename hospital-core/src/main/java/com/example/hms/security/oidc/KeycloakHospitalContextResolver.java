@@ -72,21 +72,30 @@ public class KeycloakHospitalContextResolver {
             return ids;
         }
         for (Object entry : entries) {
-            if (entry == null) {
-                continue;
-            }
-            String value = entry.toString();
-            int delim = value.indexOf(ROLE_HOSPITAL_DELIMITER);
-            if (delim <= 0 || delim >= value.length() - 1) {
-                log.debug("Ignoring malformed role_assignments entry: {}", value);
-                continue;
-            }
-            UUID hospitalId = parseUuid(value.substring(delim + 1));
+            UUID hospitalId = hospitalIdFromAssignment(entry);
             if (hospitalId != null) {
                 ids.add(hospitalId);
             }
         }
         return ids;
+    }
+
+    /**
+     * Parse a single {@code "<ROLE>@<hospital-uuid>"} entry into the trailing
+     * UUID, or return {@code null} when the entry is missing, malformed, or
+     * carries a non-UUID hospital fragment.
+     */
+    private UUID hospitalIdFromAssignment(Object entry) {
+        if (entry == null) {
+            return null;
+        }
+        String value = entry.toString();
+        int delim = value.indexOf(ROLE_HOSPITAL_DELIMITER);
+        if (delim <= 0 || delim >= value.length() - 1) {
+            log.debug("Ignoring malformed role_assignments entry: {}", value);
+            return null;
+        }
+        return parseUuid(value.substring(delim + 1));
     }
 
     private UUID parseUuid(String value) {

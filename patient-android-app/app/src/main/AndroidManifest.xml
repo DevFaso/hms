@@ -50,6 +50,13 @@
             app/build.gradle.kts, and must match the scheme half of
             the redirect URI registered on the hms-patient-android
             client in keycloak/realm-export.json.
+
+            The android:path constraint pins the filter to the exact
+            /oauth2redirect callback the realm whitelists, so any
+            other deep link the app may add later under the same
+            scheme cannot be routed into AppAuth's redirect handler.
+            Keep this aligned with the path half of
+            KEYCLOAK_REDIRECT_URI in build.gradle.kts.
         -->
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
@@ -59,7 +66,9 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${appAuthRedirectScheme}" />
+                <data
+                    android:scheme="${appAuthRedirectScheme}"
+                    android:path="/oauth2redirect" />
             </intent-filter>
         </activity>
     </application>

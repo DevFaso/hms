@@ -28,7 +28,7 @@ Notes:
 - The actual callback path (e.g. `/auth/callback`) is handled inside the
   SPA router; Keycloak only needs the host+glob to authorize.
 
-## Android — `hms-android`
+## Android — `hms-patient-android`
 
 | Item | Value |
 |------|-------|
@@ -48,7 +48,7 @@ To switch to Android App Links (verified HTTPS redirects) later, add
 `https://hms.example.com/.well-known/assetlinks.json` and register
 `https://hms.example.com/app/oauth/callback` as a redirect URI.
 
-## iOS — `hms-ios`
+## iOS — `hms-patient-ios`
 
 | Item | Value |
 |------|-------|

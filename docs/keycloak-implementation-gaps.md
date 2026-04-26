@@ -99,9 +99,9 @@ Phases 3–4 remain pending.
 
 ### 1.2 Realm + ops
 - [keycloak/realm-export.json](../keycloak/realm-export.json) declares
-  `hms-backend`, `hms-portal`, `hms-android`, `hms-ios`, **26 realm roles**,
-  and the `hms-claims` scope (with `hospital_id` + `role_assignments`
-  protocol mappers).
+  `hms-backend`, `hms-portal`, `hms-patient-android`, `hms-patient-ios`,
+  **26 realm roles**, and the `hms-claims` scope (with `hospital_id` +
+  `role_assignments` protocol mappers).
 - [scripts/keycloak-migration/](../scripts/keycloak-migration/) — TS migration
   with `MIGRATION_DRY_RUN`, idempotent rerun, role resolution, orphan tracking
   (22/22 tests green per the live-testing log).
@@ -138,10 +138,16 @@ Phases 3–4 remain pending.
 
 ## 2. Gaps
 
-The work below is **not** shipped, contradicts the reference docs, or is
-known-broken.
+Each entry below describes the gap **as identified at audit time**
+(2026-04-26) so the original reasoning stays reviewable, then carries a
+`Status:` line reflecting where the fix landed. Gaps are kept verbatim
+even after they ship — the resolution context is more useful for
+auditors than a delete.
 
 ### G-1 — Angular OIDC library drift (LOW)
+**Status:** ✅ Resolved in Phase 1.4 (commit `9fb438f4`). Migration
+design doc updated to document `angular-oauth2-oidc` (the shipped lib).
+
 **Doc says** `angular-auth-oidc-client`; **code uses** `angular-oauth2-oidc`.
 Both support OIDC + PKCE so functionality is fine, but the migration doc,
 sample `provideAuth({...})` block, and any future onboarding will mislead.
@@ -149,6 +155,11 @@ Either swap the dep or update [keycloak-migration.md §4](keycloak-migration.md)
 to match reality.
 
 ### G-2 — Custom claims not flowed into the security principal (MEDIUM)
+**Status:** ✅ Resolved in Phase 1.2 (commit `9fb438f4`). New
+`KeycloakHospitalContextResolver` + `KeycloakHospitalContextFilter`
+populate `HospitalContextHolder` from `hospital_id` and
+`role_assignments` claims.
+
 [KeycloakJwtAuthenticationConverter](../hospital-core/src/main/java/com/example/hms/security/oidc/KeycloakJwtAuthenticationConverter.java)
 extracts roles only. `hospital_id` and `role_assignments` reach the JWT (the
 realm export ships protocol mappers and the seed script populates the user
@@ -161,6 +172,10 @@ resolver) writes `hospital_id` + `role_assignments` onto the principal the
 existing services already consume.
 
 ### G-3 — Android redirect-URI / realm mismatch (HIGH — blocks first live run)
+**Status:** ✅ Resolved in Phase 1.1 (commit `9fb438f4`). Realm export +
+`redirect-uris.md` aligned to the published Play Store / App Store
+bundle-id schemes (`com.bitnesttechs.hms.patient(.native):/oauth2redirect`).
+
 - Code declares `com.bitnesttechs.hms.patient:/oauth2redirect`
   ([app/build.gradle.kts](../patient-android-app/app/build.gradle.kts) +
   manifest placeholder).
@@ -176,6 +191,12 @@ existing services already consume.
   and re-import the realm.
 
 ### G-4 — Android intent-filter not declared in app manifest (LOW)
+**Status:** ✅ Resolved in Phase 1.3 (commit `9fb438f4`).
+`AndroidManifest.xml` declares `RedirectUriReceiverActivity`
+explicitly with `tools:node="replace"` and an
+`android:path="/oauth2redirect"` constraint that pins the filter
+to the realm-whitelisted callback path.
+
 The redirect callback works today only because AppAuth's library manifest
 auto-registers `RedirectUriReceiverActivity`. Best practice (and what the
 docs imply at §2.3) is to declare an explicit intent-filter in the app
@@ -183,6 +204,13 @@ docs imply at §2.3) is to declare an explicit intent-filter in the app
 so that the scheme is grep-able and survives a library upgrade.
 
 ### G-5 — No mobile e2e / instrumentation tests (MEDIUM)
+**Status:** ⚠️ Partially resolved in Phase 2.3 (commit `ea18b794`). New
+`MediHubPatientTests/KeycloakE2ETests.swift` adds an always-on AppAuth
+request-shape test plus a `MEDIHUB_KEYCLOAK_E2E=1`-gated live discovery
+test. Android Espresso UI coverage is **deferred** (the local Android
+wrapper jar is missing and host gradle can't load Java 21 build
+scripts) — tracked under "Deferred" below.
+
 - Android: only `AuthInterceptorTest` (3 unit tests). No
   Espresso/UIAutomator coverage, no E2E gate.
 - iOS: only `KeycloakConfigTests` (config-level). The header comment
@@ -192,6 +220,13 @@ so that the scheme is grep-able and survives a library upgrade.
   unverified by automation.
 
 ### G-6 — `app.auth.oidc.required=true` soak coverage is partial (MEDIUM)
+**Status:** ✅ Resolved in Phase 2.1 + 2.2 (commit `ea18b794`). New
+Playwright `describe` block stubs `/api/auth/login` → 410 Gone and
+asserts the portal surfaces the runbook message verbatim. Android
+`AuthRepository.login()` now parses Spring `MessageResponse` bodies
+and adds a 410-specific fallback that points users at SSO; covered by
+6 new `AuthRepositoryTest` cases.
+
 - Backend: covered by `AuthControllerOidcRequiredTest` (2/2).
 - Portal: no Playwright spec asserts the **portal's** behavior when the
   backend returns 410. The user-facing "session expired" / "sign in via
@@ -201,6 +236,11 @@ so that the scheme is grep-able and survives a library upgrade.
   the SSO button rather than a generic error.
 
 ### G-7 — Migration runbook does not match script behavior on MFA / passwords (LOW)
+**Status:** ✅ Resolved in Phase 1.4 (commit `9fb438f4`).
+`keycloak-migration.md §3` rewritten to match the shipped KC-4 strategy
+(no password / MFA copy; users get `UPDATE_PASSWORD` + `VERIFY_EMAIL`
+required actions).
+
 - [keycloak-migration.md §3 Phase B](keycloak-migration.md) says we copy
   `password_hash` and `mfa_secret`.
 - The actual script (and KC-4 design) deliberately skips both — every user
@@ -212,6 +252,12 @@ so that the scheme is grep-able and survives a library upgrade.
   runbook agree, otherwise reviewers / auditors will flag the drift.
 
 ### G-8 — Frontend has no fallback when `oidc.enabled=true` but discovery fails (LOW)
+**Status:** ✅ Resolved in Phase 2.4 (commit `ea18b794`). `OidcAuthService`
+exposes a new `discoveryFailed` signal + `isAvailable()` gate; the SSO
+button hides and an "SSO temporarily unavailable" banner shows when
+discovery rejects at bootstrap. Three added unit tests
+(`oidc-auth.service.spec.ts` 8/8 green via Karma headless).
+
 [OidcAuthService.initialize()](../hospital-portal/src/app/auth/oidc-auth.service.ts)
 calls `loadDiscoveryDocumentAndTryLogin()` once at bootstrap. If the
 issuer is unreachable (e.g. dev keycloak container not started), the SPA
@@ -221,6 +267,9 @@ clearly fallback; we should hide or warn on the SSO button when discovery
 fails so users don't try an action that 502s.
 
 ### G-9 — Phase D cleanup not started (LOW; do not start until cutover soak)
+**Status:** ⏸ Deferred until ≥30 days after prod cutover (see §3
+Phase 4). Tracked here for visibility.
+
 [keycloak-migration.md §3 Phase D](keycloak-migration.md) calls for:
 - Removing `AuthController.login()` signing logic.
 - Reducing `JwtTokenProvider` to claim-extraction only.
@@ -229,6 +278,12 @@ None of this is done — correctly, because Phases A–C must complete first.
 Tracked here so it doesn't fall off the radar after cutover.
 
 ### G-10 — Documentation drift between the three Keycloak docs (LOW)
+**Status:** ✅ Resolved in Phase 1.4 (commit `9fb438f4`).
+`keycloak-migration.md` now lists 26 realm roles and removes the
+fictional "federated User Storage SPI" Phase A.
+`keycloak-live-testing.md` carries a PowerShell→bash translation
+table for macOS/Linux developers.
+
 - `keycloak-migration.md` lists 20 roles; `realm-export.json` ships 26.
 - `keycloak-migration.md` describes a "Federated User Storage SPI"
   (Phase A) that we never built.
