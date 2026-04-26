@@ -144,8 +144,10 @@ class JwtAuthenticationFilterTest {
 
     @AfterEach
     void clearSecurityContext() {
-        // The DisabledException branch must clear the context — verify via
-        // teardown so any test that leaves a stale principal behind is caught.
+        // The DisabledException branch must clear the context — assert the
+        // invariant in teardown so any test that leaves a stale principal
+        // behind fails loudly here rather than corrupting a later test.
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         SecurityContextHolder.clearContext();
     }
 

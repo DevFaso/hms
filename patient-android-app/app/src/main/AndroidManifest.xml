@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Networking -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -36,6 +37,38 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            OAuth/OIDC redirect receiver for Keycloak SSO. AppAuth
+            ships its own copy of this activity, but we redeclare it
+            explicitly (tools:node="replace") so the redirect scheme is
+            visible in this manifest and reviewable independently of
+            the library version. The scheme is supplied by the
+            ${appAuthRedirectScheme} manifest placeholder set in
+            app/build.gradle.kts, and must match the scheme half of
+            the redirect URI registered on the hms-patient-android
+            client in keycloak/realm-export.json.
+
+            The android:path constraint pins the filter to the exact
+            /oauth2redirect callback the realm whitelists, so any
+            other deep link the app may add later under the same
+            scheme cannot be routed into AppAuth's redirect handler.
+            Keep this aligned with the path half of
+            KEYCLOAK_REDIRECT_URI in build.gradle.kts.
+        -->
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            android:exported="true"
+            tools:node="replace">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="${appAuthRedirectScheme}"
+                    android:path="/oauth2redirect" />
             </intent-filter>
         </activity>
     </application>

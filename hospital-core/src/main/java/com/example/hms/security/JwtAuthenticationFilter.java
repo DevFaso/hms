@@ -2,6 +2,7 @@ package com.example.hms.security;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -183,39 +184,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return true;
     }
 
+    /**
+     * Delegates to the shared
+     * {@link HospitalContextRequestOverrides#applyRequestOverrides} so the
+     * legacy bearer path and the OIDC path
+     * ({@code KeycloakHospitalContextFilter}) honour the
+     * {@code X-Hospital-Id} header identically. Behaviour is unchanged
+     * vs. the inline implementation; the only difference is log-line
+     * prefix ({@code [AUTH]} now, was {@code [JWT]}).
+     */
     private HospitalContext applyRequestOverrides(HospitalContext context, HttpServletRequest request) {
-        HospitalContext effective = context != null ? context : HospitalContext.empty();
-        String headerValue = request.getHeader("X-Hospital-Id");
-        if (!StringUtils.hasText(headerValue)) {
-            return effective;
-        }
-
-        try {
-            UUID requestedHospital = UUID.fromString(headerValue.trim());
-
-            boolean permitted = effective.isSuperAdmin()
-                || effective.getPermittedHospitalIds().isEmpty()
-                || effective.getPermittedHospitalIds().contains(requestedHospital);
-
-            if (!permitted) {
-                log.warn("[JWT] Ignoring X-Hospital-Id {} not in permitted scope {}",
-                    requestedHospital, effective.getPermittedHospitalIds());
-                return effective;
-            }
-
-            if (effective.getActiveHospitalId() == null
-                || !requestedHospital.equals(effective.getActiveHospitalId())) {
-                log.debug("[JWT] Overriding active hospital via header: {} (previously {})",
-                    requestedHospital, effective.getActiveHospitalId());
-            }
-
-            return effective.toBuilder()
-                .activeHospitalId(requestedHospital)
-                .build();
-        } catch (IllegalArgumentException ex) {
-            log.warn("[JWT] Invalid X-Hospital-Id header value: {}", headerValue);
-            return effective;
-        }
+        return HospitalContextRequestOverrides.applyRequestOverrides(context, request);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

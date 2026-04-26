@@ -10,9 +10,9 @@
 | Client ID | Type | Flow |
 |-----------|------|------|
 | `hms-backend` | Confidential / bearer-only | None (resource server) |
-| `hms-portal`  | Public | Auth Code + PKCE |
-| `hms-android` | Public | Auth Code + PKCE (Chrome Custom Tabs) |
-| `hms-ios`     | Public | Auth Code + PKCE (ASWebAuthenticationSession) |
+| `hms-portal` | Public | Auth Code + PKCE |
+| `hms-patient-android` | Public | Auth Code + PKCE (Chrome Custom Tabs) |
+| `hms-patient-ios` | Public | Auth Code + PKCE (ASWebAuthenticationSession) |
 
 ## Angular portal — `hms-portal`
 
@@ -28,27 +28,40 @@ Notes:
 - The actual callback path (e.g. `/auth/callback`) is handled inside the
   SPA router; Keycloak only needs the host+glob to authorize.
 
-## Android — `hms-android`
+## Android — `hms-patient-android`
 
 | Item | Value |
 |------|-------|
-| Package | `com.example.hms.patient` |
-| Scheme  | `com.example.hms.patient` |
-| Callback URI | `com.example.hms.patient://oauth/callback` |
-| Post-logout URI | `com.example.hms.patient://logout` |
+| Package (`applicationId`) | `com.bitnesttechs.hms.patient` |
+| Scheme  | `com.bitnesttechs.hms.patient` |
+| Callback URI | `com.bitnesttechs.hms.patient:/oauth2redirect` |
+| Post-logout URI | `com.bitnesttechs.hms.patient:/oauth2redirect` |
+
+The scheme is fixed by the published Play Store `applicationId`
+(`patient-android-app/app/build.gradle.kts`). Both the login redirect
+and the RP-initiated end-session redirect target the same URI —
+`KeycloakAuthService.buildEndSessionIntent` defaults
+`postLogoutRedirect` to the login redirect — so they must both be
+registered exactly as above.
 
 To switch to Android App Links (verified HTTPS redirects) later, add
 `https://hms.example.com/.well-known/assetlinks.json` and register
 `https://hms.example.com/app/oauth/callback` as a redirect URI.
 
-## iOS — `hms-ios`
+## iOS — `hms-patient-ios`
 
 | Item | Value |
 |------|-------|
-| Bundle ID | `com.example.hms.patient` |
-| Scheme    | `com.example.hms.patient` |
-| Callback URI | `com.example.hms.patient://oauth/callback` |
-| Post-logout URI | `com.example.hms.patient://logout` |
+| Bundle ID | `com.bitnesttechs.hms.patient.native` |
+| Scheme    | `com.bitnesttechs.hms.patient.native` |
+| Callback URI | `com.bitnesttechs.hms.patient.native:/oauth2redirect` |
+| Post-logout URI | `com.bitnesttechs.hms.patient.native:/oauth2redirect` |
+
+The scheme is fixed by the published App Store bundle id
+(`patient-ios-app/project.yml` `PRODUCT_BUNDLE_IDENTIFIER`) and the URL
+scheme registered in `Info.plist`. RP-initiated logout is not yet
+wired in iOS, but the realm registers the same URI for symmetry with
+Android so it will work when added.
 
 To switch to Universal Links later, add
 `https://hms.example.com/.well-known/apple-app-site-association` and

@@ -67,9 +67,23 @@ export class Login implements OnInit {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
-  /** KC-2b: true when the env enables Keycloak/OIDC login. */
+  /**
+   * KC-2b: true when SSO is enabled <em>and</em> the issuer is reachable
+   * (i.e. Keycloak discovery succeeded). Bound to the SSO button —
+   * hides the button automatically when Keycloak is unreachable so the
+   * user falls back to the legacy form rather than tripping over a 502.
+   */
   get oidcLoginEnabled(): boolean {
-    return this.oidcAuth.isEnabled();
+    return this.oidcAuth.isAvailable();
+  }
+
+  /**
+   * KC-2b: true when SSO was configured but discovery failed. Drives the
+   * "temporarily unavailable" banner above the legacy form so the user
+   * understands why the SSO button vanished.
+   */
+  get oidcDiscoveryFailed(): boolean {
+    return this.oidcAuth.isEnabled() && this.oidcAuth.discoveryFailed();
   }
 
   /** KC-2b: kick off Authorization Code + PKCE — browser navigates to Keycloak. */
