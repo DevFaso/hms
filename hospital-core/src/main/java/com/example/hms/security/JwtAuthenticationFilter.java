@@ -68,6 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             // ── WebSocket ticket-based auth (T-38) ──
+            // Tickets are reusable within their TTL so SockJS can hit /info and the
+            // transport upgrade with the same value (see WsTicketService Javadoc).
             if (path != null && path.startsWith("/api/ws-chat")
                     && handleWsTicketAuth(request, response, filterChain, path)) {
                 return;
@@ -116,11 +118,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // Ticket-based handshake must respect the same email-verification
                     // gate as JWT auth. A redeemed ticket for an unverified or disabled
                     // account is not sufficient to attach role-based authorities.
-                    // Username is redacted from the log line (defense-in-depth against
-                    // log-aggregator misconfiguration / PII leak); the path + the
-                    // ticket-issuance trail let ops correlate when needed.
+                    // Username is redacted from the log line and from respondUnauthorized
+                    // (defense-in-depth against log-aggregator misconfiguration / PII leak);
+                    // the path + the ticket-issuance trail let ops correlate when needed.
                     log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
-                    respondUnauthorized(response, username);
+                    respondUnauthorized(response, null);
                     return true;
                 }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(

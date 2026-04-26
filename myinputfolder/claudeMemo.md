@@ -56,40 +56,69 @@ No SQL needed. Next time the patient hits `/me/patient/after-visit-summaries` fr
 
 ---
 
-## 3. UAT role-welcome link broken (`hms-uat.bitnesttechs.com` NXDOMAIN)
+## 3. UAT role-welcome link broken — wrong host pattern (`hms-uat.…` vs `hms.uat.…`)
+
+> **CORRECTION (2026-04-25 evening):** an earlier draft of this section claimed
+> the UAT host was `hms-uat.bitnesttechs.com` (hyphen). That was wrong. Railway
+> has actually provisioned `hms.uat.bitnesttechs.com` (dot) and
+> `api.hms.uat.bitnesttechs.com` for the UAT services. Anyone who followed the
+> previous draft and set `FRONTEND_BASE_URL=https://hms-uat.bitnesttechs.com`
+> on Railway *caused* the broken email links — the hyphen host has no DNS.
+> Section 3 has been rewritten to match the actual infra.
 
 ### Problem
-The role-welcome link `https://hms-uat.bitnesttechs.com/onboarding/role-welcome?assignment=...` returns `DNS_PROBE_FINISHED_NXDOMAIN`. The action button on that page is also unresponsive (likely because the page never loads).
+A role-welcome email went out with the link
+`https://hms-uat.bitnesttechs.com/onboarding/role-welcome?assignment=…` —
+which returns `DNS_PROBE_FINISHED_NXDOMAIN` because that hostname doesn't
+exist. The action button in the email uses the same URL and fails identically.
 
-### Root cause
-**Not a code bug** — the YAML configuration is correct for the three-environment model:
+### Actual host pattern (verified against Railway dashboard)
 
-| Env  | Frontend host                       |
-|------|-------------------------------------|
-| prod | `hms.bitnesttechs.com`              |
-| uat  | `hms-uat.bitnesttechs.com`          |
-| dev  | `hms.dev.bitnesttechs.com`          |
+| Env  | Frontend host                  | API host                            |
+|------|--------------------------------|-------------------------------------|
+| prod | `hms.bitnesttechs.com`         | `api.hms.bitnesttechs.com`          |
+| uat  | `hms.uat.bitnesttechs.com`     | `api.hms.uat.bitnesttechs.com`      |
+| dev  | `hms.dev.bitnesttechs.com`     | `api.hms.dev.bitnesttechs.com`      |
 
-The DNS record for `hms-uat.bitnesttechs.com` is missing or unwired on the Railway side. Prod (`hms.bitnesttechs.com`) is unaffected.
+UAT uses a `hms.<env>.bitnesttechs.com` subdomain pattern, *not* a hyphenated
+`hms-<env>.bitnesttechs.com` pattern. The dot is consistent with dev and prod.
+
+### Root cause of the broken email
+
+At the time the email was generated, the Railway `hms-backend-uat` service had
+`FRONTEND_BASE_URL=https://hms-uat.bitnesttechs.com` (hyphen) — set per the
+earlier (wrong) version of this memo. `AssignmentLinkService` substituted that
+value into the URL template, so the email shipped with the broken link.
 
 ### What changed
-`hospital-core/src/main/resources/application-uat.yml` — kept the fallback URL as `hms-uat.bitnesttechs.com`. Replaced the misleading comments (which previously referenced `hms-uat.dev.bitnesttechs.com`, conflating UAT with dev) so the comments now document the three-env model and explicitly note that the DNS record + Railway env vars must be wired up on infra.
+
+- `hospital-core/src/main/resources/application-uat.yml` — already uses
+  `https://hms.uat.bitnesttechs.com` (dot) as the fallback. No edit needed; the
+  comments and defaults are correct.
+- `hospital-core/src/main/java/com/example/hms/config/PortalProperties.java` —
+  added a `@PostConstruct` log line that prints the resolved
+  `profile-completion-url-template` at startup, so ops can verify the running
+  pod is using the right value at a glance.
+- `http/http-client.env.json` — fixed UAT entries to the dot form.
 
 ---
 
 ## Next steps
 
 ### Infra (UAT) — owner: Tiego / DevOps
-1. Add a DNS record (A or CNAME via the registrar) for:
-   - `hms-uat.bitnesttechs.com` → Railway UAT backend service
-   - `patient.uat.bitnesttechs.com` → Railway UAT patient portal service (if separate)
-   - `api.hms-uat.bitnesttechs.com` → Railway UAT API service (if exposed publicly)
-2. In the Railway UAT project, attach the custom domains above to the right services so Railway provisions TLS.
-3. On the Railway UAT backend service, set explicit env vars (don't rely on the YAML fallback):
-   - `FRONTEND_BASE_URL=https://hms-uat.bitnesttechs.com`
-   - `CORS_ALLOWED_ORIGINS=https://hms-uat.bitnesttechs.com,https://patient.uat.bitnesttechs.com`
-   - `PUBLIC_BASE_URL=https://api.hms-uat.bitnesttechs.com` (or whatever the UAT api host actually is)
-4. Re-issue a role-welcome email and confirm the link resolves and the action button works.
+
+1. DNS records — already provisioned by Railway, leave as-is:
+   - `hms.uat.bitnesttechs.com` → Railway UAT frontend service (`hms-frontend-uat`)
+   - `api.hms.uat.bitnesttechs.com` → Railway UAT backend service (`hms-backend-uat`, port 8080)
+   - `patient.uat.bitnesttechs.com` → Railway UAT patient portal service (if separate; not yet attached)
+2. **Do NOT** add hyphenated `hms-uat.bitnesttechs.com` records — that pattern doesn't exist in this project.
+3. On the Railway UAT backend service, ensure these env vars use the dot form. Either leave unset (the YAML fallback in `application-uat.yml` is already correct) **or** set them explicitly to:
+   - `FRONTEND_BASE_URL=https://hms.uat.bitnesttechs.com`
+   - `CORS_ALLOWED_ORIGINS=https://hms.uat.bitnesttechs.com,https://patient.uat.bitnesttechs.com`
+   - `PUBLIC_BASE_URL=https://api.hms.uat.bitnesttechs.com`
+4. After the next backend deploy, watch the boot log for the new line (added in the PortalProperties `@PostConstruct`):
+   `[PORTAL] profile-completion URL template = https://hms.uat.bitnesttechs.com/onboarding/role-welcome?assignment=%s`
+5. Re-issue a role-welcome email (a *new* assignment — the older `HCX-…-202604251803-…` email is baked-in and cannot be retroactively fixed) and confirm the link resolves.
 
 ### Backend (low priority follow-ups)
 - Consider treating PUT `/encounters/{id}` setting `status=COMPLETED` as a deprecated path — UI should always go through POST `/encounters/{id}/checkout` so the AVS write happens at the dedicated entry point. The fix in `updateEncounter` is a safety net; long-term we want one canonical write path.

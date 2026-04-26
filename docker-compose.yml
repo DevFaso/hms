@@ -138,6 +138,11 @@ services:
       start_period: 30s
 
   # ── Prometheus ──────────────────────────────────────────────
+  # Two metric paths feed this instance:
+  #   1. Direct scrape of the backend (legacy prometheus.yml scrape_configs).
+  #   2. remote_write from Alloy (production-shaped pipeline; activated when
+  #      GRAFANA_METRICS_URL is unset and points at this Prometheus instead).
+  # The remote-write receiver flag is required for #2.
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: hms-prometheus
@@ -149,6 +154,48 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-remote-write-receiver'
+
+  # ── Loki (log aggregation) ─────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: hms-loki
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ── Alloy (metrics scraping + log shipping) ────────────────
+  # Reads docker container stdout via the docker socket and ships it to Loki,
+  # and scrapes Spring Boot Prometheus metrics. Requires the docker socket to
+  # be mounted read-only.
+  alloy:
+    image: grafana/alloy:v1.4.2
+    container_name: hms-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./grafana/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    environment:
+      # Local dev: forward metrics to the local Prometheus's remote_write endpoint.
+      # Override these in a Grafana Cloud setup.
+      GRAFANA_METRICS_URL: ${GRAFANA_METRICS_URL:-http://prometheus:9090/api/v1/write}
+      GRAFANA_METRICS_USER: ${GRAFANA_METRICS_USER:-}
+      GRAFANA_METRICS_TOKEN: ${GRAFANA_METRICS_TOKEN:-}
+    depends_on:
+      loki:
+        condition: service_healthy
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:
@@ -159,12 +206,15 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
+      # Log panels need to know about the Loki datasource — provisioning handles
+      # the rest (see grafana/provisioning/datasources/datasources.yml).
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - loki
 
 volumes:
   pgdata:
@@ -172,6 +222,8 @@ volumes:
   pgdata_uat:
   prometheus_data:
   grafana_data:
+  loki_data:
+  alloy_data:
   redis_data:
   keycloak_pgdata:
   # Named volume for backend uploaded files (profile images, attachments, etc.).

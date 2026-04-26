@@ -3,7 +3,12 @@
     "allow": [
       "Bash(gh pr *)",
       "Bash(gh api *)",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(git diff *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)"
     ]
   },
   "hooks": {

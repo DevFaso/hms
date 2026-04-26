@@ -10,15 +10,28 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Issues single-use, short-lived tickets for WebSocket handshake authentication.
+ * Issues short-lived tickets for WebSocket handshake authentication.
  * <p>
- * Flow:
+ * Flow (paths shown without the {@code /api} servlet context-path; the portal's
+ * Nginx + Spring's {@code server.servlet.context-path=/api} prepend it, so the
+ * browser sees {@code POST /api/auth/ws-ticket} and {@code GET /api/ws-chat?ticket=…}):
  * <ol>
  *   <li>Authenticated user calls {@code POST /auth/ws-ticket}</li>
  *   <li>Server generates a random ticket, stores it mapped to the user's username</li>
- *   <li>Frontend connects to {@code /ws-chat?ticket=<ticket>}</li>
- *   <li>Filter calls {@link #redeem(String)} — returns the username once, then deletes the ticket</li>
+ *   <li>Frontend connects to {@code /ws-chat?ticket=<ticket>} (i.e. {@code /api/ws-chat?…} from the browser)</li>
+ *   <li>Filter calls {@link #redeem(String)} — returns the username if the ticket is valid</li>
  * </ol>
+ *
+ * <p>Tickets are reusable within the {@value #TICKET_TTL_MS}-ms TTL window. SockJS opens
+ * the same handshake URL twice (once for {@code /info} transport negotiation, once for the
+ * actual transport), so a single-use semantic would burn the ticket on the first hit and
+ * 401 the second. Bounding replay to the TTL keeps the attack surface tight while letting
+ * the legitimate handshake complete.
+ *
+ * <p>The TTL is sized to absorb a SockJS reconnect cycle (initial connect, transport
+ * upgrade, plus one or two reconnect attempts on a flaky network) without forcing the
+ * client back through {@code /auth/ws-ticket}. The frontend still re-mints on hard failure;
+ * the longer window just stops a one-second blip from cascading into a permanent 401.
  *
  * <p><strong>Limitation:</strong> in-memory; not shared across instances.
  * Replace with Redis-backed store when horizontal scaling is required.
@@ -27,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class WsTicketService {
 
-    private static final long TICKET_TTL_MS = 60_000; // 1 minute
+    private static final long TICKET_TTL_MS = 300_000; // 5 minutes
     private static final int TICKET_BYTE_LENGTH = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -35,7 +48,8 @@ public class WsTicketService {
     private final Map<String, TicketEntry> tickets = new ConcurrentHashMap<>();
 
     /**
-     * Generate a single-use ticket for the given user.
+     * Generate a short-lived ticket for the given user. The same ticket may be
+     * redeemed multiple times until its TTL expires (see class Javadoc).
      *
      * @param username the authenticated user's username
      * @return an opaque, URL-safe ticket string
@@ -51,19 +65,22 @@ public class WsTicketService {
     }
 
     /**
-     * Redeem a ticket. Returns the username if the ticket is valid and not expired,
-     * then immediately removes it (single-use). Returns {@code null} otherwise.
+     * Redeem a ticket. Returns the username if the ticket is valid and not expired.
+     * The entry stays in the map until its TTL expires so SockJS can reuse the ticket
+     * across the {@code /info} negotiation and the actual transport handshake.
+     * Returns {@code null} for unknown or expired tickets.
      */
     public String redeem(String ticket) {
         if (ticket == null || ticket.isBlank()) {
             return null;
         }
-        TicketEntry entry = tickets.remove(ticket);
+        TicketEntry entry = tickets.get(ticket);
         if (entry == null) {
-            log.debug("[WS-TICKET] Unknown or already-used ticket");
+            log.debug("[WS-TICKET] Unknown ticket");
             return null;
         }
         if (System.currentTimeMillis() > entry.expiresAt()) {
+            tickets.remove(ticket, entry);
             log.debug("[WS-TICKET] Expired ticket for user='{}'", entry.username());
             return null;
         }

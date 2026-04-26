@@ -1,5 +1,8 @@
+import type { EnvironmentName } from './environment-name';
+
 export const environment = {
   production: false,
+  name: 'dev' satisfies EnvironmentName,
   apiUrl: '/api',
   apiBase: '/api',
   faroCollectorUrl: '',

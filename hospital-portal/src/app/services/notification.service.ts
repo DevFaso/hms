@@ -52,6 +52,7 @@ export class NotificationService {
   private readonly baseReconnectDelay = 5_000; // start at 5 s
 
   private connectGeneration = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   getNotifications(params?: {
     read?: boolean;
@@ -96,9 +97,16 @@ export class NotificationService {
     const token = this.auth.getToken();
     if (!token || this.auth.isExpired(token)) return;
 
+    // Cancel any pending reconnect — a fresh connect supersedes it.
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     const generation = ++this.connectGeneration;
 
-    // T-38: exchange JWT for a single-use WebSocket ticket, then hand it to SockJS.
+    // T-38: exchange JWT for a short-lived WebSocket ticket, then hand it to SockJS.
+    // Each call mints a fresh ticket so reconnects never reuse a stale (expired) one.
     this.http.post<{ ticket: string }>('/auth/ws-ticket', {}).subscribe({
       next: (res) => {
         if (generation !== this.connectGeneration) return;
@@ -107,9 +115,39 @@ export class NotificationService {
         this.activateStompWithTicket(ticket, generation);
       },
       error: () => {
-        // Ticket issuance failed — skip WebSocket silently; REST flows still work.
+        // Ticket issuance failed — schedule one retry; don't loop.
+        this.scheduleReconnect(generation);
       },
     });
+  }
+
+  /**
+   * Tear down the StompJS client (if any) and schedule a fresh `connectWebSocket()`
+   * with exponential backoff. We don't lean on StompJS's built-in reconnect because
+   * its `webSocketFactory` closure captures the ticket — once the ticket TTL elapses
+   * every retry would 401 forever. Always re-mint the ticket on reconnect.
+   */
+  private scheduleReconnect(generation: number): void {
+    if (generation !== this.connectGeneration) return;
+    if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.disconnectWebSocket();
+      return;
+    }
+    this.reconnectAttempts++;
+    const delay = Math.min(
+      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectDelay,
+    );
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+    }
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      // Drop the old client before re-minting; the new connect bumps the generation.
+      this.stompClient?.deactivate().catch(() => undefined);
+      this.stompClient = null;
+      this.connectWebSocket();
+    }, delay);
   }
 
   private activateStompWithTicket(ticket: string, generation: number): void {
@@ -124,21 +162,19 @@ export class NotificationService {
         this.stompClient = new Client({
           webSocketFactory: () => new SockJSCtor(sockUrl),
 
-          reconnectDelay: this.baseReconnectDelay,
+          // Disable StompJS's built-in reconnect (it would reuse the stale ticket).
+          // We drive reconnects via scheduleReconnect() to mint a fresh ticket.
+          reconnectDelay: 0,
 
-          // Abort reconnection if the token has expired or max retries exceeded
           beforeConnect: () => {
-            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
+            if (this.auth.isExpired()) {
               this.disconnectWebSocket();
-              throw new Error('Token expired or max reconnect attempts reached');
+              throw new Error('Token expired');
             }
           },
 
           onConnect: () => {
             this.reconnectAttempts = 0;
-            if (this.stompClient) {
-              this.stompClient.reconnectDelay = this.baseReconnectDelay;
-            }
 
             this.stompClient?.subscribe('/user/topic/notifications', (frame: IMessage) => {
               try {
@@ -150,59 +186,15 @@ export class NotificationService {
             });
           },
 
-          onDisconnect: () => {
-            // If token has expired or max retries exceeded, stop reconnecting
-            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
-              this.disconnectWebSocket();
-              return;
-            }
-            this.reconnectAttempts++;
-            const nextDelay = Math.min(
-              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-              this.maxReconnectDelay,
-            );
-            if (this.stompClient) {
-              this.stompClient.reconnectDelay = nextDelay;
-            }
-          },
-
-          onStompError: () => {
-            // STOMP-level auth failures — stop reconnecting with stale token
-            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
-              this.disconnectWebSocket();
-              return;
-            }
-            this.reconnectAttempts++;
-            const nextDelay = Math.min(
-              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-              this.maxReconnectDelay,
-            );
-            if (this.stompClient) {
-              this.stompClient.reconnectDelay = nextDelay;
-            }
-          },
-
-          onWebSocketError: () => {
-            // Transport-level failure (401 from SockJS /info) — stop if token expired
-            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
-              this.disconnectWebSocket();
-              return;
-            }
-            this.reconnectAttempts++;
-            const nextDelay = Math.min(
-              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-              this.maxReconnectDelay,
-            );
-            if (this.stompClient) {
-              this.stompClient.reconnectDelay = nextDelay;
-            }
-          },
+          onDisconnect: () => this.scheduleReconnect(generation),
+          onStompError: () => this.scheduleReconnect(generation),
+          onWebSocketError: () => this.scheduleReconnect(generation),
         });
 
         this.stompClient.activate();
       })
       .catch((_: unknown) => {
-        // Token expired or unavailable — skip WebSocket connection silently
+        // sockjs-client failed to load (offline / chunk error). Don't loop.
       });
   }
 
@@ -212,6 +204,10 @@ export class NotificationService {
 
   disconnectWebSocket(): void {
     this.connectGeneration++;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.stompClient?.deactivate().catch(() => undefined);
     this.stompClient = null;
     this.reconnectAttempts = 0;
