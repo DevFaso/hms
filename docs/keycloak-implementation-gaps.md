@@ -13,7 +13,7 @@ phased plan to close them.
 
 ## Phase 1 status (2026-04-26)
 
-Phase 1 of the plan below is implemented on `feature/security-v1`:
+Phase 1 of the plan below is implemented on `feature/keycloak-gaps`:
 
 - ✅ **G-3** Realm export, `redirect-uris.md`, and live-testing doc now
   use `hms-patient-android` / `hms-patient-ios` with the
@@ -36,7 +36,44 @@ Phase 1 of the plan below is implemented on `feature/security-v1`:
   realm roles. `keycloak-live-testing.md` carries a macOS/Linux
   shell-translation table.
 
-Phases 2–4 remain pending.
+## Phase 2 status (2026-04-26)
+
+Phase 2 (test + UX hardening) is implemented on the same branch:
+
+- ✅ **G-8 (2.4)** `OidcAuthService` exposes a new `discoveryFailed`
+  signal and an `isAvailable()` gate. On bootstrap, when
+  `loadDiscoveryDocumentAndTryLogin()` rejects (issuer unreachable),
+  the SSO button is hidden and an "SSO temporarily unavailable"
+  banner is shown above the legacy form. Covered by 3 added unit
+  tests (8/8 in `oidc-auth.service.spec.ts` green via Karma headless).
+- ✅ **G-6 (2.1)** New Playwright `describe` block in
+  `keycloak-login.spec.ts` stubs `/api/auth/login` to return
+  **HTTP 410 Gone** with the runbook message and asserts the portal
+  surfaces it verbatim (and never falls back to the generic
+  "Login failed. Please try again." copy). Two specs; CI runs them
+  in the `no-auth` project.
+- ✅ **G-6 (2.2)** `AuthRepository.login()` now extracts
+  `{"message":"…"}` / `{"error":"…"}` from the error body for any
+  non-success response, with a 410-specific fallback that points
+  the user at SSO. Six new JVM unit tests
+  (`AuthRepositoryTest`) cover the parser and the status-code
+  routing — runnable via `./gradlew test` once the Android wrapper
+  jar is restored.
+  - **Deferred**: a true Espresso UI test asserting "only the SSO
+    button is offered" is held back because the local Android
+    wrapper is broken (`gradle-wrapper.jar` not checked in) and host
+    Gradle can't load Java 21 build scripts. Tracked here for the
+    next sprint.
+- ✅ **G-5 (2.3)** New `MediHubPatientTests/KeycloakE2ETests.swift`
+  pins the AppAuth `OIDAuthorizationRequest` shape (always-on) and
+  adds a `MEDIHUB_KEYCLOAK_E2E=1`-gated test that fetches the
+  realm's `.well-known/openid-configuration` and validates the
+  endpoint metadata. Mirrors the Angular `KEYCLOAK_E2E=1` pattern.
+- ✅ **G-1 (2.5)** Closed in Phase 1.4 — `keycloak-migration.md`
+  documents `angular-oauth2-oidc` (the shipped library) instead of
+  `angular-auth-oidc-client`. No code change required.
+
+Phases 3–4 remain pending.
 
 ---
 
