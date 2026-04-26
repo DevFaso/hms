@@ -48,12 +48,16 @@ export function buildUserPayload(
   if (plan.forcePasswordReset) requiredActions.push('UPDATE_PASSWORD');
   if (!plan.requireEmailVerified) requiredActions.push('VERIFY_EMAIL');
 
-  const roleAssignmentsJson = user.assignments
-    .map((a) =>
-      JSON.stringify({ hospitalId: a.hospitalId ?? '', role: a.role }),
-    )
-    .slice() // defensive copy before sort
-    .sort();
+  // Backend contract — KeycloakHospitalContextResolver#hospitalIdFromAssignment
+  // splits each entry on '@' and parses the trailing UUID. Anything that does
+  // not match `<ROLE>@<uuid>` is logged and dropped, so changing this format
+  // silently breaks multi-hospital RBAC. See docs/keycloak-implementation-gaps.md.
+  // (`.map(...)` already returns a fresh array, so `.sort()` mutates it in
+  // place without aliasing the caller's `assignments` array.)
+  const roleAssignments = user.assignments
+    .filter((a) => a.hospitalId)
+    .map((a) => `${a.role}@${a.hospitalId}`)
+    .sort((a, b) => a.localeCompare(b));
 
   return {
     username: user.username,
@@ -64,7 +68,7 @@ export function buildUserPayload(
     emailVerified: plan.requireEmailVerified,
     attributes: {
       hospital_id: user.primaryHospitalId ? [user.primaryHospitalId] : [],
-      role_assignments: roleAssignmentsJson,
+      role_assignments: roleAssignments,
       ...(user.phoneNumber ? { phone_number: [user.phoneNumber] } : {}),
     },
     requiredActions,
