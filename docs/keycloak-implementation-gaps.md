@@ -327,17 +327,28 @@ gracefully when something is misconfigured.
 ### Phase 3 — Cutover & soak (gated on prod schedule)
 
 Goal: flip `app.auth.oidc.required=true` in prod after the maintenance
-window already on the calendar (per
-[runbook](runbooks/keycloak-migration-runbook.md) §When to run).
+window already on the calendar.
+
+The full ops procedure now lives in
+[`runbooks/keycloak-cutover-runbook.md`](runbooks/keycloak-cutover-runbook.md)
+— it covers preconditions, the flag flip (Spring Cloud Config and
+plain env-var rollouts), smoke checks against the live realm, the
+seven-day monitoring matrix (410 ratio, JWKS latency, MFA enrolment
+ramp), and the rollback procedure. A startup log line — `[OIDC]
+app.auth.oidc.required=true — …` — is emitted by `AuthController` so
+the cutover on-call can confirm the flag took effect from boot logs.
+
+Top-level sequencing remains:
 
 1. Run the migration runbook (dry-run → live) in `uat` first; soak ≥ 5
    business days. Acceptance: zero `failed`, zero unexpected `orphaned`,
    `OidcResourceServerIntegrationTest` green against the uat realm.
 2. Schedule a maintenance window with ops + clinical leads.
-3. Run the runbook in `prod`, then flip
-   `app.auth.oidc.required=true` via the Spring config server / env.
-4. Post-cutover: monitor 401/410 ratios on `/api/auth/*`, MFA enrolment
-   completion rate, and JWKS fetch latency for 7 days.
+3. Execute
+   [`keycloak-cutover-runbook.md`](runbooks/keycloak-cutover-runbook.md)
+   in `prod`.
+4. Post-cutover: monitor per the runbook's "Post-flip monitoring"
+   matrix for ≥ 30 days before kicking off Phase 4.
 
 ### Phase 4 — Cleanup (G-9), starts ≥ 30 days after prod cutover
 
