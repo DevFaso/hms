@@ -1,6 +1,13 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+# Each Railway service MUST set BUILD_CONFIG as a Service Variable to pick the
+# right Angular environment.ts at build time. Without it the Dockerfile falls
+# back to `production`, which on UAT/dev mis-tags Faro telemetry and routes it
+# to the prod collector (CORS will block, prod dashboards get noise).
+#   hms-frontend-uat  → BUILD_CONFIG=uat
+#   hms-frontend-dev  → BUILD_CONFIG=dev
+#   hms-frontend-prod → BUILD_CONFIG=production (or unset)
 
 [deploy]
 healthcheckPath = "/"

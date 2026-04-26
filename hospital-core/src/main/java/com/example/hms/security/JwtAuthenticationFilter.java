@@ -68,6 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             // ── WebSocket ticket-based auth (T-38) ──
+            // Tickets are reusable within their TTL so SockJS can hit /info and the
+            // transport upgrade with the same value (see WsTicketService Javadoc).
             if (path != null && path.startsWith("/api/ws-chat")
                     && handleWsTicketAuth(request, response, filterChain, path)) {
                 return;
