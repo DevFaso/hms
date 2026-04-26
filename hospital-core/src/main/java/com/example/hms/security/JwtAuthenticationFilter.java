@@ -116,8 +116,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // Ticket-based handshake must respect the same email-verification
                     // gate as JWT auth. A redeemed ticket for an unverified or disabled
                     // account is not sufficient to attach role-based authorities.
-                    log.warn("[WS-TICKET] Refusing ticket for disabled/unverified user='{}' on path={}",
-                            username, path);
+                    // Username is redacted from the log line (defense-in-depth against
+                    // log-aggregator misconfiguration / PII leak); the path + the
+                    // ticket-issuance trail let ops correlate when needed.
+                    log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
                     respondUnauthorized(response, username);
                     return true;
                 }
@@ -164,9 +166,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return false;
             }
         } else {
-            log.warn("[JWT] Token provided but invalid for path={} headerPrefixOk={} rawHeader={}", path,
-                request.getHeader(HEADER_STRING) != null && request.getHeader(HEADER_STRING).startsWith(TOKEN_PREFIX),
-                request.getHeader(HEADER_STRING));
+            // Do NOT log the raw Authorization header — even an invalid/expired token
+            // still embeds the user's subject claim and could be a partial credential
+            // leak through log aggregators. Log only the structural facts (was the
+            // header present, did it start with "Bearer ", and the token length) so
+            // ops can distinguish "no auth header" from "garbled header" from
+            // "expired token" without ever shipping token bytes off the box.
+            String rawHeader = request.getHeader(HEADER_STRING);
+            boolean prefixOk = rawHeader != null && rawHeader.startsWith(TOKEN_PREFIX);
+            int tokenLen = prefixOk ? rawHeader.length() - TOKEN_PREFIX.length() : 0;
+            log.warn("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
+                path, rawHeader != null, prefixOk, tokenLen);
         }
         return true;
     }
@@ -239,8 +249,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // disabled (most commonly: email not yet verified). Refuse the request rather
             // than letting the generic catch-all in doFilterInternal pass it through
             // unauthenticated.
-            log.warn("[JWT] Rejecting token for disabled/unverified principal '{}': {}",
-                extractedSubject, disabled.getMessage());
+            //
+            // Subject + DisabledException.getMessage() are kept out of the log line
+            // (the message is already generic; the subject is PII). Operators who
+            // need to investigate can correlate via the JTI from the request log.
+            log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             return false;
@@ -270,7 +283,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (missingPrincipalSubjects.add(subject)) {
             rememberMissingPrincipal(subject);
-            log.warn("[JWT] Ignoring token for missing user '{}' (suppressing future warnings)", subject);
+            // Subject is a username — kept out of the warn log (defense-in-depth
+            // against PII bleed into log aggregators). At trace level a follow-up
+            // line carries the subject for deep debugging in dev only.
+            log.warn("[JWT] Ignoring token for a missing user (suppressing future warnings).");
+            if (log.isTraceEnabled()) {
+                log.trace("[JWT] First missing-user record subject='{}'", subject);
+            }
         } else if (log.isTraceEnabled()) {
             log.trace("[JWT] Already warned about missing user '{}', suppressing log", subject);
         }

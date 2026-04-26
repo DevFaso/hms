@@ -27,15 +27,23 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
     @Override
     @Transactional
     public HospitalUserDetails loadUserByUsername(String username) {
-        log.info("🔍 Attempting to load user by username: {}", username);
+        // This method fires per-request on every authenticated call. INFO-level
+        // logging here was both noisy (one line per request times every user) and
+        // a steady drip of usernames + role sets into log aggregators. Demoted to
+        // DEBUG and stripped of identifying info on the hot path; the lookup
+        // failure is the only branch that retains operator-actionable detail
+        // (and it's still WARN-level without surfacing the username).
+        log.debug("🔍 loadUserByUsername invoked");
 
         User user = userRepository.findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> {
-                    log.warn("❌ User not found with username: {}", username);
-                    return new UsernameNotFoundException("User not found with username: " + username);
+                    // Subject not found is operator-actionable but not enumerable
+                    // (the caller already presented this username via JWT subject
+                    // or login form). Logged at DEBUG to avoid PII bleed; the
+                    // upstream filter already emits a redacted WARN line.
+                    log.debug("❌ User not found for supplied username");
+                    return new UsernameNotFoundException("User not found.");
                 });
-
-        log.info("✅ Loaded user: {}, Active: {}", user.getUsername(), user.isActive());
 
         // Hospital-scoped roles from user_role_hospital_assignment (active only)
         Set<String> scopedRoles = userRoleHospitalAssignmentRepository.findByUser(user).stream()
@@ -57,8 +65,8 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
             .map(SimpleGrantedAuthority::new)
             .collect(Collectors.toSet());
 
-        log.info("🔐 User '{}' granted {} authorities (scoped={}, global={}): {}",
-                user.getUsername(), authorities.size(), scopedRoles.size(), globalRoles.size(), authorities);
+        log.debug("🔐 Granted {} authorities (scoped={}, global={}, active={})",
+                authorities.size(), scopedRoles.size(), globalRoles.size(), user.isActive());
 
         return new CustomUserDetails(user, authorities);
     }

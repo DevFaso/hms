@@ -75,7 +75,10 @@ class JwtTokenProviderAuthenticationTest {
 
         assertThatThrownBy(() -> provider.getAuthenticationFromJwt(token))
             .isInstanceOf(DisabledException.class)
-            .hasMessageContaining(username);
+            // The exception message must NOT contain the username — defense-in-depth
+            // against future call sites that might serialize the exception (audit logs,
+            // error pages). The username belongs in the structured server log only.
+            .hasMessage("Account is disabled or unverified.");
     }
 
     @Test
