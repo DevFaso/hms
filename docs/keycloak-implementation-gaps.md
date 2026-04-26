@@ -164,7 +164,106 @@ KC functional checks 1–5 all PASS (token claims shape, NimbusJwtDecoder
 accepts live JWTs, direct grant rejected on every production client,
 migration logic 22/22, refresh-token rotation).
 
-Phases 3–4 remain pending.
+## Phase 2.8 status (pending) — per-environment Keycloak + mobile release packaging
+
+Phase 2.6/2.7 closed every code-side gap. Before Phase 3 cutover can run,
+two operational gates remain — and the mobile apps need release builds
+that actually use the new Keycloak. Today the apps are dev-only
+(TestFlight internal / Play Internal Track), pinned to
+`https://api.hms.dev.bitnesttechs.com`, with SSO defaulted **OFF** in
+both build configs:
+
+- iOS scheme env vars: `MEDIHUB_KEYCLOAK_ISSUER=""`,
+  `MEDIHUB_KEYCLOAK_SSO_ENABLED="0"` ([project.yml](../patient-ios-app/project.yml)).
+- Android `local.properties` defaults: `KEYCLOAK_SSO_ENABLED=false`,
+  `KEYCLOAK_ISSUER=""`
+  ([app/build.gradle.kts](../patient-android-app/app/build.gradle.kts)).
+
+The only Keycloak that's actually been exercised against this code is
+the local docker-compose profile — there is no `hms-keycloak-dev`,
+`hms-keycloak-uat`, or `hms-keycloak-prod` service deployed yet.
+
+### Phase 2.8.A — Provision per-environment Keycloak (DevOps; blocks 2.8.B/C)
+
+**Status:** ⏳ pending (waiting on DevOps to click through the existing
+Railway runbook). Engineering side is shipped:
+[`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile),
+[`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml), and
+[`keycloak/prod/README.md`](../keycloak/prod/README.md) — the prod runbook.
+The realm-export.json baked into the Dockerfile already carries every
+fix from Phase 2.7 (standard scopes, user-profile config,
+`role_assignments` mapper).
+
+Per-env recipe (one execution per environment):
+
+1. **Stand up `hms-keycloak-dev` first.** Copy `keycloak/prod/` to
+   `keycloak/dev/` (or parameterize the existing one with
+   `BUILD_CONFIG=dev`), follow steps 1–4 of
+   [`keycloak/prod/README.md`](../keycloak/prod/README.md). Note the
+   Railway-issued domain (e.g. `hms-keycloak-dev.up.railway.app`).
+2. **Stand up `hms-keycloak-uat`.** Same recipe, env=`uat`. Note the
+   domain.
+3. **Stand up `hms-keycloak-prod`.** P-2 from
+   [`docs/tasks-keycloak.md`](tasks-keycloak.md). Same recipe, env=`prod`,
+   plus the admin-console allow-list / VPN gate per the runbook §7.
+4. For each, set `OIDC_ISSUER_URI` and `OIDC_AUDIENCE` on the matching
+   Railway backend service (`hms-backend-{env}`). Backend boots with
+   OIDC beans active when these are set; without them it stays on the
+   legacy auth path (correct rollback posture).
+5. For each, run [`scripts/keycloak-migration`](../scripts/keycloak-migration/)
+   in dry-run, then live, against that realm. Acceptance: zero
+   `failed`, zero unexpected `orphaned`, full round-trip
+   (`POST /users` → JWT → backend filter → `permittedHospitalIds`)
+   green per Phase 2.7's KC checks 1–5.
+
+### Phase 2.8.B — Mobile release builds with SSO ON (per env, after 2.8.A)
+
+**Status:** ⏳ pending. Engineering side is shipped (Phase 2.6); each
+release just needs the build env vars flipped on with the env's issuer
+URL.
+
+Per-env recipe:
+
+1. **iOS** (Xcode scheme env, [`patient-ios-app/project.yml`](../patient-ios-app/project.yml)):
+    - `MEDIHUB_KEYCLOAK_ISSUER=https://hms-keycloak-{env}.up.railway.app/realms/hms`
+    - `MEDIHUB_KEYCLOAK_SSO_ENABLED=1`
+    - Bump `CURRENT_PROJECT_VERSION`. Marketing version stays at
+      `1.0.3` until prod cutover.
+    - `xcodebuild archive` → upload to App Store Connect → TestFlight
+      internal track.
+2. **Android** (CI env or `local.properties`,
+   [`patient-android-app/app/build.gradle.kts`](../patient-android-app/app/build.gradle.kts)):
+    - `KEYCLOAK_ISSUER=https://hms-keycloak-{env}.up.railway.app/realms/hms`
+    - `KEYCLOAK_SSO_ENABLED=true`
+    - Bump `versionCode` (currently 10) and `versionName` (currently
+      `1.0.9`). Marketing-style bump deferred until prod cutover.
+    - `./gradlew :app:bundleRelease` → upload to Play Console →
+      Internal Testing track.
+3. **QA pass**: testers verify the SSO button appears, the
+   `ASWebAuthenticationSession` / Custom Tabs flow completes, the
+   token lands in keychain/keystore, and protected API calls return
+   200. The legacy form must still work for users not yet migrated.
+
+Order is **dev → uat → prod**, gated on each environment's Keycloak
+being live and the backend `OIDC_ISSUER_URI` set.
+
+### Phase 2.8.C — Cutover sequencing (Phase 3 + mobile coordination)
+
+The existing
+[`runbooks/keycloak-cutover-runbook.md`](runbooks/keycloak-cutover-runbook.md)
+covers the backend flag flip. The mobile pieces stack on top of it:
+
+- Submit the prod TestFlight build to App Review **≥ 48h before** the
+  prod maintenance window — Apple review delay is the long pole.
+- Stage Play Internal → Closed → Production rollout the same day or
+  morning-of, since the Play track flip is near-instant.
+- Post-cutover: Phase 3 monitoring (410 ratio, JWKS latency, MFA
+  enrolment ramp) plus a mobile-specific tile for SSO success rate vs.
+  legacy login attempts.
+
+Phase 4 (cleanup of `AuthController.login`, password columns, in-app
+MFA) starts only after the prod soak per
+[Phase 4](#phase-4--cleanup-g-9-starts--30-days-after-prod-cutover) below.
 
 ---
 
