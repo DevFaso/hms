@@ -1063,14 +1063,22 @@ public class UserServiceImpl implements UserService {
     }
 
     private void createAssignmentIfAbsent(UUID userId, UUID roleId, UUID hospitalId) {
-        if (!assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
-            assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
-                    .userId(userId)
-                    .roleId(roleId)
-                    .hospitalId(hospitalId)
-                    .active(true)
-                    .build());
+        if (assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
+            return;
         }
+        // Only SUPER_ADMIN bootstraps active=true. Every other role (PATIENT, staff, admin)
+        // must remain inactive at creation; activation is gated on email verification
+        // (see verifyEmail / verifyAssignmentByCode). enforceRoleScopeConstraints rejects
+        // active=true for PATIENT, so passing null lets the downstream guards apply the
+        // correct default per role.
+        Role role = roleRepository.getReferenceById(roleId);
+        Boolean active = ROLE_SUPER_ADMIN.equalsIgnoreCase(role.getCode()) ? Boolean.TRUE : null;
+        assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+                .userId(userId)
+                .roleId(roleId)
+                .hospitalId(hospitalId)
+                .active(active)
+                .build());
     }
 
     private Hospital getDefaultHospital() {
