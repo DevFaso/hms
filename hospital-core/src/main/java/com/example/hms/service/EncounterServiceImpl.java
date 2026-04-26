@@ -56,6 +56,7 @@ import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -79,7 +80,7 @@ import java.util.stream.Collectors;
 import static com.example.hms.mapper.PatientHospitalRegistrationMapper.joinName;
 
 
-@lombok.extern.slf4j.Slf4j
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
