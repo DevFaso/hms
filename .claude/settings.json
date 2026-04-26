@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr *)",
+      "Bash(gh api *)",
+      "Bash(git ls-tree *)",
+      "Bash(git diff *)",
+      "Bash(git commit -m ' *)",
+      "Bash(npx tsc *)",
+      "Bash(npx eslint *)",
+      "Bash(npx prettier *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "cd \"${CLAUDE_PROJECT_DIR:-$PWD}/hospital-portal\" && npm run format:check && npm run lint",
+            "timeout": 120,
+            "statusMessage": "Pre-commit: portal format-check + lint"
+          }
+        ]
+      }
+    ]
+  }
+}

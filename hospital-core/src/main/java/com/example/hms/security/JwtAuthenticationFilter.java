@@ -2,6 +2,7 @@ package com.example.hms.security;
 
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.context.HospitalContextRequestOverrides;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -67,6 +69,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             // ── WebSocket ticket-based auth (T-38) ──
+            // Tickets are reusable within their TTL so SockJS can hit /info and the
+            // transport upgrade with the same value (see WsTicketService Javadoc).
             if (path != null && path.startsWith("/api/ws-chat")
                     && handleWsTicketAuth(request, response, filterChain, path)) {
                 return;
@@ -111,6 +115,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (username != null) {
             try {
                 var userDetails = hospitalUserDetailsService.loadUserByUsername(username);
+                if (!userDetails.isEnabled()) {
+                    // Ticket-based handshake must respect the same email-verification
+                    // gate as JWT auth. A redeemed ticket for an unverified or disabled
+                    // account is not sufficient to attach role-based authorities.
+                    // Username is redacted from the log line and from respondUnauthorized
+                    // (defense-in-depth against log-aggregator misconfiguration / PII leak);
+                    // the path + the ticket-issuance trail let ops correlate when needed.
+                    log.warn("[WS-TICKET] Refusing ticket for a disabled/unverified account on path={}", path);
+                    respondUnauthorized(response, null);
+                    return true;
+                }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
@@ -154,46 +169,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return false;
             }
         } else {
-            log.warn("[JWT] Token provided but invalid for path={} headerPrefixOk={} rawHeader={}", path,
-                request.getHeader(HEADER_STRING) != null && request.getHeader(HEADER_STRING).startsWith(TOKEN_PREFIX),
-                request.getHeader(HEADER_STRING));
+            // Do NOT log the raw Authorization header — even an invalid/expired token
+            // still embeds the user's subject claim and could be a partial credential
+            // leak through log aggregators. Log only the structural facts (was the
+            // header present, did it start with "Bearer ", and the token length) so
+            // ops can distinguish "no auth header" from "garbled header" from
+            // "expired token" without ever shipping token bytes off the box.
+            String rawHeader = request.getHeader(HEADER_STRING);
+            boolean prefixOk = rawHeader != null && rawHeader.startsWith(TOKEN_PREFIX);
+            int tokenLen = prefixOk ? rawHeader.length() - TOKEN_PREFIX.length() : 0;
+            log.warn("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
+                path, rawHeader != null, prefixOk, tokenLen);
         }
         return true;
     }
 
+    /**
+     * Delegates to the shared
+     * {@link HospitalContextRequestOverrides#applyRequestOverrides} so the
+     * legacy bearer path and the OIDC path
+     * ({@code KeycloakHospitalContextFilter}) honour the
+     * {@code X-Hospital-Id} header identically. Behaviour is unchanged
+     * vs. the inline implementation; the only difference is log-line
+     * prefix ({@code [AUTH]} now, was {@code [JWT]}).
+     */
     private HospitalContext applyRequestOverrides(HospitalContext context, HttpServletRequest request) {
-        HospitalContext effective = context != null ? context : HospitalContext.empty();
-        String headerValue = request.getHeader("X-Hospital-Id");
-        if (!StringUtils.hasText(headerValue)) {
-            return effective;
-        }
-
-        try {
-            UUID requestedHospital = UUID.fromString(headerValue.trim());
-
-            boolean permitted = effective.isSuperAdmin()
-                || effective.getPermittedHospitalIds().isEmpty()
-                || effective.getPermittedHospitalIds().contains(requestedHospital);
-
-            if (!permitted) {
-                log.warn("[JWT] Ignoring X-Hospital-Id {} not in permitted scope {}",
-                    requestedHospital, effective.getPermittedHospitalIds());
-                return effective;
-            }
-
-            if (effective.getActiveHospitalId() == null
-                || !requestedHospital.equals(effective.getActiveHospitalId())) {
-                log.debug("[JWT] Overriding active hospital via header: {} (previously {})",
-                    requestedHospital, effective.getActiveHospitalId());
-            }
-
-            return effective.toBuilder()
-                .activeHospitalId(requestedHospital)
-                .build();
-        } catch (IllegalArgumentException ex) {
-            log.warn("[JWT] Invalid X-Hospital-Id header value: {}", headerValue);
-            return effective;
-        }
+        return HospitalContextRequestOverrides.applyRequestOverrides(context, request);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
@@ -224,6 +225,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             return false;
+        } catch (DisabledException disabled) {
+            // The JWT is signed and unexpired but belongs to a user whose account is
+            // disabled (most commonly: email not yet verified). Refuse the request rather
+            // than letting the generic catch-all in doFilterInternal pass it through
+            // unauthenticated.
+            //
+            // Subject + DisabledException.getMessage() are kept out of the log line
+            // (the message is already generic; the subject is PII). Operators who
+            // need to investigate can correlate via the JTI from the request log.
+            log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            return false;
         }
     }
 
@@ -250,7 +264,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         if (missingPrincipalSubjects.add(subject)) {
             rememberMissingPrincipal(subject);
-            log.warn("[JWT] Ignoring token for missing user '{}' (suppressing future warnings)", subject);
+            // Subject is a username — kept out of the warn log (defense-in-depth
+            // against PII bleed into log aggregators). At trace level a follow-up
+            // line carries the subject for deep debugging in dev only.
+            log.warn("[JWT] Ignoring token for a missing user (suppressing future warnings).");
+            if (log.isTraceEnabled()) {
+                log.trace("[JWT] First missing-user record subject='{}'", subject);
+            }
         } else if (log.isTraceEnabled()) {
             log.trace("[JWT] Already warned about missing user '{}', suppressing log", subject);
         }

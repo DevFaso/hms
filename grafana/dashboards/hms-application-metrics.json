@@ -12,7 +12,7 @@
       "title": "JVM Memory Used",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "bytes" },
         "overrides": []
@@ -28,7 +28,7 @@
       "title": "JVM Memory Max",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "bytes" },
         "overrides": []
@@ -44,10 +44,10 @@
       "title": "HTTP Request Rate (req/s)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
-          "expr": "rate(http_server_requests_seconds_count{application=\"hms\"}[5m])",
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\"}[5m])) by (method, uri, status)",
           "legendFormat": "{{method}} {{uri}} – {{status}}"
         }
       ]
@@ -56,7 +56,7 @@
       "title": "HTTP Response Time (p95)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" },
         "overrides": []
@@ -72,7 +72,7 @@
       "title": "HTTP 5xx Error Rate",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", status=~\"5..\"}[5m])) by (uri)",
@@ -84,7 +84,7 @@
       "title": "Active HTTP Threads",
       "type": "gauge",
       "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "tomcat_threads_busy_threads{application=\"hms\"}"
@@ -95,7 +95,7 @@
       "title": "System CPU Usage",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "percentunit", "max": 1 },
         "overrides": []
@@ -115,7 +115,7 @@
       "title": "DB Connection Pool",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "hikaricp_connections_active{application=\"hms\"}",
@@ -135,7 +135,7 @@
       "title": "JVM GC Pause Duration (p95)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" },
         "overrides": []
@@ -151,7 +151,7 @@
       "title": "JVM Threads",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "jvm_threads_live_threads{application=\"hms\"}",
@@ -168,34 +168,65 @@
       ]
     },
     {
-      "title": "Log Events Rate",
+      "title": "Log Events Rate (Logback)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
-          "expr": "rate(logback_events_total{application=\"hms\"}[5m])",
+          "expr": "sum(rate(logback_events_total{application=\"hms\"}[5m])) by (level)",
           "legendFormat": "{{level}}"
+        }
+      ]
+    },
+    {
+      "title": "Errors & Warnings (last 1h)",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 40 },
+      "datasource": { "type": "loki", "uid": "hms-loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{application=\"hms\"} |~ \"(?i)\\\\b(ERROR|WARN)\\\\b\"",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "title": "All backend logs (live tail)",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 52 },
+      "datasource": { "type": "loki", "uid": "hms-loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{application=\"hms\"}",
+          "refId": "A"
         }
       ]
     }
   ],
   "schemaVersion": 39,
-  "tags": ["hms", "spring-boot", "prometheus"],
-  "templating": {
-    "list": [
-      {
-        "name": "DS_PROMETHEUS",
-        "type": "datasource",
-        "query": "prometheus",
-        "current": { "text": "Prometheus", "value": "Prometheus" }
-      }
-    ]
-  },
+  "tags": ["hms", "spring-boot", "prometheus", "loki"],
+  "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "HMS – Application Metrics",
+  "title": "HMS – Application Metrics & Logs",
   "uid": "hms-app-metrics",
-  "version": 1
+  "version": 2
 }

@@ -102,6 +102,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     @Mock private com.example.hms.mapper.CheckOutMapper checkOutMapper;
     @Mock private com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -1399,5 +1400,218 @@ class EncounterServiceImplTest {
         assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Expected AWAITING_RESULTS or IN_PROGRESS");
+    }
+
+    // ---------- updateEncounter (PUT) — COMPLETED-transition AVS persistence ----------
+
+    /**
+     * When a clinician PUT-updates an encounter and that update flips the status to
+     * COMPLETED, EncounterServiceImpl.updateEncounter must mirror the dedicated
+     * /checkout flow: backfill checkoutTimestamp if absent, persist a DischargeSummary,
+     * and notify the patient — otherwise the patient-portal / Android / iOS After-Visit
+     * Summary screens stay empty for that encounter (the bug Copilot review #2 covers).
+     */
+    @Test
+    void updateEncounter_transitionToCompleted_persistsDischargeSummaryAndNotifies() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        hospital.setName("General Hospital");
+
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        User patientUser = User.builder().username("patient1").email("patient.user@example.com").build();
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        patient.setEmail("patient@example.com");
+        patient.setFirstName("Jane");
+        patient.setLastName("Doe");
+        patient.setUser(patientUser);
+
+        User staffUser = User.builder().username("dr.smith").build();
+        staffUser.setId(userId);
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+        staff.setName("Dr. Smith");
+
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.IN_PROGRESS);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        // The merged encounter (post-mapper) has status=COMPLETED, follow-up
+        // instructions, and serialised diagnoses — exactly what a clinician's PUT
+        // payload would produce when wrapping up a visit via the generic update path.
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.COMPLETED);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(assignment);
+        merged.setEncounterDate(existing.getEncounterDate());
+        merged.setFollowUpInstructions("Return in 2 weeks for cardiology review");
+        merged.setDischargeDiagnoses("[\"Hypertension\"]");
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setStatus(EncounterStatus.COMPLETED);
+        request.setEncounterDate(existing.getEncounterDate());
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class),
+                any(Patient.class),
+                any(Staff.class),
+                any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
+            .thenReturn(new EncounterResponseDTO());
+        when(checkOutMapper.parseDiagnoses("[\"Hypertension\"]"))
+            .thenReturn(List.of("Hypertension"));
+        when(prescriptionRepository.findByEncounter_Id(org.mockito.ArgumentMatchers.eq(encounterId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        EncounterResponseDTO result = service.updateEncounter(encounterId, request, locale);
+
+        assertThat(result).isNotNull();
+        // checkoutTimestamp should have been backfilled in-flight when the merge had none
+        assertThat(merged.getCheckoutTimestamp()).isNotNull();
+        // The new branch must persist the AVS via the same path /checkout uses
+        verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
+        // …and the patient must be notified (in-app + email)
+        verify(notificationService).createNotification(
+            anyString(),
+            org.mockito.ArgumentMatchers.eq("patient1"),
+            org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
+        verify(emailService).sendHtml(
+            org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")),
+            org.mockito.ArgumentMatchers.eq(List.of()),
+            org.mockito.ArgumentMatchers.eq(List.of()),
+            org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"),
+            anyString());
+    }
+
+    /**
+     * Sibling case — when updateEncounter does NOT change the status to COMPLETED,
+     * the AVS-persistence side effects must NOT fire. Otherwise every routine note
+     * edit on an encounter would write a duplicate DischargeSummary and spam the
+     * patient with a fresh email.
+     */
+    @Test
+    void updateEncounter_noTransitionToCompleted_doesNotPersistDischargeSummary() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+
+        User staffUser = User.builder().username("dr.smith").build();
+        staffUser.setId(userId);
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.IN_PROGRESS);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+
+        // Status stays IN_PROGRESS — only an unrelated field changes
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.IN_PROGRESS);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(assignment);
+        merged.setEncounterDate(existing.getEncounterDate());
+        merged.setNotes("intermediate note edit");
+
+        com.example.hms.payload.dto.EncounterRequestDTO request =
+            new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+        when(assignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class),
+                any(Patient.class),
+                any(Staff.class),
+                any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class)))
+            .thenReturn(new EncounterResponseDTO());
+
+        service.updateEncounter(encounterId, request, locale);
+
+        verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
+        assertThat(merged.getCheckoutTimestamp()).isNull();
     }
 }

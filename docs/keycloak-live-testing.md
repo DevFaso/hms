@@ -16,6 +16,16 @@
 
 ## 0. Start the dev Keycloak (once, shared by all clients)
 
+The shell snippets below are PowerShell. **On macOS / Linux**, the
+Docker, `curl`, and `npm` / `gradle` commands work unchanged; only
+shell-specific bits change:
+
+| PowerShell | bash / zsh equivalent |
+|---|---|
+| `$env:FOO = "bar"` | `export FOO=bar` |
+| `Invoke-RestMethod -Uri … -Body $body -ContentType …` | `curl -sS -X POST -d "$body" -H 'Content-Type: …' …` |
+| `powershell -File scripts/seed-keycloak.ps1` | `pwsh scripts/seed-keycloak.ps1` (install PowerShell Core via `brew install --cask powershell`) |
+
 ```powershell
 cd c:\dev\hms-04-18-26\hms
 docker compose --profile keycloak up -d keycloak-db keycloak
@@ -29,8 +39,8 @@ curl http://localhost:8081/realms/hms/.well-known/openid-configuration
 | Issuer | `http://localhost:8081/realms/hms` |
 | Backend client | `hms-backend` (bearer-only) |
 | SPA client | `hms-portal` (PKCE) |
-| Android client | `hms-android` (PKCE) |
-| iOS client | `hms-ios` (PKCE) |
+| Android client | `hms-patient-android` (PKCE) |
+| iOS client | `hms-patient-ios` (PKCE) |
 
 Realm is auto-imported from [keycloak/realm-export.json](../keycloak/realm-export.json)
 on first boot. To re-import (wipe state):
@@ -204,14 +214,14 @@ Expect **HTTP 410 Gone** with body
 
 ## 2. Android (emulator)
 
-> ⚠ **Redirect-URI reconciliation required before first run.** Realm
-> client `hms-android` has `com.example.hms.patient://oauth/callback`,
-> but historical docs reference
-> `com.bitnesttechs.hms.patient.native:/oauth2redirect`. Whichever
-> scheme `AndroidManifest.xml` + `KeycloakConfig.kt` actually declare
-> **must** match the realm — otherwise Keycloak returns
-> `invalid_redirect_uri`. Verify this once, pick one, update the other
-> side.
+> **2026-04-26 update:** the historical redirect-URI mismatch is
+> resolved. Both the realm client (`hms-patient-android`) and the
+> AppAuth manifest placeholder use
+> `com.bitnesttechs.hms.patient:/oauth2redirect`, derived from the
+> published Play Store `applicationId`. The canonical mapping is
+> documented in
+> [`keycloak/redirect-uris.md`](../keycloak/redirect-uris.md); keep
+> these in sync if either side changes.
 
 ### 2.1 Config
 
@@ -221,8 +231,8 @@ Create `patient-android-app/local.properties` (gitignored) if missing:
 sdk.dir=C:\\Users\\<you>\\AppData\\Local\\Android\\Sdk
 KEYCLOAK_SSO_ENABLED=true
 KEYCLOAK_ISSUER=http://10.0.2.2:8081/realms/hms
-KEYCLOAK_CLIENT_ID=hms-android
-KEYCLOAK_REDIRECT_URI=<exact scheme from AndroidManifest>
+KEYCLOAK_CLIENT_ID=hms-patient-android
+KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
 API_BASE_URL=http://10.0.2.2:8080
 ```
 
@@ -254,9 +264,10 @@ Launch the emulator first (Android Studio → Device Manager).
 
 Replace `10.0.2.2` with your PC's LAN IP (e.g. `192.168.1.50`):
 
-1. Add that IP to the realm `hms-android` Valid redirect URIs if your
-   scheme uses http (it shouldn't — mobile clients use a custom scheme,
-   so no change needed for the redirect; only `API_BASE_URL` changes).
+1. Add that IP to the realm `hms-patient-android` Valid redirect URIs
+   if your scheme uses http (it shouldn't — mobile clients use a custom
+   scheme, so no change needed for the redirect; only `API_BASE_URL`
+   changes).
 2. Windows Firewall: allow inbound 8080 and 8081 from the phone's
    subnet.
 3. `API_BASE_URL=http://192.168.1.50:8080`,
@@ -267,9 +278,11 @@ Replace `10.0.2.2` with your PC's LAN IP (e.g. `192.168.1.50`):
 ## 3. iOS (simulator) — macOS only
 
 > `xcodebuild` and the iOS simulator are macOS-only. Clone the repo on
-> a Mac. Same redirect-URI caveat as Android — reconcile
-> `KeycloakConfig.swift` / `Info.plist` URL scheme with the realm
-> `hms-ios` client.
+> a Mac. The realm client `hms-patient-ios` ships with redirect URI
+> `com.bitnesttechs.hms.patient.native:/oauth2redirect`, which matches
+> the published App Store bundle id and the URL scheme registered in
+> `Info.plist` — keep them in sync via
+> [`keycloak/redirect-uris.md`](../keycloak/redirect-uris.md).
 
 ### 3.1 Config
 
@@ -277,7 +290,7 @@ In the Xcode scheme's **Run → Arguments → Environment Variables**:
 
 - `MEDIHUB_KEYCLOAK_SSO_ENABLED=1`
 - `MEDIHUB_KEYCLOAK_ISSUER=http://localhost:8081/realms/hms`
-- `MEDIHUB_KEYCLOAK_CLIENT_ID=hms-ios`
+- `MEDIHUB_KEYCLOAK_CLIENT_ID=hms-patient-ios`
 - `MEDIHUB_API_BASE_URL=http://localhost:8080`
 
 ### 3.2 Build & run

@@ -1,12 +1,15 @@
 package com.example.hms.security;
 
 import jakarta.servlet.FilterChain;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import static jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
@@ -137,5 +140,70 @@ class JwtAuthenticationFilterTest {
 
         verify(chain, never()).doFilter(any(), any());
         assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        // The DisabledException branch must clear the context — assert the
+        // invariant in teardown so any test that leaves a stale principal
+        // behind fails loudly here rather than corrupting a later test.
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldReturnUnauthorizedAndClearContextWhenUserDisabled() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(API_PATIENTS);
+        request.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
+        when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("unverified.user");
+        when(tokenProvider.getAuthenticationFromJwt(GHOST_TOKEN))
+            .thenThrow(new DisabledException("User account 'unverified.user' is disabled or unverified."));
+
+        filter.doFilter(request, response, chain);
+
+        // The filter must short-circuit: chain not invoked, 401 returned.
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
+        // And the security context must NOT carry a principal — otherwise downstream
+        // filters in the same thread could see a half-authenticated request.
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    void shouldNotCacheDisabledUserAsMissingPrincipal() throws Exception {
+        // Disabled and missing-user are distinct outcomes: the missing-principal
+        // cache exists to suppress repeated DB lookups for genuinely-deleted users.
+        // A user who simply hasn't verified their email could verify between
+        // requests, so they must NOT enter the negative cache.
+        MockHttpServletRequest first = new MockHttpServletRequest();
+        first.setRequestURI(API_PATIENTS);
+        first.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse firstResponse = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
+        when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("unverified.user");
+        when(tokenProvider.getAuthenticationFromJwt(GHOST_TOKEN))
+            .thenThrow(new DisabledException("disabled"));
+
+        filter.doFilter(first, firstResponse, chain);
+
+        MockHttpServletRequest second = new MockHttpServletRequest();
+        second.setRequestURI(API_PATIENTS);
+        second.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse secondResponse = new MockHttpServletResponse();
+
+        filter.doFilter(second, secondResponse, chain);
+
+        // getAuthenticationFromJwt was re-invoked — the disabled-user path is NOT
+        // hidden behind the missing-principal short-circuit.
+        verify(tokenProvider, times(2)).getAuthenticationFromJwt(GHOST_TOKEN);
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(secondResponse.getStatus()).isEqualTo(SC_UNAUTHORIZED);
     }
 }

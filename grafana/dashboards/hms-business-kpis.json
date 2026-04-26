@@ -12,7 +12,7 @@
       "title": "API Requests by Endpoint (Top 10)",
       "type": "table",
       "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "topk(10, sum(increase(http_server_requests_seconds_count{application=\"hms\"}[24h])) by (uri))",
@@ -26,7 +26,7 @@
       "title": "Authentication Events (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/auth/login|/auth/logout\"}[5m])) by (uri) * 60",
@@ -38,7 +38,7 @@
       "title": "Patient Operations (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/patients.*\"}[5m])) by (method) * 60",
@@ -50,7 +50,7 @@
       "title": "Appointment Operations (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/appointments.*\"}[5m])) by (method) * 60",
@@ -62,7 +62,7 @@
       "title": "Encounter & Billing (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/encounters.*\"}[5m])) * 60",
@@ -78,7 +78,7 @@
       "title": "Lab & Imaging Orders (rate/min)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "targets": [
         {
           "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/lab-orders.*\"}[5m])) * 60",
@@ -94,7 +94,7 @@
       "title": "Slowest Endpoints (p99 latency)",
       "type": "table",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "datasource": { "type": "prometheus", "uid": "hms-prometheus" },
       "fieldConfig": {
         "defaults": { "unit": "s" },
         "overrides": []
@@ -107,24 +107,35 @@
           "instant": true
         }
       ]
+    },
+    {
+      "title": "Recent Auth Failures (login/refresh 401/403)",
+      "type": "logs",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "loki", "uid": "hms-loki" },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "expr": "{application=\"hms\"} |~ \"(?i)(JWT|WS-TICKET|Auth).*(invalid|expired|unauthor|disabled|missing)\"",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "schemaVersion": 39,
-  "tags": ["hms", "business-kpi"],
-  "templating": {
-    "list": [
-      {
-        "name": "DS_PROMETHEUS",
-        "type": "datasource",
-        "query": "prometheus",
-        "current": { "text": "Prometheus", "value": "Prometheus" }
-      }
-    ]
-  },
+  "tags": ["hms", "business-kpi", "loki"],
+  "templating": { "list": [] },
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "HMS – Business KPIs",
   "uid": "hms-business-kpi",
-  "version": 1
+  "version": 2
 }
