@@ -1,6 +1,8 @@
+import type { EnvironmentName } from './environment-name';
+
 export const environment = {
   production: true,
-  name: 'production' as 'local' | 'dev' | 'uat' | 'production',
+  name: 'production' satisfies EnvironmentName,
   apiUrl: '/api',
   apiBase: '/api',
   gaTrackingId: 'G-XXXXXXXXXX',
