@@ -12,11 +12,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Issues short-lived tickets for WebSocket handshake authentication.
  * <p>
- * Flow:
+ * Flow (paths shown without the {@code /api} servlet context-path; the portal's
+ * Nginx + Spring's {@code server.servlet.context-path=/api} prepend it, so the
+ * browser sees {@code POST /api/auth/ws-ticket} and {@code GET /api/ws-chat?ticket=…}):
  * <ol>
  *   <li>Authenticated user calls {@code POST /auth/ws-ticket}</li>
  *   <li>Server generates a random ticket, stores it mapped to the user's username</li>
- *   <li>Frontend connects to {@code /ws-chat?ticket=<ticket>}</li>
+ *   <li>Frontend connects to {@code /ws-chat?ticket=<ticket>} (i.e. {@code /api/ws-chat?…} from the browser)</li>
  *   <li>Filter calls {@link #redeem(String)} — returns the username if the ticket is valid</li>
  * </ol>
  *
