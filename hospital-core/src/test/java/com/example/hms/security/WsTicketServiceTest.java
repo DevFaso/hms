@@ -28,10 +28,14 @@ class WsTicketServiceTest {
     }
 
     @Test
-    void redeem_singleUse_secondRedeemReturnsNull() {
+    void redeem_isReusableWithinTtl_returnsSameUsername() {
+        // SockJS opens the same handshake URL twice (once for /info transport
+        // negotiation, once for the actual transport upgrade). The ticket must
+        // remain valid across both calls within its TTL window.
         String ticket = wsTicketService.issue("doctor@hms.com");
         assertThat(wsTicketService.redeem(ticket)).isEqualTo("doctor@hms.com");
-        assertThat(wsTicketService.redeem(ticket)).isNull();
+        assertThat(wsTicketService.redeem(ticket)).isEqualTo("doctor@hms.com");
+        assertThat(wsTicketService.redeem(ticket)).isEqualTo("doctor@hms.com");
     }
 
     @Test

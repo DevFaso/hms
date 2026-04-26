@@ -1,7 +1,9 @@
 package com.example.hms.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -16,6 +18,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *   <li>{@code APP_PORTAL_ASSIGNER_CONFIRMATION_URL_TEMPLATE}</li>
  * </ul>
  */
+@Slf4j
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "app.portal")
@@ -36,4 +39,17 @@ public class PortalProperties {
      * {@code ${app.frontend.base-url}/super/assignments?confirm=%s}.
      */
     private String assignerConfirmationUrlTemplate;
+
+    /**
+     * Logs the resolved portal URL templates at startup so operators can verify the
+     * Railway-injected {@code FRONTEND_BASE_URL} resolved to the expected hostname
+     * (e.g. {@code https://hms.uat.bitnesttechs.com} not {@code https://hms-uat.bitnesttechs.com}).
+     * Verification emails go out with whatever this base URL resolves to — a wrong
+     * value silently breaks every onboarding link.
+     */
+    @PostConstruct
+    void logResolvedTemplates() {
+        log.info("[PORTAL] profile-completion URL template = {}", profileCompletionUrlTemplate);
+        log.info("[PORTAL] assigner-confirmation URL template = {}", assignerConfirmationUrlTemplate);
+    }
 }

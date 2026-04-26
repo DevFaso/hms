@@ -13,7 +13,7 @@ if (environment.faroCollectorUrl) {
         app: {
           name: 'HMS',
           version: '1.0.0',
-          environment: environment.production ? 'production' : 'uat',
+          environment: environment.name,
         },
         instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
       });
