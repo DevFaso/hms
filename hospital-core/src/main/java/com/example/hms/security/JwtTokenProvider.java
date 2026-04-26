@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -630,6 +631,29 @@ public class JwtTokenProvider {
             .toList();
 
         HospitalUserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+        if (!userDetails.isEnabled()) {
+            // Reject every JWT-bearing request from an unverified or deactivated account.
+            // The login endpoint already blocks initial sign-in via DisabledException; this
+            // closes the gap for tokens issued through any other path or held across a
+            // post-issuance deactivation.
+            //
+            // Defense-in-depth: keep this branch free of identifying information so
+            // an attacker cannot use it to enumerate accounts via response/timing
+            // signals or via leaked logs:
+            //  - This code path is reachable only with a valid signature on a token
+            //    we minted (Keycloak-issued tokens go through OidcResourceServer,
+            //    not this method), so an unauthenticated attacker cannot probe
+            //    arbitrary usernames here. Still — operator log aggregators
+            //    (Datadog/Loki/etc.) can be misconfigured, so we don't log the
+            //    username on the rejection branch. The corresponding request log
+            //    line already carries the JTI, IP, and timestamp, which is enough
+            //    to correlate back to a user when ops needs to investigate.
+            //  - The exception message is generic so it stays safe to serialize
+            //    if it ever flows into an error page or audit event.
+            log.warn("JWT presented for a disabled or unverified account — rejecting authentication.");
+            throw new DisabledException("Account is disabled or unverified.");
+        }
 
         log.debug("JWT token for user {} contains authorities: {}", username, authorities);
 
