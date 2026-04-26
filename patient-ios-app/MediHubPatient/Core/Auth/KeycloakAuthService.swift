@@ -157,3 +157,98 @@ enum KeycloakError: LocalizedError {
         }
     }
 }
+
+#if DEBUG
+extension KeycloakAuthService {
+    /// Debug-only bypass for the `ASWebAuthenticationSession` browser sheet.
+    ///
+    /// XCUITest cannot reliably automate `ASWebAuthenticationSession` (Apple
+    /// runs it out-of-process and sandboxes it from the test runner), so we
+    /// expose this entry point so test harnesses — and developers running a
+    /// build with `MEDIHUB_KEYCLOAK_E2E_BYPASS=1` — can exercise the
+    /// post-redirect code path (Keychain persistence, `hasActiveSession`,
+    /// API client wiring) without driving the system browser. See
+    /// `docs/keycloak-implementation-gaps.md` §4 (G-5) for the rationale.
+    ///
+    /// Synthesizes the same `OIDAuthState` shape AppAuth produces after a
+    /// successful redirect, then routes through the existing `persist`
+    /// path so the test exercises the real keychain flow.
+    func acceptDebugSession(
+        accessToken: String,
+        refreshToken: String? = nil,
+        idToken: String? = nil,
+        expiresIn: TimeInterval = 3600
+    ) {
+        // Fall back to a docker-compose default when the build is unconfigured
+        // (test harnesses, CI without scheme env vars). Never crash the host
+        // process — assertion-fail and bail so the caller sees a no-op.
+        let issuerString = KeycloakConfig.isConfigured
+            ? KeycloakConfig.issuer
+            : "http://localhost:8081/realms/hms"
+        let redirectString = KeycloakConfig.redirectURI.isEmpty
+            ? "com.bitnesttechs.hms.patient.native:/oauth2redirect"
+            : KeycloakConfig.redirectURI
+        let clientId = KeycloakConfig.clientID.isEmpty
+            ? "hms-patient-ios"
+            : KeycloakConfig.clientID
+
+        guard
+            let authEndpoint = URL(string: "\(issuerString)/protocol/openid-connect/auth"),
+            let tokenEndpoint = URL(string: "\(issuerString)/protocol/openid-connect/token"),
+            let redirectURL = URL(string: redirectString)
+        else {
+            assertionFailure("acceptDebugSession: KeycloakConfig produced an unparseable URL (issuer=\(issuerString), redirect=\(redirectString)).")
+            return
+        }
+        let serviceConfig = OIDServiceConfiguration(
+            authorizationEndpoint: authEndpoint,
+            tokenEndpoint: tokenEndpoint
+        )
+
+        let authRequest = OIDAuthorizationRequest(
+            configuration: serviceConfig,
+            clientId: clientId,
+            clientSecret: nil,
+            scopes: [OIDScopeOpenID, OIDScopeProfile, OIDScopeEmail],
+            redirectURL: redirectURL,
+            responseType: OIDResponseTypeCode,
+            additionalParameters: nil
+        )
+
+        let authResponseParams: [String: NSString] = [
+            "code": "debug-auth-code" as NSString,
+            "state": (authRequest.state ?? "debug-state") as NSString,
+        ]
+        let authResponse = OIDAuthorizationResponse(
+            request: authRequest,
+            parameters: authResponseParams
+        )
+
+        guard let tokenRequest = authResponse.tokenExchangeRequest() else {
+            assertionFailure("AppAuth refused to build a token-exchange request from the synthetic auth response.")
+            return
+        }
+
+        var tokenParams: [String: NSString] = [
+            "access_token": accessToken as NSString,
+            "token_type": "Bearer" as NSString,
+            "expires_in": String(Int(expiresIn)) as NSString,
+            "scope": "openid profile email" as NSString,
+        ]
+        if let refreshToken {
+            tokenParams["refresh_token"] = refreshToken as NSString
+        }
+        if let idToken {
+            tokenParams["id_token"] = idToken as NSString
+        }
+        let tokenResponse = OIDTokenResponse(request: tokenRequest, parameters: tokenParams)
+
+        let state = OIDAuthState(
+            authorizationResponse: authResponse,
+            tokenResponse: tokenResponse
+        )
+        authState = state
+        persist(state: state)
+    }
+}
+#endif

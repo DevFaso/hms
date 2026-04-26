@@ -44,7 +44,7 @@ final class KeycloakE2ETests: XCTestCase {
     /// Hard-pin the shape of the authorization request the app would send
     /// to Keycloak. Catches regressions where `client_id`, `redirect_uri`,
     /// or `scope` drift away from what the realm export expects.
-    func testAuthorizationRequestCarriesExpectedClientAndRedirect() {
+    func testAuthorizationRequestCarriesExpectedClientAndRedirect() throws {
         setenv("MEDIHUB_KEYCLOAK_ISSUER", "http://localhost:8081/realms/hms", 1)
         setenv("MEDIHUB_KEYCLOAK_CLIENT_ID", "hms-patient-ios", 1)
         setenv(
@@ -72,8 +72,13 @@ final class KeycloakE2ETests: XCTestCase {
         )
 
         XCTAssertEqual(request.clientID, "hms-patient-ios")
+        // Unwrap so a missing redirect URL fails distinctly from a mismatch.
+        let redirectURL = try XCTUnwrap(
+            request.redirectURL,
+            "AppAuth dropped the redirect URL — KeycloakConfig.redirectURI may be empty or unparseable."
+        )
         XCTAssertEqual(
-            request.redirectURL.absoluteString,
+            redirectURL.absoluteString,
             "com.bitnesttechs.hms.patient.native:/oauth2redirect"
         )
         XCTAssertEqual(request.responseType, OIDResponseTypeCode)

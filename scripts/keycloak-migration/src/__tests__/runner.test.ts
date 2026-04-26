@@ -68,7 +68,7 @@ function stubClient(overrides: Partial<KeycloakAdminClient> = {}): {
 }
 
 describe('buildUserPayload', () => {
-  it('serialises role_assignments as sorted JSON strings and includes primary hospital_id', () => {
+  it('serialises role_assignments as sorted ROLE@hospital strings and includes primary hospital_id', () => {
     const payload = buildUserPayload(user(), {
       dryRun: false,
       forcePasswordReset: true,
@@ -78,9 +78,10 @@ describe('buildUserPayload', () => {
     assert.equal(payload.username, 'alice');
     assert.deepEqual(payload.attributes.hospital_id, ['h-1']);
     assert.deepEqual(payload.attributes.phone_number, ['+15551234']);
+    // Format MUST match KeycloakHospitalContextResolver — see runner.ts.
     assert.deepEqual(payload.attributes.role_assignments, [
-      JSON.stringify({ hospitalId: 'h-1', role: 'ROLE_DOCTOR' }),
-      JSON.stringify({ hospitalId: 'h-1', role: 'ROLE_LAB_SCIENTIST' }),
+      'ROLE_DOCTOR@h-1',
+      'ROLE_LAB_SCIENTIST@h-1',
     ]);
     assert.deepEqual(payload.requiredActions, ['UPDATE_PASSWORD', 'VERIFY_EMAIL']);
     assert.equal(payload.emailVerified, false);
