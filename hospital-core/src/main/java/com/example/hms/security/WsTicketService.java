@@ -26,6 +26,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * 401 the second. Bounding replay to the TTL keeps the attack surface tight while letting
  * the legitimate handshake complete.
  *
+ * <p>The TTL is sized to absorb a SockJS reconnect cycle (initial connect, transport
+ * upgrade, plus one or two reconnect attempts on a flaky network) without forcing the
+ * client back through {@code /auth/ws-ticket}. The frontend still re-mints on hard failure;
+ * the longer window just stops a one-second blip from cascading into a permanent 401.
+ *
  * <p><strong>Limitation:</strong> in-memory; not shared across instances.
  * Replace with Redis-backed store when horizontal scaling is required.
  */
@@ -33,7 +38,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class WsTicketService {
 
-    private static final long TICKET_TTL_MS = 60_000; // 1 minute
+    private static final long TICKET_TTL_MS = 300_000; // 5 minutes
     private static final int TICKET_BYTE_LENGTH = 32;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
