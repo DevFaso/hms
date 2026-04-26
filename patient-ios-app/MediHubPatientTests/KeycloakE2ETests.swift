@@ -73,7 +73,7 @@ final class KeycloakE2ETests: XCTestCase {
 
         XCTAssertEqual(request.clientID, "hms-patient-ios")
         XCTAssertEqual(
-            request.redirectURL.absoluteString,
+            request.redirectURL?.absoluteString,
             "com.bitnesttechs.hms.patient.native:/oauth2redirect"
         )
         XCTAssertEqual(request.responseType, OIDResponseTypeCode)

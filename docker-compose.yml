@@ -197,6 +197,28 @@ services:
       loki:
         condition: service_healthy
 
+  # ── mock-oauth2-server (profile: mock-oidc) ───────────────
+  # Lightweight standalone OIDC server used by the iOS
+  # `KeycloakMockE2ETests` (KC-3 / G-5, Phase 2.3 Option B). Exposes
+  # discovery + token endpoints at http://localhost:8082/default/.
+  # Not a substitute for the real Keycloak realm — only used to
+  # exercise AppAuth's discovery + token-exchange code paths in CI
+  # without spinning up the full Keycloak + Postgres profile.
+  #
+  # Bring up only when running mock-backed tests:
+  #   docker compose --profile mock-oidc up -d mock-oauth2-server
+  mock-oauth2-server:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    container_name: hms-mock-oauth2
+    profiles: ["mock-oidc"]
+    ports:
+      - "8082:8080"
+    environment:
+      # Single issuer named "default" — mirrors the path the iOS test
+      # reaches at `/default/.well-known/openid-configuration`.
+      SERVER_PORT: "8080"
+      LOG_LEVEL: INFO
+
   # ── Grafana ────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.1.0

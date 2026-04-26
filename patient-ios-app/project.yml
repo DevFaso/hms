@@ -46,6 +46,16 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"
     info:
       path: MediHubPatient/Resources/Info.plist
+      properties:
+        # KC-3: AppAuth callback scheme. Must match the redirect URI on
+        # the Keycloak `hms-patient-ios` client and `MEDIHUB_KEYCLOAK_REDIRECT_URI`.
+        # Declared here (not just in Info.plist) so `xcodegen generate`
+        # does not strip it on regeneration.
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: com.bitnesttechs.hms.patient.native.oauth
+            CFBundleURLSchemes:
+              - com.bitnesttechs.hms.patient.native
     scheme:
       testTargets:
         - MediHubPatientTests
