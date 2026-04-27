@@ -1,6 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
@@ -17,15 +18,27 @@ import {
   templateUrl: './stock-routing.html',
   styleUrl: './stock-routing.scss',
 })
-export class StockRoutingComponent {
+export class StockRoutingComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly route = inject(ActivatedRoute);
 
   // Prescription lookup
   prescriptionId = '';
   checking = signal(false);
   stockResult = signal<StockCheckResult | null>(null);
+
+  ngOnInit(): void {
+    // P-05: when navigated to via /pharmacy/stock-routing/:prescriptionId, skip the
+    // manual lookup and run checkStock immediately. The plain /pharmacy/stock-routing
+    // route still supports manual entry as a fallback.
+    const idFromRoute = this.route.snapshot.paramMap.get('prescriptionId')?.trim();
+    if (idFromRoute) {
+      this.prescriptionId = idFromRoute;
+      this.checkStock();
+    }
+  }
 
   // Routing decisions history
   decisions = signal<RoutingDecisionResponse[]>([]);

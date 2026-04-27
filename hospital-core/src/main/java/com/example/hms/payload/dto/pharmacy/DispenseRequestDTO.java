@@ -58,6 +58,14 @@ public class DispenseRequestDTO {
     @Size(max = 500)
     private String substitutionReason;
 
+    /**
+     * P-08: pharmacist's reason for overriding a CRITICAL CDS alert at dispense
+     * time. Required when the prospective CDS check returns
+     * {@code requiresOverride = true}; otherwise ignored.
+     */
+    @Size(max = 1000)
+    private String cdsOverrideReason;
+
     private DispenseStatus status;
 
     @Size(max = 1000)

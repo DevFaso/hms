@@ -3072,5 +3072,32 @@
   "checkout": {
     "success": "Paciente dado de alta con éxito",
     "error": "Error en el alta. Inténtelo de nuevo."
+  },
+  "PHARMACY": {
+    "ROUTE": "Encaminar",
+    "ROUTE_HINT": "Abrir el encaminamiento de stock para esta receta",
+    "LOT_NUMBER": "Número de lote",
+    "SUPPLIER": "Proveedor",
+    "PO_REFERENCE": "Referencia de orden de compra",
+    "EXPIRY_DATE": "Fecha de caducidad",
+    "UNIT_COST": "Costo unitario",
+    "ADJUSTMENT_REASON_CODE": "Código de motivo del ajuste",
+    "ADJUSTMENT_NOTES": "Notas",
+    "TRANSFER_DESTINATION": "Farmacia de destino",
+    "RETURN_REFERENCE": "Número de referencia de devolución",
+    "DISPENSE_USE_DISPENSING_SCREEN": "Las dispensaciones se registran desde la pantalla de Dispensación.",
+    "MTM_TITLE": "Gestión de la terapia medicamentosa",
+    "MTM_SUBTITLE": "Revisión farmacéutica e intervenciones",
+    "MTM_NEW": "Nueva revisión MTM",
+    "MTM_REVIEW": "Revisión MTM",
+    "MTM_CHRONIC_FOCUS": "Patología crónica enfocada",
+    "MTM_ADHERENCE_CONCERN": "Preocupación de adherencia",
+    "MTM_ADHERENCE": "Adherencia",
+    "MTM_POLYPHARMACY": "Polifarmacia",
+    "MTM_INTERVENTION": "Resumen de la intervención",
+    "MTM_RECOMMENDED_ACTIONS": "Acciones recomendadas",
+    "MTM_FOLLOW_UP_DATE": "Fecha de seguimiento",
+    "MTM_EMPTY": "Sin revisiones MTM registradas",
+    "PATIENT_ID": "ID del paciente"
   }
 }

@@ -693,4 +693,46 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V57: P-07 — Pharmacy OTC walk-in sale (header + line items)
+         - clinical.pharmacy_sales: cash transactions not tied to a
+           prescription (anonymous walk-in patient_id is allowed).
+         - clinical.sale_lines: per-medication line items with unit price
+           captured at sale time so catalog price changes do not rewrite
+           historical revenue.
+         ================================================================= -->
+    <changeSet id="V57-pharmacy-sale-sale-line" author="hms-team" runOnChange="false">
+        <sqlFile path="V57__pharmacy_sale_sale_line.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V58: P-09 — Medication Therapy Management (MTM) review record
+         - clinical.mtm_reviews: pharmacist-led chronic disease review
+           with adherence concern flag, polypharmacy alert, intervention
+           summary, recommended actions, and status (DRAFT/COMPLETED/REFERRED).
+         ================================================================= -->
+    <changeSet id="V58-mtm-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V58__mtm_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V59: FU-2 (P-06 backend) — first-class stock RECEIPT columns
+         - Adds lot_number, supplier, po_reference, expiry_date, unit_cost
+           to clinical.stock_transactions so reporting can query these
+           fields directly instead of parsing the free-text `reason`.
+         - Additive only; all columns nullable. Existing rows unchanged.
+         ================================================================= -->
+    <changeSet id="V59-stock-transaction-receipt-fields" author="hms-team" runOnChange="false">
+        <sqlFile path="V59__stock_transaction_receipt_fields.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -1,14 +1,19 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.PharmacyMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.PharmacyService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,10 +30,13 @@ import java.util.UUID;
 public class PharmacyServiceImpl implements PharmacyService {
 
     private static final String PHARMACY_NOT_FOUND = "pharmacy.notfound";
+    private static final String AUDIT_ENTITY = "PHARMACY";
 
     private final PharmacyRepository pharmacyRepository;
     private final HospitalRepository hospitalRepository;
     private final PharmacyMapper mapper;
+    private final AuditEventLogService auditEventLogService;
+    private final RoleValidator roleValidator;
 
     @Override
     public PharmacyResponseDTO create(PharmacyRequestDTO dto) {
@@ -83,5 +91,27 @@ public class PharmacyServiceImpl implements PharmacyService {
         pharmacy.setActive(false);
         pharmacyRepository.save(pharmacy);
         log.info("Deactivated pharmacy '{}'", pharmacy.getName());
+
+        // P-04: registry deactivation is a governance event — emit a distinct audit record
+        // so admin actions are traceable and queryable.
+        logAudit(AuditEventType.PHARMACY_DEACTIVATED,
+                "Deactivated pharmacy '" + pharmacy.getName() + "'",
+                pharmacy.getId().toString());
+    }
+
+    private void logAudit(AuditEventType eventType, String description, String resourceId) {
+        try {
+            UUID userId = roleValidator.getCurrentUserId();
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(userId)
+                    .eventType(eventType)
+                    .eventDescription(description)
+                    .status(AuditStatus.SUCCESS)
+                    .resourceId(resourceId)
+                    .entityType(AUDIT_ENTITY)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
+        }
     }
 }
