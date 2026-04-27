@@ -185,27 +185,31 @@ the local docker-compose profile — there is no `hms-keycloak-dev`,
 
 ### Phase 2.8.A — Provision per-environment Keycloak (DevOps; blocks 2.8.B/C)
 
-**Status:** ⏳ pending (waiting on DevOps to click through the existing
-Railway runbook). Engineering side is shipped:
+**Status:** ⏳ pending (waiting on DevOps to click through the Railway
+recipe). Engineering side is shipped: one Dockerfile, one `railway.toml`,
+parameterized via `BUILD_CONFIG={dev,uat,prod}` —
 [`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile),
 [`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml), and
-[`keycloak/prod/README.md`](../keycloak/prod/README.md) — the prod runbook.
-The realm-export.json baked into the Dockerfile already carries every
-fix from Phase 2.7 (standard scopes, user-profile config,
-`role_assignments` mapper).
+[`keycloak/prod/README.md`](../keycloak/prod/README.md) (the per-env
+runbook). The realm-export.json baked into the Dockerfile already
+carries every fix from Phase 2.7 (standard scopes, user-profile config,
+`role_assignments` mapper). The directory name `prod/` is historical —
+the Dockerfile now serves all envs.
 
-Per-env recipe (one execution per environment):
+Per-env recipe (one execution per environment, in order **dev → uat → prod**):
 
-1. **Stand up `hms-keycloak-dev` first.** Copy `keycloak/prod/` to
-   `keycloak/dev/` (or parameterize the existing one with
-   `BUILD_CONFIG=dev`), follow steps 1–4 of
-   [`keycloak/prod/README.md`](../keycloak/prod/README.md). Note the
-   Railway-issued domain (e.g. `hms-keycloak-dev.up.railway.app`).
-2. **Stand up `hms-keycloak-uat`.** Same recipe, env=`uat`. Note the
-   domain.
+1. **Stand up `hms-keycloak-dev` first.** Follow steps 1–7 of
+   [`keycloak/prod/README.md`](../keycloak/prod/README.md), setting the
+   service env var `BUILD_CONFIG=dev`. Note the Railway-issued domain
+   (e.g. `hms-keycloak-dev.up.railway.app`). The `KC_HMS_ENV=dev` runtime
+   tag and the `com.bitnesttechs.hms.env=dev` Docker label make the env
+   grep-able from boot logs and metrics.
+2. **Stand up `hms-keycloak-uat`.** Same recipe, `BUILD_CONFIG=uat`. Note
+   the domain.
 3. **Stand up `hms-keycloak-prod`.** P-2 from
-   [`docs/tasks-keycloak.md`](tasks-keycloak.md). Same recipe, env=`prod`,
-   plus the admin-console allow-list / VPN gate per the runbook §7.
+   [`docs/tasks-keycloak.md`](tasks-keycloak.md). Same recipe,
+   `BUILD_CONFIG=prod`, plus the admin-console allow-list / VPN gate per
+   the runbook §5 (prod-only).
 4. For each, set `OIDC_ISSUER_URI` and `OIDC_AUDIENCE` on the matching
    Railway backend service (`hms-backend-{env}`). Backend boots with
    OIDC beans active when these are set; without them it stays on the
