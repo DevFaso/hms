@@ -34,5 +34,19 @@
 			</array>
 		</dict>
 	</array>
+	<!-- Phase 2.8.B: per-env Keycloak settings, substituted at build
+	     time from the MEDIHUB_KEYCLOAK_* build settings. Defaults come
+	     from project.yml settings.base; per-env xcconfigs in Config/
+	     override for Release-{Dev,UAT,Prod}. KeycloakConfig and
+	     FeatureFlags read these via Bundle.main.infoDictionary so
+	     archive builds (where ProcessInfo is empty) get the values. -->
+	<key>MEDIHUB_KEYCLOAK_ISSUER</key>
+	<string>$(MEDIHUB_KEYCLOAK_ISSUER)</string>
+	<key>MEDIHUB_KEYCLOAK_SSO_ENABLED</key>
+	<string>$(MEDIHUB_KEYCLOAK_SSO_ENABLED)</string>
+	<key>MEDIHUB_KEYCLOAK_CLIENT_ID</key>
+	<string>$(MEDIHUB_KEYCLOAK_CLIENT_ID)</string>
+	<key>MEDIHUB_KEYCLOAK_REDIRECT_URI</key>
+	<string>$(MEDIHUB_KEYCLOAK_REDIRECT_URI)</string>
 </dict>
 </plist>

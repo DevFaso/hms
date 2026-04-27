@@ -1,9 +1,10 @@
-# Railway service config for the production Keycloak instance.
+# Railway service config for HMS Keycloak (dev / uat / prod).
 #
-# Provisioning steps live in README.md in this folder. This file is the
-# single source of truth for Keycloak's deploy settings; Railway will pick
-# it up when the "hms-keycloak" service's config path is set to
-# `keycloak/prod/railway.toml` in the Railway dashboard.
+# This single file is referenced by all three `hms-keycloak-{env}` Railway
+# services. Each service sets its own `BUILD_CONFIG` env var (`dev`, `uat`,
+# or `prod`); Railway forwards env vars matching declared Dockerfile ARGs
+# to the build, so `BUILD_CONFIG` becomes the build-time selector. See
+# `README.md` in this folder for the per-env provisioning recipe.
 
 [build]
 builder = "dockerfile"
