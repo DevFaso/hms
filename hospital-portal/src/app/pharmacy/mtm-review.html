@@ -1,0 +1,151 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.MTM_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.MTM_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'PHARMACY.MTM_NEW' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (showForm()) {
+    <div class="form-card">
+      <h3>
+        <span class="material-symbols-outlined">edit_note</span>
+        {{ 'PHARMACY.MTM_REVIEW' | translate }}
+      </h3>
+      <form (ngSubmit)="submit()">
+        <div class="form-row">
+          <div class="field">
+            <label for="mtmPatient">{{ 'PHARMACY.PATIENT_ID' | translate }} *</label>
+            <input
+              id="mtmPatient"
+              type="text"
+              [(ngModel)]="form.patientId"
+              name="patientId"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="mtmStatus">{{ 'PHARMACY.STATUS' | translate }}</label>
+            <select id="mtmStatus" [(ngModel)]="form.status" name="status">
+              <option value="DRAFT">DRAFT</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="REFERRED">REFERRED</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="mtmChronic">{{ 'PHARMACY.MTM_CHRONIC_FOCUS' | translate }}</label>
+            <input
+              id="mtmChronic"
+              type="text"
+              [(ngModel)]="form.chronicConditionFocus"
+              name="chronicConditionFocus"
+            />
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="form.adherenceConcern" name="adherenceConcern" />
+              {{ 'PHARMACY.MTM_ADHERENCE_CONCERN' | translate }}
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="mtmIntervention">{{ 'PHARMACY.MTM_INTERVENTION' | translate }}</label>
+          <textarea
+            id="mtmIntervention"
+            [(ngModel)]="form.interventionSummary"
+            name="interventionSummary"
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="mtmActions">{{ 'PHARMACY.MTM_RECOMMENDED_ACTIONS' | translate }}</label>
+          <textarea
+            id="mtmActions"
+            [(ngModel)]="form.recommendedActions"
+            name="recommendedActions"
+            rows="3"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="mtmFollowUp">{{ 'PHARMACY.MTM_FOLLOW_UP_DATE' | translate }}</label>
+            <input
+              id="mtmFollowUp"
+              type="date"
+              [(ngModel)]="form.followUpDate"
+              name="followUpDate"
+            />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeForm()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            <span class="material-symbols-outlined">check</span>
+            {{ saving() ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE' | translate) }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="loading-bar"></div>
+  } @else if (reviews().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">medication</span>
+      <h3>{{ 'PHARMACY.MTM_EMPTY' | translate }}</h3>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'PHARMACY.PATIENT_ID' | translate }}</th>
+            <th>{{ 'PHARMACY.MTM_CHRONIC_FOCUS' | translate }}</th>
+            <th>{{ 'PHARMACY.MTM_POLYPHARMACY' | translate }}</th>
+            <th>{{ 'PHARMACY.MTM_ADHERENCE' | translate }}</th>
+            <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+            <th>{{ 'PHARMACY.MTM_FOLLOW_UP_DATE' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of reviews(); track r.id) {
+            <tr>
+              <td>{{ r.patientId }}</td>
+              <td>{{ r.chronicConditionFocus || '—' }}</td>
+              <td>
+                @if (r.polypharmacyAlert) {
+                  <span class="badge badge-warning">⚠</span>
+                } @else {
+                  —
+                }
+              </td>
+              <td>{{ r.adherenceConcern ? '✓' : '—' }}</td>
+              <td>
+                <span class="badge" [ngClass]="statusBadgeClass(r.status)">{{ r.status }}</span>
+              </td>
+              <td>{{ r.followUpDate || '—' }}</td>
+              <td>
+                <button class="btn-action" (click)="openEdit(r)">
+                  <span class="material-symbols-outlined">edit</span>
+                  {{ 'COMMON.EDIT' | translate }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

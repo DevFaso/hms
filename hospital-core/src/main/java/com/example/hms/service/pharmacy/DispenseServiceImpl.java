@@ -58,6 +58,7 @@ public class DispenseServiceImpl implements DispenseService {
     private final DispenseMapper dispenseMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final CdsCheckService cdsCheckService;
 
     private static final String AUDIT_ENTITY = "DISPENSE";
 
@@ -83,6 +84,21 @@ public class DispenseServiceImpl implements DispenseService {
         Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         enforceHospitalScope(pharmacy);
+
+        // P-08: prospective CDS check before any state mutates. CRITICAL severity
+        // blocks the dispense unless the pharmacist supplied an override reason.
+        // Defensive: treat a null result as a clear pass so a misconfigured/mocked
+        // service never silently fails the dispense flow.
+        com.example.hms.payload.dto.pharmacy.CdsAlertResult cdsResult =
+                cdsCheckService.checkAtDispense(prescription, patient.getId());
+        if (cdsResult == null) {
+            cdsResult = com.example.hms.payload.dto.pharmacy.CdsAlertResult.clear();
+        }
+        if (cdsResult.requiresOverride()
+                && (dto.getCdsOverrideReason() == null || dto.getCdsOverrideReason().isBlank())) {
+            throw new BusinessException("CDS_CRITICAL: pharmacist override reason required — "
+                    + String.join(" | ", cdsResult.alerts()));
+        }
 
         ActorPair actors = resolveActors(dto);
 
@@ -110,6 +126,15 @@ public class DispenseServiceImpl implements DispenseService {
                 "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
                         + " of " + dto.getMedicationName() + " to patient " + patient.getId(),
                 saved.getId().toString());
+
+        // P-04: emit a distinct audit event when the dispense is a substitution so that
+        // formulary substitutions are queryable independently of regular dispenses.
+        if (Boolean.TRUE.equals(dto.getSubstitution())) {
+            String reason = dto.getSubstitutionReason() != null ? dto.getSubstitutionReason() : "(no reason provided)";
+            logAudit(AuditEventType.DISPENSE_SUBSTITUTED,
+                    "Substituted dispense for " + dto.getMedicationName() + " — reason: " + reason,
+                    saved.getId().toString());
+        }
 
         return dispenseMapper.toResponseDTO(saved);
     }

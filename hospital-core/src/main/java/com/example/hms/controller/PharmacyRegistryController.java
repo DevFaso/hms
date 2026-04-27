@@ -35,7 +35,8 @@ public class PharmacyRegistryController {
     private final PharmacyService pharmacyService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-01: pharmacy registration is a governance act — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Register a new pharmacy")
     public ResponseEntity<PharmacyResponseDTO> create(@Valid @RequestBody PharmacyRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(pharmacyService.create(dto));
@@ -70,7 +71,8 @@ public class PharmacyRegistryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-01: pharmacy edits are governance acts — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update a pharmacy")
     public ResponseEntity<PharmacyResponseDTO> update(
             @PathVariable UUID id,
@@ -79,7 +81,8 @@ public class PharmacyRegistryController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-01: pharmacy deactivation is a governance act — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Deactivate a pharmacy")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,

@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
@@ -24,6 +25,7 @@ export class DispensingComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
 
   // Work queue
   workQueue = signal<WorkQueuePrescription[]>([]);
@@ -117,6 +119,16 @@ export class DispensingComponent implements OnInit {
     this.loadWorkQueue();
     this.loadRecentDispenses();
     this.loadInventory();
+  }
+
+  /**
+   * P-05: deep-link to stock-routing with the prescription ID pre-filled. This
+   * removes the need for users to copy/paste a raw UUID into the routing form
+   * when they discover an out-of-stock condition while dispensing.
+   */
+  routeFromQueue(rx: WorkQueuePrescription): void {
+    if (!rx?.id) return;
+    this.router.navigate(['/pharmacy/stock-routing', rx.id]);
   }
 
   selectPrescription(rx: WorkQueuePrescription): void {

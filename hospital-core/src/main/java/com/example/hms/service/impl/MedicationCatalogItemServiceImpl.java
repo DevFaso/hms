@@ -1,14 +1,19 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MedicationCatalogItemMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MedicationCatalogItemService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -25,10 +30,13 @@ import java.util.UUID;
 public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemService {
 
     private static final String MEDICATION_CATALOG_NOT_FOUND = "medication.catalog.notfound";
+    private static final String AUDIT_ENTITY = "MEDICATION_CATALOG_ITEM";
 
     private final MedicationCatalogItemRepository catalogRepository;
     private final HospitalRepository hospitalRepository;
     private final MedicationCatalogItemMapper mapper;
+    private final AuditEventLogService auditEventLogService;
+    private final RoleValidator roleValidator;
 
     @Override
     public MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto) {
@@ -104,5 +112,27 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         item.setActive(false);
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());
+
+        // P-04: formulary deactivation is a governance event — emit a distinct audit
+        // record so admin actions are traceable and queryable.
+        logAudit(AuditEventType.MEDICATION_DEACTIVATED,
+                "Deactivated medication catalog item '" + item.getNameFr() + "'",
+                item.getId().toString());
+    }
+
+    private void logAudit(AuditEventType eventType, String description, String resourceId) {
+        try {
+            UUID userId = roleValidator.getCurrentUserId();
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .userId(userId)
+                    .eventType(eventType)
+                    .eventDescription(description)
+                    .status(AuditStatus.SUCCESS)
+                    .resourceId(resourceId)
+                    .entityType(AUDIT_ENTITY)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
+        }
     }
 }

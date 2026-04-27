@@ -148,8 +148,16 @@ export interface StockTransactionRequest {
   transactionType: string;
   quantity: number;
   reason?: string;
+  /** Must be a UUID when present (e.g. destination pharmacy on TRANSFER). */
   referenceId?: string;
   performedBy?: string;
+  // FU-2: first-class RECEIPT fields (all optional)
+  lotNumber?: string;
+  supplier?: string;
+  poReference?: string;
+  /** ISO date (YYYY-MM-DD). */
+  expiryDate?: string;
+  unitCost?: number;
 }
 
 export interface StockTransactionResponse {
@@ -162,6 +170,12 @@ export interface StockTransactionResponse {
   referenceId?: string;
   performedBy?: string;
   createdAt: string;
+  // FU-2: first-class RECEIPT fields
+  lotNumber?: string;
+  supplier?: string;
+  poReference?: string;
+  expiryDate?: string;
+  unitCost?: number;
 }
 
 /* ───────────────────────────── Page wrapper ───────────────────────────── */
@@ -858,4 +872,73 @@ export class PharmacyService {
     }
     return this.http.get('/pharmacy/claims/export/fhir', { params, responseType: 'blob' });
   }
+
+  // ── P-09: MTM Reviews ──
+
+  startMtmReview(req: MtmReviewRequest): Observable<MtmReviewResponse> {
+    return this.http.post<MtmReviewResponse>('/mtm-reviews', req);
+  }
+
+  updateMtmReview(id: string, req: MtmReviewRequest): Observable<MtmReviewResponse> {
+    return this.http.put<MtmReviewResponse>(`/mtm-reviews/${id}`, req);
+  }
+
+  getMtmReview(id: string): Observable<MtmReviewResponse> {
+    return this.http.get<MtmReviewResponse>(`/mtm-reviews/${id}`);
+  }
+
+  listMtmReviewsByHospital(
+    hospitalId: string,
+    page = 0,
+    size = 20,
+  ): Observable<Page<MtmReviewResponse>> {
+    const params = new HttpParams()
+      .set('hospitalId', hospitalId)
+      .set('page', page)
+      .set('size', size);
+    return this.http.get<Page<MtmReviewResponse>>('/mtm-reviews', { params });
+  }
+
+  listMtmReviewsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<Page<MtmReviewResponse>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<Page<MtmReviewResponse>>(`/mtm-reviews/by-patient/${patientId}`, {
+      params,
+    });
+  }
+}
+
+// ── P-09: MTM Review types ──
+
+export type MtmReviewStatus = 'DRAFT' | 'COMPLETED' | 'REFERRED';
+
+export interface MtmReviewRequest {
+  patientId: string;
+  hospitalId: string;
+  chronicConditionFocus?: string;
+  adherenceConcern?: boolean;
+  interventionSummary?: string;
+  recommendedActions?: string;
+  status?: MtmReviewStatus;
+  followUpDate?: string;
+}
+
+export interface MtmReviewResponse {
+  id: string;
+  patientId: string;
+  hospitalId: string;
+  pharmacistUserId: string;
+  reviewDate: string;
+  chronicConditionFocus?: string;
+  adherenceConcern: boolean;
+  polypharmacyAlert: boolean;
+  interventionSummary?: string;
+  recommendedActions?: string;
+  status: MtmReviewStatus;
+  followUpDate?: string;
+  createdAt: string;
+  updatedAt: string;
 }
