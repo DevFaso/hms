@@ -53,7 +53,7 @@ ADD --chmod=444 https://github.com/open-telemetry/opentelemetry-java-instrumenta
 # Single source of truth — no on-disk entrypoint.sh to drift against.
 #
 # v3 — runs as root to chown the (possibly volume-mounted) uploads directory,
-# then exec's the JVM as appuser. Conditionally attaches the OTEL Java agent
+# then execs the JVM as appuser. Conditionally attaches the OTEL Java agent
 # when OTEL_EXPORTER_OTLP_ENDPOINT is set.
 COPY <<'ENTRYPOINT_SH' /entrypoint.sh
 #!/bin/sh
@@ -77,6 +77,19 @@ set -e
 UPLOAD_DIR="${APP_UPLOAD_DIR:-/app/uploads}"
 JAVA_BIN="${JAVA_HOME:-/opt/java/openjdk}/bin/java"
 
+# Validate PORT: must be a non-empty string of digits. Anything else (empty,
+# whitespace, shell metacharacters) falls back to 8081 — this prevents an
+# attacker-controlled PORT env var from injecting extra JVM args via the
+# `su -c` command string below. Railway always supplies a numeric PORT, so
+# the fallback path is just defense-in-depth.
+PORT="${PORT:-8081}"
+case "${PORT}" in
+  ''|*[!0-9]*)
+    echo "[entrypoint] Invalid PORT='${PORT}' (not a positive integer); falling back to 8081" >&2
+    PORT=8081
+    ;;
+esac
+
 echo "[entrypoint] Ensuring upload directory exists: ${UPLOAD_DIR}"
 mkdir -p "${UPLOAD_DIR}"
 chown -R appuser:appuser "${UPLOAD_DIR}"
@@ -92,10 +105,14 @@ if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagen
   echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
 fi
 
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT:-8081} -jar /app/app.jar"
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
 ENTRYPOINT_SH
 
-RUN chmod +x /entrypoint.sh \
+# Strip CRLF from the heredoc'd script in case the Dockerfile was checked out
+# with Windows line endings (.gitattributes enforces LF for *.sh and Dockerfile,
+# but this is a cheap belt-and-suspenders against a misconfigured local checkout).
+RUN sed -i 's/\r$//' /entrypoint.sh \
+    && chmod +x /entrypoint.sh \
     && mkdir -p /app/uploads \
     && chown -R appuser:appuser /app
 
