@@ -7,10 +7,26 @@ options:
   generateEmptyDirectories: true
   groupSortPosition: top
 
+# Phase 2.8.B: per-env release configurations for the Keycloak cutover.
+# Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/UAT/Prod
+# layer xcconfig files (Config/{Dev,UAT,Prod}.xcconfig) on top of the
+# Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
+configurations:
+  Debug: debug
+  Release: release
+  Release-Dev: release
+  Release-UAT: release
+  Release-Prod: release
+
 packages:
   AppAuth:
     url: https://github.com/openid/AppAuth-iOS.git
     from: "1.7.5"
+
+configFiles:
+  Release-Dev: Config/Dev.xcconfig
+  Release-UAT: Config/UAT.xcconfig
+  Release-Prod: Config/Prod.xcconfig
 
 settings:
   base:
@@ -20,6 +36,13 @@ settings:
     DEVELOPMENT_TEAM: "D6K83N72S4"
     CODE_SIGN_IDENTITY: "Apple Distribution"
     CODE_SIGN_STYLE: Automatic
+    # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
+    # Debug/Release builds. Per-env xcconfigs override these for
+    # Release-{Dev,UAT,Prod}. See Config/README.md.
+    MEDIHUB_KEYCLOAK_ISSUER: ""
+    MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
+    MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
+    MEDIHUB_KEYCLOAK_REDIRECT_URI: "com.bitnesttechs.hms.patient.native:/oauth2redirect"
 
 targets:
   MediHubPatient:
@@ -56,6 +79,16 @@ targets:
             CFBundleURLName: com.bitnesttechs.hms.patient.native.oauth
             CFBundleURLSchemes:
               - com.bitnesttechs.hms.patient.native
+        # Phase 2.8.B: per-env Keycloak settings, baked into Info.plist
+        # so `xcodebuild archive` builds carry them. `KeycloakConfig` /
+        # `FeatureFlags` read these via Bundle.main.infoDictionary as a
+        # fallback when ProcessInfo doesn't have a value (i.e. archive
+        # builds, where scheme env vars don't apply). Default values
+        # come from `settings.base`; per-env xcconfigs override.
+        MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
+        MEDIHUB_KEYCLOAK_CLIENT_ID: $(MEDIHUB_KEYCLOAK_CLIENT_ID)
+        MEDIHUB_KEYCLOAK_REDIRECT_URI: $(MEDIHUB_KEYCLOAK_REDIRECT_URI)
     scheme:
       testTargets:
         - MediHubPatientTests

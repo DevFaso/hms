@@ -222,23 +222,39 @@ Per-env recipe (one execution per environment, in order **dev → uat → prod**
 
 ### Phase 2.8.B — Mobile release builds with SSO ON (per env, after 2.8.A)
 
-**Status:** ⏳ pending. Engineering side is shipped (Phase 2.6); each
-release just needs the build env vars flipped on with the env's issuer
-URL.
+**Status:** ⏳ pending. Engineering side is shipped — per-env defaults
+are pre-staged so each release is one config flip, not a code edit.
+
+> ⚠️ Pre-2.8.B note (now resolved): the original recipe pointed at the
+> Xcode scheme's `environmentVariables` block. Scheme env vars are only
+> injected for **Run/Test** actions; they do NOT propagate into
+> `xcodebuild archive` output. Phase 2.8.B fixes this by baking the
+> values into Info.plist via xcconfig files and reading them through
+> `Bundle.main.infoDictionary` at runtime (with `ProcessInfo` still
+> winning for in-Xcode dev runs).
 
 Per-env recipe:
 
-1. **iOS** (Xcode scheme env, [`patient-ios-app/project.yml`](../patient-ios-app/project.yml)):
-    - `MEDIHUB_KEYCLOAK_ISSUER=https://hms-keycloak-{env}.up.railway.app/realms/hms`
-    - `MEDIHUB_KEYCLOAK_SSO_ENABLED=1`
-    - Bump `CURRENT_PROJECT_VERSION`. Marketing version stays at
-      `1.0.3` until prod cutover.
-    - `xcodebuild archive` → upload to App Store Connect → TestFlight
-      internal track.
-2. **Android** (CI env or `local.properties`,
-   [`patient-android-app/app/build.gradle.kts`](../patient-android-app/app/build.gradle.kts)):
+1. **iOS** — three new build configurations (`Release-Dev`,
+   `Release-UAT`, `Release-Prod`) wired to xcconfig files in
+   [`patient-ios-app/Config/`](../patient-ios-app/Config/):
+    - Per-env defaults already populated (issuer URL, SSO flag,
+      client ID, redirect URI). Dev/UAT default to SSO=1; Prod
+      defaults to SSO=0 until cutover.
+    - To release: bump `CURRENT_PROJECT_VERSION` in
+      [`project.yml`](../patient-ios-app/project.yml), run
+      `xcodegen generate`, then
+      `xcodebuild archive -configuration Release-{Dev,UAT,Prod}`.
+      Upload to App Store Connect → TestFlight internal track.
+    - Marketing version stays at `1.0.3` until prod cutover.
+    - Detail: [`patient-ios-app/Config/README.md`](../patient-ios-app/Config/README.md).
+2. **Android** — the existing `local.properties` → BuildConfig path
+   already covers `bundleRelease`. Per-env values pre-staged in
+   [`patient-android-app/local.properties.example`](../patient-android-app/local.properties.example);
+   copy the matching block into `local.properties` (or set the same
+   keys as CI env vars) and run:
     - `KEYCLOAK_ISSUER=https://hms-keycloak-{env}.up.railway.app/realms/hms`
-    - `KEYCLOAK_SSO_ENABLED=true`
+    - `KEYCLOAK_SSO_ENABLED=true` (`false` for prod until cutover)
     - Bump `versionCode` (currently 10) and `versionName` (currently
       `1.0.9`). Marketing-style bump deferred until prod cutover.
     - `./gradlew :app:bundleRelease` → upload to Play Console →

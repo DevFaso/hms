@@ -1,0 +1,11 @@
+// Per-env Keycloak settings for the `Release-Prod` build configuration.
+//
+// Selected by `xcodebuild -configuration Release-Prod` for the App Store
+// Connect production track. SSO stays OFF until Phase 3 cutover (see
+// `docs/keycloak-implementation-gaps.md` Phase 2.8.C); the issuer URL is
+// pre-staged so the cutover flip is one xcconfig line, not a code edit.
+
+MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-prod.up.railway.app/realms/hms
+MEDIHUB_KEYCLOAK_SSO_ENABLED = 0
+MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
+MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect
