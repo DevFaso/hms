@@ -35,7 +35,8 @@ public class MedicationCatalogController {
     private final MedicationCatalogItemService catalogService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-02: formulary additions are governance acts — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Add a medication to the catalog")
     public ResponseEntity<MedicationCatalogItemResponseDTO> create(@Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(catalogService.create(dto));
@@ -80,7 +81,8 @@ public class MedicationCatalogController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-02: formulary edits are governance acts — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update a medication catalog item")
     public ResponseEntity<MedicationCatalogItemResponseDTO> update(
             @PathVariable UUID id,
@@ -89,7 +91,8 @@ public class MedicationCatalogController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN')")
+    // P-02: formulary deactivation is a governance act — restrict to admin roles only.
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Deactivate a medication catalog item")
     public ResponseEntity<Void> deactivate(
             @PathVariable UUID id,

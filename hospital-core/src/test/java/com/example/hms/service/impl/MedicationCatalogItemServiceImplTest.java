@@ -1,13 +1,18 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MedicationCatalogItemMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemRequestDTO;
 import com.example.hms.payload.dto.medication.MedicationCatalogItemResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.utility.RoleValidator;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +40,8 @@ class MedicationCatalogItemServiceImplTest {
     @Mock private MedicationCatalogItemRepository catalogRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private MedicationCatalogItemMapper mapper;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private RoleValidator roleValidator;
 
     @InjectMocks private MedicationCatalogItemServiceImpl service;
 
@@ -207,6 +214,24 @@ class MedicationCatalogItemServiceImplTest {
 
         assertThat(item.isActive()).isFalse();
         verify(catalogRepository).save(item);
+    }
+
+    @Test
+    void deactivate_emitsMedicationDeactivatedAuditEvent() {
+        // P-04: formulary deactivation must produce a distinct audit event so admin
+        // actions are queryable independently of routine catalog edits.
+        when(catalogRepository.findByIdAndHospital_Id(itemId, hospitalId))
+                .thenReturn(Optional.of(item));
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+
+        service.deactivate(itemId, hospitalId);
+
+        ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        AuditEventRequestDTO logged = captor.getValue();
+        assertThat(logged.getEventType()).isEqualTo(AuditEventType.MEDICATION_DEACTIVATED);
+        assertThat(logged.getResourceId()).isEqualTo(itemId.toString());
+        assertThat(logged.getEntityType()).isEqualTo("MEDICATION_CATALOG_ITEM");
     }
 
     @Test

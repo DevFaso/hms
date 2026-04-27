@@ -29,7 +29,23 @@
         {{ 'PHARMACY.NEW_TRANSACTION' | translate }}
       </h3>
       <form (ngSubmit)="submitForm()">
+        <!-- P-06: type selector first; type-specific fields render below. -->
         <div class="form-row">
+          <div class="field">
+            <label for="txType">{{ 'PHARMACY.TRANSACTION_TYPE' | translate }} *</label>
+            <select
+              id="txType"
+              [ngModel]="txType()"
+              (ngModelChange)="onTypeChange($event)"
+              name="transactionType"
+              required
+            >
+              <option value="">— Select Type —</option>
+              @for (t of transactionTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
           <div class="field">
             <label for="txItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
             <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
@@ -38,15 +54,6 @@
                 <option [value]="item.id">
                   {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
                 </option>
-              }
-            </select>
-          </div>
-          <div class="field">
-            <label for="txType">{{ 'PHARMACY.TRANSACTION_TYPE' | translate }} *</label>
-            <select id="txType" [(ngModel)]="form.transactionType" name="transactionType" required>
-              <option value="">— Select Type —</option>
-              @for (t of transactionTypes; track t) {
-                <option [value]="t">{{ t }}</option>
               }
             </select>
           </div>
@@ -64,21 +71,141 @@
             />
           </div>
         </div>
-        <div class="field">
-          <label for="txReason">{{ 'PHARMACY.REASON' | translate }}</label>
-          <textarea
-            id="txReason"
-            [(ngModel)]="form.reason"
-            name="reason"
-            rows="2"
-            placeholder="e.g., Physical count discrepancy"
-          ></textarea>
-        </div>
+
+        <!-- RECEIPT-specific fields -->
+        @if (isReceipt()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="rxLot">{{ 'PHARMACY.LOT_NUMBER' | translate }} *</label>
+              <input
+                id="rxLot"
+                type="text"
+                [(ngModel)]="receiptLotNumber"
+                name="receiptLotNumber"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="rxSupplier">{{ 'PHARMACY.SUPPLIER' | translate }}</label>
+              <input
+                id="rxSupplier"
+                type="text"
+                [(ngModel)]="receiptSupplier"
+                name="receiptSupplier"
+              />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="rxPo">{{ 'PHARMACY.PO_REFERENCE' | translate }}</label>
+              <input
+                id="rxPo"
+                type="text"
+                [(ngModel)]="receiptPoReference"
+                name="receiptPoReference"
+              />
+            </div>
+            <div class="field">
+              <label for="rxExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }}</label>
+              <input
+                id="rxExpiry"
+                type="date"
+                [(ngModel)]="receiptExpiryDate"
+                name="receiptExpiryDate"
+              />
+            </div>
+            <div class="field">
+              <label for="rxCost">{{ 'PHARMACY.UNIT_COST' | translate }}</label>
+              <input
+                id="rxCost"
+                type="number"
+                step="0.01"
+                min="0"
+                [(ngModel)]="receiptCostPerUnit"
+                name="receiptCostPerUnit"
+              />
+            </div>
+          </div>
+        }
+
+        <!-- ADJUSTMENT-specific fields -->
+        @if (isAdjustment()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="adjReason">{{ 'PHARMACY.ADJUSTMENT_REASON_CODE' | translate }} *</label>
+              <select
+                id="adjReason"
+                [(ngModel)]="adjustmentReasonCode"
+                name="adjustmentReasonCode"
+                required
+              >
+                <option value="">— Select Reason —</option>
+                @for (code of adjustmentReasonCodes; track code) {
+                  <option [value]="code">{{ code }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="adjNotes">{{ 'PHARMACY.ADJUSTMENT_NOTES' | translate }} *</label>
+            <textarea
+              id="adjNotes"
+              [(ngModel)]="adjustmentNotes"
+              name="adjustmentNotes"
+              rows="2"
+              required
+            ></textarea>
+          </div>
+        }
+
+        <!-- TRANSFER-specific fields -->
+        @if (isTransfer()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="trDest">{{ 'PHARMACY.TRANSFER_DESTINATION' | translate }} *</label>
+              <select
+                id="trDest"
+                [(ngModel)]="transferDestinationPharmacyId"
+                name="transferDestinationPharmacyId"
+                required
+              >
+                <option value="">— Select Destination Pharmacy —</option>
+                @for (p of transferDestinationOptions(); track p.id) {
+                  <option [value]="p.id">{{ p.name }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+
+        <!-- RETURN-specific fields -->
+        @if (isReturn()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="retRef">{{ 'PHARMACY.RETURN_REFERENCE' | translate }} *</label>
+              <input
+                id="retRef"
+                type="text"
+                [(ngModel)]="returnReference"
+                name="returnReference"
+                required
+              />
+            </div>
+          </div>
+        }
+
+        <!-- DISPENSE: this screen is read-mostly for dispenses; encourage the proper UI. -->
+        @if (isDispense()) {
+          <div class="hint">
+            {{ 'PHARMACY.DISPENSE_USE_DISPENSING_SCREEN' | translate }}
+          </div>
+        }
+
         <div class="form-actions">
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving()">
+          <button type="submit" class="btn-primary" [disabled]="saving() || !txType()">
             <span class="material-symbols-outlined">check</span>
             {{
               saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate)

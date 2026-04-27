@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -13,6 +15,7 @@ import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
+import com.example.hms.payload.dto.pharmacy.CdsAlertResult;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
@@ -47,6 +50,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -68,6 +72,7 @@ class DispenseServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
+    @Mock private CdsCheckService cdsCheckService;
 
     @InjectMocks
     private DispenseServiceImpl service;
@@ -311,6 +316,118 @@ class DispenseServiceImplTest {
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
             verify(support).notifyReadyForPickup(patient, pharmacy, "Amoxicillin");
+        }
+
+        @Test
+        @DisplayName("P-04: should emit DISPENSE_SUBSTITUTED audit event when substitution flag is true")
+        void shouldEmitSubstitutedAuditOnSubstitution() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setSubstitution(Boolean.TRUE);
+            dto.setSubstitutionReason("Brand X out of stock; substituted with Brand Y");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            // The DISPENSE_CREATED event always fires; the new DISPENSE_SUBSTITUTED event
+            // fires in addition when substitution=true so substitutions are queryable.
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_CREATED), any(), any(), any());
+            verify(support).logAudit(eq(AuditEventType.DISPENSE_SUBSTITUTED),
+                    contains("Brand X out of stock"), eq(dispenseId.toString()), any());
+        }
+
+        @Test
+        @DisplayName("P-04: should NOT emit DISPENSE_SUBSTITUTED when substitution flag is absent")
+        void shouldNotEmitSubstitutedAuditWhenNoSubstitution() {
+            DispenseRequestDTO dto = buildRequest();
+            // substitution flag deliberately left null
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(support, never()).logAudit(eq(AuditEventType.DISPENSE_SUBSTITUTED), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("P-08: should block dispense on CRITICAL CDS alert without override reason")
+        void shouldBlockOnCriticalCdsWithoutOverride() {
+            DispenseRequestDTO dto = buildRequest();
+            // No cdsOverrideReason set — must block
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(cdsCheckService.checkAtDispense(prescription, patientId)).thenReturn(
+                    new CdsAlertResult(CdsAlertSeverity.CRITICAL,
+                            java.util.List.of("[CONTRAINDICATED] Drug A ↔ Drug B"), true));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("CDS_CRITICAL");
+
+            // No state should have mutated.
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("P-08: should proceed when CRITICAL CDS alert is overridden with a reason")
+        void shouldProceedOnCriticalCdsWithOverride() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setCdsOverrideReason("Specialist consulted; benefit outweighs risk");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(cdsCheckService.checkAtDispense(prescription, patientId)).thenReturn(
+                    new CdsAlertResult(CdsAlertSeverity.CRITICAL,
+                            java.util.List.of("[MAJOR] Drug A ↔ Drug B"), true));
+
+            DispenseResponseDTO result = service.createDispense(dto);
+
+            assertThat(result.getId()).isEqualTo(dispenseId);
+            verify(dispenseRepository).save(any(Dispense.class));
         }
 
         @Test

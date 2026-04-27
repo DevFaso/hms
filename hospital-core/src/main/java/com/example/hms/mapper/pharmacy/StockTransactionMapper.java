@@ -26,6 +26,12 @@ public class StockTransactionMapper {
             .referenceId(entity.getReferenceId())
             .performedBy(entity.getPerformedByUser() != null ? entity.getPerformedByUser().getId() : null)
             .createdAt(entity.getCreatedAt())
+            // FU-2: first-class RECEIPT fields
+            .lotNumber(entity.getLotNumber())
+            .supplier(entity.getSupplier())
+            .poReference(entity.getPoReference())
+            .expiryDate(entity.getExpiryDate())
+            .unitCost(entity.getUnitCost())
             .build();
     }
 
@@ -45,6 +51,12 @@ public class StockTransactionMapper {
             .reason(dto.getReason())
             .referenceId(dto.getReferenceId())
             .performedByUser(performedByUser)
+            // FU-2: first-class RECEIPT fields
+            .lotNumber(dto.getLotNumber())
+            .supplier(dto.getSupplier())
+            .poReference(dto.getPoReference())
+            .expiryDate(dto.getExpiryDate())
+            .unitCost(dto.getUnitCost())
             .build();
     }
 }

@@ -926,6 +926,31 @@ export const routes: Routes = [
           import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
       },
       {
+        // P-05: deep-link variant — work-queue rows navigate here with the
+        // prescription ID pre-filled so users never type or paste a UUID.
+        path: 'pharmacy/stock-routing/:prescriptionId',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
+      },
+      {
+        // P-09: pharmacist-led MTM (Medication Therapy Management) review.
+        path: 'pharmacy/mtm',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./pharmacy/mtm-review').then((m) => m.MtmReviewComponent),
+      },
+      {
         // T-43/T-44: pharmacy checkout & French printable receipt
         path: 'pharmacy/checkout',
         canActivate: [RoleGuard],
