@@ -164,24 +164,61 @@ KC functional checks 1–5 all PASS (token claims shape, NimbusJwtDecoder
 accepts live JWTs, direct grant rejected on every production client,
 migration logic 22/22, refresh-token rotation).
 
-## Phase 2.8 status (pending) — per-environment Keycloak + mobile release packaging
+## Phase 2.8 status (2026-04-26) — per-environment Keycloak + mobile release packaging
 
-Phase 2.6/2.7 closed every code-side gap. Before Phase 3 cutover can run,
-two operational gates remain — and the mobile apps need release builds
-that actually use the new Keycloak. Today the apps are dev-only
-(TestFlight internal / Play Internal Track), pinned to
-`https://api.hms.dev.bitnesttechs.com`, with SSO defaulted **OFF** in
-both build configs:
+Phase 2.6/2.7 closed every code-side gap. Phase 2.8 now closes the
+engineering scope for per-env release builds; what remains is
+operational (Railway provisioning, TestFlight/Play uploads) and
+covered by the 2.8.A/B/C subsections below.
 
-- iOS scheme env vars: `MEDIHUB_KEYCLOAK_ISSUER=""`,
-  `MEDIHUB_KEYCLOAK_SSO_ENABLED="0"` ([project.yml](../patient-ios-app/project.yml)).
-- Android `local.properties` defaults: `KEYCLOAK_SSO_ENABLED=false`,
-  `KEYCLOAK_ISSUER=""`
-  ([app/build.gradle.kts](../patient-android-app/app/build.gradle.kts)).
+### ✅ Engineering closure (2026-04-26 — `feature/keycloak-phase-2.8`)
 
-The only Keycloak that's actually been exercised against this code is
-the local docker-compose profile — there is no `hms-keycloak-dev`,
-`hms-keycloak-uat`, or `hms-keycloak-prod` service deployed yet.
+- ✅ **2.8.A engineering** Single parameterized Railway image —
+  `ARG BUILD_CONFIG={dev,uat,prod}` in
+  [`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile), one
+  [`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml) shared
+  across all three Railway services. Image stamps a
+  `com.bitnesttechs.hms.env` Docker label and a `KC_HMS_ENV` runtime
+  env var so the running env is grep-able from boot logs and metrics.
+  [`keycloak/prod/README.md`](../keycloak/prod/README.md) rewritten as
+  a per-env recipe (dev → uat → prod). Dev users (`realm-export.dev-users.json`)
+  remain deliberately unimported in every env per the file's own
+  safety note. Commit `f0ead7be`.
+- ✅ **2.8.B engineering** iOS gains
+  [`patient-ios-app/Config/{Dev,UAT,Prod}.xcconfig`](../patient-ios-app/Config/)
+  wired into three new build configurations (`Release-Dev`,
+  `Release-UAT`, `Release-Prod`) via `configFiles` in
+  [`project.yml`](../patient-ios-app/project.yml). Info.plist now
+  carries `MEDIHUB_KEYCLOAK_*` keys with `$(VAR)` substitution; new
+  `KeycloakRuntimeConfig` resolver in
+  [`FeatureFlags.swift`](../patient-ios-app/MediHubPatient/Core/Config/FeatureFlags.swift)
+  falls back `ProcessInfo` → `Bundle.main.infoDictionary` so
+  `xcodebuild archive` builds actually carry per-env values — fixes a
+  latent bug where scheme env vars (the prior recipe) never reached
+  archive output. Six new iOS tests
+  ([`KeycloakConfigTests.swift`](../patient-ios-app/MediHubPatientTests/KeycloakConfigTests.swift))
+  cover Bundle fallback, ProcessInfo precedence, and unsubstituted
+  `$(VAR)` placeholder handling. Android needed no code change (the
+  existing `local.properties` → BuildConfig path already covers
+  `bundleRelease`); ships
+  [`patient-android-app/local.properties.example`](../patient-android-app/local.properties.example)
+  with per-env blocks pre-filled. Verified:
+  `./gradlew :app:testDebugUnitTest` BUILD SUCCESSFUL. Commit
+  `82e306d2`.
+
+### ⏳ Remaining ops gates
+
+Three Railway services still need to be stood up (2.8.A ops), and the
+mobile release builds need to be archived + uploaded per env (2.8.B
+ops). 2.8.C cutover sequencing stacks on top. Until 2.8.A finishes
+the only Keycloak that's been exercised against this code is the local
+docker-compose profile.
+
+Pre-Phase-2.8 state for reference: apps were pinned to
+`https://api.hms.dev.bitnesttechs.com` with `MEDIHUB_KEYCLOAK_*` only
+populated through Xcode scheme env vars (which inject for Run/Test,
+not archive) and Android `local.properties` defaults at
+`KEYCLOAK_SSO_ENABLED=false` / `KEYCLOAK_ISSUER=""`.
 
 ### Phase 2.8.A — Provision per-environment Keycloak (DevOps; blocks 2.8.B/C)
 
