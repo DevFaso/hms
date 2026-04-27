@@ -24,6 +24,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -82,4 +83,27 @@ public class StockTransaction extends BaseEntity {
     @JoinColumn(name = "performed_by", nullable = false,
         foreignKey = @ForeignKey(name = "fk_st_user"))
     private User performedByUser;
+
+    // ── FU-2 (P-06 backend): first-class fields for stock RECEIPT entries ──
+    // All nullable so that DISPENSE / TRANSFER / ADJUSTMENT / RETURN rows are
+    // unaffected. Captured here rather than in `reason` text so reports can
+    // query supplier / expiry / cost directly.
+
+    @Size(max = 120)
+    @Column(name = "lot_number", length = 120)
+    private String lotNumber;
+
+    @Size(max = 200)
+    @Column(name = "supplier", length = 200)
+    private String supplier;
+
+    @Size(max = 120)
+    @Column(name = "po_reference", length = 120)
+    private String poReference;
+
+    @Column(name = "expiry_date")
+    private LocalDate expiryDate;
+
+    @Column(name = "unit_cost", precision = 12, scale = 2)
+    private BigDecimal unitCost;
 }

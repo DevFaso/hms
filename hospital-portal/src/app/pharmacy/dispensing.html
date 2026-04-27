@@ -184,6 +184,15 @@
                     <span class="material-symbols-outlined">medication</span>
                     {{ 'PHARMACY.DISPENSE' | translate }}
                   </button>
+                  <button
+                    class="btn-action"
+                    type="button"
+                    (click)="routeFromQueue(rx)"
+                    [title]="'PHARMACY.ROUTE_HINT' | translate"
+                  >
+                    <span class="material-symbols-outlined">alt_route</span>
+                    {{ 'PHARMACY.ROUTE' | translate }}
+                  </button>
                 </td>
               </tr>
             }

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -82,12 +83,44 @@ describe('StockRoutingComponent', () => {
         provideHttpClientTesting(),
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: ToastService, useValue: toastSvc },
+        // P-05: component now reads :prescriptionId from the route — provide an
+        // empty paramMap by default so the existing tests don't auto-trigger
+        // checkStock(). The deep-link path is exercised by its own test below.
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({}) } },
+        },
       ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(StockRoutingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('P-05: should auto-check stock when navigated with :prescriptionId param', async () => {
+    // Re-create the bed with a populated paramMap to verify the deep-link path.
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [StockRoutingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PharmacyService, useValue: pharmacySvc },
+        { provide: ToastService, useValue: toastSvc },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { paramMap: convertToParamMap({ prescriptionId: 'rx-deep-1' }) } },
+        },
+      ],
+    }).compileComponents();
+
+    const f = TestBed.createComponent(StockRoutingComponent);
+    f.detectChanges();
+    const c = f.componentInstance;
+
+    expect(c.prescriptionId).toBe('rx-deep-1');
+    expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
   });
 
   it('should create', () => {
