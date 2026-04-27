@@ -1,0 +1,12 @@
+// Per-env Keycloak settings for the `Release-Dev` build configuration.
+//
+// Selected by `xcodebuild -configuration Release-Dev` for TestFlight
+// internal builds pointing at `hms-keycloak-dev`. The values below get
+// substituted into Info.plist (via `$(VAR)` keys) and read at runtime by
+// `KeycloakConfig` / `FeatureFlags`. See `Config/README.md` for the full
+// matrix.
+
+MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-dev.up.railway.app/realms/hms
+MEDIHUB_KEYCLOAK_SSO_ENABLED = 1
+MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
+MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect
