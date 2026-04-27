@@ -10,11 +10,15 @@
 
 Three xcconfig files live next to this README:
 
-| File | Build configuration | Issuer | SSO default | TestFlight track |
+| File | Build configuration | Issuer host | SSO default | TestFlight track |
 | --- | --- | --- | --- | --- |
 | [`Dev.xcconfig`](Dev.xcconfig) | `Release-Dev` | `hms-keycloak-dev.up.railway.app` | ON | Internal |
 | [`UAT.xcconfig`](UAT.xcconfig) | `Release-UAT` | `hms-keycloak-uat.up.railway.app` | ON | Internal (UAT track) |
 | [`Prod.xcconfig`](Prod.xcconfig) | `Release-Prod` | `hms-keycloak-prod.up.railway.app` | OFF until cutover | Production |
+
+The "Issuer host" column is the bare hostname for readability; the
+actual `MEDIHUB_KEYCLOAK_ISSUER` build setting in each xcconfig is the
+full OIDC URL — `https://<host>/realms/hms`.
 
 Each xcconfig sets four build settings:
 
@@ -32,6 +36,9 @@ sessions — useful for QA against a local docker-compose Keycloak.
 
 ## Building per env
 
+All three commands need `-project` and `-scheme` — `xcodebuild archive`
+fails or builds the wrong target without them.
+
 ```bash
 # Dev (TestFlight internal)
 xcodebuild -project MediHubPatient.xcodeproj \
@@ -41,10 +48,18 @@ xcodebuild -project MediHubPatient.xcodeproj \
            archive
 
 # UAT
-xcodebuild -configuration Release-UAT  -archivePath build/MediHubPatient-UAT.xcarchive  archive
+xcodebuild -project MediHubPatient.xcodeproj \
+           -scheme MediHubPatient \
+           -configuration Release-UAT \
+           -archivePath build/MediHubPatient-UAT.xcarchive \
+           archive
 
 # Prod
-xcodebuild -configuration Release-Prod -archivePath build/MediHubPatient-Prod.xcarchive archive
+xcodebuild -project MediHubPatient.xcodeproj \
+           -scheme MediHubPatient \
+           -configuration Release-Prod \
+           -archivePath build/MediHubPatient-Prod.xcarchive \
+           archive
 ```
 
 Default `Debug` and `Release` configurations remain unchanged for
