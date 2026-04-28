@@ -53,9 +53,16 @@ public class MllpTcpServer {
     @PostConstruct
     public void start() throws IOException {
         ServerSocket socket = new ServerSocket();
-        socket.setReuseAddress(true);
-        socket.bind(new InetSocketAddress(InetAddress.getByName(properties.getBindAddress()), properties.getPort()));
-        socket.setSoTimeout(1_000);   // periodically wake to honour shutdown
+        try {
+            socket.setReuseAddress(true);
+            socket.bind(new InetSocketAddress(InetAddress.getByName(properties.getBindAddress()), properties.getPort()));
+            socket.setSoTimeout(1_000);   // periodically wake to honour shutdown
+        } catch (IOException | RuntimeException ex) {
+            // Bind / setSoTimeout failed — release the half-initialised socket
+            // before propagating so we don't leak a kernel file descriptor.
+            try { socket.close(); } catch (IOException suppressed) { ex.addSuppressed(suppressed); }
+            throw ex;
+        }
         this.serverSocket = socket;
         this.boundPort = socket.getLocalPort();
         running.set(true);
