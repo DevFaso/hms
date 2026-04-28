@@ -1,0 +1,133 @@
+package com.example.hms.cdshooks.service;
+
+import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
+import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
+import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
+import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
+import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
+import com.example.hms.model.PatientAllergy;
+import com.example.hms.repository.PatientAllergyRepository;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * On {@code order-sign} for medication orders, returns a critical card
+ * if the proposed medication name overlaps with any active allergy on
+ * the patient's record.
+ *
+ * <p>This is a deliberately simple text-match check. RxNorm/ATC lookup
+ * goes in P1 once those code systems are bound (gap #5). Even without
+ * coded data, a string match catches the common case in West-African
+ * deployments where allergies are recorded as freetext (e.g. "penicillin",
+ * "sulfa", "aspirin").
+ */
+@Component
+public class MedicationAllergyCdsService implements CdsHookService {
+
+    private static final String ID = "hms-medication-allergy-check";
+    private static final String SOURCE_LABEL = "HMS Allergy Check";
+
+    private final PatientAllergyRepository allergyRepository;
+
+    public MedicationAllergyCdsService(PatientAllergyRepository allergyRepository) {
+        this.allergyRepository = allergyRepository;
+    }
+
+    @Override
+    public CdsServiceDescriptor descriptor() {
+        return new CdsServiceDescriptor(
+            "order-sign",
+            ID,
+            "Drug-allergy interaction check",
+            "Warns when a proposed MedicationRequest matches an active allergy "
+                + "on the patient's chart.",
+            null
+        );
+    }
+
+    @Override
+    public CdsHookResponse evaluate(CdsHookRequest request) {
+        UUID patientId = CdsHookContext.requirePatientId(request);
+        if (patientId == null) return CdsHookResponse.empty();
+
+        Set<String> haystacks = collectAllergyTerms(allergyRepository.findByPatient_Id(patientId));
+        if (haystacks.isEmpty()) return CdsHookResponse.empty();
+
+        List<CdsCard> cards = new ArrayList<>();
+        for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
+            if (!"MedicationRequest".equals(draft.get("resourceType"))) continue;
+            String medText = extractMedicationText(draft);
+            if (medText == null) continue;
+            String norm = medText.toLowerCase(Locale.ROOT);
+            for (String allergen : haystacks) {
+                if (norm.contains(allergen)) {
+                    cards.add(buildCard(medText, allergen));
+                    break;
+                }
+            }
+        }
+        return CdsHookResponse.of(cards);
+    }
+
+    private Set<String> collectAllergyTerms(List<PatientAllergy> allergies) {
+        java.util.HashSet<String> out = new java.util.HashSet<>();
+        for (PatientAllergy a : allergies) {
+            if (!a.isActive()) continue;
+            addNormalised(out, a.getAllergenDisplay());
+            addNormalised(out, a.getAllergenCode());
+        }
+        return out;
+    }
+
+    private static void addNormalised(Set<String> sink, String value) {
+        if (value == null) return;
+        String trimmed = value.trim().toLowerCase(Locale.ROOT);
+        if (trimmed.length() >= 3) sink.add(trimmed);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String extractMedicationText(Map<String, Object> draft) {
+        Object cc = draft.get("medicationCodeableConcept");
+        if (cc instanceof Map<?, ?> map) {
+            Object text = map.get("text");
+            if (text instanceof String s && !s.isBlank()) return s;
+            Object coding = map.get("coding");
+            if (coding instanceof List<?> list && !list.isEmpty()) {
+                Object first = list.get(0);
+                if (first instanceof Map<?, ?> firstMap) {
+                    Object display = firstMap.get("display");
+                    if (display instanceof String s && !s.isBlank()) return s;
+                    Object code = firstMap.get("code");
+                    if (code instanceof String s && !s.isBlank()) return s;
+                }
+            }
+        }
+        Object reference = draft.get("medicationReference");
+        if (reference instanceof Map<?, ?> ref) {
+            Object display = ref.get("display");
+            if (display instanceof String s && !s.isBlank()) return s;
+        }
+        return null;
+    }
+
+    private CdsCard buildCard(String medication, String matchedAllergen) {
+        String summary = "Allergy alert: " + medication
+            + " matches recorded allergy “" + matchedAllergen + "”";
+        String detail =
+            "The patient has an active allergy entry that matches the proposed "
+                + "medication. Review the patient's allergy list before signing.";
+        return new CdsCard(
+            summary,
+            detail,
+            CdsCard.Indicator.critical,
+            new Source(SOURCE_LABEL, null, null),
+            null, null, null, java.util.UUID.randomUUID().toString()
+        );
+    }
+}
