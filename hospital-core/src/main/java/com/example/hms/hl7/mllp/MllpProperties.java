@@ -41,6 +41,14 @@ public class MllpProperties {
     /** Per-socket read timeout in ms. After this with no data the connection is closed. */
     private int readTimeoutMs = 60_000;
 
+    /**
+     * Hard cap on concurrent worker threads. Defends against connection
+     * floods (accidental analyzer misconfig or malicious traffic). The
+     * accept loop blocks new clients once this limit is reached; analyzers
+     * retry on the next configured interval, which is the desired behaviour.
+     */
+    private int maxConcurrentConnections = 100;
+
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
@@ -58,6 +66,9 @@ public class MllpProperties {
 
     public int getReadTimeoutMs() { return readTimeoutMs; }
     public void setReadTimeoutMs(int readTimeoutMs) { this.readTimeoutMs = readTimeoutMs; }
+
+    public int getMaxConcurrentConnections() { return maxConcurrentConnections; }
+    public void setMaxConcurrentConnections(int maxConcurrentConnections) { this.maxConcurrentConnections = maxConcurrentConnections; }
 
     public Charset resolvedCharset() {
         return Charset.forName(charset);

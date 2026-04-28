@@ -4,7 +4,6 @@ import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.Search;
-import ca.uhn.fhir.rest.api.SortSpec;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
@@ -38,7 +37,6 @@ import java.util.UUID;
 public class PatientFhirResourceProvider implements IResourceProvider {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
-    private static final int MAX_PAGE_SIZE = 500;
 
     private final PatientRepository patientRepository;
     private final PatientFhirMapper patientMapper;
@@ -61,15 +59,20 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         return patientMapper.toFhir(entity);
     }
 
+    /**
+     * Search supports the parameters that can be honored by the existing
+     * {@code searchPatientsExtended} repository query without post-paginate
+     * in-memory filtering. {@code given}, {@code family}, and {@code gender}
+     * are intentionally not exposed yet — pushing them into the JPA query is
+     * a P1 follow-up. Until then, callers should use the broader {@code name}
+     * parameter (which matches first / last / concatenated name).
+     */
     @Search
     public List<org.hl7.fhir.r4.model.Patient> search(
         @OptionalParam(name = "_id") TokenParam idParam,
         @OptionalParam(name = "identifier") TokenParam identifier,
         @OptionalParam(name = "name") StringParam name,
-        @OptionalParam(name = "given") StringParam given,
-        @OptionalParam(name = "family") StringParam family,
         @OptionalParam(name = "birthdate") DateParam birthdate,
-        @OptionalParam(name = "gender") TokenParam gender,
         @OptionalParam(name = "phone") TokenParam phone,
         @OptionalParam(name = "email") TokenParam email,
         @OptionalParam(name = "active") TokenParam active
@@ -84,11 +87,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         }
 
         String mrn = (identifier != null && identifier.getValue() != null) ? identifier.getValue() : null;
-        String namePattern = firstNonNull(
-            stringPattern(name),
-            stringPattern(given),
-            stringPattern(family)
-        );
+        String namePattern = stringPattern(name);
         String dob = (birthdate != null && birthdate.getValue() != null)
             ? birthdate.getValueAsString()
             : null;
@@ -114,13 +113,7 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             PageRequest.of(0, DEFAULT_PAGE_SIZE, sort)
         );
 
-        String genderFilter = gender != null && gender.getValue() != null
-            ? gender.getValue().trim().toLowerCase()
-            : null;
-
         return page.stream()
-            .filter(p -> genderFilter == null
-                || (p.getGender() != null && genderFilter.equalsIgnoreCase(p.getGender().trim())))
             .map(patientMapper::toFhir)
             .toList();
     }
@@ -128,11 +121,6 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private static String stringPattern(StringParam param) {
         if (param == null || param.getValue() == null || param.getValue().isBlank()) return null;
         return "%" + param.getValue().trim().toLowerCase() + "%";
-    }
-
-    private static String firstNonNull(String... values) {
-        for (String v : values) if (v != null) return v;
-        return null;
     }
 
     private static String normalizeDob(String raw) {
@@ -167,16 +155,4 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         }
     }
 
-    /** Reserved for future paging support. */
-    @SuppressWarnings("unused")
-    private static int boundedPageSize(int requested) {
-        if (requested <= 0) return DEFAULT_PAGE_SIZE;
-        return Math.min(requested, MAX_PAGE_SIZE);
-    }
-
-    /** Reserved for future explicit sort spec mapping. */
-    @SuppressWarnings("unused")
-    private static Sort.Order toOrder(SortSpec spec) {
-        return Sort.Order.asc(spec.getParamName());
-    }
 }

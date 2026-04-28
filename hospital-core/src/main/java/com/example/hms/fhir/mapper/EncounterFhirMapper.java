@@ -33,9 +33,10 @@ public class EncounterFhirMapper {
             reason.setText(src.getChiefComplaint());
             out.addReasonCode(reason);
         }
-        if (src.getNotes() != null && !src.getNotes().isBlank()) {
-            out.addType(new CodeableConcept().setText(src.getNotes()));
-        }
+        // Encounter.type is reserved for classification (ADMS, NEWPT, etc.).
+        // Free-text encounter notes will surface as a separate DocumentReference
+        // once the documentation provider is added; mapping them onto type here
+        // would mislead consumers that treat the field as a coded concept.
         return out;
     }
 

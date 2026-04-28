@@ -35,6 +35,9 @@ import java.util.UUID;
 public class ObservationFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_VITALS_PER_PATIENT = 250;
+    private static final int MAX_LAB_RESULTS_PER_PATIENT = 250;
+    private static final String VITAL_PREFIX = "vital-";
+    private static final int UUID_LENGTH = 36;
 
     private final PatientVitalSignRepository vitalsRepository;
     private final LabResultRepository labResultRepository;
@@ -68,14 +71,18 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
                 .map(mapper::toFhir)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }
-        if (idPart.startsWith("vital-")) {
-            // vital-{uuid}-{component}
-            int last = idPart.lastIndexOf('-');
-            if (last <= "vital-".length()) throw new ResourceNotFoundException(id);
-            String uuidPart = idPart.substring("vital-".length(), last);
-            String component = idPart.substring(last + 1);
-            UUID uuid = FhirIds.tryParse(uuidPart);
+        if (idPart.startsWith(VITAL_PREFIX)) {
+            // Format: vital-{uuid}-{component}. Components emitted by the mapper
+            // include dashes themselves (heart-rate, resp-rate), so we cannot
+            // split on the last dash — UUID is fixed at 36 characters.
+            int uuidStart = VITAL_PREFIX.length();
+            int uuidEnd = uuidStart + UUID_LENGTH;
+            if (idPart.length() <= uuidEnd + 1 || idPart.charAt(uuidEnd) != '-') {
+                throw new ResourceNotFoundException(id);
+            }
+            UUID uuid = FhirIds.tryParse(idPart.substring(uuidStart, uuidEnd));
             if (uuid == null) throw new ResourceNotFoundException(id);
+            String component = idPart.substring(uuidEnd + 1);
             return vitalsRepository.findById(uuid)
                 .map(mapper::toFhir)
                 .flatMap(list -> list.stream()
@@ -104,7 +111,8 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
                 .forEach(v -> out.addAll(mapper.toFhir(v)));
         }
         if (wantsLabs) {
-            labResultRepository.findByLabOrder_Patient_Id(patientId)
+            labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
+                .limit(MAX_LAB_RESULTS_PER_PATIENT)
                 .forEach(r -> {
                     Observation mapped = mapper.toFhir(r);
                     if (mapped != null) out.add(mapped);

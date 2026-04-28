@@ -51,8 +51,9 @@ public final class CdsHookContext {
                 if (entries instanceof List<?> list) {
                     return list.stream()
                         .filter(e -> e instanceof Map<?, ?>)
-                        .map(e -> (Map<String, Object>) ((Map<?, ?>) e).get("resource"))
-                        .filter(java.util.Objects::nonNull)
+                        .map(e -> ((Map<?, ?>) e).get("resource"))
+                        .filter(resource -> resource instanceof Map<?, ?>)
+                        .map(resource -> (Map<String, Object>) resource)
                         .toList();
                 }
             }

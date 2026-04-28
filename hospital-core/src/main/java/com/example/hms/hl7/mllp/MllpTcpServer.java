@@ -16,17 +16,25 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.Charset;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Plain-JDK MLLP TCP server. One accept thread + a cached worker pool for
+ * Plain-JDK MLLP TCP server. One accept thread + a bounded worker pool for
  * connection handling. Designed to coexist with the rest of the Spring app
  * without adding a heavy integration framework.
  *
  * <p>The bean is only registered when {@code app.hl7.mllp.enabled=true}.
  * In test profile and in {@code local-h2} we keep it off to avoid binding
  * a privileged port and to keep CI isolated.
+ *
+ * <p>The worker pool is sized at {@link MllpProperties#getMaxConcurrentConnections()}
+ * with a {@link ThreadPoolExecutor.CallerRunsPolicy CallerRunsPolicy} fallback —
+ * under flood conditions the accept thread itself processes the over-limit
+ * connection, providing natural backpressure instead of unbounded thread
+ * spawning.
  */
 public class MllpTcpServer {
 
@@ -43,11 +51,20 @@ public class MllpTcpServer {
     public MllpTcpServer(MllpProperties properties, Hl7MessageDispatcher dispatcher) {
         this.properties = properties;
         this.dispatcher = dispatcher;
-        this.workers = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "mllp-worker-" + System.nanoTime());
-            t.setDaemon(true);
-            return t;
-        });
+        int max = Math.max(1, properties.getMaxConcurrentConnections());
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+            max, max,
+            60L, TimeUnit.SECONDS,
+            new LinkedBlockingQueue<>(),
+            r -> {
+                Thread t = new Thread(r, "mllp-worker-" + System.nanoTime());
+                t.setDaemon(true);
+                return t;
+            },
+            new ThreadPoolExecutor.CallerRunsPolicy()
+        );
+        pool.allowCoreThreadTimeOut(true);
+        this.workers = pool;
     }
 
     @PostConstruct

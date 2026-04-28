@@ -5,6 +5,8 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
+import com.example.hms.enums.AllergySeverity;
+import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.repository.PatientAllergyRepository;
@@ -72,9 +74,8 @@ public class PatientViewCdsService implements CdsHookService {
         if (allergies.isEmpty()) return;
 
         boolean anyHigh = allergies.stream()
-            .anyMatch(a -> a.getSeverity() != null
-                && (a.getSeverity().name().equalsIgnoreCase("HIGH")
-                    || a.getSeverity().name().equalsIgnoreCase("SEVERE")));
+            .anyMatch(a -> a.getSeverity() == AllergySeverity.SEVERE
+                || a.getSeverity() == AllergySeverity.LIFE_THREATENING);
         String summary = allergies.size() == 1
             ? "1 active allergy on file"
             : allergies.size() + " active allergies on file";
@@ -94,9 +95,8 @@ public class PatientViewCdsService implements CdsHookService {
     private void addProblemCard(List<CdsCard> sink, UUID patientId) {
         List<PatientProblem> active = problemRepository.findByPatient_Id(patientId).stream()
             .filter(p -> p.getStatus() == null
-                || p.getStatus().name().equalsIgnoreCase("ACTIVE")
-                || p.getStatus().name().equalsIgnoreCase("RECURRENCE")
-                || p.getStatus().name().equalsIgnoreCase("RELAPSE"))
+                || p.getStatus() == ProblemStatus.ACTIVE
+                || p.getStatus() == ProblemStatus.RECURRENCE)
             .toList();
         if (active.isEmpty()) return;
 
