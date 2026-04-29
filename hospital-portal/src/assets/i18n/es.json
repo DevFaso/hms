@@ -4,6 +4,15 @@
     "SUBTITLE": "Panel de administración",
     "TITLE": "Administración"
   },
+  "CDS": {
+    "SECTION_LABEL": "Soporte de decisiones clínicas",
+    "FORCE_OVERRIDE": "Anular alerta crítica tras revisión clínica",
+    "INDICATOR": {
+      "INFO": "Información",
+      "WARNING": "Advertencia",
+      "CRITICAL": "Crítico"
+    }
+  },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
     "ACUITY_LEVEL": "Nivel de Gravedad",

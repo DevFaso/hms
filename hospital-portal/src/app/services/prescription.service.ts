@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 export interface PrescriptionResponse {
   id: string;
@@ -20,6 +21,12 @@ export interface PrescriptionResponse {
   status: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * CDS rule-engine cards returned by the backend on create / update.
+   * Optional because read-only responses (list, get-by-id) do not
+   * re-run the rule engine.
+   */
+  cdsAdvisories?: CdsCard[];
 }
 
 export type PrescriptionStatusType =
