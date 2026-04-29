@@ -202,7 +202,7 @@ public class Hl7v2MessageBuilder {
         try {
             String[] segments = hl7Message.split("[\r\n]+");
             String[] pid = findSegment(segments, "PID");
-            if (pid == null) return null;
+            if (pid.length == 0) return null;
             String[] mrnParts = parseIdentifierList(field(pid, 3));
             if (mrnParts[0] == null || mrnParts[0].isBlank()) {
                 // No MRN — refuse: we cannot resolve identity.
@@ -239,18 +239,20 @@ public class Hl7v2MessageBuilder {
         }
     }
 
+    private static final String[] EMPTY_SEGMENT = new String[0];
+
     private String[] findSegment(String[] segments, String prefix) {
-        if (segments == null) return null;
+        if (segments == null) return EMPTY_SEGMENT;
         for (String seg : segments) {
             if (seg.startsWith(prefix + "|")) {
                 return seg.split("\\|", -1);
             }
         }
-        return null;
+        return EMPTY_SEGMENT;
     }
 
     private String field(String[] segment, int idx) {
-        if (segment == null || idx < 0 || idx >= segment.length) return "";
+        if (idx < 0 || idx >= segment.length) return "";
         return segment[idx] == null ? "" : segment[idx];
     }
 
