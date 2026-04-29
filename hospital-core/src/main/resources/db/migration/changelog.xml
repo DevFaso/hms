@@ -769,4 +769,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V62: P1 #2b — MLLP per-facility allowlist
+         - platform.mllp_allowed_senders maps (sending_application,
+           sending_facility) MSH-3/MSH-4 pairs to a receiving hospital.
+         - The dispatcher uses this to reject unknown senders with AR
+           and to pin accepted messages to the right hospital scope.
+         - Depends on V61 (SYSTEM-actor support on lab_results) so
+           machine-origin LabResult writes can omit assignment_id.
+         - Additive only.
+         ================================================================= -->
+    <changeSet id="V62-mllp-allowed-senders" author="hms-team" runOnChange="false">
+        <sqlFile path="V62__mllp_allowed_senders.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
