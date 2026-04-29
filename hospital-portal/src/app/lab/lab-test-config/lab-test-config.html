@@ -364,6 +364,34 @@
               max="10080"
             />
           </div>
+          <div class="form-group">
+            <label for="defLoincCode">
+              {{ 'LAB_TEST_CONFIG.LOINC_CODE' | translate }}
+              <span class="optional-hint">{{ 'COMMON.OPTIONAL' | translate }}</span>
+            </label>
+            <input
+              id="defLoincCode"
+              type="text"
+              [(ngModel)]="defForm.loincCode"
+              placeholder="e.g. 718-7"
+              pattern="^\d{1,7}-\d$"
+              [class.invalid]="!isLoincValid()"
+            />
+            @if (!isLoincValid()) {
+              <small class="error-hint">{{
+                'LAB_TEST_CONFIG.LOINC_FORMAT_HINT' | translate
+              }}</small>
+            }
+          </div>
+          <div class="form-group">
+            <label for="defLoincDisplay">{{ 'LAB_TEST_CONFIG.LOINC_DISPLAY' | translate }}</label>
+            <input
+              id="defLoincDisplay"
+              type="text"
+              [(ngModel)]="defForm.loincDisplay"
+              placeholder="e.g. Hemoglobin [Mass/volume] in Blood"
+            />
+          </div>
           <div class="form-group form-group-full">
             <label for="defDescription">{{ 'LAB_TEST_CONFIG.DESCRIPTION' | translate }}</label>
             <textarea
@@ -399,7 +427,7 @@
           <button
             class="btn-primary"
             (click)="submitDefForm()"
-            [disabled]="savingDef() || !defForm.testCode || !defForm.testName"
+            [disabled]="savingDef() || !defForm.testCode || !defForm.testName || !isLoincValid()"
           >
             @if (savingDef()) {
               <span class="material-symbols-outlined spin">progress_activity</span>

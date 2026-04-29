@@ -320,3 +320,66 @@ Copilot PR review identified that controller-level `@PreAuthorize` expansions we
 ---
 
 *Last updated: 2026-04-07 — all gaps fixed (controller + service layer + i18n) on `fix/lab-role-permission-gaps`*
+
+---
+
+# Epic-Alignment P0 — Shipped (2026-04-28)
+
+> All four interoperability blockers (FHIR R4, HL7 v2 MLLP, CDS Hooks,
+> SMART-on-FHIR) landed in PR #139, promoted to `main` via #140 (develop→uat)
+> and #141 (uat→main). See `claude/finding-gaps.md` for the full audit.
+
+## Done
+
+- [x] **P0.1 — FHIR R4 read API** at `/api/fhir/*` (HAPI 7.4.5). Patient, Encounter, Observation (vitals + labs), Condition, MedicationRequest, Immunization. — `docs/fhir.md`
+- [x] **P0.2 — HL7 v2 MLLP TCP listener** (off by default, bounded thread pool, ORU^R01 + ADT^A01/A04/A08, framed AA/AE/AR ACK). — `docs/hl7-mllp.md`
+- [x] **P0.3 — CDS Hooks 1.0** services at `/api/cds-services` (`hms-patient-view`, `hms-medication-allergy-check`). — `docs/cds-hooks.md`
+- [x] **P0.4 — SMART-on-FHIR App Launch 1.0** discovery + CapabilityStatement OAuth security extension. — `docs/smart-on-fhir.md`
+
+Quality gates (PR #139): 13/13 GitHub CI checks, SonarCloud gate clean (0 PR issues after 26 → 2 → 0 cleanup), JaCoCo 80% threshold satisfied, 17 new backend tests.
+
+---
+
+# Epic-Alignment P1 — Active queue
+
+Top-down priority. Each item ships as one PR per `agent/coordination.md` (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
+
+- [ ] **P1.1 — Terminology binding** (gap #5)
+  - [ ] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI)
+  - [ ] ICD-10/11 on `PatientProblem` (already has `icdVersion` — wire validation + admin curation)
+  - [ ] WHO ATC + RxNorm on `MedicationCatalogItem`
+  - [ ] Update FHIR mappers to advertise the bound systems (`http://loinc.org`, `http://hl7.org/fhir/sid/icd-10`, `http://www.nlm.nih.gov/research/umls/rxnorm`, WHO ATC)
+
+- [ ] **P1.2 — MLLP / FHIR persistence**
+  - [ ] Resolve OBR-3 → `LabOrder.id` from analyzer messages (with allowlisted facility mapping)
+  - [ ] Persist ORU^R01 results as `LabResult` rows via the existing `LabResultService`
+  - [ ] Project ADT^A01/A04/A08 into `Patient` + `Encounter` via the EMPI service
+  - [ ] Per-facility allowlist (sending facility → hospital)
+
+- [ ] **P1.3 — CDS rule engine** (gap #3 expanded)
+  - [ ] Drug-drug interaction check on `order-sign` (depends on P1.1 RxNorm)
+  - [ ] Duplicate-order detection on `order-sign`
+  - [ ] Pediatric dose check (uses `Patient.dateOfBirth` + bound dose)
+  - [ ] BPA scaffolding for protocol cards (malaria, sepsis, OB hemorrhage)
+
+- [ ] **P1.4 — CPOE order-set builder** (gap #6) — versioned templates, search-driven picker
+
+- [ ] **P1.5 — Storyboard patient banner** (gap #15) — persistent allergy / problem / encounter / code-status header on every chart route
+
+- [ ] **P1.6 — Chart Review tabbed viewer** (gap #16) — Encounters / Notes / Results / Meds / Imaging / Procedures with timeline
+
+- [ ] **P1.7 — Cadence visual scheduling grid** (gap #17) — FullCalendar multi-resource block view
+
+- [ ] **P1.8 — Inpatient eMAR** (gap #10) — barcode-scan administration loop on top of pharmacy + MAR entities
+
+- [ ] **P1.9 — Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22)
+
+- [ ] **P1.10 — Telehealth low-bandwidth** (gap #12) — audio + photo + chat reusing the chat module
+
+- [ ] **P1.11 — DHIS2 ADX export** (gap #14) — immunization, ANC, malaria reporting tied to FHIR `Immunization`
+
+- [ ] **P1.12 — Referral lifecycle** (gap #13) — accept / decline / complete states on `GeneralReferral`
+
+P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-gaps.md`.
+
+*Last updated: 2026-04-28 — P0 shipped to main via #139/#140/#141*

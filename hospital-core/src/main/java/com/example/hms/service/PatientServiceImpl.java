@@ -1351,20 +1351,37 @@ public class PatientServiceImpl implements PatientService {
         if (normalized == null) {
             return null;
         }
-        if (requiresIcdValidation(icdVersion) && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
+        IcdValidation validation = pickIcdValidation(icdVersion);
+        if (validation == IcdValidation.ICD10 && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
             throw new BusinessException("Diagnosis code must be a valid ICD-10 value.");
+        }
+        if (validation == IcdValidation.ICD11 && !DiagnosisCodeValidator.isValidIcd11(normalized)) {
+            throw new BusinessException("Diagnosis code must be a valid ICD-11 MMS value.");
         }
         return normalized;
     }
 
-    private boolean requiresIcdValidation(String icdVersion) {
+    /**
+     * Selects which ICD format to enforce. Accepts the same flexible
+     * inputs the UI emits (e.g. {@code "ICD-10"}, {@code "icd10"},
+     * {@code "CIM-10"}, {@code "ICD-11"}, {@code "MMS"}).
+     */
+    private IcdValidation pickIcdValidation(String icdVersion) {
         if (icdVersion == null) {
-            return false;
+            return IcdValidation.NONE;
         }
         String normalized = icdVersion.replaceAll("[^A-Za-z0-9]", "")
             .toUpperCase(Locale.ROOT);
-        return normalized.startsWith("ICD") || normalized.startsWith("CIM");
+        if (normalized.contains("11") || normalized.contains("MMS")) {
+            return IcdValidation.ICD11;
+        }
+        if (normalized.startsWith("ICD") || normalized.startsWith("CIM")) {
+            return IcdValidation.ICD10;
+        }
+        return IcdValidation.NONE;
     }
+
+    private enum IcdValidation { NONE, ICD10, ICD11 }
 
     private boolean isActiveDiagnosis(PatientProblem problem) {
         if (problem == null) {

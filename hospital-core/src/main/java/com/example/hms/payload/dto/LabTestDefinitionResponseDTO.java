@@ -30,6 +30,8 @@ public class LabTestDefinitionResponseDTO {
     private String description;
     private String category;
     private String unit;
+    private String loincCode;
+    private String loincDisplay;
     private String sampleType;
     private String preparationInstructions;
     private Integer turnaroundTime;

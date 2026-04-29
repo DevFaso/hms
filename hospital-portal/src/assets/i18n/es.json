@@ -1119,6 +1119,9 @@
     "TEST_NAME": "Nombre de prueba",
     "CATEGORY": "Categoría",
     "UNIT": "Unidad",
+    "LOINC_CODE": "Código LOINC",
+    "LOINC_DISPLAY": "Etiqueta LOINC",
+    "LOINC_FORMAT_HINT": "El código LOINC debe seguir el formato n{1,7}-d (p. ej. 718-7).",
     "SAMPLE_TYPE": "Tipo de muestra",
     "STATUS": "Estado",
     "RANGES": "Rangos",
@@ -3074,6 +3077,8 @@
     "error": "Error en el alta. Inténtelo de nuevo."
   },
   "PHARMACY": {
+    "ATC_FORMAT_HINT": "El código ATC debe seguir el formato OMS L##LL## (p. ej. J01CA04).",
+    "RXNORM_FORMAT_HINT": "El código RxNorm debe tener entre 1 y 12 dígitos.",
     "ROUTE": "Encaminar",
     "ROUTE_HINT": "Abrir el encaminamiento de stock para esta receta",
     "LOT_NUMBER": "Número de lote",

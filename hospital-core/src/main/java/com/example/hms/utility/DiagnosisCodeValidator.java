@@ -1,5 +1,7 @@
 package com.example.hms.utility;
 
+import com.example.hms.terminology.TerminologyCodes;
+
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -19,6 +21,15 @@ public final class DiagnosisCodeValidator {
             return false;
         }
         return ICD10_PATTERN.matcher(value).matches();
+    }
+
+    /**
+     * ICD-11 MMS validation delegates to {@link TerminologyCodes#isValidIcd11}.
+     * Kept here so callers that already use this utility for ICD-10 can adopt
+     * ICD-11 without depending on the terminology package directly.
+     */
+    public static boolean isValidIcd11(String value) {
+        return TerminologyCodes.isValidIcd11(value);
     }
 
     public static String normalize(String value) {

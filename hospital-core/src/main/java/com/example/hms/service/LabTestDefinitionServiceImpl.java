@@ -19,6 +19,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.terminology.TerminologyCodes;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.Document;
@@ -79,6 +80,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertUserCanManageGlobal(currentUser);
         }
 
+        dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
         entity.setHospital(null);
         return mapper.toDto(repository.save(entity));
@@ -131,6 +133,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         } else {
             assertUserCanManageHospital(currentUser, existing.getAssignment());
         }
+
+        dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
         if (dto.getAssignmentId() != null) {
             if (existing.getAssignment() == null

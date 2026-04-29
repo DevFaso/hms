@@ -45,7 +45,8 @@ import java.util.UUID;
     indexes = {
         @Index(name = "idx_lab_testdef_hospital", columnList = "hospital_id"),
         @Index(name = "idx_lab_testdef_name", columnList = "name"),
-        @Index(name = "idx_lab_testdef_assignment", columnList = "assignment_id")
+        @Index(name = "idx_lab_testdef_assignment", columnList = "assignment_id"),
+        @Index(name = "idx_lab_testdef_loinc", columnList = "loinc_code")
     }
 )
 @Getter
@@ -82,6 +83,20 @@ public class LabTestDefinition extends BaseEntity {
     @Size(max = 50)
     @Column(length = 50)
     private String unit;
+
+    /**
+     * LOINC code identifying this lab observation in FHIR {@code Observation.code}.
+     * Format is enforced at the service layer via
+     * {@code TerminologyCodes#isValidLoinc} so freetext definitions remain
+     * importable until they are re-coded.
+     */
+    @Size(max = 20)
+    @Column(name = "loinc_code", length = 20)
+    private String loincCode;
+
+    @Size(max = 255)
+    @Column(name = "loinc_display", length = 255)
+    private String loincDisplay;
 
     @Size(max = 1000)
     @Column(name = "preparation_instructions", length = 1000)
@@ -148,6 +163,14 @@ public class LabTestDefinition extends BaseEntity {
         if (name != null) name = name.trim();
         if (category != null) category = category.trim().toUpperCase();
         if (sampleType != null) sampleType = sampleType.trim().toUpperCase();
+        if (loincCode != null) {
+            String trimmed = loincCode.trim();
+            loincCode = trimmed.isEmpty() ? null : trimmed;
+        }
+        if (loincDisplay != null) {
+            String trimmed = loincDisplay.trim();
+            loincDisplay = trimmed.isEmpty() ? null : trimmed;
+        }
 
         // Lab test definitions are nationally scoped, never tied to a single hospital
         hospital = null;
