@@ -786,4 +786,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V63: P1 #3 — CDS rule-engine reference data
+         - clinical.drug_interactions: symmetric (rxnorm_a, rxnorm_b)
+           pairs with severity + advice. Seeded with 12 high-impact
+           interactions from WHO Model Formulary / BNF / FDA labels.
+         - clinical.medication_catalog_items.pediatric_max_dose_mg_per_kg:
+           optional weight-based ceiling consulted by PediatricDoseRule.
+         - Additive only; idempotent (CREATE IF NOT EXISTS / ON CONFLICT).
+         ================================================================= -->
+    <changeSet id="V63-cds-drug-interactions" author="hms-team" runOnChange="false">
+        <sqlFile path="V63__cds_drug_interactions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

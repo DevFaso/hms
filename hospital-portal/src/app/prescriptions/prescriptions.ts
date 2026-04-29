@@ -14,11 +14,13 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',
 })
@@ -57,6 +59,14 @@ export class PrescriptionsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingRx = signal<PrescriptionResponse | null>(null);
   deleting = signal(false);
+
+  /** CDS rule-engine cards from the most recent submit attempt. */
+  cdsAdvisories = signal<CdsCard[]>([]);
+  /**
+   * True when the backend last rejected the submit with a critical CDS
+   * advisory. Surfaces the override checkbox in the form.
+   */
+  cdsCriticalBlocked = signal(false);
 
   ngOnInit(): void {
     this.load();
@@ -181,6 +191,7 @@ export class PrescriptionsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.resetCdsState();
   }
 
   submitForm(): void {
@@ -189,17 +200,62 @@ export class PrescriptionsComponent implements OnInit {
       ? this.prescriptionService.update(this.editingId()!, this.form)
       : this.prescriptionService.create(this.form);
     op.subscribe({
-      next: () => {
+      next: (saved) => {
+        // Surface non-blocking advisories (warning/info). Critical
+        // advisories would have arrived via the error branch.
+        this.cdsAdvisories.set(saved?.cdsAdvisories ?? []);
+        this.cdsCriticalBlocked.set(false);
         this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
         this.closeModal();
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error('Save failed');
+      error: (err) => {
+        const message = this.extractErrorMessage(err);
+        if (this.isCdsCriticalBlock(message)) {
+          // Stay in the modal — surface the advisory, expose the
+          // forceOverride checkbox, and let the clinician re-submit.
+          this.cdsAdvisories.set([this.cardFromMessage(message)]);
+          this.cdsCriticalBlocked.set(true);
+          this.toast.error(message);
+        } else {
+          this.toast.error('Save failed');
+        }
         this.saving.set(false);
       },
     });
+  }
+
+  /** Cleared when the modal closes so a stale advisory does not leak between rxes. */
+  resetCdsState(): void {
+    this.cdsAdvisories.set([]);
+    this.cdsCriticalBlocked.set(false);
+    this.form.forceOverride = undefined;
+  }
+
+  private extractErrorMessage(err: unknown): string {
+    if (err && typeof err === 'object') {
+      const e = err as { error?: { message?: string }; message?: string };
+      return e.error?.message ?? e.message ?? '';
+    }
+    return '';
+  }
+
+  private isCdsCriticalBlock(message: string): boolean {
+    return typeof message === 'string' && message.startsWith('CDS ALERT:');
+  }
+
+  private cardFromMessage(message: string): CdsCard {
+    const summary = message
+      .replace(/^CDS ALERT:\s*/, '')
+      .replace(/\s*— set forceOverride.*$/, '')
+      .trim();
+    return {
+      summary: summary || 'CDS critical advisory',
+      detail: 'Set forceOverride to record clinical justification and re-submit.',
+      indicator: 'critical',
+      source: { label: 'HMS CDS Rule Engine' },
+    };
   }
 
   confirmDelete(p: PrescriptionResponse): void {

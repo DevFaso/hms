@@ -380,6 +380,26 @@
             [placeholder]="'PRESCRIPTIONS.NOTES_PLACEHOLDER' | translate"
           ></textarea>
         </div>
+
+        @if (cdsAdvisories().length > 0) {
+          <div class="field cds-advisories" data-testid="cds-advisories">
+            <h4 class="cds-advisories__heading">{{ 'CDS.SECTION_LABEL' | translate }}</h4>
+            <app-cds-card-list [cards]="cdsAdvisories()" />
+            @if (cdsCriticalBlocked()) {
+              <div class="cds-override">
+                <label class="cds-override__label">
+                  <input
+                    type="checkbox"
+                    name="cds-force-override"
+                    [(ngModel)]="form.forceOverride"
+                    data-testid="cds-force-override"
+                  />
+                  {{ 'CDS.FORCE_OVERRIDE' | translate }}
+                </label>
+              </div>
+            }
+          </div>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">

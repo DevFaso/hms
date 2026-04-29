@@ -72,6 +72,8 @@ class PrescriptionServiceImplTest {
     private AuthService authService;
     @Mock
     private UserRoleHospitalAssignmentRepository urhaRepository;
+    @Mock
+    private com.example.hms.cdshooks.rules.CdsRuleEngine cdsRuleEngine;
 
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
@@ -112,6 +114,8 @@ class PrescriptionServiceImplTest {
         encounter.setStaff(staff);
 
         lenient().when(patientAllergyRepository.findByPatient_IdAndHospital_Id(any(), any()))
+            .thenReturn(List.of());
+        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
             .thenReturn(List.of());
 
         assignment = new UserRoleHospitalAssignment();
@@ -2248,5 +2252,113 @@ class PrescriptionServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
         verify(patientRepository).findByIdUnscoped(patientId);
         verify(patientRepository, never()).findById(patientId);
+    }
+
+    @Test
+    void createPrescriptionAttachesCdsAdvisoriesToResponse() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+
+        UUID currentUser = UUID.randomUUID();
+        Prescription mappedEntity = new Prescription();
+        PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
+            .id(UUID.randomUUID()).build();
+
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard warning =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Possible duplicate order: Ibuprofen", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Duplicate-Order Check", null, null),
+                null, null, null, "uuid");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
+        when(cdsRuleEngine.evaluateProposedPrescription(
+                eq(patient), eq(hospitalId), eq(TEST_MEDICATION), any(), eq(TEST_DOSAGE)))
+            .thenReturn(List.of(warning));
+
+        PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(result.getCdsAdvisories()).containsExactly(warning);
+        verify(prescriptionRepository).save(mappedEntity);
+    }
+
+    @Test
+    void createPrescriptionWithCriticalCdsAdvisoryAndNoOverrideBlocks() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+
+        UUID currentUser = UUID.randomUUID();
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard critical =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Drug-drug interaction: warfarin ↔ aspirin (MAJOR)", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Drug-Drug Interaction Check", null, null),
+                null, null, null, "uuid");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+            .thenReturn(List.of(critical));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("CDS ALERT")
+            .hasMessageContaining("warfarin");
+
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void createPrescriptionWithCriticalCdsAdvisoryAndForceOverridePersists() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+
+        UUID currentUser = UUID.randomUUID();
+        Prescription mappedEntity = new Prescription();
+        PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
+            .id(UUID.randomUUID()).build();
+
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard critical =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Drug-drug interaction: warfarin ↔ aspirin (MAJOR)", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS DDI", null, null),
+                null, null, null, "uuid");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+            .thenReturn(List.of(critical));
+
+        PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(result.getCdsAdvisories()).containsExactly(critical);
+        verify(prescriptionRepository).save(mappedEntity);
     }
 }
