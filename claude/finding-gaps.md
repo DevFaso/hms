@@ -111,8 +111,40 @@ Each numbered item below should ship as one PR, additive only, with backend + fr
 
 ---
 
-## Active Work — Starting on P0
+## P0 — Shipped (2026-04-28)
 
-Pick order: **#1 FHIR R4 read API → #3 HL7 MLLP listener → #4 CDS Hooks → #2 SMART-on-FHIR**.
+All four interoperability blockers landed in PR [#139](https://github.com/DevFaso/hms/pull/139),
+promoted via [#140](https://github.com/DevFaso/hms/pull/140) (develop → uat) and
+[#141](https://github.com/DevFaso/hms/pull/141) (uat → main).
 
-Each ships independently; #1 is the critical path for everything else.
+| # | Item | Code | Docs |
+|---|---|---|---|
+| 1 | FHIR R4 read API (Patient, Encounter, Observation, Condition, MedicationRequest, Immunization) | `hospital-core/src/main/java/com/example/hms/fhir/` | [`docs/fhir.md`](../docs/fhir.md) |
+| 2 | HL7 v2 MLLP TCP listener (off by default; bounded thread pool; ORU^R01 + ADT^A01/A04/A08) | `hospital-core/src/main/java/com/example/hms/hl7/mllp/` | [`docs/hl7-mllp.md`](../docs/hl7-mllp.md) |
+| 3 | CDS Hooks 1.0 (`hms-patient-view`, `hms-medication-allergy-check`) | `hospital-core/src/main/java/com/example/hms/cdshooks/` | [`docs/cds-hooks.md`](../docs/cds-hooks.md) |
+| 4 | SMART-on-FHIR App Launch 1.0 (well-known config + CapabilityStatement OAuth extension) | `hospital-core/src/main/java/com/example/hms/fhir/smart/` | [`docs/smart-on-fhir.md`](../docs/smart-on-fhir.md) |
+
+Quality gates that passed on PR #139:
+
+- 13/13 GitHub CI checks (Backend JUnit + Jacoco @ 80% threshold, Frontend lint+format+headless, CodeQL ×3, agent prompt tests, dockerfile/yaml lint)
+- SonarCloud quality gate, 0 PR issues after iterative cleanup (26 → 2 → 0)
+- 17 new backend tests across `fhir`, `hl7.mllp`, `cdshooks` packages
+
+## P1 — Active queue
+
+Same numbering as the gap list above. Priority is top-down; each ships as one PR.
+
+1. **Terminology binding** (gap #5) — LOINC on `LabTestDefinition`, ICD-10/11 on `PatientProblem`, WHO ATC + RxNorm on `MedicationCatalogItem`. Additive Liquibase + DTO + UI. *Unblocks deeper FHIR semantics and rule-based CDS.*
+2. **MLLP / FHIR persistence** — wire ORU^R01 → `LabResult` and ADT → `Encounter`/`Patient` projections through EMPI. Currently the MLLP listener acks + logs only.
+3. **CDS rule engine** (gap #3 expanded) — drug-drug, duplicate-order, pediatric-dose checks on top of the new terminology bindings.
+4. **CPOE order-set builder** (gap #6) — versioned templates for malaria, sepsis, OB hemorrhage protocols.
+5. **Storyboard patient banner** (gap #15) — persistent header (allergies / problems / active encounter / code status) on every chart route.
+6. **Chart Review tabbed component** (gap #16) — consolidate existing endpoint data into the Epic-style tab strip.
+7. **Cadence visual scheduling grid** (gap #17) — FullCalendar multi-resource block view.
+8. **Inpatient eMAR** (gap #10) — barcode-scan administration loop, reusing the pharmacy + MAR entities.
+9. **Break-the-glass workflow** (gap #21) + **granular consent scopes** (gap #22).
+10. **Telehealth low-bandwidth** (gap #12) — audio + photo + chat on top of the existing chat module.
+11. **DHIS2 ADX export** (gap #14) — immunization, ANC, malaria reporting tied to FHIR `Immunization`.
+12. **Referral lifecycle** (gap #13) — accept/decline/complete states on `GeneralReferral`.
+
+P2 items (#9 OpTime, #11 prior-auth, #18 BPA pop-ups UX, #19 order catalog UX, #20 push tracker, #23 DICOM/PACS, #24 e-prescribing) remain on the backlog and are expected to be picked up after P1 #1–#5 land.

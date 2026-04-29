@@ -65,14 +65,22 @@ curl -s -G -H "Authorization: Bearer $TOKEN" \
 
 ## Terminology bindings (current vs target)
 
-| Field                  | Current binding                                | Target (P1, gap #5) |
-| ---------------------- | ---------------------------------------------- | --------------------- |
-| `Patient.identifier`   | `urn:hms:patient:id`, `urn:hms:hospital:{id}:mrn` | unchanged             |
-| `Condition.code`       | ICD-10 / ICD-11 when `icdVersion` set, else local | ICD-10 + WHO ICD-11   |
-| `MedicationRequest.medication.coding` | RxNorm if numeric, else local | RxNorm + WHO ATC      |
-| `Observation.code` (vitals) | LOINC                                     | LOINC                 |
-| `Observation.code` (labs)   | local `urn:hms:lab:test-code`             | LOINC                 |
-| `Immunization.vaccineCode`  | CDC CVX when `vaccineCode` set, else local | CDC CVX + DHIS2 PAHO  |
+| Field | Current binding | Target (P1, gap #5) |
+| --- | --- | --- |
+| `Patient.identifier` | `urn:hms:patient:id`, `urn:hms:hospital:{id}:mrn` | unchanged |
+| `Condition.code` | ICD-10 / ICD-11 when `icdVersion` set (P1 #1: ICD-11 MMS format now validated), else local | ICD-10 + WHO ICD-11 |
+| `MedicationRequest.medication.coding` | RxNorm if numeric, else local | RxNorm + WHO ATC |
+| `MedicationCatalogItem` | ATC + RxNorm fields validated against canonical patterns (P1 #1) | ATC + RxNorm in MedicationRequest mapping once Prescription↔Catalog FK lands |
+| `Observation.code` (vitals) | LOINC | LOINC |
+| `Observation.code` (labs) | LOINC primary coding when `LabTestDefinition.loincCode` is set (P1 #1), with `urn:hms:lab:test-code` retained as a secondary identifier | LOINC |
+| `Immunization.vaccineCode` | CDC CVX when `vaccineCode` set, else local | CDC CVX + DHIS2 PAHO |
+
+P1 #1 binding is enforced at the application layer by
+[`com.example.hms.terminology.TerminologyCodes`](../hospital-core/src/main/java/com/example/hms/terminology/TerminologyCodes.java),
+which holds the canonical FHIR system URIs and the format validators
+called from `LabTestDefinitionService`, `MedicationCatalogItemService`,
+and `PatientServiceImpl`. Codes that fail the format check are rejected
+with HTTP 400 before they ever reach a downstream FHIR consumer.
 
 SNOMED CT bindings are intentionally deferred — SNOMED licensing is hard for
 non-affiliate African deployments. Where SNOMED would normally be expected

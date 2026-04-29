@@ -118,9 +118,35 @@ export class MedicationCatalogComponent implements OnInit {
     this.editing.set(null);
   }
 
+  /** WHO ATC: anatomical letter, two digits, two letters, two digits (e.g. J01CA04). */
+  static readonly ATC_PATTERN = /^[A-Z]\d{2}[A-Z]{2}\d{2}$/;
+
+  /** RxNorm RxCUI: 1–12 digits. */
+  static readonly RXNORM_PATTERN = /^\d{1,12}$/;
+
+  isAtcValid(): boolean {
+    const value = (this.form.atcCode ?? '').trim().toUpperCase();
+    if (value.length === 0) return true;
+    return MedicationCatalogComponent.ATC_PATTERN.test(value);
+  }
+
+  isRxNormValid(): boolean {
+    const value = (this.form.rxnormCode ?? '').trim();
+    if (value.length === 0) return true;
+    return MedicationCatalogComponent.RXNORM_PATTERN.test(value);
+  }
+
   submitForm(): void {
     if (!this.form.nameFr || !this.form.genericName) {
       this.toast.error('Name (FR) and generic name are required');
+      return;
+    }
+    if (!this.isAtcValid()) {
+      this.toast.error('ATC code must match WHO format L##LL## (e.g. J01CA04)');
+      return;
+    }
+    if (!this.isRxNormValid()) {
+      this.toast.error('RxNorm code must be 1–12 digits');
       return;
     }
     this.saving.set(true);
