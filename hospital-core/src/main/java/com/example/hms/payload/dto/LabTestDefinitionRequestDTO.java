@@ -45,6 +45,21 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 50)
     private String unit;
 
+    /**
+     * LOINC code identifying this test in FHIR {@code Observation.code}.
+     * Format ({@code n{1,7}-d}) is intentionally enforced by the service
+     * layer rather than {@code @Pattern} here so that the resulting 400
+     * response carries the human-readable hint defined in
+     * {@code TerminologyCodes#normalizeAndRequireValidLoinc} — both paths
+     * land on {@code GlobalExceptionHandler} and produce 400 Bad Request,
+     * but the service-layer message is more actionable.
+     */
+    @Size(max = 20)
+    private String loincCode;
+
+    @Size(max = 255)
+    private String loincDisplay;
+
     @Size(max = 100)
     private String sampleType;
 

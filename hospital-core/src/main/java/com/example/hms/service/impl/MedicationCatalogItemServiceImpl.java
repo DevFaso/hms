@@ -13,6 +13,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MedicationCatalogItemService;
+import com.example.hms.terminology.TerminologyCodes;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +43,9 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     public MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto) {
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+
+        dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
+        dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
         MedicationCatalogItem entity = mapper.toEntity(dto);
         entity.setHospital(hospital);
@@ -84,6 +88,9 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     public MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto) {
         MedicationCatalogItem existing = catalogRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+
+        dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
+        dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
         existing.setNameFr(dto.getNameFr());
         existing.setGenericName(dto.getGenericName());
