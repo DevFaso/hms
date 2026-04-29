@@ -4,6 +4,15 @@
     "SUBTITLE": "Panneau d'administration",
     "TITLE": "Administration"
   },
+  "CDS": {
+    "SECTION_LABEL": "Aide à la décision clinique",
+    "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
+    "INDICATOR": {
+      "INFO": "Info",
+      "WARNING": "Avertissement",
+      "CRITICAL": "Critique"
+    }
+  },
   "ADMISSIONS": {
     "ACUITY": "Gravité",
     "ACUITY_LEVEL": "Niveau de Gravité",

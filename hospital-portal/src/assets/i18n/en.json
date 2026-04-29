@@ -4,6 +4,15 @@
     "SUBTITLE": "Admin panel",
     "TITLE": "Administration"
   },
+  "CDS": {
+    "SECTION_LABEL": "Clinical decision support",
+    "FORCE_OVERRIDE": "Override critical advisory after clinical review",
+    "INDICATOR": {
+      "INFO": "Info",
+      "WARNING": "Warning",
+      "CRITICAL": "Critical"
+    }
+  },
   "ADMISSIONS": {
     "ACUITY": "Acuity",
     "ACUITY_LEVEL": "Acuity Level",

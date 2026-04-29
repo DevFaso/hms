@@ -102,6 +102,14 @@ public class MedicationCatalogItem extends BaseEntity {
     @Column(length = 100)
     private String category;
 
+    /**
+     * Pediatric weight-based dose ceiling consulted by the
+     * {@code PediatricDoseRule} (see V63). Optional — when null, the rule
+     * emits an advisory instead of a hard block.
+     */
+    @Column(name = "pediatric_max_dose_mg_per_kg", precision = 8, scale = 3)
+    private java.math.BigDecimal pediatricMaxDoseMgPerKg;
+
     /** Whether this is on Burkina's essential medicines list. */
     @Column(name = "essential_list", nullable = false)
     @Builder.Default

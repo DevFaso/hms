@@ -66,7 +66,7 @@ public class PrescriptionMapper {
         }
 
         e.setMedicationName(dto.getMedicationName());
-        e.setMedicationDisplayName(dto.getMedicationName());
+        e.setMedicationCode(dto.getMedicationCode());
         e.setMedicationDisplayName(dto.getMedicationName());
 
         e.setDosage(dto.getDosage());
@@ -93,6 +93,9 @@ public class PrescriptionMapper {
         }
 
         target.setMedicationName(dto.getMedicationName());
+        if (dto.getMedicationCode() != null) {
+            target.setMedicationCode(dto.getMedicationCode());
+        }
         if (!notBlank(target.getMedicationDisplayName())) {
             target.setMedicationDisplayName(dto.getMedicationName());
         }

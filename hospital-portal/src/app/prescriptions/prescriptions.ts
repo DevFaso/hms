@@ -14,11 +14,13 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',
 })
@@ -57,6 +59,14 @@ export class PrescriptionsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingRx = signal<PrescriptionResponse | null>(null);
   deleting = signal(false);
+
+  /** CDS rule-engine cards from the most recent submit attempt. */
+  cdsAdvisories = signal<CdsCard[]>([]);
+  /**
+   * True when the backend last rejected the submit with a critical CDS
+   * advisory. Surfaces the override checkbox in the form.
+   */
+  cdsCriticalBlocked = signal(false);
 
   ngOnInit(): void {
     this.load();
@@ -181,6 +191,7 @@ export class PrescriptionsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.resetCdsState();
   }
 
   submitForm(): void {
@@ -189,17 +200,67 @@ export class PrescriptionsComponent implements OnInit {
       ? this.prescriptionService.update(this.editingId()!, this.form)
       : this.prescriptionService.create(this.form);
     op.subscribe({
-      next: () => {
+      next: (saved) => {
+        const advisories = saved?.cdsAdvisories ?? [];
+        this.cdsAdvisories.set(advisories);
+        this.cdsCriticalBlocked.set(false);
         this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
-        this.closeModal();
         this.saving.set(false);
         this.load();
+        // Only auto-close when there is nothing for the clinician to
+        // see; otherwise the closeModal() reset would erase the
+        // warning/info cards we just attached.
+        if (advisories.length === 0) {
+          this.closeModal();
+        }
       },
-      error: () => {
-        this.toast.error('Save failed');
+      error: (err) => {
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0) {
+          // Stay in the modal — backend has signalled a critical
+          // block. Render the structured cards verbatim and expose
+          // the forceOverride checkbox for re-submission.
+          this.cdsAdvisories.set(cards);
+          this.cdsCriticalBlocked.set(true);
+          this.toast.error(this.extractErrorMessage(err));
+        } else {
+          this.toast.error('Save failed');
+        }
         this.saving.set(false);
       },
     });
+  }
+
+  /** Cleared when the modal closes so a stale advisory does not leak between rxes. */
+  resetCdsState(): void {
+    this.cdsAdvisories.set([]);
+    this.cdsCriticalBlocked.set(false);
+    this.form.forceOverride = undefined;
+  }
+
+  /** Allow the clinician to dismiss non-blocking advisories without re-submitting. */
+  dismissAdvisories(): void {
+    this.resetCdsState();
+    this.closeModal();
+  }
+
+  private extractErrorMessage(err: unknown): string {
+    if (err && typeof err === 'object') {
+      const e = err as { error?: { message?: string }; message?: string };
+      return e.error?.message ?? e.message ?? '';
+    }
+    return '';
+  }
+
+  /**
+   * Pulls the structured `cdsAdvisories` array off the error response
+   * body. The backend `CdsCriticalBlockException` handler returns
+   * `{ message, cdsAdvisories: CdsCard[], ... }` with status 400.
+   */
+  private extractCdsCards(err: unknown): CdsCard[] {
+    if (!err || typeof err !== 'object') return [];
+    const body = (err as { error?: { cdsAdvisories?: CdsCard[] } }).error;
+    return body?.cdsAdvisories ?? [];
   }
 
   confirmDelete(p: PrescriptionResponse): void {
