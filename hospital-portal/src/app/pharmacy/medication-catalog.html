@@ -192,7 +192,12 @@
                   [(ngModel)]="form.atcCode"
                   name="atcCode"
                   placeholder="e.g., J01CA04"
+                  pattern="^[A-Za-z]\d{2}[A-Za-z]{2}\d{2}$"
+                  [class.invalid]="!isAtcValid()"
                 />
+                @if (!isAtcValid()) {
+                  <small class="error-hint">{{ 'PHARMACY.ATC_FORMAT_HINT' | translate }}</small>
+                }
               </div>
             </div>
 
@@ -274,7 +279,12 @@
                   type="text"
                   [(ngModel)]="form.rxnormCode"
                   name="rxnormCode"
+                  pattern="^\d{1,12}$"
+                  [class.invalid]="!isRxNormValid()"
                 />
+                @if (!isRxNormValid()) {
+                  <small class="error-hint">{{ 'PHARMACY.RXNORM_FORMAT_HINT' | translate }}</small>
+                }
               </div>
               <div class="field checkbox-group">
                 <label class="toggle-label">

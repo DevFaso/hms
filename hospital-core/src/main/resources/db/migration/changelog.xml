@@ -735,4 +735,38 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V60: P1 #1 — Terminology binding (LOINC on lab test definitions)
+         - Adds nullable loinc_code (VARCHAR 20) and loinc_display
+           (VARCHAR 255) to lab.lab_test_definitions plus a partial
+           index on loinc_code (PostgreSQL).
+         - LOINC format is enforced at the application layer via
+           TerminologyCodes#isValidLoinc.
+         - Additive only; ATC + RxNorm + icd_version already exist on
+           clinical.medication_catalog_items / clinical.patient_problems.
+         ================================================================= -->
+    <changeSet id="V60-terminology-binding" author="hms-team" runOnChange="false">
+        <sqlFile path="V60__terminology_binding.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V61: P1 #2a — SYSTEM actor support on lab.lab_results
+         - Mirrors V9's pattern for audit_event_logs.
+         - Makes assignment_id nullable so machine-origin LabResult
+           writes (HL7 v2 MLLP / external LIS in P1 #2b) can persist
+           without a hospital-scoped human assignment.
+         - Adds actor_type (USER|SYSTEM) and actor_label columns.
+         - CHECK constraint ensures USER rows still require an
+           assignment_id, preserving the existing clinical guarantee.
+         ================================================================= -->
+    <changeSet id="V61-system-actor-on-lab-results" author="hms-team" runOnChange="false">
+        <sqlFile path="V61__system_actor_on_lab_results.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

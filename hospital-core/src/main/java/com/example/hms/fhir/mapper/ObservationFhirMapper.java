@@ -83,7 +83,6 @@ public class ObservationFhirMapper {
     }
 
     private static CodeableConcept buildLabCode(LabResult src) {
-        // P1 will replace this with proper LOINC binding (gap #5).
         CodeableConcept code = new CodeableConcept();
         var def = src.getLabOrder() == null ? null : src.getLabOrder().getLabTestDefinition();
         if (def == null) {
@@ -91,6 +90,16 @@ public class ObservationFhirMapper {
             return code;
         }
         if (def.getName() != null) code.setText(def.getName());
+        // LOINC coding (P1 #1) — emitted as the primary coding when present so
+        // OpenHIE/DHIS2 nodes can resolve the observation against an authoritative
+        // value set. Local urn:hms:lab:test-code remains as a secondary identifier
+        // so internal callers that index by the formulary code still work.
+        if (def.getLoincCode() != null && !def.getLoincCode().isBlank()) {
+            code.addCoding(new Coding()
+                .setSystem(LOINC)
+                .setCode(def.getLoincCode())
+                .setDisplay(def.getLoincDisplay() != null ? def.getLoincDisplay() : def.getName()));
+        }
         if (def.getTestCode() != null && !def.getTestCode().isBlank()) {
             code.addCoding(new Coding()
                 .setSystem("urn:hms:lab:test-code")

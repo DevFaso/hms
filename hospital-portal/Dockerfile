@@ -1,4 +1,9 @@
 # Multi-stage Dockerfile for Hospital Portal (Angular)
+# Cache-bust 2026-04-29: Railway dev/prod frontend services were replaying
+# cached layers from a prior misconfig where they built the backend
+# Dockerfile. Updating the first instruction below invalidates BuildKit's
+# content-addressable cache for every subsequent layer, forcing a clean
+# rebuild against this (correct) frontend Dockerfile.
 # Build stage
 FROM node:20-alpine AS build
 
