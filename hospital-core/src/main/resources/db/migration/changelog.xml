@@ -796,10 +796,21 @@
          - Additive only; idempotent (CREATE IF NOT EXISTS / ON CONFLICT).
          ================================================================= -->
     <changeSet id="V63-cds-drug-interactions" author="hms-team" runOnChange="false">
+        <!--
+            splitStatements MUST be false: V63 contains a `DO $$ ... $$;`
+            anonymous PL/pgSQL block to drive the bidirectional dedupe on
+            the seed insert. With splitStatements=true Liquibase chops on
+            the inner `;` characters and tries to execute fragments such
+            as "DO $$ DECLARE v_now TIMESTAMP WITHOUT TIME ZONE := NOW()"
+            on their own — failing with `Unterminated dollar quote
+            started at position 3 in SQL DO $$`. Same pattern as V9 and
+            V61, both of which use splitStatements=false for the same
+            reason.
+        -->
         <sqlFile path="V63__cds_drug_interactions.sql"
                  relativeToChangelogFile="true"
-                 splitStatements="true"
-                 stripComments="true"/>
+                 splitStatements="false"
+                 stripComments="false"/>
     </changeSet>
 
 </databaseChangeLog>
