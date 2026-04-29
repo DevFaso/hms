@@ -58,6 +58,12 @@ ALTER TABLE clinical.medication_catalog_items
 --    repository search is bidirectional.
 DO $$
 DECLARE
+    -- PostgreSQL requires the FOR-loop target to be a declared record /
+    -- row variable (or a list of scalars). Without `seed RECORD` here,
+    -- Liquibase's apply fails with:
+    --   ERROR: loop variable of loop over rows must be a record variable
+    --   or list of scalar variables
+    seed  RECORD;
     v_now TIMESTAMP WITHOUT TIME ZONE := NOW();
     v_id  UUID;
 BEGIN
