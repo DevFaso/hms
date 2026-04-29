@@ -83,15 +83,21 @@ public class ConditionFhirMapper {
         return SYSTEM_HMS_LOCAL;
     }
 
+    private static final String CLINICAL_STATUS_ACTIVE   = "active";
+    private static final String CLINICAL_STATUS_RESOLVED = "resolved";
+    private static final String CLINICAL_STATUS_INACTIVE = "inactive";
+
     private static CodeableConcept buildClinicalStatus(PatientProblem src) {
-        String code = src.getStatus() == null ? "active" : src.getStatus().name().toLowerCase(Locale.ROOT);
+        String code = src.getStatus() == null
+            ? CLINICAL_STATUS_ACTIVE
+            : src.getStatus().name().toLowerCase(Locale.ROOT);
         // Normalize internal statuses (ACTIVE/RESOLVED/INACTIVE/RECURRENCE/REMISSION)
         // into FHIR's required value-set.
         String normalized = switch (code) {
-            case "active", "recurrence", "relapse" -> "active";
-            case "resolved"                         -> "resolved";
-            case "inactive", "remission"           -> "inactive";
-            default                                 -> "active";
+            case CLINICAL_STATUS_ACTIVE, "recurrence", "relapse" -> CLINICAL_STATUS_ACTIVE;
+            case CLINICAL_STATUS_RESOLVED                         -> CLINICAL_STATUS_RESOLVED;
+            case CLINICAL_STATUS_INACTIVE, "remission"           -> CLINICAL_STATUS_INACTIVE;
+            default                                                -> CLINICAL_STATUS_ACTIVE;
         };
         return new CodeableConcept().addCoding(new Coding()
             .setSystem(CLINICAL_STATUS_SYSTEM).setCode(normalized).setDisplay(normalized));

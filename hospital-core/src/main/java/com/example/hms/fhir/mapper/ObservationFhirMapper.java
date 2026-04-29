@@ -59,46 +59,60 @@ public class ObservationFhirMapper {
             ? Observation.ObservationStatus.FINAL
             : Observation.ObservationStatus.PRELIMINARY);
         o.addCategory(category("laboratory", "Laboratory"));
-        if (src.getLabOrder() != null && src.getLabOrder().getPatient() != null
-            && src.getLabOrder().getPatient().getId() != null) {
-            o.setSubject(new Reference("Patient/" + src.getLabOrder().getPatient().getId()));
-        }
-        if (src.getResultDate() != null) {
-            o.setEffective(new DateTimeType(Date.from(
-                src.getResultDate().atZone(ZoneId.systemDefault()).toInstant()
-            )));
-        }
-        // P1 will replace this with proper LOINC binding (gap #5).
-        CodeableConcept code = new CodeableConcept();
-        var def = src.getLabOrder() == null ? null : src.getLabOrder().getLabTestDefinition();
-        if (def != null) {
-            if (def.getName() != null) code.setText(def.getName());
-            if (def.getTestCode() != null && !def.getTestCode().isBlank()) {
-                code.addCoding(new Coding()
-                    .setSystem("urn:hms:lab:test-code")
-                    .setCode(def.getTestCode())
-                    .setDisplay(def.getName()));
-            }
-        } else {
-            code.setText("Laboratory result");
-        }
-        o.setCode(code);
-        if (src.getResultValue() != null) {
-            BigDecimal numeric = parseNumeric(src.getResultValue());
-            if (numeric != null) {
-                Quantity q = new Quantity().setValue(numeric);
-                if (src.getResultUnit() != null && !src.getResultUnit().isBlank()) {
-                    q.setUnit(src.getResultUnit().trim()).setSystem(UCUM).setCode(src.getResultUnit().trim());
-                }
-                o.setValue(q);
-            } else {
-                o.setValue(new org.hl7.fhir.r4.model.StringType(src.getResultValue()));
-            }
-        }
+        setLabSubject(o, src);
+        setLabEffective(o, src);
+        o.setCode(buildLabCode(src));
+        setLabValue(o, src);
         if (src.getNotes() != null && !src.getNotes().isBlank()) {
             o.addNote().setText(src.getNotes());
         }
         return o;
+    }
+
+    private static void setLabSubject(Observation o, LabResult src) {
+        if (src.getLabOrder() == null || src.getLabOrder().getPatient() == null
+            || src.getLabOrder().getPatient().getId() == null) return;
+        o.setSubject(new Reference("Patient/" + src.getLabOrder().getPatient().getId()));
+    }
+
+    private static void setLabEffective(Observation o, LabResult src) {
+        if (src.getResultDate() == null) return;
+        o.setEffective(new DateTimeType(Date.from(
+            src.getResultDate().atZone(ZoneId.systemDefault()).toInstant()
+        )));
+    }
+
+    private static CodeableConcept buildLabCode(LabResult src) {
+        // P1 will replace this with proper LOINC binding (gap #5).
+        CodeableConcept code = new CodeableConcept();
+        var def = src.getLabOrder() == null ? null : src.getLabOrder().getLabTestDefinition();
+        if (def == null) {
+            code.setText("Laboratory result");
+            return code;
+        }
+        if (def.getName() != null) code.setText(def.getName());
+        if (def.getTestCode() != null && !def.getTestCode().isBlank()) {
+            code.addCoding(new Coding()
+                .setSystem("urn:hms:lab:test-code")
+                .setCode(def.getTestCode())
+                .setDisplay(def.getName()));
+        }
+        return code;
+    }
+
+    private static void setLabValue(Observation o, LabResult src) {
+        if (src.getResultValue() == null) return;
+        BigDecimal numeric = parseNumeric(src.getResultValue());
+        if (numeric == null) {
+            o.setValue(new org.hl7.fhir.r4.model.StringType(src.getResultValue()));
+            return;
+        }
+        Quantity q = new Quantity().setValue(numeric);
+        if (src.getResultUnit() != null && !src.getResultUnit().isBlank()) {
+            String unit = src.getResultUnit().trim();
+            q.setUnit(unit).setSystem(UCUM).setCode(unit);
+        }
+        o.setValue(q);
     }
 
     /* ---------- helpers ---------- */

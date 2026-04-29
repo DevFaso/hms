@@ -28,12 +28,16 @@ public final class MllpFrameCodec {
 
     private MllpFrameCodec() {}
 
+    /** Sentinel returned by {@link #readFrame(InputStream, int)} when the peer closes
+     *  the stream before any start-block byte is seen (graceful end-of-stream). */
+    public static final byte[] END_OF_STREAM = new byte[0];
+
     /**
      * Reads bytes from {@code in} until a complete MLLP frame is parsed,
      * then returns the inner HL7 body without the framing octets.
      *
-     * @return the decoded body, or {@code null} if EOF is hit before any
-     *         start-block byte is seen (graceful end-of-stream).
+     * @return the decoded body, or {@link #END_OF_STREAM} (an empty array)
+     *         if EOF is hit before any start-block byte is seen.
      * @throws MllpProtocolException if framing is malformed or the body
      *         exceeds {@code maxBytes}.
      * @throws IOException on underlying I/O errors.
@@ -43,7 +47,7 @@ public final class MllpFrameCodec {
         int b;
         do {
             b = in.read();
-            if (b == -1) return null;       // graceful EOF before any frame
+            if (b == -1) return END_OF_STREAM;       // graceful EOF before any frame
         } while (b != START_BLOCK);
 
         ByteArrayOutputStream body = new ByteArrayOutputStream(4 * 1024);

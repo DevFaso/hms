@@ -19,8 +19,9 @@ class Hl7MessageDispatcherTest {
 
         String ack = dispatcher.dispatch(oru, "10.0.0.42:54321");
 
-        assertThat(ack).contains("ACK|");
-        assertThat(ack).contains("MSA|AA|MSG-42");
+        assertThat(ack)
+            .contains("ACK|")
+            .contains("MSA|AA|MSG-42");
     }
 
     @Test
@@ -36,16 +37,18 @@ class Hl7MessageDispatcherTest {
     void rejectsUnsupportedMessageTypeWithAr() {
         String unknown = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
         String ack = dispatcher.dispatch(unknown, "10.0.0.51:1");
-        assertThat(ack).contains("MSA|AR|C-1");
-        assertThat(ack).contains("Unsupported message type ZZZ^Z99");
+        assertThat(ack)
+            .contains("MSA|AR|C-1")
+            .contains("Unsupported message type ZZZ^Z99");
     }
 
     @Test
     void rejectsMessageWithBadHeader() {
         String bad = "GARBAGE|||";
         String ack = dispatcher.dispatch(bad, "10.0.0.99:1");
-        assertThat(ack).contains("MSA|AR|");
-        assertThat(ack).contains("Invalid MSH");
+        assertThat(ack)
+            .contains("MSA|AR|")
+            .contains("Invalid MSH");
     }
 
     @Test

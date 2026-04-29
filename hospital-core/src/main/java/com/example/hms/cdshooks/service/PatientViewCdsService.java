@@ -86,7 +86,7 @@ public class PatientViewCdsService implements CdsHookService {
         sink.add(new CdsCard(
             summary,
             detail,
-            anyHigh ? CdsCard.Indicator.warning : CdsCard.Indicator.info,
+            anyHigh ? CdsCard.Indicator.WARNING : CdsCard.Indicator.INFO,
             new Source(SOURCE_LABEL, null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));
@@ -110,7 +110,7 @@ public class PatientViewCdsService implements CdsHookService {
         sink.add(new CdsCard(
             summary,
             detail,
-            CdsCard.Indicator.info,
+            CdsCard.Indicator.INFO,
             new Source(SOURCE_LABEL, null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         ));

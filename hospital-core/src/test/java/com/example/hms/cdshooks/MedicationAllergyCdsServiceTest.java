@@ -53,7 +53,7 @@ class MedicationAllergyCdsServiceTest {
 
         assertThat(response.cards()).hasSize(1);
         CdsCard card = response.cards().get(0);
-        assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.critical);
+        assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
         assertThat(card.summary())
             .contains("Penicillin V 500 mg PO BID")
             .contains("penicillin");

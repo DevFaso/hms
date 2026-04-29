@@ -60,12 +60,12 @@ class PatientViewCdsServiceTest {
         CdsCard allergy = response.cards().get(0);
         assertThat(allergy.summary()).contains("1 active allergy");
         assertThat(allergy.detail()).contains("Penicillin").contains("hives");
-        assertThat(allergy.indicator()).isEqualTo(CdsCard.Indicator.warning);
+        assertThat(allergy.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
 
         CdsCard problem = response.cards().get(1);
         assertThat(problem.summary()).contains("1 active problem");
         assertThat(problem.detail()).contains("Sickle cell disease").contains("chronic");
-        assertThat(problem.indicator()).isEqualTo(CdsCard.Indicator.info);
+        assertThat(problem.indicator()).isEqualTo(CdsCard.Indicator.INFO);
     }
 
     @Test

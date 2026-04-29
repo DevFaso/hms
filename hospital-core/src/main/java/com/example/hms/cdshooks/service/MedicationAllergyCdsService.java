@@ -61,18 +61,23 @@ public class MedicationAllergyCdsService implements CdsHookService {
 
         List<CdsCard> cards = new ArrayList<>();
         for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
-            if (!"MedicationRequest".equals(draft.get("resourceType"))) continue;
-            String medText = extractMedicationText(draft);
-            if (medText == null) continue;
-            String norm = medText.toLowerCase(Locale.ROOT);
-            for (String allergen : haystacks) {
-                if (norm.contains(allergen)) {
-                    cards.add(buildCard(medText, allergen));
-                    break;
-                }
-            }
+            CdsCard card = cardForDraft(draft, haystacks);
+            if (card != null) cards.add(card);
         }
         return CdsHookResponse.of(cards);
+    }
+
+    /** Returns a critical card when the draft's medication text overlaps an active allergy term, else null. */
+    private CdsCard cardForDraft(Map<String, Object> draft, Set<String> haystacks) {
+        if (!"MedicationRequest".equals(draft.get("resourceType"))) return null;
+        String medText = extractMedicationText(draft);
+        if (medText == null) return null;
+        String norm = medText.toLowerCase(Locale.ROOT);
+        return haystacks.stream()
+            .filter(norm::contains)
+            .findFirst()
+            .map(allergen -> buildCard(medText, allergen))
+            .orElse(null);
     }
 
     private Set<String> collectAllergyTerms(List<PatientAllergy> allergies) {
@@ -125,7 +130,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
         return new CdsCard(
             summary,
             detail,
-            CdsCard.Indicator.critical,
+            CdsCard.Indicator.CRITICAL,
             new Source(SOURCE_LABEL, null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         );

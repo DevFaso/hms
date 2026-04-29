@@ -38,35 +38,37 @@ class MllpFrameCodecTest {
     }
 
     @Test
-    void readFrameReturnsNullOnGracefulEofBeforeAnyStartBlock() throws Exception {
-        byte[] empty = new byte[0];
-        assertThat(MllpFrameCodec.readFrame(new ByteArrayInputStream(empty), 4096)).isNull();
+    void readFrameReturnsEmptyArrayOnGracefulEofBeforeAnyStartBlock() throws Exception {
+        ByteArrayInputStream stream = new ByteArrayInputStream(new byte[0]);
+        byte[] frame = MllpFrameCodec.readFrame(stream, 4096);
+        assertThat(frame).isEmpty();
     }
 
     @Test
     void readFrameRejectsBodyExceedingLimit() {
-        byte[] truncated = new byte[]{
+        ByteArrayInputStream stream = new ByteArrayInputStream(new byte[]{
             MllpFrameCodec.START_BLOCK, 'A', 'B', 'C', 'D', 'E'
-        };
-        assertThatThrownBy(() -> MllpFrameCodec.readFrame(new ByteArrayInputStream(truncated), 3))
+        });
+        assertThatThrownBy(() -> MllpFrameCodec.readFrame(stream, 3))
             .isInstanceOf(MllpProtocolException.class)
             .hasMessageContaining("exceeds limit");
     }
 
     @Test
     void readFrameRejectsTruncatedTail() {
-        byte[] noEnd = new byte[]{ MllpFrameCodec.START_BLOCK, 'M', 'S', 'H' };
-        assertThatThrownBy(() -> MllpFrameCodec.readFrame(new ByteArrayInputStream(noEnd), 4096))
+        ByteArrayInputStream stream = new ByteArrayInputStream(
+            new byte[]{ MllpFrameCodec.START_BLOCK, 'M', 'S', 'H' });
+        assertThatThrownBy(() -> MllpFrameCodec.readFrame(stream, 4096))
             .isInstanceOf(EOFException.class);
     }
 
     @Test
     void readFrameRejectsMissingCarriageReturnAfterEndBlock() {
-        byte[] missingCr = new byte[]{
+        ByteArrayInputStream stream = new ByteArrayInputStream(new byte[]{
             MllpFrameCodec.START_BLOCK, 'M', 'S', 'H',
             MllpFrameCodec.END_BLOCK, 'X'
-        };
-        assertThatThrownBy(() -> MllpFrameCodec.readFrame(new ByteArrayInputStream(missingCr), 4096))
+        });
+        assertThatThrownBy(() -> MllpFrameCodec.readFrame(stream, 4096))
             .isInstanceOf(MllpProtocolException.class)
             .hasMessageContaining("Expected <CR>");
     }

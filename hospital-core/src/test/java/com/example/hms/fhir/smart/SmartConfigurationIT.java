@@ -38,12 +38,13 @@ class SmartConfigurationIT {
         String body = response.getBody();
         assertThat(body).isNotNull();
         String compact = body.replaceAll("\\s+", "");
-        assertThat(compact).contains("\"authorization_endpoint\"");
-        assertThat(compact).contains("\"token_endpoint\"");
-        assertThat(compact).contains("\"capabilities\"");
-        assertThat(compact).contains("launch-ehr");
-        assertThat(compact).contains("permission-patient");
-        assertThat(compact).contains("\"S256\"");
+        assertThat(compact)
+            .contains("\"authorization_endpoint\"")
+            .contains("\"token_endpoint\"")
+            .contains("\"capabilities\"")
+            .contains("launch-ehr")
+            .contains("permission-patient")
+            .contains("\"S256\"");
     }
 
     @Test
@@ -59,11 +60,10 @@ class SmartConfigurationIT {
         );
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         String compact = response.getBody().replaceAll("\\s+", "");
-        assertThat(compact).contains("\"code\":\"SMART-on-FHIR\"");
-        assertThat(compact).contains(
-            "\"url\":\"http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris\""
-        );
-        assertThat(compact).contains("\"url\":\"authorize\"");
-        assertThat(compact).contains("\"url\":\"token\"");
+        assertThat(compact)
+            .contains("\"code\":\"SMART-on-FHIR\"")
+            .contains("\"url\":\"http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris\"")
+            .contains("\"url\":\"authorize\"")
+            .contains("\"url\":\"token\"");
     }
 }

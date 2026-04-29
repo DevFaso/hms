@@ -55,10 +55,13 @@ public class EncounterFhirMapper {
         };
     }
 
+    private static final String CLASS_SYSTEM = "http://terminology.hl7.org/CodeSystem/v3-ActCode";
+    private static final String CLASS_AMBULATORY = "ambulatory";
+
     private static Coding mapClass(Encounter src) {
-        Coding cls = new Coding().setSystem("http://terminology.hl7.org/CodeSystem/v3-ActCode");
+        Coding cls = new Coding().setSystem(CLASS_SYSTEM);
         if (src.getEncounterType() == null) {
-            return cls.setCode("AMB").setDisplay("ambulatory");
+            return cls.setCode("AMB").setDisplay(CLASS_AMBULATORY);
         }
         return switch (src.getEncounterType()) {
             case INPATIENT       -> cls.setCode("IMP").setDisplay("inpatient encounter");
@@ -67,8 +70,7 @@ public class EncounterFhirMapper {
             case CONSULTATION,
                  OUTPATIENT,
                  FOLLOW_UP,
-                 LAB             -> cls.setCode("AMB").setDisplay("ambulatory");
-            default              -> cls.setCode("AMB").setDisplay("ambulatory");
+                 LAB             -> cls.setCode("AMB").setDisplay(CLASS_AMBULATORY);
         };
     }
 

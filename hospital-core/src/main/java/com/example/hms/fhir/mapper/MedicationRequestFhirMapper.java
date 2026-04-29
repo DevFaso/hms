@@ -84,37 +84,43 @@ public class MedicationRequestFhirMapper {
 
     private static Dosage buildDosage(Prescription src) {
         Dosage d = new Dosage();
-        StringBuilder text = new StringBuilder();
-        if (src.getDosage() != null) text.append(src.getDosage().trim());
+        d.setText(renderDosageText(src));
         if (src.getRoute() != null) {
-            if (text.length() > 0) text.append(" ");
-            text.append(src.getRoute().trim());
             d.setRoute(new CodeableConcept().setText(src.getRoute().trim()));
         }
-        if (src.getFrequency() != null) {
-            if (text.length() > 0) text.append(" ");
-            text.append(src.getFrequency().trim());
-        }
-        if (src.getDuration() != null) {
-            if (text.length() > 0) text.append(" — ");
-            text.append(src.getDuration().trim());
-        }
-        if (text.length() > 0) d.setText(text.toString());
         if (src.getInstructions() != null && !src.getInstructions().isBlank()) {
             d.setPatientInstruction(src.getInstructions());
         }
-        if (src.getDoseUnit() != null && src.getDosage() != null) {
-            try {
-                Quantity q = new Quantity()
-                    .setValue(new java.math.BigDecimal(src.getDosage().replaceAll("[^0-9.\\-]", "")))
-                    .setUnit(src.getDoseUnit());
-                Dosage.DosageDoseAndRateComponent dr = new Dosage.DosageDoseAndRateComponent();
-                dr.setDose(q);
-                d.addDoseAndRate(dr);
-            } catch (RuntimeException ignored) {
-                // freetext dosage — text already captures it
-            }
-        }
+        addStructuredDose(d, src);
         return d;
+    }
+
+    private static String renderDosageText(Prescription src) {
+        StringBuilder text = new StringBuilder();
+        appendIfPresent(text, src.getDosage(), " ");
+        appendIfPresent(text, src.getRoute(), " ");
+        appendIfPresent(text, src.getFrequency(), " ");
+        appendIfPresent(text, src.getDuration(), " — ");
+        return text.isEmpty() ? null : text.toString();
+    }
+
+    private static void appendIfPresent(StringBuilder sink, String value, String separator) {
+        if (value == null || value.isBlank()) return;
+        if (!sink.isEmpty()) sink.append(separator);
+        sink.append(value.trim());
+    }
+
+    private static void addStructuredDose(Dosage d, Prescription src) {
+        if (src.getDoseUnit() == null || src.getDosage() == null) return;
+        try {
+            Quantity q = new Quantity()
+                .setValue(new java.math.BigDecimal(src.getDosage().replaceAll("[^0-9.\\-]", "")))
+                .setUnit(src.getDoseUnit());
+            Dosage.DosageDoseAndRateComponent dr = new Dosage.DosageDoseAndRateComponent();
+            dr.setDose(q);
+            d.addDoseAndRate(dr);
+        } catch (RuntimeException ignored) {
+            // freetext dosage — text already captures it
+        }
     }
 }

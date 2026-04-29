@@ -30,9 +30,10 @@ class CdsHooksDiscoveryIT {
         String body = response.getBody();
         assertThat(body).isNotNull();
         String compact = body.replaceAll("\\s+", "");
-        assertThat(compact).contains("\"hook\":\"patient-view\"");
-        assertThat(compact).contains("\"id\":\"hms-patient-view\"");
-        assertThat(compact).contains("\"hook\":\"order-sign\"");
-        assertThat(compact).contains("\"id\":\"hms-medication-allergy-check\"");
+        assertThat(compact)
+            .contains("\"hook\":\"patient-view\"")
+            .contains("\"id\":\"hms-patient-view\"")
+            .contains("\"hook\":\"order-sign\"")
+            .contains("\"id\":\"hms-medication-allergy-check\"");
     }
 }

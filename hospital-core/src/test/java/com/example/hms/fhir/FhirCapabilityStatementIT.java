@@ -14,8 +14,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
-import java.util.List;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -46,17 +44,15 @@ class FhirCapabilityStatementIT {
         String body = response.getBody();
         assertThat(body).isNotNull();
         String compact = body.replaceAll("\\s+", "");
-        assertThat(compact).contains("\"resourceType\":\"CapabilityStatement\"");
-        assertThat(compact).contains("\"fhirVersion\":\"4.0.1\"");
-        for (String type : List.of(
-            "\"type\":\"Patient\"",
-            "\"type\":\"Encounter\"",
-            "\"type\":\"Observation\"",
-            "\"type\":\"Condition\"",
-            "\"type\":\"MedicationRequest\"",
-            "\"type\":\"Immunization\""
-        )) {
-            assertThat(compact).as("CapabilityStatement should advertise " + type).contains(type);
-        }
+        assertThat(compact)
+            .contains("\"resourceType\":\"CapabilityStatement\"")
+            .contains("\"fhirVersion\":\"4.0.1\"")
+            .contains(
+                "\"type\":\"Patient\"",
+                "\"type\":\"Encounter\"",
+                "\"type\":\"Observation\"",
+                "\"type\":\"Condition\"",
+                "\"type\":\"MedicationRequest\"",
+                "\"type\":\"Immunization\"");
     }
 }

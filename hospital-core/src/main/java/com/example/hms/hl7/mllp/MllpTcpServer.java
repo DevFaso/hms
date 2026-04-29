@@ -45,7 +45,6 @@ public class MllpTcpServer {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final ExecutorService workers;
     private ServerSocket serverSocket;
-    private Thread acceptThread;
     private volatile int boundPort = -1;
 
     public MllpTcpServer(MllpProperties properties, Hl7MessageDispatcher dispatcher) {
@@ -69,28 +68,42 @@ public class MllpTcpServer {
 
     @PostConstruct
     public void start() throws IOException {
-        ServerSocket socket = new ServerSocket();
-        try {
-            socket.setReuseAddress(true);
-            socket.bind(new InetSocketAddress(InetAddress.getByName(properties.getBindAddress()), properties.getPort()));
-            socket.setSoTimeout(1_000);   // periodically wake to honour shutdown
-        } catch (IOException | RuntimeException ex) {
-            // Bind / setSoTimeout failed — release the half-initialised socket
-            // before propagating so we don't leak a kernel file descriptor.
-            try { socket.close(); } catch (IOException suppressed) { ex.addSuppressed(suppressed); }
-            throw ex;
-        }
+        ServerSocket socket = openAndBind();
         this.serverSocket = socket;
         this.boundPort = socket.getLocalPort();
         running.set(true);
 
-        acceptThread = new Thread(this::acceptLoop, "mllp-accept");
-        acceptThread.setDaemon(true);
-        acceptThread.start();
+        Thread accept = new Thread(this::acceptLoop, "mllp-accept");
+        accept.setDaemon(true);
+        accept.start();
 
         log.info("[MLLP] HL7 v2 listener started on {}:{} charset={} maxFrameBytes={}",
             properties.getBindAddress(), boundPort,
             properties.getCharset(), properties.getMaxFrameBytes());
+    }
+
+    /** Bind the listening socket; closes it cleanly if any setup step fails. */
+    private ServerSocket openAndBind() throws IOException {
+        ServerSocket socket = new ServerSocket();
+        try {
+            socket.setReuseAddress(true);
+            socket.bind(new InetSocketAddress(
+                InetAddress.getByName(properties.getBindAddress()),
+                properties.getPort()));
+            socket.setSoTimeout(1_000);   // periodically wake to honour shutdown
+            return socket;
+        } catch (IOException | RuntimeException ex) {
+            closeQuietly(socket, ex);
+            throw ex;
+        }
+    }
+
+    private static void closeQuietly(ServerSocket socket, Throwable cause) {
+        try {
+            socket.close();
+        } catch (IOException suppressed) {
+            cause.addSuppressed(suppressed);
+        }
     }
 
     @PreDestroy
@@ -136,7 +149,7 @@ public class MllpTcpServer {
             ) {
                 while (running.get()) {
                     byte[] frame = MllpFrameCodec.readFrame(in, properties.getMaxFrameBytes());
-                    if (frame == null) {
+                    if (frame.length == 0) {
                         log.debug("[MLLP {}] peer closed", remote);
                         return;
                     }

@@ -62,7 +62,15 @@ public final class CdsHookDtos {
         String selectionBehavior,
         String uuid
     ) {
-        public enum Indicator { info, warning, critical }
+        public enum Indicator {
+            INFO, WARNING, CRITICAL;
+
+            /** Wire format per CDS Hooks 1.0 — lowercase. */
+            @com.fasterxml.jackson.annotation.JsonValue
+            public String wire() {
+                return name().toLowerCase(java.util.Locale.ROOT);
+            }
+        }
     }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
