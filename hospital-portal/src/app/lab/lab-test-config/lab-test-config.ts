@@ -68,6 +68,8 @@ export class LabTestConfigComponent implements OnInit {
       category: '',
       description: '',
       unit: '',
+      loincCode: '',
+      loincDisplay: '',
       sampleType: '',
       preparationInstructions: '',
       turnaroundTime: undefined,
@@ -75,6 +77,16 @@ export class LabTestConfigComponent implements OnInit {
       assignmentId: this.activeAssignmentId || undefined,
       referenceRanges: [],
     };
+  }
+
+  /** LOINC RxCUI: 1–7 digits, dash, single check digit (e.g. 718-7). */
+  static readonly LOINC_PATTERN = /^\d{1,7}-\d$/;
+
+  /** Returns true when the LOINC field is empty (optional) or matches the canonical shape. */
+  isLoincValid(): boolean {
+    const value = (this.defForm.loincCode ?? '').trim();
+    if (value.length === 0) return true;
+    return LabTestConfigComponent.LOINC_PATTERN.test(value);
   }
 
   loadDefinitions(): void {
@@ -217,6 +229,8 @@ export class LabTestConfigComponent implements OnInit {
       category: def.category ?? '',
       description: def.description ?? '',
       unit: def.unit ?? '',
+      loincCode: def.loincCode ?? '',
+      loincDisplay: def.loincDisplay ?? '',
       sampleType: def.sampleType ?? '',
       preparationInstructions: def.preparationInstructions ?? '',
       turnaroundTime: def.turnaroundTime ?? undefined,

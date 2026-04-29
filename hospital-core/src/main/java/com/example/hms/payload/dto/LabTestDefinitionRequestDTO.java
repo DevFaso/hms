@@ -45,6 +45,18 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 50)
     private String unit;
 
+    /**
+     * LOINC code identifying this test in FHIR Observation.code. Format
+     * (n{1,7}-d) is enforced by the service layer; the constraint here is
+     * only on length so a malformed value bubbles up as a 400 with a
+     * meaningful message instead of a 500 from the @Pattern violation.
+     */
+    @Size(max = 20)
+    private String loincCode;
+
+    @Size(max = 255)
+    private String loincDisplay;
+
     @Size(max = 100)
     private String sampleType;
 
