@@ -10,6 +10,13 @@
 -- one Hospital. Pairs can be deactivated (active = false) without
 -- deleting the row so the audit history of past senders is kept.
 --
+-- Case handling: sender app/facility values are stored UPPERCASE.
+-- The application layer normalises on write (MllpAllowedSenderMapper)
+-- and on the runtime resolve path (MllpAllowedSenderServiceImpl), so
+-- the unique constraint and index can stay on raw columns and queries
+-- avoid UPPER()/LOWER() at runtime. The two CHECK constraints below
+-- defend against direct inserts that bypass JPA.
+--
 -- Additive only.
 
 CREATE TABLE platform.mllp_allowed_senders (
@@ -24,7 +31,11 @@ CREATE TABLE platform.mllp_allowed_senders (
     CONSTRAINT fk_mllp_sender_hospital
         FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals (id),
     CONSTRAINT uq_mllp_sender_app_facility
-        UNIQUE (sending_application, sending_facility)
+        UNIQUE (sending_application, sending_facility),
+    CONSTRAINT chk_mllp_sender_app_uppercase
+        CHECK (sending_application = UPPER(sending_application)),
+    CONSTRAINT chk_mllp_sender_facility_uppercase
+        CHECK (sending_facility = UPPER(sending_facility))
 );
 
 CREATE INDEX idx_mllp_sender_lookup

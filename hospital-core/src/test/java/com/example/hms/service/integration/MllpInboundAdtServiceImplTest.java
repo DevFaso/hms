@@ -75,7 +75,7 @@ class MllpInboundAdtServiceImplTest {
     void acceptedHappyPath() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
 
@@ -106,7 +106,7 @@ class MllpInboundAdtServiceImplTest {
 
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
 
@@ -134,7 +134,7 @@ class MllpInboundAdtServiceImplTest {
     void rejectedWhenPatientRowMissing() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         assertThat(service.processAdt(
             adt("MRN-1", "Doe", "Jane", null), hospital, "REG", "HOSP1"))
@@ -146,7 +146,7 @@ class MllpInboundAdtServiceImplTest {
     void rejectedWhenNotRegisteredAtHospital() {
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.empty());
 
@@ -179,7 +179,7 @@ class MllpInboundAdtServiceImplTest {
         patient.setCity("Bobo-Dioulasso");
         when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
             .thenReturn(Optional.of(empiHit(patientId)));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
 

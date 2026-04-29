@@ -189,8 +189,13 @@ public class Hl7v2MessageBuilder {
 
     /**
      * Parses an inbound ADT message into the fields needed to project
-     * a {@code Patient} + {@code Encounter}. Returns {@code null} if the
-     * message has no PID-3 (MRN) or no PID/PV1 segments at all.
+     * a {@code Patient} demographic record. Required: a PID segment
+     * with a non-blank PID-3 (MRN). PV1 is optional — when absent,
+     * the PV1-derived fields ({@code patientClass}, {@code assignedLocation},
+     * {@code visitNumber}, admit / discharge timestamps) are returned
+     * as empty strings or {@code null}. Returns {@code null} only when
+     * the body is unparseable at this minimum level (no PID, blank
+     * MRN, or hard parse failure).
      */
     public ParsedAdtMessage parseAdtMessage(String hl7Message, String triggerEvent) {
         if (hl7Message == null || hl7Message.isBlank()) return null;

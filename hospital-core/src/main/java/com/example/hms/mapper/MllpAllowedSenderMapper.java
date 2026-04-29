@@ -4,6 +4,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.platform.MllpAllowedSender;
 import com.example.hms.payload.dto.platform.MllpAllowedSenderRequestDTO;
 import com.example.hms.payload.dto.platform.MllpAllowedSenderResponseDTO;
+import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -33,8 +34,8 @@ public class MllpAllowedSenderMapper {
         }
         return MllpAllowedSender.builder()
             .hospital(hospital)
-            .sendingApplication(dto.sendingApplication() == null ? null : dto.sendingApplication().trim())
-            .sendingFacility(dto.sendingFacility() == null ? null : dto.sendingFacility().trim())
+            .sendingApplication(normalizeSenderField(dto.sendingApplication()))
+            .sendingFacility(normalizeSenderField(dto.sendingFacility()))
             .description(dto.description() == null ? null : dto.description().trim())
             .active(dto.active() == null || dto.active())
             .build();
@@ -45,11 +46,24 @@ public class MllpAllowedSenderMapper {
             return;
         }
         target.setHospital(hospital);
-        target.setSendingApplication(dto.sendingApplication() == null ? null : dto.sendingApplication().trim());
-        target.setSendingFacility(dto.sendingFacility() == null ? null : dto.sendingFacility().trim());
+        target.setSendingApplication(normalizeSenderField(dto.sendingApplication()));
+        target.setSendingFacility(normalizeSenderField(dto.sendingFacility()));
         target.setDescription(dto.description() == null ? null : dto.description().trim());
         if (dto.active() != null) {
             target.setActive(dto.active());
         }
+    }
+
+    /**
+     * Sender app/facility values are stored in upper-case canonical
+     * form so that the unique constraint and the runtime lookup index
+     * work without {@code UPPER()}/{@code LOWER()} wrappers. The
+     * matching DB-level CHECK constraints (V62) reject any direct
+     * insert that bypasses this layer.
+     */
+    static String normalizeSenderField(String raw) {
+        if (raw == null) return null;
+        String trimmed = raw.trim();
+        return trimmed.isEmpty() ? null : trimmed.toUpperCase(Locale.ROOT);
     }
 }

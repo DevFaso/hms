@@ -37,9 +37,14 @@ public class MllpAllowedSenderServiceImpl implements MllpAllowedSenderService {
         if (!StringUtils.hasText(sendingApplication) || !StringUtils.hasText(sendingFacility)) {
             return Optional.empty();
         }
+        // Stored values are normalised to upper-case canonical form
+        // (V62 CHECK constraints + MllpAllowedSenderMapper). Match
+        // that normalisation here so the case-sensitive index can be
+        // used directly.
         return senderRepository
-            .findBySendingApplicationIgnoreCaseAndSendingFacilityIgnoreCaseAndActiveTrue(
-                sendingApplication.trim(), sendingFacility.trim())
+            .findBySendingApplicationAndSendingFacilityAndActiveTrue(
+                sendingApplication.trim().toUpperCase(java.util.Locale.ROOT),
+                sendingFacility.trim().toUpperCase(java.util.Locale.ROOT))
             .map(MllpAllowedSender::getHospital);
     }
 

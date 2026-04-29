@@ -9,7 +9,6 @@ import com.example.hms.utility.Hl7v2MessageBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -32,16 +31,16 @@ class Hl7MessageDispatcherTest {
     @Mock private MllpInboundLabService inboundLab;
     @Mock private MllpInboundAdtService inboundAdt;
 
-    @InjectMocks private Hl7MessageDispatcher dispatcher;
+    // The dispatcher is constructed manually rather than via @InjectMocks
+    // because we want to inject the real Hl7v2MessageBuilder (its parsing
+    // logic is covered by its own unit tests) alongside Mockito mocks for
+    // the three other collaborators.
+    private Hl7MessageDispatcher dispatcher;
 
     private Hospital hospital;
 
     @BeforeEach
     void setUp() {
-        // The dispatcher uses the real Hl7v2MessageBuilder for parsing
-        // (its parsing logic is covered by Hl7v2MessageBuilder's own
-        // unit tests). The allowlist + inbound services are mocked so
-        // each branch of the dispatcher can be exercised in isolation.
         dispatcher = new Hl7MessageDispatcher(
             new Hl7v2MessageBuilder(),
             allowlist,

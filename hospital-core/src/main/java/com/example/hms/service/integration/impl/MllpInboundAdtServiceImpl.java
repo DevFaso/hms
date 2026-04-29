@@ -57,7 +57,13 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
         }
 
         UUID patientId = identity.get().getPatientId();
-        Optional<Patient> patientOpt = patientRepository.findById(patientId);
+        // PatientRepository.findById() is tenant-scoped via
+        // TenantAwareJpaRepository and would return empty in this MLLP
+        // path because no HospitalContext is set on the worker thread.
+        // findByIdUnscoped bypasses that filter; the cross-tenant
+        // PatientHospitalRegistration gate below is what actually
+        // enforces "this sender is allowed to update this patient".
+        Optional<Patient> patientOpt = patientRepository.findByIdUnscoped(patientId);
         if (patientOpt.isEmpty()) {
             // EMPI has the alias but the patient row is gone — data
             // inconsistency, treat as not-found rather than crashing.
