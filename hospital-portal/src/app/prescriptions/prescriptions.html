@@ -397,6 +397,17 @@
                   {{ 'CDS.FORCE_OVERRIDE' | translate }}
                 </label>
               </div>
+            } @else {
+              <div class="cds-override">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  (click)="dismissAdvisories()"
+                  data-testid="cds-dismiss"
+                >
+                  {{ 'COMMON.CLOSE' | translate }}
+                </button>
+              </div>
             }
           </div>
         }

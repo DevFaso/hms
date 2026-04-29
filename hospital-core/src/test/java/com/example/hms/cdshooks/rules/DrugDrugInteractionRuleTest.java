@@ -43,7 +43,8 @@ class DrugDrugInteractionRuleTest {
             .recommendation("Switch macrolide.")
             .active(true)
             .build();
-        when(repo.findInteractionBetween("36567", "2551")).thenReturn(Optional.of(di));
+        // Rule canonicalises (alphabetical) before lookup; repo is bidirectional.
+        when(repo.findInteractionBetween("2551", "36567")).thenReturn(Optional.of(di));
 
         List<CdsCard> cards = rule.evaluate(contextWith("36567", "2551"));
 

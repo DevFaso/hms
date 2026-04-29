@@ -27,6 +27,13 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** Shared response-body field names — kept as constants for Sonar S1192. */
+    private static final String FIELD_TIMESTAMP = "timestamp";
+    private static final String FIELD_STATUS    = "status";
+    private static final String FIELD_ERROR     = "error";
+    private static final String FIELD_MESSAGE   = "message";
+    private static final String FIELD_PATH      = "path";
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Object> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
@@ -45,13 +52,26 @@ public class GlobalExceptionHandler {
             message = raw.substring(idx + 1).trim();
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.CONFLICT.value());
-        body.put("error", "Conflict");
-        body.put("message", message);
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
+        body.put(FIELD_ERROR, "Conflict");
+        body.put(FIELD_MESSAGE, message);
         if (field != null) body.put("field", field);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+    public ResponseEntity<Object> handleCdsCriticalBlock(
+            com.example.hms.cdshooks.CdsCriticalBlockException ex, WebRequest request) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "CDS Critical Advisory");
+        body.put(FIELD_MESSAGE, ex.getMessage());
+        body.put("cdsAdvisories", ex.getCards());
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -102,12 +122,12 @@ public class GlobalExceptionHandler {
                 ));
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Validation Failed");
-        body.put("message", "Validation errors in request");
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "Validation Failed");
+        body.put(FIELD_MESSAGE, "Validation errors in request");
         body.put("fieldErrors", fieldErrors);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -122,12 +142,12 @@ public class GlobalExceptionHandler {
                 ));
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Validation Failed");
-        body.put("message", "Constraint violation in request parameters");
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "Validation Failed");
+        body.put(FIELD_MESSAGE, "Constraint violation in request parameters");
         body.put("fieldErrors", violations);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
@@ -155,11 +175,11 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message, WebRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", status.value());
-        body.put("error", status.getReasonPhrase());
-        body.put("message", message);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, status.value());
+        body.put(FIELD_ERROR, status.getReasonPhrase());
+        body.put(FIELD_MESSAGE, message);
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, status);
     }
 

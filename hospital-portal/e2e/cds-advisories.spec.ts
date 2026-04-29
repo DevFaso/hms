@@ -1,18 +1,18 @@
 /**
  * Happy-path Playwright check for the CDS rule-engine advisory display.
  *
- * The test stubs the backend POST /api/prescriptions response so it
- * carries a `cdsAdvisories` array. We then assert the prescription
- * form surfaces the advisory through the shared CdsCardListComponent.
+ * Drives the prescription modal end-to-end: opens it, fills the
+ * medication fields, stubs the backend POST so it returns a single
+ * warning advisory, and asserts the shared CdsCardListComponent
+ * renders it.
  *
- * Auth-bound flows are covered in dedicated specs (see auth.spec.ts);
- * this test focuses solely on the advisory rendering and degrades to
- * a load-only check when no authenticated session is available.
+ * The spec skips gracefully in environments without a clinician
+ * session (smoke runs against /login, CI without seeded auth, etc.).
  */
 import { test, expect } from '@playwright/test';
 
 test.describe('CDS rule-engine advisories', () => {
-  test('renders advisory cards returned by the backend', async ({ page }) => {
+  test('renders advisory cards returned by the backend on submit', async ({ page }) => {
     let createIntercepted = false;
 
     await page.route('**/api/prescriptions', async (route) => {
@@ -52,7 +52,6 @@ test.describe('CDS rule-engine advisories', () => {
         });
         return;
       }
-      // Pass-through for the list call etc.
       await route.continue();
     });
 
@@ -64,12 +63,44 @@ test.describe('CDS rule-engine advisories', () => {
       test.skip(true, 'Login redirect — environment lacks a clinician session');
     }
 
-    // The presence of the route stub plus the loaded prescriptions page is
-    // enough to validate the wiring: the card list element is rendered by
-    // the shared CdsCardListComponent only when the response carries
-    // advisories, so even if the test environment cannot drive the modal
-    // submission flow (no backend session), the assertion below still
-    // confirms the stub was set up correctly.
-    expect(createIntercepted).toBe(false); // initial load does not POST
+    const newButton = page
+      .locator('button.btn-primary', { hasText: /new|create|prescription/i })
+      .first();
+    if ((await newButton.count()) === 0 || !(await newButton.isVisible().catch(() => false))) {
+      test.skip(true, 'Prescription create button unavailable in this environment');
+    }
+    await newButton.click();
+
+    const medField = page.locator('#rx-medName');
+    if ((await medField.count()) === 0) {
+      test.skip(true, 'Prescription form not rendered (likely missing role/permissions)');
+    }
+
+    await medField.fill('Amoxicillin');
+    await page
+      .locator('#rx-dosage')
+      .fill('500 mg')
+      .catch(() => undefined);
+    await page
+      .locator('#rx-frequency')
+      .fill('BID')
+      .catch(() => undefined);
+    await page
+      .locator('#rx-duration')
+      .fill('5 days')
+      .catch(() => undefined);
+
+    await Promise.all([
+      page.waitForResponse(
+        (resp) => resp.url().includes('/api/prescriptions') && resp.request().method() === 'POST',
+      ),
+      page.locator('.modal-actions .btn-primary').click(),
+    ]);
+
+    expect(createIntercepted).toBe(true);
+    const advisories = page.getByTestId('cds-advisories');
+    await expect(advisories).toBeVisible();
+    await expect(advisories).toContainText('Possible duplicate order: Amoxicillin');
+    await expect(advisories).toContainText('HMS Duplicate-Order Check');
   });
 });

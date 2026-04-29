@@ -16,8 +16,11 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -158,21 +161,43 @@ public class CdsRuleEngine {
             .toList();
     }
 
+    /**
+     * Batch-resolves the RxNorm code for each prescription against the
+     * medication catalog in a single query — avoids the per-row catalog
+     * lookup that would otherwise add N round-trips at order-sign time.
+     * Result list is parallel to {@code active}: nulls fill positions
+     * whose prescription had no medicationCode or no catalog match.
+     */
     List<String> mapRxnorms(List<Prescription> active, UUID hospitalId) {
         if (active.isEmpty()) return List.of();
+        if (hospitalId == null) return nullList(active.size());
+
+        Set<String> distinctCodes = new HashSet<>();
+        for (Prescription p : active) {
+            String code = p.getMedicationCode();
+            if (code != null && !code.isBlank()) distinctCodes.add(code);
+        }
+        if (distinctCodes.isEmpty()) return nullList(active.size());
+
+        Map<String, String> rxnormByCode = new HashMap<>();
+        for (MedicationCatalogItem item :
+                catalogRepository.findByHospitalIdAndCodeIn(hospitalId, distinctCodes)) {
+            if (item.getCode() != null && item.getRxnormCode() != null) {
+                rxnormByCode.put(item.getCode(), item.getRxnormCode());
+            }
+        }
         List<String> rxnorms = new ArrayList<>(active.size());
         for (Prescription p : active) {
-            rxnorms.add(rxnormForPrescription(p, hospitalId));
+            String code = p.getMedicationCode();
+            rxnorms.add(code == null ? null : rxnormByCode.get(code));
         }
         return rxnorms;
     }
 
-    String rxnormForPrescription(Prescription p, UUID hospitalId) {
-        if (hospitalId == null || p.getMedicationCode() == null
-            || p.getMedicationCode().isBlank()) return null;
-        return catalogRepository.findByHospitalIdAndCode(hospitalId, p.getMedicationCode())
-            .map(MedicationCatalogItem::getRxnormCode)
-            .orElse(null);
+    private static List<String> nullList(int size) {
+        List<String> out = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) out.add(null);
+        return out;
     }
 
     Double loadLatestWeight(UUID patientId, UUID hospitalId) {

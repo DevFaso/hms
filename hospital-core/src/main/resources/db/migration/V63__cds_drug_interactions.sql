@@ -28,14 +28,19 @@
 -- or relies on duplicate-key suppression.
 
 -- 1. Add lookup indexes on the existing drug_interactions table.
---    Partial indexes scoped to active=true keep them small in the
---    common path (deactivated entries stay out of the index).
-CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug1_active
-    ON clinical.drug_interactions (drug1_code)
+--    DrugInteractionRepository#findInteractionBetween queries
+--      (drug1_code = :a AND drug2_code = :b)
+--      OR (drug1_code = :b AND drug2_code = :a)
+--    so the planner needs a composite key on each ordering. Two
+--    composite partial indexes (scoped to is_active = TRUE) match
+--    both branches without column-function wrapping; the OR is
+--    rewritten into a BitmapOr by the planner.
+CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug1_drug2_active
+    ON clinical.drug_interactions (drug1_code, drug2_code)
     WHERE is_active = TRUE;
 
-CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug2_active
-    ON clinical.drug_interactions (drug2_code)
+CREATE INDEX IF NOT EXISTS idx_drug_interactions_drug2_drug1_active
+    ON clinical.drug_interactions (drug2_code, drug1_code)
     WHERE is_active = TRUE;
 
 -- 2. Pediatric dose ceiling on medication_catalog_items.

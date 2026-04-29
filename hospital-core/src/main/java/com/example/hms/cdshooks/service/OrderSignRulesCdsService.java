@@ -9,7 +9,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,19 +66,18 @@ public class OrderSignRulesCdsService implements CdsHookService {
         if (patient == null) return CdsHookResponse.empty();
 
         UUID hospitalId = patient.getHospitalId();
-        List<CdsCard> cards = new ArrayList<>();
-        for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
-            if (!"MedicationRequest".equals(draft.get("resourceType"))) continue;
-            ProposedMedication proposed = ProposedMedication.fromDraft(draft);
-            if (proposed.name() == null) continue;
-            cards.addAll(ruleEngine.evaluateProposedPrescription(
+        List<CdsCard> cards = CdsHookContext.medicationDrafts(request).stream()
+            .filter(draft -> "MedicationRequest".equals(draft.get("resourceType")))
+            .map(ProposedMedication::fromDraft)
+            .filter(proposed -> proposed.name() != null)
+            .flatMap(proposed -> ruleEngine.evaluateProposedPrescription(
                 patient,
                 hospitalId,
                 proposed.name(),
                 proposed.code(),
                 proposed.dose()
-            ));
-        }
+            ).stream())
+            .toList();
         return CdsHookResponse.of(cards);
     }
 

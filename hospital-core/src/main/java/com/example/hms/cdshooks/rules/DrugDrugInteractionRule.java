@@ -7,9 +7,7 @@ import com.example.hms.model.medication.DrugInteraction;
 import com.example.hms.repository.DrugInteractionRepository;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -51,16 +49,22 @@ public class DrugDrugInteractionRule implements CdsRule {
         String proposed = context.proposedRxnormCode();
         if (proposed == null || proposed.isBlank()) return List.of();
 
-        List<CdsCard> cards = new ArrayList<>();
-        java.util.Set<String> seenPairs = new java.util.HashSet<>();
-        for (String existing : context.activePrescriptionRxnorms()) {
-            if (existing == null || existing.isBlank() || existing.equals(proposed)) continue;
-            String pairKey = canonicalPair(proposed, existing);
-            if (!seenPairs.add(pairKey)) continue;
-            Optional<DrugInteraction> hit = repository.findInteractionBetween(proposed, existing);
-            hit.filter(DrugInteraction::isActive).ifPresent(di -> cards.add(buildCard(di)));
-        }
-        return cards;
+        return context.activePrescriptionRxnorms().stream()
+            .filter(existing -> existing != null && !existing.isBlank() && !existing.equals(proposed))
+            .map(existing -> canonicalPair(proposed, existing))
+            .distinct()
+            .map(pairKey -> {
+                int sep = pairKey.indexOf('|');
+                String a = pairKey.substring(0, sep);
+                String b = pairKey.substring(sep + 1);
+                // proposed is always one side of the pair; we don't care which
+                // because findInteractionBetween is bidirectional.
+                return repository.findInteractionBetween(a, b).orElse(null);
+            })
+            .filter(java.util.Objects::nonNull)
+            .filter(DrugInteraction::isActive)
+            .map(this::buildCard)
+            .toList();
     }
 
     private static String canonicalPair(String a, String b) {
@@ -70,19 +74,24 @@ public class DrugDrugInteractionRule implements CdsRule {
     private CdsCard buildCard(DrugInteraction di) {
         String summary = "Drug-drug interaction: " + di.getDrug1Name()
             + " ↔ " + di.getDrug2Name() + " (" + di.getSeverity() + ")";
-        StringBuilder detail = new StringBuilder();
-        if (di.getDescription() != null) detail.append(di.getDescription());
-        if (di.getRecommendation() != null) {
-            if (detail.length() > 0) detail.append(" ");
-            detail.append("Recommendation: ").append(di.getRecommendation());
-        }
+        String detail = composeDetail(di);
         return new CdsCard(
             summary,
-            detail.length() == 0 ? null : detail.toString(),
+            detail,
             mapIndicator(di.getSeverity()),
             new Source(SOURCE_LABEL, null, null),
             null, null, null, UUID.randomUUID().toString()
         );
+    }
+
+    private static String composeDetail(DrugInteraction di) {
+        StringBuilder detail = new StringBuilder();
+        if (di.getDescription() != null) detail.append(di.getDescription());
+        if (di.getRecommendation() != null) {
+            if (!detail.isEmpty()) detail.append(' ');
+            detail.append("Recommendation: ").append(di.getRecommendation());
+        }
+        return detail.isEmpty() ? null : detail.toString();
     }
 
     private static CdsCard.Indicator mapIndicator(InteractionSeverity severity) {

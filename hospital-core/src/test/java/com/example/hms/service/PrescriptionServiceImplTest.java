@@ -37,8 +37,10 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -2317,9 +2319,11 @@ class PrescriptionServiceImplTest {
             .thenReturn(List.of(critical));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
             .hasMessageContaining("CDS ALERT")
-            .hasMessageContaining("warfarin");
+            .hasMessageContaining("warfarin")
+            .extracting("cards", as(InstanceOfAssertFactories.LIST))
+            .hasSize(1);
 
         verify(prescriptionRepository, never()).save(any());
     }

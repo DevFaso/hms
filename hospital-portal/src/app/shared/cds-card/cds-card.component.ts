@@ -53,7 +53,13 @@ export class CdsCardListComponent {
     return `CDS.INDICATOR.${indicator.toUpperCase()}`;
   }
 
-  protected trackByCard(_index: number, card: CdsCard): string {
+  /**
+   * Public so unit tests can assert the keying contract directly.
+   * `uuid` wins when present (unique per backend response); summary
+   * is the fallback so two cards with the same uuid-less summary
+   * still trackBy stably across re-renders.
+   */
+  trackByCard(_index: number, card: CdsCard): string {
     return card.uuid ?? card.summary;
   }
 }

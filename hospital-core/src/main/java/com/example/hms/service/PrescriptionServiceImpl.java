@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.cdshooks.CdsCriticalBlockException;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.rules.CdsRuleEngine;
 import com.example.hms.enums.EncounterStatus;
@@ -82,10 +83,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
-            patient, hospitalId,
-            request.getMedicationName(), null, request.getDosage());
-        enforceCriticalAdvisories(advisories, request.getForceOverride());
+        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
@@ -181,10 +179,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
-            patient, hospitalId,
-            request.getMedicationName(), null, request.getDosage());
-        enforceCriticalAdvisories(advisories, request.getForceOverride());
+        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
@@ -473,23 +468,37 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * Block on critical CDS rule findings unless the prescriber has set
-     * {@code forceOverride=true}. Mirrors the existing severe-allergy
-     * gate so the override surface stays uniform.
+     * Runs the CDS rule engine for the proposed prescription, blocks on
+     * any critical finding unless {@code forceOverride=true}, and
+     * returns the full advisory list (caller attaches it to the
+     * response DTO). Mirrors the existing severe-allergy gate so the
+     * override surface stays uniform; on block, throws
+     * {@link CdsCriticalBlockException} so the API caller receives a
+     * structured payload instead of having to parse the message text.
      */
-    private void enforceCriticalAdvisories(List<CdsCard> advisories, Boolean forceOverride) {
-        if (advisories == null || advisories.isEmpty()) return;
-        if (Boolean.TRUE.equals(forceOverride)) return;
+    private List<CdsCard> runCdsRuleEngine(Patient patient, UUID hospitalId,
+                                           PrescriptionRequestDTO request) {
+        List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
+            patient, hospitalId,
+            request.getMedicationName(),
+            request.getMedicationCode(),
+            request.getDosage());
+        if (advisories.isEmpty() || Boolean.TRUE.equals(request.getForceOverride())) {
+            return advisories;
+        }
         for (CdsCard card : advisories) {
             if (card.indicator() == CdsCard.Indicator.CRITICAL) {
                 if (logger.isWarnEnabled()) {
                     logger.warn("CDS critical advisory blocked prescription: {}",
                         sanitizeLog(card.summary()));
                 }
-                throw new BusinessException("CDS ALERT: " + card.summary()
-                    + " — set forceOverride after clinical review.");
+                throw new CdsCriticalBlockException(
+                    "CDS ALERT: " + card.summary()
+                        + " — set forceOverride after clinical review.",
+                    advisories);
             }
         }
+        return advisories;
     }
 }
 

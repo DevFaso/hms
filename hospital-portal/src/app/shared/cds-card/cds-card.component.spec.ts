@@ -48,9 +48,12 @@ describe('CdsCardListComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Long detail here');
   });
 
-  it('uses the card uuid for trackBy when present', () => {
-    setCards([sampleCard('info', 'A')]);
-    expect(component).toBeTruthy();
+  it('uses the card uuid for trackBy when present, summary as fallback', () => {
+    const withUuid: CdsCard = { ...sampleCard('info', 'A'), uuid: 'fixed-id' };
+    expect(component.trackByCard(0, withUuid)).toBe('fixed-id');
+
+    const withoutUuid: CdsCard = { ...sampleCard('warning', 'Fallback summary'), uuid: undefined };
+    expect(component.trackByCard(1, withoutUuid)).toBe('Fallback summary');
   });
 });
 

@@ -201,23 +201,28 @@ export class PrescriptionsComponent implements OnInit {
       : this.prescriptionService.create(this.form);
     op.subscribe({
       next: (saved) => {
-        // Surface non-blocking advisories (warning/info). Critical
-        // advisories would have arrived via the error branch.
-        this.cdsAdvisories.set(saved?.cdsAdvisories ?? []);
+        const advisories = saved?.cdsAdvisories ?? [];
+        this.cdsAdvisories.set(advisories);
         this.cdsCriticalBlocked.set(false);
         this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
-        this.closeModal();
         this.saving.set(false);
         this.load();
+        // Only auto-close when there is nothing for the clinician to
+        // see; otherwise the closeModal() reset would erase the
+        // warning/info cards we just attached.
+        if (advisories.length === 0) {
+          this.closeModal();
+        }
       },
       error: (err) => {
-        const message = this.extractErrorMessage(err);
-        if (this.isCdsCriticalBlock(message)) {
-          // Stay in the modal — surface the advisory, expose the
-          // forceOverride checkbox, and let the clinician re-submit.
-          this.cdsAdvisories.set([this.cardFromMessage(message)]);
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0) {
+          // Stay in the modal — backend has signalled a critical
+          // block. Render the structured cards verbatim and expose
+          // the forceOverride checkbox for re-submission.
+          this.cdsAdvisories.set(cards);
           this.cdsCriticalBlocked.set(true);
-          this.toast.error(message);
+          this.toast.error(this.extractErrorMessage(err));
         } else {
           this.toast.error('Save failed');
         }
@@ -233,6 +238,12 @@ export class PrescriptionsComponent implements OnInit {
     this.form.forceOverride = undefined;
   }
 
+  /** Allow the clinician to dismiss non-blocking advisories without re-submitting. */
+  dismissAdvisories(): void {
+    this.resetCdsState();
+    this.closeModal();
+  }
+
   private extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object') {
       const e = err as { error?: { message?: string }; message?: string };
@@ -241,21 +252,15 @@ export class PrescriptionsComponent implements OnInit {
     return '';
   }
 
-  private isCdsCriticalBlock(message: string): boolean {
-    return typeof message === 'string' && message.startsWith('CDS ALERT:');
-  }
-
-  private cardFromMessage(message: string): CdsCard {
-    const summary = message
-      .replace(/^CDS ALERT:\s*/, '')
-      .replace(/\s*— set forceOverride.*$/, '')
-      .trim();
-    return {
-      summary: summary || 'CDS critical advisory',
-      detail: 'Set forceOverride to record clinical justification and re-submit.',
-      indicator: 'critical',
-      source: { label: 'HMS CDS Rule Engine' },
-    };
+  /**
+   * Pulls the structured `cdsAdvisories` array off the error response
+   * body. The backend `CdsCriticalBlockException` handler returns
+   * `{ message, cdsAdvisories: CdsCard[], ... }` with status 400.
+   */
+  private extractCdsCards(err: unknown): CdsCard[] {
+    if (!err || typeof err !== 'object') return [];
+    const body = (err as { error?: { cdsAdvisories?: CdsCard[] } }).error;
+    return body?.cdsAdvisories ?? [];
   }
 
   confirmDelete(p: PrescriptionResponse): void {
