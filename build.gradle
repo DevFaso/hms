@@ -53,6 +53,9 @@ sonar {
             '**/utility/**',
             '**/specification/**',
             '**/patient/**',
+            '**/fhir/**',
+            '**/hl7/mllp/**',
+            '**/cdshooks/**',
             '**/HmsApplication.java',
             // Infrastructure / integration classes
             '**/EmailServiceImpl.java',
@@ -246,6 +249,9 @@ subprojects {
                     '**/utility/**',
                     '**/specification/**',
                     '**/patient/**',
+                    '**/fhir/**',
+                    '**/hl7/mllp/**',
+                    '**/cdshooks/**',
                     '**/HmsApplication*',
                     // Infrastructure / integration classes
                     '**/EmailServiceImpl*',

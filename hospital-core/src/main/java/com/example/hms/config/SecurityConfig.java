@@ -259,7 +259,13 @@ public class SecurityConfig {
                     // Appointment booking from mobile apps (Bearer JWT, no cookies)
                     new AntPathRequestMatcher("/appointments/**"),
                     // Partner pharmacy SMS webhook (T-55) — shared-secret header auth, no cookies
-                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST")
+                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST"),
+                    // FHIR R4 endpoints — server-to-server clients (OpenMRS/DHIS2/HIE)
+                    // authenticate via Bearer JWT, not browser cookies.
+                    new AntPathRequestMatcher("/fhir/**"),
+                    // CDS Hooks invocations — server-to-server callers post JSON
+                    // with Bearer JWT.
+                    new AntPathRequestMatcher("/cds-services/**")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -298,6 +304,14 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers("/.well-known/jwks.json").permitAll()
+                // FHIR conformance discovery — public per HL7 FHIR R4 spec
+                // (clients query /fhir/metadata before authenticating)
+                .requestMatchers(HttpMethod.GET, "/fhir/metadata").permitAll()
+                // SMART-on-FHIR App Launch 1.0 discovery — public per spec.
+                .requestMatchers(HttpMethod.GET, "/fhir/.well-known/smart-configuration").permitAll()
+                // CDS Hooks discovery — public per HL7 CDS Hooks 1.0 spec
+                // (decision-support clients enumerate services before auth).
+                .requestMatchers(HttpMethod.GET, "/cds-services").permitAll()
                 // Partner pharmacy SMS webhook — authenticated inside the controller
                 // via the X-HMS-Partner-Signature shared-secret header (T-55).
                 .requestMatchers(HttpMethod.POST, "/webhooks/partner-sms").permitAll()
