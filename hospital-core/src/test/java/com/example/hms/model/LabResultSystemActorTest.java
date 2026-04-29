@@ -75,8 +75,8 @@ class LabResultSystemActorTest {
                 .build();
 
             assertDoesNotThrow(() -> invokeValidate(r));
-            assertEquals(ActorType.USER, r.getActorType(), "USER derived from non-null assignment");
-            assertNotNull(r.getResultDate(), "resultDate auto-defaulted");
+            assertEquals(ActorType.USER, r.getActorType(), "builder default keeps actorType=USER when omitted");
+            assertNotNull(r.getResultDate(), "validate() back-fills resultDate when null");
         }
 
         @Test

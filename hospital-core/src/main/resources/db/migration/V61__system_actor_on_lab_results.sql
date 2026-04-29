@@ -15,9 +15,14 @@
 --   2. actor_type VARCHAR(20) NOT NULL DEFAULT 'USER' is added
 --   3. actor_label VARCHAR(255) captures a human-readable origin
 --      (e.g. "MLLP:ROCHE_COBAS/LAB_A"); kept for audit traceability
---   4. CHECK constraint enforces that USER rows still require an
---      assignment_id, so the existing clinical write path keeps the
---      same data-integrity guarantee it has today
+--   4. CHECK constraint enforces a symmetric invariant:
+--        - USER rows must carry an assignment_id (preserving the
+--          existing clinical guarantee)
+--        - SYSTEM rows must NOT carry an assignment_id (assignments
+--          are role-at-hospital contexts of a human author; SYSTEM
+--          rows have none, so any non-null value would be a data bug)
+--      The same invariant is enforced at the application layer in
+--      LabResult.@PrePersist so the two sides stay in lockstep.
 --
 -- Additive only. Existing rows are backfilled to actor_type='USER' with
 -- their current assignment_id intact.
@@ -50,7 +55,9 @@ BEGIN
             ADD COLUMN actor_label VARCHAR(255);
     END IF;
 
-    -- Step 4: enforce that USER rows still carry an assignment_id
+    -- Step 4: enforce the symmetric USER/SYSTEM invariant
+    --   USER   → assignment_id NOT NULL  (existing clinical guarantee)
+    --   SYSTEM → assignment_id IS NULL   (no human author by definition)
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
         WHERE conname = 'chk_labresult_user_or_system'
@@ -58,9 +65,9 @@ BEGIN
         ALTER TABLE lab.lab_results
             ADD CONSTRAINT chk_labresult_user_or_system
             CHECK (
-                (actor_type = 'USER' AND assignment_id IS NOT NULL)
+                (actor_type = 'USER'   AND assignment_id IS NOT NULL)
                 OR
-                (actor_type = 'SYSTEM')
+                (actor_type = 'SYSTEM' AND assignment_id IS NULL)
             );
     END IF;
 END
