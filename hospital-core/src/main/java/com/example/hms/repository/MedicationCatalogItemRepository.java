@@ -33,4 +33,14 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     boolean existsByAtcCodeAndHospital_Id(String atcCode, UUID hospitalId);
 
     Optional<MedicationCatalogItem> findByHospitalIdAndCode(UUID hospitalId, String code);
+
+    /**
+     * Batch lookup used by {@link com.example.hms.cdshooks.rules.CdsRuleEngine}
+     * to resolve the RxNorm of every active prescription on a patient
+     * in a single query (avoids N+1 over the catalog).
+     */
+    @Query("SELECT m FROM MedicationCatalogItem m WHERE m.hospital.id = :hospitalId AND m.code IN :codes")
+    java.util.List<MedicationCatalogItem> findByHospitalIdAndCodeIn(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("codes") java.util.Collection<String> codes);
 }
