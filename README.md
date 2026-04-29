@@ -13,6 +13,10 @@ Full-stack hospital management platform built with **Spring Boot 3.4** + **Angul
 | Migrations | Liquibase |
 | CI/CD | GitHub Actions → Railway |
 | i18n | ngx-translate (EN/FR/ES) |
+| Interop | FHIR R4 read API at `/api/fhir/*` (HAPI 7) — see [`docs/fhir.md`](docs/fhir.md) |
+| Lab interface | HL7 v2 MLLP listener (off by default) — see [`docs/hl7-mllp.md`](docs/hl7-mllp.md) |
+| Decision support | CDS Hooks 1.0 services at `/api/cds-services` — see [`docs/cds-hooks.md`](docs/cds-hooks.md) |
+| App launch | SMART-on-FHIR App Launch 1.0 — see [`docs/smart-on-fhir.md`](docs/smart-on-fhir.md) |
 
 ## Quick Start
 
