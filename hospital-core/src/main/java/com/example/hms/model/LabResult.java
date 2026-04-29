@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.enums.ActorType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,6 +16,7 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -65,11 +67,36 @@ public class LabResult extends BaseEntity {
     @Column(name = "abnormal_flag", length = 20)
     private AbnormalFlag abnormalFlag;
 
-    /** Context (role@hospital) of the user posting the result. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "assignment_id", nullable = false,
+    /**
+     * Context (role@hospital) of the user posting the result. Required
+     * for USER-actor writes (the existing clinical path); always
+     * {@code null} for SYSTEM-actor writes coming through the MLLP /
+     * external-LIS ingestion path. The DB-level CHECK constraint
+     * (chk_labresult_user_or_system, V61) enforces the same invariant.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignment_id",
         foreignKey = @ForeignKey(name = "fk_labresult_assignment"))
     private UserRoleHospitalAssignment assignment;
+
+    /**
+     * Identifies whether this result was posted by a real user or by a
+     * system/integration process. Drives the @PrePersist guards and the
+     * CHECK constraint introduced in V61. Defaults to USER on legacy
+     * rows so the existing clinical write path remains identical.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actor_type", nullable = false, length = 20)
+    @Builder.Default
+    private ActorType actorType = ActorType.USER;
+
+    /**
+     * Human-readable origin label for SYSTEM-actor writes (e.g.
+     * {@code "MLLP:ROCHE_COBAS/LAB_A"}). Optional for USER writes.
+     */
+    @Size(max = 255)
+    @Column(name = "actor_label", length = 255)
+    private String actorLabel;
 
     @Builder.Default
     @Column(name = "acknowledged", nullable = false)
@@ -116,11 +143,28 @@ public class LabResult extends BaseEntity {
     @PreUpdate
     private void validate() {
         if (resultDate == null) resultDate = LocalDateTime.now();
+        if (actorType == null) {
+            actorType = (assignment == null) ? ActorType.SYSTEM : ActorType.USER;
+        }
 
-        if (labOrder == null || assignment == null
-            || labOrder.getHospital() == null || assignment.getHospital() == null
-            || !Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())) {
-            throw new IllegalStateException("LabResult.assignment.hospital must match LabResult.labOrder.hospital");
+        if (labOrder == null || labOrder.getHospital() == null) {
+            throw new IllegalStateException("LabResult.labOrder.hospital must be present");
+        }
+
+        if (actorType == ActorType.USER) {
+            if (assignment == null || assignment.getHospital() == null
+                || !Objects.equals(labOrder.getHospital().getId(), assignment.getHospital().getId())) {
+                throw new IllegalStateException(
+                    "LabResult.assignment.hospital must match LabResult.labOrder.hospital for USER writes");
+            }
+        } else {
+            // SYSTEM writes (MLLP / external LIS): no human assignment is
+            // available. The CHECK constraint in V61 enforces the same
+            // shape at the DB level.
+            if (assignment != null) {
+                throw new IllegalStateException(
+                    "LabResult.assignment must be null for SYSTEM writes; use actorLabel for traceability");
+            }
         }
     }
 }
