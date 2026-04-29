@@ -28,6 +28,8 @@ public class LabTestDefinitionMapper {
             .description(dto.getDescription())
             .sampleType(dto.getSampleType())
             .unit(dto.getUnit())
+            .loincCode(dto.getLoincCode())
+            .loincDisplay(dto.getLoincDisplay())
             .preparationInstructions(dto.getPreparationInstructions())
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
             .active(dto.getActive() == null || dto.getActive())
@@ -49,6 +51,8 @@ public class LabTestDefinitionMapper {
                 .description(entity.getDescription())
                 .category(entity.getCategory())
                 .unit(entity.getUnit())
+                .loincCode(entity.getLoincCode())
+                .loincDisplay(entity.getLoincDisplay())
                 .sampleType(entity.getSampleType())
                 .preparationInstructions(entity.getPreparationInstructions())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
@@ -75,6 +79,8 @@ public class LabTestDefinitionMapper {
         entity.setDescription(dto.getDescription());
         entity.setSampleType(dto.getSampleType());
         entity.setUnit(dto.getUnit());
+        entity.setLoincCode(dto.getLoincCode());
+        entity.setLoincDisplay(dto.getLoincDisplay());
         entity.setPreparationInstructions(dto.getPreparationInstructions());
         if (dto.getTurnaroundTime() != null) {
             entity.setTurnaroundTimeMinutes(dto.getTurnaroundTime());
