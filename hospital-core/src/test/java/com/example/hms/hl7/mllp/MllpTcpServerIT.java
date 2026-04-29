@@ -22,7 +22,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Boots the listener on an ephemeral port (port=0), sends a framed
- * ORU^R01 over TCP, and asserts a framed AA ACK comes back.
+ * ORU^R01 over TCP, and asserts a framed ACK comes back.
+ *
+ * <p>Since P1 #2b introduced the {@code MllpAllowedSenderService}
+ * allowlist gate, an unseeded inbound message gets {@code AR — Sender
+ * not authorised} rather than {@code AA}. This smoke test verifies
+ * three things end-to-end: (1) the listener accepts framed bytes,
+ * (2) the dispatcher consults the allowlist, and (3) a framed ACK is
+ * returned. A full happy-path integration test (allowlist + LabOrder
+ * + LabSpecimen seeded) is tracked as P1 #2b follow-up work.
  */
 @SpringBootTest(classes = HmsApplication.class)
 @ActiveProfiles("test")
@@ -38,7 +46,7 @@ class MllpTcpServerIT {
     private MllpTcpServer server;
 
     @Test
-    @DisplayName("client → MLLP listener: framed ORU^R01 exchanged for framed AA ACK")
+    @DisplayName("client → MLLP listener: framed ORU^R01 exchanged for framed AR ACK (allowlist denies unseeded sender)")
     void roundTripsAnOruMessage() throws Exception {
         int port = server.getBoundPort();
         assertThat(port).isPositive();
@@ -60,7 +68,10 @@ class MllpTcpServerIT {
                 byte[] ackBytes = MllpFrameCodec.readFrame(in, 64 * 1024);
                 assertThat(ackBytes).isNotNull();
                 String ack = new String(ackBytes, StandardCharsets.UTF_8);
-                assertThat(ack).contains("MSA|AA|MSG-IT");
+                // No allowlist row seeded — the dispatcher must reject
+                // the sender before any domain work is attempted.
+                assertThat(ack).contains("MSA|AR|MSG-IT");
+                assertThat(ack).contains("Sender not authorised");
                 assertThat(ack).startsWith("MSH|^~\\&|HMS|HOSP1|MINDRAY|LAB1|");
             }
         }
