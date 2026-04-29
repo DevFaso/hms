@@ -143,32 +143,44 @@ public class MllpTcpServer {
         try (Socket socket = client) {
             socket.setSoTimeout(properties.getReadTimeoutMs());
             socket.setTcpNoDelay(true);
-            try (
-                InputStream in = new BufferedInputStream(socket.getInputStream());
-                OutputStream out = new BufferedOutputStream(socket.getOutputStream())
-            ) {
-                while (running.get()) {
-                    byte[] frame = MllpFrameCodec.readFrame(in, properties.getMaxFrameBytes());
-                    if (frame.length == 0) {
-                        log.debug("[MLLP {}] peer closed", remote);
-                        return;
-                    }
-                    String body = new String(frame, charset);
-                    String ack;
-                    try {
-                        ack = dispatcher.dispatch(body, remote);
-                    } catch (RuntimeException ex) {
-                        log.error("[MLLP {}] dispatcher error", remote, ex);
-                        ack = Hl7AckBuilder.buildAck(safeHeader(body),
-                            Hl7AckBuilder.AckCode.AE, "Server-side handler error");
-                    }
-                    MllpFrameCodec.writeFrame(out, ack, charset);
-                }
-            }
+            processFrames(socket, charset, remote);
         } catch (java.net.SocketTimeoutException timeout) {
             log.debug("[MLLP {}] read timeout — closing", remote);
         } catch (IOException ioe) {
             log.warn("[MLLP {}] I/O error: {}", remote, ioe.getMessage());
+        }
+    }
+
+    /**
+     * Reads framed MLLP messages from the connected socket, dispatches each one,
+     * and writes back the framed ACK. Returns when the peer closes the stream
+     * or the listener is asked to stop.
+     */
+    private void processFrames(Socket socket, Charset charset, String remote) throws IOException {
+        try (
+            InputStream in = new BufferedInputStream(socket.getInputStream());
+            OutputStream out = new BufferedOutputStream(socket.getOutputStream())
+        ) {
+            while (running.get()) {
+                byte[] frame = MllpFrameCodec.readFrame(in, properties.getMaxFrameBytes());
+                if (frame.length == 0) {
+                    log.debug("[MLLP {}] peer closed", remote);
+                    return;
+                }
+                String body = new String(frame, charset);
+                String ack = safeDispatch(body, remote);
+                MllpFrameCodec.writeFrame(out, ack, charset);
+            }
+        }
+    }
+
+    private String safeDispatch(String body, String remote) {
+        try {
+            return dispatcher.dispatch(body, remote);
+        } catch (RuntimeException ex) {
+            log.error("[MLLP {}] dispatcher error", remote, ex);
+            return Hl7AckBuilder.buildAck(safeHeader(body),
+                Hl7AckBuilder.AckCode.AE, "Server-side handler error");
         }
     }
 

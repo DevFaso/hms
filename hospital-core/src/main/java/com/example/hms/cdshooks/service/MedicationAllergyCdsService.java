@@ -96,29 +96,33 @@ public class MedicationAllergyCdsService implements CdsHookService {
         if (trimmed.length() >= 3) sink.add(trimmed);
     }
 
-    @SuppressWarnings("unchecked")
     private static String extractMedicationText(Map<String, Object> draft) {
-        Object cc = draft.get("medicationCodeableConcept");
-        if (cc instanceof Map<?, ?> map) {
-            Object text = map.get("text");
-            if (text instanceof String s && !s.isBlank()) return s;
-            Object coding = map.get("coding");
-            if (coding instanceof List<?> list && !list.isEmpty()) {
-                Object first = list.get(0);
-                if (first instanceof Map<?, ?> firstMap) {
-                    Object display = firstMap.get("display");
-                    if (display instanceof String s && !s.isBlank()) return s;
-                    Object code = firstMap.get("code");
-                    if (code instanceof String s && !s.isBlank()) return s;
-                }
-            }
-        }
-        Object reference = draft.get("medicationReference");
-        if (reference instanceof Map<?, ?> ref) {
-            Object display = ref.get("display");
-            if (display instanceof String s && !s.isBlank()) return s;
-        }
-        return null;
+        String fromConcept = textFromCodeableConcept(draft.get("medicationCodeableConcept"));
+        if (fromConcept != null) return fromConcept;
+        return textFromReference(draft.get("medicationReference"));
+    }
+
+    private static String textFromCodeableConcept(Object value) {
+        if (!(value instanceof Map<?, ?> map)) return null;
+        String text = nonBlank(map.get("text"));
+        if (text != null) return text;
+        return textFromFirstCoding(map.get("coding"));
+    }
+
+    private static String textFromFirstCoding(Object coding) {
+        if (!(coding instanceof List<?> list) || list.isEmpty()) return null;
+        if (!(list.get(0) instanceof Map<?, ?> first)) return null;
+        String display = nonBlank(first.get("display"));
+        return display != null ? display : nonBlank(first.get("code"));
+    }
+
+    private static String textFromReference(Object value) {
+        if (!(value instanceof Map<?, ?> ref)) return null;
+        return nonBlank(ref.get("display"));
+    }
+
+    private static String nonBlank(Object value) {
+        return (value instanceof String s && !s.isBlank()) ? s : null;
     }
 
     private CdsCard buildCard(String medication, String matchedAllergen) {
