@@ -5,6 +5,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class TerminologyCodesTest {
 
@@ -148,8 +149,45 @@ class TerminologyCodesTest {
         assertThat(TerminologyCodes.icdSystemFor("ICD-10")).isEqualTo(TerminologyCodes.SYSTEM_ICD10);
         assertThat(TerminologyCodes.icdSystemFor("CIM-10")).isEqualTo(TerminologyCodes.SYSTEM_ICD10);
         assertThat(TerminologyCodes.icdSystemFor("icd11")).isEqualTo(TerminologyCodes.SYSTEM_ICD11);
-        assertThat(TerminologyCodes.icdSystemFor("MMS")).isEqualTo(TerminologyCodes.SYSTEM_HMS_PROBLEM_LOCAL);
+        assertThat(TerminologyCodes.icdSystemFor("MMS")).isEqualTo(TerminologyCodes.SYSTEM_ICD11);
+        assertThat(TerminologyCodes.icdSystemFor("mms")).isEqualTo(TerminologyCodes.SYSTEM_ICD11);
         assertThat(TerminologyCodes.icdSystemFor(null)).isEqualTo(TerminologyCodes.SYSTEM_HMS_PROBLEM_LOCAL);
         assertThat(TerminologyCodes.icdSystemFor("freetext")).isEqualTo(TerminologyCodes.SYSTEM_HMS_PROBLEM_LOCAL);
+    }
+
+    /* ---------- normalize + validate helpers (used by service layer) ---------- */
+
+    @Test
+    void normalizeAndRequireValidLoincReturnsTrimmedValueOrNull() {
+        assertThat(TerminologyCodes.normalizeAndRequireValidLoinc("  718-7  ")).isEqualTo("718-7");
+        assertThat(TerminologyCodes.normalizeAndRequireValidLoinc(null)).isNull();
+        assertThat(TerminologyCodes.normalizeAndRequireValidLoinc("   ")).isNull();
+    }
+
+    @Test
+    void normalizeAndRequireValidLoincThrowsOnMalformed() {
+        assertThatThrownBy(() -> TerminologyCodes.normalizeAndRequireValidLoinc("ABC"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("loincCode");
+    }
+
+    @Test
+    void normalizeAndRequireValidAtcUppercasesAndValidates() {
+        assertThat(TerminologyCodes.normalizeAndRequireValidAtc("  j01ca04  ")).isEqualTo("J01CA04");
+        assertThat(TerminologyCodes.normalizeAndRequireValidAtc(null)).isNull();
+        assertThat(TerminologyCodes.normalizeAndRequireValidAtc(" ")).isNull();
+        assertThatThrownBy(() -> TerminologyCodes.normalizeAndRequireValidAtc("J01CA"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("atcCode");
+    }
+
+    @Test
+    void normalizeAndRequireValidRxNormTrimsAndValidates() {
+        assertThat(TerminologyCodes.normalizeAndRequireValidRxNorm("  723  ")).isEqualTo("723");
+        assertThat(TerminologyCodes.normalizeAndRequireValidRxNorm(null)).isNull();
+        assertThat(TerminologyCodes.normalizeAndRequireValidRxNorm(""  )).isNull();
+        assertThatThrownBy(() -> TerminologyCodes.normalizeAndRequireValidRxNorm("ABC"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("rxnormCode");
     }
 }

@@ -79,7 +79,7 @@ export class LabTestConfigComponent implements OnInit {
     };
   }
 
-  /** LOINC RxCUI: 1–7 digits, dash, single check digit (e.g. 718-7). */
+  /** LOINC code format: 1–7 digits, dash, single check digit (e.g. 718-7). */
   static readonly LOINC_PATTERN = /^\d{1,7}-\d$/;
 
   /** Returns true when the LOINC field is empty (optional) or matches the canonical shape. */

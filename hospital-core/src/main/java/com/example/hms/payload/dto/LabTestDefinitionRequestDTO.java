@@ -46,10 +46,13 @@ public class LabTestDefinitionRequestDTO {
     private String unit;
 
     /**
-     * LOINC code identifying this test in FHIR Observation.code. Format
-     * (n{1,7}-d) is enforced by the service layer; the constraint here is
-     * only on length so a malformed value bubbles up as a 400 with a
-     * meaningful message instead of a 500 from the @Pattern violation.
+     * LOINC code identifying this test in FHIR {@code Observation.code}.
+     * Format ({@code n{1,7}-d}) is intentionally enforced by the service
+     * layer rather than {@code @Pattern} here so that the resulting 400
+     * response carries the human-readable hint defined in
+     * {@code TerminologyCodes#normalizeAndRequireValidLoinc} — both paths
+     * land on {@code GlobalExceptionHandler} and produce 400 Bad Request,
+     * but the service-layer message is more actionable.
      */
     @Size(max = 20)
     private String loincCode;

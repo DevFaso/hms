@@ -44,8 +44,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
 
-        validateAtcCode(dto.getAtcCode());
-        validateRxNormCode(dto.getRxnormCode());
+        dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
+        dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
         MedicationCatalogItem entity = mapper.toEntity(dto);
         entity.setHospital(hospital);
@@ -89,8 +89,8 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         MedicationCatalogItem existing = catalogRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
 
-        validateAtcCode(dto.getAtcCode());
-        validateRxNormCode(dto.getRxnormCode());
+        dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
+        dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
 
         existing.setNameFr(dto.getNameFr());
         existing.setGenericName(dto.getGenericName());
@@ -125,28 +125,6 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         logAudit(AuditEventType.MEDICATION_DEACTIVATED,
                 "Deactivated medication catalog item '" + item.getNameFr() + "'",
                 item.getId().toString());
-    }
-
-    /**
-     * ATC binding is optional, but when supplied it must match the WHO
-     * 7-character anatomical-therapeutic-chemical pattern (e.g.
-     * {@code J01CA04}) so the FHIR MedicationRequest coding emitted via
-     * the catalog stays trustworthy for OpenHIE/DHIS2 downstream nodes.
-     */
-    private static void validateAtcCode(String atcCode) {
-        if (atcCode == null || atcCode.isBlank()) return;
-        if (!TerminologyCodes.isValidAtc(atcCode)) {
-            throw new IllegalArgumentException(
-                "atcCode must match WHO ATC format L##LL## (e.g. J01CA04)");
-        }
-    }
-
-    private static void validateRxNormCode(String rxNormCode) {
-        if (rxNormCode == null || rxNormCode.isBlank()) return;
-        if (!TerminologyCodes.isValidRxNorm(rxNormCode)) {
-            throw new IllegalArgumentException(
-                "rxnormCode must be 1–12 digits (RxCUI numeric only)");
-        }
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

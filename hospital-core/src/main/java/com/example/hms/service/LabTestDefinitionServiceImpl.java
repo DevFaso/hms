@@ -80,24 +80,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertUserCanManageGlobal(currentUser);
         }
 
-        validateLoinc(dto.getLoincCode());
+        dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
         entity.setHospital(null);
         return mapper.toDto(repository.save(entity));
-    }
-
-    /**
-     * LOINC binding is optional, but when supplied it must match the
-     * LOINC RxCUI shape ({@code n{1,7}-d}). Rejecting freetext early
-     * keeps the {@code Observation.code} we emit through the FHIR façade
-     * trustworthy for downstream nodes (DHIS2, OpenMRS, OpenHIE).
-     */
-    private static void validateLoinc(String loincCode) {
-        if (loincCode == null || loincCode.isBlank()) return;
-        if (!TerminologyCodes.isValidLoinc(loincCode)) {
-            throw new IllegalArgumentException(
-                "loincCode must match LOINC format n{1,7}-d (e.g. 718-7)");
-        }
     }
 
     @Override
@@ -148,7 +134,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertUserCanManageHospital(currentUser, existing.getAssignment());
         }
 
-        validateLoinc(dto.getLoincCode());
+        dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
         if (dto.getAssignmentId() != null) {
             if (existing.getAssignment() == null
