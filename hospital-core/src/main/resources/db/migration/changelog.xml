@@ -846,4 +846,21 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V66: P1 #8 — Inpatient eMAR five-rights barcode-scan loop
+         - Additive columns on clinical.medication_administration_records:
+           patient_scan_value, medication_scan_value, dose_scan_value,
+           scan_verified_at, five_rights_status, five_rights_overrides
+           (JSONB), override_reason.
+         - Indexes on five_rights_status and scan_verified_at to support
+           the bedside dashboard and audit-by-override-decision queries.
+         - Additive only; no destructive ops.
+         ================================================================= -->
+    <changeSet id="V66-inpatient-emar-five-rights" author="hms-team" runOnChange="false">
+        <sqlFile path="V66__inpatient_emar_five_rights.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

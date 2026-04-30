@@ -1,0 +1,227 @@
+<section class="emar" data-testid="emar-root">
+  <header class="emar__header">
+    <h1 class="emar__title">Inpatient eMAR</h1>
+    <p class="emar__subtitle">
+      Bedside five-rights barcode-scan verification for due medication doses.
+    </p>
+  </header>
+
+  @switch (state()) {
+    @case ('loading') {
+      <div class="emar__state emar__state--loading" data-testid="emar-loading">
+        Loading due medications…
+      </div>
+    }
+    @case ('error') {
+      <div class="emar__state emar__state--error" data-testid="emar-error">
+        <p>We couldn't load due doses. Please try again.</p>
+        <button type="button" class="emar__btn" (click)="loadTasks()">Retry</button>
+      </div>
+    }
+    @case ('empty') {
+      <div class="emar__state emar__state--empty" data-testid="emar-empty">
+        No medication doses are due right now.
+      </div>
+    }
+    @case ('ready') {
+      <div class="emar__layout">
+        <ul class="emar__queue" data-testid="emar-queue">
+          @for (task of tasks(); track task.id) {
+            <li
+              class="emar__queue-item"
+              [class.emar__queue-item--active]="activeTask()?.id === task.id"
+            >
+              <button
+                type="button"
+                class="emar__queue-button"
+                (click)="selectTask(task)"
+                [attr.data-testid]="'emar-task-' + task.id"
+              >
+                <span class="emar__queue-patient">{{ task.patientName }}</span>
+                <span class="emar__queue-med">{{ task.medication }}</span>
+                <span class="emar__queue-meta">
+                  {{ task.dose }} · {{ task.route }} · {{ task.dueTime | date: 'HH:mm' }}
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+
+        @if (activeTask(); as task) {
+          <article class="emar__detail" data-testid="emar-detail">
+            <header class="emar__detail-header">
+              <div>
+                <h2>{{ task.patientName }}</h2>
+                <p class="emar__detail-meta">
+                  {{ task.medication }} · {{ task.dose }} · {{ task.route }}
+                </p>
+              </div>
+              <button type="button" class="emar__btn emar__btn--ghost" (click)="closeTask()">
+                Close
+              </button>
+            </header>
+
+            <section class="emar__scan">
+              <h3>1. Scan patient wristband</h3>
+              <div class="emar__scan-row">
+                <input
+                  type="text"
+                  class="emar__input"
+                  data-testid="emar-patient-scan"
+                  placeholder="Patient wristband value"
+                  [value]="patientScan()"
+                  (input)="onScanInput('patient', $any($event.target).value)"
+                />
+                <button
+                  type="button"
+                  class="emar__btn"
+                  data-testid="emar-scan-patient"
+                  (click)="startScanner('patient')"
+                >
+                  Scan
+                </button>
+              </div>
+
+              <h3>2. Scan medication label</h3>
+              <div class="emar__scan-row">
+                <input
+                  type="text"
+                  class="emar__input"
+                  data-testid="emar-med-scan"
+                  placeholder="Medication barcode value"
+                  [value]="medicationScan()"
+                  (input)="onScanInput('medication', $any($event.target).value)"
+                />
+                <button
+                  type="button"
+                  class="emar__btn"
+                  data-testid="emar-scan-medication"
+                  (click)="startScanner('medication')"
+                >
+                  Scan
+                </button>
+              </div>
+
+              <h3>3. Confirm dose &amp; route</h3>
+              <div class="emar__scan-row">
+                <input
+                  type="text"
+                  class="emar__input"
+                  data-testid="emar-dose"
+                  placeholder="Dose"
+                  [value]="doseScan()"
+                  (input)="onDoseInput($any($event.target).value)"
+                />
+                <input
+                  type="text"
+                  class="emar__input"
+                  data-testid="emar-route"
+                  placeholder="Route"
+                  [value]="routeScan()"
+                  (input)="onRouteInput($any($event.target).value)"
+                />
+              </div>
+
+              @if (scannerActive(); as field) {
+                <div class="emar__scanner" data-testid="emar-scanner">
+                  <video #scannerVideo class="emar__scanner-video" autoplay playsinline muted></video>
+                  <p class="emar__scanner-hint">Aim at the {{ field }} barcode…</p>
+                  <button type="button" class="emar__btn emar__btn--ghost" (click)="stopScanner()">
+                    Cancel scanner
+                  </button>
+                </div>
+              }
+              @if (scannerError(); as err) {
+                <p class="emar__scanner-error" data-testid="emar-scanner-error">{{ err }}</p>
+              }
+            </section>
+
+            <section class="emar__verify">
+              <button
+                type="button"
+                class="emar__btn emar__btn--primary"
+                data-testid="emar-verify"
+                [disabled]="!canVerify() || verifyInFlight()"
+                (click)="verify()"
+              >
+                @if (verifyInFlight()) {
+                  Verifying…
+                } @else {
+                  Verify five rights
+                }
+              </button>
+
+              @if (verification(); as result) {
+                <ul class="emar__rights" data-testid="emar-rights">
+                  @for (check of fiveRights; track check) {
+                    <li
+                      class="emar__right"
+                      [class.emar__right--pass]="result.outcomes[check]"
+                      [class.emar__right--fail]="!result.outcomes[check]"
+                      [attr.data-testid]="'emar-right-' + check"
+                    >
+                      <span class="emar__right-icon">{{
+                        result.outcomes[check] ? '✓' : '✕'
+                      }}</span>
+                      <span class="emar__right-label">{{ fiveRightsLabel(check) }}</span>
+                      @if (!result.outcomes[check] && result.failureReasons[check]) {
+                        <span class="emar__right-reason">— {{ result.failureReasons[check] }}</span>
+                      }
+                    </li>
+                  }
+                </ul>
+
+                @if (needsOverride()) {
+                  <label class="emar__override">
+                    <span>Override reason (required to proceed past failed rights)</span>
+                    <textarea
+                      data-testid="emar-override-reason"
+                      class="emar__input emar__input--multiline"
+                      [value]="overrideReason()"
+                      (input)="onOverrideInput($any($event.target).value)"
+                      rows="3"
+                    ></textarea>
+                  </label>
+                }
+              }
+            </section>
+
+            <section class="emar__actions">
+              <button
+                type="button"
+                class="emar__btn emar__btn--success"
+                data-testid="emar-administer-given"
+                [disabled]="!canAdminister() || administerInFlight()"
+                (click)="administer('GIVEN')"
+              >
+                Record GIVEN
+              </button>
+              <button
+                type="button"
+                class="emar__btn emar__btn--ghost"
+                data-testid="emar-administer-held"
+                [disabled]="administerInFlight()"
+                (click)="administer('HELD')"
+              >
+                Hold
+              </button>
+              <button
+                type="button"
+                class="emar__btn emar__btn--ghost"
+                data-testid="emar-administer-refused"
+                [disabled]="administerInFlight()"
+                (click)="administer('REFUSED')"
+              >
+                Refused
+              </button>
+            </section>
+          </article>
+        } @else {
+          <div class="emar__placeholder" data-testid="emar-placeholder">
+            Select a due dose to begin verification.
+          </div>
+        }
+      </div>
+    }
+  }
+</section>

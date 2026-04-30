@@ -1,6 +1,8 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.FiveRightsStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -21,6 +23,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.Type;
 
 import java.time.LocalDateTime;
 
@@ -108,4 +111,44 @@ public class MedicationAdministrationRecord extends BaseEntity {
     @Size(max = 2000)
     @Column(name = "notes", length = 2000)
     private String notes;
+
+    /* ── Bedside five-rights barcode-scan loop (P1 #8) ──────────────────── */
+
+    /** Raw value scanned from the patient's wristband (typically the patient UUID). */
+    @Size(max = 255)
+    @Column(name = "patient_scan_value", length = 255)
+    private String patientScanValue;
+
+    /** Raw value scanned from the medication label (formulary code, RxNorm, or name). */
+    @Size(max = 255)
+    @Column(name = "medication_scan_value", length = 255)
+    private String medicationScanValue;
+
+    /** Dose entered or scanned at the bedside (e.g. "500 mg"). */
+    @Size(max = 100)
+    @Column(name = "dose_scan_value", length = 100)
+    private String doseScanValue;
+
+    /** When the bedside verification finished (verified or overridden). */
+    @Column(name = "scan_verified_at")
+    private LocalDateTime scanVerifiedAt;
+
+    /** Outcome of the bedside five-rights check; null until first verification. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "five_rights_status", length = 20)
+    private FiveRightsStatus fiveRightsStatus;
+
+    /**
+     * JSON array of {@link com.example.hms.enums.FiveRightsCheck} names that the
+     * nurse overrode (i.e. proceeded despite a failed match). Null when the
+     * status is {@link FiveRightsStatus#VERIFIED} or before any scan.
+     */
+    @Type(JsonBinaryType.class)
+    @Column(name = "five_rights_overrides", columnDefinition = "JSONB")
+    private String fiveRightsOverrides;
+
+    /** Reason supplied by the nurse when overriding any failed right. */
+    @Size(max = 1024)
+    @Column(name = "override_reason", length = 1024)
+    private String overrideReason;
 }

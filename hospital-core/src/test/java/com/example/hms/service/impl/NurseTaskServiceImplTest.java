@@ -67,6 +67,8 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
+import com.example.hms.service.emar.FiveRightsVerificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -103,6 +105,8 @@ class NurseTaskServiceImplTest {
     @Mock private UserRepository userRepository;
 
     private NurseTaskServiceImpl service;
+    private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -110,7 +114,8 @@ class NurseTaskServiceImplTest {
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
-            nursingNoteRepository, notificationRepository, userRepository));
+            nursingNoteRepository, notificationRepository, userRepository,
+            fiveRightsService, objectMapper));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -782,6 +787,8 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
         request.setNote("Administered on schedule");
+        // P1 #8 — five-rights not yet verified, so an override reason is required.
+        request.setOverrideReason("Pre-eMAR rollout dose; verified manually by charge nurse.");
 
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
 
@@ -789,6 +796,29 @@ class NurseTaskServiceImplTest {
         assertThat(result.getStatus()).isEqualTo("GIVEN");
         verify(marRepository).save(any(MedicationAdministrationRecord.class));
         verify(staffRepository).findByUserIdAndHospitalId(nurseId, hospitalId);
+    }
+
+    @Test
+    void recordMedicationAdministrationGivenWithoutOverrideOrVerifyIsRejected() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient mockPatient = Mockito.mock(Patient.class);
+        Hospital mockHospital = Mockito.mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = Mockito.mock(Prescription.class);
+        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        // No overrideReason and no prior verify — must throw.
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("override reason");
     }
 
     @Test
@@ -1184,6 +1214,8 @@ class NurseTaskServiceImplTest {
         // nurseId is null → resolveNurseStaff returns empty, no staff set
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
+        // P1 #8 — five-rights not verified, override reason required to proceed.
+        request.setOverrideReason("Edge-case test: anonymous nurse path.");
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, null, hospitalId, request);
         assertThat(result.getStatus()).isEqualTo("GIVEN");
     }
