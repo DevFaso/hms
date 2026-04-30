@@ -77,6 +77,14 @@
       @if (canViewEncounters()) {
         <button
           class="tab"
+          [class.active]="activeTab() === 'chart'"
+          (click)="setTab('chart')"
+          [title]="'CHART_REVIEW.TAB_TITLE' | translate"
+        >
+          {{ 'CHART_REVIEW.TAB_LABEL' | translate }}
+        </button>
+        <button
+          class="tab"
           [class.active]="activeTab() === 'encounters'"
           (click)="setTab('encounters')"
           [title]="'PATIENTS.ENCOUNTERS_TITLE' | translate"
@@ -210,6 +218,11 @@
           </p>
         </div>
       </div>
+    }
+
+    <!-- ═══ Chart Review Tab ═══ -->
+    @if (activeTab() === 'chart' && canViewEncounters()) {
+      <app-chart-review [patientId]="p.id" />
     }
 
     <!-- ═══ Vitals Tab ═══ -->
