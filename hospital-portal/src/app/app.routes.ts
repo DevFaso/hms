@@ -255,6 +255,15 @@ export const routes: Routes = [
               import('./appointments/appointment-form').then((m) => m.AppointmentFormComponent),
           },
           {
+            // Cadence visual scheduling grid (P1 #7) — lazy so FullCalendar
+            // only ships when this route is visited.
+            path: 'calendar',
+            loadComponent: () =>
+              import('./appointments/calendar/appointment-calendar.component').then(
+                (m) => m.AppointmentCalendarComponent,
+              ),
+          },
+          {
             path: ':id',
             loadComponent: () =>
               import('./appointments/appointment-detail').then((m) => m.AppointmentDetailComponent),

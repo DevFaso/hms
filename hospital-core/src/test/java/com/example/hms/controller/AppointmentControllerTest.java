@@ -634,4 +634,88 @@ class AppointmentControllerTest {
                         .principal(auth))
                 .andExpect(status().isOk());
     }
+
+    // ─── /appointments/calendar (P1 #7 Cadence calendar) ──────────────────────
+
+    @Test
+    void getCalendarEvents_happyPath_returnsEvents() throws Exception {
+        UUID hid = UUID.randomUUID();
+        com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO ev =
+            new com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO(
+                appointmentId, patientId, "Alice Patient",
+                staffId, "Dr Provider", "Alice Patient",
+                LocalDate.of(2026, 5, 3).atTime(9, 0),
+                LocalDate.of(2026, 5, 3).atTime(9, 30),
+                "SCHEDULED", "Follow-up");
+        when(appointmentService.getCalendarEvents(
+            eq(hid), eq(LocalDate.of(2026, 5, 1)), eq(LocalDate.of(2026, 5, 7)),
+            eq(null), eq("testuser"), any(Locale.class)))
+            .thenReturn(List.of(ev));
+
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", hid.toString())
+                .param("from", "2026-05-01")
+                .param("to", "2026-05-07")
+                .principal(auth))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(1)))
+            .andExpect(jsonPath("$[0].title").value("Alice Patient"))
+            .andExpect(jsonPath("$[0].status").value("SCHEDULED"));
+    }
+
+    @Test
+    void getCalendarEvents_invertedRange_returns400() throws Exception {
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", UUID.randomUUID().toString())
+                .param("from", "2026-05-10")
+                .param("to", "2026-05-01")
+                .principal(auth))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getCalendarEvents_rangeOver31DaysInclusive_returns400() throws Exception {
+        // 2026-05-01 → 2026-06-01 = 32 days inclusive → must reject.
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", UUID.randomUUID().toString())
+                .param("from", "2026-05-01")
+                .param("to", "2026-06-01")
+                .principal(auth))
+            .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getCalendarEvents_31DaysInclusive_isAccepted() throws Exception {
+        // 2026-05-01 → 2026-05-31 = 31 days inclusive → must accept.
+        UUID hid = UUID.randomUUID();
+        when(appointmentService.getCalendarEvents(
+            eq(hid), eq(LocalDate.of(2026, 5, 1)), eq(LocalDate.of(2026, 5, 31)),
+            eq(null), eq("testuser"), any(Locale.class)))
+            .thenReturn(List.of());
+
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", hid.toString())
+                .param("from", "2026-05-01")
+                .param("to", "2026-05-31")
+                .principal(auth))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void getCalendarEvents_withStaffFilter_passesThroughToService() throws Exception {
+        UUID hid = UUID.randomUUID();
+        UUID provider = UUID.randomUUID();
+        when(appointmentService.getCalendarEvents(
+            eq(hid), eq(LocalDate.of(2026, 5, 1)), eq(LocalDate.of(2026, 5, 7)),
+            eq(provider), eq("testuser"), any(Locale.class)))
+            .thenReturn(List.of());
+
+        mockMvc.perform(get("/appointments/calendar")
+                .param("hospitalId", hid.toString())
+                .param("from", "2026-05-01")
+                .param("to", "2026-05-07")
+                .param("staffId", provider.toString())
+                .principal(auth))
+            .andExpect(status().isOk());
+    }
 }

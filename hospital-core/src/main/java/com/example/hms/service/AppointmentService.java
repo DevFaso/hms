@@ -47,4 +47,13 @@ public interface AppointmentService {
     // WITH CONTEXT: Get by doctor, but only what the user is allowed to see
     List<AppointmentResponseDTO> getAppointmentsByDoctorId(UUID staffId, Locale locale, String username);
 
+
+    /**
+     * Date-range slice for the Cadence calendar grid. Hospital-scoped;
+     * optionally filtered by provider. The controller caps the viewport
+     * at one month to keep the result set bounded.
+     */
+    java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
+        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+        java.util.UUID staffId, String username, java.util.Locale locale);
 }

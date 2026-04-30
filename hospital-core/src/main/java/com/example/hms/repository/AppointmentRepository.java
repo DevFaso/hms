@@ -88,4 +88,17 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
      */
     @Query("SELECT DISTINCT a FROM Appointment a")
     List<Appointment> findAllDistinct();
+
+    /**
+     * Hospital-scoped date-range slice used by the Cadence calendar grid.
+     * Backed by the existing index on hospital + appointment_date.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff"})
+    java.util.List<com.example.hms.model.Appointment> findByHospital_IdAndAppointmentDateBetween(
+        java.util.UUID hospitalId, java.time.LocalDate startDate, java.time.LocalDate endDate);
+
+    /** Same range query, additionally filtered by provider. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff"})
+    java.util.List<com.example.hms.model.Appointment> findByHospital_IdAndStaff_IdAndAppointmentDateBetween(
+        java.util.UUID hospitalId, java.util.UUID staffId, java.time.LocalDate startDate, java.time.LocalDate endDate);
 }
