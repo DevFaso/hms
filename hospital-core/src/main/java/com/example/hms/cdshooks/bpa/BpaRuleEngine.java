@@ -50,11 +50,22 @@ public class BpaRuleEngine {
     static final Duration VITALS_LOOKBACK = Duration.ofHours(24);
 
     /**
-     * Page size for the vitals query — enough to cover an active inpatient
-     * with q4h vitals over 24h plus headroom, while keeping the chart-view
-     * query bounded.
+     * Page size for the vitals query. We page until either the 24h
+     * window is exhausted or {@link #VITALS_MAX_PAGES} pages are loaded —
+     * whichever comes first. q15min vitals over 24h yield 96 records, q5min
+     * (ICU) yield 288, continuous (q1min) yield 1440, so a single page would
+     * silently drop older-but-still-in-window readings on heavily monitored
+     * patients.
      */
-    private static final int VITALS_PAGE_SIZE = 50;
+    private static final int VITALS_PAGE_SIZE = 100;
+
+    /**
+     * Hard cap on pages loaded per chart-view to bound the query cost on a
+     * pathological patient (e.g. broken capture device producing thousands
+     * of records / hour). 20 pages × 100 records = 2000 vitals — covers
+     * continuous q1min monitoring for 24h with comfortable headroom.
+     */
+    private static final int VITALS_MAX_PAGES = 20;
 
     /**
      * Statuses considered terminal. Anything else (DRAFT, SIGNED,
@@ -115,9 +126,11 @@ public class BpaRuleEngine {
                 if (ruleCards != null) cards.addAll(ruleCards);
             } catch (RuntimeException ex) {
                 // Defensive: a buggy rule must not crash the chart load.
-                // Log and continue with the rest.
+                // Log with the throwable so the stack trace lands in
+                // production logs and `ex.getMessage()` being null
+                // doesn't strip diagnostic context.
                 logger.warn("BPA rule {} threw {}: {}", rule.id(),
-                    ex.getClass().getSimpleName(), ex.getMessage());
+                    ex.getClass().getSimpleName(), ex.getMessage(), ex);
             }
         }
         return cards;
@@ -134,8 +147,22 @@ public class BpaRuleEngine {
 
     List<PatientVitalSign> loadRecentVitals(UUID patientId, UUID hospitalId) {
         LocalDateTime from = LocalDateTime.now().minus(VITALS_LOOKBACK);
-        Pageable page = PageRequest.of(0, VITALS_PAGE_SIZE);
-        return vitalSignRepository.findWithinRange(patientId, hospitalId, from, null, page);
+        List<PatientVitalSign> all = new ArrayList<>();
+        // Page until either the window is exhausted (last page returned a
+        // partial batch) or VITALS_MAX_PAGES is reached. Single exit to
+        // satisfy Sonar S135; an empty batch is a partial batch (size 0 <
+        // VITALS_PAGE_SIZE) so it terminates the loop after a no-op addAll.
+        int pageNumber = 0;
+        boolean moreToFetch = true;
+        while (moreToFetch && pageNumber < VITALS_MAX_PAGES) {
+            Pageable page = PageRequest.of(pageNumber, VITALS_PAGE_SIZE);
+            List<PatientVitalSign> batch = vitalSignRepository.findWithinRange(
+                patientId, hospitalId, from, null, page);
+            all.addAll(batch);
+            moreToFetch = batch.size() == VITALS_PAGE_SIZE;
+            pageNumber++;
+        }
+        return all;
     }
 
     List<PatientProblem> loadActiveProblems(UUID patientId, UUID hospitalId) {

@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { BpaPanelComponent } from './bpa-panel.component';
 import { BpaService } from '../../services/bpa.service';
@@ -42,7 +42,9 @@ describe('BpaPanelComponent', () => {
 
     expect(bpaSpy.evaluate).toHaveBeenCalledOnceWith('p-123', undefined);
     expect(
-      fixture.nativeElement.querySelector('[data-testid="bpa-panel"]').getAttribute('data-state'),
+      (fixture.nativeElement.querySelector('[data-testid="bpa-panel"]') as HTMLElement).dataset[
+        'state'
+      ],
     ).toBe('ready');
     expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel-cards"]')).not.toBeNull();
   });
@@ -72,6 +74,32 @@ describe('BpaPanelComponent', () => {
     fixture.detectChanges();
 
     expect(bpaSpy.evaluate).toHaveBeenCalledOnceWith('p-1', 'enc-9');
+  });
+
+  it('cancels the previous request when patientId changes mid-flight', () => {
+    // First load: never emits — simulates a slow request still in-flight.
+    const firstStream = new Subject<CdsCard[]>();
+    bpaSpy.evaluate.and.returnValue(firstStream.asObservable());
+    setPatient('p-slow');
+    expect(firstStream.observed).toBeTrue();
+
+    // Second load: switching patient before the first response lands.
+    const secondCards: CdsCard[] = [sampleCard('warning', 'Sepsis')];
+    bpaSpy.evaluate.and.returnValue(of(secondCards));
+    setPatient('p-fast');
+
+    // Stale "p-slow" response arrives last; must NOT overwrite "p-fast" state.
+    firstStream.next([sampleCard('info', 'Stale')]);
+    firstStream.complete();
+    fixture.detectChanges();
+
+    expect(firstStream.observed).toBeFalse();
+    expect(
+      (fixture.nativeElement.querySelector('[data-testid="bpa-panel"]') as HTMLElement).dataset[
+        'state'
+      ],
+    ).toBe('ready');
+    expect(fixture.nativeElement.querySelector('[data-testid="bpa-panel-cards"]')).not.toBeNull();
   });
 });
 

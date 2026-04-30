@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, takeUntil } from 'rxjs';
+import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
@@ -98,10 +98,12 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
 
   private readonly bpa = inject(BpaService);
   private readonly destroyed$ = new Subject<void>();
+  private inFlight?: Subscription;
 
   ngOnChanges(_changes: SimpleChanges): void {
     const id = this.patientId();
     if (!id) {
+      this.cancelInFlight();
       this.cards.set([]);
       this.state.set('empty');
       return;
@@ -110,13 +112,20 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.cancelInFlight();
     this.destroyed$.next();
     this.destroyed$.complete();
   }
 
+  /**
+   * Cancel the previous request before issuing a new one. Without this,
+   * a stale response from a prior `patientId` could land *after* a newer
+   * one and overwrite the panel state for the wrong patient.
+   */
   private load(patientId: string, encounterId?: string): void {
+    this.cancelInFlight();
     this.state.set('loading');
-    this.bpa
+    this.inFlight = this.bpa
       .evaluate(patientId, encounterId)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
@@ -129,5 +138,10 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
           this.state.set('error');
         },
       });
+  }
+
+  private cancelInFlight(): void {
+    this.inFlight?.unsubscribe();
+    this.inFlight = undefined;
   }
 }
