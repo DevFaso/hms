@@ -1,0 +1,404 @@
+<section
+  class="chart-review"
+  data-testid="chart-review"
+  *ngIf="patientId()"
+  [attr.data-state]="state()"
+  [attr.aria-label]="'CHART_REVIEW.ARIA_LABEL' | translate"
+>
+  <header class="chart-review__header">
+    <h2 class="chart-review__title">
+      <span class="material-symbols-outlined" aria-hidden="true">folder_shared</span>
+      {{ 'CHART_REVIEW.TITLE' | translate }}
+    </h2>
+  </header>
+
+  @if (state() === 'loading') {
+    <p class="chart-review__status" data-testid="chart-review-loading">
+      <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+      {{ 'CHART_REVIEW.LOADING' | translate }}
+    </p>
+  } @else if (state() === 'error') {
+    <p class="chart-review__status chart-review__status--error" data-testid="chart-review-error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      {{ 'CHART_REVIEW.ERROR' | translate }}
+    </p>
+  } @else if (state() === 'empty') {
+    <p class="chart-review__status chart-review__status--empty" data-testid="chart-review-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">inbox</span>
+      {{ 'CHART_REVIEW.EMPTY' | translate }}
+    </p>
+  } @else if (chart(); as c) {
+    <nav
+      class="chart-review__tabs"
+      role="tablist"
+      [attr.aria-label]="'CHART_REVIEW.TABS_ARIA' | translate"
+    >
+      @for (tab of tabs; track tab) {
+        <button
+          type="button"
+          class="chart-review__tab"
+          [class.chart-review__tab--active]="activeTab() === tab"
+          role="tab"
+          [attr.aria-selected]="activeTab() === tab"
+          [attr.data-testid]="'chart-review-tab-' + tab"
+          (click)="setTab(tab)"
+        >
+          {{ 'CHART_REVIEW.TABS.' + tab | uppercase | translate }}
+          <span class="chart-review__tab-count">{{ counts()[tab] }}</span>
+        </button>
+      }
+    </nav>
+
+    <!-- ═══ Timeline ═══ -->
+    @if (activeTab() === 'timeline') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-timeline">
+        @if (c.timeline && c.timeline.length > 0) {
+          <ol class="chart-review__timeline">
+            @for (event of c.timeline; track event.id) {
+              <li class="chart-review__timeline-item">
+                <div
+                  class="chart-review__timeline-marker"
+                  [attr.data-section]="event.section"
+                  aria-hidden="true"
+                ></div>
+                <div class="chart-review__timeline-body">
+                  <div class="chart-review__timeline-head">
+                    <span class="chart-review__pill chart-review__pill--neutral">
+                      {{ sectionLabelKey(event.section) | translate }}
+                    </span>
+                    @if (event.occurredAt) {
+                      <time class="chart-review__timeline-date">
+                        {{ event.occurredAt | date: 'medium' }}
+                      </time>
+                    }
+                    @if (event.status) {
+                      <span class="chart-review__pill" [ngClass]="statusClass(event.status)">
+                        {{ event.status }}
+                      </span>
+                    }
+                  </div>
+                  @if (event.title) {
+                    <p class="chart-review__timeline-title">{{ event.title }}</p>
+                  }
+                  @if (event.summary) {
+                    <p class="chart-review__timeline-summary">{{ event.summary }}</p>
+                  }
+                </div>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_TIMELINE' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Encounters ═══ -->
+    @if (activeTab() === 'encounters') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-encounters">
+        @if (c.encounters && c.encounters.length > 0) {
+          <table class="chart-review__table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART_REVIEW.COL.DATE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.TYPE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.PROVIDER' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.DEPARTMENT' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.STATUS' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.CHIEF_COMPLAINT' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (e of c.encounters; track e.id) {
+                <tr>
+                  <td>{{ e.encounterDate | date: 'mediumDate' }}</td>
+                  <td>{{ e.encounterType || '—' }}</td>
+                  <td>{{ e.staffFullName || '—' }}</td>
+                  <td>{{ e.departmentName || '—' }}</td>
+                  <td>
+                    <span class="chart-review__pill" [ngClass]="statusClass(e.status)">
+                      {{ e.status || '—' }}
+                    </span>
+                  </td>
+                  <td>{{ e.chiefComplaint || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_ENCOUNTERS' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Notes ═══ -->
+    @if (activeTab() === 'notes') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-notes">
+        @if (c.notes && c.notes.length > 0) {
+          <ul class="chart-review__cards">
+            @for (n of c.notes; track n.id) {
+              <li class="chart-review__card">
+                <header class="chart-review__card-head">
+                  <span class="chart-review__pill chart-review__pill--info">{{
+                    n.template || 'NOTE'
+                  }}</span>
+                  @if (n.documentedAt) {
+                    <time class="chart-review__card-date">
+                      {{ n.documentedAt | date: 'medium' }}
+                    </time>
+                  }
+                  <span
+                    class="chart-review__pill"
+                    [ngClass]="
+                      n.signed ? 'chart-review__pill--info' : 'chart-review__pill--warning'
+                    "
+                  >
+                    {{
+                      n.signed
+                        ? ('CHART_REVIEW.SIGNED' | translate)
+                        : ('CHART_REVIEW.DRAFT' | translate)
+                    }}
+                  </span>
+                  @if (n.lateEntry) {
+                    <span class="chart-review__pill chart-review__pill--warning">
+                      {{ 'CHART_REVIEW.LATE_ENTRY' | translate }}
+                    </span>
+                  }
+                </header>
+                @if (n.authorName) {
+                  <p class="chart-review__card-meta">
+                    {{ 'CHART_REVIEW.AUTHOR' | translate }}: {{ n.authorName }}
+                    @if (n.authorCredentials) {
+                      <span class="chart-review__card-credentials"
+                        >, {{ n.authorCredentials }}</span
+                      >
+                    }
+                  </p>
+                }
+                @if (n.preview) {
+                  <p class="chart-review__card-body">{{ n.preview }}</p>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_NOTES' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Results ═══ -->
+    @if (activeTab() === 'results') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-results">
+        @if (c.results && c.results.length > 0) {
+          <table class="chart-review__table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART_REVIEW.COL.DATE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.TEST' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.VALUE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.FLAG' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.ORDERED_BY' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (r of c.results; track r.id) {
+                <tr>
+                  <td>{{ r.resultDate | date: 'medium' }}</td>
+                  <td>
+                    {{ r.testName || '—' }}
+                    @if (r.testCode) {
+                      <span class="chart-review__muted"> · {{ r.testCode }}</span>
+                    }
+                  </td>
+                  <td>
+                    {{ r.resultValue }}
+                    @if (r.resultUnit) {
+                      <span class="chart-review__muted">{{ r.resultUnit }}</span>
+                    }
+                  </td>
+                  <td>
+                    @if (r.abnormalFlag) {
+                      <span class="chart-review__pill" [ngClass]="resultClass(r.abnormalFlag)">
+                        {{ r.abnormalFlag }}
+                      </span>
+                    } @else {
+                      —
+                    }
+                  </td>
+                  <td>{{ r.orderingStaffName || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_RESULTS' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Medications ═══ -->
+    @if (activeTab() === 'medications') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-medications">
+        @if (c.medications && c.medications.length > 0) {
+          <table class="chart-review__table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART_REVIEW.COL.DATE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.MEDICATION' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.DOSAGE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.SIG' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.STATUS' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.PRESCRIBER' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (m of c.medications; track m.id) {
+                <tr>
+                  <td>{{ m.createdAt | date: 'mediumDate' }}</td>
+                  <td>
+                    {{ m.medicationName || '—' }}
+                    @if (m.controlledSubstance) {
+                      <span class="chart-review__pill chart-review__pill--warning">
+                        {{ 'CHART_REVIEW.CONTROLLED' | translate }}
+                      </span>
+                    }
+                  </td>
+                  <td>{{ m.dosage || '—' }}</td>
+                  <td>{{ m.frequency || '—' }} · {{ m.route || '—' }} · {{ m.duration || '—' }}</td>
+                  <td>
+                    <span class="chart-review__pill" [ngClass]="statusClass(m.status)">
+                      {{ m.status || '—' }}
+                    </span>
+                  </td>
+                  <td>{{ m.prescriberName || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_MEDICATIONS' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Imaging ═══ -->
+    @if (activeTab() === 'imaging') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-imaging">
+        @if (c.imaging && c.imaging.length > 0) {
+          <ul class="chart-review__cards">
+            @for (i of c.imaging; track i.id) {
+              <li class="chart-review__card">
+                <header class="chart-review__card-head">
+                  <span class="chart-review__pill chart-review__pill--info">{{
+                    i.modality || '—'
+                  }}</span>
+                  <span class="chart-review__card-title">{{ i.studyType || '—' }}</span>
+                  @if (i.bodyRegion) {
+                    <span class="chart-review__muted">· {{ i.bodyRegion }}</span>
+                  }
+                  @if (i.laterality) {
+                    <span class="chart-review__muted">· {{ i.laterality }}</span>
+                  }
+                  <span class="chart-review__pill" [ngClass]="statusClass(i.status)">
+                    {{ i.status || '—' }}
+                  </span>
+                </header>
+                <p class="chart-review__card-meta">
+                  @if (i.orderedAt) {
+                    <span
+                      >{{ 'CHART_REVIEW.ORDERED' | translate }}:
+                      {{ i.orderedAt | date: 'medium' }}</span
+                    >
+                  }
+                  @if (i.scheduledFor) {
+                    <span>
+                      · {{ 'CHART_REVIEW.SCHEDULED' | translate }}:
+                      {{ i.scheduledFor | date: 'mediumDate' }}</span
+                    >
+                  }
+                  @if (i.priority) {
+                    <span> · {{ i.priority }}</span>
+                  }
+                </p>
+                @if (i.clinicalQuestion) {
+                  <p class="chart-review__card-body">
+                    <strong>{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate }}:</strong>
+                    {{ i.clinicalQuestion }}
+                  </p>
+                }
+                @if (i.reportImpression) {
+                  <p class="chart-review__card-body">
+                    <strong
+                      >{{ 'CHART_REVIEW.IMPRESSION' | translate }}
+                      @if (i.reportStatus) {
+                        ({{ i.reportStatus }})
+                      }
+                      :
+                    </strong>
+                    {{ i.reportImpression }}
+                  </p>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_IMAGING' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- ═══ Procedures ═══ -->
+    @if (activeTab() === 'procedures') {
+      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-procedures">
+        @if (c.procedures && c.procedures.length > 0) {
+          <table class="chart-review__table">
+            <thead>
+              <tr>
+                <th scope="col">{{ 'CHART_REVIEW.COL.ORDERED' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.PROCEDURE' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.URGENCY' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.STATUS' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.PROVIDER' | translate }}</th>
+                <th scope="col">{{ 'CHART_REVIEW.COL.CONSENT' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (p of c.procedures; track p.id) {
+                <tr>
+                  <td>{{ p.orderedAt | date: 'mediumDate' }}</td>
+                  <td>
+                    {{ p.procedureName || '—' }}
+                    @if (p.procedureCategory) {
+                      <span class="chart-review__muted"> · {{ p.procedureCategory }}</span>
+                    }
+                  </td>
+                  <td>{{ p.urgency || '—' }}</td>
+                  <td>
+                    <span class="chart-review__pill" [ngClass]="statusClass(p.status)">
+                      {{ p.status || '—' }}
+                    </span>
+                  </td>
+                  <td>{{ p.orderingProviderName || '—' }}</td>
+                  <td>
+                    @if (p.consentObtained) {
+                      <span class="chart-review__pill chart-review__pill--info">
+                        {{ 'CHART_REVIEW.CONSENT_YES' | translate }}
+                      </span>
+                    } @else {
+                      <span class="chart-review__pill chart-review__pill--warning">
+                        {{ 'CHART_REVIEW.CONSENT_NO' | translate }}
+                      </span>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <p class="chart-review__empty">{{ 'CHART_REVIEW.NO_PROCEDURES' | translate }}</p>
+        }
+      </div>
+    }
+  }
+</section>

@@ -19,8 +19,16 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
+import { ChartReviewComponent } from './chart-review/chart-review.component';
 
-type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' | 'sharing';
+type TabKey =
+  | 'overview'
+  | 'medical'
+  | 'chart'
+  | 'vitals'
+  | 'encounters'
+  | 'appointments'
+  | 'sharing';
 
 @Component({
   selector: 'app-patient-detail',
@@ -32,6 +40,7 @@ type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' 
     TranslateModule,
     BpaPanelComponent,
     StoryboardBannerComponent,
+    ChartReviewComponent,
   ],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',

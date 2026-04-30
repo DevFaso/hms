@@ -1,0 +1,370 @@
+// Chart Review tabbed viewer. Designed for narrow viewports first, scales up
+// to a wider chart layout on desktop. Mirrors the Storyboard banner palette
+// so the two components feel like part of the same chart frame.
+.chart-review {
+  background: var(--surface-1, #ffffff);
+  border: 1px solid var(--border, #e2e6ea);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.chart-review[data-state='loading'],
+.chart-review[data-state='empty'],
+.chart-review[data-state='error'] {
+  padding: 0.75rem 1rem;
+}
+
+.chart-review__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.chart-review__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.chart-review__title .material-symbols-outlined {
+  font-size: 1.125rem;
+  color: var(--info, #1f6feb);
+}
+
+.chart-review__status {
+  margin: 0;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--text-muted, #6c757d);
+}
+
+.chart-review__status--error {
+  color: var(--danger, #b00020);
+}
+
+.chart-review__status--empty {
+  color: var(--text-muted, #6c757d);
+}
+
+.chart-review__status .material-symbols-outlined {
+  font-size: 1.125rem;
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────────
+.chart-review__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border, #e2e6ea);
+  margin-bottom: 0.75rem;
+  overflow-x: auto;
+}
+
+.chart-review__tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #6c757d);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.chart-review__tab:hover {
+  color: var(--text, #212529);
+}
+
+.chart-review__tab--active {
+  color: var(--info-strong, #0a3d8c);
+  border-bottom-color: var(--info, #1f6feb);
+}
+
+.chart-review__tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: 999px;
+  background: var(--surface-2, #f1f3f5);
+  color: var(--text-muted, #495057);
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.chart-review__tab--active .chart-review__tab-count {
+  background: var(--info-soft, #e6f4ff);
+  color: var(--info-strong, #0a3d8c);
+}
+
+// ─── Panels ──────────────────────────────────────────────────────────
+.chart-review__panel {
+  padding: 0.25rem 0;
+}
+
+.chart-review__empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted, #6c757d);
+  text-align: center;
+  padding: 1rem 0;
+}
+
+// ─── Pills ───────────────────────────────────────────────────────────
+.chart-review__pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.chart-review__pill--danger {
+  background: var(--danger, #b00020);
+  color: #ffffff;
+}
+
+.chart-review__pill--warning {
+  background: var(--warning, #c47d00);
+  color: #ffffff;
+}
+
+.chart-review__pill--info {
+  background: var(--info-soft, #e6f4ff);
+  color: var(--info-strong, #0a3d8c);
+  border: 1px solid var(--info, #1f6feb);
+}
+
+.chart-review__pill--neutral {
+  background: var(--surface-2, #f1f3f5);
+  color: var(--text-muted, #495057);
+}
+
+.chart-review__muted {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.8125rem;
+  margin-left: 0.25rem;
+}
+
+// ─── Tables ──────────────────────────────────────────────────────────
+.chart-review__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.chart-review__table thead th {
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--text-faint, #6c757d);
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid var(--border, #e2e6ea);
+}
+
+.chart-review__table tbody td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border, #f1f3f5);
+  vertical-align: top;
+  color: var(--text, #212529);
+}
+
+.chart-review__table tbody tr:hover td {
+  background: var(--surface-2, #f7f9fb);
+}
+
+// ─── Cards (notes / imaging) ─────────────────────────────────────────
+.chart-review__cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.chart-review__card {
+  background: var(--surface-2, #f7f9fb);
+  border: 1px solid var(--border, #e2e6ea);
+  border-radius: 6px;
+  padding: 0.625rem 0.75rem;
+}
+
+.chart-review__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+  margin-bottom: 0.375rem;
+}
+
+.chart-review__card-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.chart-review__card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6c757d);
+}
+
+.chart-review__card-meta {
+  margin: 0 0 0.375rem;
+  font-size: 0.75rem;
+  color: var(--text-muted, #6c757d);
+}
+
+.chart-review__card-credentials {
+  font-style: italic;
+}
+
+.chart-review__card-body {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text, #212529);
+  line-height: 1.4;
+}
+
+.chart-review__card-body + .chart-review__card-body {
+  margin-top: 0.375rem;
+}
+
+// ─── Timeline ────────────────────────────────────────────────────────
+.chart-review__timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.chart-review__timeline::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  background: var(--border, #e2e6ea);
+}
+
+.chart-review__timeline-item {
+  display: flex;
+  gap: 0.625rem;
+  padding: 0.375rem 0;
+  position: relative;
+}
+
+.chart-review__timeline-marker {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--info, #1f6feb);
+  border: 2px solid var(--surface-1, #ffffff);
+  margin-top: 0.4rem;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.chart-review__timeline-marker[data-section='ENCOUNTER'] {
+  background: var(--info, #1f6feb);
+}
+.chart-review__timeline-marker[data-section='NOTE'] {
+  background: var(--warning, #c47d00);
+}
+.chart-review__timeline-marker[data-section='RESULT'] {
+  background: var(--danger, #b00020);
+}
+.chart-review__timeline-marker[data-section='MEDICATION'] {
+  background: #6f42c1;
+}
+.chart-review__timeline-marker[data-section='IMAGING'] {
+  background: #20c997;
+}
+.chart-review__timeline-marker[data-section='PROCEDURE'] {
+  background: #fd7e14;
+}
+
+.chart-review__timeline-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-review__timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.chart-review__timeline-date {
+  font-size: 0.75rem;
+  color: var(--text-muted, #6c757d);
+}
+
+.chart-review__timeline-title {
+  margin: 0 0 0.125rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text, #212529);
+}
+
+.chart-review__timeline-summary {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #495057);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+@media (max-width: 600px) {
+  .chart-review {
+    padding: 0.75rem;
+  }
+
+  .chart-review__table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chart-review__status .material-symbols-outlined {
+    animation: chart-review-spin 1.4s linear infinite;
+  }
+
+  .chart-review[data-state='ready'] .chart-review__status .material-symbols-outlined,
+  .chart-review[data-state='empty'] .chart-review__status .material-symbols-outlined,
+  .chart-review[data-state='error'] .chart-review__status .material-symbols-outlined {
+    animation: none;
+  }
+}
+
+@keyframes chart-review-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
