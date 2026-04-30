@@ -14,7 +14,11 @@
   min-width: 200px;
 }
 
-.form-card {
+// Local accent variant of the shared white .form-card — used by the
+// pharmacy modules to highlight an active task (dispense / adjust / route)
+// against the page background. Renamed from .form-card so it no longer
+// shadows the shared neutral form-card on these pages.
+.form-card-accent {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 12px;
@@ -116,44 +120,8 @@
   }
 }
 
-.empty-state {
-  text-align: center;
-  padding: 2rem;
-  color: #94a3b8;
-
-  .material-symbols-outlined {
-    font-size: 48px;
-    margin-bottom: 0.5rem;
-  }
-}
-
 .table-responsive {
   overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-
-  th,
-  td {
-    padding: 0.625rem 0.75rem;
-    text-align: left;
-    border-bottom: 1px solid #f1f5f9;
-  }
-
-  th {
-    font-weight: 600;
-    color: #475569;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  tbody tr:hover {
-    background: #f8fafc;
-  }
 }
 
 .badge {
