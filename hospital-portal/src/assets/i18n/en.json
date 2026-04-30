@@ -13,6 +13,12 @@
       "CRITICAL": "Critical"
     }
   },
+  "BPA": {
+    "HEADING": "Best-Practice Advisories",
+    "LOADING": "Checking advisories…",
+    "NONE_ACTIVE": "No active advisories for this patient.",
+    "ERROR": "Could not load best-practice advisories. The chart is still safe to use."
+  },
   "ADMISSIONS": {
     "ACUITY": "Acuity",
     "ACUITY_LEVEL": "Acuity Level",

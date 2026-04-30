@@ -13,6 +13,12 @@
       "CRITICAL": "Critique"
     }
   },
+  "BPA": {
+    "HEADING": "Avis de bonne pratique",
+    "LOADING": "Vérification des avis…",
+    "NONE_ACTIVE": "Aucun avis actif pour ce patient.",
+    "ERROR": "Impossible de charger les avis de bonne pratique. Le dossier reste utilisable."
+  },
   "ADMISSIONS": {
     "ACUITY": "Gravité",
     "ACUITY_LEVEL": "Niveau de Gravité",
