@@ -39,7 +39,10 @@
           class="chart-review__tab"
           [class.chart-review__tab--active]="activeTab() === tab"
           role="tab"
+          [id]="tabId(tab)"
           [attr.aria-selected]="activeTab() === tab"
+          [attr.aria-controls]="panelId(tab)"
+          [attr.tabindex]="activeTab() === tab ? 0 : -1"
           [attr.data-testid]="'chart-review-tab-' + tab"
           (click)="setTab(tab)"
         >
@@ -51,7 +54,13 @@
 
     <!-- ═══ Timeline ═══ -->
     @if (activeTab() === 'timeline') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-timeline">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('timeline')"
+        [attr.aria-labelledby]="tabId('timeline')"
+        data-testid="chart-review-panel-timeline"
+      >
         @if (c.timeline && c.timeline.length > 0) {
           <ol class="chart-review__timeline">
             @for (event of c.timeline; track event.id) {
@@ -95,7 +104,13 @@
 
     <!-- ═══ Encounters ═══ -->
     @if (activeTab() === 'encounters') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-encounters">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('encounters')"
+        [attr.aria-labelledby]="tabId('encounters')"
+        data-testid="chart-review-panel-encounters"
+      >
         @if (c.encounters && c.encounters.length > 0) {
           <table class="chart-review__table">
             <thead>
@@ -133,7 +148,13 @@
 
     <!-- ═══ Notes ═══ -->
     @if (activeTab() === 'notes') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-notes">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('notes')"
+        [attr.aria-labelledby]="tabId('notes')"
+        data-testid="chart-review-panel-notes"
+      >
         @if (c.notes && c.notes.length > 0) {
           <ul class="chart-review__cards">
             @for (n of c.notes; track n.id) {
@@ -189,7 +210,13 @@
 
     <!-- ═══ Results ═══ -->
     @if (activeTab() === 'results') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-results">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('results')"
+        [attr.aria-labelledby]="tabId('results')"
+        data-testid="chart-review-panel-results"
+      >
         @if (c.results && c.results.length > 0) {
           <table class="chart-review__table">
             <thead>
@@ -239,7 +266,13 @@
 
     <!-- ═══ Medications ═══ -->
     @if (activeTab() === 'medications') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-medications">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('medications')"
+        [attr.aria-labelledby]="tabId('medications')"
+        data-testid="chart-review-panel-medications"
+      >
         @if (c.medications && c.medications.length > 0) {
           <table class="chart-review__table">
             <thead>
@@ -284,7 +317,13 @@
 
     <!-- ═══ Imaging ═══ -->
     @if (activeTab() === 'imaging') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-imaging">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('imaging')"
+        [attr.aria-labelledby]="tabId('imaging')"
+        data-testid="chart-review-panel-imaging"
+      >
         @if (c.imaging && c.imaging.length > 0) {
           <ul class="chart-review__cards">
             @for (i of c.imaging; track i.id) {
@@ -350,7 +389,13 @@
 
     <!-- ═══ Procedures ═══ -->
     @if (activeTab() === 'procedures') {
-      <div class="chart-review__panel" role="tabpanel" data-testid="chart-review-panel-procedures">
+      <div
+        class="chart-review__panel"
+        role="tabpanel"
+        [id]="panelId('procedures')"
+        [attr.aria-labelledby]="tabId('procedures')"
+        data-testid="chart-review-panel-procedures"
+      >
         @if (c.procedures && c.procedures.length > 0) {
           <table class="chart-review__table">
             <thead>

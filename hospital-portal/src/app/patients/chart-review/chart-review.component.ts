@@ -113,7 +113,15 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   protected statusClass(status?: string | null): string {
     if (!status) return 'chart-review__pill--neutral';
     const upper = status.toUpperCase();
-    if (upper.includes('CANCEL') || upper.includes('REJECT') || upper.includes('FAIL')) {
+    // RESULT timeline events carry the abnormal flag in `status`, so the
+    // pill must light up red for ABNORMAL/CRITICAL — otherwise abnormal
+    // results would render with the same neutral chip as ROUTINE statuses.
+    if (
+      ABNORMAL_DANGER.has(upper) ||
+      upper.includes('CANCEL') ||
+      upper.includes('REJECT') ||
+      upper.includes('FAIL')
+    ) {
       return 'chart-review__pill--danger';
     }
     if (upper.includes('PROGRESS') || upper.includes('ACTIVE') || upper.includes('SIGNED')) {
@@ -127,6 +135,16 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
 
   protected sectionLabelKey(section: string): string {
     return `CHART_REVIEW.SECTION.${section}`;
+  }
+
+  /** Stable DOM id for a tab button — used to wire tabpanel `aria-labelledby`. */
+  protected tabId(tab: ChartReviewTab): string {
+    return `chart-review-tab-${tab}`;
+  }
+
+  /** Stable DOM id for a tabpanel — used to wire tab `aria-controls`. */
+  protected panelId(tab: ChartReviewTab): string {
+    return `chart-review-panel-${tab}`;
   }
 
   /**

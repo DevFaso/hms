@@ -33,6 +33,7 @@ import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.service.ChartReviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,9 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -109,79 +110,136 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     /* ------------- per-section loaders ------------------------------- */
 
     private List<EncounterEntryDTO> loadEncounters(UUID patientId, UUID hospitalId, int limit) {
+        Pageable page = PageRequest.of(0, limit);
         List<Encounter> source = hospitalId != null
-            ? encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, hospitalId)
-            : encounterRepository.findByPatient_Id(patientId);
+            ? encounterRepository
+                .findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(patientId, hospitalId, page)
+                .getContent()
+            : encounterRepository
+                .findByPatient_IdOrderByEncounterDateDesc(patientId, page)
+                .getContent();
         return source.stream()
-            .sorted(Comparator
-                .comparing(Encounter::getEncounterDate, Comparator.nullsLast(Comparator.reverseOrder())))
-            .limit(limit)
             .map(this::toEncounterDto)
             .toList();
     }
 
     /**
-     * Notes are aligned to the encounters we just loaded (one note per encounter
-     * via {@code uk_encounter_note_encounter}), so we avoid a second patient-wide
-     * scan and keep the payload coherent.
+     * Notes are aligned to the encounters loaded on the current page (one note
+     * per encounter via {@code uk_encounter_note_encounter}). Fetched in a
+     * single batch query keyed by encounterId to avoid the N+1 pattern of
+     * one repository call per encounter.
      */
     private List<NoteEntryDTO> loadNotes(List<EncounterEntryDTO> encounters) {
         if (encounters == null || encounters.isEmpty()) {
             return List.of();
         }
-        List<NoteEntryDTO> notes = new ArrayList<>();
+        Map<UUID, EncounterEntryDTO> encounterById = new HashMap<>();
         for (EncounterEntryDTO enc : encounters) {
-            if (enc.getId() == null) continue;
-            Optional<EncounterNote> note = encounterNoteRepository.findByEncounter_Id(enc.getId());
-            note.map(n -> toNoteDto(n, enc)).ifPresent(notes::add);
+            if (enc.getId() != null) {
+                encounterById.put(enc.getId(), enc);
+            }
         }
-        notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt,
-            Comparator.nullsLast(Comparator.reverseOrder())));
-        return notes;
+        if (encounterById.isEmpty()) {
+            return List.of();
+        }
+        return encounterNoteRepository.findByEncounter_IdIn(encounterById.keySet()).stream()
+            .filter(n -> n.getEncounter() != null
+                && encounterById.containsKey(n.getEncounter().getId()))
+            .map(n -> toNoteDto(n, encounterById.get(n.getEncounter().getId())))
+            .sorted(Comparator.comparing(NoteEntryDTO::getDocumentedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, int limit) {
-        List<LabResult> source;
-        if (hospitalId != null) {
-            source = labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                patientId, hospitalId, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate")));
-        } else {
-            source = labResultRepository.findByLabOrder_Patient_Id(patientId);
-        }
+        Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "resultDate"));
+        List<LabResult> source = hospitalId != null
+            ? labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                patientId, hospitalId, page)
+            : labResultRepository.findByLabOrder_Patient_Id(patientId, page).getContent();
         return source.stream()
-            .sorted(Comparator.comparing(LabResult::getResultDate,
-                Comparator.nullsLast(Comparator.reverseOrder())))
-            .limit(limit)
             .map(this::toResultDto)
             .toList();
     }
 
     private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, int limit) {
-        List<Prescription> source;
-        if (hospitalId != null) {
-            source = prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId);
-        } else {
-            source = prescriptionRepository
-                .findByPatient_Id(patientId, PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt")))
+        Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<Prescription> source = hospitalId != null
+            ? prescriptionRepository
+                .findByPatient_IdAndHospital_Id(patientId, hospitalId, page)
+                .getContent()
+            : prescriptionRepository
+                .findByPatient_Id(patientId, page)
                 .getContent();
-        }
         return source.stream()
-            .sorted(Comparator.comparing(Prescription::getCreatedAt,
-                Comparator.nullsLast(Comparator.reverseOrder())))
-            .limit(limit)
             .map(this::toMedicationDto)
             .toList();
     }
 
     private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, int limit) {
-        List<ImagingOrder> orders = imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+        Pageable page = PageRequest.of(0, limit);
+        List<ImagingOrder> orders = hospitalId != null
+            ? imagingOrderRepository
+                .findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, hospitalId, page)
+                .getContent()
+            : imagingOrderRepository
+                .findByPatient_IdOrderByOrderedAtDesc(patientId, page)
+                .getContent();
+        if (orders.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, ImagingReport> latestByOrderId = batchLoadLatestReports(orders);
         return orders.stream()
-            .filter(o -> hospitalId == null
-                || (o.getHospital() != null
-                    && Objects.equals(o.getHospital().getId(), hospitalId)))
-            .limit(limit)
-            .map(this::toImagingDto)
+            .map(o -> toImagingDto(o, latestByOrderId.get(o.getId())))
             .toList();
+    }
+
+    /**
+     * Resolves the most recent imaging report for every order on the current
+     * page in (at most) two queries: one keyed by {@code latest_version=true}
+     * and a fallback for legacy rows that never set the flag, where the
+     * highest {@code reportVersion} per order wins. Avoids the N+1 lookup
+     * pattern that the per-row {@code toImagingDto} previously caused.
+     */
+    private Map<UUID, ImagingReport> batchLoadLatestReports(List<ImagingOrder> orders) {
+        List<UUID> orderIds = orders.stream()
+            .map(ImagingOrder::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (orderIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, ImagingReport> byOrder = new HashMap<>();
+        for (ImagingReport r : imagingReportRepository
+            .findByImagingOrder_IdInAndLatestVersionIsTrue(orderIds)) {
+            UUID oid = r.getImagingOrder() != null ? r.getImagingOrder().getId() : null;
+            if (oid != null) {
+                byOrder.put(oid, r);
+            }
+        }
+        List<UUID> missing = orderIds.stream()
+            .filter(id -> !byOrder.containsKey(id))
+            .toList();
+        if (!missing.isEmpty()) {
+            for (ImagingReport r : imagingReportRepository.findByImagingOrder_IdIn(missing)) {
+                UUID oid = r.getImagingOrder() != null ? r.getImagingOrder().getId() : null;
+                if (oid == null) {
+                    continue;
+                }
+                ImagingReport prior = byOrder.get(oid);
+                if (prior == null
+                    || compareVersion(r.getReportVersion(), prior.getReportVersion()) > 0) {
+                    byOrder.put(oid, r);
+                }
+            }
+        }
+        return byOrder;
+    }
+
+    private static int compareVersion(Integer a, Integer b) {
+        int aValue = a != null ? a : 0;
+        int bValue = b != null ? b : 0;
+        return Integer.compare(aValue, bValue);
     }
 
     private List<ProcedureEntryDTO> loadProcedures(UUID patientId, UUID hospitalId, int limit) {
@@ -225,12 +283,14 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .status(n.isSigned() ? "SIGNED" : "DRAFT")
             .build()));
 
+        // Title carries test name + value + unit; status pill carries the abnormal
+        // flag. Leave summary null so the API response stays language-neutral and
+        // the FR/ES UIs do not pick up a hard-coded English string.
         results.forEach(r -> events.add(TimelineEventDTO.builder()
             .id(r.getId())
             .section(Section.RESULT)
             .occurredAt(r.getResultDate())
             .title(joinNonBlank(" ", r.getTestName(), formatResult(r)))
-            .summary(r.getAbnormalFlag() != null ? "Abnormal flag: " + r.getAbnormalFlag() : null)
             .status(r.getAbnormalFlag())
             .build()));
 
@@ -263,7 +323,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
         events.sort(Comparator
             .comparing(TimelineEventDTO::getOccurredAt, Comparator.nullsLast(Comparator.reverseOrder())));
-        return events.stream().limit((long) limit).toList();
+        return events.stream().limit(limit).toList();
     }
 
     /* ------------- entity → DTO mappers ------------------------------ */
@@ -347,12 +407,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
-    private ImagingEntryDTO toImagingDto(ImagingOrder o) {
-        ImagingReport latest = imagingReportRepository
-            .findFirstByImagingOrder_IdAndLatestVersionIsTrue(o.getId())
-            .or(() -> imagingReportRepository.findTopByImagingOrder_IdOrderByReportVersionDesc(o.getId()))
-            .orElse(null);
-
+    private ImagingEntryDTO toImagingDto(ImagingOrder o, ImagingReport latest) {
         LocalDateTime scheduledFor = o.getScheduledDate() != null
             ? o.getScheduledDate().atStartOfDay() : null;
         return ImagingEntryDTO.builder()
@@ -404,7 +459,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         if (limit == null || limit <= 0) {
             return DEFAULT_LIMIT;
         }
-        return Math.min(MAX_LIMIT, Math.max(MIN_LIMIT, limit));
+        return Math.clamp(limit, MIN_LIMIT, MAX_LIMIT);
     }
 
     private static String buildNotePreview(EncounterNote note) {
@@ -447,9 +502,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         StringBuilder out = new StringBuilder();
         for (String part : parts) {
             if (part == null || part.isBlank()) continue;
-            if (out.length() > 0) out.append(sep);
+            if (!out.isEmpty()) out.append(sep);
             out.append(part);
         }
-        return out.length() == 0 ? null : out.toString();
+        return out.isEmpty() ? null : out.toString();
     }
 }

@@ -28,6 +28,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.payload.dto.chartreview.ChartReviewDTO;
+import com.example.hms.payload.dto.chartreview.ChartReviewDTO.EncounterEntryDTO;
 import com.example.hms.payload.dto.chartreview.ChartReviewDTO.TimelineEventDTO.Section;
 import com.example.hms.repository.EncounterNoteRepository;
 import com.example.hms.repository.EncounterRepository;
@@ -46,6 +47,7 @@ import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -96,17 +98,36 @@ class ChartReviewServiceImplTest {
         when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
         when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
 
-        // Default empty results so individual tests only have to populate what they need
-        when(encounterRepo.findAllByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
-        when(encounterRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of());
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(any(UUID.class), any(UUID.class), any(Pageable.class)))
+        // Default empty results so individual tests only have to populate what they need.
+        // All loaders now use paged DB queries, so default to empty Page returns.
+        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(encounterRepo.findByPatient_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of());
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
             .thenReturn(List.of());
-        when(labResultRepo.findByLabOrder_Patient_Id(PATIENT_ID)).thenReturn(List.of());
-        when(prescriptionRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
-        Page<Prescription> emptyPage = new PageImpl<>(List.of());
-        when(prescriptionRepo.findByPatient_Id(any(UUID.class), any(Pageable.class))).thenReturn(emptyPage);
-        when(imagingOrderRepo.findByPatient_IdOrderByOrderedAtDesc(PATIENT_ID)).thenReturn(List.of());
-        when(procedureRepo.findByPatient_IdOrderByOrderedAtDesc(PATIENT_ID)).thenReturn(List.of());
+        when(labResultRepo.findByLabOrder_Patient_Id(any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(prescriptionRepo.findByPatient_IdAndHospital_Id(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(prescriptionRepo.findByPatient_Id(any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(imagingOrderRepo.findByPatient_IdOrderByOrderedAtDesc(
+            any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+        when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any()))
+            .thenReturn(List.of());
+        when(imagingReportRepo.findByImagingOrder_IdIn(any())).thenReturn(List.of());
+        when(procedureRepo.findByPatient_IdOrderByOrderedAtDesc(PATIENT_ID))
+            .thenReturn(List.of());
         when(procedureRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(PATIENT_ID, HOSPITAL_ID))
             .thenReturn(List.of());
     }
@@ -123,10 +144,11 @@ class ChartReviewServiceImplTest {
     void emptyChartRendersWithoutCrashing() {
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
-        assertThat(dto.getPatientId()).isEqualTo(PATIENT_ID);
-        assertThat(dto.getHospitalId()).isEqualTo(HOSPITAL_ID);
-        assertThat(dto.getHospitalName()).isEqualTo("Centre Médical Bobo");
-        assertThat(dto.getLimit()).isEqualTo(20);
+        assertThat(dto)
+            .returns(PATIENT_ID, ChartReviewDTO::getPatientId)
+            .returns(HOSPITAL_ID, ChartReviewDTO::getHospitalId)
+            .returns("Centre Médical Bobo", ChartReviewDTO::getHospitalName)
+            .returns(20, ChartReviewDTO::getLimit);
         assertThat(dto.getEncounters()).isEmpty();
         assertThat(dto.getNotes()).isEmpty();
         assertThat(dto.getResults()).isEmpty();
@@ -142,26 +164,33 @@ class ChartReviewServiceImplTest {
 
         Encounter encOld = encounter(EncounterStatus.COMPLETED, now.minusDays(10));
         Encounter encNew = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(2));
-        when(encounterRepo.findAllByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
-            .thenReturn(List.of(encOld, encNew));
+        // Returned in DB-sorted order (DESC by encounterDate).
+        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(encNew, encOld)));
 
+        // Batch note lookup — only the new encounter has a note.
         EncounterNote note = note(encNew, now.minusHours(1));
-        when(noteRepo.findByEncounter_Id(encNew.getId())).thenReturn(Optional.of(note));
-        when(noteRepo.findByEncounter_Id(encOld.getId())).thenReturn(Optional.empty());
+        when(noteRepo.findByEncounter_IdIn(any(Collection.class)))
+            .thenReturn(List.of(note));
 
         LabResult labResult = labResult(now.minusDays(1), AbnormalFlag.ABNORMAL, "Hemoglobin", "718-7");
-        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(any(UUID.class), any(UUID.class), any(Pageable.class)))
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
             .thenReturn(List.of(labResult));
 
         Prescription rx = prescription("Amoxicillin", "RxNorm-723", now.minusDays(2));
-        when(prescriptionRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
-            .thenReturn(List.of(rx));
+        when(prescriptionRepo.findByPatient_IdAndHospital_Id(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(rx)));
 
         ImagingOrder img = imagingOrder(now.minusDays(3), ImagingModality.XRAY, "Chest XR");
-        when(imagingOrderRepo.findByPatient_IdOrderByOrderedAtDesc(PATIENT_ID)).thenReturn(List.of(img));
+        when(imagingOrderRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(img)));
         ImagingReport report = imagingReport(img, "No acute cardiopulmonary findings.");
-        when(imagingReportRepo.findFirstByImagingOrder_IdAndLatestVersionIsTrue(img.getId()))
-            .thenReturn(Optional.of(report));
+        when(imagingReportRepo.findByImagingOrder_IdInAndLatestVersionIsTrue(any()))
+            .thenReturn(List.of(report));
 
         ProcedureOrder proc = procedure("Lumbar puncture", now.minusDays(4));
         when(procedureRepo.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(PATIENT_ID, HOSPITAL_ID))
@@ -169,39 +198,42 @@ class ChartReviewServiceImplTest {
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
-        assertThat(dto.getEncounters()).hasSize(2);
-        assertThat(dto.getEncounters().get(0).getStatus()).isEqualTo("IN_PROGRESS");
-        assertThat(dto.getEncounters().get(1).getStatus()).isEqualTo("COMPLETED");
+        assertThat(dto.getEncounters())
+            .extracting(EncounterEntryDTO::getStatus)
+            .containsExactly("IN_PROGRESS", "COMPLETED");
 
-        assertThat(dto.getNotes()).hasSize(1);
-        assertThat(dto.getNotes().get(0).isSigned()).isTrue();
-        assertThat(dto.getNotes().get(0).getPreview()).contains("Patient stable");
+        assertThat(dto.getNotes()).singleElement().satisfies(n -> {
+            assertThat(n.isSigned()).isTrue();
+            assertThat(n.getPreview()).contains("Patient stable");
+        });
 
-        assertThat(dto.getResults()).hasSize(1);
-        assertThat(dto.getResults().get(0).getTestName()).isEqualTo("Hemoglobin");
-        assertThat(dto.getResults().get(0).getAbnormalFlag()).isEqualTo("ABNORMAL");
+        assertThat(dto.getResults()).singleElement()
+            .extracting("testName", "abnormalFlag")
+            .containsExactly("Hemoglobin", "ABNORMAL");
 
-        assertThat(dto.getMedications()).hasSize(1);
-        assertThat(dto.getMedications().get(0).getMedicationName()).isEqualTo("Amoxicillin");
+        assertThat(dto.getMedications()).singleElement()
+            .extracting("medicationName")
+            .isEqualTo("Amoxicillin");
 
-        assertThat(dto.getImaging()).hasSize(1);
-        assertThat(dto.getImaging().get(0).getReportImpression())
-            .isEqualTo("No acute cardiopulmonary findings.");
-        assertThat(dto.getImaging().get(0).getReportStatus()).isEqualTo("FINAL");
+        assertThat(dto.getImaging()).singleElement()
+            .extracting("reportImpression", "reportStatus")
+            .containsExactly("No acute cardiopulmonary findings.", "FINAL");
 
-        assertThat(dto.getProcedures()).hasSize(1);
-        assertThat(dto.getProcedures().get(0).getProcedureName()).isEqualTo("Lumbar puncture");
+        assertThat(dto.getProcedures()).singleElement()
+            .extracting("procedureName")
+            .isEqualTo("Lumbar puncture");
 
-        assertThat(dto.getTimeline()).hasSize(7);
-        assertThat(dto.getTimeline().get(0).getSection()).isEqualTo(Section.NOTE);
+        assertThat(dto.getTimeline()).hasSize(7).first()
+            .extracting("section")
+            .isEqualTo(Section.NOTE);
         // Strictly descending occurredAt ordering
-        for (int i = 1; i < dto.getTimeline().size(); i++) {
-            LocalDateTime prev = dto.getTimeline().get(i - 1).getOccurredAt();
-            LocalDateTime curr = dto.getTimeline().get(i).getOccurredAt();
-            if (prev != null && curr != null) {
-                assertThat(prev).isAfterOrEqualTo(curr);
-            }
-        }
+        assertThat(dto.getTimeline()).isSortedAccordingTo(
+            (a, b) -> {
+                if (a.getOccurredAt() == null && b.getOccurredAt() == null) return 0;
+                if (a.getOccurredAt() == null) return 1;
+                if (b.getOccurredAt() == null) return -1;
+                return b.getOccurredAt().compareTo(a.getOccurredAt());
+            });
     }
 
     @Test
@@ -211,12 +243,18 @@ class ChartReviewServiceImplTest {
         for (int i = 0; i < 30; i++) {
             manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
         }
-        when(encounterRepo.findAllByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
-            .thenReturn(manyEnc);
+        // Simulate the DB returning the page-size we asked for (pageable filters in SQL).
+        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenAnswer(inv -> {
+                Pageable p = inv.getArgument(2);
+                return new PageImpl<>(manyEnc.subList(0, Math.min(p.getPageSize(), manyEnc.size())));
+            });
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 7);
 
-        assertThat(dto.getLimit()).isEqualTo(7);
+        assertThat(dto)
+            .returns(7, ChartReviewDTO::getLimit);
         assertThat(dto.getEncounters()).hasSize(7);
         assertThat(dto.getTimeline()).hasSize(7);
     }
@@ -224,19 +262,20 @@ class ChartReviewServiceImplTest {
     @Test
     void clampsLimitBelowFloorAndAboveCeiling() {
         ChartReviewDTO low = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 1);
-        assertThat(low.getLimit()).isEqualTo(5);
-
         ChartReviewDTO high = service.getChartReview(PATIENT_ID, HOSPITAL_ID, 5000);
-        assertThat(high.getLimit()).isEqualTo(100);
-
         ChartReviewDTO defaulted = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(low.getLimit()).isEqualTo(5);
+        assertThat(high.getLimit()).isEqualTo(100);
         assertThat(defaulted.getLimit()).isEqualTo(20);
     }
 
     @Test
     void hospitalIdNullFallsBackToUnscopedQueries() {
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        when(encounterRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(enc));
+        when(encounterRepo.findByPatient_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(enc)));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, null, null);
 
@@ -249,20 +288,45 @@ class ChartReviewServiceImplTest {
     void notePreviewPicksAssessmentAndTruncatesLongBodies() {
         LocalDateTime now = LocalDateTime.now();
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, now);
-        when(encounterRepo.findAllByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID))
-            .thenReturn(List.of(enc));
+        when(encounterRepo.findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(enc)));
 
         EncounterNote note = note(enc, now);
         // Replace the default short assessment with a 600-char body
         String longBody = "A".repeat(600);
         note.setAssessment(longBody);
-        when(noteRepo.findByEncounter_Id(enc.getId())).thenReturn(Optional.of(note));
+        when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of(note));
 
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
-        String preview = dto.getNotes().get(0).getPreview();
-        assertThat(preview).hasSize(ChartReviewServiceImpl.PREVIEW_LENGTH + 1); // +1 for the ellipsis
-        assertThat(preview).endsWith("…");
+        assertThat(dto.getNotes()).singleElement().satisfies(n -> {
+            String preview = n.getPreview();
+            assertThat(preview)
+                .hasSize(ChartReviewServiceImpl.PREVIEW_LENGTH + 1)
+                .endsWith("…");
+        });
+    }
+
+    @Test
+    void resultTimelineEventHasNoEnglishSummary() {
+        // Regression: previously the service injected "Abnormal flag: ..." as the
+        // event summary, which leaked English into FR/ES UIs. Now summary stays null
+        // and the UI carries the abnormal flag via the status pill instead.
+        LabResult r = labResult(LocalDateTime.now(), AbnormalFlag.ABNORMAL, "Glucose", "2345-7");
+        when(labResultRepo.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+            any(UUID.class), any(UUID.class), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> {
+                assertThat(e.getSummary()).isNull();
+                assertThat(e.getStatus()).isEqualTo("ABNORMAL");
+            });
     }
 
     /* ---- helpers ---------------------------------------------------- */
