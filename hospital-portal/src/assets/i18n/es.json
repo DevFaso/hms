@@ -13,6 +13,12 @@
       "CRITICAL": "Crítico"
     }
   },
+  "BPA": {
+    "HEADING": "Avisos de buena práctica",
+    "LOADING": "Comprobando avisos…",
+    "NONE_ACTIVE": "Sin avisos activos para este paciente.",
+    "ERROR": "No se pudieron cargar los avisos de buena práctica. El expediente sigue siendo seguro de usar."
+  },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
     "ACUITY_LEVEL": "Nivel de Gravedad",
