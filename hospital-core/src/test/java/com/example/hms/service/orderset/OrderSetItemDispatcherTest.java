@@ -2,12 +2,14 @@ package com.example.hms.service.orderset;
 
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.enums.ImagingModality;
+import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.LabOrderService;
 import com.example.hms.service.PrescriptionService;
@@ -18,6 +20,7 @@ import org.mockito.ArgumentCaptor;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +36,8 @@ class OrderSetItemDispatcherTest {
     private final PrescriptionService prescriptionService = mock(PrescriptionService.class);
     private final LabOrderService labOrderService = mock(LabOrderService.class);
     private final ImagingOrderService imagingOrderService = mock(ImagingOrderService.class);
+    private final LabTestDefinitionRepository labTestDefinitionRepository =
+        mock(LabTestDefinitionRepository.class);
 
     private OrderSetItemDispatcher dispatcher;
 
@@ -40,20 +45,29 @@ class OrderSetItemDispatcherTest {
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
     private static final UUID ENCOUNTER_ID = UUID.randomUUID();
     private static final UUID STAFF_ID = UUID.randomUUID();
+    private static final UUID ASSIGNMENT_ID = UUID.randomUUID();
     private static final UUID ORDER_SET_ID = UUID.randomUUID();
     private static final UUID ADMISSION_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        dispatcher = new OrderSetItemDispatcher(prescriptionService, labOrderService, imagingOrderService);
+        dispatcher = new OrderSetItemDispatcher(
+            prescriptionService, labOrderService, imagingOrderService, labTestDefinitionRepository);
     }
 
     private OrderSetApplicationContext ctx() {
         return new OrderSetApplicationContext(
             ORDER_SET_ID, "Sepsis bundle", "Sepsis Hour-1",
-            ADMISSION_ID, PATIENT_ID, HOSPITAL_ID, ENCOUNTER_ID, STAFF_ID,
+            ADMISSION_ID, PATIENT_ID, HOSPITAL_ID, ENCOUNTER_ID, STAFF_ID, ASSIGNMENT_ID,
             "A41.9", false
         );
+    }
+
+    private static LabTestDefinition labDefinitionFor(String name) {
+        LabTestDefinition def = new LabTestDefinition();
+        def.setId(UUID.randomUUID());
+        def.setName(name);
+        return def;
     }
 
     @Test
@@ -112,6 +126,9 @@ class OrderSetItemDispatcherTest {
         LabOrderResponseDTO resp = new LabOrderResponseDTO();
         resp.setId(labId.toString());
         when(labOrderService.createLabOrder(any(), any(Locale.class))).thenReturn(resp);
+        LabTestDefinition def = labDefinitionFor("Blood Culture");
+        when(labTestDefinitionRepository.findByNameIgnoreCase("Blood Culture"))
+            .thenReturn(Optional.of(def));
 
         Map<String, Object> item = Map.of(
             "orderType", "LAB",
@@ -131,6 +148,12 @@ class OrderSetItemDispatcherTest {
         assertThat(sent.getPriority()).isEqualTo("STAT");
         assertThat(sent.getClinicalIndication()).contains("Sepsis bundle");
         assertThat(sent.getPrimaryDiagnosisCode()).isEqualTo("A41.9");
+        assertThat(sent.getOrderingStaffId()).isEqualTo(STAFF_ID);
+        assertThat(sent.getLabTestDefinitionId()).isEqualTo(def.getId());
+        assertThat(sent.getAssignmentId()).isEqualTo(ASSIGNMENT_ID);
+        assertThat(sent.getOrderChannel()).isEqualTo("ELECTRONIC");
+        assertThat(sent.getProviderSignature()).contains("Sepsis bundle");
+        assertThat(sent.getOrderDatetime()).isNotNull();
     }
 
     @Test
@@ -139,16 +162,58 @@ class OrderSetItemDispatcherTest {
         LabOrderResponseDTO resp = new LabOrderResponseDTO();
         resp.setId(labId.toString());
         when(labOrderService.createLabOrder(any(), any())).thenReturn(resp);
+        when(labTestDefinitionRepository.findByNameIgnoreCase("CBC"))
+            .thenReturn(Optional.of(labDefinitionFor("CBC")));
 
         OrderSetApplicationContext noDiag = new OrderSetApplicationContext(
             ORDER_SET_ID, "Set", null, ADMISSION_ID, PATIENT_ID,
-            HOSPITAL_ID, ENCOUNTER_ID, STAFF_ID, null, false
+            HOSPITAL_ID, ENCOUNTER_ID, STAFF_ID, ASSIGNMENT_ID, null, false
         );
         dispatcher.dispatch(Map.of("orderType", "LAB", "orderName", "CBC"), noDiag, Locale.ENGLISH);
 
         ArgumentCaptor<LabOrderRequestDTO> captor = ArgumentCaptor.forClass(LabOrderRequestDTO.class);
         verify(labOrderService).createLabOrder(captor.capture(), any());
         assertThat(captor.getValue().getPrimaryDiagnosisCode()).isEqualTo("Z00.00");
+    }
+
+    @Test
+    void labSkippedWhenAssignmentMissing() {
+        OrderSetApplicationContext noAssignment = new OrderSetApplicationContext(
+            ORDER_SET_ID, "Set", null, ADMISSION_ID, PATIENT_ID,
+            HOSPITAL_ID, ENCOUNTER_ID, STAFF_ID, null, "A41.9", false
+        );
+        DispatchResult result = dispatcher.dispatch(
+            Map.of("orderType", "LAB", "orderName", "CBC"), noAssignment, Locale.ENGLISH);
+        assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
+        assertThat(result.skipReason()).contains("assignment");
+        verifyNoInteractions(labOrderService);
+    }
+
+    @Test
+    void labSkippedWhenTestDefinitionNotFound() {
+        when(labTestDefinitionRepository.findByNameIgnoreCase("Unknown Panel"))
+            .thenReturn(Optional.empty());
+
+        DispatchResult result = dispatcher.dispatch(
+            Map.of("orderType", "LAB", "orderName", "Unknown Panel"), ctx(), Locale.ENGLISH);
+
+        assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
+        assertThat(result.skipReason()).contains("Unknown Panel");
+        verifyNoInteractions(labOrderService);
+    }
+
+    @Test
+    void imagingSkippedWhenNoEncounterIdInContext() {
+        OrderSetApplicationContext noEncounter = new OrderSetApplicationContext(
+            ORDER_SET_ID, "Set", null, ADMISSION_ID, PATIENT_ID,
+            HOSPITAL_ID, null, STAFF_ID, ASSIGNMENT_ID, "A41.9", false
+        );
+        DispatchResult result = dispatcher.dispatch(
+            Map.of("orderType", "IMAGING", "modality", "CT", "studyType", "CT abdo"),
+            noEncounter, Locale.ENGLISH);
+        assertThat(result.type()).isEqualTo(DispatchResult.Type.SKIPPED);
+        assertThat(result.skipReason()).contains("encounter");
+        verifyNoInteractions(imagingOrderService);
     }
 
     @Test

@@ -196,7 +196,7 @@
         [encounterId]="ctx.encounterId"
         [orderingStaffId]="ctx.orderingStaffId"
         (closed)="closeOrderSetPicker()"
-        (applied)="onOrderSetApplied()"
+        (applied)="onOrderSetApplied($event)"
       />
     </div>
   </div>

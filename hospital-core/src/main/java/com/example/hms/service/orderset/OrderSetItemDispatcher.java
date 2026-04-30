@@ -2,11 +2,13 @@ package com.example.hms.service.orderset;
 
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderPriority;
+import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.LabOrderService;
 import com.example.hms.service.PrescriptionService;
@@ -14,8 +16,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -57,18 +61,24 @@ public class OrderSetItemDispatcher {
     /** Common prefix for indication / question / note narratives generated from a set. */
     private static final String NARRATIVE_PREFIX = "Per order set: ";
 
+    /** Lab order channel for system-applied order sets. */
+    private static final String DEFAULT_ORDER_CHANNEL = "ELECTRONIC";
+
     private final PrescriptionService prescriptionService;
     private final LabOrderService labOrderService;
     private final ImagingOrderService imagingOrderService;
+    private final LabTestDefinitionRepository labTestDefinitionRepository;
 
     public OrderSetItemDispatcher(
         PrescriptionService prescriptionService,
         LabOrderService labOrderService,
-        ImagingOrderService imagingOrderService
+        ImagingOrderService imagingOrderService,
+        LabTestDefinitionRepository labTestDefinitionRepository
     ) {
         this.prescriptionService = prescriptionService;
         this.labOrderService = labOrderService;
         this.imagingOrderService = imagingOrderService;
+        this.labTestDefinitionRepository = labTestDefinitionRepository;
     }
 
     /**
@@ -124,6 +134,25 @@ public class OrderSetItemDispatcher {
         String testName = firstNonBlank(string(item.get("orderName")), string(item.get("testName")));
         if (testName == null) return DispatchResult.skipped("lab missing orderName/testName");
 
+        // LabOrderRequestDTO requires orderingStaffId / labTestDefinitionId /
+        // assignmentId / orderChannel / providerSignature — fields the
+        // order-set JSONB doesn't carry. Resolve them here so the dispatcher
+        // hands the service a fully-populated DTO; skip the item with a
+        // clear reason when a prerequisite is missing rather than letting
+        // the service NPE / 400.
+        if (ctx.orderingStaffId() == null) {
+            return DispatchResult.skipped("lab requires an orderingStaffId");
+        }
+        if (ctx.orderingAssignmentId() == null) {
+            return DispatchResult.skipped(
+                "lab requires the ordering staff's hospital assignment (none active)");
+        }
+        Optional<LabTestDefinition> testDefinition =
+            labTestDefinitionRepository.findByNameIgnoreCase(testName);
+        if (testDefinition.isEmpty() || testDefinition.get().getId() == null) {
+            return DispatchResult.skipped("lab test definition '" + testName + "' not found");
+        }
+
         LabOrderRequestDTO req = new LabOrderRequestDTO();
         req.setPatientId(ctx.patientId());
         req.setHospitalId(ctx.hospitalId());
@@ -139,6 +168,12 @@ public class OrderSetItemDispatcher {
         req.setPrimaryDiagnosisCode(ctx.primaryDiagnosisCode() != null
             ? ctx.primaryDiagnosisCode()
             : FALLBACK_DIAGNOSIS_CODE);
+        req.setOrderingStaffId(ctx.orderingStaffId());
+        req.setLabTestDefinitionId(testDefinition.get().getId());
+        req.setAssignmentId(ctx.orderingAssignmentId());
+        req.setOrderChannel(DEFAULT_ORDER_CHANNEL);
+        req.setProviderSignature(NARRATIVE_PREFIX + ctx.orderSetName());
+        req.setOrderDatetime(LocalDateTime.now());
 
         String createdId = labOrderService.createLabOrder(req, locale).getId();
         return DispatchResult.lab(UUID.fromString(createdId));
@@ -150,6 +185,13 @@ public class OrderSetItemDispatcher {
 
         ImagingModality modality = parseModality(string(item.get("modality")));
         if (modality == null) return DispatchResult.skipped("imaging missing/invalid modality");
+
+        // ImagingOrderRequestDTO.encounterId is @NotNull. Skip cleanly when
+        // the apply request didn't supply one rather than letting validation
+        // fail the whole bundle (medication + lab tolerate a null encounter).
+        if (ctx.encounterId() == null) {
+            return DispatchResult.skipped("imaging requires an encounter — none supplied");
+        }
 
         ImagingOrderRequestDTO req = new ImagingOrderRequestDTO();
         req.setPatientId(ctx.patientId());

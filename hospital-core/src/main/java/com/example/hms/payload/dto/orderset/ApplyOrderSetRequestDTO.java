@@ -5,15 +5,16 @@ import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
 
 /**
- * Request body for {@code POST /api/admissions/{id}/order-sets/{orderSetId}/apply}.
+ * Request body for {@code POST /api/order-sets/{orderSetId}/apply/{admissionId}}.
  *
- * <p>The encounter id is required because every fanned-out order
- * (Prescription, LabOrder, ImagingOrder) anchors to an encounter — the
- * picker UI captures the active encounter in the clinician's context
- * before posting.
+ * <p>{@code encounterId} is optional. {@code PrescriptionService} resolves
+ * or creates an encounter when one is not supplied; {@code LabOrderService}
+ * accepts a null encounter. {@code ImagingOrderService} requires one — the
+ * dispatcher returns a skipped result for IMAGING items when no encounter
+ * is supplied so the rest of the bundle still applies cleanly.
  */
 public record ApplyOrderSetRequestDTO(
-    @NotNull UUID encounterId,
+    UUID encounterId,
     @NotNull UUID orderingStaffId,
     Boolean forceOverride
 ) {}

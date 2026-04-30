@@ -131,6 +131,17 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Transactional
     public AdmissionOrderSetResponseDTO update(UUID id, AdmissionOrderSetRequestDTO request) {
         AdmissionOrderSet parent = loadOrderSet(id);
+        // Reject cross-hospital edits: AdmissionOrderSetRequestDTO.hospitalId
+        // is @NotNull, so consumers send it on every PUT. Silently reusing
+        // parent.hospital (as the original code did) would let a misrouted
+        // request mutate another hospital's template; better to fail loudly.
+        UUID parentHospitalId = parent.getHospital() != null ? parent.getHospital().getId() : null;
+        if (request.getHospitalId() != null && parentHospitalId != null
+            && !request.getHospitalId().equals(parentHospitalId)) {
+            throw new IllegalArgumentException(
+                "Order set " + id + " belongs to hospital " + parentHospitalId
+                    + " but request targets " + request.getHospitalId());
+        }
         Staff modifiedBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND));
         Department department = request.getDepartmentId() == null ? null
@@ -185,6 +196,15 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         Admission admission = admissionRepository.findById(admissionId)
             .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND));
 
+        // Resolve the ordering staff's active hospital assignment so the lab
+        // fan-out can populate LabOrderRequestDTO.assignmentId (@NotNull).
+        // Null is acceptable — the dispatcher returns a skipped result for
+        // LAB items in that case rather than 400-ing the whole bundle.
+        UUID assignmentId = resolveOrderingAssignmentId(
+            request.orderingStaffId(),
+            admission.getHospital() != null ? admission.getHospital().getId() : null
+        );
+
         OrderSetApplicationContext ctx = new OrderSetApplicationContext(
             orderSet.getId(),
             orderSet.getName(),
@@ -194,6 +214,7 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             admission.getHospital() != null ? admission.getHospital().getId() : null,
             request.encounterId(),
             request.orderingStaffId(),
+            assignmentId,
             admission.getPrimaryDiagnosisCode(),
             request.forceOverride()
         );
@@ -241,5 +262,21 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     private AdmissionOrderSet loadOrderSet(UUID id) {
         return orderSetRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(ORDER_SET_NOT_FOUND));
+    }
+
+    /**
+     * Look up the ordering staff's active hospital assignment for the
+     * apply target. Returns null when the staff entity has no resolvable
+     * user / no active assignment at the hospital — the dispatcher then
+     * skips LAB items cleanly rather than NPE-ing inside LabOrderService.
+     */
+    private UUID resolveOrderingAssignmentId(UUID orderingStaffId, UUID hospitalId) {
+        if (orderingStaffId == null || hospitalId == null) return null;
+        return staffRepository.findById(orderingStaffId)
+            .map(Staff::getAssignment)
+            .filter(java.util.Objects::nonNull)
+            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+            .map(com.example.hms.model.UserRoleHospitalAssignment::getId)
+            .orElse(null);
     }
 }

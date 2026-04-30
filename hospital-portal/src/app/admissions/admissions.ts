@@ -18,6 +18,8 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
+import { AuthService } from '../auth/auth.service';
+import { AppliedOrderSetSummary } from '../services/order-set.service';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -42,6 +44,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -292,11 +295,20 @@ export class AdmissionsComponent implements OnInit {
 
   openOrderSetPicker(a: AdmissionResponse): void {
     if (!a.id || !a.hospitalId) return;
+    // The orderer is the signed-in clinician (the person clicking Apply),
+    // not the admission's admittingProvider. Resolved via AuthService so
+    // the apply request anchors prescriptions / labs / imaging on the
+    // correct staff identity for audit + CDS attribution.
+    const orderingStaffId = this.auth.getUserProfile()?.staffId ?? '';
+    if (!orderingStaffId) {
+      this.toast.error(this.translate.instant('ORDER_SETS.MISSING_ORDERING_STAFF'));
+      return;
+    }
     this.orderSetPicker.set({
       hospitalId: a.hospitalId,
       admissionId: a.id,
       encounterId: a.currentEncounterId ?? '',
-      orderingStaffId: a.admittingProviderId ?? '',
+      orderingStaffId,
     });
   }
 
@@ -304,10 +316,16 @@ export class AdmissionsComponent implements OnInit {
     this.orderSetPicker.set(null);
   }
 
-  onOrderSetApplied(): void {
-    // Show a confirmation toast; let the picker linger for the user to dismiss.
+  onOrderSetApplied(summary: AppliedOrderSetSummary): void {
+    // Compute the real created/skipped counts from the backend summary
+    // so the toast shows accurate numbers instead of empty placeholders.
+    const count =
+      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length;
     this.toast.success(
-      this.translate.instant('ORDER_SETS.APPLIED_RESULT', { count: '', skipped: '' }),
+      this.translate.instant('ORDER_SETS.APPLIED_RESULT', {
+        count,
+        skipped: summary.skippedItemCount,
+      }),
     );
   }
 

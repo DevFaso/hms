@@ -29,6 +29,7 @@
     "APPLIED_RESULT": "Applied. Created {{count}} orders ({{skipped}} skipped).",
     "ERROR": "Could not load or apply order sets. Try again or place orders manually.",
     "OPEN_PICKER": "Order set",
+    "MISSING_ORDERING_STAFF": "No clinician profile is signed in — cannot open the order-set picker.",
     "ADMIN_TITLE": "Order set templates",
     "NEW": "New order set",
     "EDIT_TITLE": "Edit order set",

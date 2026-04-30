@@ -2,8 +2,10 @@ import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
+  OnChanges,
   OnDestroy,
   Output,
+  SimpleChanges,
   inject,
   input,
   signal,
@@ -52,6 +54,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         <button
           type="button"
           class="close"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
           (click)="closed.emit()"
           data-testid="order-set-picker-close"
         >
@@ -207,7 +210,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
     `,
   ],
 })
-export class OrderSetPickerComponent implements OnDestroy {
+export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   readonly hospitalId = input<string>('');
   readonly admissionId = input<string>('');
   readonly encounterId = input<string>('');
@@ -233,9 +236,19 @@ export class OrderSetPickerComponent implements OnDestroy {
         debounceTime(250),
         distinctUntilChanged(),
         takeUntil(this.destroyed$),
+        // Guard: when the host component renders before its hospitalId
+        // input binding has propagated, an immediate request would hit
+        // /api/order-sets?hospitalId= and put the picker into an error
+        // state. Skip those frames; ngOnChanges nudges the subject again
+        // once the input is set.
         switchMap((term) => {
+          const hid = this.hospitalId();
+          if (!hid) {
+            this.state.set('idle');
+            return [];
+          }
           this.state.set('searching');
-          return this.orderSetService.list(this.hospitalId(), term);
+          return this.orderSetService.list(hid, term);
         }),
       )
       .subscribe({
@@ -248,8 +261,14 @@ export class OrderSetPickerComponent implements OnDestroy {
           this.state.set('error');
         },
       });
-    // Trigger an initial empty-search load once an input is set.
     this.searchSubject.next('');
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['hospitalId'] && this.hospitalId()) {
+      // Replay so the search-pipe has a non-empty hospitalId on hand.
+      this.searchSubject.next(this.searchTerm());
+    }
   }
 
   ngOnDestroy(): void {

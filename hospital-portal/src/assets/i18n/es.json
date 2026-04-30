@@ -29,6 +29,7 @@
     "APPLIED_RESULT": "Aplicado. {{count}} órdenes creadas ({{skipped}} omitidas).",
     "ERROR": "No se pudieron cargar o aplicar los conjuntos. Vuelva a intentarlo o introduzca las órdenes manualmente.",
     "OPEN_PICKER": "Conjunto de órdenes",
+    "MISSING_ORDERING_STAFF": "No hay un perfil clínico conectado — no se puede abrir el selector de conjuntos.",
     "ADMIN_TITLE": "Plantillas de conjuntos de órdenes",
     "NEW": "Nuevo conjunto",
     "EDIT_TITLE": "Editar conjunto",

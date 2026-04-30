@@ -29,6 +29,7 @@
     "APPLIED_RESULT": "Appliqué. {{count}} ordres créés ({{skipped}} ignorés).",
     "ERROR": "Impossible de charger ou d'appliquer les ensembles. Réessayez ou saisissez les ordres manuellement.",
     "OPEN_PICKER": "Ensemble d'ordres",
+    "MISSING_ORDERING_STAFF": "Aucun profil clinicien connecté — impossible d'ouvrir le sélecteur d'ensembles.",
     "ADMIN_TITLE": "Modèles d'ensembles d'ordres",
     "NEW": "Nouvel ensemble",
     "EDIT_TITLE": "Modifier l'ensemble",
