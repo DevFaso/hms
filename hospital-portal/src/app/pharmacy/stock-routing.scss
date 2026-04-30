@@ -1,28 +1,7 @@
 @use '../shared/styles/page-common';
 
-.page-container {
-  padding: 2rem;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
-.page-header {
-  margin-bottom: 2rem;
-
-  h1 {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin: 0;
-  }
-
-  .subtitle {
-    color: #64748b;
-    margin-top: 4px;
-    font-size: 0.875rem;
-  }
-}
-
-.form-card {
+// Local accent variant — see dispensing.scss for the shared rationale.
+.form-card-accent {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 12px;
@@ -36,11 +15,13 @@
   }
 
   &.slide-in {
-    animation: slideIn 0.2s ease-out;
+    animation: stock-routing-slide-in 0.2s ease-out;
   }
 }
 
-@keyframes slideIn {
+// Renamed from generic `slideIn` to avoid colliding with other modules
+// authoring their own slideIn keyframes; scoped to stock-routing usage.
+@keyframes stock-routing-slide-in {
   from {
     opacity: 0;
     transform: translateY(-8px);
@@ -178,32 +159,6 @@ textarea.form-control {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-}
-
-// Table
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-
-  th,
-  td {
-    padding: 0.75rem 1rem;
-    text-align: left;
-    border-bottom: 1px solid #e2e8f0;
-  }
-
-  th {
-    font-weight: 600;
-    color: #64748b;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  tbody tr:hover {
-    background: #f8fafc;
-  }
 }
 
 // Badges

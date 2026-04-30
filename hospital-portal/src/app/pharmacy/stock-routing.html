@@ -1,11 +1,13 @@
 <div class="page-container">
   <div class="page-header">
-    <h1>{{ 'PHARMACY.STOCK_ROUTING' | translate }}</h1>
-    <p class="subtitle">{{ 'PHARMACY.STOCK_ROUTING_DESC' | translate }}</p>
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.STOCK_ROUTING' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.STOCK_ROUTING_DESC' | translate }}</p>
+    </div>
   </div>
 
   <!-- Prescription lookup -->
-  <div class="form-card">
+  <div class="form-card form-card-accent">
     <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>
     <label class="sr-only" for="prescriptionIdInput">
       {{ 'PHARMACY.PRESCRIPTION_ID' | translate }}
@@ -31,7 +33,7 @@
   </div>
 
   <!-- Stock check result -->
-  <div class="form-card" *ngIf="stockResult()">
+  <div class="form-card form-card-accent" *ngIf="stockResult()">
     <h2>{{ 'PHARMACY.STOCK_RESULT' | translate }}</h2>
     <div class="stock-summary">
       <div class="stock-info">
@@ -130,7 +132,7 @@
   </div>
 
   <!-- Partner routing form (slide-in) -->
-  <div class="form-card slide-in" *ngIf="showPartnerForm()">
+  <div class="form-card form-card-accent slide-in" *ngIf="showPartnerForm()">
     <h2>{{ 'PHARMACY.ROUTE_TO_PARTNER' | translate }}</h2>
     <div class="partner-detail">
       <span class="label">{{ 'PHARMACY.PARTNER' | translate }}:</span>
@@ -158,7 +160,7 @@
   </div>
 
   <!-- Back-order form (slide-in) -->
-  <div class="form-card slide-in" *ngIf="showBackOrderForm()">
+  <div class="form-card form-card-accent slide-in" *ngIf="showBackOrderForm()">
     <h2>{{ 'PHARMACY.BACK_ORDER' | translate }}</h2>
     <div class="form-group">
       <label for="estimatedRestockDate">{{ 'PHARMACY.ESTIMATED_RESTOCK_DATE' | translate }}</label>
@@ -181,7 +183,7 @@
   </div>
 
   <!-- Routing decisions history -->
-  <div class="form-card" *ngIf="decisions().length > 0">
+  <div class="form-card form-card-accent" *ngIf="decisions().length > 0">
     <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
     <table class="data-table">
       <thead>

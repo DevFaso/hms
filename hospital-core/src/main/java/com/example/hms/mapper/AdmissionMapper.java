@@ -1,14 +1,21 @@
 package com.example.hms.mapper;
 
+import com.example.hms.enums.EncounterStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.AdmissionOrderSet;
+import com.example.hms.model.Encounter;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.AdmissionOrderSetResponseDTO;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
+import com.example.hms.repository.EncounterRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -16,6 +23,16 @@ import java.util.UUID;
  */
 @Component
 public class AdmissionMapper {
+
+    /** Encounter statuses that are terminal — excluded from the active lookup. */
+    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES =
+        EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+
+    private final EncounterRepository encounterRepository;
+
+    public AdmissionMapper(EncounterRepository encounterRepository) {
+        this.encounterRepository = encounterRepository;
+    }
 
     /**
      * Convert Admission entity to response DTO
@@ -46,6 +63,12 @@ public class AdmissionMapper {
             dto.setAdmittingProviderId(admission.getAdmittingProvider().getId());
                 dto.setAdmittingProviderName(admission.getAdmittingProvider().getFullName());
         }
+
+        // Resolve the patient's most-recent non-terminal encounter at this hospital.
+        // Single query per admission — same shape as the registration lookup above.
+        // Returns null when no open encounter exists, which the picker handles
+        // gracefully (medication + lab fan-out tolerate null encounter).
+        dto.setCurrentEncounterId(resolveCurrentEncounterId(admission));
 
         // Department
         if (admission.getDepartment() != null) {
@@ -156,6 +179,26 @@ public class AdmissionMapper {
 
         return dto;
     }
+
+        private UUID resolveCurrentEncounterId(Admission admission) {
+            if (admission == null || admission.getPatient() == null
+                || admission.getPatient().getId() == null
+                || admission.getHospital() == null
+                || admission.getHospital().getId() == null) {
+                return null;
+            }
+            List<Encounter> open = encounterRepository
+                .findByPatient_IdAndHospital_IdAndStatusNotIn(
+                    admission.getPatient().getId(),
+                    admission.getHospital().getId(),
+                    TERMINAL_ENCOUNTER_STATUSES);
+            return open.stream()
+                .filter(Objects::nonNull)
+                .filter(e -> e.getEncounterDate() != null)
+                .max(Comparator.comparing(Encounter::getEncounterDate))
+                .map(Encounter::getId)
+                .orElse(null);
+        }
 
         private String resolvePatientMrn(Admission admission) {
             if (admission == null || admission.getPatient() == null ||
