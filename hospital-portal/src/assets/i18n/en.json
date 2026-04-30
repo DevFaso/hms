@@ -28,7 +28,22 @@
     "APPLY": "Apply to admission",
     "APPLIED_RESULT": "Applied. Created {{count}} orders ({{skipped}} skipped).",
     "ERROR": "Could not load or apply order sets. Try again or place orders manually.",
-    "OPEN_PICKER": "Order set"
+    "OPEN_PICKER": "Order set",
+    "ADMIN_TITLE": "Order set templates",
+    "NEW": "New order set",
+    "EDIT_TITLE": "Edit order set",
+    "DEACTIVATE": "Deactivate",
+    "VERSION_HISTORY": "Version history",
+    "FIELD_NAME": "Name",
+    "FIELD_DESCRIPTION": "Description",
+    "FIELD_ADMISSION_TYPE": "Admission type",
+    "FIELD_CLINICAL_GUIDELINES": "Clinical guidelines / reference",
+    "FIELD_ORDER_ITEMS_JSON": "Order items (JSON array)",
+    "COL_NAME": "Name",
+    "COL_VERSION": "Version",
+    "COL_ITEM_COUNT": "Items",
+    "COL_TYPE": "Admission type",
+    "COL_LAST_MODIFIED": "Last modified"
   },
   "ADMISSIONS": {
     "ACUITY": "Acuity",

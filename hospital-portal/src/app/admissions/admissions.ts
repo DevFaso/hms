@@ -295,7 +295,7 @@ export class AdmissionsComponent implements OnInit {
     this.orderSetPicker.set({
       hospitalId: a.hospitalId,
       admissionId: a.id,
-      encounterId: '',
+      encounterId: a.currentEncounterId ?? '',
       orderingStaffId: a.admittingProviderId ?? '',
     });
   }

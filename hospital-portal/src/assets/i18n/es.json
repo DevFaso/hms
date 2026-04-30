@@ -28,7 +28,22 @@
     "APPLY": "Aplicar al ingreso",
     "APPLIED_RESULT": "Aplicado. {{count}} órdenes creadas ({{skipped}} omitidas).",
     "ERROR": "No se pudieron cargar o aplicar los conjuntos. Vuelva a intentarlo o introduzca las órdenes manualmente.",
-    "OPEN_PICKER": "Conjunto de órdenes"
+    "OPEN_PICKER": "Conjunto de órdenes",
+    "ADMIN_TITLE": "Plantillas de conjuntos de órdenes",
+    "NEW": "Nuevo conjunto",
+    "EDIT_TITLE": "Editar conjunto",
+    "DEACTIVATE": "Desactivar",
+    "VERSION_HISTORY": "Historial de versiones",
+    "FIELD_NAME": "Nombre",
+    "FIELD_DESCRIPTION": "Descripción",
+    "FIELD_ADMISSION_TYPE": "Tipo de ingreso",
+    "FIELD_CLINICAL_GUIDELINES": "Directrices clínicas",
+    "FIELD_ORDER_ITEMS_JSON": "Elementos de orden (matriz JSON)",
+    "COL_NAME": "Nombre",
+    "COL_VERSION": "Versión",
+    "COL_ITEM_COUNT": "Elementos",
+    "COL_TYPE": "Tipo de ingreso",
+    "COL_LAST_MODIFIED": "Última modificación"
   },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
