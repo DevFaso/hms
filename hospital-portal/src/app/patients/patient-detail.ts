@@ -18,13 +18,21 @@ import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
+import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
 
 type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' | 'sharing';
 
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, BpaPanelComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    BpaPanelComponent,
+    StoryboardBannerComponent,
+  ],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',
 })
