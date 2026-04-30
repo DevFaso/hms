@@ -259,6 +259,16 @@
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
     "YES_CANCEL": "Sí, Cancelar"
   },
+  "APPOINTMENT_CALENDAR": {
+    "TITLE": "Calendario de citas",
+    "SUBTITLE": "Cuadrícula de programación multi-proveedor",
+    "BACK_TO_LIST": "Volver a la lista",
+    "FILTER_PROVIDER": "Proveedor",
+    "ALL_PROVIDERS": "Todos los proveedores",
+    "LOADING": "Cargando citas…",
+    "ERROR": "No se pudo cargar el calendario. Inténtelo de nuevo o use la vista de lista.",
+    "OPEN_CALENDAR": "Calendario"
+  },
   "AUDIT": {
     "ALL_EVENT_TYPES": "All Event Types",
     "APPLY_FILTER": "Aplicar",
@@ -806,7 +816,7 @@
     "RESOURCE": "Resource",
     "RESULTS_TO_REVIEW": "Results to Review",
     "REVENUE": "Ingresos",
-    "REVIEW_NOW": "Review Now",
+    "REVIEW_NOW": "Revisar Ahora",
     "ROLES": "Roles",
     "ROOMED": "Roomed",
     "ROOMED_PATIENTS": "Roomed Patients",
@@ -865,7 +875,6 @@
     "PENDING_QA_REVIEW_DESC": "Definiciones de prueba esperan revisión de calidad antes de proceder al director.",
     "QA_REVIEW_QUEUE": "Cola de Revisión QA",
     "QUALITY_PASS_RATE": "Tasa de Aprobación de Calidad",
-    "REVIEW_NOW": "Revisar Ahora",
     "VALIDATION_STUDIES": "Estudios de Validación",
     "VALIDATION_STUDIES_30D": "Estudios (Últimos 30 Días)",
     "VALIDATION_STUDIES_PENDING": "Pendiente de Aprobación"
@@ -1256,7 +1265,7 @@
     "LOADING": "Cargando resultados…",
     "SEARCH": "Buscar por código de orden, paciente o prueba…",
     "TOTAL": "Total de resultados",
-    "RELEASED": "Publicados",
+    "RELEASED": "Resultado publicado",
     "PENDING_RELEASE": "Pendientes de publicación",
     "NEW_RESULT": "Nuevo resultado",
     "EDIT_RESULT": "Editar resultado",
@@ -1287,7 +1296,6 @@
     "CREATED": "Resultado de laboratorio creado",
     "UPDATED": "Resultado de laboratorio actualizado",
     "DELETED": "Resultado de laboratorio eliminado",
-    "RELEASED": "Resultado publicado",
     "RELEASE_ERROR": "Error al publicar el resultado",
     "SAVE_ERROR": "Error al guardar. Inténtelo de nuevo.",
     "DELETE_ERROR": "Error al eliminar el resultado. Inténtelo de nuevo.",

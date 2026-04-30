@@ -368,4 +368,29 @@ public class AppointmentController {
         return Sort.by(direction, property);
     }
 
+
+    // ---- CALENDAR (Cadence visual scheduling grid) ----
+
+    /**
+     * Date-range slice for the Cadence calendar grid. Hospital-scoped;
+     * optionally filtered by provider. Caps the viewport at 31 days to
+     * keep the result set bounded; broader ranges return 400.
+     */
+    @GetMapping("/calendar")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @Operation(summary = "List appointments in a date range for calendar rendering")
+    public ResponseEntity<List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO>> getCalendarEvents(
+        @RequestParam UUID hospitalId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(required = false) UUID staffId
+    ) {
+        if (from == null || to == null || from.isAfter(to)) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 31) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(appointmentService.getCalendarEvents(hospitalId, from, to, staffId));
+    }
 }
