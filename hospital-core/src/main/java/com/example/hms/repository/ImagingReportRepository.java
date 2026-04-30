@@ -6,6 +6,7 @@ import com.example.hms.model.ImagingReport;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,4 +27,19 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
     Optional<ImagingReport> findByReportNumberAndHospital_Id(String reportNumber, UUID hospitalId);
 
     boolean existsByImagingOrder_IdAndReportStatus(UUID imagingOrderId, ImagingReportStatus status);
+
+    /**
+     * Batch lookup used by the chart-review aggregator so the latest
+     * imaging report (i.e. the row flagged {@code latest_version=true})
+     * can be resolved for every imaging order on the current page in one
+     * round-trip instead of two queries per order.
+     */
+    List<ImagingReport> findByImagingOrder_IdInAndLatestVersionIsTrue(Collection<UUID> imagingOrderIds);
+
+    /**
+     * Fallback batch lookup for orders whose reports were not flagged with
+     * {@code latest_version=true} — the chart-review aggregator picks the
+     * highest {@code reportVersion} per order from this list in memory.
+     */
+    List<ImagingReport> findByImagingOrder_IdIn(Collection<UUID> imagingOrderIds);
 }

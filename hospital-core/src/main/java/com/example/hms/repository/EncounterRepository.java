@@ -171,6 +171,32 @@ public interface EncounterRepository
             @Param("hospitalId") UUID hospitalId);
 
     /**
+     * Paged variant for the chart-review aggregator. Eagerly fetches the few
+     * associations the chart-review DTO needs (staff/user, department,
+     * hospital) so we avoid N+1 lookups on the rendered rows. Sort + limit
+     * are applied at the DB level via the {@link Pageable} argument.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    Page<Encounter> findByPatient_IdOrderByEncounterDateDesc(UUID patientId, Pageable pageable);
+
+    /** Hospital-scoped paged variant for the chart-review aggregator. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    Page<Encounter> findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+        UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /**
      * Find COMPLETED encounters for a patient that do NOT have a corresponding
      * discharge summary. Used by the patient portal to backfill missing summaries.
      */
