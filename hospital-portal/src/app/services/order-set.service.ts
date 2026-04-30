@@ -78,7 +78,12 @@ export class OrderSetService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/order-sets';
 
-  list(hospitalId: string, search?: string, page = 0, size = 20): Observable<PageEnvelope<OrderSetSummary>> {
+  list(
+    hospitalId: string,
+    search?: string,
+    page = 0,
+    size = 20,
+  ): Observable<PageEnvelope<OrderSetSummary>> {
     let params = new HttpParams().set('hospitalId', hospitalId).set('page', page).set('size', size);
     if (search && search.trim()) params = params.set('search', search.trim());
     return this.http.get<PageEnvelope<OrderSetSummary>>(this.baseUrl, { params });
@@ -105,7 +110,11 @@ export class OrderSetService {
     return this.http.delete<OrderSetSummary>(`${this.baseUrl}/${id}`, { params });
   }
 
-  apply(orderSetId: string, admissionId: string, request: ApplyOrderSetRequest): Observable<AppliedOrderSetSummary> {
+  apply(
+    orderSetId: string,
+    admissionId: string,
+    request: ApplyOrderSetRequest,
+  ): Observable<AppliedOrderSetSummary> {
     return this.http.post<AppliedOrderSetSummary>(
       `${this.baseUrl}/${orderSetId}/apply/${admissionId}`,
       request,

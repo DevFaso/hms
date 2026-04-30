@@ -306,7 +306,9 @@ export class AdmissionsComponent implements OnInit {
 
   onOrderSetApplied(): void {
     // Show a confirmation toast; let the picker linger for the user to dismiss.
-    this.toast.success(this.translate.instant('ORDER_SETS.APPLIED_RESULT', { count: '', skipped: '' }));
+    this.toast.success(
+      this.translate.instant('ORDER_SETS.APPLIED_RESULT', { count: '', skipped: '' }),
+    );
   }
 
   openEdit(a: AdmissionResponse): void {

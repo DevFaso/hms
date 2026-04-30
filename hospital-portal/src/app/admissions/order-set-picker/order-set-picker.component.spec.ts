@@ -48,9 +48,7 @@ describe('OrderSetPickerComponent', () => {
 
   beforeEach(async () => {
     svc = jasmine.createSpyObj<OrderSetService>('OrderSetService', ['list', 'apply']);
-    svc.list.and.returnValue(
-      of({ content: [sepsisSet], totalElements: 1, number: 0, size: 20 }),
-    );
+    svc.list.and.returnValue(of({ content: [sepsisSet], totalElements: 1, number: 0, size: 20 }));
     svc.apply.and.returnValue(of(appliedResult));
 
     await TestBed.configureTestingModule({
@@ -70,9 +68,7 @@ describe('OrderSetPickerComponent', () => {
     setTimeout(() => {
       fixture.detectChanges();
       expect(svc.list).toHaveBeenCalledWith('h1', '');
-      const items = fixture.nativeElement.querySelectorAll(
-        '[data-testid="order-set-picker-item"]',
-      );
+      const items = fixture.nativeElement.querySelectorAll('[data-testid="order-set-picker-item"]');
       expect(items.length).toBe(1);
       expect(items[0].textContent).toContain('Sepsis bundle');
       done();

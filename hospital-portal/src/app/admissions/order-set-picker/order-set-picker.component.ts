@@ -11,7 +11,14 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs';
+import {
+  Subject,
+  Subscription,
+  debounceTime,
+  distinctUntilChanged,
+  switchMap,
+  takeUntil,
+} from 'rxjs';
 
 import {
   AppliedOrderSetSummary,
@@ -42,7 +49,12 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
     <section class="order-set-picker" data-testid="order-set-picker" [attr.data-state]="state()">
       <header class="order-set-picker__header">
         <h2>{{ 'ORDER_SETS.PICKER_TITLE' | translate }}</h2>
-        <button type="button" class="close" (click)="closed.emit()" data-testid="order-set-picker-close">
+        <button
+          type="button"
+          class="close"
+          (click)="closed.emit()"
+          data-testid="order-set-picker-close"
+        >
           ×
         </button>
       </header>
@@ -71,7 +83,9 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
           (keydown.space)="select(os); $event.preventDefault()"
           data-testid="order-set-picker-item"
         >
-          <div class="order-set-picker__item-name">{{ os.name }} <small>v{{ os.version }}</small></div>
+          <div class="order-set-picker__item-name">
+            {{ os.name }} <small>v{{ os.version }}</small>
+          </div>
           <div class="order-set-picker__item-meta">
             {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} · {{ os.admissionType }}
           </div>
@@ -111,7 +125,8 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
         <p *ngIf="sel.description">{{ sel.description }}</p>
         <ul>
           <li *ngFor="let item of sel.orderItems; let i = index">
-            <strong>{{ orderItemType(item) }}</strong>: {{ orderItemLabel(item) }}
+            <strong>{{ orderItemType(item) }}</strong
+            >: {{ orderItemLabel(item) }}
           </li>
         </ul>
         <button
@@ -135,8 +150,11 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
             'ORDER_SETS.APPLIED_RESULT'
               | translate
                 : {
-                    count: summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length,
-                    skipped: summary.skippedItemCount
+                    count:
+                      summary.prescriptionIds.length +
+                      summary.labOrderIds.length +
+                      summary.imagingOrderIds.length,
+                    skipped: summary.skippedItemCount,
                   }
           }}
         </p>
