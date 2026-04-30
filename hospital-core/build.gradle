@@ -78,4 +78,12 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+
+    // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
+    // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
+    // splitStatements config) surface pre-merge instead of on dev deploy.
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
