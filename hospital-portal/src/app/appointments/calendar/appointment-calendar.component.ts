@@ -68,7 +68,7 @@ type State = 'idle' | 'loading' | 'ready' | 'error';
         >
           <option [ngValue]="''">{{ 'APPOINTMENT_CALENDAR.ALL_PROVIDERS' | translate }}</option>
           <option *ngFor="let s of providers()" [ngValue]="s.id">
-            {{ s.firstName }} {{ s.lastName }}
+            {{ s.name }}
           </option>
         </select>
       </div>
