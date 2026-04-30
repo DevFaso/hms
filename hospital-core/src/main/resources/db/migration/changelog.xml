@@ -813,4 +813,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V64: P1 #3b — BPA / protocol-card reference data
+         - clinical.bpa_protocols: catalog of best-practice advisories
+           rendered by BpaRule implementations on the patient-view hook.
+         - Three seeded protocols: MALARIA_FEVER, SEPSIS_QSOFA,
+           OB_HEMORRHAGE. Active-only partial index for rule lookups.
+         - Additive only; idempotent (CREATE IF NOT EXISTS / ON CONFLICT).
+         splitStatements="true" is safe here: V64 has no PL/pgSQL
+         DO blocks, only plain DDL + INSERT … ON CONFLICT statements.
+         ================================================================= -->
+    <changeSet id="V64-bpa-protocol-reference" author="hms-team" runOnChange="false">
+        <sqlFile path="V64__bpa_protocol_reference.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

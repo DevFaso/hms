@@ -12,6 +12,9 @@
   }
 
   @if (!loading() && patient(); as p) {
+    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
+    <app-bpa-panel [patientId]="p.id" />
+
     <!-- Header -->
     <div class="detail-header">
       <div class="patient-avatar-lg">{{ getInitials(p) }}</div>
