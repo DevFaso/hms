@@ -68,7 +68,7 @@ class PatientStoryboardServiceImplTest {
         hospital = Hospital.builder().name("Centre Médical Bobo").build();
         hospital.setId(HOSPITAL_ID);
 
-        patient = buildPatient(HOSPITAL_ID, "MRN-1001", "FULL_CODE");
+        patient = buildPatient("MRN-1001", "FULL_CODE");
 
         when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
         when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
@@ -77,7 +77,8 @@ class PatientStoryboardServiceImplTest {
     @Test
     void missingPatientThrowsNotFound() {
         when(patientRepo.findById(any(UUID.class))).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.getStoryboard(UUID.randomUUID(), HOSPITAL_ID))
+        UUID missingId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.getStoryboard(missingId, HOSPITAL_ID))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -142,7 +143,7 @@ class PatientStoryboardServiceImplTest {
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
         when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
         // Patient with no code status either
-        Patient bare = buildPatient(HOSPITAL_ID, "MRN-9999", null);
+        Patient bare = buildPatient("MRN-9999", null);
         when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(bare));
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
@@ -156,7 +157,7 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
-    void caCapsAllergyAndProblemListsToProtectMobileBandwidth() {
+    void capsAllergyAndProblemListsToProtectMobileBandwidth() {
         java.util.List<PatientAllergy> many = new java.util.ArrayList<>();
         for (int i = 0; i < PatientStoryboardServiceImpl.MAX_ALLERGIES + 4; i++) {
             many.add(allergy("Allergen " + i, AllergySeverity.MILD, true));
@@ -198,7 +199,7 @@ class PatientStoryboardServiceImplTest {
 
     /* ---- helpers ---------------------------------------------------- */
 
-    private Patient buildPatient(UUID hospitalId, String mrn, String codeStatus) {
+    private Patient buildPatient(String mrn, String codeStatus) {
         Patient p = Patient.builder()
             .firstName("Aïssata")
             .lastName("Diallo")

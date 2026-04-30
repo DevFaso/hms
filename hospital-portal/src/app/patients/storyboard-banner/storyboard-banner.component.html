@@ -82,7 +82,7 @@
         @if (hasAllergies()) {
           <ul class="storyboard__chips">
             @for (a of s.allergies; track a.id) {
-              <li class="storyboard__chip" [class]="severityClass(a.severity)">
+              <li class="storyboard__chip" [ngClass]="severityClass(a.severity)">
                 <span class="storyboard__chip-label">{{ a.allergenDisplay }}</span>
                 @if (a.reaction) {
                   <span class="storyboard__chip-detail" aria-hidden="false"
@@ -198,7 +198,7 @@
         </div>
         @if (hasCodeStatus() && s.codeStatus; as cs) {
           @if (cs.status) {
-            <span class="storyboard__pill" [class]="codeStatusClass(cs.status)">
+            <span class="storyboard__pill" [ngClass]="codeStatusPillClass(cs.status)">
               {{ cs.status }}
             </span>
           }

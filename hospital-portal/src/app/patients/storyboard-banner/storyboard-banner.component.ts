@@ -98,14 +98,14 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
     }
   }
 
-  protected codeStatusClass(status?: string | null): string {
-    if (!status) return 'storyboard__chip--neutral';
+  protected codeStatusPillClass(status?: string | null): string {
+    if (!status) return 'storyboard__pill--neutral';
     const upper = status.toUpperCase();
-    if (upper.includes('FULL')) return 'storyboard__chip--info';
+    if (upper.includes('FULL')) return 'storyboard__pill--info';
     if (upper.includes('DNR') || upper.includes('DNI') || upper.includes('COMFORT')) {
-      return 'storyboard__chip--danger';
+      return 'storyboard__pill--danger';
     }
-    return 'storyboard__chip--warning';
+    return 'storyboard__pill--warning';
   }
 
   /**

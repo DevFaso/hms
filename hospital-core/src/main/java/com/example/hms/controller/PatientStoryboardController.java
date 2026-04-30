@@ -62,9 +62,10 @@ public class PatientStoryboardController {
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID effectiveHospitalId = hospitalId != null
-            ? hospitalId
-            : authUtils.extractHospitalIdFromJwt(auth);
+        // Validate the requested hospital is one the caller is assigned to (or
+        // they are SUPER_ADMIN). The repository helpers used downstream are
+        // derived queries, not Specifications, so we must enforce scope here.
+        UUID effectiveHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         return ResponseEntity.ok(patientStoryboardService.getStoryboard(patientId, effectiveHospitalId));
     }
 }
