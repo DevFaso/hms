@@ -969,4 +969,58 @@ public class AppointmentServiceImpl implements AppointmentService {
     private void requireHospitalScope(User user, UUID hospitalId) {
     requireHospitalScope(user, hospitalId, LocaleContextHolder.getLocale());
     }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
+        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+        java.util.UUID staffId, String username, java.util.Locale locale) {
+        if (hospitalId == null || from == null || to == null || from.isAfter(to)) {
+            return java.util.List.of();
+        }
+        // Authorisation: the calendar must not let an authenticated staff role
+        // enumerate appointments for arbitrary hospitalIds. Reuse the same
+        // hospital-scope gate as the rest of AppointmentServiceImpl so global
+        // roles (SUPER_ADMIN, etc.) still pass through.
+        java.util.Locale loc = locale != null ? locale
+            : org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        if (username != null) {
+            User currentUser = getUserOrThrow(username);
+            requireHospitalScope(currentUser, hospitalId, loc);
+        }
+        java.util.List<com.example.hms.model.Appointment> rows = staffId == null
+            ? appointmentRepository.findByHospital_IdAndAppointmentDateBetween(hospitalId, from, to)
+            : appointmentRepository.findByHospital_IdAndStaff_IdAndAppointmentDateBetween(
+                hospitalId, staffId, from, to);
+        return rows.stream().map(AppointmentServiceImpl::toCalendarEvent).toList();
+    }
+
+    private static com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO toCalendarEvent(com.example.hms.model.Appointment a) {
+        java.util.UUID providerId = a.getStaff() != null ? a.getStaff().getId() : null;
+        String providerName = a.getStaff() != null && a.getStaff().getFullName() != null
+            ? a.getStaff().getFullName()
+            : (a.getStaff() != null ? a.getStaff().getName() : null);
+        java.util.UUID patientId = a.getPatient() != null ? a.getPatient().getId() : null;
+        String patientName = a.getPatient() == null ? null
+            : ((a.getPatient().getFirstName() == null ? "" : a.getPatient().getFirstName())
+                + " "
+                + (a.getPatient().getLastName() == null ? "" : a.getPatient().getLastName())).trim();
+        java.time.LocalDateTime start = a.getAppointmentDate() == null || a.getStartTime() == null
+            ? null : a.getAppointmentDate().atTime(a.getStartTime());
+        java.time.LocalDateTime end = a.getAppointmentDate() == null || a.getEndTime() == null
+            ? null : a.getAppointmentDate().atTime(a.getEndTime());
+        String title = (patientName == null || patientName.isBlank() ? "Appointment" : patientName);
+        return new com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO(
+            a.getId(),
+            patientId,
+            patientName,
+            providerId,
+            providerName,
+            title,
+            start,
+            end,
+            a.getStatus() == null ? null : a.getStatus().name(),
+            a.getReason()
+        );
+    }
 }
