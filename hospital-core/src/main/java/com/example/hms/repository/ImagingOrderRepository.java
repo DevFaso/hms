@@ -3,6 +3,8 @@ package com.example.hms.repository;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.model.ImagingOrder;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,4 +42,16 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
         @Param("bodyRegion") String bodyRegion,
         @Param("orderedAfter") LocalDateTime orderedAfter
     );
+
+    /**
+     * Hospital-scoped, ordered, paged variant for the chart-review
+     * aggregator. Filtering and limiting happen at the DB level so we
+     * never load the full imaging-order history into memory just to
+     * keep the most recent N rows.
+     */
+    Page<ImagingOrder> findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
+        UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /** Unscoped paged variant used when no hospital scope is supplied. */
+    Page<ImagingOrder> findByPatient_IdOrderByOrderedAtDesc(UUID patientId, Pageable pageable);
 }
