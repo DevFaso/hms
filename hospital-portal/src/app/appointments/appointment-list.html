@@ -10,6 +10,10 @@
         }
       </p>
     </div>
+    <a routerLink="/appointments/calendar" class="btn-secondary">
+      <span class="material-symbols-outlined">calendar_month</span>
+      {{ 'APPOINTMENT_CALENDAR.OPEN_CALENDAR' | translate }}
+    </a>
     @if (canCreate) {
       <a routerLink="/appointments/new" class="btn-primary">
         <span class="material-symbols-outlined">event</span>
