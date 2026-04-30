@@ -991,6 +991,26 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // CPOE order-set authoring (admin)
+      {
+        path: 'admin/order-sets',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/order-sets/order-set-list.component').then(
+            (m) => m.OrderSetListComponent,
+          ),
+      },
+      {
+        path: 'admin/order-sets/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/order-sets/order-set-edit.component').then(
+            (m) => m.OrderSetEditComponent,
+          ),
+      },
+
       // Feature Flags Management
       {
         path: 'feature-flags',
