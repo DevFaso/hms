@@ -830,4 +830,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V65: P1 #4 — CPOE order-set version history
+         - admission_order_sets.parent_order_set_id self-FK so each edit
+           can freeze the previous row and append a new active row that
+           points at it (chain forms the version history).
+         - Active-by-(hospital,name) partial index speeds the picker's
+           lookup.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V65-order-set-versioning" author="hms-team" runOnChange="false">
+        <sqlFile path="V65__order_set_versioning.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

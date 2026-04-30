@@ -17,11 +17,19 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
+
+interface OrderSetPickerCtx {
+  hospitalId: string;
+  admissionId: string;
+  encounterId: string;
+  orderingStaffId: string;
+}
 
 @Component({
   selector: 'app-admissions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, OrderSetPickerComponent],
   templateUrl: './admissions.html',
   styleUrl: './admissions.scss',
 })
@@ -40,6 +48,19 @@ export class AdmissionsComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'admitted' | 'discharged'>('all');
+
+  /**
+   * When non-null, the order-set picker is rendered as a modal-style
+   * overlay. Set by {@link openOrderSetPicker}; cleared by
+   * {@link closeOrderSetPicker} or after a successful apply.
+   *
+   * <p>encounterId is left blank in v0 because AdmissionResponse does
+   * not carry the active encounter — fan-out to MEDICATION + LAB tolerates
+   * a null encounter; IMAGING items in the set will surface a clear
+   * server error. Follow-up work will add `currentEncounterId` to
+   * AdmissionResponse so imaging-rich sets work end-to-end here too.
+   */
+  orderSetPicker = signal<OrderSetPickerCtx | null>(null);
 
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
@@ -267,6 +288,25 @@ export class AdmissionsComponent implements OnInit {
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
     this.showModal.set(true);
+  }
+
+  openOrderSetPicker(a: AdmissionResponse): void {
+    if (!a.id || !a.hospitalId) return;
+    this.orderSetPicker.set({
+      hospitalId: a.hospitalId,
+      admissionId: a.id,
+      encounterId: '',
+      orderingStaffId: a.admittingProviderId ?? '',
+    });
+  }
+
+  closeOrderSetPicker(): void {
+    this.orderSetPicker.set(null);
+  }
+
+  onOrderSetApplied(): void {
+    // Show a confirmation toast; let the picker linger for the user to dismiss.
+    this.toast.success(this.translate.instant('ORDER_SETS.APPLIED_RESULT', { count: '', skipped: '' }));
   }
 
   openEdit(a: AdmissionResponse): void {

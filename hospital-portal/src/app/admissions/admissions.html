@@ -151,6 +151,14 @@
                     >
                       <span class="material-symbols-outlined">exit_to_app</span>
                     </button>
+                    <button
+                      class="action-link"
+                      (click)="openOrderSetPicker(a)"
+                      [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
+                      data-testid="open-order-set-picker"
+                    >
+                      <span class="material-symbols-outlined">playlist_add_check</span>
+                    </button>
                   }
                   <button class="action-link edit-link" (click)="openEdit(a)">
                     <span class="material-symbols-outlined">edit</span>
@@ -167,6 +175,32 @@
     </div>
   }
 </div>
+
+<!-- ═══ ORDER-SET PICKER OVERLAY ═══ -->
+@if (orderSetPicker(); as ctx) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeOrderSetPicker()"
+    (keydown.escape)="closeOrderSetPicker()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <app-order-set-picker
+        [hospitalId]="ctx.hospitalId"
+        [admissionId]="ctx.admissionId"
+        [encounterId]="ctx.encounterId"
+        [orderingStaffId]="ctx.orderingStaffId"
+        (closed)="closeOrderSetPicker()"
+        (applied)="onOrderSetApplied()"
+      />
+    </div>
+  </div>
+}
 
 <!-- ═══ CREATE / EDIT ADMISSION MODAL ═══ -->
 @if (showModal()) {

@@ -19,6 +19,17 @@
     "NONE_ACTIVE": "Sin avisos activos para este paciente.",
     "ERROR": "No se pudieron cargar los avisos de buena práctica. El expediente sigue siendo seguro de usar."
   },
+  "ORDER_SETS": {
+    "PICKER_TITLE": "Aplicar conjunto de órdenes",
+    "SEARCH_PLACEHOLDER": "Buscar conjuntos…",
+    "SEARCHING": "Buscando…",
+    "NO_RESULTS": "Sin conjuntos coincidentes.",
+    "ITEMS": "elementos",
+    "APPLY": "Aplicar al ingreso",
+    "APPLIED_RESULT": "Aplicado. {{count}} órdenes creadas ({{skipped}} omitidas).",
+    "ERROR": "No se pudieron cargar o aplicar los conjuntos. Vuelva a intentarlo o introduzca las órdenes manualmente.",
+    "OPEN_PICKER": "Conjunto de órdenes"
+  },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
     "ACUITY_LEVEL": "Nivel de Gravedad",

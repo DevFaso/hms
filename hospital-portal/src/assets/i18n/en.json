@@ -19,6 +19,17 @@
     "NONE_ACTIVE": "No active advisories for this patient.",
     "ERROR": "Could not load best-practice advisories. The chart is still safe to use."
   },
+  "ORDER_SETS": {
+    "PICKER_TITLE": "Apply order set",
+    "SEARCH_PLACEHOLDER": "Search order sets…",
+    "SEARCHING": "Searching…",
+    "NO_RESULTS": "No matching order sets.",
+    "ITEMS": "items",
+    "APPLY": "Apply to admission",
+    "APPLIED_RESULT": "Applied. Created {{count}} orders ({{skipped}} skipped).",
+    "ERROR": "Could not load or apply order sets. Try again or place orders manually.",
+    "OPEN_PICKER": "Order set"
+  },
   "ADMISSIONS": {
     "ACUITY": "Acuity",
     "ACUITY_LEVEL": "Acuity Level",
