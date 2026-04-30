@@ -13,6 +13,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
+import { StoryboardService } from '../services/storyboard.service';
 
 describe('PatientDetailComponent', () => {
   let component: PatientDetailComponent;
@@ -27,6 +28,7 @@ describe('PatientDetailComponent', () => {
   let permissionSpy: jasmine.SpyObj<PermissionService>;
   let roleContextSpy: jasmine.SpyObj<RoleContextService>;
   let bpaServiceSpy: jasmine.SpyObj<BpaService>;
+  let storyboardServiceSpy: jasmine.SpyObj<StoryboardService>;
 
   const mockPatient = {
     id: 'p1',
@@ -63,6 +65,7 @@ describe('PatientDetailComponent', () => {
       activeHospitalId: 'h1',
     });
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
+    storyboardServiceSpy = jasmine.createSpyObj('StoryboardService', ['getStoryboard']);
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
@@ -72,6 +75,17 @@ describe('PatientDetailComponent', () => {
     permissionSpy.hasAnyPermission.and.returnValue(true);
     roleContextSpy.isSuperAdmin.and.returnValue(false);
     bpaServiceSpy.evaluate.and.returnValue(of([]));
+    storyboardServiceSpy.getStoryboard.and.returnValue(
+      of({
+        patient: { id: 'p1' },
+        allergies: [],
+        problems: [],
+        activeEncounter: null,
+        codeStatus: null,
+        hasHighSeverityAllergy: false,
+        hasChronicProblem: false,
+      }),
+    );
 
     await TestBed.configureTestingModule({
       imports: [PatientDetailComponent, TranslateModule.forRoot()],
@@ -91,6 +105,7 @@ describe('PatientDetailComponent', () => {
         { provide: PermissionService, useValue: permissionSpy },
         { provide: RoleContextService, useValue: roleContextSpy },
         { provide: BpaService, useValue: bpaServiceSpy },
+        { provide: StoryboardService, useValue: storyboardServiceSpy },
       ],
     }).compileComponents();
 

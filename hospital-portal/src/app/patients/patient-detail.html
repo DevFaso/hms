@@ -12,6 +12,9 @@
   }
 
   @if (!loading() && patient(); as p) {
+    <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
+    <app-storyboard-banner [patientId]="p.id" />
+
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
     <app-bpa-panel [patientId]="p.id" />
 
