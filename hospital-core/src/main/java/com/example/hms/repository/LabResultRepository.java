@@ -123,5 +123,23 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
     /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
     long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
+
+    /**
+     * Paged unscoped variant used by the chart-review aggregator when no
+     * hospital scope is supplied. Sort + limit are applied at the DB level
+     * via the {@link Pageable} argument so we avoid loading the entire
+     * lab-result history into memory.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    Page<LabResult> findByLabOrder_Patient_Id(UUID patientId, Pageable pageable);
 }
 
