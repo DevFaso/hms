@@ -1,0 +1,225 @@
+<section
+  class="storyboard"
+  data-testid="storyboard-banner"
+  *ngIf="patientId()"
+  [attr.data-state]="state()"
+  [attr.aria-label]="'STORYBOARD.ARIA_LABEL' | translate"
+>
+  @if (state() === 'loading') {
+    <p class="storyboard__status" data-testid="storyboard-loading">
+      <span class="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+      {{ 'STORYBOARD.LOADING' | translate }}
+    </p>
+  } @else if (state() === 'error') {
+    <p class="storyboard__status storyboard__status--error" data-testid="storyboard-error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      {{ 'STORYBOARD.ERROR' | translate }}
+    </p>
+  } @else if (state() === 'empty') {
+    <p class="storyboard__status storyboard__status--empty" data-testid="storyboard-empty">
+      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      {{ 'STORYBOARD.EMPTY' | translate }}
+    </p>
+  } @else if (summary(); as s) {
+    <header class="storyboard__header">
+      <div class="storyboard__identity">
+        <h2 class="storyboard__name">
+          {{ s.patient.fullName || (s.patient.firstName || '') + ' ' + (s.patient.lastName || '') }}
+        </h2>
+        <div class="storyboard__meta">
+          @if (s.patient.mrn) {
+            <span class="storyboard__meta-item">
+              <span class="storyboard__meta-label">{{ 'STORYBOARD.MRN' | translate }}</span>
+              <span class="storyboard__meta-value">{{ s.patient.mrn }}</span>
+            </span>
+          }
+          @if (s.patient.ageYears !== null && s.patient.ageYears !== undefined) {
+            <span class="storyboard__meta-item">
+              <span class="storyboard__meta-label">{{ 'STORYBOARD.AGE' | translate }}</span>
+              <span class="storyboard__meta-value">
+                {{ 'STORYBOARD.AGE_YEARS_VALUE' | translate: { years: s.patient.ageYears } }}
+              </span>
+            </span>
+          }
+          @if (s.patient.gender) {
+            <span class="storyboard__meta-item">
+              <span class="storyboard__meta-label">{{ 'STORYBOARD.SEX' | translate }}</span>
+              <span class="storyboard__meta-value">{{ s.patient.gender }}</span>
+            </span>
+          }
+          @if (s.patient.bloodType) {
+            <span class="storyboard__meta-item">
+              <span class="storyboard__meta-label">{{ 'STORYBOARD.BLOOD_TYPE' | translate }}</span>
+              <span class="storyboard__meta-value">{{ s.patient.bloodType }}</span>
+            </span>
+          }
+          @if (s.patient.dateOfBirth) {
+            <span class="storyboard__meta-item">
+              <span class="storyboard__meta-label">{{ 'STORYBOARD.DOB' | translate }}</span>
+              <span class="storyboard__meta-value">{{ s.patient.dateOfBirth }}</span>
+            </span>
+          }
+        </div>
+      </div>
+    </header>
+
+    <div class="storyboard__sections">
+      <!-- Allergies -->
+      <div
+        class="storyboard__section"
+        [class.storyboard__section--alert]="s.hasHighSeverityAllergy"
+        data-testid="storyboard-allergies"
+      >
+        <div class="storyboard__section-head">
+          <span class="material-symbols-outlined storyboard__icon" aria-hidden="true">warning</span>
+          <h3 class="storyboard__section-title">{{ 'STORYBOARD.ALLERGIES' | translate }}</h3>
+          @if (s.hasHighSeverityAllergy) {
+            <span class="storyboard__pill storyboard__pill--danger">
+              {{ 'STORYBOARD.HIGH_SEVERITY' | translate }}
+            </span>
+          }
+        </div>
+        @if (hasAllergies()) {
+          <ul class="storyboard__chips">
+            @for (a of s.allergies; track a.id) {
+              <li class="storyboard__chip" [class]="severityClass(a.severity)">
+                <span class="storyboard__chip-label">{{ a.allergenDisplay }}</span>
+                @if (a.reaction) {
+                  <span class="storyboard__chip-detail" aria-hidden="false"
+                    >— {{ a.reaction }}</span
+                  >
+                }
+                @if (a.severity) {
+                  <span class="storyboard__chip-severity">
+                    {{ 'STORYBOARD.SEVERITY.' + a.severity | translate }}
+                  </span>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="storyboard__empty">{{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}</p>
+        }
+      </div>
+
+      <!-- Problems -->
+      <div class="storyboard__section" data-testid="storyboard-problems">
+        <div class="storyboard__section-head">
+          <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
+            >stethoscope</span
+          >
+          <h3 class="storyboard__section-title">{{ 'STORYBOARD.PROBLEMS' | translate }}</h3>
+          @if (s.hasChronicProblem) {
+            <span class="storyboard__pill storyboard__pill--info">
+              {{ 'STORYBOARD.CHRONIC_PRESENT' | translate }}
+            </span>
+          }
+        </div>
+        @if (hasProblems()) {
+          <ul class="storyboard__chips">
+            @for (p of s.problems; track p.id) {
+              <li class="storyboard__chip" [class.storyboard__chip--info]="p.chronic">
+                <span class="storyboard__chip-label">{{ p.problemDisplay }}</span>
+                @if (p.problemCode) {
+                  <span class="storyboard__chip-detail">{{ p.problemCode }}</span>
+                }
+                @if (p.chronic) {
+                  <span class="storyboard__chip-severity">
+                    {{ 'STORYBOARD.CHRONIC' | translate }}
+                  </span>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_PROBLEMS' | translate }}</p>
+        }
+      </div>
+
+      <!-- Active Encounter -->
+      <div class="storyboard__section" data-testid="storyboard-encounter">
+        <div class="storyboard__section-head">
+          <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
+            >event_available</span
+          >
+          <h3 class="storyboard__section-title">{{ 'STORYBOARD.ACTIVE_ENCOUNTER' | translate }}</h3>
+        </div>
+        @if (hasEncounter() && s.activeEncounter; as enc) {
+          <dl class="storyboard__kv">
+            @if (enc.encounterType) {
+              <div class="storyboard__kv-row">
+                <dt>{{ 'STORYBOARD.TYPE' | translate }}</dt>
+                <dd>{{ enc.encounterType }}</dd>
+              </div>
+            }
+            @if (enc.status) {
+              <div class="storyboard__kv-row">
+                <dt>{{ 'STORYBOARD.STATUS' | translate }}</dt>
+                <dd>{{ enc.status }}</dd>
+              </div>
+            }
+            @if (enc.staffFullName) {
+              <div class="storyboard__kv-row">
+                <dt>{{ 'STORYBOARD.PROVIDER' | translate }}</dt>
+                <dd>{{ enc.staffFullName }}</dd>
+              </div>
+            }
+            @if (enc.departmentName) {
+              <div class="storyboard__kv-row">
+                <dt>{{ 'STORYBOARD.DEPARTMENT' | translate }}</dt>
+                <dd>{{ enc.departmentName }}</dd>
+              </div>
+            }
+            @if (enc.roomAssignment) {
+              <div class="storyboard__kv-row">
+                <dt>{{ 'STORYBOARD.ROOM' | translate }}</dt>
+                <dd>{{ enc.roomAssignment }}</dd>
+              </div>
+            }
+            @if (enc.chiefComplaint) {
+              <div class="storyboard__kv-row storyboard__kv-row--wide">
+                <dt>{{ 'STORYBOARD.CHIEF_COMPLAINT' | translate }}</dt>
+                <dd>{{ enc.chiefComplaint }}</dd>
+              </div>
+            }
+          </dl>
+        } @else {
+          <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_ENCOUNTER' | translate }}</p>
+        }
+      </div>
+
+      <!-- Code status / advance directives -->
+      <div class="storyboard__section" data-testid="storyboard-code-status">
+        <div class="storyboard__section-head">
+          <span class="material-symbols-outlined storyboard__icon" aria-hidden="true"
+            >heart_broken</span
+          >
+          <h3 class="storyboard__section-title">{{ 'STORYBOARD.CODE_STATUS' | translate }}</h3>
+        </div>
+        @if (hasCodeStatus() && s.codeStatus; as cs) {
+          @if (cs.status) {
+            <span class="storyboard__pill" [class]="codeStatusClass(cs.status)">
+              {{ cs.status }}
+            </span>
+          }
+          @if (cs.directives && cs.directives.length > 0) {
+            <ul class="storyboard__chips storyboard__chips--directives">
+              @for (d of cs.directives; track d.id) {
+                <li class="storyboard__chip storyboard__chip--neutral">
+                  <span class="storyboard__chip-label">
+                    {{ d.directiveType }}
+                  </span>
+                  @if (d.effectiveDate) {
+                    <span class="storyboard__chip-detail">{{ d.effectiveDate }}</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        } @else {
+          <p class="storyboard__empty">{{ 'STORYBOARD.NO_CODE_STATUS' | translate }}</p>
+        }
+      </div>
+    </div>
+  }
+</section>
