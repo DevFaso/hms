@@ -973,9 +973,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
-        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to, java.util.UUID staffId) {
+        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+        java.util.UUID staffId, String username, java.util.Locale locale) {
         if (hospitalId == null || from == null || to == null || from.isAfter(to)) {
             return java.util.List.of();
+        }
+        // Authorisation: the calendar must not let an authenticated staff role
+        // enumerate appointments for arbitrary hospitalIds. Reuse the same
+        // hospital-scope gate as the rest of AppointmentServiceImpl so global
+        // roles (SUPER_ADMIN, etc.) still pass through.
+        java.util.Locale loc = locale != null ? locale
+            : org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        if (username != null) {
+            User currentUser = getUserOrThrow(username);
+            requireHospitalScope(currentUser, hospitalId, loc);
         }
         java.util.List<com.example.hms.model.Appointment> rows = staffId == null
             ? appointmentRepository.findByHospital_IdAndAppointmentDateBetween(hospitalId, from, to)

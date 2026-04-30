@@ -92,7 +92,7 @@ describe('AppointmentCalendarComponent', () => {
     ).toEqual([]);
   });
 
-  it('surfaces an error toast/state when the calendar service errors', async () => {
+  it('renders the inline error state when the calendar service errors', async () => {
     await configure('h1');
     calendarSvc.getRange.and.returnValue(throwError(() => new Error('500')));
     fixture = TestBed.createComponent(AppointmentCalendarComponent);

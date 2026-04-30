@@ -79,7 +79,7 @@ class AppointmentCalendarServiceTest {
     @Test
     void emptyResultWhenHospitalIdMissing() {
         AppointmentService svc = service();
-        assertThat(svc.getCalendarEvents(null, LocalDate.now(), LocalDate.now(), null)).isEmpty();
+        assertThat(svc.getCalendarEvents(null, LocalDate.now(), LocalDate.now(), null, null, null)).isEmpty();
         verify(appointmentRepository, never())
             .findByHospital_IdAndAppointmentDateBetween(any(), any(), any());
     }
@@ -89,7 +89,7 @@ class AppointmentCalendarServiceTest {
         AppointmentService svc = service();
         UUID hospitalId = UUID.randomUUID();
         assertThat(svc.getCalendarEvents(
-            hospitalId, LocalDate.of(2026, 5, 10), LocalDate.of(2026, 5, 1), null)).isEmpty();
+            hospitalId, LocalDate.of(2026, 5, 10), LocalDate.of(2026, 5, 1), null, null, null)).isEmpty();
         verify(appointmentRepository, never())
             .findByHospital_IdAndAppointmentDateBetween(any(), any(), any());
     }
@@ -108,7 +108,7 @@ class AppointmentCalendarServiceTest {
         when(appointmentRepository.findByHospital_IdAndAppointmentDateBetween(hospitalId, from, to))
             .thenReturn(List.of(a));
 
-        List<AppointmentCalendarEventDTO> events = svc.getCalendarEvents(hospitalId, from, to, null);
+        List<AppointmentCalendarEventDTO> events = svc.getCalendarEvents(hospitalId, from, to, null, null, null);
 
         assertThat(events).hasSize(1);
         AppointmentCalendarEventDTO e = events.get(0);
@@ -135,7 +135,7 @@ class AppointmentCalendarServiceTest {
             hospitalId, providerId, from, to)).thenReturn(List.of());
 
         List<AppointmentCalendarEventDTO> events =
-            svc.getCalendarEvents(hospitalId, from, to, providerId);
+            svc.getCalendarEvents(hospitalId, from, to, providerId, null, null);
 
         assertThat(events).isEmpty();
         verify(appointmentRepository, never())
@@ -160,7 +160,7 @@ class AppointmentCalendarServiceTest {
         when(appointmentRepository.findByHospital_IdAndAppointmentDateBetween(hospitalId, today, today))
             .thenReturn(List.of(naked));
 
-        List<AppointmentCalendarEventDTO> events = svc.getCalendarEvents(hospitalId, today, today, null);
+        List<AppointmentCalendarEventDTO> events = svc.getCalendarEvents(hospitalId, today, today, null, null, null);
 
         assertThat(events).hasSize(1);
         AppointmentCalendarEventDTO e = events.get(0);

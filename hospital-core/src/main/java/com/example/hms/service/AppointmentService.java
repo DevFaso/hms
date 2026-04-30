@@ -54,5 +54,6 @@ public interface AppointmentService {
      * at one month to keep the result set bounded.
      */
     java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
-        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to, java.util.UUID staffId);
+        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+        java.util.UUID staffId, String username, java.util.Locale locale);
 }

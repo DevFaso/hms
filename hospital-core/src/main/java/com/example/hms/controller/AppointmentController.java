@@ -383,14 +383,21 @@ public class AppointmentController {
         @RequestParam UUID hospitalId,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
-        @RequestParam(required = false) UUID staffId
+        @RequestParam(required = false) UUID staffId,
+        Authentication authentication,
+        @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
     ) {
         if (from == null || to == null || from.isAfter(to)) {
             return ResponseEntity.badRequest().build();
         }
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 31) {
+        // 31-day cap is INCLUSIVE: ChronoUnit.DAYS.between is exclusive of
+        // the end date, so a 31-day range yields 30; reject when > 30.
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 30) {
             return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.ok(appointmentService.getCalendarEvents(hospitalId, from, to, staffId));
+        Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
+            ? Locale.ENGLISH : Locale.forLanguageTag(acceptLanguage);
+        return ResponseEntity.ok(appointmentService.getCalendarEvents(
+            hospitalId, from, to, staffId, getUsername(authentication), locale));
     }
 }
