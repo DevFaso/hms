@@ -14,7 +14,8 @@
   min-width: 200px;
 }
 
-.form-card {
+// Local accent variant — see dispensing.scss for the shared rationale.
+.form-card-accent {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
   border-radius: 12px;
@@ -69,10 +70,6 @@
     border-radius: 6px;
     font-size: 0.875rem;
   }
-}
-
-.table-wrap {
-  overflow-x: auto;
 }
 
 .tx-type {
