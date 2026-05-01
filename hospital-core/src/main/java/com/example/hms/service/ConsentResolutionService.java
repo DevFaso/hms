@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.DataDomain;
 import com.example.hms.enums.ShareScope;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -33,6 +34,19 @@ public interface ConsentResolutionService {
      * @throws com.example.hms.exception.ResourceNotFoundException if patient or hospital is not found
      */
     ConsentContext resolve(UUID patientId, UUID requestingHospitalId);
+
+    /**
+     * Domain-aware resolution: like {@link #resolve(UUID, UUID)} but additionally
+     * verifies that the matched consent's {@code scope} authorises the requested
+     * {@link DataDomain}. If the tiered consent search fails or the consent does
+     * not cover the domain, a live break-the-glass session for the current user
+     * falls through and is consumed (incrementing its audit counter and emitting
+     * a {@code BREAK_GLASS_ACCESS} event).
+     *
+     * <p>{@link com.example.hms.enums.ShareScope#SAME_HOSPITAL} accesses still
+     * skip scope checks because the data is already local.
+     */
+    ConsentContext resolveForDomain(UUID patientId, UUID requestingHospitalId, DataDomain domain);
 
     /**
      * Lightweight value object that carries the outcome of the resolution.

@@ -16,7 +16,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -41,7 +40,12 @@ class ConsentResolutionServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private PatientConsentRepository consentRepository;
 
-    @InjectMocks private ConsentResolutionServiceImpl service;
+    /**
+     * Constructed manually rather than via {@code @InjectMocks} because the
+     * production constructor takes an {@link Optional} for the optional
+     * break-glass dependency, which Mockito's auto-wiring can't synthesise.
+     */
+    private ConsentResolutionServiceImpl service;
 
     // ── Shared fixtures ────────────────────────────────────────────────────
 
@@ -61,6 +65,9 @@ class ConsentResolutionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        service = new ConsentResolutionServiceImpl(
+            patientRepository, hospitalRepository, consentRepository, Optional.empty());
+
         patientId           = UUID.randomUUID();
         requestingHospitalId = UUID.randomUUID();
         siblingHospitalId   = UUID.randomUUID();

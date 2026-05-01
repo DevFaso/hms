@@ -496,9 +496,38 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
 
     /**
      * Returns true if the domain is present in the allowed set, or the set is empty (all domains).
+     *
+     * <p>Where the requested {@code domain} string maps to a known
+     * {@link com.example.hms.enums.DataDomain}, the check additionally accepts
+     * the legacy alias form (so a consent that stores the modern canonical
+     * value still permits a read keyed by the legacy alias, and vice-versa —
+     * see {@link com.example.hms.enums.DataDomain#canonical()}).
      */
     private boolean isDomainAllowed(Set<String> allowedDomains, String domain) {
-        return allowedDomains.isEmpty() || allowedDomains.contains(domain);
+        if (allowedDomains.isEmpty()) {
+            return true;
+        }
+        if (allowedDomains.contains(domain)) {
+            return true;
+        }
+        // Try the canonical form as well so VITAL_SIGNS↔VITALS and
+        // ENCOUNTER_HISTORY↔ENCOUNTERS round-trip correctly.
+        try {
+            com.example.hms.enums.DataDomain typed =
+                com.example.hms.enums.DataDomain.valueOf(domain).canonical();
+            if (allowedDomains.contains(typed.name())) {
+                return true;
+            }
+            // And the alias of the canonical
+            for (com.example.hms.enums.DataDomain v : com.example.hms.enums.DataDomain.values()) {
+                if (v.canonical() == typed && allowedDomains.contains(v.name())) {
+                    return true;
+                }
+            }
+        } catch (IllegalArgumentException ignored) {
+            // Domain string is not a typed DataDomain — fall through to false.
+        }
+        return false;
     }
 
     private List<EncounterHistoryResponseDTO> loadScopedEncounterHistory(
