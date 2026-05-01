@@ -3,6 +3,8 @@ package com.example.hms.controller;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
@@ -86,6 +88,28 @@ public class NurseTaskController {
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         return ResponseEntity.ok(nurseTaskService.getMedicationTasks(nurseId, scopedHospital, status));
+    }
+
+    @PostMapping("/medications/mar/{taskId}/verify")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Run the bedside five-rights barcode-scan check on a MAR task (P1 #8)")
+    public ResponseEntity<MarVerificationResponseDTO> verifyMedication(
+        @PathVariable("taskId") UUID taskId,
+        @Valid @RequestBody MarVerificationRequestDTO request,
+        @RequestParam(name = "assignee", required = false) String assignee,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        UUID nurseId = resolveAssignee(auth, assignee);
+        if (nurseId == null) {
+            nurseId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        }
+        return ResponseEntity.ok(
+            nurseTaskService.verifyMedicationAdministration(taskId, nurseId, scopedHospital, request)
+        );
     }
 
     @PutMapping("/medications/mar/{taskId}/administer")
