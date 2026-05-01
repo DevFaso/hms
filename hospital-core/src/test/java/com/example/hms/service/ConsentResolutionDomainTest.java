@@ -153,6 +153,33 @@ class ConsentResolutionDomainTest {
     }
 
     @Test
+    @DisplayName("null domain throws BusinessException")
+    void nullDomainRejected() {
+        assertThatThrownBy(() -> service.resolveForDomain(patientId, requestingHospitalId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("data domain");
+    }
+
+    @Test
+    @DisplayName("404s when patient is unknown")
+    void patientNotFound() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.resolveForDomain(patientId, requestingHospitalId, DataDomain.PRESCRIPTIONS))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("404s when requesting hospital is unknown")
+    void hospitalNotFound() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(requestingHospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.resolveForDomain(patientId, requestingHospitalId, DataDomain.PRESCRIPTIONS))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("Sensitive domain requires explicit listing — generic 'all-domains' scope is not enough")
     void sensitiveDomainRequiresExplicitScope() {
         patient.getHospitalRegistrations().add(activeReg(sourceHospital));

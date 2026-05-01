@@ -307,6 +307,164 @@ class BreakGlassServiceImplTest {
             verify(sessionRepository, never()).save(any());
             verify(auditService, never()).logEvent(any());
         }
+
+        @Test
+        @DisplayName("returns empty when patientId is null (defensive guard)")
+        void nullPatientShortCircuits() {
+            assertThat(service.consumeIfLive(null, userId, "x")).isEmpty();
+            verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("falls back to current security context when sessionUserId is null")
+        void nullUserIdResolvesFromSecurityContext() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(liveSession()));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            Optional<BreakGlassSessionResponseDTO> out =
+                service.consumeIfLive(patientId, null, "fallback");
+
+            assertThat(out).isPresent();
+        }
+
+        @Test
+        @DisplayName("returns empty when sessionUserId is null AND no security context")
+        void nullUserIdNoSecurityContext() {
+            SecurityContextHolder.clearContext();
+            assertThat(service.consumeIfLive(patientId, null, "x")).isEmpty();
+            verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("uses fallback purpose label when caller passes null")
+        void nullPurposeUsesFallback() {
+            BreakGlassSession session = liveSession();
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(session));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.consumeIfLive(patientId, userId, null);
+
+            verify(auditService).logEvent(any());
+        }
+    }
+
+    // -------------------------------------------------------------------- list / find
+
+    @Nested
+    @DisplayName("listLiveForPatient / listForHospital / findLiveForCurrentUserAndPatient")
+    class ListAndFind {
+        @Test
+        @DisplayName("listLiveForPatient maps repository results to DTOs")
+        void listLiveForPatient() {
+            when(sessionRepository.findLiveForPatient(eq(patientId), any()))
+                .thenReturn(List.of(liveSession(), liveSession()));
+
+            List<BreakGlassSessionResponseDTO> out = service.listLiveForPatient(patientId);
+
+            assertThat(out).hasSize(2);
+            assertThat(out).allMatch(BreakGlassSessionResponseDTO::isLive);
+        }
+
+        @Test
+        @DisplayName("listForHospital paginates")
+        void listForHospital() {
+            org.springframework.data.domain.Pageable page =
+                org.springframework.data.domain.PageRequest.of(0, 10);
+            when(sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, page))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(liveSession())));
+
+            org.springframework.data.domain.Page<BreakGlassSessionResponseDTO> out =
+                service.listForHospital(hospitalId, page);
+
+            assertThat(out.getContent()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("findLiveForCurrentUserAndPatient returns empty when no security context")
+        void findLiveNoAuth() {
+            SecurityContextHolder.clearContext();
+            assertThat(service.findLiveForCurrentUserAndPatient(patientId)).isEmpty();
+            verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("findLiveForCurrentUserAndPatient returns the live session for the calling user")
+        void findLiveWithAuth() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(liveSession()));
+
+            Optional<BreakGlassSessionResponseDTO> out = service.findLiveForCurrentUserAndPatient(patientId);
+
+            assertThat(out).isPresent();
+            assertThat(out.get().isLive()).isTrue();
+        }
+
+        @Test
+        @DisplayName("findLiveForCurrentUserAndPatient returns empty when the user has no live session")
+        void findLiveNoActiveSession() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of());
+
+            assertThat(service.findLiveForCurrentUserAndPatient(patientId)).isEmpty();
+        }
+    }
+
+    // -------------------------------------------------------------------- super admin
+
+    @Nested
+    @DisplayName("super-admin shortcut + auth boundaries")
+    class SuperAdminAndAuth {
+        @Test
+        @DisplayName("SUPER_ADMIN can declare even without a hospital-scoped role")
+        void superAdminBypassesHospitalRoleCheck() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+                .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId)
+                .reason("Super-admin override.").build();
+
+            assertThat(service.declare(req)).isNotNull();
+            // existsActiveByUserAndHospitalAndAnyRoleCode must NOT be consulted
+            verify(assignmentRepository, never())
+                .existsActiveByUserAndHospitalAndAnyRoleCode(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("declare throws Unauthorized when no security context is present")
+        void declareWithoutAuth() {
+            SecurityContextHolder.clearContext();
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId)
+                .reason("Trying without auth.").build();
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(UnauthorizedAccessException.class);
+        }
+
+        @Test
+        @DisplayName("audit emission failure does not bubble out of the service")
+        void auditFailureSwallowed() {
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.doThrow(new RuntimeException("audit DB down"))
+                .when(auditService).logEvent(any());
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId)
+                .reason("Audit failure resilience test.").build();
+
+            // Must not throw — declare should still succeed even if audit emission fails.
+            assertThat(service.declare(req)).isNotNull();
+        }
     }
 
     // -------------------------------------------------------------------- helpers
