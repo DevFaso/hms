@@ -184,7 +184,7 @@ class BreakGlassServiceImplTest {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
                 .thenReturn(false);
@@ -250,7 +250,7 @@ class BreakGlassServiceImplTest {
 
             when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
-            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
                 eq(userId), eq(hospitalId), any())).thenReturn(false);
@@ -425,7 +425,7 @@ class BreakGlassServiceImplTest {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -473,10 +473,12 @@ class BreakGlassServiceImplTest {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+        when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());
+        // Pin the role-code set so a regression that drops the ROLE_ prefix
+        // (or a typo'd value) fails this test instead of silently authorising.
         when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
-            eq(userId), eq(hospitalId), any(Set.class))).thenReturn(true);
+            eq(userId), eq(hospitalId), eq(BreakGlassServiceImpl.DECLARE_ROLES))).thenReturn(true);
     }
 
     private BreakGlassSession liveSession() {

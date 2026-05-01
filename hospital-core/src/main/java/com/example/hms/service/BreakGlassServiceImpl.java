@@ -54,15 +54,20 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     static final int MAX_TTL_MINUTES = 240;
 
     /**
-     * Roles allowed to declare a break-the-glass session. Mirrors the
-     * controller's @PreAuthorize so the two cannot drift.
+     * Roles allowed to declare a break-the-glass session. Codes match what
+     * V2__seed_roles.sql persists in {@code security.roles.code} (all prefixed
+     * with {@code ROLE_}); the controller's @PreAuthorize uses the same form
+     * via Spring's authority convention.
      */
     static final Set<String> DECLARE_ROLES = Set.of(
-        "DOCTOR", "NURSE", "MIDWIFE", "HOSPITAL_ADMIN", "SUPER_ADMIN"
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"
     );
 
     /** Roles allowed to revoke any session at the hospital (declaring user can always revoke their own). */
-    static final Set<String> ADMIN_REVOKE_ROLES = Set.of("HOSPITAL_ADMIN", "SUPER_ADMIN");
+    static final Set<String> ADMIN_REVOKE_ROLES = Set.of("ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
+
+    /** Persisted role code for the global super-admin. */
+    static final String SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
 
     private final BreakGlassSessionRepository sessionRepository;
     private final UserRepository userRepository;
@@ -264,7 +269,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
 
     private boolean isSuperAdmin(User caller) {
         return assignmentRepository
-            .findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(caller.getId(), "SUPER_ADMIN")
+            .findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(caller.getId(), SUPER_ADMIN_CODE)
             .isPresent();
     }
 
