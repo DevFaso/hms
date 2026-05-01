@@ -506,3 +506,19 @@
 .scope-label {
   user-select: none;
 }
+
+.scope-checkbox.sensitive {
+  border: 1px dashed #c0392b;
+  background: #fff5f4;
+
+  .scope-label {
+    color: #7a1f1f;
+    font-weight: 500;
+  }
+
+  .sensitive-marker {
+    color: #c0392b;
+    font-weight: 700;
+    margin-left: 0.15rem;
+  }
+}

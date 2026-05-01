@@ -19,6 +19,20 @@
     "NONE_ACTIVE": "Aucun avis actif pour ce patient.",
     "ERROR": "Impossible de charger les avis de bonne pratique. Le dossier reste utilisable."
   },
+  "BREAK_GLASS": {
+    "ACTIVE": "Accès d'urgence actif — chaque lecture est journalisée.",
+    "EXPIRES_IN": "Expire dans",
+    "PROMPT": "Besoin d'accéder au dossier sans consentement ?",
+    "NEED_HOSPITAL": "Sélectionnez un hôpital avant de déclencher l'accès d'urgence.",
+    "DECLARE": "Déclencher l'accès d'urgence",
+    "REVOKE": "Mettre fin à l'accès d'urgence",
+    "MODAL_TITLE": "Déclencher l'accès d'urgence",
+    "MODAL_WARN": "Cela autorise jusqu'à 4 heures d'accès en lecture audité sans consentement du patient. À utiliser uniquement en urgence — chaque lecture sera journalisée.",
+    "REASON_LABEL": "Justification clinique",
+    "REASON_PLACEHOLDER": "Ex. : Patient inconscient, aucun proche joignable ; besoin des allergies/médicaments.",
+    "TTL_LABEL": "Durée",
+    "CONFIRM": "Activer l'accès"
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
     "LOADING": "Chargement du résumé patient…",
@@ -529,6 +543,7 @@
       "SCOPE": "Portée",
       "SHARE_ALL": "Partager tous les dossiers",
       "SCOPE_HINT": "Sélectionnez les domaines à partager, ou gardez « Partager tous » coché pour tout partager.",
+      "SENSITIVE_HINT": "Catégorie sensible — le patient doit consentir explicitement. Non incluse dans Partager tous.",
       "EXPIRATION": "Expiration",
       "PATIENT_ID": "ID patient",
       "UUID_PLACEHOLDER": "Saisir un UUID",
@@ -547,18 +562,27 @@
     },
     "SCOPE_DOMAINS": {
       "ENCOUNTERS": "Consultations",
-      "TREATMENTS": "Traitements",
+      "ENCOUNTER_HISTORY": "Historique des consultations",
+      "NOTES": "Notes cliniques",
+      "PROBLEMS": "Problèmes",
+      "ALLERGIES": "Allergies",
       "PRESCRIPTIONS": "Prescriptions",
+      "TREATMENTS": "Traitements",
       "LAB_ORDERS": "Analyses prescrites",
       "LAB_RESULTS": "Résultats de labo",
-      "ALLERGIES": "Allergies",
-      "PROBLEMS": "Problèmes",
+      "IMAGING": "Imagerie",
+      "PROCEDURES": "Procédures",
       "SURGICAL_HISTORY": "Antécédents chirurgicaux",
-      "ADVANCE_DIRECTIVES": "Directives anticipées",
-      "ENCOUNTER_HISTORY": "Historique des consultations",
+      "VITALS": "Signes vitaux",
       "VITAL_SIGNS": "Signes vitaux",
       "IMMUNIZATIONS": "Immunisations",
-      "INSURANCES": "Informations d'assurance"
+      "ADVANCE_DIRECTIVES": "Directives anticipées",
+      "INSURANCES": "Informations d'assurance",
+      "BILLING": "Facturation",
+      "MENTAL_HEALTH": "Santé mentale (sensible)",
+      "HIV_STATUS": "Statut VIH (sensible)",
+      "SUBSTANCE_USE": "Toxicomanie (sensible)",
+      "GENETICS": "Génétique (sensible)"
     }
   },
   "SHARED_RECORDS": {

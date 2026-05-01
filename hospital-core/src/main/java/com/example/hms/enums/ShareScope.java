@@ -28,7 +28,16 @@ public enum ShareScope {
      * The hospitals belong to different organisations.
      * An explicit, time-bound cross-org consent is required.
      */
-    CROSS_ORG("Cross-organisation share");
+    CROSS_ORG("Cross-organisation share"),
+
+    /**
+     * No matching consent existed at any tier (or the matched consent's scope
+     * did not cover the requested domain) but a live break-the-glass emergency
+     * session for the current user authorised the read. Every read served
+     * under this scope has already emitted a {@code BREAK_GLASS_ACCESS} audit
+     * event by the time the caller observes the {@code ConsentContext}.
+     */
+    BREAK_GLASS("Break-the-glass override");
 
     private final String label;
 

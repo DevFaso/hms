@@ -20,6 +20,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
 import { ChartReviewComponent } from './chart-review/chart-review.component';
+import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
 
 type TabKey =
   | 'overview'
@@ -41,6 +42,7 @@ type TabKey =
     BpaPanelComponent,
     StoryboardBannerComponent,
     ChartReviewComponent,
+    BreakGlassBannerComponent,
   ],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',
@@ -95,6 +97,11 @@ export class PatientDetailComponent implements OnInit {
     }
     this.patientId = id;
     this.loadPatient(id);
+  }
+
+  /** Active hospital for the caller. Null when no scope is selected (e.g. SUPER_ADMIN unscoped view). */
+  currentHospitalId(): string | null {
+    return this.roleContext.activeHospitalId ?? null;
   }
 
   loadPatient(id: string): void {
