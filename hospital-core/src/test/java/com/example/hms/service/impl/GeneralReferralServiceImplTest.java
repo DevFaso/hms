@@ -255,6 +255,7 @@ class GeneralReferralServiceImplTest {
     void completeReferral_updatesCompletionMetadata() {
         UUID referralId = UUID.randomUUID();
         GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(referral)).thenReturn(referral);
@@ -265,6 +266,83 @@ class GeneralReferralServiceImplTest {
         assertEquals("Specialist concluded care", response.getCompletionSummary());
         assertEquals("Follow up with PCP", response.getFollowUpRecommendations());
         assertNotNull(referral.getCompletedAt());
+        verify(referralRepository).save(referral);
+    }
+
+    @Test
+    void scheduleReferral_setsScheduledStatusAndAppointmentFields() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(5);
+
+        com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(appointmentTime)
+                .location("Clinic 7 — Room 12")
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO response = generalReferralService.scheduleReferral(referralId, request);
+
+        assertEquals(ReferralStatus.SCHEDULED, response.getStatus());
+        assertEquals(appointmentTime, referral.getScheduledAppointmentAt());
+        assertEquals("Clinic 7 — Room 12", referral.getAppointmentLocation());
+        verify(referralRepository).save(referral);
+    }
+
+    @Test
+    void scheduleReferral_unknownReferral_throwsNotFound() {
+        UUID referralId = UUID.randomUUID();
+        com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(LocalDateTime.now().plusDays(1))
+                .location("X")
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> generalReferralService.scheduleReferral(referralId, request));
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
+    }
+
+    @Test
+    void startReferral_transitionsToInProgressAndStampsStartedAt() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.SCHEDULED);
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO response = generalReferralService.startReferral(referralId);
+
+        assertEquals(ReferralStatus.IN_PROGRESS, response.getStatus());
+        assertNotNull(referral.getStartedAt());
+        assertNotNull(response.getStartedAt());
+        verify(referralRepository).save(referral);
+    }
+
+    @Test
+    void rejectReferral_setsRejectedStatusAndStoresReason() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        com.example.hms.payload.dto.referral.RejectReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.RejectReferralRequestDTO.builder()
+                .reason("Out of scope for our service")
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO response = generalReferralService.rejectReferral(referralId, request);
+
+        assertEquals(ReferralStatus.REJECTED, response.getStatus());
+        assertEquals("Out of scope for our service", referral.getCancellationReason());
         verify(referralRepository).save(referral);
     }
 
@@ -693,6 +771,7 @@ class GeneralReferralServiceImplTest {
 
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(buildHospital(activeHospId, "Sending Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -714,6 +793,7 @@ class GeneralReferralServiceImplTest {
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(buildHospital(otherHospId, "Sending Hospital"));
         referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -750,6 +830,7 @@ class GeneralReferralServiceImplTest {
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(null);  // hospital is null — isSendingHospital evaluates to false safely
         referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));

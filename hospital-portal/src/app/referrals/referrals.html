@@ -155,7 +155,34 @@
                       <span class="material-symbols-outlined">task_alt</span>
                     </button>
                   }
-                  @if (['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status)) {
+                  @if (['SUBMITTED', 'ACKNOWLEDGED'].includes(r.status)) {
+                    <button
+                      class="action-link reject"
+                      (click)="openReject(r)"
+                      title="Reject referral"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                    </button>
+                  }
+                  @if (r.status === 'ACKNOWLEDGED') {
+                    <button
+                      class="action-link schedule"
+                      (click)="openSchedule(r)"
+                      title="Schedule appointment"
+                    >
+                      <span class="material-symbols-outlined">event</span>
+                    </button>
+                  }
+                  @if (['ACKNOWLEDGED', 'SCHEDULED'].includes(r.status)) {
+                    <button
+                      class="action-link start"
+                      (click)="startReferral(r)"
+                      title="Start consultation"
+                    >
+                      <span class="material-symbols-outlined">play_circle</span>
+                    </button>
+                  }
+                  @if (['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status)) {
                     <button
                       class="action-link complete"
                       (click)="openComplete(r)"
@@ -164,7 +191,7 @@
                       <span class="material-symbols-outlined">check_circle</span>
                     </button>
                   }
-                  @if (!['COMPLETED', 'CANCELLED'].includes(r.status)) {
+                  @if (!['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status)) {
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(r)"
@@ -251,6 +278,22 @@
               }}</span>
             </div>
             <div class="detail-field">
+              <span class="field-label">Scheduled</span
+              ><span class="field-value">{{
+                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Appointment Location</span
+              ><span class="field-value">{{ ref.appointmentLocation || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Started</span
+              ><span class="field-value">{{
+                ref.startedAt ? (ref.startedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
                 ref.completedAt ? (ref.completedAt | date: 'medium') : '—'
@@ -328,13 +371,31 @@
                 Acknowledge
               </button>
             }
-            @if (['ACKNOWLEDGED', 'IN_PROGRESS'].includes(ref.status)) {
+            @if (['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)) {
+              <button class="btn-danger" (click)="openReject(ref)" [disabled]="actionLoading()">
+                <span class="material-symbols-outlined">block</span>
+                Reject
+              </button>
+            }
+            @if (ref.status === 'ACKNOWLEDGED') {
+              <button class="btn-primary" (click)="openSchedule(ref)" [disabled]="actionLoading()">
+                <span class="material-symbols-outlined">event</span>
+                Schedule
+              </button>
+            }
+            @if (['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)) {
+              <button class="btn-primary" (click)="startReferral(ref)" [disabled]="actionLoading()">
+                <span class="material-symbols-outlined">play_circle</span>
+                {{ actionLoading() ? 'Starting…' : 'Start' }}
+              </button>
+            }
+            @if (['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)) {
               <button class="btn-primary" (click)="openComplete(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">check_circle</span>
                 Complete
               </button>
             }
-            @if (!['COMPLETED', 'CANCELLED'].includes(ref.status)) {
+            @if (!['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(ref.status)) {
               <button class="btn-danger" (click)="confirmCancel(ref)">
                 <span class="material-symbols-outlined">cancel</span>
                 Cancel
@@ -661,6 +722,100 @@
           [disabled]="actionLoading() || !acknowledgeNotes.trim()"
         >
           {{ actionLoading() ? 'Acknowledging…' : 'Acknowledge' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Schedule Referral Modal -->
+  @if (showScheduleModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeScheduleModal()"
+      (keydown.escape)="closeScheduleModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Schedule Referral</h2>
+        <button class="modal-close" (click)="closeScheduleModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Schedule an appointment for <strong>{{ schedulingRef()?.patientName }}</strong> ({{
+            schedulingRef()?.targetSpecialty
+          }}).
+        </p>
+        <div class="field">
+          <label for="schedule-time">Appointment Date & Time *</label>
+          <input id="schedule-time" type="datetime-local" [(ngModel)]="scheduleAppointmentTime" />
+        </div>
+        <div class="field">
+          <label for="schedule-location">Location</label>
+          <input
+            id="schedule-location"
+            type="text"
+            [(ngModel)]="scheduleLocation"
+            placeholder="e.g. Clinic 3 — Room 204"
+            maxlength="300"
+          />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeScheduleModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="executeSchedule()"
+          [disabled]="actionLoading() || !scheduleAppointmentTime"
+        >
+          {{ actionLoading() ? 'Scheduling…' : 'Schedule' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Reject Referral Modal -->
+  @if (showRejectModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeRejectModal()"
+      (keydown.escape)="closeRejectModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Reject Referral</h2>
+        <button class="modal-close" (click)="closeRejectModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Reject the referral for <strong>{{ rejectingRef()?.patientName }}</strong> ({{
+            rejectingRef()?.targetSpecialty
+          }}). The referring provider will be notified.
+        </p>
+        <div class="field">
+          <label for="reject-reason">Reason *</label>
+          <textarea
+            id="reject-reason"
+            [(ngModel)]="rejectReason"
+            rows="3"
+            maxlength="500"
+            placeholder="Why is this referral being declined?"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeRejectModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-danger"
+          (click)="executeReject()"
+          [disabled]="actionLoading() || !rejectReason.trim()"
+        >
+          {{ actionLoading() ? 'Rejecting…' : 'Reject' }}
         </button>
       </div>
     </div>
