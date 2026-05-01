@@ -73,10 +73,11 @@ class GeneralReferralStateMachineTest {
 
         @Test
         void acknowledge_fromOtherStatuses_throws() {
+            Staff anyStaff = new Staff();
             for (ReferralStatus s : ReferralStatus.values()) {
                 if (s == ReferralStatus.SUBMITTED) continue;
                 GeneralReferral r = newReferralIn(s);
-                assertThatThrownBy(() -> r.acknowledge("x", new Staff()))
+                assertThatThrownBy(() -> r.acknowledge("x", anyStaff))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("acknowledge");
             }
@@ -98,10 +99,11 @@ class GeneralReferralStateMachineTest {
 
         @Test
         void schedule_fromOtherStatuses_throws() {
+            LocalDateTime when = LocalDateTime.now().plusDays(1);
             for (ReferralStatus s : ReferralStatus.values()) {
                 if (s == ReferralStatus.ACKNOWLEDGED) continue;
                 GeneralReferral r = newReferralIn(s);
-                assertThatThrownBy(() -> r.schedule(LocalDateTime.now().plusDays(1), "X"))
+                assertThatThrownBy(() -> r.schedule(when, "X"))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("schedule");
             }
