@@ -73,8 +73,9 @@ public class BreakGlassController {
     @GetMapping("/active")
     @Operation(summary = "List live sessions for a patient",
                description = "Powers the patient-detail emergency-access banner. Returns only sessions "
-                           + "that have not been revoked and have not yet expired.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+                           + "that have not been revoked and have not yet expired. Receptionists are "
+                           + "intentionally excluded — sessions carry clinical justification text.")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<BreakGlassSessionResponseDTO>> listActiveForPatient(
             @RequestParam UUID patientId) {
         return ResponseEntity.ok(breakGlassService.listLiveForPatient(patientId));

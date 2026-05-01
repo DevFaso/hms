@@ -162,8 +162,16 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Override
     @Transactional(readOnly = true)
     public List<BreakGlassSessionResponseDTO> listLiveForPatient(UUID patientId) {
+        // Service-side authz: the controller's @PreAuthorize accepts any privileged
+        // role globally, but we still need the caller to actually be staff at one
+        // of the hospitals where this session was declared (or super admin).
+        // Filter the row set to those hospitals before returning.
+        User caller = currentUserOrThrow();
+        boolean superAdmin = isSuperAdmin(caller);
         return sessionRepository.findLiveForPatient(patientId, LocalDateTime.now())
             .stream()
+            .filter(s -> superAdmin
+                || hasAnyRoleAtHospital(caller, s.getHospital().getId(), DECLARE_ROLES))
             .map(this::toDto)
             .toList();
     }
@@ -171,6 +179,18 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     @Override
     @Transactional(readOnly = true)
     public Page<BreakGlassSessionResponseDTO> listForHospital(UUID hospitalId, Pageable pageable) {
+        // The controller-level @PreAuthorize only checks that the caller has the
+        // ROLE_HOSPITAL_ADMIN authority — it does NOT verify the call is for the
+        // caller's own hospital. Without this service-side check a hospital admin
+        // at hospital A could enumerate emergency-access activity at hospital B.
+        User caller = currentUserOrThrow();
+        boolean isAdminForHospital = isSuperAdmin(caller)
+            || hasAnyRoleAtHospital(caller, hospitalId, ADMIN_REVOKE_ROLES);
+        if (!isAdminForHospital) {
+            throw new UnauthorizedAccessException(
+                "Caller is not an administrator at hospital " + hospitalId
+                    + "; cannot view its break-glass audit trail.");
+        }
         return sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, pageable)
             .map(this::toDto);
     }

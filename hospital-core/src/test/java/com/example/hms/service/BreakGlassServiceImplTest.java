@@ -357,20 +357,66 @@ class BreakGlassServiceImplTest {
     @DisplayName("listLiveForPatient / listForHospital / findLiveForCurrentUserAndPatient")
     class ListAndFind {
         @Test
-        @DisplayName("listLiveForPatient maps repository results to DTOs")
-        void listLiveForPatient() {
+        @DisplayName("listLiveForPatient returns only sessions whose hospital the caller works at")
+        void listLiveForPatientFiltersByCallerHospital() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            // Caller works at the session's hospital.
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(userId), eq(hospitalId), eq(BreakGlassServiceImpl.DECLARE_ROLES))).thenReturn(true);
+            // Build one session at the caller's hospital and one at a different hospital.
+            BreakGlassSession s1 = liveSession();
+            BreakGlassSession s2 = liveSession();
+            Hospital otherHospital = Hospital.builder().name("Other").build();
+            otherHospital.setId(UUID.randomUUID());
+            s2.setHospital(otherHospital);
             when(sessionRepository.findLiveForPatient(eq(patientId), any()))
-                .thenReturn(List.of(liveSession(), liveSession()));
+                .thenReturn(List.of(s1, s2));
 
             List<BreakGlassSessionResponseDTO> out = service.listLiveForPatient(patientId);
 
-            assertThat(out).hasSize(2);
-            assertThat(out).allMatch(BreakGlassSessionResponseDTO::isLive);
+            assertThat(out).hasSize(1);
+            assertThat(out.get(0).getHospitalId()).isEqualTo(hospitalId);
         }
 
         @Test
-        @DisplayName("listForHospital paginates")
+        @DisplayName("listLiveForPatient: SUPER_ADMIN sees every hospital's sessions")
+        void listLiveForPatientSuperAdmin() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
+            when(sessionRepository.findLiveForPatient(eq(patientId), any()))
+                .thenReturn(List.of(liveSession(), liveSession()));
+
+            assertThat(service.listLiveForPatient(patientId)).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("listForHospital rejects callers who are not admins of that hospital")
+        void listForHospitalRejectsCrossHospitalAdmin() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(userId), eq(hospitalId), eq(BreakGlassServiceImpl.ADMIN_REVOKE_ROLES))).thenReturn(false);
+
+            assertThatThrownBy(() -> service.listForHospital(hospitalId,
+                org.springframework.data.domain.PageRequest.of(0, 10)))
+                .isInstanceOf(UnauthorizedAccessException.class);
+            verify(sessionRepository, never())
+                .findByHospitalIdOrderByStartedAtDesc(any(), any());
+        }
+
+        @Test
+        @DisplayName("listForHospital paginates for an admin of the hospital")
         void listForHospital() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(userId), eq(hospitalId), eq(BreakGlassServiceImpl.ADMIN_REVOKE_ROLES))).thenReturn(true);
+
             org.springframework.data.domain.Pageable page =
                 org.springframework.data.domain.PageRequest.of(0, 10);
             when(sessionRepository.findByHospitalIdOrderByStartedAtDesc(hospitalId, page))
