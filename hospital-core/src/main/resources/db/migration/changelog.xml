@@ -881,4 +881,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V68: P1 #11 — DHIS2 ADX (Aggregate Data Exchange) export
+         - integration schema (new) holds four tables: per-facility
+           DHIS2 endpoint config, HMS->DHIS2 dataElement mappings,
+           one row per triggered export run, and the per-value outbox
+           that makes replays idempotent.
+         - hospital.hospitals.dhis2_org_unit_uid binds an HMS facility
+           to its DHIS2 organisation-unit UID.
+         - Auth secrets are NOT stored: auth_secret_env_var holds the
+           env-var name; the value is resolved at push time.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V68-dhis2-adx-export" author="hms-team" runOnChange="false">
+        <sqlFile path="V68__dhis2_adx_export.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

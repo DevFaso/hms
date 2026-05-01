@@ -28,6 +28,13 @@ public final class TerminologyCodes {
     public static final String SYSTEM_RXNORM = "http://www.nlm.nih.gov/research/umls/rxnorm";
     public static final String SYSTEM_UCUM = "http://unitsofmeasure.org";
 
+    /**
+     * CDC vaccine code (CVX) — the FHIR-canonical system used on
+     * {@code PatientImmunization.vaccineCode}. Drives the DHIS2 ADX
+     * export's per-vaccine aggregation buckets.
+     */
+    public static final String SYSTEM_CVX = "http://hl7.org/fhir/sid/cvx";
+
     /** Project-local fallback for codes whose source system is unknown. */
     public static final String SYSTEM_HMS_LAB_LOCAL = "urn:hms:lab:test-code";
     public static final String SYSTEM_HMS_PROBLEM_LOCAL = "urn:hms:problem-code";

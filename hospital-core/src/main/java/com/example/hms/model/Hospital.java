@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.Set;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 @Entity
@@ -89,6 +90,19 @@ public class Hospital extends BaseEntity {
     @Size(max = 255)
     @Column(length = 255)
     private String website;
+
+    /**
+     * DHIS2 organisation-unit UID (11-char DHIS2 convention) bound to this
+     * hospital for ADX exports. Null when the facility does not export.
+     * The DB-side CHECK enforces this format too; the {@code @Pattern}
+     * here surfaces the violation at validation time so callers see a
+     * user-actionable error rather than a 500 on commit.
+     */
+    @Size(max = 11)
+    @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
+        message = "DHIS2 org-unit UID must be 11 chars, alphanumeric, leading letter")
+    @Column(name = "dhis2_org_unit_uid", length = 11)
+    private String dhis2OrgUnitUid;
 
     @Builder.Default
     @Column(nullable = false)
