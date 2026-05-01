@@ -15,6 +15,9 @@
     <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
     <app-storyboard-banner [patientId]="p.id" />
 
+    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
+    <app-break-glass-banner [patientId]="p.id" [hospitalId]="currentHospitalId()" />
+
     <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
     <app-bpa-panel [patientId]="p.id" />
 
