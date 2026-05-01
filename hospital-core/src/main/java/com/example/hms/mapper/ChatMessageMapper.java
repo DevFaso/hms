@@ -1,17 +1,33 @@
 package com.example.hms.mapper;
 
+import com.example.hms.model.ChatAttachment;
 import com.example.hms.model.ChatMessage;
 import com.example.hms.model.User;
+import com.example.hms.payload.dto.ChatAttachmentDTO;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class ChatMessageMapper {
 
+    private final ChatAttachmentMapper chatAttachmentMapper;
+
+    public ChatMessageMapper(ChatAttachmentMapper chatAttachmentMapper) {
+        this.chatAttachmentMapper = chatAttachmentMapper;
+    }
+
     public ChatMessageResponseDTO toChatMessageResponseDTO(ChatMessage message) {
+        return toChatMessageResponseDTO(message, List.of());
+    }
+
+    public ChatMessageResponseDTO toChatMessageResponseDTO(ChatMessage message,
+                                                           Collection<ChatAttachment> attachments) {
         if (message == null) return null;
 
         ChatMessageResponseDTO dto = new ChatMessageResponseDTO();
@@ -32,7 +48,27 @@ public class ChatMessageMapper {
             dto.setHospitalName(message.getAssignment().getHospital().getName());
         }
 
+        List<ChatAttachmentDTO> attachmentDtos = attachments == null
+            ? List.of()
+            : attachments.stream().map(chatAttachmentMapper::toDto).toList();
+        dto.setAttachments(attachmentDtos);
+
         return dto;
+    }
+
+    /**
+     * Convenience for batch rendering: caller pre-loads attachments via
+     * {@code findByMessage_IdInOrderByMessage_IdAscCreatedAtAsc(...)} and
+     * groups them by message id, avoiding N+1.
+     */
+    public ChatMessageResponseDTO toChatMessageResponseDTO(ChatMessage message,
+                                                           Map<java.util.UUID, List<ChatAttachment>> attachmentsByMessage) {
+        return toChatMessageResponseDTO(
+            message,
+            attachmentsByMessage != null && message != null && message.getId() != null
+                ? attachmentsByMessage.getOrDefault(message.getId(), List.of())
+                : List.of()
+        );
     }
 
     private void populateSenderInfo(ChatMessageResponseDTO dto, User sender) {
