@@ -67,6 +67,7 @@ public class EncounterFhirMapper {
             case INPATIENT       -> cls.setCode("IMP").setDisplay("inpatient encounter");
             case EMERGENCY       -> cls.setCode("EMER").setDisplay("emergency");
             case SURGERY         -> cls.setCode("ACUTE").setDisplay("inpatient acute");
+            case TELEHEALTH      -> cls.setCode("VR").setDisplay("virtual");
             case CONSULTATION,
                  OUTPATIENT,
                  FOLLOW_UP,
