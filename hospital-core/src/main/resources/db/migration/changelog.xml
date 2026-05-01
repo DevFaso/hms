@@ -919,4 +919,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V70: P1 #12 — Referral lifecycle (Tier A close-out)
+         - general_referrals.started_at TIMESTAMP NULL captures the
+           IN_PROGRESS transition timestamp (set when the receiving
+           clinician clicks Start). Pairs with the entity's state-machine
+           guards so SCHEDULED → IN_PROGRESS → COMPLETED is observable.
+         - Additive only; pure DDL; nullable column.
+         ================================================================= -->
+    <changeSet id="V70-add-referral-started-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V70__add_referral_started_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
