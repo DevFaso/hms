@@ -19,6 +19,59 @@
     "NONE_ACTIVE": "No active advisories for this patient.",
     "ERROR": "Could not load best-practice advisories. The chart is still safe to use."
   },
+  "DHIS2": {
+    "ADMIN": {
+      "HEADING": "DHIS2 ADX export",
+      "TAB_CONFIG": "Facility config",
+      "TAB_MAPPINGS": "Mappings",
+      "TAB_EXPORTS": "Exports"
+    },
+    "CONFIG": {
+      "BASE_URL": "DHIS2 base URL",
+      "AUTH_MODE": "Auth mode",
+      "AUTH_SECRET_ENV_VAR": "Auth secret env-var name",
+      "DEFAULT_PERIOD_TYPE": "Default period type",
+      "DEFAULT_DATASET_UID": "Default dataset UID",
+      "ACTIVE": "Active",
+      "LAST_EXPORT": "Last export",
+      "SECRET_CONFIGURED": "Env-var set"
+    },
+    "MAPPINGS": {
+      "HEADING": "DataElement mappings",
+      "FILTER_DATASET": "Filter by dataset UID",
+      "ADD": "Add a mapping",
+      "LOADING": "Loading mappings…",
+      "ERROR": "Could not load mappings.",
+      "EMPTY": "No mappings yet for this dataset.",
+      "COL_SYSTEM": "HMS system",
+      "COL_CODE": "HMS code",
+      "COL_DATAELEMENT": "DHIS2 dataElement",
+      "COL_COC": "Cat. option combo",
+      "COL_PERIOD": "Period",
+      "COL_ACTIVE": "Active"
+    },
+    "PANEL": {
+      "HEADING": "Manual export",
+      "DATASET_UID": "Dataset UID",
+      "PERIOD_TYPE": "Period type",
+      "PERIOD_ISO": "Period (e.g. 202604)",
+      "TRIGGER": "Trigger export",
+      "LOADING": "Loading recent runs…",
+      "ERROR": "Could not load recent runs.",
+      "EMPTY": "No exports yet for this hospital.",
+      "COL_STARTED": "Started",
+      "COL_DATASET": "Dataset",
+      "COL_PERIOD": "Period",
+      "COL_STATUS": "Status",
+      "COL_VALUES": "Values",
+      "COL_SKIPPED": "Skipped"
+    },
+    "PERIOD": {
+      "MONTHLY": "Monthly",
+      "WEEKLY": "Weekly",
+      "YEARLY": "Yearly"
+    }
+  },
   "BREAK_GLASS": {
     "ACTIVE": "Emergency access active — every read is audited.",
     "EXPIRES_IN": "Expires in",

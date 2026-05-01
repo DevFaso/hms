@@ -82,6 +82,14 @@ class LiquibaseSchemaIT {
             assertColumnExists(stmt, "clinical", "medication_catalog_items",
                 "pediatric_max_dose_mg_per_kg");
             assertSeedRowsPresent(stmt, "clinical", "drug_interactions", 12);
+
+            // V68: DHIS2 ADX export integration tables
+            assertSchemaExists(stmt, "integration");
+            assertTableExists(stmt, "integration", "dhis2_facility_config");
+            assertTableExists(stmt, "integration", "dhis2_dataelement_mapping");
+            assertTableExists(stmt, "integration", "dhis2_export_run");
+            assertTableExists(stmt, "integration", "dhis2_export_outbox");
+            assertColumnExists(stmt, "hospital", "hospitals", "dhis2_org_unit_uid");
         }
     }
 

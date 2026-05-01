@@ -90,6 +90,14 @@ public class Hospital extends BaseEntity {
     @Column(length = 255)
     private String website;
 
+    /**
+     * DHIS2 organisation-unit UID (11-char DHIS2 convention) bound to this
+     * hospital for ADX exports. Null when the facility does not export.
+     */
+    @Size(max = 11)
+    @Column(name = "dhis2_org_unit_uid", length = 11)
+    private String dhis2OrgUnitUid;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
