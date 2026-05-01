@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
@@ -42,6 +44,18 @@ public interface NurseTaskService {
         UUID nurseUserId,
         UUID hospitalId,
         NurseMedicationAdministrationRequestDTO request
+    );
+
+    /**
+     * Run the bedside five-rights verification on a MAR record (P1 #8).
+     * Persists the scanned values and the resulting status onto the MAR row
+     * before returning the per-right outcomes to the eMAR UI.
+     */
+    MarVerificationResponseDTO verifyMedicationAdministration(
+        UUID marId,
+        UUID nurseUserId,
+        UUID hospitalId,
+        MarVerificationRequestDTO request
     );
 
     NurseHandoffChecklistUpdateResponseDTO updateHandoffChecklistItem(

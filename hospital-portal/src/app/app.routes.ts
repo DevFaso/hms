@@ -675,6 +675,17 @@ export const routes: Routes = [
           import('./nurse-station/nurse-station').then((m) => m.NurseStationComponent),
       },
 
+      // Inpatient eMAR — bedside five-rights barcode-scan loop (P1 #8)
+      {
+        path: 'emar',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./nurse-station/emar/emar.component').then((m) => m.EmarComponent),
+      },
+
       // Patient Tracker Board (MVP 5)
       {
         path: 'patient-tracker',
