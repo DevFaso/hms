@@ -158,10 +158,21 @@ CREATE TABLE integration.dhis2_export_outbox (
     CONSTRAINT fk_dhis2_outbox_run
         FOREIGN KEY (run_id) REFERENCES integration.dhis2_export_run (id),
     CONSTRAINT chk_dhis2_outbox_status
-        CHECK (status IN ('PENDING', 'SENT', 'FAILED')),
-    CONSTRAINT uq_dhis2_outbox_value
-        UNIQUE (run_id, period_iso, org_unit_uid, dataelement_uid, category_option_combo_uid)
+        CHECK (status IN ('PENDING', 'SENT', 'FAILED'))
 );
+
+-- True idempotency for the default-COC case: PostgreSQL treats NULLs as
+-- distinct in plain UNIQUE constraints, so a normal table-level UNIQUE
+-- on (run_id, period, orgUnit, dataElement, category_option_combo_uid)
+-- would let two outbox rows for the same dataValue coexist whenever the
+-- categoryOptionCombo is NULL (the most common case). We replace it
+-- with a UNIQUE INDEX over a COALESCE expression so the implicit
+-- "default COC" sentinel collapses to one row regardless of NULL.
+CREATE UNIQUE INDEX uq_dhis2_outbox_value
+    ON integration.dhis2_export_outbox (
+        run_id, period_iso, org_unit_uid, dataelement_uid,
+        COALESCE(category_option_combo_uid, '__DEFAULT_COC__')
+    );
 
 -- Reconciliation lookup: walk all outbox rows for a run.
 CREATE INDEX idx_dhis2_outbox_run

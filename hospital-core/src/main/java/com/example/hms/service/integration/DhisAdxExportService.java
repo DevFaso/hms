@@ -23,7 +23,7 @@ public interface DhisAdxExportService {
      *                     {@link com.example.hms.model.integration.Dhis2DataElementMapping})
      * @param periodType   monthly / weekly / yearly — must match the
      *                     period_type on facility config and mapping rows
-     * @param periodIso    DHIS2-canonical period token, e.g. {@code 2026-04}
+     * @param periodIso    DHIS2-canonical period token (YYYYMM | YYYYW## | YYYY); e.g. {@code 202604}
      * @param staffId      optional staff who triggered the run (null for scheduler)
      * @return persisted run with terminal status (SUCCESS / PARTIAL / FAILED)
      */

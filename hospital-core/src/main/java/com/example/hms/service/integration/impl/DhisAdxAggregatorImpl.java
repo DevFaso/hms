@@ -85,9 +85,15 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
             .findByHospital_IdAndDatasetUidAndHmsConceptSystemAndHmsConceptCodeInAndActiveTrue(
                 hospitalId, datasetUid, TerminologyCodes.SYSTEM_CVX, cvxCodes);
 
+        // Filter by periodType so a mapping authored for a different
+        // granularity (e.g. weekly mapping when this run is monthly) is
+        // not silently used. Mappings are period-type-scoped per the
+        // service contract and the V68 column.
         final Map<String, Dhis2DataElementMapping> mappingByCvx = new HashMap<>();
         for (Dhis2DataElementMapping m : mappings) {
-            mappingByCvx.put(m.getHmsConceptCode(), m);
+            if (m.getPeriodType() == periodType) {
+                mappingByCvx.put(m.getHmsConceptCode(), m);
+            }
         }
 
         final List<AggregatedDataValue> values = new ArrayList<>();
@@ -97,8 +103,8 @@ public class DhisAdxAggregatorImpl implements DhisAdxAggregator {
             final Long count = (Long) row[1];
             final Dhis2DataElementMapping mapping = mappingByCvx.get(cvx);
             if (mapping == null) {
-                log.info("DHIS2 ADX aggregator: skipping CVX={} (no mapping for dataset {})",
-                    cvx, datasetUid);
+                log.info("DHIS2 ADX aggregator: skipping CVX={} (no {} mapping for dataset {})",
+                    cvx, periodType, datasetUid);
                 skipped++;
                 continue;
             }

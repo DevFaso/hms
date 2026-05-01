@@ -11,7 +11,6 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -40,12 +39,6 @@ import java.time.LocalDateTime;
 @Table(
     name = "dhis2_export_outbox",
     schema = "integration",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uq_dhis2_outbox_value",
-            columnNames = {"run_id", "period_iso", "org_unit_uid",
-                "dataelement_uid", "category_option_combo_uid"})
-    },
     indexes = {
         @Index(name = "idx_dhis2_outbox_run", columnList = "run_id"),
         @Index(name = "idx_dhis2_outbox_pending", columnList = "run_id, status")

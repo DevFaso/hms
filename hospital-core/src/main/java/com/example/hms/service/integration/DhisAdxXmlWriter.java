@@ -29,7 +29,7 @@ public class DhisAdxXmlWriter {
      * Build an ADX payload from a single (orgUnit, period, dataset) group.
      *
      * @param orgUnitUid     DHIS2 facility UID
-     * @param periodIso      DHIS2-canonical period token (e.g. {@code 2026-04})
+     * @param periodIso      DHIS2-canonical period token (e.g. {@code 202604} for April 2026)
      * @param datasetUid     DHIS2 dataset UID
      * @param values         data values (must all share the orgUnit)
      * @param exportedAt     timestamp written into the {@code exported} attribute

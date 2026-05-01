@@ -210,6 +210,11 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
   }
 
   protected onFilterChange(): void {
+    // Keep the create-row's datasetUid in sync with the filter, otherwise
+    // newRow.datasetUid stays stuck on whatever filterDatasetUid was when
+    // emptyRow() ran (typically blank), and canAdd() / createMapping()
+    // would respectively block forever or send the wrong dataset.
+    this.newRow.datasetUid = this.filterDatasetUid;
     if (DHIS2_UID_REGEX.test(this.filterDatasetUid)) {
       this.refresh();
     } else {

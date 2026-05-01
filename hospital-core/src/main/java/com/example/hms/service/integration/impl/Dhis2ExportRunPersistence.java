@@ -125,7 +125,13 @@ public class Dhis2ExportRunPersistence {
         final boolean partial = response.ignoredCount() > 0;
         run.setStatus(partial ? Dhis2ExportStatus.PARTIAL : Dhis2ExportStatus.SUCCESS);
         if (partial) {
-            run.setErrorMessage("DHIS2 ignored " + response.ignoredCount() + " value(s); see body");
+            // Persist a truncated copy of the DHIS2 import-summary body so
+            // operators can inspect *what* was ignored without trawling the
+            // backend logs. The 2048-char column cap is enforced by truncate().
+            run.setErrorMessage(truncate(
+                "DHIS2 ignored " + response.ignoredCount() + " value(s). Body: "
+                    + (response.body() == null ? "" : response.body()),
+                2048));
         }
         markAllOutbox(run.getId(), Dhis2OutboxStatus.SENT, null);
 

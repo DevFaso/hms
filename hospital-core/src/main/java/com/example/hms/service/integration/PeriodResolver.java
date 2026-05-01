@@ -63,8 +63,12 @@ public final class PeriodResolver {
             throw new IllegalArgumentException("Weekly period week must be 1..53; got " + periodIso);
         }
         // ISO 8601 week: Monday is day 1 of the week.
-        LocalDate monday = LocalDate.now()
-            .withYear(year)
+        // Use a deterministic base inside the requested week-based year (Jan 4
+        // is guaranteed to fall in week 1) so the result never depends on
+        // "today" — fixes a year-boundary bug where `LocalDate.now()` could
+        // pick the wrong year/week when run close to Jan 1 / Dec 31.
+        LocalDate monday = LocalDate.of(year, 1, 4)
+            .with(IsoFields.WEEK_BASED_YEAR, year)
             .with(IsoFields.WEEK_OF_WEEK_BASED_YEAR, week)
             .with(DayOfWeek.MONDAY);
         return new Range(monday, monday.plusDays(6));

@@ -86,9 +86,13 @@ ADX export is **aggregate-only**. Hard rules:
 ## Idempotency
 
 Every outbox row is keyed on
-`(run_id, period_iso, org_unit_uid, dataelement_uid, COALESCE(category_option_combo_uid,''))`.
-A retry for the same period+orgUnit+dataElement+COC will fail the
-UNIQUE constraint inside the same run, so replays are safe at the SQL
+`(run_id, period_iso, org_unit_uid, dataelement_uid, COALESCE(category_option_combo_uid,'__DEFAULT_COC__'))`
+via the `uq_dhis2_outbox_value` UNIQUE INDEX (V68). The COALESCE is
+required because Postgres treats NULLs as distinct in plain UNIQUE
+constraints, which would otherwise let two outbox rows for the same
+"default-COC" data value coexist inside one run.
+A retry for the same period+orgUnit+dataElement+COC will fail this
+UNIQUE INDEX inside the same run, so replays are safe at the SQL
 boundary. DHIS2 itself accepts repeated POSTs — the import summary
 will show high `imported` counts on first call and high `ignored`
 counts on subsequent calls (the orchestrator persists this on
