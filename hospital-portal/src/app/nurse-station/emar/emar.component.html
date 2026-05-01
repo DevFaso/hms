@@ -124,7 +124,13 @@
 
               @if (scannerActive(); as field) {
                 <div class="emar__scanner" data-testid="emar-scanner">
-                  <video #scannerVideo class="emar__scanner-video" autoplay playsinline muted></video>
+                  <video
+                    #scannerVideo
+                    class="emar__scanner-video"
+                    autoplay
+                    playsinline
+                    muted
+                  ></video>
                   <p class="emar__scanner-hint">Aim at the {{ field }} barcode…</p>
                   <button type="button" class="emar__btn emar__btn--ghost" (click)="stopScanner()">
                     Cancel scanner
@@ -160,9 +166,7 @@
                       [class.emar__right--fail]="!result.outcomes[check]"
                       [attr.data-testid]="'emar-right-' + check"
                     >
-                      <span class="emar__right-icon">{{
-                        result.outcomes[check] ? '✓' : '✕'
-                      }}</span>
+                      <span class="emar__right-icon">{{ result.outcomes[check] ? '✓' : '✕' }}</span>
                       <span class="emar__right-label">{{ fiveRightsLabel(check) }}</span>
                       @if (!result.outcomes[check] && result.failureReasons[check]) {
                         <span class="emar__right-reason">— {{ result.failureReasons[check] }}</span>

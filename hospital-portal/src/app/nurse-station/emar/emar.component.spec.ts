@@ -32,11 +32,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       'verifyMedication',
       'administerMedication',
     ]);
-    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', [
-      'success',
-      'error',
-      'info',
-    ]);
+    toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
 
     await TestBed.configureTestingModule({
       imports: [EmarComponent],

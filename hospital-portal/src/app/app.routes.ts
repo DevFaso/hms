@@ -680,12 +680,7 @@ export const routes: Routes = [
         path: 'emar',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_DOCTOR',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./nurse-station/emar/emar.component').then((m) => m.EmarComponent),

@@ -34,13 +34,7 @@ interface BarcodeDetectorCtor {
   getSupportedFormats?(): Promise<string[]>;
 }
 
-const FIVE_RIGHTS_ORDER: readonly FiveRightsCheck[] = [
-  'PATIENT',
-  'DRUG',
-  'DOSE',
-  'ROUTE',
-  'TIME',
-];
+const FIVE_RIGHTS_ORDER: readonly FiveRightsCheck[] = ['PATIENT', 'DRUG', 'DOSE', 'ROUTE', 'TIME'];
 
 const FIVE_RIGHTS_LABELS: Record<FiveRightsCheck, string> = {
   PATIENT: 'Right Patient',
