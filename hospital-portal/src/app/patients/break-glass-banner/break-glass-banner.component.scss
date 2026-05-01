@@ -1,0 +1,132 @@
+.bg-banner {
+  margin: 0 0 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+  background: #fff7e6;
+  border: 1px solid #f0c674;
+  color: #6d4c02;
+  font-size: 0.92rem;
+
+  &.bg-active {
+    background: #fde8e8;
+    border-color: #f5a3a3;
+    color: #7a1f1f;
+  }
+
+  &__row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  &__icon {
+    font-weight: 700;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: currentColor;
+    color: #fff;
+    font-size: 0.78rem;
+
+    &--idle {
+      background: transparent;
+      color: inherit;
+      font-size: 1rem;
+    }
+  }
+
+  &__text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    line-height: 1.25;
+  }
+
+  &__meta {
+    opacity: 0.85;
+    font-size: 0.85rem;
+  }
+
+  &__btn {
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+    background: #d62828;
+    color: #fff;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    &--ghost {
+      background: transparent;
+      color: inherit;
+    }
+
+    &--danger {
+      background: #b3261e;
+      border-color: #b3261e;
+    }
+  }
+}
+
+.bg-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+
+  &__panel {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    width: min(480px, 92vw);
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+
+    h3 {
+      margin: 0 0 0.5rem;
+    }
+  }
+
+  &__warn {
+    margin: 0 0 0.9rem;
+    color: #7a1f1f;
+    font-weight: 500;
+  }
+
+  &__label {
+    display: block;
+    font-size: 0.85rem;
+    margin: 0.4rem 0 0.25rem;
+    color: #444;
+  }
+
+  &__input {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border-radius: 4px;
+    border: 1px solid #c8c8c8;
+    font: inherit;
+    box-sizing: border-box;
+  }
+
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+}

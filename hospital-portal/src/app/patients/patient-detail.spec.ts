@@ -14,6 +14,8 @@ import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
 import { StoryboardService } from '../services/storyboard.service';
+import { BreakGlassService } from '../services/break-glass.service';
+import { AuthService } from '../auth/auth.service';
 
 describe('PatientDetailComponent', () => {
   let component: PatientDetailComponent;
@@ -66,6 +68,16 @@ describe('PatientDetailComponent', () => {
     });
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
     storyboardServiceSpy = jasmine.createSpyObj('StoryboardService', ['getStoryboard']);
+    const breakGlassSpy = jasmine.createSpyObj<BreakGlassService>('BreakGlassService', [
+      'declare',
+      'revoke',
+      'findMyLiveSession',
+      'listLiveForPatient',
+      'listForHospital',
+    ]);
+    breakGlassSpy.findMyLiveSession.and.returnValue(of(null));
+    const authSpy = jasmine.createSpyObj<AuthService>('AuthService', ['getRoles']);
+    authSpy.getRoles.and.returnValue([]);
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
@@ -106,6 +118,8 @@ describe('PatientDetailComponent', () => {
         { provide: RoleContextService, useValue: roleContextSpy },
         { provide: BpaService, useValue: bpaServiceSpy },
         { provide: StoryboardService, useValue: storyboardServiceSpy },
+        { provide: BreakGlassService, useValue: breakGlassSpy },
+        { provide: AuthService, useValue: authSpy },
       ],
     }).compileComponents();
 
