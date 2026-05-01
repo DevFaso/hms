@@ -165,25 +165,55 @@ export class EmarComponent implements OnInit, OnDestroy {
   }
 
   protected onScanInput(field: ScanField, value: string): void {
-    if (field === 'patient') this.patientScan.set(value);
-    else this.medicationScan.set(value);
+    if (field === 'patient') {
+      if (this.patientScan() === value) return;
+      this.patientScan.set(value);
+    } else {
+      if (this.medicationScan() === value) return;
+      this.medicationScan.set(value);
+    }
+    this.invalidateVerification();
   }
 
   protected onDoseInput(value: string): void {
+    if (this.doseScan() === value) return;
     this.doseScan.set(value);
+    this.invalidateVerification();
   }
 
   protected onRouteInput(value: string): void {
+    if (this.routeScan() === value) return;
     this.routeScan.set(value);
+    this.invalidateVerification();
   }
 
   protected onOverrideInput(value: string): void {
     this.overrideReason.set(value);
   }
 
+  /**
+   * Drop the previous verification result whenever any input the server
+   * matched against changes. Without this guard a nurse could verify, edit
+   * the dose to something the prescription doesn't allow, then proceed to
+   * GIVEN using the now-stale all-pass outcome.
+   */
+  private invalidateVerification(): void {
+    if (this.verification() !== null) {
+      this.verification.set(null);
+    }
+    if (this.overrideReason() !== '') {
+      this.overrideReason.set('');
+    }
+  }
+
   protected verify(): void {
     const task = this.activeTask();
     if (!task || !this.canVerify()) return;
+    // Capture the task id at call time. If the nurse switches to a different
+    // task while this request is in-flight, a late response must not paint
+    // the previous patient's outcomes onto the now-active row — that would
+    // be a clinical safety hazard.
+    const taskIdAtCall = task.id;
     const request: MarVerificationRequest = {
       patientScanValue: this.patientScan().trim(),
       medicationScanValue: this.medicationScan().trim(),
@@ -192,10 +222,11 @@ export class EmarComponent implements OnInit, OnDestroy {
     };
     this.verifyInFlight.set(true);
     this.nurseTaskService
-      .verifyMedication(task.id, request)
+      .verifyMedication(taskIdAtCall, request)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
         next: (resp) => {
+          if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verification.set(resp);
           this.verifyInFlight.set(false);
           if (resp.allPassed) {
@@ -205,6 +236,7 @@ export class EmarComponent implements OnInit, OnDestroy {
           }
         },
         error: () => {
+          if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verifyInFlight.set(false);
           this.toast.error('Verification failed. Try again.');
         },
@@ -242,6 +274,10 @@ export class EmarComponent implements OnInit, OnDestroy {
   /* ── Camera scanner (BarcodeDetector) ────────────────────────────────── */
 
   protected async startScanner(field: ScanField): Promise<void> {
+    // Tear down any prior session first; otherwise tapping Scan for the
+    // other field while the camera is already running would acquire a second
+    // MediaStream and leak a still-running video track until ngOnDestroy.
+    this.stopScanner();
     this.scannerError.set(null);
     const Detector = (globalThis as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
       .BarcodeDetector;

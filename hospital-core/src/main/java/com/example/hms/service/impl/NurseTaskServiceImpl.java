@@ -363,10 +363,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         mar.setPatientScanValue(request.getPatientScanValue());
         mar.setMedicationScanValue(request.getMedicationScanValue());
         mar.setDoseScanValue(request.getDoseScanValue());
+        mar.setRouteScanValue(request.getRouteScanValue());
         mar.setScanVerifiedAt(verifiedAt);
         mar.setFiveRightsStatus(result.allPassed() ? FiveRightsStatus.VERIFIED : FiveRightsStatus.NOT_VERIFIED);
-        // Overrides + reason are recorded on administer, not verify.
+        // A new verification supersedes any prior override decision: clear
+        // both the JSON override list and the free-text reason so a stale
+        // OVERRIDDEN reason from an earlier attempt cannot survive a clean
+        // re-verify.
         mar.setFiveRightsOverrides(null);
+        mar.setOverrideReason(null);
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(mar::setAdministeredByStaff);
         marRepository.save(mar);
@@ -420,8 +425,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /**
      * Stamp a finalised MAR row with the override decision once the
-     * administration is being recorded. Determines OVERRIDDEN vs VERIFIED
-     * based on the persisted scan outcomes.
+     * administration is being recorded. Always re-runs the five-rights check
+     * — the TIME right depends on the final {@code administeredAt}, which is
+     * set by the administer call (not by verify), so a row that was
+     * VERIFIED earlier may now be outside the time window. The route used
+     * here is the persisted scanned route ({@code routeScanValue}), not the
+     * prescription's own route, so a route mismatch caught at verify is not
+     * silently exonerated by reusing the prescribed value.
      */
     private void recordOverrideOnAdminister(
         MedicationAdministrationRecord mar,
@@ -429,19 +439,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String overrideReason
     ) {
         if (status != MedicationAdministrationStatus.GIVEN) return;
-        if (mar.getFiveRightsStatus() == FiveRightsStatus.VERIFIED) return;
 
-        // Re-run verification using the stored scan values to find which rights failed.
         FiveRightsVerificationResult check = fiveRightsVerificationService.verify(
             mar,
             mar.getPatientScanValue(),
             mar.getMedicationScanValue(),
             mar.getDoseScanValue(),
-            mar.getRoute(),
+            mar.getRouteScanValue(),
             mar.getAdministeredAt()
         );
         if (check.allPassed()) {
             mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+            mar.setFiveRightsOverrides(null);
+            mar.setOverrideReason(null);
             return;
         }
 
@@ -716,7 +726,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         // No verify call has happened for a fresh prescription-as-task path —
-        // GIVEN must therefore be explicitly overridden by the nurse.
+        // GIVEN must therefore be explicitly overridden by the nurse. We
+        // stamp scanVerifiedAt with the override decision time so audit
+        // queries that range over scan_verified_at still see this record.
         if (status == MedicationAdministrationStatus.GIVEN) {
             if (overrideReason == null || overrideReason.isBlank()) {
                 throw new BusinessException(
@@ -725,6 +737,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRecord.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
             marRecord.setOverrideReason(overrideReason);
             marRecord.setFiveRightsOverrides(serializeOverrides(EnumSet.allOf(FiveRightsCheck.class)));
+            marRecord.setScanVerifiedAt(LocalDateTime.now());
         }
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
 

@@ -129,6 +129,16 @@ public class MedicationAdministrationRecord extends BaseEntity {
     @Column(name = "dose_scan_value", length = 100)
     private String doseScanValue;
 
+    /**
+     * Route entered or scanned at the bedside. Persisted separately from the
+     * order's prescribed route on this record so the ROUTE right can be
+     * re-evaluated honestly at administer time and a route mismatch is
+     * captured in audit even when the nurse later overrides.
+     */
+    @Size(max = 80)
+    @Column(name = "route_scan_value", length = 80)
+    private String routeScanValue;
+
     /** When the bedside verification finished (verified or overridden). */
     @Column(name = "scan_verified_at")
     private LocalDateTime scanVerifiedAt;

@@ -18,6 +18,7 @@ ALTER TABLE clinical.medication_administration_records
     ADD COLUMN IF NOT EXISTS patient_scan_value     VARCHAR(255),
     ADD COLUMN IF NOT EXISTS medication_scan_value  VARCHAR(255),
     ADD COLUMN IF NOT EXISTS dose_scan_value        VARCHAR(100),
+    ADD COLUMN IF NOT EXISTS route_scan_value       VARCHAR(80),
     ADD COLUMN IF NOT EXISTS scan_verified_at       TIMESTAMP WITHOUT TIME ZONE,
     ADD COLUMN IF NOT EXISTS five_rights_status     VARCHAR(20),
     ADD COLUMN IF NOT EXISTS five_rights_overrides  JSONB,

@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { EmarComponent } from './emar.component';
 import {
@@ -144,5 +144,81 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     component['administer']('GIVEN');
 
     expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+  });
+
+  it('drops a late verify response when the nurse switches to a different task mid-flight', () => {
+    const otherTask: NurseMedicationTask = { ...sampleTask, id: 'task-2' };
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask, otherTask]));
+
+    // First verify call returns a Subject we can resolve later.
+    const verifySubject = new Subject<MarVerificationResponse>();
+    nurseSpy.verifyMedication.and.returnValue(verifySubject.asObservable());
+
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['patientScan'].set('pat-uuid');
+    component['medicationScan'].set('AMOX-500');
+    component['doseScan'].set('500 mg');
+    component['routeScan'].set('PO');
+    component['verify']();
+
+    // Switch to a different MAR row before the response arrives.
+    component['selectTask'](otherTask);
+
+    // Late response for the original task fires.
+    verifySubject.next({
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+
+    // The active task is now task-2, so the stale response must be ignored.
+    expect(component['verification']()).toBeNull();
+  });
+
+  it('clears a prior verification result when any scan/dose/route input changes', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['verification'].set({
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    component['overrideReason'].set('stale reason');
+
+    component['onDoseInput']('250 mg');
+
+    expect(component['verification']()).toBeNull();
+    expect(component['overrideReason']()).toBe('');
+  });
+
+  it('does not invalidate verification when an input handler is called with the same value', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['doseScan'].set('500 mg');
+    const verified: MarVerificationResponse = {
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    };
+    component['verification'].set(verified);
+
+    // Same value → no-op, must not wipe the verification.
+    component['onDoseInput']('500 mg');
+
+    expect(component['verification']()).toBe(verified);
   });
 });
