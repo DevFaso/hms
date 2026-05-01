@@ -121,4 +121,61 @@ class FileUploadServiceChatAttachmentTest {
         assertThrows(IllegalArgumentException.class,
             () -> service.uploadChatAttachment(file, ChatAttachmentKind.AUDIO, UPLOADER));
     }
+
+    // ---- resolveChatAttachment: server-side re-derivation from disk ----
+
+    @Test
+    void resolveChatAttachment_rebuildsDescriptorFromDiskForPhoto() throws IOException {
+        byte[] payload = "trusted-jpeg".getBytes();
+        MockMultipartFile file = new MockMultipartFile(
+            "file", "rash.jpg", "image/jpeg", payload);
+        FileUploadService.StoredFileDescriptor uploaded =
+            service.uploadChatAttachment(file, ChatAttachmentKind.PHOTO, UPLOADER);
+
+        FileUploadService.StoredFileDescriptor resolved =
+            service.resolveChatAttachment(uploaded.storageKey(), ChatAttachmentKind.PHOTO);
+
+        assertEquals(uploaded.storageKey(), resolved.storageKey());
+        assertEquals("image/jpeg", resolved.contentType());
+        assertEquals(payload.length, resolved.sizeBytes());
+        // SHA-256 must match — proves it's recomputed from disk, not echoed from caller.
+        assertEquals(uploaded.sha256(), resolved.sha256());
+    }
+
+    @Test
+    void resolveChatAttachment_rejectsBlankStorageKey() {
+        assertThrows(IllegalArgumentException.class,
+            () -> service.resolveChatAttachment("   ", ChatAttachmentKind.PHOTO));
+    }
+
+    @Test
+    void resolveChatAttachment_rejectsKeyWithoutExpectedPrefix() {
+        assertThrows(IllegalArgumentException.class,
+            () -> service.resolveChatAttachment("/uploads/chart-attachments/x.jpg", ChatAttachmentKind.PHOTO));
+    }
+
+    @Test
+    void resolveChatAttachment_rejectsPathTraversalInKey() {
+        assertThrows(IllegalArgumentException.class,
+            () -> service.resolveChatAttachment("/uploads/chat-attachments/../../etc/passwd", ChatAttachmentKind.PHOTO));
+    }
+
+    @Test
+    void resolveChatAttachment_rejectsMissingFileOnDisk() {
+        assertThrows(IllegalArgumentException.class,
+            () -> service.resolveChatAttachment("/uploads/chat-attachments/does-not-exist.jpg", ChatAttachmentKind.PHOTO));
+    }
+
+    @Test
+    void resolveChatAttachment_rejectsKindMismatchAgainstStoredFile() throws IOException {
+        MockMultipartFile file = new MockMultipartFile(
+            "file", "v.ogg", "audio/ogg", new byte[]{1, 2, 3});
+        FileUploadService.StoredFileDescriptor uploaded =
+            service.uploadChatAttachment(file, ChatAttachmentKind.AUDIO, UPLOADER);
+        String storageKey = uploaded.storageKey();
+
+        // Caller declares PHOTO but the on-disk file is .ogg → must reject.
+        assertThrows(IllegalArgumentException.class,
+            () -> service.resolveChatAttachment(storageKey, ChatAttachmentKind.PHOTO));
+    }
 }

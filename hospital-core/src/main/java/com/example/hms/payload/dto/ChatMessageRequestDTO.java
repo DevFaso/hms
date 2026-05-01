@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,7 +23,10 @@ public class ChatMessageRequestDTO {
     /** Hospital name – used by hospital-context sends. Optional for SUPER_ADMIN. */
     private String hospitalName;
 
-    @NotBlank
+    /**
+     * Message body. May be blank or null for attachment-only sends; the service enforces
+     * "content-or-attachments required" so an empty message with no attachments is rejected.
+     */
     private String content;
 
     private String roleCode;

@@ -11,7 +11,7 @@ import {
 import { UserService, UserSummary } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
@@ -110,6 +110,7 @@ export class ChatComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   conversations = signal<ChatConversation[]>([]);
   messages = signal<ChatMessage[]>([]);
@@ -219,7 +220,7 @@ export class ChatComponent implements OnInit {
     const req: ChatSendRequest = {
       senderId: this.currentUserId,
       recipientId: conv.conversationUserId,
-      content: this.messageText.trim() || (attachments.length > 0 ? '📎' : ''),
+      content: this.messageText.trim(),
       attachments: attachments.length > 0 ? attachments : undefined,
     };
 
@@ -253,17 +254,20 @@ export class ChatComponent implements OnInit {
   /** Voice memo cap (mirrors backend audio duration constraint). */
   static readonly MAX_VOICE_MEMO_SECONDS = 90;
 
+  /** Template-accessible alias for {@link MAX_VOICE_MEMO_SECONDS}. */
+  readonly maxVoiceMemoSeconds = ChatComponent.MAX_VOICE_MEMO_SECONDS;
+
   onPhotoSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
     if (!file) return;
     if (this.pendingAttachments().length >= ChatComponent.MAX_ATTACHMENTS_PER_MESSAGE) {
-      this.attachmentError.set('You can attach at most 4 items to a single message.');
+      this.attachmentError.set(this.translate.instant('CHAT.ATTACHMENT_LIMIT_REACHED'));
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      this.attachmentError.set('Photo must be 10 MB or smaller.');
+      this.attachmentError.set(this.translate.instant('CHAT.PHOTO_TOO_LARGE'));
       return;
     }
     this.uploadingPhoto.set(true);
@@ -275,7 +279,7 @@ export class ChatComponent implements OnInit {
       },
       error: (err) => {
         this.uploadingPhoto.set(false);
-        const detail = err?.error?.message ?? 'Failed to upload photo.';
+        const detail = err?.error?.message ?? this.translate.instant('CHAT.PHOTO_UPLOAD_FAILED');
         this.attachmentError.set(detail);
       },
     });
@@ -291,11 +295,11 @@ export class ChatComponent implements OnInit {
       return;
     }
     if (this.pendingAttachments().length >= ChatComponent.MAX_ATTACHMENTS_PER_MESSAGE) {
-      this.attachmentError.set('You can attach at most 4 items to a single message.');
+      this.attachmentError.set(this.translate.instant('CHAT.ATTACHMENT_LIMIT_REACHED'));
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
-      this.attachmentError.set('Voice memo recording is not supported in this browser.');
+      this.attachmentError.set(this.translate.instant('CHAT.VOICE_MEMO_NOT_SUPPORTED'));
       return;
     }
     try {
@@ -327,7 +331,7 @@ export class ChatComponent implements OnInit {
       }, 250);
     } catch {
       this.recordingAudio.set(false);
-      this.attachmentError.set('Microphone access was denied.');
+      this.attachmentError.set(this.translate.instant('CHAT.MICROPHONE_DENIED'));
     }
   }
 
@@ -367,7 +371,7 @@ export class ChatComponent implements OnInit {
     );
     const blob = new Blob(this.recordedChunks, { type: mimeType });
     if (blob.size === 0) {
-      this.attachmentError.set('Voice memo was empty — please try again.');
+      this.attachmentError.set(this.translate.instant('CHAT.VOICE_MEMO_EMPTY'));
       return;
     }
     const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'm4a' : 'webm';
@@ -380,7 +384,8 @@ export class ChatComponent implements OnInit {
       },
       error: (err) => {
         this.uploadingAudio.set(false);
-        const detail = err?.error?.message ?? 'Failed to upload voice memo.';
+        const detail =
+          err?.error?.message ?? this.translate.instant('CHAT.VOICE_MEMO_UPLOAD_FAILED');
         this.attachmentError.set(detail);
       },
     });

@@ -217,7 +217,12 @@
                     {{ att.kind === 'PHOTO' ? 'image' : 'mic' }}
                   </span>
                   <span class="pending-name">
-                    {{ att.displayName || (att.kind === 'PHOTO' ? 'photo' : 'voice memo') }}
+                    {{
+                      att.displayName ||
+                        (att.kind === 'PHOTO'
+                          ? ('CHAT.PHOTO' | translate)
+                          : ('CHAT.VOICE_MEMO' | translate))
+                    }}
                   </span>
                   @if (att.kind === 'AUDIO' && att.durationSeconds) {
                     <span class="pending-meta">{{ att.durationSeconds }}s</span>
@@ -227,6 +232,7 @@
                     class="pending-remove"
                     (click)="removePendingAttachment(i)"
                     [title]="'CHAT.REMOVE_ATTACHMENT' | translate"
+                    [attr.aria-label]="'CHAT.REMOVE_ATTACHMENT' | translate"
                   >
                     <span class="material-symbols-outlined">close</span>
                   </button>
@@ -243,7 +249,7 @@
             <div class="msg-recording-banner">
               <span class="rec-dot"></span>
               {{ 'CHAT.RECORDING' | translate }} · {{ formatRecordingTime(recordingElapsed()) }} /
-              0:90
+              {{ formatRecordingTime(maxVoiceMemoSeconds) }}
             </div>
           }
 

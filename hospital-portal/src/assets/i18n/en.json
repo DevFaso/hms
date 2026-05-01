@@ -461,14 +461,19 @@
   },
   "CHAT": {
     "ATTACH_PHOTO": "Attach photo",
+    "ATTACHMENT_LIMIT_REACHED": "You can attach at most 4 items to a single message.",
     "CONVERSATIONS": "Conversations",
     "ERROR_TITLE": "Error loading messages",
     "LOADING_CONVERSATIONS": "Loading conversations...",
     "LOADING_USERS": "Loading users...",
+    "MICROPHONE_DENIED": "Microphone access was denied.",
     "NEW_CONVERSATION": "New Conversation",
     "NO_CONVERSATIONS": "No conversations yet",
     "NO_MESSAGES": "No messages yet",
     "NO_USERS_FOUND": "No users found",
+    "PHOTO": "photo",
+    "PHOTO_TOO_LARGE": "Photo must be 10 MB or smaller.",
+    "PHOTO_UPLOAD_FAILED": "Failed to upload photo.",
     "RECORD_VOICE_MEMO": "Record voice memo",
     "RECORDING": "Recording",
     "REFRESH_MESSAGES": "Refresh messages",
@@ -480,7 +485,11 @@
     "START_CONVERSATION": "Start Conversation",
     "SUBTITLE": "Chat with colleagues",
     "TITLE": "Messages",
-    "TYPE_MESSAGE": "Type a message..."
+    "TYPE_MESSAGE": "Type a message...",
+    "VOICE_MEMO": "voice memo",
+    "VOICE_MEMO_EMPTY": "Voice memo was empty — please try again.",
+    "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
+    "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo."
   },
   "COMMON": {
     "ACTION": "Action",

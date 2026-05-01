@@ -53,6 +53,7 @@ class ChatMessageServiceImplTest {
     @Mock private MessageSource messageSource;
     @Mock private NotificationService notificationService;
     @Mock private ChatAttachmentRepository chatAttachmentRepository;
+    @Mock private FileUploadService fileUploadService;
 
     @InjectMocks
     private ChatMessageServiceImpl chatMessageService;
@@ -213,6 +214,18 @@ class ChatMessageServiceImplTest {
 
     // ---- P1 #10 telehealth attachment paths ----
 
+    private static FileUploadService.StoredFileDescriptor descriptorFor(String storageKey, String contentType) {
+        String filename = storageKey.substring(storageKey.lastIndexOf('/') + 1);
+        return new FileUploadService.StoredFileDescriptor(
+            storageKey,
+            "https://hms.test" + storageKey,
+            filename,
+            contentType,
+            1024L,
+            "deadbeef".repeat(8) // 64-char sha
+        );
+    }
+
     private ChatMessageServiceImpl primeAttachmentSendScenario(UUID senderId, UUID recipientId,
                                                                java.util.List<ChatAttachmentDTO> attachments,
                                                                ChatMessageRequestDTO dto) {
@@ -231,7 +244,7 @@ class ChatMessageServiceImplTest {
         savedMessage.setRecipient(recipient);
         savedMessage.setContent(dto.getContent());
         when(chatMessageRepository.save(any(ChatMessage.class))).thenReturn(savedMessage);
-        when(chatAttachmentRepository.save(any(ChatAttachment.class)))
+        when(chatAttachmentRepository.saveAndFlush(any(ChatAttachment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
             .thenReturn(ChatMessageResponseDTO.builder().build());
@@ -244,18 +257,19 @@ class ChatMessageServiceImplTest {
     }
 
     @Test
-    void sendMessage_persistsPhotoAttachment_whenStorageKeyIsNew() {
+    void sendMessage_persistsPhotoAttachment_whenStorageKeyIsNew() throws Exception {
         UUID senderId = UUID.randomUUID();
         UUID recipientId = UUID.randomUUID();
 
         ChatAttachmentDTO photo = ChatAttachmentDTO.builder()
             .storageKey("/uploads/chat-attachments/abc.jpg")
-            .publicUrl("https://hms/uploads/chat-attachments/abc.jpg")
-            .displayName("xray.jpg")
-            .contentType("image/jpeg")
-            .sizeBytes(1024L)
-            .sha256("deadbeef")
             .kind(ChatAttachmentKind.PHOTO)
+            // Client-supplied descriptors below MUST be ignored by the service:
+            .publicUrl("https://malicious/abc.jpg")
+            .displayName("not-trusted.jpg")
+            .contentType("application/octet-stream")
+            .sizeBytes(999_999_999L)
+            .sha256("tampered")
             .build();
 
         ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
@@ -266,15 +280,86 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = primeAttachmentSendScenario(
             senderId, recipientId, java.util.List.of(photo), dto);
 
+        when(fileUploadService.resolveChatAttachment(photo.getStorageKey(), ChatAttachmentKind.PHOTO))
+            .thenReturn(descriptorFor(photo.getStorageKey(), "image/jpeg"));
         when(chatAttachmentRepository.existsByStorageKey(photo.getStorageKey())).thenReturn(false);
 
         ChatMessageResponseDTO result = service.sendMessage(dto, Locale.ENGLISH);
         assertNotNull(result);
-        verify(chatAttachmentRepository, times(1)).save(any(ChatAttachment.class));
+        org.mockito.ArgumentCaptor<ChatAttachment> captor =
+            org.mockito.ArgumentCaptor.forClass(ChatAttachment.class);
+        verify(chatAttachmentRepository, times(1)).saveAndFlush(captor.capture());
+        ChatAttachment saved = captor.getValue();
+        // Server-resolved fields, not the malicious client values:
+        assertEquals("image/jpeg", saved.getContentType());
+        assertEquals(1024L, saved.getSizeBytes());
+        assertEquals("abc.jpg", saved.getDisplayName());
+        assertTrue(saved.getPublicUrl().startsWith("https://hms.test"));
+        // PHOTO must drop any client-supplied duration:
+        assertEquals(null, saved.getDurationSeconds());
     }
 
     @Test
-    void sendMessage_rejectsAttachmentWithReusedStorageKey() {
+    void sendMessage_persistsAudioWithClampedDuration() throws Exception {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+
+        ChatAttachmentDTO audio = ChatAttachmentDTO.builder()
+            .storageKey("/uploads/chat-attachments/v.ogg")
+            .kind(ChatAttachmentKind.AUDIO)
+            .durationSeconds(45)
+            .build();
+
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
+            .recipientId(recipientId)
+            .content(null)
+            .build();
+
+        ChatMessageServiceImpl service = primeAttachmentSendScenario(
+            senderId, recipientId, java.util.List.of(audio), dto);
+
+        when(fileUploadService.resolveChatAttachment(audio.getStorageKey(), ChatAttachmentKind.AUDIO))
+            .thenReturn(descriptorFor(audio.getStorageKey(), "audio/ogg"));
+        when(chatAttachmentRepository.existsByStorageKey(audio.getStorageKey())).thenReturn(false);
+
+        service.sendMessage(dto, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<ChatAttachment> captor =
+            org.mockito.ArgumentCaptor.forClass(ChatAttachment.class);
+        verify(chatAttachmentRepository).saveAndFlush(captor.capture());
+        assertEquals(45, captor.getValue().getDurationSeconds());
+    }
+
+    @Test
+    void sendMessage_rejectsAudioWithDurationOutOfRange() throws Exception {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+
+        ChatAttachmentDTO audio = ChatAttachmentDTO.builder()
+            .storageKey("/uploads/chat-attachments/v.ogg")
+            .kind(ChatAttachmentKind.AUDIO)
+            .durationSeconds(120)
+            .build();
+
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
+            .recipientId(recipientId)
+            .content("voice memo")
+            .build();
+
+        ChatMessageServiceImpl service = primeAttachmentSendScenario(
+            senderId, recipientId, java.util.List.of(audio), dto);
+
+        when(fileUploadService.resolveChatAttachment(audio.getStorageKey(), ChatAttachmentKind.AUDIO))
+            .thenReturn(descriptorFor(audio.getStorageKey(), "audio/ogg"));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertTrue(ex.getMessage().contains("between 1 and 90"));
+        verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
+    }
+
+    @Test
+    void sendMessage_rejectsAttachmentWithReusedStorageKey() throws Exception {
         UUID senderId = UUID.randomUUID();
         UUID recipientId = UUID.randomUUID();
 
@@ -291,37 +376,43 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = primeAttachmentSendScenario(
             senderId, recipientId, java.util.List.of(photo), dto);
 
+        when(fileUploadService.resolveChatAttachment(photo.getStorageKey(), ChatAttachmentKind.PHOTO))
+            .thenReturn(descriptorFor(photo.getStorageKey(), "image/jpeg"));
         when(chatAttachmentRepository.existsByStorageKey(photo.getStorageKey())).thenReturn(true);
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
         assertTrue(ex.getMessage().contains("already linked"));
-        verify(chatAttachmentRepository, never()).save(any(ChatAttachment.class));
+        verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
     }
 
     @Test
-    void sendMessage_rejectsAttachmentWithBlankStorageKey() {
+    void sendMessage_rejectsOnDataIntegrityViolationRace() throws Exception {
         UUID senderId = UUID.randomUUID();
         UUID recipientId = UUID.randomUUID();
 
-        ChatAttachmentDTO bad = ChatAttachmentDTO.builder()
-            .storageKey("   ")
-            .kind(ChatAttachmentKind.AUDIO)
-            .durationSeconds(10)
+        ChatAttachmentDTO photo = ChatAttachmentDTO.builder()
+            .storageKey("/uploads/chat-attachments/race.jpg")
+            .kind(ChatAttachmentKind.PHOTO)
             .build();
 
         ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
             .recipientId(recipientId)
-            .content("voice memo")
+            .content("race")
             .build();
 
         ChatMessageServiceImpl service = primeAttachmentSendScenario(
-            senderId, recipientId, java.util.List.of(bad), dto);
+            senderId, recipientId, java.util.List.of(photo), dto);
+
+        when(fileUploadService.resolveChatAttachment(photo.getStorageKey(), ChatAttachmentKind.PHOTO))
+            .thenReturn(descriptorFor(photo.getStorageKey(), "image/jpeg"));
+        when(chatAttachmentRepository.existsByStorageKey(photo.getStorageKey())).thenReturn(false);
+        when(chatAttachmentRepository.saveAndFlush(any(ChatAttachment.class)))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("race"));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertTrue(ex.getMessage().contains("storageKey is required"));
-        verify(chatAttachmentRepository, never()).save(any(ChatAttachment.class));
+        assertTrue(ex.getMessage().contains("already linked"));
     }
 
     @Test
@@ -348,7 +439,7 @@ class ChatMessageServiceImplTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
         assertTrue(ex.getMessage().contains("at most 4"));
-        verify(chatAttachmentRepository, never()).save(any(ChatAttachment.class));
+        verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
     }
 
     @Test
@@ -366,7 +457,7 @@ class ChatMessageServiceImplTest {
 
         ChatMessageResponseDTO result = service.sendMessage(dto, Locale.ENGLISH);
         assertNotNull(result);
-        verify(chatAttachmentRepository, never()).save(any(ChatAttachment.class));
+        verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
         verify(chatAttachmentRepository, never()).existsByStorageKey(any(String.class));
     }
 
@@ -390,8 +481,59 @@ class ChatMessageServiceImplTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertTrue(ex.getMessage().contains("kind is required"));
         assertEquals("Attachment kind is required", ex.getMessage());
-        verify(chatAttachmentRepository, never()).save(any(ChatAttachment.class));
+        verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
+    }
+
+    @Test
+    void sendMessage_rejectsEmptyContentAndNoAttachments() {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+
+        User sender = new User();
+        sender.setId(senderId);
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        when(userRepository.findById(recipientId)).thenReturn(Optional.of(recipient));
+        setSecurityContext("ROLE_NURSE");
+
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
+            .recipientId(recipientId)
+            .content("   ")
+            .build();
+
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertTrue(ex.getMessage().contains("content or at least one attachment"));
+    }
+
+    @Test
+    void sendMessage_allowsAttachmentOnlySend() throws Exception {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+
+        ChatAttachmentDTO photo = ChatAttachmentDTO.builder()
+            .storageKey("/uploads/chat-attachments/onlymedia.jpg")
+            .kind(ChatAttachmentKind.PHOTO)
+            .build();
+
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
+            .recipientId(recipientId)
+            .content(null)
+            .build();
+
+        ChatMessageServiceImpl service = primeAttachmentSendScenario(
+            senderId, recipientId, java.util.List.of(photo), dto);
+
+        when(fileUploadService.resolveChatAttachment(photo.getStorageKey(), ChatAttachmentKind.PHOTO))
+            .thenReturn(descriptorFor(photo.getStorageKey(), "image/jpeg"));
+        when(chatAttachmentRepository.existsByStorageKey(photo.getStorageKey())).thenReturn(false);
+
+        ChatMessageResponseDTO result = service.sendMessage(dto, Locale.ENGLISH);
+        assertNotNull(result);
+        verify(chatAttachmentRepository, times(1)).saveAndFlush(any(ChatAttachment.class));
     }
 }

@@ -1,4 +1,4 @@
--- V68: P1 #10 — Telehealth low-bandwidth (audio + photo on chat)
+-- V69: P1 #10 — Telehealth low-bandwidth (audio + photo on chat)
 --
 -- Adds first-class attachment support to support.chat_messages so a
 -- telehealth consult can carry a short voice memo (Opus/AAC) or a
@@ -6,7 +6,7 @@
 --
 -- Each chat message can carry zero-or-more attachments (max 4 enforced
 -- in service). Storage path follows the existing FileUploadService
--- chart-attachments convention: server-renamed file under
+-- chat-attachments convention: server-renamed file under
 -- /uploads/chat-attachments/, SHA-256 captured for tamper detection.
 --
 -- duration_seconds is populated for AUDIO only (client-measured at

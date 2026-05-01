@@ -461,6 +461,107 @@ public class FileUploadService {
         return String.join("/", "/uploads", subdir, filename);
     }
 
+    private static final String CHAT_ATTACHMENT_KEY_PREFIX = "/uploads/chat-attachments/";
+
+    /**
+     * Re-derive a server-trusted descriptor from a previously uploaded chat-attachment storage
+     * key. The caller (chat send path) only supplies the storage key + declared kind +
+     * (for AUDIO) the client-measured duration; everything else (size, sha256, content type,
+     * display name, public url) is recomputed from disk so a tampered or omitted client
+     * descriptor cannot poison the persisted row.
+     *
+     * @throws IllegalArgumentException if the key is malformed, the file is missing, or kind
+     *     mismatches the on-disk content type
+     */
+    public StoredFileDescriptor resolveChatAttachment(String storageKey, ChatAttachmentKind declaredKind) throws IOException {
+        if (storageKey == null || storageKey.isBlank()) {
+            throw new IllegalArgumentException("Attachment storageKey is required");
+        }
+        if (declaredKind == null) {
+            throw new IllegalArgumentException("Attachment kind is required");
+        }
+        if (!storageKey.startsWith(CHAT_ATTACHMENT_KEY_PREFIX)) {
+            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+        }
+        String filename = storageKey.substring(CHAT_ATTACHMENT_KEY_PREFIX.length());
+        if (filename.isBlank() || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
+            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+        }
+        Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH).toAbsolutePath().normalize();
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+        }
+        if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
+            throw new IllegalArgumentException("Chat attachment not found");
+        }
+
+        String extension = getFileExtension(filename).toLowerCase();
+        ChatAttachmentKind derivedKind = deriveChatAttachmentKindFromExtension(extension);
+        if (derivedKind == null) {
+            throw new IllegalArgumentException("Unsupported chat attachment extension");
+        }
+        if (derivedKind != declaredKind) {
+            throw new IllegalArgumentException("Declared kind does not match stored file");
+        }
+
+        long sizeBytes = Files.size(filePath);
+        if (sizeBytes <= 0) {
+            throw new IllegalArgumentException("Chat attachment is empty");
+        }
+        if (declaredKind == ChatAttachmentKind.PHOTO && sizeBytes > MAX_CHAT_PHOTO_SIZE) {
+            throw new IllegalArgumentException("Photo cannot exceed 10MB");
+        }
+        if (declaredKind == ChatAttachmentKind.AUDIO && sizeBytes > MAX_CHAT_AUDIO_SIZE) {
+            throw new IllegalArgumentException("Voice memo cannot exceed 5MB");
+        }
+
+        String contentType = resolveChatContentTypeFromExtension(extension);
+        String sha256 = computeSha256(filePath);
+        String relativePath = CHAT_ATTACHMENT_KEY_PREFIX + filename;
+
+        return new StoredFileDescriptor(
+            relativePath,
+            buildPublicUrl(relativePath),
+            filename,
+            contentType,
+            sizeBytes,
+            sha256
+        );
+    }
+
+    private ChatAttachmentKind deriveChatAttachmentKindFromExtension(String extension) {
+        if (ALLOWED_CHAT_PHOTO_EXTENSIONS.contains(extension)) return ChatAttachmentKind.PHOTO;
+        if (ALLOWED_CHAT_AUDIO_EXTENSIONS.contains(extension)) return ChatAttachmentKind.AUDIO;
+        return null;
+    }
+
+    private String resolveChatContentTypeFromExtension(String extension) {
+        return switch (extension) {
+            case ".jpg", ".jpeg" -> "image/jpeg";
+            case ".png" -> "image/png";
+            case ".webp" -> "image/webp";
+            case ".webm" -> "audio/webm";
+            case ".ogg", ".oga" -> "audio/ogg";
+            case ".m4a", ".mp4" -> "audio/mp4";
+            case ".mp3" -> "audio/mpeg";
+            case ".aac" -> "audio/aac";
+            default -> "application/octet-stream";
+        };
+    }
+
+    private String computeSha256(Path filePath) throws IOException {
+        MessageDigest digest = createSha256Digest();
+        try (java.io.InputStream in = Files.newInputStream(filePath);
+             DigestInputStream digestStream = new DigestInputStream(in, digest)) {
+            byte[] buf = new byte[8192];
+            while (digestStream.read(buf) != -1) {
+                // drain to digest
+            }
+        }
+        return HexFormat.of().formatHex(digest.digest());
+    }
+
     private void validateChatAttachment(MultipartFile file, ChatAttachmentKind kind) {
         if (kind == null) {
             throw new IllegalArgumentException("Attachment kind is required");

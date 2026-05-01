@@ -461,14 +461,19 @@
   },
   "CHAT": {
     "ATTACH_PHOTO": "Adjuntar foto",
+    "ATTACHMENT_LIMIT_REACHED": "Solo se pueden adjuntar 4 elementos por mensaje.",
     "CONVERSATIONS": "Conversations",
     "ERROR_TITLE": "Error loading messages",
     "LOADING_CONVERSATIONS": "Loading conversations...",
     "LOADING_USERS": "Loading users...",
+    "MICROPHONE_DENIED": "Acceso al micrófono denegado.",
     "NEW_CONVERSATION": "New Conversation",
     "NO_CONVERSATIONS": "No conversations yet",
     "NO_MESSAGES": "No messages yet",
     "NO_USERS_FOUND": "No users found",
+    "PHOTO": "foto",
+    "PHOTO_TOO_LARGE": "La foto no puede superar 10 MB.",
+    "PHOTO_UPLOAD_FAILED": "Fallo al subir la foto.",
     "RECORD_VOICE_MEMO": "Grabar nota de voz",
     "RECORDING": "Grabando",
     "REFRESH_MESSAGES": "Refresh messages",
@@ -480,7 +485,11 @@
     "START_CONVERSATION": "Start Conversation",
     "SUBTITLE": "Chat with colleagues",
     "TITLE": "Messages",
-    "TYPE_MESSAGE": "Type a message..."
+    "TYPE_MESSAGE": "Type a message...",
+    "VOICE_MEMO": "nota de voz",
+    "VOICE_MEMO_EMPTY": "La nota de voz estaba vacía — inténtelo de nuevo.",
+    "VOICE_MEMO_NOT_SUPPORTED": "Este navegador no admite la grabación de notas de voz.",
+    "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz."
   },
   "COMMON": {
     "ACTION": "Action",

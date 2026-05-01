@@ -204,17 +204,22 @@ public class FileUploadController {
         }
     }
 
+    /** Mirrors {@code ChatController.CHAT_ROLES} so only chat-capable roles can upload media. */
+    private static final String CHAT_ATTACHMENT_ROLES = "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'RECEPTIONIST', "
+            + "'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', "
+            + "'BILLING_SPECIALIST', 'ACCOUNTANT', 'STAFF', 'PATIENT')";
+
     @Operation(
         summary = "Upload chat attachment (telehealth low-bandwidth)",
         description = "Upload a single PHOTO (≤10 MB, JPG/PNG/WebP) or AUDIO voice memo "
-            + "(≤5 MB, Opus/AAC/MP3) to be linked on the next chat send. Authenticated users only."
+            + "(≤5 MB, Opus/AAC/MP3) to be linked on the next chat send. Restricted to chat-capable roles."
     )
     @PostMapping(value = "/chat-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize(CHAT_ATTACHMENT_ROLES)
     public ResponseEntity<Object> uploadChatAttachment(
-        @RequestParam("file") MultipartFile file,
-        @RequestParam("kind") ChatAttachmentKind kind,
-        @RequestParam(required = false) Integer durationSeconds,
+        @RequestParam(value = "file") MultipartFile file,
+        @RequestParam(value = "kind") ChatAttachmentKind kind,
+        @RequestParam(value = "durationSeconds", required = false) Integer durationSeconds,
         Authentication authentication
     ) {
         try {

@@ -461,14 +461,19 @@
   },
   "CHAT": {
     "ATTACH_PHOTO": "Joindre une photo",
+    "ATTACHMENT_LIMIT_REACHED": "Vous ne pouvez joindre que 4 éléments par message.",
     "CONVERSATIONS": "Conversations",
     "ERROR_TITLE": "Erreur de chargement des messages",
     "LOADING_CONVERSATIONS": "Chargement des conversations…",
     "LOADING_USERS": "Chargement des utilisateurs…",
+    "MICROPHONE_DENIED": "Accès au microphone refusé.",
     "NEW_CONVERSATION": "Nouvelle Conversation",
     "NO_CONVERSATIONS": "Aucune conversation",
     "NO_MESSAGES": "Aucun message",
     "NO_USERS_FOUND": "Aucun utilisateur trouvé",
+    "PHOTO": "photo",
+    "PHOTO_TOO_LARGE": "La photo ne doit pas dépasser 10 Mo.",
+    "PHOTO_UPLOAD_FAILED": "Échec de l'envoi de la photo.",
     "RECORD_VOICE_MEMO": "Enregistrer un mémo vocal",
     "RECORDING": "Enregistrement",
     "REFRESH_MESSAGES": "Actualiser les messages",
@@ -480,7 +485,11 @@
     "START_CONVERSATION": "Démarrer la Conversation",
     "SUBTITLE": "Discuter avec vos collègues",
     "TITLE": "Messages",
-    "TYPE_MESSAGE": "Tapez un message…"
+    "TYPE_MESSAGE": "Tapez un message…",
+    "VOICE_MEMO": "mémo vocal",
+    "VOICE_MEMO_EMPTY": "Le mémo vocal était vide — veuillez réessayer.",
+    "VOICE_MEMO_NOT_SUPPORTED": "L'enregistrement de mémo vocal n'est pas pris en charge dans ce navigateur.",
+    "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal."
   },
   "COMMON": {
     "ACTION": "Action",

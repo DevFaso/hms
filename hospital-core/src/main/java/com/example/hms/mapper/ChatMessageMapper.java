@@ -48,12 +48,10 @@ public class ChatMessageMapper {
             dto.setHospitalName(message.getAssignment().getHospital().getName());
         }
 
-        if (attachments != null && !attachments.isEmpty()) {
-            List<ChatAttachmentDTO> attachmentDtos = attachments.stream()
-                .map(chatAttachmentMapper::toDto)
-                .toList();
-            dto.setAttachments(attachmentDtos);
-        }
+        List<ChatAttachmentDTO> attachmentDtos = attachments == null
+            ? List.of()
+            : attachments.stream().map(chatAttachmentMapper::toDto).toList();
+        dto.setAttachments(attachmentDtos);
 
         return dto;
     }

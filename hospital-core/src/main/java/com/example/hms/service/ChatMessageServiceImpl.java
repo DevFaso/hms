@@ -102,6 +102,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
+    private static final int MIN_AUDIO_DURATION_SECONDS = 1;
+    private static final int MAX_AUDIO_DURATION_SECONDS = 90;
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
@@ -112,10 +114,17 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
     private final ChatAttachmentRepository chatAttachmentRepository;
+    private final FileUploadService fileUploadService;
 
     @Override
     @Transactional
     public ChatMessageResponseDTO sendMessage(ChatMessageRequestDTO dto, Locale locale) {
+        boolean hasContent = dto.getContent() != null && !dto.getContent().isBlank();
+        boolean hasAttachments = dto.getAttachments() != null && !dto.getAttachments().isEmpty();
+        if (!hasContent && !hasAttachments) {
+            throw new IllegalArgumentException("A message must carry either content or at least one attachment");
+        }
+
         UUID currentUserId = getCurrentUserId(); // Sender ID
 
         User sender = userRepository.findById(currentUserId)
@@ -197,10 +206,15 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     /**
-     * Re-resolve each inbound attachment by its server-assigned storageKey,
-     * persist a row pointing at it, and return the saved entities.
-     * Bounded by {@link #MAX_ATTACHMENTS_PER_MESSAGE} so a sender can't fan
-     * out an arbitrary number of media rows under one chat send.
+     * Re-resolve each inbound attachment from its server-assigned storageKey, ignoring all
+     * other client-supplied descriptor fields, and persist a row pointing at it. Client-supplied
+     * publicUrl/displayName/contentType/sizeBytes/sha256 are recomputed from disk by
+     * {@link FileUploadService#resolveChatAttachment}; durationSeconds is preserved only for
+     * AUDIO with a 1..90 s clamp and forced null for PHOTO. The unique storage_key index races
+     * are caught and turned into 400s.
+     * <p>
+     * Bounded by {@link #MAX_ATTACHMENTS_PER_MESSAGE} so a sender can't fan out an arbitrary
+     * number of media rows under one chat send.
      */
     private List<ChatAttachment> persistAttachments(ChatMessage message, List<ChatAttachmentDTO> incoming) {
         if (incoming == null || incoming.isEmpty()) {
@@ -213,30 +227,57 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         List<ChatAttachment> persisted = new ArrayList<>(incoming.size());
         for (ChatAttachmentDTO dto : incoming) {
-            if (dto == null || dto.getStorageKey() == null || dto.getStorageKey().isBlank()) {
-                throw new IllegalArgumentException("Attachment storageKey is required");
+            if (dto == null) {
+                throw new IllegalArgumentException("Attachment payload is required");
             }
             if (dto.getKind() == null) {
                 throw new IllegalArgumentException("Attachment kind is required");
             }
-            if (chatAttachmentRepository.existsByStorageKey(dto.getStorageKey())) {
+            FileUploadService.StoredFileDescriptor descriptor;
+            try {
+                descriptor = fileUploadService.resolveChatAttachment(dto.getStorageKey(), dto.getKind());
+            } catch (java.io.IOException ex) {
+                throw new IllegalArgumentException("Failed to resolve chat attachment", ex);
+            }
+            Integer duration = clampAudioDuration(dto.getKind(), dto.getDurationSeconds());
+            if (chatAttachmentRepository.existsByStorageKey(descriptor.storageKey())) {
                 throw new IllegalArgumentException(
                     "Attachment storageKey already linked to another message");
             }
             ChatAttachment attachment = ChatAttachment.builder()
                 .message(message)
                 .kind(dto.getKind())
-                .storageKey(dto.getStorageKey())
-                .publicUrl(dto.getPublicUrl())
-                .displayName(dto.getDisplayName())
-                .contentType(dto.getContentType())
-                .sizeBytes(dto.getSizeBytes())
-                .sha256(dto.getSha256())
-                .durationSeconds(dto.getDurationSeconds())
+                .storageKey(descriptor.storageKey())
+                .publicUrl(descriptor.publicUrl())
+                .displayName(descriptor.displayName())
+                .contentType(descriptor.contentType())
+                .sizeBytes(descriptor.sizeBytes())
+                .sha256(descriptor.sha256())
+                .durationSeconds(duration)
                 .build();
-            persisted.add(chatAttachmentRepository.save(attachment));
+            try {
+                persisted.add(chatAttachmentRepository.saveAndFlush(attachment));
+            } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+                throw new IllegalArgumentException(
+                    "Attachment storageKey already linked to another message", ex);
+            }
         }
         return persisted;
+    }
+
+    private Integer clampAudioDuration(com.example.hms.enums.ChatAttachmentKind kind, Integer durationSeconds) {
+        if (kind == com.example.hms.enums.ChatAttachmentKind.PHOTO) {
+            return null;
+        }
+        if (durationSeconds == null) {
+            throw new IllegalArgumentException("Voice memo duration is required");
+        }
+        if (durationSeconds < MIN_AUDIO_DURATION_SECONDS || durationSeconds > MAX_AUDIO_DURATION_SECONDS) {
+            throw new IllegalArgumentException(
+                "Voice memo duration must be between " + MIN_AUDIO_DURATION_SECONDS
+                    + " and " + MAX_AUDIO_DURATION_SECONDS + " seconds");
+        }
+        return durationSeconds;
     }
 
     /** Batch-load attachments for a page of messages so the response avoids N+1. */
@@ -438,26 +479,33 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
-public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
-    List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
+        List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
-    List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
+        List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
-    List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
+        List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
-    List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
+        List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
+        return mapWithAttachments(messages);
+    }
+
+    private List<ChatMessageResponseDTO> mapWithAttachments(List<ChatMessage> messages) {
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages);
+        return messages.stream()
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
+            .toList();
+    }
 }
