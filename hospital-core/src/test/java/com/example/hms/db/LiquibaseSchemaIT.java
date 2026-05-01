@@ -82,6 +82,59 @@ class LiquibaseSchemaIT {
             assertColumnExists(stmt, "clinical", "medication_catalog_items",
                 "pediatric_max_dose_mg_per_kg");
             assertSeedRowsPresent(stmt, "clinical", "drug_interactions", 12);
+
+            // V68: DHIS2 ADX export integration tables
+            assertSchemaExists(stmt, "integration");
+            assertTableExists(stmt, "integration", "dhis2_facility_config");
+            assertTableExists(stmt, "integration", "dhis2_dataelement_mapping");
+            assertTableExists(stmt, "integration", "dhis2_export_run");
+            assertTableExists(stmt, "integration", "dhis2_export_outbox");
+            assertColumnExists(stmt, "hospital", "hospitals", "dhis2_org_unit_uid");
+        }
+    }
+
+    /**
+     * V68 regression: the outbox UNIQUE INDEX uses
+     * {@code COALESCE(category_option_combo_uid, '__DEFAULT_COC__')} so two
+     * "default-COC" rows for the same (run, period, orgUnit, dataElement)
+     * collide as a duplicate even when both have NULL category_option_combo_uid.
+     * A plain UNIQUE constraint would have allowed both rows because Postgres
+     * treats NULLs as distinct.
+     */
+    @Test
+    void v68OutboxNullCocDuplicateIsRejected() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("INSERT INTO hospital.hospitals "
+                + "(id, name, code, active, created_at, updated_at) "
+                + "VALUES ('a0000000-0000-0000-0000-000000000001', "
+                + "'IT-Hospital', 'IT-NULLCOC', TRUE, NOW(), NOW())");
+            stmt.executeUpdate("INSERT INTO integration.dhis2_export_run "
+                + "(id, hospital_id, dataset_uid, period_iso, started_at, status, "
+                + " value_count, skipped_count, request_id, created_at, updated_at) "
+                + "VALUES ('b0000000-0000-0000-0000-000000000001', "
+                + "'a0000000-0000-0000-0000-000000000001', 'DS00000DEFK', '202604', "
+                + "NOW(), 'PENDING', 0, 0, "
+                + "'c0000000-0000-0000-0000-000000000001', NOW(), NOW())");
+            stmt.executeUpdate("INSERT INTO integration.dhis2_export_outbox "
+                + "(id, run_id, period_iso, org_unit_uid, dataelement_uid, "
+                + " data_value, status, attempts, created_at, updated_at) "
+                + "VALUES ('d0000000-0000-0000-0000-000000000001', "
+                + "'b0000000-0000-0000-0000-000000000001', '202604', "
+                + "'OU000000001', 'DE000000001', '42', 'PENDING', 0, NOW(), NOW())");
+
+            String dupSql = "INSERT INTO integration.dhis2_export_outbox "
+                + "(id, run_id, period_iso, org_unit_uid, dataelement_uid, "
+                + " data_value, status, attempts, created_at, updated_at) "
+                + "VALUES ('d0000000-0000-0000-0000-000000000002', "
+                + "'b0000000-0000-0000-0000-000000000001', '202604', "
+                + "'OU000000001', 'DE000000001', '99', 'PENDING', 0, NOW(), NOW())";
+            assertThatCode(() -> {
+                try (Statement s = conn.createStatement()) {
+                    s.executeUpdate(dupSql);
+                }
+            }).isInstanceOf(java.sql.SQLException.class);
         }
     }
 

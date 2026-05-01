@@ -1031,6 +1031,17 @@ export const routes: Routes = [
           ),
       },
 
+      // DHIS2 ADX export administration (per-hospital config + mappings + manual trigger)
+      {
+        path: 'admin/integrations/dhis2',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/integrations/dhis2-admin-page/dhis2-admin-page.component').then(
+            (m) => m.Dhis2AdminPageComponent,
+          ),
+      },
+
       // Feature Flags Management
       {
         path: 'feature-flags',

@@ -118,4 +118,25 @@ public interface ImmunizationRepository extends JpaRepository<PatientImmunizatio
             "AND i.doseNumber < i.totalDosesInSeries " +
             "AND i.active = true ORDER BY i.administrationDate DESC")
     List<PatientImmunization> findIncompleteSeries(@Param("patientId") UUID patientId);
+
+    /**
+     * DHIS2 ADX aggregation: COUNT of completed, active immunizations per
+     * vaccineCode for a hospital within a date range. Returns
+     * {@code [vaccineCode, count]} pairs — never patient identifiers.
+     * <p>The {@code is true} predicate on the boxed Boolean is intentional:
+     * the column is nullable on legacy rows but only TRUE rows count
+     * toward the aggregate.
+     */
+    @Query("SELECT i.vaccineCode, COUNT(i) FROM PatientImmunization i " +
+            "WHERE i.hospital.id = :hospitalId " +
+            "AND i.administrationDate >= :startInclusive " +
+            "AND i.administrationDate <= :endInclusive " +
+            "AND i.status = 'COMPLETED' " +
+            "AND i.active = true " +
+            "AND i.vaccineCode IS NOT NULL " +
+            "GROUP BY i.vaccineCode")
+    List<Object[]> countByVaccineCodeForHospitalInRange(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("startInclusive") LocalDate startInclusive,
+            @Param("endInclusive") LocalDate endInclusive);
 }
