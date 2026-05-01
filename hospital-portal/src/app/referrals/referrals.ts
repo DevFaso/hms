@@ -73,6 +73,15 @@ export class ReferralsComponent implements OnInit {
   completeSummary = '';
   completeFollowUp = '';
 
+  showScheduleModal = signal(false);
+  schedulingRef = signal<ReferralResponse | null>(null);
+  scheduleAppointmentTime = '';
+  scheduleLocation = '';
+
+  showRejectModal = signal(false);
+  rejectingRef = signal<ReferralResponse | null>(null);
+  rejectReason = '';
+
   urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
 
   referralTypes = [
@@ -374,7 +383,85 @@ export class ReferralsComponent implements OnInit {
     });
   }
 
-  /* ── Complete ACKNOWLEDGED/IN_PROGRESS → COMPLETED ── */
+  /* ── Schedule ACKNOWLEDGED → SCHEDULED ── */
+  openSchedule(r: ReferralResponse): void {
+    this.schedulingRef.set(r);
+    this.scheduleAppointmentTime = '';
+    this.scheduleLocation = '';
+    this.showScheduleModal.set(true);
+  }
+  closeScheduleModal(): void {
+    this.showScheduleModal.set(false);
+    this.schedulingRef.set(null);
+  }
+  executeSchedule(): void {
+    const ref = this.schedulingRef();
+    if (!ref || !this.scheduleAppointmentTime) return;
+    this.actionLoading.set(true);
+    this.referralService
+      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .subscribe({
+        next: () => {
+          this.toast.success('Referral scheduled');
+          this.closeScheduleModal();
+          this.actionLoading.set(false);
+          this.load();
+          this.closeDetail();
+        },
+        error: () => {
+          this.toast.error('Schedule failed');
+          this.actionLoading.set(false);
+        },
+      });
+  }
+
+  /* ── Start ACKNOWLEDGED/SCHEDULED → IN_PROGRESS (direct, no modal) ── */
+  startReferral(r: ReferralResponse): void {
+    this.actionLoading.set(true);
+    this.referralService.start(r.id).subscribe({
+      next: () => {
+        this.toast.success('Consultation started');
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Start failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Reject SUBMITTED/ACKNOWLEDGED → REJECTED ── */
+  openReject(r: ReferralResponse): void {
+    this.rejectingRef.set(r);
+    this.rejectReason = '';
+    this.showRejectModal.set(true);
+  }
+  closeRejectModal(): void {
+    this.showRejectModal.set(false);
+    this.rejectingRef.set(null);
+  }
+  executeReject(): void {
+    const ref = this.rejectingRef();
+    if (!ref || !this.rejectReason.trim()) return;
+    this.actionLoading.set(true);
+    this.referralService.reject(ref.id, this.rejectReason).subscribe({
+      next: () => {
+        this.toast.success('Referral rejected');
+        this.closeRejectModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Reject failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Complete ACKNOWLEDGED/SCHEDULED/IN_PROGRESS → COMPLETED ── */
   openComplete(r: ReferralResponse): void {
     this.completingRef.set(r);
     this.completeSummary = '';
@@ -429,9 +516,11 @@ export class ReferralsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'pending') list = list.filter((r) => ['DRAFT', 'SUBMITTED'].includes(r.status));
     else if (tab === 'active')
-      list = list.filter((r) => ['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status));
+      list = list.filter((r) => ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status));
     else if (tab === 'completed')
-      list = list.filter((r) => ['COMPLETED', 'CANCELLED'].includes(r.status));
+      list = list.filter((r) =>
+        ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status),
+      );
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -458,12 +547,15 @@ export class ReferralsComponent implements OnInit {
       case 'SUBMITTED':
         return 'status-submitted';
       case 'ACKNOWLEDGED':
+      case 'SCHEDULED':
       case 'IN_PROGRESS':
         return 'status-active';
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+      case 'REJECTED':
         return 'status-cancelled';
+      case 'EXPIRED':
       case 'OVERDUE':
         return 'status-overdue';
       default:
@@ -487,8 +579,9 @@ export class ReferralsComponent implements OnInit {
     if (group === 'pending')
       return this.referrals().filter((r) => ['DRAFT', 'SUBMITTED'].includes(r.status)).length;
     if (group === 'active')
-      return this.referrals().filter((r) => ['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status))
-        .length;
+      return this.referrals().filter((r) =>
+        ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status),
+      ).length;
     if (group === 'completed')
       return this.referrals().filter((r) => r.status === 'COMPLETED').length;
     return 0;

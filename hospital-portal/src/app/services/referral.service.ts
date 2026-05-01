@@ -46,6 +46,8 @@ export interface ReferralResponse {
   acknowledgedAt: string;
   acknowledgementNotes: string;
   scheduledAppointmentAt: string;
+  appointmentLocation: string;
+  startedAt: string;
   completedAt: string;
   completionSummary: string;
   followUpRecommendations: string;
@@ -102,6 +104,21 @@ export class ReferralService {
     return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/acknowledge`, null, {
       params: { notes, receivingProviderId },
     });
+  }
+
+  schedule(id: string, appointmentTime: string, location?: string): Observable<ReferralResponse> {
+    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/schedule`, {
+      appointmentTime,
+      location: location ?? null,
+    });
+  }
+
+  start(id: string): Observable<ReferralResponse> {
+    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/start`, {});
+  }
+
+  reject(id: string, reason: string): Observable<ReferralResponse> {
+    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/reject`, { reason });
   }
 
   complete(id: string, summary: string, followUp?: string): Observable<ReferralResponse> {

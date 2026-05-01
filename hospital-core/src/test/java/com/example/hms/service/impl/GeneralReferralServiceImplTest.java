@@ -255,6 +255,7 @@ class GeneralReferralServiceImplTest {
     void completeReferral_updatesCompletionMetadata() {
         UUID referralId = UUID.randomUUID();
         GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(referral)).thenReturn(referral);
@@ -693,6 +694,7 @@ class GeneralReferralServiceImplTest {
 
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(buildHospital(activeHospId, "Sending Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -714,6 +716,7 @@ class GeneralReferralServiceImplTest {
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(buildHospital(otherHospId, "Sending Hospital"));
         referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -750,6 +753,7 @@ class GeneralReferralServiceImplTest {
         GeneralReferral referral = buildReferral(referralId);
         referral.setHospital(null);  // hospital is null — isSendingHospital evaluates to false safely
         referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));

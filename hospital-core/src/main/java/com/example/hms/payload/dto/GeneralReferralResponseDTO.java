@@ -69,7 +69,9 @@ public class GeneralReferralResponseDTO {
     
     private LocalDateTime scheduledAppointmentAt;
     private String appointmentLocation;
-    
+
+    private LocalDateTime startedAt;
+
     private LocalDateTime completedAt;
     private String completionSummary;
     private String followUpRecommendations;
