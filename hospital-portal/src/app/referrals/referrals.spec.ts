@@ -271,4 +271,25 @@ describe('ReferralsComponent', () => {
         .sort(),
     ).toEqual(['c', 'e', 'r']);
   });
+
+  it('countByGroup matches the row count shown when each tab is active', () => {
+    flushInitRequests();
+    component.referrals.set([
+      { id: 'd', status: 'DRAFT' } as any,
+      { id: 's', status: 'SUBMITTED' } as any,
+      { id: 'a', status: 'ACKNOWLEDGED' } as any,
+      { id: 'sc', status: 'SCHEDULED' } as any,
+      { id: 'ip', status: 'IN_PROGRESS' } as any,
+      { id: 'co', status: 'COMPLETED' } as any,
+      { id: 'ca', status: 'CANCELLED' } as any,
+      { id: 're', status: 'REJECTED' } as any,
+      { id: 'ex', status: 'EXPIRED' } as any,
+    ]);
+    for (const tab of ['pending', 'active', 'completed'] as const) {
+      component.setTab(tab);
+      expect(component.countByGroup(tab))
+        .withContext(`badge count for ${tab} tab must equal filtered row count`)
+        .toBe(component.filtered().length);
+    }
+  });
 });

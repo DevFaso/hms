@@ -583,7 +583,9 @@ export class ReferralsComponent implements OnInit {
         ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status),
       ).length;
     if (group === 'completed')
-      return this.referrals().filter((r) => r.status === 'COMPLETED').length;
+      return this.referrals().filter((r) =>
+        ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status),
+      ).length;
     return 0;
   }
 }
