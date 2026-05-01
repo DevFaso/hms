@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralExpiryService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +27,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -60,9 +62,12 @@ class GeneralReferralControllerTest {
     @Autowired
     private GeneralReferralService referralService;
 
+    @Autowired
+    private ReferralExpiryService referralExpiryService;
+
     @AfterEach
     void resetMocks() {
-        Mockito.reset(referralService);
+        Mockito.reset(referralService, referralExpiryService);
     }
 
     @Test
@@ -283,6 +288,49 @@ class GeneralReferralControllerTest {
         verify(referralService).getOverdueReferrals();
     }
 
+    @SuppressWarnings("java:S1075")
+    private static final String EXPIRE_OVERDUE_PATH = "/referrals/admin/expire-overdue";
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue returns expired count for admin")
+    void expireOverdueReferralsReturnsCount() throws Exception {
+        when(referralExpiryService.expireOverdueReferrals(any(Duration.class))).thenReturn(7);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param("graceHours", "6"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.expired").value(7));
+
+        verify(referralExpiryService).expireOverdueReferrals(Duration.ofHours(6));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue defaults graceHours to 0 when omitted")
+    void expireOverdueReferralsDefaultsGraceToZero() throws Exception {
+        when(referralExpiryService.expireOverdueReferrals(any(Duration.class))).thenReturn(0);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.expired").value(0));
+
+        verify(referralExpiryService).expireOverdueReferrals(Duration.ZERO);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue clamps negative graceHours to 0")
+    void expireOverdueReferralsClampsNegativeGrace() throws Exception {
+        when(referralExpiryService.expireOverdueReferrals(any(Duration.class))).thenReturn(0);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param("graceHours", "-3"))
+            .andExpect(status().isOk());
+
+        verify(referralExpiryService).expireOverdueReferrals(Duration.ZERO);
+    }
+
     private GeneralReferralRequestDTO buildRequest() {
         GeneralReferralRequestDTO request = new GeneralReferralRequestDTO();
         request.setPatientId(UUID.randomUUID());
@@ -318,6 +366,11 @@ class GeneralReferralControllerTest {
         @Bean
         GeneralReferralService referralService() {
             return Mockito.mock(GeneralReferralService.class);
+        }
+
+        @Bean
+        ReferralExpiryService referralExpiryService() {
+            return Mockito.mock(ReferralExpiryService.class);
         }
     }
 }

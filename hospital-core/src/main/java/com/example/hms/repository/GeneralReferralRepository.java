@@ -65,15 +65,25 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
     List<GeneralReferral> findByUrgencyAndStatusOrderBySlaDueAtAsc(ReferralUrgency urgency, ReferralStatus status);
 
     /**
-     * Find overdue referrals
+     * Find overdue referrals (any non-terminal status with slaDueAt in the past)
      */
     @Query("SELECT r FROM GeneralReferral r WHERE r.slaDueAt < :now " +
-           "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED') ORDER BY r.slaDueAt ASC")
+           "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED') ORDER BY r.slaDueAt ASC")
     List<GeneralReferral> findOverdueReferrals(@Param("now") LocalDateTime now);
 
     @Query("SELECT r FROM GeneralReferral r WHERE r.hospital.id = :hospitalId AND r.slaDueAt < :now " +
-           "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED') ORDER BY r.slaDueAt ASC")
+           "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED') ORDER BY r.slaDueAt ASC")
     List<GeneralReferral> findOverdueReferralsByHospital(@Param("hospitalId") UUID hospitalId, @Param("now") LocalDateTime now);
+
+    /**
+     * Find referrals eligible for the EXPIRED auto-sweep:
+     * post-submission, pre-consultation statuses with slaDueAt before the cutoff.
+     * IN_PROGRESS is intentionally excluded — once a consultation has actually begun,
+     * it must terminate via complete() or cancel(), not by an SLA sweep.
+     */
+    @Query("SELECT r FROM GeneralReferral r WHERE r.slaDueAt < :cutoff " +
+           "AND r.status IN ('SUBMITTED', 'ACKNOWLEDGED', 'SCHEDULED') ORDER BY r.slaDueAt ASC")
+    List<GeneralReferral> findExpirableReferrals(@Param("cutoff") LocalDateTime cutoff);
 
     /**
      * Find pending referrals for provider

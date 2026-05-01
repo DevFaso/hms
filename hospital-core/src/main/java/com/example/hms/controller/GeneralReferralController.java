@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralExpiryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,7 +21,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -33,6 +36,7 @@ import java.util.UUID;
 public class GeneralReferralController {
 
     private final GeneralReferralService referralService;
+    private final ReferralExpiryService referralExpiryService;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
@@ -160,5 +164,21 @@ public class GeneralReferralController {
     @Operation(summary = "Get overdue referrals", description = "Retrieve all overdue referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getOverdueReferrals() {
         return ResponseEntity.ok(referralService.getOverdueReferrals());
+    }
+
+    @PostMapping("/admin/expire-overdue")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(
+        summary = "Manually trigger the EXPIRED auto-sweep",
+        description = "Transition every SUBMITTED/ACKNOWLEDGED/SCHEDULED referral whose SLA "
+            + "fell before now() - graceHours to EXPIRED. Mirrors the @Scheduled sweep so "
+            + "operators can run it ad-hoc when the scheduler is OFF or after extended downtime."
+    )
+    public ResponseEntity<Map<String, Integer>> expireOverdueReferrals(
+        @RequestParam(name = "graceHours", required = false, defaultValue = "0") long graceHours
+    ) {
+        long bounded = Math.max(0L, graceHours);
+        int expired = referralExpiryService.expireOverdueReferrals(Duration.ofHours(bounded));
+        return ResponseEntity.ok(Map.of("expired", expired));
     }
 }

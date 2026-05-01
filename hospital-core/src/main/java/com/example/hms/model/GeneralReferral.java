@@ -337,6 +337,15 @@ public class GeneralReferral {
         this.cancellationReason = reason;
     }
 
+    public void expire(String reason) {
+        // IN_PROGRESS is intentionally excluded — once a consultation has actually begun,
+        // it must terminate via complete() or cancel(), not by SLA expiry sweep.
+        requireStatus("expire",
+            ReferralStatus.SUBMITTED, ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED);
+        this.status = ReferralStatus.EXPIRED;
+        this.cancellationReason = reason;
+    }
+
     private void requireStatus(String action, ReferralStatus... allowed) {
         for (ReferralStatus s : allowed) {
             if (this.status == s) {
@@ -383,8 +392,7 @@ public class GeneralReferral {
      * Check if referral is overdue
      */
     public boolean isOverdue() {
-        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt) 
-               && status != ReferralStatus.COMPLETED && status != ReferralStatus.CANCELLED 
-               && status != ReferralStatus.REJECTED;
+        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt)
+               && !isTerminal(this.status);
     }
 }
