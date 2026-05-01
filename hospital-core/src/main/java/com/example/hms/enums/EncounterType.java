@@ -7,6 +7,7 @@ public enum EncounterType {
 	SURGERY,
 	LAB,
 	OUTPATIENT,
-	INPATIENT;
+	INPATIENT,
+	TELEHEALTH;
 
 }

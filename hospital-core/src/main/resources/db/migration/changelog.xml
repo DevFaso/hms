@@ -900,4 +900,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V69: P1 #10 — Telehealth low-bandwidth (audio + photo on chat)
+         - support.chat_attachments: per-message attachment rows for
+           PHOTO (≤10 MB JPEG/PNG/WebP) or AUDIO (≤5 MB Opus/AAC/MP3,
+           ≤90 s) so chat threads can carry remote-consult media without
+           introducing WebRTC.
+         - ON DELETE CASCADE keeps orphan rows out when a message is
+           soft/hard-deleted.
+         - Partial CHECK enforces that AUDIO carries duration_seconds
+           and PHOTO does not.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V69-telehealth-chat-attachments" author="hms-team" runOnChange="false">
+        <sqlFile path="V69__telehealth_chat_attachments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
