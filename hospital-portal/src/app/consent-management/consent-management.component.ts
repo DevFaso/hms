@@ -36,11 +36,15 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
  * Keep this list in sync with `com.example.hms.enums.DataDomain`. The order
  * here drives chip ordering in the UI; sensitive domains are grouped at the
  * end with a visual separator.
+ *
+ * Legacy aliases (VITAL_SIGNS → VITALS, ENCOUNTER_HISTORY → ENCOUNTERS) are
+ * deliberately omitted from the picker — `DataDomain#parseCsv` on the server
+ * normalises them so historical CSVs continue to work, but the UI surfaces
+ * only the canonical form to avoid duplicate chips that mean the same thing.
  */
 const SCOPE_DOMAINS = [
   // General clinical record
   'ENCOUNTERS',
-  'ENCOUNTER_HISTORY',
   'NOTES',
   'PROBLEMS',
   'ALLERGIES',
@@ -54,7 +58,6 @@ const SCOPE_DOMAINS = [
   'PROCEDURES',
   'SURGICAL_HISTORY',
   'VITALS',
-  'VITAL_SIGNS',
   'IMMUNIZATIONS',
   'ADVANCE_DIRECTIVES',
   'INSURANCES',

@@ -230,8 +230,11 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             return Optional.empty();
         }
         BreakGlassSession session = maybe.get();
+        // Atomic UPDATE to defeat the read-modify-write race under concurrent
+        // reads. The in-memory copy is then bumped purely so the response DTO
+        // reflects the new value without a re-fetch.
+        sessionRepository.incrementAuditCount(session.getId());
         session.setAuditCount(session.getAuditCount() + 1);
-        sessionRepository.save(session);
 
         emitAudit(AuditEventType.BREAK_GLASS_ACCESS, session.getUser(),
             session.getHospital(), session.getPatient(),

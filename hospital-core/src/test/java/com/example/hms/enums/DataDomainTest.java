@@ -79,4 +79,40 @@ class DataDomainTest {
         String csv = DataDomain.toCsv(set);
         assertThat(DataDomain.parseCsv(csv)).isEqualTo(set);
     }
+
+    @Nested
+    @DisplayName("legacy alias normalisation")
+    class Aliases {
+        @Test void parseCsvNormalisesVitalSignsToVitals() {
+            assertThat(DataDomain.parseCsv("VITAL_SIGNS"))
+                .containsExactly(DataDomain.VITALS);
+        }
+
+        @Test void parseCsvNormalisesEncounterHistoryToEncounters() {
+            assertThat(DataDomain.parseCsv("ENCOUNTER_HISTORY,LAB_RESULTS"))
+                .containsExactlyInAnyOrder(DataDomain.ENCOUNTERS, DataDomain.LAB_RESULTS);
+        }
+
+        @Test void coversAcceptsAliasOnEitherSide() {
+            // Request canonical, scope uses legacy
+            assertThat(DataDomain.covers("VITAL_SIGNS", DataDomain.VITALS)).isTrue();
+            // Request legacy, scope uses canonical
+            assertThat(DataDomain.covers("VITALS", DataDomain.VITAL_SIGNS)).isTrue();
+            // Same for encounters
+            assertThat(DataDomain.covers("ENCOUNTER_HISTORY", DataDomain.ENCOUNTERS)).isTrue();
+            assertThat(DataDomain.covers("ENCOUNTERS", DataDomain.ENCOUNTER_HISTORY)).isTrue();
+        }
+
+        @Test void canonicalIsIdempotent() {
+            assertThat(DataDomain.VITALS.canonical()).isEqualTo(DataDomain.VITALS);
+            assertThat(DataDomain.VITAL_SIGNS.canonical()).isEqualTo(DataDomain.VITALS);
+        }
+
+        @Test void isLegacyAliasIdentifiesAliasesOnly() {
+            assertThat(DataDomain.VITAL_SIGNS.isLegacyAlias()).isTrue();
+            assertThat(DataDomain.ENCOUNTER_HISTORY.isLegacyAlias()).isTrue();
+            assertThat(DataDomain.VITALS.isLegacyAlias()).isFalse();
+            assertThat(DataDomain.PRESCRIPTIONS.isLegacyAlias()).isFalse();
+        }
+    }
 }

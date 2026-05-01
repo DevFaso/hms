@@ -279,18 +279,22 @@ class BreakGlassServiceImplTest {
     @DisplayName("consumeIfLive")
     class Consume {
         @Test
-        @DisplayName("increments auditCount and emits audit when a live session exists")
+        @DisplayName("uses an atomic UPDATE for the audit counter; emits audit on success")
         void consumesLiveSession() {
             BreakGlassSession session = liveSession();
             when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
                 .thenReturn(List.of(session));
-            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
 
             Optional<BreakGlassSessionResponseDTO> out =
                 service.consumeIfLive(patientId, userId, "Reading allergies");
 
             assertThat(out).isPresent();
-            assertThat(session.getAuditCount()).isEqualTo(1);
+            // DTO reflects the atomic +1
+            assertThat(out.get().getAuditCount()).isEqualTo(1);
+            // Crucially, the service must NOT fall back to save-the-entity (race-prone)
+            verify(sessionRepository, never()).save(any());
+            verify(sessionRepository).incrementAuditCount(session.getId());
             verify(auditService, times(1)).logEvent(any());
         }
 
@@ -304,7 +308,7 @@ class BreakGlassServiceImplTest {
                 service.consumeIfLive(patientId, userId, "Reading allergies");
 
             assertThat(out).isEmpty();
-            verify(sessionRepository, never()).save(any());
+            verify(sessionRepository, never()).incrementAuditCount(any());
             verify(auditService, never()).logEvent(any());
         }
 
@@ -321,7 +325,7 @@ class BreakGlassServiceImplTest {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
                 .thenReturn(List.of(liveSession()));
-            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.incrementAuditCount(any())).thenReturn(1);
 
             Optional<BreakGlassSessionResponseDTO> out =
                 service.consumeIfLive(patientId, null, "fallback");
@@ -343,7 +347,7 @@ class BreakGlassServiceImplTest {
             BreakGlassSession session = liveSession();
             when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
                 .thenReturn(List.of(session));
-            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(sessionRepository.incrementAuditCount(any())).thenReturn(1);
 
             service.consumeIfLive(patientId, userId, null);
 

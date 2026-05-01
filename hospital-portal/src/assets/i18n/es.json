@@ -23,6 +23,7 @@
     "ACTIVE": "Acceso de emergencia activo — cada lectura queda registrada.",
     "EXPIRES_IN": "Expira en",
     "PROMPT": "¿Necesita leer este expediente sin consentimiento?",
+    "NEED_HOSPITAL": "Seleccione un hospital antes de declarar acceso de emergencia.",
     "DECLARE": "Declarar acceso de emergencia",
     "REVOKE": "Finalizar acceso de emergencia",
     "MODAL_TITLE": "Declarar acceso de emergencia",

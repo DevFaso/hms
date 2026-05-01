@@ -52,7 +52,17 @@ class DataDomainCsvValidatorTest {
     @Test void unknownTokenIsInvalidAndAddsCustomViolation() {
         assertThat(validator.isValid("PRESCRIPTIONS,FOO_BAR", context)).isFalse();
         verify(context).disableDefaultConstraintViolation();
-        verify(context).buildConstraintViolationWithTemplate(anyString());
+        verify(context).buildConstraintViolationWithTemplate(
+            org.mockito.ArgumentMatchers.contains("'FOO_BAR'"));
         verify(builder).addConstraintViolation();
+    }
+
+    @Test void messageDoesNotLeakEnumValueOfInternals() {
+        org.mockito.ArgumentCaptor<String> captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        assertThat(validator.isValid("BOGUS", context)).isFalse();
+        verify(context).buildConstraintViolationWithTemplate(captor.capture());
+        // Must not contain the leaked Enum.valueOf shape "No enum constant ..."
+        assertThat(captor.getValue()).doesNotContain("No enum constant");
+        assertThat(captor.getValue()).contains("Allowed values:");
     }
 }

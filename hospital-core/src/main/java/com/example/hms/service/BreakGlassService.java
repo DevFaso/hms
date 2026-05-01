@@ -58,11 +58,16 @@ public interface BreakGlassService {
     Optional<BreakGlassSessionResponseDTO> findLiveForCurrentUserAndPatient(UUID patientId);
 
     /**
-     * Atomically: looks up a live session for the current user + patient,
-     * increments its audit counter, and emits a {@code BREAK_GLASS_ACCESS}
-     * audit event with the supplied {@code purpose}. Returns the session if
-     * one was consumed, empty otherwise (caller should fall through to its
-     * existing access check).
+     * Looks up a live session for the supplied user + patient (or the current
+     * security context when {@code sessionUserId} is null), bumps its audit
+     * counter via an atomic {@code UPDATE … SET audit_count = audit_count + 1},
+     * and emits a {@code BREAK_GLASS_ACCESS} audit event with the supplied
+     * {@code purpose}. Returns the session DTO if one was consumed, empty
+     * otherwise (caller should fall through to its existing access check).
+     *
+     * <p>The atomic UPDATE keeps the counter race-free under concurrent reads;
+     * the in-memory entity used to render the response DTO is bumped purely so
+     * the caller observes the new value without a re-fetch.
      */
     Optional<BreakGlassSessionResponseDTO> consumeIfLive(UUID patientId, UUID sessionUserId, String purpose);
 }

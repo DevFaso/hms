@@ -10,13 +10,21 @@ import java.util.Set;
  * Granular record-domain categories used to scope a {@link com.example.hms.model.PatientConsent}.
  *
  * <p>A consent record's {@code scope} field stores zero or more of these as a
- * comma-separated string. {@code null} or empty {@code scope} means <b>all domains</b>
- * (unrestricted), preserving backward compatibility with consents created before
- * granular scoping landed.
+ * comma-separated string. {@code null} or empty {@code scope} preserves backward
+ * compatibility with consents created before granular scoping landed by treating
+ * the consent as covering the <b>general (non-sensitive)</b> domains. The four
+ * sensitive categories below still require explicit listing — they are never
+ * implied by a blank scope.
  *
  * <p>Sensitive categories ({@link #MENTAL_HEALTH}, {@link #HIV_STATUS}, {@link #GENETICS},
  * {@link #SUBSTANCE_USE}) are intentionally separate so the patient (or local regulation)
  * can withhold them from a broader treatment-purpose consent.
+ *
+ * <p><b>Legacy aliases.</b> A few historical token spellings ({@link #VITAL_SIGNS},
+ * {@link #ENCOUNTER_HISTORY}) appear in older consent rows; {@link #parseCsv(String)}
+ * normalises them to their canonical form ({@link #VITALS}, {@link #ENCOUNTERS})
+ * so a single set of canonical values can be used downstream. The aliases are kept
+ * as enum entries solely so that legacy CSV strings can still be {@code valueOf}'d.
  */
 public enum DataDomain {
 
@@ -92,6 +100,28 @@ public enum DataDomain {
     );
 
     /**
+     * Legacy → canonical mapping. {@link #parseCsv(String)} applies this map
+     * after {@link Enum#valueOf} so downstream code (notably
+     * {@link com.example.hms.model.PatientConsent#coversDomain(DataDomain)})
+     * only ever sees canonical tokens, even when the stored CSV uses an old
+     * alias.
+     */
+    private static final java.util.Map<DataDomain, DataDomain> ALIASES = java.util.Map.of(
+        VITAL_SIGNS, VITALS,
+        ENCOUNTER_HISTORY, ENCOUNTERS
+    );
+
+    /** True when the value is a legacy alias kept for backward compatibility. */
+    public boolean isLegacyAlias() {
+        return ALIASES.containsKey(this);
+    }
+
+    /** The canonical form for this value (returns {@code this} when already canonical). */
+    public DataDomain canonical() {
+        return ALIASES.getOrDefault(this, this);
+    }
+
+    /**
      * Parses a comma-separated scope string into a set of domains.
      * Whitespace and case are ignored. Null/blank input yields an empty set.
      * Unknown tokens throw {@link IllegalArgumentException} so callers can validate.
@@ -106,7 +136,11 @@ public enum DataDomain {
             if (trimmed.isEmpty()) {
                 continue;
             }
-            result.add(DataDomain.valueOf(trimmed.toUpperCase(Locale.ROOT)));
+            DataDomain parsed = DataDomain.valueOf(trimmed.toUpperCase(Locale.ROOT));
+            // Normalise legacy aliases (VITAL_SIGNS → VITALS, etc.) so callers
+            // can compare against the canonical set without worrying about the
+            // shape of the stored CSV.
+            result.add(parsed.canonical());
         }
         return result;
     }
@@ -147,10 +181,14 @@ public enum DataDomain {
         if (requested == null) {
             return false;
         }
+        // Compare in canonical form so callers using an alias (e.g. asking for
+        // VITAL_SIGNS) still match a CSV that stores the modern canonical
+        // (VITALS), and vice versa.
+        DataDomain canonical = requested.canonical();
         if (scope == null || scope.isBlank()) {
-            return !SENSITIVE.contains(requested);
+            return !SENSITIVE.contains(canonical);
         }
-        return parseCsv(scope).contains(requested);
+        return parseCsv(scope).contains(canonical);
     }
 
     /** Convenience: list all values, in declaration order, as a fresh array. */

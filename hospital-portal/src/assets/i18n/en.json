@@ -23,6 +23,7 @@
     "ACTIVE": "Emergency access active — every read is audited.",
     "EXPIRES_IN": "Expires in",
     "PROMPT": "Need to read this chart without consent?",
+    "NEED_HOSPITAL": "Select a hospital scope before declaring emergency access.",
     "DECLARE": "Declare break-the-glass",
     "REVOKE": "End emergency access",
     "MODAL_TITLE": "Declare emergency access",

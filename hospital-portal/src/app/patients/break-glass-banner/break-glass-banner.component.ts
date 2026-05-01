@@ -77,10 +77,25 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     'ROLE_SUPER_ADMIN',
   ]);
 
+  /**
+   * True when the caller's role allows declaring break-glass at all (drives
+   * whether the banner appears at all).
+   */
   protected readonly canDeclare = computed(() => {
     const roles = this.auth.getRoles?.() ?? [];
     return roles.some((r) => BreakGlassBannerComponent.DECLARE_ROLES.has(r));
   });
+
+  /**
+   * True only when the declare action is *actually* invokable — caller is
+   * privileged AND we know which patient/hospital to attach the session to.
+   * Used by the template to disable the button (with a tooltip) instead of
+   * letting the user click and then hit a useless "missing patient/hospital"
+   * error toast.
+   */
+  protected readonly canInvokeDeclare = computed(
+    () => this.canDeclare() && !!this.patientId() && !!this.hospitalId(),
+  );
 
   ngOnChanges(_changes: SimpleChanges): void {
     this.refreshFromInputs();
@@ -203,16 +218,25 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
   }
 
   private startClock(): void {
-    this.stopClock();
+    this.cancelClockTimer();
+    this.remainingLabel.set('');
     this.tickClock();
     this.clockTimer = setInterval(() => this.tickClock(), 30_000);
   }
 
-  private stopClock(): void {
+  /** Cancels the interval but leaves {@link remainingLabel} alone — needed
+   *  for the "expired" path so the label stays observable in the template. */
+  private cancelClockTimer(): void {
     if (this.clockTimer) {
       clearInterval(this.clockTimer);
       this.clockTimer = undefined;
     }
+  }
+
+  /** Cancels the interval AND resets the label — used when the banner returns
+   *  to the idle/no-session state. */
+  private stopClock(): void {
+    this.cancelClockTimer();
     this.remainingLabel.set('');
   }
 
@@ -227,7 +251,8 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       this.remainingLabel.set('expired');
       this.mySession.set({ ...session, live: false });
       this.sessionChanged.emit(null);
-      this.stopClock();
+      // Stop the timer but keep the 'expired' label so the template shows it.
+      this.cancelClockTimer();
       return;
     }
     const totalMinutes = Math.floor(ms / 60_000);

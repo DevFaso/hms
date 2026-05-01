@@ -23,6 +23,7 @@
     "ACTIVE": "Accès d'urgence actif — chaque lecture est journalisée.",
     "EXPIRES_IN": "Expire dans",
     "PROMPT": "Besoin d'accéder au dossier sans consentement ?",
+    "NEED_HOSPITAL": "Sélectionnez un hôpital avant de déclencher l'accès d'urgence.",
     "DECLARE": "Déclencher l'accès d'urgence",
     "REVOKE": "Mettre fin à l'accès d'urgence",
     "MODAL_TITLE": "Déclencher l'accès d'urgence",

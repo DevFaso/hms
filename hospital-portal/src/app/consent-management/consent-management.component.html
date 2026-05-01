@@ -181,7 +181,9 @@
                 <label
                   class="scope-checkbox"
                   [class.sensitive]="isSensitive(domain)"
-                  [title]="isSensitive(domain) ? ('CONSENT.MANAGEMENT.SENSITIVE_HINT' | translate) : null"
+                  [title]="
+                    isSensitive(domain) ? ('CONSENT.MANAGEMENT.SENSITIVE_HINT' | translate) : null
+                  "
                 >
                   <input
                     type="checkbox"

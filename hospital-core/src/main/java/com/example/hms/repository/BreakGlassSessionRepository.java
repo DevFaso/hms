@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -58,4 +59,17 @@ public interface BreakGlassSessionRepository extends JpaRepository<BreakGlassSes
     Page<BreakGlassSession> findByHospitalIdOrderByStartedAtDesc(UUID hospitalId, Pageable pageable);
 
     Optional<BreakGlassSession> findByIdAndHospitalId(UUID id, UUID hospitalId);
+
+    /**
+     * Atomic +1 on the audit counter. Avoids the read-modify-write race that
+     * the ORM-based {@code save} path would have under concurrent reads.
+     * Returns the number of rows affected (1 on success, 0 if the session has
+     * been deleted).
+     */
+    @Modifying
+    @Query("UPDATE BreakGlassSession bg "
+         + "   SET bg.auditCount = bg.auditCount + 1, bg.updatedAt = CURRENT_TIMESTAMP "
+         + " WHERE bg.id = :id")
+    int incrementAuditCount(@Param("id") UUID id);
 }
+

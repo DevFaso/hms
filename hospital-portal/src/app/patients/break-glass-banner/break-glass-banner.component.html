@@ -16,8 +16,20 @@
     } @else {
       <div class="bg-banner__row">
         <span class="bg-banner__icon bg-banner__icon--idle" aria-hidden="true">⚠</span>
-        <span class="bg-banner__text">{{ 'BREAK_GLASS.PROMPT' | translate }}</span>
-        <button type="button" class="bg-banner__btn" (click)="openModal()">
+        <span class="bg-banner__text">
+          @if (!hospitalId()) {
+            {{ 'BREAK_GLASS.NEED_HOSPITAL' | translate }}
+          } @else {
+            {{ 'BREAK_GLASS.PROMPT' | translate }}
+          }
+        </span>
+        <button
+          type="button"
+          class="bg-banner__btn"
+          [disabled]="!canInvokeDeclare()"
+          [title]="!hospitalId() ? ('BREAK_GLASS.NEED_HOSPITAL' | translate) : null"
+          (click)="openModal()"
+        >
           {{ 'BREAK_GLASS.DECLARE' | translate }}
         </button>
       </div>
@@ -69,7 +81,12 @@
         <button type="button" class="bg-banner__btn bg-banner__btn--ghost" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="button" class="bg-banner__btn bg-banner__btn--danger" [disabled]="submitting()" (click)="submit()">
+        <button
+          type="button"
+          class="bg-banner__btn bg-banner__btn--danger"
+          [disabled]="submitting()"
+          (click)="submit()"
+        >
           {{ 'BREAK_GLASS.CONFIRM' | translate }}
         </button>
       </div>

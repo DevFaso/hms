@@ -46,7 +46,11 @@ describe('BreakGlassBannerComponent', () => {
         { provide: AuthService, useValue: authSpy },
         {
           provide: ToastService,
-          useValue: jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']),
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
         },
       ],
     });

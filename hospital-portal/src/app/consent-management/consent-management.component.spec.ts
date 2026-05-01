@@ -507,7 +507,6 @@ describe('ConsentManagementComponent', () => {
       component.shareAll.set(false);
       component.scopeSelections.set({
         ENCOUNTERS: true,
-        ENCOUNTER_HISTORY: false,
         NOTES: false,
         PROBLEMS: false,
         ALLERGIES: false,
@@ -519,7 +518,6 @@ describe('ConsentManagementComponent', () => {
         PROCEDURES: false,
         SURGICAL_HISTORY: false,
         VITALS: false,
-        VITAL_SIGNS: false,
         IMMUNIZATIONS: false,
         ADVANCE_DIRECTIVES: false,
         INSURANCES: false,
