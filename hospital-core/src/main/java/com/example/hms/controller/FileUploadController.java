@@ -1,7 +1,9 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.ChatAttachmentKind;
 import com.example.hms.enums.ReferralAttachmentCategory;
 import com.example.hms.payload.dto.ChartAttachmentUploadResponseDTO;
+import com.example.hms.payload.dto.ChatAttachmentDTO;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.referral.ReferralAttachmentUploadResponseDTO;
 import com.example.hms.service.FileUploadService;
@@ -199,6 +201,60 @@ public class FileUploadController {
             log.error("Failed to upload chart attachment", ex);
             return ResponseEntity.internalServerError()
                 .body(new MessageResponse("Failed to upload chart attachment"));
+        }
+    }
+
+    @Operation(
+        summary = "Upload chat attachment (telehealth low-bandwidth)",
+        description = "Upload a single PHOTO (≤10 MB, JPG/PNG/WebP) or AUDIO voice memo "
+            + "(≤5 MB, Opus/AAC/MP3) to be linked on the next chat send. Authenticated users only."
+    )
+    @PostMapping(value = "/chat-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Object> uploadChatAttachment(
+        @RequestParam("file") MultipartFile file,
+        @RequestParam("kind") ChatAttachmentKind kind,
+        @RequestParam(required = false) Integer durationSeconds,
+        Authentication authentication
+    ) {
+        try {
+            UUID userId = userService.getUserIdByUsername(authentication.getName());
+            if (userId == null) {
+                return ResponseEntity.badRequest().body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+            }
+
+            if (kind == ChatAttachmentKind.AUDIO
+                && (durationSeconds == null || durationSeconds < 1 || durationSeconds > 90)) {
+                return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Voice memo duration must be between 1 and 90 seconds"));
+            }
+            if (kind == ChatAttachmentKind.PHOTO && durationSeconds != null) {
+                return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Photo attachments must not carry a duration"));
+            }
+
+            FileUploadService.StoredFileDescriptor descriptor =
+                fileUploadService.uploadChatAttachment(file, kind, userId);
+
+            ChatAttachmentDTO response = ChatAttachmentDTO.builder()
+                .storageKey(descriptor.storageKey())
+                .publicUrl(descriptor.publicUrl())
+                .displayName(descriptor.displayName())
+                .contentType(descriptor.contentType())
+                .sizeBytes(descriptor.sizeBytes())
+                .sha256(descriptor.sha256())
+                .kind(kind)
+                .durationSeconds(durationSeconds)
+                .build();
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid chat attachment upload: {}", ex.getMessage());
+            return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
+        } catch (IOException | RuntimeException ex) {
+            log.error("Failed to upload chat attachment", ex);
+            return ResponseEntity.internalServerError()
+                .body(new MessageResponse("Failed to upload chat attachment"));
         }
     }
 }

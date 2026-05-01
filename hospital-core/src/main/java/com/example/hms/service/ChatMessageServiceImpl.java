@@ -2,12 +2,15 @@ package com.example.hms.service;
 
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ChatMessageMapper;
+import com.example.hms.model.ChatAttachment;
 import com.example.hms.model.ChatMessage;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.ChatAttachmentDTO;
 import com.example.hms.payload.dto.ChatConversationSummaryDTO;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
+import com.example.hms.repository.ChatAttachmentRepository;
 import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
@@ -26,6 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -95,6 +101,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     );
 
 
+    private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
+
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
@@ -103,6 +111,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
+    private final ChatAttachmentRepository chatAttachmentRepository;
 
     @Override
     @Transactional
@@ -177,12 +186,77 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         ChatMessage saved = chatMessageRepository.save(message);
 
+        List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
+
         notificationService.createNotification(
             "New message from " + sender.getFirstName() + " " + sender.getLastName(),
             recipient.getUsername()
         );
 
-        return chatMessageMapper.toChatMessageResponseDTO(saved);
+        return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
+    }
+
+    /**
+     * Re-resolve each inbound attachment by its server-assigned storageKey,
+     * persist a row pointing at it, and return the saved entities.
+     * Bounded by {@link #MAX_ATTACHMENTS_PER_MESSAGE} so a sender can't fan
+     * out an arbitrary number of media rows under one chat send.
+     */
+    private List<ChatAttachment> persistAttachments(ChatMessage message, List<ChatAttachmentDTO> incoming) {
+        if (incoming == null || incoming.isEmpty()) {
+            return List.of();
+        }
+        if (incoming.size() > MAX_ATTACHMENTS_PER_MESSAGE) {
+            throw new IllegalArgumentException(
+                "A chat message may carry at most " + MAX_ATTACHMENTS_PER_MESSAGE + " attachments");
+        }
+
+        List<ChatAttachment> persisted = new ArrayList<>(incoming.size());
+        for (ChatAttachmentDTO dto : incoming) {
+            if (dto == null || dto.getStorageKey() == null || dto.getStorageKey().isBlank()) {
+                throw new IllegalArgumentException("Attachment storageKey is required");
+            }
+            if (dto.getKind() == null) {
+                throw new IllegalArgumentException("Attachment kind is required");
+            }
+            if (chatAttachmentRepository.existsByStorageKey(dto.getStorageKey())) {
+                throw new IllegalArgumentException(
+                    "Attachment storageKey already linked to another message");
+            }
+            ChatAttachment attachment = ChatAttachment.builder()
+                .message(message)
+                .kind(dto.getKind())
+                .storageKey(dto.getStorageKey())
+                .publicUrl(dto.getPublicUrl())
+                .displayName(dto.getDisplayName())
+                .contentType(dto.getContentType())
+                .sizeBytes(dto.getSizeBytes())
+                .sha256(dto.getSha256())
+                .durationSeconds(dto.getDurationSeconds())
+                .build();
+            persisted.add(chatAttachmentRepository.save(attachment));
+        }
+        return persisted;
+    }
+
+    /** Batch-load attachments for a page of messages so the response avoids N+1. */
+    private Map<UUID, List<ChatAttachment>> loadAttachmentsByMessage(Collection<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = messages.stream()
+            .map(ChatMessage::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<ChatAttachment>> grouped = new HashMap<>();
+        chatAttachmentRepository.findByMessage_IdInOrderByMessage_IdAscCreatedAtAsc(ids)
+            .forEach(att -> grouped
+                .computeIfAbsent(att.getMessage().getId(), k -> new ArrayList<>())
+                .add(att));
+        return grouped;
     }
 
     private boolean isSuperAdminContext() {
@@ -274,8 +348,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository.findChatBetweenUsers(user1, user2, pageable);
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 
@@ -301,8 +376,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Page<ChatMessage> messages = chatMessageRepository
             .searchMessagesBetweenUsers(user1Id, user2Id, keyword, pageable);
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 
@@ -317,8 +393,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             messages = chatMessageRepository.findAllMessagesForUser(userId, pageable);
         }
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 

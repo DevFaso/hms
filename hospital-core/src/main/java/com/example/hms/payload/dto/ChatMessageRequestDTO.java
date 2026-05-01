@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -38,4 +39,11 @@ public class ChatMessageRequestDTO {
 
     /** Recipient UUID – alternative to recipientEmail. */
     private UUID recipientId;
+
+    /**
+     * Optional telehealth attachments. Each entry must carry the {@code storageKey}
+     * returned by {@code POST /files/chat-attachments}; service re-resolves and
+     * persists them under the new message. Capped at 4 by the service.
+     */
+    private List<ChatAttachmentDTO> attachments;
 }

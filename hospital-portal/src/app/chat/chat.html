@@ -167,7 +167,37 @@
                 [class.own]="isOwnMessage(msg)"
                 [class.other]="!isOwnMessage(msg)"
               >
-                <p>{{ msg.content }}</p>
+                @if (msg.content) {
+                  <p>{{ msg.content }}</p>
+                }
+                @if (msg.attachments && msg.attachments.length > 0) {
+                  <div class="msg-attachments">
+                    @for (att of msg.attachments; track att.id || att.storageKey) {
+                      @if (att.kind === 'PHOTO') {
+                        <a
+                          class="msg-photo"
+                          [href]="att.publicUrl"
+                          target="_blank"
+                          rel="noopener"
+                          [title]="att.displayName || 'attachment'"
+                        >
+                          <img
+                            [src]="att.publicUrl"
+                            [alt]="att.displayName || 'chat attachment'"
+                            [title]="att.displayName || 'chat attachment'"
+                          />
+                        </a>
+                      } @else if (att.kind === 'AUDIO') {
+                        <audio
+                          class="msg-audio"
+                          controls
+                          preload="none"
+                          [src]="att.publicUrl"
+                        ></audio>
+                      }
+                    }
+                  </div>
+                }
                 <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
               </div>
             }
@@ -179,7 +209,73 @@
             }
           </div>
 
+          @if (pendingAttachments().length > 0) {
+            <div class="msg-pending-attachments">
+              @for (att of pendingAttachments(); track att.storageKey; let i = $index) {
+                <div class="pending-chip" [attr.data-kind]="att.kind">
+                  <span class="material-symbols-outlined">
+                    {{ att.kind === 'PHOTO' ? 'image' : 'mic' }}
+                  </span>
+                  <span class="pending-name">
+                    {{ att.displayName || (att.kind === 'PHOTO' ? 'photo' : 'voice memo') }}
+                  </span>
+                  @if (att.kind === 'AUDIO' && att.durationSeconds) {
+                    <span class="pending-meta">{{ att.durationSeconds }}s</span>
+                  }
+                  <button
+                    type="button"
+                    class="pending-remove"
+                    (click)="removePendingAttachment(i)"
+                    [title]="'CHAT.REMOVE_ATTACHMENT' | translate"
+                  >
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+
+          @if (attachmentError(); as attErr) {
+            <div class="msg-attachment-error" role="alert">{{ attErr }}</div>
+          }
+
+          @if (recordingAudio()) {
+            <div class="msg-recording-banner">
+              <span class="rec-dot"></span>
+              {{ 'CHAT.RECORDING' | translate }} · {{ formatRecordingTime(recordingElapsed()) }} /
+              0:90
+            </div>
+          }
+
           <div class="msg-input-area">
+            <input
+              type="file"
+              #photoInput
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              (change)="onPhotoSelected($event)"
+            />
+            <button
+              class="msg-attach-btn"
+              [disabled]="uploadingPhoto() || sendingMessage() || recordingAudio()"
+              (click)="photoInput.click()"
+              [title]="'CHAT.ATTACH_PHOTO' | translate"
+            >
+              <span class="material-symbols-outlined">{{
+                uploadingPhoto() ? 'progress_activity' : 'image'
+              }}</span>
+            </button>
+            <button
+              class="msg-attach-btn"
+              [class.recording]="recordingAudio()"
+              [disabled]="uploadingAudio() || sendingMessage()"
+              (click)="toggleVoiceMemo()"
+              [title]="'CHAT.RECORD_VOICE_MEMO' | translate"
+            >
+              <span class="material-symbols-outlined">{{
+                recordingAudio() ? 'stop_circle' : uploadingAudio() ? 'progress_activity' : 'mic'
+              }}</span>
+            </button>
             <input
               type="text"
               [placeholder]="'CHAT.TYPE_MESSAGE' | translate"
@@ -188,7 +284,11 @@
             />
             <button
               class="send-btn"
-              [disabled]="sendingMessage() || !messageText.trim()"
+              [disabled]="
+                sendingMessage() ||
+                recordingAudio() ||
+                (!messageText.trim() && pendingAttachments().length === 0)
+              "
               (click)="sendMessage()"
             >
               <span class="material-symbols-outlined">send</span>

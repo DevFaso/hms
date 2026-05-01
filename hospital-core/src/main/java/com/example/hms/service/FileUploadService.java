@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.ChatAttachmentKind;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -389,5 +390,116 @@ public class FileUploadService {
         long sizeBytes,
         String sha256
     ) {
+    }
+
+    // ---------------------------------------------------------------------
+    // P1 #10 — Telehealth low-bandwidth: chat attachments (PHOTO / AUDIO).
+    // Photo cap is intentionally lower than chart-attachments so a phone
+    // on a metered link doesn't blow a patient's data plan; audio cap is
+    // tighter still since voice memos are tiny in Opus.
+    // ---------------------------------------------------------------------
+    private static final long MAX_CHAT_PHOTO_SIZE = 10L * 1024 * 1024; // 10 MB
+    private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
+    private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
+    private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
+        ".jpg", ".jpeg", ".png", ".webp"
+    );
+    private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
+        "image/jpeg", "image/png", "image/webp"
+    );
+    private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
+        ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
+    );
+    private static final Set<String> ALLOWED_CHAT_AUDIO_MIME = Set.of(
+        "audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/aac", "audio/x-m4a"
+    );
+
+    /**
+     * Upload a single chat-attachment for a low-bandwidth telehealth consult.
+     * Returns the storage descriptor; the caller (chat send path) links it to
+     * the message row and records the SHA-256 for tamper detection.
+     *
+     * @throws IllegalArgumentException if the kind/content-type/extension/size do not match
+     */
+    public StoredFileDescriptor uploadChatAttachment(MultipartFile file,
+                                                      ChatAttachmentKind kind,
+                                                      UUID uploaderId) throws IOException {
+        validateChatAttachment(file, kind);
+
+        Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH);
+        Files.createDirectories(uploadPath);
+
+        String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
+        String extension = getFileExtension(file.getOriginalFilename());
+        String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId,
+            kind == ChatAttachmentKind.AUDIO ? "voice_memo" : "photo");
+
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+        }
+        MessageDigest digest = createSha256Digest();
+        try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
+            Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        String relativePath = relativeUploadPath(CHAT_ATTACHMENTS_PATH, filename);
+        long sizeBytes = Files.size(filePath);
+        String checksum = HexFormat.of().formatHex(digest.digest());
+
+        return new StoredFileDescriptor(
+            relativePath,
+            buildPublicUrl(relativePath),
+            determineDisplayName(file, filename),
+            file.getContentType(),
+            sizeBytes,
+            checksum
+        );
+    }
+
+    private static String relativeUploadPath(String subdir, String filename) {
+        return String.join("/", "/uploads", subdir, filename);
+    }
+
+    private void validateChatAttachment(MultipartFile file, ChatAttachmentKind kind) {
+        if (kind == null) {
+            throw new IllegalArgumentException("Attachment kind is required");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
+        }
+        if (kind == ChatAttachmentKind.AUDIO) {
+            validateChatAudio(file);
+        } else {
+            validateChatPhoto(file);
+        }
+    }
+
+    private void validateChatPhoto(MultipartFile file) {
+        if (file.getSize() > MAX_CHAT_PHOTO_SIZE) {
+            throw new IllegalArgumentException("Photo cannot exceed 10MB");
+        }
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
+        if (!ALLOWED_CHAT_PHOTO_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Unsupported photo format. Allowed: JPG, JPEG, PNG, WEBP");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CHAT_PHOTO_MIME.contains(contentType.toLowerCase())) {
+            throw new IllegalArgumentException("Unsupported photo content-type");
+        }
+    }
+
+    private void validateChatAudio(MultipartFile file) {
+        if (file.getSize() > MAX_CHAT_AUDIO_SIZE) {
+            throw new IllegalArgumentException("Voice memo cannot exceed 5MB");
+        }
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
+        if (!ALLOWED_CHAT_AUDIO_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Unsupported audio format. Allowed: WEBM, OGG, M4A, MP4, MP3, AAC");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CHAT_AUDIO_MIME.contains(contentType.toLowerCase())) {
+            throw new IllegalArgumentException("Unsupported audio content-type");
+        }
     }
 }

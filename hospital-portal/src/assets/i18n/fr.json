@@ -460,6 +460,7 @@
     "TOTAL_INVOICES": "Total Factures"
   },
   "CHAT": {
+    "ATTACH_PHOTO": "Joindre une photo",
     "CONVERSATIONS": "Conversations",
     "ERROR_TITLE": "Erreur de chargement des messages",
     "LOADING_CONVERSATIONS": "Chargement des conversations…",
@@ -468,7 +469,10 @@
     "NO_CONVERSATIONS": "Aucune conversation",
     "NO_MESSAGES": "Aucun message",
     "NO_USERS_FOUND": "Aucun utilisateur trouvé",
+    "RECORD_VOICE_MEMO": "Enregistrer un mémo vocal",
+    "RECORDING": "Enregistrement",
     "REFRESH_MESSAGES": "Actualiser les messages",
+    "REMOVE_ATTACHMENT": "Retirer la pièce jointe",
     "SEARCH_CONVERSATIONS": "Rechercher des conversations…",
     "SEARCH_USERS": "Rechercher des utilisateurs…",
     "SELECT_CONVERSATION": "Sélectionner une conversation",
