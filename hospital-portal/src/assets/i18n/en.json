@@ -19,6 +19,19 @@
     "NONE_ACTIVE": "No active advisories for this patient.",
     "ERROR": "Could not load best-practice advisories. The chart is still safe to use."
   },
+  "BREAK_GLASS": {
+    "ACTIVE": "Emergency access active — every read is audited.",
+    "EXPIRES_IN": "Expires in",
+    "PROMPT": "Need to read this chart without consent?",
+    "DECLARE": "Declare break-the-glass",
+    "REVOKE": "End emergency access",
+    "MODAL_TITLE": "Declare emergency access",
+    "MODAL_WARN": "This grants you up to 4 hours of audited read access without the patient's consent. Use only in genuine emergencies — every read will be logged.",
+    "REASON_LABEL": "Clinical justification",
+    "REASON_PLACEHOLDER": "e.g. Patient unconscious, no proxy reachable; need allergy/med history.",
+    "TTL_LABEL": "Duration",
+    "CONFIRM": "Declare access"
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
     "LOADING": "Loading patient summary…",
@@ -529,6 +542,7 @@
       "SCOPE": "Scope",
       "SHARE_ALL": "Share All Records",
       "SCOPE_HINT": "Select specific domains to share, or keep \"Share All\" checked to share everything.",
+      "SENSITIVE_HINT": "Sensitive category — patient must opt in explicitly. Not implied by Share All.",
       "EXPIRATION": "Expires",
       "PATIENT_ID": "Patient",
       "UUID_PLACEHOLDER": "Enter UUID",
@@ -547,18 +561,27 @@
     },
     "SCOPE_DOMAINS": {
       "ENCOUNTERS": "Encounters",
-      "TREATMENTS": "Treatments",
+      "ENCOUNTER_HISTORY": "Encounter History",
+      "NOTES": "Clinical Notes",
+      "PROBLEMS": "Problems",
+      "ALLERGIES": "Allergies",
       "PRESCRIPTIONS": "Prescriptions",
+      "TREATMENTS": "Treatments",
       "LAB_ORDERS": "Lab Orders",
       "LAB_RESULTS": "Lab Results",
-      "ALLERGIES": "Allergies",
-      "PROBLEMS": "Problems",
+      "IMAGING": "Imaging",
+      "PROCEDURES": "Procedures",
       "SURGICAL_HISTORY": "Surgical History",
-      "ADVANCE_DIRECTIVES": "Advance Directives",
-      "ENCOUNTER_HISTORY": "Encounter History",
+      "VITALS": "Vital Signs",
       "VITAL_SIGNS": "Vital Signs",
       "IMMUNIZATIONS": "Immunizations",
-      "INSURANCES": "Insurance Information"
+      "ADVANCE_DIRECTIVES": "Advance Directives",
+      "INSURANCES": "Insurance Information",
+      "BILLING": "Billing",
+      "MENTAL_HEALTH": "Mental Health (sensitive)",
+      "HIV_STATUS": "HIV Status (sensitive)",
+      "SUBSTANCE_USE": "Substance Use (sensitive)",
+      "GENETICS": "Genetics (sensitive)"
     }
   },
   "SHARED_RECORDS": {

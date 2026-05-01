@@ -507,18 +507,27 @@ describe('ConsentManagementComponent', () => {
       component.shareAll.set(false);
       component.scopeSelections.set({
         ENCOUNTERS: true,
-        TREATMENTS: false,
+        ENCOUNTER_HISTORY: false,
+        NOTES: false,
+        PROBLEMS: false,
+        ALLERGIES: false,
         PRESCRIPTIONS: true,
+        TREATMENTS: false,
         LAB_ORDERS: false,
         LAB_RESULTS: false,
-        ALLERGIES: false,
-        PROBLEMS: false,
+        IMAGING: false,
+        PROCEDURES: false,
         SURGICAL_HISTORY: false,
-        ADVANCE_DIRECTIVES: false,
-        ENCOUNTER_HISTORY: false,
+        VITALS: false,
         VITAL_SIGNS: false,
         IMMUNIZATIONS: false,
+        ADVANCE_DIRECTIVES: false,
         INSURANCES: false,
+        BILLING: false,
+        MENTAL_HEALTH: false,
+        HIV_STATUS: false,
+        SUBSTANCE_USE: false,
+        GENETICS: false,
       });
       component.submitGrant();
       const arg = sharingStub.grantConsent.calls.mostRecent().args[0];

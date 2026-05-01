@@ -1,0 +1,337 @@
+package com.example.hms.service;
+
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.exception.UnauthorizedAccessException;
+import com.example.hms.model.BreakGlassSession;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.User;
+import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
+import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
+import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
+import com.example.hms.repository.BreakGlassSessionRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Unit tests for {@link BreakGlassServiceImpl}.
+ *
+ * <p>The service does role-gating and audit emission, both of which are easy
+ * to mis-wire. These tests pin the behaviour at the boundary the controller
+ * relies on: a non-privileged user cannot declare; a declared session emits a
+ * BREAK_GLASS_ACCESS audit; consumeIfLive increments the audit count and
+ * emits an audit event; revoke is restricted to the owner / hospital admin.
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("BreakGlassServiceImpl")
+class BreakGlassServiceImplTest {
+
+    @Mock private BreakGlassSessionRepository sessionRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private PatientRepository patientRepository;
+    @Mock private HospitalRepository hospitalRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private AuditEventLogService auditService;
+
+    @InjectMocks private BreakGlassServiceImpl service;
+
+    private User caller;
+    private Hospital hospital;
+    private Patient patient;
+    private UUID hospitalId;
+    private UUID patientId;
+    private UUID userId;
+
+    @BeforeEach
+    void setUp() {
+        userId = UUID.randomUUID();
+        hospitalId = UUID.randomUUID();
+        patientId = UUID.randomUUID();
+
+        caller = new User();
+        caller.setId(userId);
+        caller.setUsername("dr.alice");
+
+        hospital = Hospital.builder().name("City Clinic").build();
+        hospital.setId(hospitalId);
+
+        patient = new Patient();
+        patient.setId(patientId);
+
+        // Authenticate as dr.alice
+        SecurityContextHolder.getContext().setAuthentication(
+            new TestingAuthenticationToken("dr.alice", "n/a"));
+    }
+
+    @AfterEach
+    void clearAuth() {
+        SecurityContextHolder.clearContext();
+    }
+
+    // -------------------------------------------------------------------- declare
+
+    @Nested
+    @DisplayName("declare")
+    class Declare {
+        @Test
+        @DisplayName("creates session, applies default 240 min TTL, emits audit")
+        void declareSuccess() {
+            stubAuthenticatedDoctor();
+
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build();
+
+            BreakGlassSessionResponseDTO out = service.declare(req);
+
+            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
+            verify(sessionRepository).save(captor.capture());
+            BreakGlassSession saved = captor.getValue();
+
+            assertThat(saved.getReason()).startsWith("Unconscious");
+            assertThat(saved.getUser().getId()).isEqualTo(userId);
+            assertThat(saved.getPatient().getId()).isEqualTo(patientId);
+            // Default TTL = 240 min
+            assertThat(saved.getExpiresAt()).isAfter(LocalDateTime.now().plusMinutes(239));
+            assertThat(saved.getExpiresAt()).isBefore(LocalDateTime.now().plusMinutes(241));
+            assertThat(out.getReason()).startsWith("Unconscious");
+
+            verify(auditService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("clamps caller-supplied TTL above 240 min to the 240-min ceiling")
+        void declareClampsTtl() {
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .ttlMinutes(9999)
+                .build();
+
+            service.declare(req);
+
+            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
+            verify(sessionRepository).save(captor.capture());
+            assertThat(captor.getValue().getExpiresAt())
+                .isBefore(LocalDateTime.now().plusMinutes(241));
+        }
+
+        @Test
+        @DisplayName("rejects TTL below the 15-minute floor")
+        void declareRejectsLowTtl() {
+            stubAuthenticatedDoctor();
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .ttlMinutes(5)
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(BusinessException.class);
+
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("rejects callers without a privileged role at the hospital")
+        void declareRejectsUnprivileged() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
+                .thenReturn(false);
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Trying to override.")
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(UnauthorizedAccessException.class);
+
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("404s when hospital is unknown")
+        void declareUnknownHospital() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Override needed for trauma chart.")
+                .build();
+
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    // -------------------------------------------------------------------- revoke
+
+    @Nested
+    @DisplayName("revoke")
+    class Revoke {
+        @Test
+        @DisplayName("declaring user can revoke their own session")
+        void ownerRevokes() {
+            BreakGlassSession session = liveSession();
+            when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            BreakGlassSessionResponseDTO out = service.revoke(session.getId(),
+                BreakGlassRevokeRequestDTO.builder().reason("Patient regained consciousness.").build());
+
+            assertThat(out.getRevokedAt()).isNotNull();
+            verify(auditService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("non-owner without admin role is rejected")
+        void nonOwnerNonAdminRejected() {
+            BreakGlassSession session = liveSession();
+            // Different declaring user
+            User other = new User();
+            other.setId(UUID.randomUUID());
+            other.setUsername("dr.bob");
+            session.setUser(other);
+
+            when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(userId), eq(hospitalId), any())).thenReturn(false);
+
+            assertThatThrownBy(() -> service.revoke(session.getId(), null))
+                .isInstanceOf(UnauthorizedAccessException.class);
+        }
+
+        @Test
+        @DisplayName("re-revoking an already-closed session is a no-op (idempotent)")
+        void reRevokeIdempotent() {
+            BreakGlassSession session = liveSession();
+            session.setRevokedAt(LocalDateTime.now().minusMinutes(5));
+            when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+
+            service.revoke(session.getId(), null);
+
+            verify(sessionRepository, never()).save(any());
+        }
+    }
+
+    // -------------------------------------------------------------------- consumeIfLive
+
+    @Nested
+    @DisplayName("consumeIfLive")
+    class Consume {
+        @Test
+        @DisplayName("increments auditCount and emits audit when a live session exists")
+        void consumesLiveSession() {
+            BreakGlassSession session = liveSession();
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(session));
+            when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            Optional<BreakGlassSessionResponseDTO> out =
+                service.consumeIfLive(patientId, userId, "Reading allergies");
+
+            assertThat(out).isPresent();
+            assertThat(session.getAuditCount()).isEqualTo(1);
+            verify(auditService, times(1)).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("returns empty without side effects when no live session exists")
+        void noSession() {
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of());
+
+            Optional<BreakGlassSessionResponseDTO> out =
+                service.consumeIfLive(patientId, userId, "Reading allergies");
+
+            assertThat(out).isEmpty();
+            verify(sessionRepository, never()).save(any());
+            verify(auditService, never()).logEvent(any());
+        }
+    }
+
+    // -------------------------------------------------------------------- helpers
+
+    private void stubAuthenticatedDoctor() {
+        when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "SUPER_ADMIN"))
+            .thenReturn(Optional.empty());
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), any(Set.class))).thenReturn(true);
+    }
+
+    private BreakGlassSession liveSession() {
+        BreakGlassSession s = BreakGlassSession.builder()
+            .user(caller)
+            .patient(patient)
+            .hospital(hospital)
+            .reason("Trauma override")
+            .startedAt(LocalDateTime.now().minusMinutes(10))
+            .expiresAt(LocalDateTime.now().plusMinutes(230))
+            .auditCount(0)
+            .build();
+        s.setId(UUID.randomUUID());
+        return s;
+    }
+}

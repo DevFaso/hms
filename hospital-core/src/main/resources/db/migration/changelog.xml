@@ -846,4 +846,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V67: P1 #9 — Break-the-glass emergency-access sessions
+         - clinical.break_glass_sessions: short-lived (default 4h)
+           emergency overrides granted to clinicians who need to read a
+           patient's chart without a pre-existing consent.
+         - Every read served under an active session emits a
+           BREAK_GLASS_ACCESS audit event (existing AuditEventType).
+         - Partial indexes target the (user, patient) hot path and the
+           per-patient banner lookup.
+         - V66 is reserved for the parallel P1 #8 (Inpatient eMAR) PR.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V67-break-glass-sessions" author="hms-team" runOnChange="false">
+        <sqlFile path="V67__break_glass_sessions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

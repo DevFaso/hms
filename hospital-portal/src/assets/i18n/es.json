@@ -19,6 +19,19 @@
     "NONE_ACTIVE": "Sin avisos activos para este paciente.",
     "ERROR": "No se pudieron cargar los avisos de buena práctica. El expediente sigue siendo seguro de usar."
   },
+  "BREAK_GLASS": {
+    "ACTIVE": "Acceso de emergencia activo — cada lectura queda registrada.",
+    "EXPIRES_IN": "Expira en",
+    "PROMPT": "¿Necesita leer este expediente sin consentimiento?",
+    "DECLARE": "Declarar acceso de emergencia",
+    "REVOKE": "Finalizar acceso de emergencia",
+    "MODAL_TITLE": "Declarar acceso de emergencia",
+    "MODAL_WARN": "Esto otorga hasta 4 horas de acceso de lectura auditado sin consentimiento del paciente. Úselo solo en emergencias reales — cada lectura quedará registrada.",
+    "REASON_LABEL": "Justificación clínica",
+    "REASON_PLACEHOLDER": "Ej.: Paciente inconsciente, sin familia localizable; necesito alergias/medicación.",
+    "TTL_LABEL": "Duración",
+    "CONFIRM": "Activar acceso"
+  },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
     "LOADING": "Cargando resumen del paciente…",
@@ -529,6 +542,7 @@
       "SCOPE": "Alcance",
       "SCOPE_PLACEHOLDER": "ej. RECETAS,RESULTADOS_LAB",
       "SCOPE_HINT": "Dominios de registros separados por comas. Dejar en blanco para compartir todo.",
+      "SENSITIVE_HINT": "Categoría sensible — el paciente debe consentir explícitamente. No se incluye en Compartir todo.",
       "EXPIRATION": "Vencimiento",
       "PATIENT_ID": "ID de paciente",
       "UUID_PLACEHOLDER": "Ingresar UUID",
@@ -548,18 +562,27 @@
     },
     "SCOPE_DOMAINS": {
       "ENCOUNTERS": "Consultas",
-      "TREATMENTS": "Tratamientos",
+      "ENCOUNTER_HISTORY": "Historial de consultas",
+      "NOTES": "Notas clínicas",
+      "PROBLEMS": "Problemas",
+      "ALLERGIES": "Alergias",
       "PRESCRIPTIONS": "Recetas",
+      "TREATMENTS": "Tratamientos",
       "LAB_ORDERS": "Pedidos de laboratorio",
       "LAB_RESULTS": "Resultados de laboratorio",
-      "ALLERGIES": "Alergias",
-      "PROBLEMS": "Problemas",
+      "IMAGING": "Imagenología",
+      "PROCEDURES": "Procedimientos",
       "SURGICAL_HISTORY": "Antecedentes quirúrgicos",
-      "ADVANCE_DIRECTIVES": "Directivas anticipadas",
-      "ENCOUNTER_HISTORY": "Historial de consultas",
+      "VITALS": "Signos vitales",
       "VITAL_SIGNS": "Signos vitales",
       "IMMUNIZATIONS": "Inmunizaciones",
-      "INSURANCES": "Información de seguros"
+      "ADVANCE_DIRECTIVES": "Directivas anticipadas",
+      "INSURANCES": "Información de seguros",
+      "BILLING": "Facturación",
+      "MENTAL_HEALTH": "Salud mental (sensible)",
+      "HIV_STATUS": "Estado de VIH (sensible)",
+      "SUBSTANCE_USE": "Consumo de sustancias (sensible)",
+      "GENETICS": "Genética (sensible)"
     }
   },
   "SHARED_RECORDS": {

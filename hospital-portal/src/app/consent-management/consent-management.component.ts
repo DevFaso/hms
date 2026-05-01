@@ -31,23 +31,50 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
   'ALL_PURPOSES',
 ];
 
+/**
+ * Granular DataDomain values picked by the backend `@DataDomainCsv` validator.
+ * Keep this list in sync with `com.example.hms.enums.DataDomain`. The order
+ * here drives chip ordering in the UI; sensitive domains are grouped at the
+ * end with a visual separator.
+ */
 const SCOPE_DOMAINS = [
+  // General clinical record
   'ENCOUNTERS',
-  'TREATMENTS',
+  'ENCOUNTER_HISTORY',
+  'NOTES',
+  'PROBLEMS',
+  'ALLERGIES',
+  // Medication & orders
   'PRESCRIPTIONS',
+  'TREATMENTS',
   'LAB_ORDERS',
   'LAB_RESULTS',
-  'ALLERGIES',
-  'PROBLEMS',
+  'IMAGING',
+  // Procedural / observational
+  'PROCEDURES',
   'SURGICAL_HISTORY',
-  'ADVANCE_DIRECTIVES',
-  'ENCOUNTER_HISTORY',
+  'VITALS',
   'VITAL_SIGNS',
   'IMMUNIZATIONS',
+  'ADVANCE_DIRECTIVES',
   'INSURANCES',
+  'BILLING',
+  // Sensitive — patient must opt in explicitly
+  'MENTAL_HEALTH',
+  'HIV_STATUS',
+  'SUBSTANCE_USE',
+  'GENETICS',
 ] as const;
 
 type ScopeDomain = (typeof SCOPE_DOMAINS)[number];
+
+/** Domains that the backend treats as sensitive (must be listed explicitly to grant). */
+export const SENSITIVE_DOMAINS: ReadonlySet<string> = new Set([
+  'MENTAL_HEALTH',
+  'HIV_STATUS',
+  'SUBSTANCE_USE',
+  'GENETICS',
+]);
 
 @Component({
   selector: 'app-consent-management',
@@ -141,6 +168,10 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     );
     if (anyChecked) this.shareAll.set(false);
     else this.shareAll.set(true);
+  }
+
+  isSensitive(domain: ScopeDomain): boolean {
+    return SENSITIVE_DOMAINS.has(domain);
   }
 
   private buildScopeString(): string {

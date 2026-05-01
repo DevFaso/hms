@@ -178,16 +178,23 @@
                 <span class="scope-label">{{ 'CONSENT.MANAGEMENT.SHARE_ALL' | translate }}</span>
               </label>
               @for (domain of scopeDomains; track domain) {
-                <label class="scope-checkbox">
+                <label
+                  class="scope-checkbox"
+                  [class.sensitive]="isSensitive(domain)"
+                  [title]="isSensitive(domain) ? ('CONSENT.MANAGEMENT.SENSITIVE_HINT' | translate) : null"
+                >
                   <input
                     type="checkbox"
                     [checked]="scopeSelections()[domain]"
                     (change)="toggleScope(domain, $any($event.target).checked)"
                     [disabled]="shareAll()"
                   />
-                  <span class="scope-label">{{
-                    'CONSENT.SCOPE_DOMAINS.' + domain | translate
-                  }}</span>
+                  <span class="scope-label">
+                    {{ 'CONSENT.SCOPE_DOMAINS.' + domain | translate }}
+                    @if (isSensitive(domain)) {
+                      <span class="sensitive-marker" aria-hidden="true">*</span>
+                    }
+                  </span>
                 </label>
               }
             </div>
