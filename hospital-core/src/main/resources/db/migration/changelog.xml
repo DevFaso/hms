@@ -847,6 +847,23 @@
     </changeSet>
 
     <!-- =================================================================
+         V66: P1 #8 — Inpatient eMAR five-rights barcode-scan loop
+         - Additive columns on clinical.medication_administration_records:
+           patient_scan_value, medication_scan_value, dose_scan_value,
+           scan_verified_at, five_rights_status, five_rights_overrides
+           (JSONB), override_reason.
+         - Indexes on five_rights_status and scan_verified_at to support
+           the bedside dashboard and audit-by-override-decision queries.
+         - Additive only; no destructive ops.
+         ================================================================= -->
+    <changeSet id="V66-inpatient-emar-five-rights" author="hms-team" runOnChange="false">
+        <sqlFile path="V66__inpatient_emar_five_rights.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V67: P1 #9 — Break-the-glass emergency-access sessions
          - clinical.break_glass_sessions: short-lived (default 4h)
            emergency overrides granted to clinicians who need to read a
@@ -855,7 +872,6 @@
            BREAK_GLASS_ACCESS audit event (existing AuditEventType).
          - Partial indexes target the (user, patient) hot path and the
            per-patient banner lookup.
-         - V66 is reserved for the parallel P1 #8 (Inpatient eMAR) PR.
          - Additive only; pure DDL.
          ================================================================= -->
     <changeSet id="V67-break-glass-sessions" author="hms-team" runOnChange="false">

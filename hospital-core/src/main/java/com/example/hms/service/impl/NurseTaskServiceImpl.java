@@ -3,6 +3,8 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.FiveRightsCheck;
+import com.example.hms.enums.FiveRightsStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -22,6 +24,8 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
@@ -56,6 +60,10 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
+import com.example.hms.service.emar.FiveRightsVerificationResult;
+import com.example.hms.service.emar.FiveRightsVerificationService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -68,9 +76,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -139,6 +150,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final NursingNoteRepository nursingNoteRepository;
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final FiveRightsVerificationService fiveRightsVerificationService;
+    private final ObjectMapper objectMapper;
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -270,13 +283,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String normalizedStatus = normalizeAdministrationStatus(request);
         MedicationAdministrationStatus marStatus = MedicationAdministrationStatus.valueOf(normalizedStatus);
         String note = request != null ? request.getNote() : null;
+        String overrideReason = request != null ? request.getOverrideReason() : null;
 
         // Try to find a real prescription matching the task ID
         Optional<Prescription> rxOpt = prescriptionRepository.findById(medicationTaskId);
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
-            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note);
+            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason);
         }
 
         // Fall back: check existing MAR records
@@ -292,6 +306,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 marRecord.setReason(note);
             }
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
+            recordOverrideOnAdminister(marRecord, marStatus, overrideReason);
             marRepository.save(marRecord);
 
             Patient patient = marRecord.getPatient();
@@ -314,6 +329,148 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findFirst()
             .map(task -> toAdministeredTask(task, normalizedStatus))
             .orElseThrow(() -> new ResourceNotFoundException("Medication administration task not found."));
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       eMAR five-rights verification (P1 #8)
+       ═══════════════════════════════════════════════════════════════════ */
+
+    @Override
+    @Transactional
+    public MarVerificationResponseDTO verifyMedicationAdministration(
+        UUID marId, UUID nurseUserId, UUID hospitalId, MarVerificationRequestDTO request
+    ) {
+        if (marId == null) {
+            throw new BusinessException("MAR identifier is required for verification.");
+        }
+        if (request == null) {
+            throw new BusinessException("Verification request body is required.");
+        }
+
+        MedicationAdministrationRecord mar = loadOrMaterializeMar(marId, nurseUserId, hospitalId);
+        validateHospitalMatch(mar.getHospital(), hospitalId);
+
+        FiveRightsVerificationResult result = fiveRightsVerificationService.verify(
+            mar,
+            request.getPatientScanValue(),
+            request.getMedicationScanValue(),
+            request.getDoseScanValue(),
+            request.getRouteScanValue(),
+            request.getAdministeredAt()
+        );
+
+        LocalDateTime verifiedAt = LocalDateTime.now();
+        mar.setPatientScanValue(request.getPatientScanValue());
+        mar.setMedicationScanValue(request.getMedicationScanValue());
+        mar.setDoseScanValue(request.getDoseScanValue());
+        mar.setRouteScanValue(request.getRouteScanValue());
+        mar.setScanVerifiedAt(verifiedAt);
+        mar.setFiveRightsStatus(result.allPassed() ? FiveRightsStatus.VERIFIED : FiveRightsStatus.NOT_VERIFIED);
+        // A new verification supersedes any prior override decision: clear
+        // both the JSON override list and the free-text reason so a stale
+        // OVERRIDDEN reason from an earlier attempt cannot survive a clean
+        // re-verify.
+        mar.setFiveRightsOverrides(null);
+        mar.setOverrideReason(null);
+
+        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(mar::setAdministeredByStaff);
+        marRepository.save(mar);
+
+        Map<String, Boolean> outcomes = new LinkedHashMap<>();
+        result.getOutcomes().forEach((check, ok) -> outcomes.put(check.name(), ok));
+
+        Map<String, String> reasons = new LinkedHashMap<>();
+        result.getFailureReasons().forEach((check, reason) -> reasons.put(check.name(), reason));
+
+        List<String> failed = result.failedChecks().stream().map(Enum::name).toList();
+
+        return MarVerificationResponseDTO.builder()
+            .marId(mar.getId())
+            .outcomes(outcomes)
+            .failedChecks(failed)
+            .failureReasons(reasons)
+            .allPassed(result.allPassed())
+            .verifiedAt(verifiedAt)
+            .build();
+    }
+
+    /**
+     * Resolve a MAR row by id, materialising one from a Prescription if the id
+     * still points at the synthetic prescription-as-task identifier the MAR
+     * list endpoint emits before the first administration is recorded.
+     */
+    private MedicationAdministrationRecord loadOrMaterializeMar(
+        UUID marId, UUID nurseUserId, UUID hospitalId
+    ) {
+        Optional<MedicationAdministrationRecord> existing = marRepository.findById(marId);
+        if (existing.isPresent()) return existing.get();
+
+        Prescription rx = prescriptionRepository.findById(marId)
+            .orElseThrow(() -> new ResourceNotFoundException("MAR record not found: " + marId));
+        validateHospitalMatch(rx.getHospital(), hospitalId);
+
+        MedicationAdministrationRecord seeded = MedicationAdministrationRecord.builder()
+            .prescription(rx)
+            .patient(rx.getPatient())
+            .hospital(rx.getHospital())
+            .medicationName(rx.getMedicationName())
+            .dose(buildDoseDisplay(rx))
+            .route(rx.getRoute() != null ? rx.getRoute() : "PO")
+            .scheduledTime(computeMedicationDueTime(rx, LocalDateTime.now()))
+            .status(MedicationAdministrationStatus.PENDING)
+            .build();
+        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(seeded::setAdministeredByStaff);
+        return marRepository.save(seeded);
+    }
+
+    /**
+     * Stamp a finalised MAR row with the override decision once the
+     * administration is being recorded. Always re-runs the five-rights check
+     * — the TIME right depends on the final {@code administeredAt}, which is
+     * set by the administer call (not by verify), so a row that was
+     * VERIFIED earlier may now be outside the time window. The route used
+     * here is the persisted scanned route ({@code routeScanValue}), not the
+     * prescription's own route, so a route mismatch caught at verify is not
+     * silently exonerated by reusing the prescribed value.
+     */
+    private void recordOverrideOnAdminister(
+        MedicationAdministrationRecord mar,
+        MedicationAdministrationStatus status,
+        String overrideReason
+    ) {
+        if (status != MedicationAdministrationStatus.GIVEN) return;
+
+        FiveRightsVerificationResult check = fiveRightsVerificationService.verify(
+            mar,
+            mar.getPatientScanValue(),
+            mar.getMedicationScanValue(),
+            mar.getDoseScanValue(),
+            mar.getRouteScanValue(),
+            mar.getAdministeredAt()
+        );
+        if (check.allPassed()) {
+            mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+            mar.setFiveRightsOverrides(null);
+            mar.setOverrideReason(null);
+            return;
+        }
+
+        if (overrideReason == null || overrideReason.isBlank()) {
+            throw new BusinessException(
+                "Five-rights check failed (" + check.failedChecks() + "); an override reason is required to record GIVEN.");
+        }
+        mar.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
+        mar.setOverrideReason(overrideReason);
+        mar.setFiveRightsOverrides(serializeOverrides(check.failedChecks()));
+    }
+
+    private String serializeOverrides(Set<FiveRightsCheck> failed) {
+        try {
+            return objectMapper.writeValueAsString(failed.stream().map(Enum::name).toList());
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize five-rights overrides; falling back to toString. {}", e.getMessage());
+            return failed.stream().map(Enum::name).toList().toString();
+        }
     }
 
     /** Convert an existing task DTO to an administered-status copy. */
@@ -550,7 +707,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** Persist a MedicationAdministrationRecord linked to a real Prescription. */
     private NurseMedicationTaskResponseDTO persistMarRecord(
         Prescription rx, UUID nurseUserId, UUID hospitalId,
-        MedicationAdministrationStatus status, String note
+        MedicationAdministrationStatus status, String note, String overrideReason
     ) {
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
@@ -568,9 +725,24 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
+        // No verify call has happened for a fresh prescription-as-task path —
+        // GIVEN must therefore be explicitly overridden by the nurse. We
+        // stamp scanVerifiedAt with the override decision time so audit
+        // queries that range over scan_verified_at still see this record.
+        if (status == MedicationAdministrationStatus.GIVEN) {
+            if (overrideReason == null || overrideReason.isBlank()) {
+                throw new BusinessException(
+                    "Five-rights verification has not been completed; an override reason is required to record GIVEN.");
+            }
+            marRecord.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
+            marRecord.setOverrideReason(overrideReason);
+            marRecord.setFiveRightsOverrides(serializeOverrides(EnumSet.allOf(FiveRightsCheck.class)));
+            marRecord.setScanVerifiedAt(LocalDateTime.now());
+        }
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
 
-        log.info("MAR recorded: prescriptionId={}, status={}, nurse={}", rx.getId(), status, nurseUserId);
+        log.info("MAR recorded: prescriptionId={}, status={}, fiveRights={}, nurse={}",
+            rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
 
         return NurseMedicationTaskResponseDTO.builder()
             .id(saved.getId())
