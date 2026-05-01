@@ -66,12 +66,18 @@ class DataDomainTest {
     }
 
     @Test void sensitiveSetIsExactlyTheKnownFour() {
-        assertThat(DataDomain.SENSITIVE).isEqualTo(EnumSet.of(
+        assertThat(DataDomain.SENSITIVE).containsExactlyInAnyOrder(
             DataDomain.MENTAL_HEALTH,
             DataDomain.HIV_STATUS,
             DataDomain.SUBSTANCE_USE,
             DataDomain.GENETICS
-        ));
+        );
+    }
+
+    @Test void sensitiveSetIsImmutable() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> DataDomain.SENSITIVE.add(DataDomain.PRESCRIPTIONS)
+        ).isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test void toCsvRoundTripsThroughParseCsv() {

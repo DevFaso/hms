@@ -255,7 +255,8 @@ class BreakGlassServiceImplTest {
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
                 eq(userId), eq(hospitalId), any())).thenReturn(false);
 
-            assertThatThrownBy(() -> service.revoke(session.getId(), null))
+            UUID sessionId = session.getId();
+            assertThatThrownBy(() -> service.revoke(sessionId, null))
                 .isInstanceOf(UnauthorizedAccessException.class);
         }
 
@@ -380,8 +381,11 @@ class BreakGlassServiceImplTest {
 
             List<BreakGlassSessionResponseDTO> out = service.listLiveForPatient(patientId);
 
-            assertThat(out).hasSize(1);
-            assertThat(out.get(0).getHospitalId()).isEqualTo(hospitalId);
+            assertThat(out)
+                .hasSize(1)
+                .first()
+                .extracting(BreakGlassSessionResponseDTO::getHospitalId)
+                .isEqualTo(hospitalId);
         }
 
         @Test
@@ -405,8 +409,11 @@ class BreakGlassServiceImplTest {
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
                 eq(userId), eq(hospitalId), eq(BreakGlassServiceImpl.ADMIN_REVOKE_ROLES))).thenReturn(false);
 
-            assertThatThrownBy(() -> service.listForHospital(hospitalId,
-                org.springframework.data.domain.PageRequest.of(0, 10)))
+            // Extract the Pageable so the throwing lambda has only one
+            // possibly-throwing invocation — keeps the failure attribution clean.
+            org.springframework.data.domain.Pageable page =
+                org.springframework.data.domain.PageRequest.of(0, 10);
+            assertThatThrownBy(() -> service.listForHospital(hospitalId, page))
                 .isInstanceOf(UnauthorizedAccessException.class);
             verify(sessionRepository, never())
                 .findByHospitalIdOrderByStartedAtDesc(any(), any());

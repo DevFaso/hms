@@ -53,6 +53,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     /** Hard upper bound on caller-supplied TTL — keeps emergency access genuinely short. */
     static final int MAX_TTL_MINUTES = 240;
 
+    /** Persisted role code for the global super-admin. */
+    static final String SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
+
+    /** Persisted role code for a hospital administrator. */
+    static final String HOSPITAL_ADMIN_CODE = "ROLE_HOSPITAL_ADMIN";
+
     /**
      * Roles allowed to declare a break-the-glass session. Codes match what
      * V2__seed_roles.sql persists in {@code security.roles.code} (all prefixed
@@ -60,14 +66,11 @@ public class BreakGlassServiceImpl implements BreakGlassService {
      * via Spring's authority convention.
      */
     static final Set<String> DECLARE_ROLES = Set.of(
-        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"
+        "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", HOSPITAL_ADMIN_CODE, SUPER_ADMIN_CODE
     );
 
     /** Roles allowed to revoke any session at the hospital (declaring user can always revoke their own). */
-    static final Set<String> ADMIN_REVOKE_ROLES = Set.of("ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
-
-    /** Persisted role code for the global super-admin. */
-    static final String SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
+    static final Set<String> ADMIN_REVOKE_ROLES = Set.of(HOSPITAL_ADMIN_CODE, SUPER_ADMIN_CODE);
 
     private final BreakGlassSessionRepository sessionRepository;
     private final UserRepository userRepository;

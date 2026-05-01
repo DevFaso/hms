@@ -14,7 +14,6 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientConsentRepository;
 import com.example.hms.repository.PatientRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,20 +49,25 @@ public class ConsentResolutionServiceImpl implements ConsentResolutionService {
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientConsentRepository consentRepository;
+
     /**
-     * Optional break-glass dependency. Field-injected so the consent resolver
-     * still works in tests / contexts that don't wire a {@link BreakGlassService}.
-     * When absent, {@link #resolveForDomain} simply skips the emergency fallback.
+     * Optional break-glass dependency. Wrapping in {@link Optional} keeps the
+     * dependency explicit at the constructor boundary while still allowing
+     * tests / lightweight Spring contexts to omit the bean — Spring injects an
+     * {@code Optional.empty()} when no {@link BreakGlassService} is registered.
+     * When absent, {@link #resolveForDomain} simply skips the emergency
+     * fallback.
      */
-    @Autowired(required = false)
-    private BreakGlassService breakGlassService;
+    private final Optional<BreakGlassService> breakGlassService;
 
     public ConsentResolutionServiceImpl(PatientRepository patientRepository,
                                         HospitalRepository hospitalRepository,
-                                        PatientConsentRepository consentRepository) {
+                                        PatientConsentRepository consentRepository,
+                                        Optional<BreakGlassService> breakGlassService) {
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
         this.consentRepository = consentRepository;
+        this.breakGlassService = breakGlassService;
     }
 
     // -- Public entry point -------------------------------------------------
@@ -115,10 +119,9 @@ public class ConsentResolutionServiceImpl implements ConsentResolutionService {
         }
 
         // Fall through to break-glass.
-        Optional<BreakGlassSessionResponseDTO> bg = (breakGlassService == null)
-            ? Optional.empty()
-            : breakGlassService.consumeIfLive(patient.getId(), null,
-                "Domain access via break-glass: " + domain.name());
+        Optional<BreakGlassSessionResponseDTO> bg = breakGlassService.flatMap(svc ->
+            svc.consumeIfLive(patient.getId(), null,
+                "Domain access via break-glass: " + domain.name()));
 
         if (bg.isPresent()) {
             log.warn(" [BREAK_GLASS] Patient {} domain {} authorised via session {}.",

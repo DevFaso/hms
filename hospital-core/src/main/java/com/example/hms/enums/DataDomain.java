@@ -1,6 +1,7 @@
 package com.example.hms.enums;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
@@ -94,9 +95,13 @@ public enum DataDomain {
     /** Genetic testing results. Sensitive — opt-in only. */
     GENETICS;
 
-    /** Domains that require an explicit opt-in (never implied by ALL). */
-    public static final Set<DataDomain> SENSITIVE = EnumSet.of(
-        MENTAL_HEALTH, HIV_STATUS, SUBSTANCE_USE, GENETICS
+    /**
+     * Domains that require an explicit opt-in (never implied by a blank scope).
+     * Wrapped in {@link Collections#unmodifiableSet} so callers can't mutate
+     * the public static singleton.
+     */
+    public static final Set<DataDomain> SENSITIVE = Collections.unmodifiableSet(
+        EnumSet.of(MENTAL_HEALTH, HIV_STATUS, SUBSTANCE_USE, GENETICS)
     );
 
     /**
@@ -157,7 +162,7 @@ public enum DataDomain {
         Set<DataDomain> ordered = new LinkedHashSet<>(domains);
         StringBuilder sb = new StringBuilder();
         for (DataDomain d : ordered) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(',');
             }
             sb.append(d.name());

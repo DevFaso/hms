@@ -18,8 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.UUID;
@@ -58,8 +56,9 @@ class ConsentResolutionDomainTest {
 
     @BeforeEach
     void setUp() {
-        service = new ConsentResolutionServiceImpl(patientRepository, hospitalRepository, consentRepository);
-        ReflectionTestUtils.setField(service, "breakGlassService", breakGlassService);
+        service = new ConsentResolutionServiceImpl(
+            patientRepository, hospitalRepository, consentRepository,
+            Optional.of(breakGlassService));
 
         patientId = UUID.randomUUID();
         requestingHospitalId = UUID.randomUUID();
