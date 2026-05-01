@@ -166,6 +166,23 @@ class GeneralReferralControllerTest {
 
     @Test
     @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_pastAppointmentTime_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .appointmentTime(LocalDateTime.now().minusDays(1))
+            .location("Clinic 4")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
     void startReferral_returnsInProgressStatus() throws Exception {
         UUID referralId = UUID.randomUUID();
         GeneralReferralResponseDTO response = buildResponse(referralId);

@@ -46,8 +46,8 @@ export interface ReferralResponse {
   acknowledgedAt: string;
   acknowledgementNotes: string;
   scheduledAppointmentAt: string;
-  appointmentLocation: string;
-  startedAt: string;
+  appointmentLocation: string | null;
+  startedAt: string | null;
   completedAt: string;
   completionSummary: string;
   followUpRecommendations: string;
