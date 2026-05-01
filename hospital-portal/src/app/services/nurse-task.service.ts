@@ -22,6 +22,26 @@ export interface NurseMedicationTask {
   status: string;
 }
 
+/** Bedside five-rights barcode-scan check (P1 #8). */
+export type FiveRightsCheck = 'PATIENT' | 'DRUG' | 'DOSE' | 'ROUTE' | 'TIME';
+
+export interface MarVerificationRequest {
+  patientScanValue: string;
+  medicationScanValue: string;
+  doseScanValue: string;
+  routeScanValue: string;
+  administeredAt?: string;
+}
+
+export interface MarVerificationResponse {
+  marId: string;
+  outcomes: Record<FiveRightsCheck, boolean>;
+  failedChecks: FiveRightsCheck[];
+  failureReasons: Partial<Record<FiveRightsCheck, string>>;
+  allPassed: boolean;
+  verifiedAt: string;
+}
+
 export interface NurseOrderTask {
   id: string;
   patientId: string;
@@ -217,10 +237,20 @@ export class NurseTaskService {
 
   administerMedication(
     taskId: string,
-    data: { status: string; note?: string },
+    data: { status: string; note?: string; overrideReason?: string },
   ): Observable<NurseMedicationTask> {
     return this.http.put<NurseMedicationTask>(
       `${this.baseUrl}/medications/mar/${taskId}/administer`,
+      data,
+    );
+  }
+
+  verifyMedication(
+    taskId: string,
+    data: MarVerificationRequest,
+  ): Observable<MarVerificationResponse> {
+    return this.http.post<MarVerificationResponse>(
+      `${this.baseUrl}/medications/mar/${taskId}/verify`,
       data,
     );
   }

@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
@@ -223,6 +225,87 @@ class NurseTaskControllerTest {
         assertThatThrownBy(() -> controller.administerMedication(taskId, request, null, null, auth))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Unable to resolve nurse assignment");
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       POST /nurse/medications/mar/{taskId}/verify   (P1 #8)
+       ═══════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void verifyMedicationReturnsAllPassedWhenScansMatch() {
+        UUID taskId = UUID.randomUUID();
+        MarVerificationRequestDTO request = new MarVerificationRequestDTO();
+        request.setPatientScanValue(UUID.randomUUID().toString());
+        request.setMedicationScanValue("AMOX-500");
+        request.setDoseScanValue("500 mg");
+        request.setRouteScanValue("PO");
+
+        MarVerificationResponseDTO response = MarVerificationResponseDTO.builder()
+            .marId(taskId)
+            .allPassed(true)
+            .verifiedAt(LocalDateTime.now())
+            .build();
+        when(nurseTaskService.verifyMedicationAdministration(taskId, NURSE_ID, HOSPITAL_ID, request))
+            .thenReturn(response);
+
+        ResponseEntity<MarVerificationResponseDTO> result =
+            controller.verifyMedication(taskId, request, "me", null, auth);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody()).isNotNull();
+        assertThat(result.getBody().isAllPassed()).isTrue();
+        verify(nurseTaskService).verifyMedicationAdministration(taskId, NURSE_ID, HOSPITAL_ID, request);
+    }
+
+    @Test
+    void verifyMedicationFallsBackToAuthWhenAssigneeNull() {
+        UUID taskId = UUID.randomUUID();
+        MarVerificationRequestDTO request = new MarVerificationRequestDTO();
+        request.setPatientScanValue(UUID.randomUUID().toString());
+        request.setMedicationScanValue("AMOX-500");
+        request.setDoseScanValue("500 mg");
+        request.setRouteScanValue("PO");
+
+        MarVerificationResponseDTO response = MarVerificationResponseDTO.builder()
+            .marId(taskId).allPassed(false).build();
+        when(nurseTaskService.verifyMedicationAdministration(taskId, NURSE_ID, HOSPITAL_ID, request))
+            .thenReturn(response);
+
+        ResponseEntity<MarVerificationResponseDTO> result =
+            controller.verifyMedication(taskId, request, null, null, auth);
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(result.getBody().isAllPassed()).isFalse();
+    }
+
+    @Test
+    void verifyMedicationThrowsWhenCannotResolveNurse() {
+        UUID taskId = UUID.randomUUID();
+        MarVerificationRequestDTO request = new MarVerificationRequestDTO();
+        request.setPatientScanValue("p");
+        request.setMedicationScanValue("m");
+        request.setDoseScanValue("d");
+        request.setRouteScanValue("r");
+
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> controller.verifyMedication(taskId, request, null, null, auth))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Unable to resolve nurse identity");
+    }
+
+    @Test
+    void administerMedicationPropagatesOverrideRequiredError() {
+        UUID taskId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+
+        when(nurseTaskService.recordMedicationAdministration(taskId, NURSE_ID, HOSPITAL_ID, request))
+            .thenThrow(new BusinessException("Five-rights check failed; override reason required."));
+
+        assertThatThrownBy(() -> controller.administerMedication(taskId, request, "me", null, auth))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Five-rights");
     }
 
     /* ═══════════════════════════════════════════════════════════════════
