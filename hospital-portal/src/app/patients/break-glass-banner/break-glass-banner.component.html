@@ -26,8 +26,15 @@
 }
 
 @if (modalOpen()) {
-  <div class="bg-modal" role="dialog" aria-modal="true" (click)="closeModal()">
-    <div class="bg-modal__panel" (click)="$event.stopPropagation()">
+  <div
+    class="bg-modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    (click)="onBackdropClick($event)"
+    (keydown.escape)="closeModal()"
+  >
+    <div class="bg-modal__panel">
       <h3>{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}</h3>
       <p class="bg-modal__warn">{{ 'BREAK_GLASS.MODAL_WARN' | translate }}</p>
 

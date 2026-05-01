@@ -104,6 +104,17 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
     this.modalOpen.set(false);
   }
 
+  /**
+   * Closes the modal only when the user clicks the backdrop itself —
+   * clicks inside the panel bubble up here too (no stopPropagation on the
+   * panel, which would trip @angular-eslint/template/click-events-have-key-events).
+   */
+  protected onBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeModal();
+    }
+  }
+
   protected submit(): void {
     const patientId = this.patientId();
     const hospitalId = this.hospitalId();
