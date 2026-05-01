@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.ConsentType;
+import com.example.hms.enums.DataDomain;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -86,6 +87,15 @@ public class PatientConsent extends BaseEntity {
 
     public boolean isConsentActive() {
         return consentGiven && (consentExpiration == null || consentExpiration.isAfter(LocalDateTime.now()));
+    }
+
+    /**
+     * Returns true when this consent's scope authorises access to the requested
+     * record domain. Sensitive domains require explicit listing — a null/empty
+     * scope does not imply them.
+     */
+    public boolean coversDomain(DataDomain requested) {
+        return DataDomain.covers(scope, requested);
     }
 
     @PrePersist
