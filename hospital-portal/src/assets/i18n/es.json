@@ -19,6 +19,59 @@
     "NONE_ACTIVE": "Sin avisos activos para este paciente.",
     "ERROR": "No se pudieron cargar los avisos de buena práctica. El expediente sigue siendo seguro de usar."
   },
+  "DHIS2": {
+    "ADMIN": {
+      "HEADING": "Exportación DHIS2 ADX",
+      "TAB_CONFIG": "Configuración",
+      "TAB_MAPPINGS": "Asignaciones",
+      "TAB_EXPORTS": "Exportaciones"
+    },
+    "CONFIG": {
+      "BASE_URL": "URL base de DHIS2",
+      "AUTH_MODE": "Modo de autenticación",
+      "AUTH_SECRET_ENV_VAR": "Variable de entorno del secreto",
+      "DEFAULT_PERIOD_TYPE": "Tipo de periodo por defecto",
+      "DEFAULT_DATASET_UID": "UID del conjunto de datos por defecto",
+      "ACTIVE": "Activa",
+      "LAST_EXPORT": "Última exportación",
+      "SECRET_CONFIGURED": "Variable configurada"
+    },
+    "MAPPINGS": {
+      "HEADING": "Asignaciones de dataElement",
+      "FILTER_DATASET": "Filtrar por UID del conjunto de datos",
+      "ADD": "Añadir asignación",
+      "LOADING": "Cargando…",
+      "ERROR": "No se pudieron cargar las asignaciones.",
+      "EMPTY": "Sin asignaciones para este conjunto.",
+      "COL_SYSTEM": "Sistema HMS",
+      "COL_CODE": "Código HMS",
+      "COL_DATAELEMENT": "DataElement DHIS2",
+      "COL_COC": "Combo. cat.",
+      "COL_PERIOD": "Periodo",
+      "COL_ACTIVE": "Activa"
+    },
+    "PANEL": {
+      "HEADING": "Exportación manual",
+      "DATASET_UID": "UID del conjunto de datos",
+      "PERIOD_TYPE": "Tipo de periodo",
+      "PERIOD_ISO": "Periodo (p. ej. 202604)",
+      "TRIGGER": "Lanzar exportación",
+      "LOADING": "Cargando exportaciones recientes…",
+      "ERROR": "No se pudieron cargar las exportaciones recientes.",
+      "EMPTY": "Sin exportaciones para este hospital.",
+      "COL_STARTED": "Inicio",
+      "COL_DATASET": "Conjunto",
+      "COL_PERIOD": "Periodo",
+      "COL_STATUS": "Estado",
+      "COL_VALUES": "Valores",
+      "COL_SKIPPED": "Omitidos"
+    },
+    "PERIOD": {
+      "MONTHLY": "Mensual",
+      "WEEKLY": "Semanal",
+      "YEARLY": "Anual"
+    }
+  },
   "BREAK_GLASS": {
     "ACTIVE": "Acceso de emergencia activo — cada lectura queda registrada.",
     "EXPIRES_IN": "Expira en",
