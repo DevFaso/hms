@@ -63,4 +63,26 @@ class PeriodResolverTest {
         assertThatThrownBy(() -> PeriodResolver.resolve(Dhis2PeriodType.MONTHLY, null))
             .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("weekly year-boundary regression: week 1 of 2026 is Mon 2025-12-29..Sun 2026-01-04")
+    void weeklyYearBoundary() {
+        // ISO 8601: week 1 of 2026 is the week containing Thu 2026-01-01.
+        // That puts Monday on 2025-12-29 and Sunday on 2026-01-04.
+        // The previous implementation anchored on LocalDate.now() and could
+        // return the wrong year when run in late December.
+        var range = PeriodResolver.resolve(Dhis2PeriodType.WEEKLY, "2026W01");
+        assertThat(range.start()).isEqualTo(LocalDate.of(2025, 12, 29));
+        assertThat(range.endInclusive()).isEqualTo(LocalDate.of(2026, 1, 4));
+    }
+
+    @Test
+    @DisplayName("weekly: week 53 of a 53-week year resolves cleanly (e.g. 2026W53 spans into 2027)")
+    void weeklyWeek53() {
+        // 2026 is not a 53-week year in ISO 8601, but 2020 is — week 53 of 2020
+        // is Mon 2020-12-28..Sun 2021-01-03. Use that as the deterministic case.
+        var range = PeriodResolver.resolve(Dhis2PeriodType.WEEKLY, "2020W53");
+        assertThat(range.start()).isEqualTo(LocalDate.of(2020, 12, 28));
+        assertThat(range.endInclusive()).isEqualTo(LocalDate.of(2021, 1, 3));
+    }
 }

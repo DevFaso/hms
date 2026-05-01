@@ -93,6 +93,51 @@ class LiquibaseSchemaIT {
         }
     }
 
+    /**
+     * V68 regression: the outbox UNIQUE INDEX uses
+     * {@code COALESCE(category_option_combo_uid, '__DEFAULT_COC__')} so two
+     * "default-COC" rows for the same (run, period, orgUnit, dataElement)
+     * collide as a duplicate even when both have NULL category_option_combo_uid.
+     * A plain UNIQUE constraint would have allowed both rows because Postgres
+     * treats NULLs as distinct.
+     */
+    @Test
+    void v68OutboxNullCocDuplicateIsRejected() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("INSERT INTO hospital.hospitals "
+                + "(id, name, code, active, created_at, updated_at) "
+                + "VALUES ('a0000000-0000-0000-0000-000000000001', "
+                + "'IT-Hospital', 'IT-NULLCOC', TRUE, NOW(), NOW())");
+            stmt.executeUpdate("INSERT INTO integration.dhis2_export_run "
+                + "(id, hospital_id, dataset_uid, period_iso, started_at, status, "
+                + " value_count, skipped_count, request_id, created_at, updated_at) "
+                + "VALUES ('b0000000-0000-0000-0000-000000000001', "
+                + "'a0000000-0000-0000-0000-000000000001', 'DS00000DEFK', '202604', "
+                + "NOW(), 'PENDING', 0, 0, "
+                + "'c0000000-0000-0000-0000-000000000001', NOW(), NOW())");
+            stmt.executeUpdate("INSERT INTO integration.dhis2_export_outbox "
+                + "(id, run_id, period_iso, org_unit_uid, dataelement_uid, "
+                + " data_value, status, attempts, created_at, updated_at) "
+                + "VALUES ('d0000000-0000-0000-0000-000000000001', "
+                + "'b0000000-0000-0000-0000-000000000001', '202604', "
+                + "'OU000000001', 'DE000000001', '42', 'PENDING', 0, NOW(), NOW())");
+
+            String dupSql = "INSERT INTO integration.dhis2_export_outbox "
+                + "(id, run_id, period_iso, org_unit_uid, dataelement_uid, "
+                + " data_value, status, attempts, created_at, updated_at) "
+                + "VALUES ('d0000000-0000-0000-0000-000000000002', "
+                + "'b0000000-0000-0000-0000-000000000001', '202604', "
+                + "'OU000000001', 'DE000000001', '99', 'PENDING', 0, NOW(), NOW())";
+            assertThatCode(() -> {
+                try (Statement s = conn.createStatement()) {
+                    s.executeUpdate(dupSql);
+                }
+            }).isInstanceOf(java.sql.SQLException.class);
+        }
+    }
+
     private static void runLiquibaseUpdate() throws Exception {
         try (Connection conn = newConnection()) {
             Database database = DatabaseFactory.getInstance()

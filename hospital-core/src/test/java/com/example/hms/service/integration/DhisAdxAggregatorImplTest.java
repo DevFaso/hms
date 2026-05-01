@@ -133,6 +133,35 @@ class DhisAdxAggregatorImplTest {
     }
 
     @Test
+    @DisplayName("periodType-mismatch regression: WEEKLY mapping skipped when MONTHLY requested")
+    void periodTypeMismatchSkipped() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationRepository.countByVaccineCodeForHospitalInRange(
+            hospitalId, periodStart, periodEnd))
+            .thenReturn(List.<Object[]>of(new Object[] {"49", 12L}));
+        // The mapping is authored for WEEKLY but the aggregator was called with MONTHLY.
+        Dhis2DataElementMapping weeklyMapping = Dhis2DataElementMapping.builder()
+            .hospital(hospital)
+            .hmsConceptSystem(TerminologyCodes.SYSTEM_CVX)
+            .hmsConceptCode("49")
+            .dhis2DataElementUid("DE000000049")
+            .periodType(Dhis2PeriodType.WEEKLY)
+            .datasetUid(datasetUid)
+            .active(true)
+            .build();
+        when(mappingRepository
+            .findByHospital_IdAndDatasetUidAndHmsConceptSystemAndHmsConceptCodeInAndActiveTrue(
+                eq(hospitalId), eq(datasetUid), eq(TerminologyCodes.SYSTEM_CVX), any()))
+            .thenReturn(List.of(weeklyMapping));
+
+        var result = aggregator.aggregateImmunizations(
+            hospitalId, datasetUid, Dhis2PeriodType.MONTHLY, periodStart, periodEnd);
+
+        assertThat(result.values()).isEmpty();
+        assertThat(result.skippedCount()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("zero immunizations -> empty result, no mapping lookup")
     void emptyAggregation() {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

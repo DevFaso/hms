@@ -132,6 +132,40 @@ class DhisHttpClientTest {
     }
 
     @Test
+    @DisplayName("5xx then 200: retries and eventually succeeds")
+    void fiveHundredThenSuccess() {
+        envVars.put("DHIS2_TOKEN", "x");
+        server.expect(requestTo("https://dhis2.example.org/api/dataValueSets"))
+            .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body("upstream"));
+        server.expect(requestTo("https://dhis2.example.org/api/dataValueSets"))
+            .andRespond(withSuccess("{\"response\":{\"importCount\":{\"imported\":3,\"ignored\":0}}}",
+                MediaType.APPLICATION_JSON));
+
+        var resp = client.postDataValueSet("https://dhis2.example.org",
+            Dhis2AuthMode.PAT, "DHIS2_TOKEN", "<adx/>", UUID.randomUUID());
+
+        assertThat(resp.httpStatus()).isEqualTo(200);
+        assertThat(resp.importedCount()).isEqualTo(3);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("5xx exhausts retries: returns the last status without throwing")
+    void retryExhausted() {
+        envVars.put("DHIS2_TOKEN", "x");
+        for (int i = 0; i < 3; i++) {
+            server.expect(requestTo("https://dhis2.example.org/api/dataValueSets"))
+                .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body("still bad"));
+        }
+
+        var resp = client.postDataValueSet("https://dhis2.example.org",
+            Dhis2AuthMode.PAT, "DHIS2_TOKEN", "<adx/>", UUID.randomUUID());
+
+        assertThat(resp.httpStatus()).isEqualTo(502);
+        server.verify(); // 3 calls, MAX_ATTEMPTS reached
+    }
+
+    @Test
     @DisplayName("non-JSON response body returns zeros without throwing")
     void nonJsonBody() {
         envVars.put("DHIS2_TOKEN", "x");
