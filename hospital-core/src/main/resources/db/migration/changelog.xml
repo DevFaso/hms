@@ -934,4 +934,26 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V71: P1 #12 follow-up — ReferralEvent audit trail
+         - public.referral_events: one append-only row per state-machine
+           transition on general_referrals (submit / acknowledge /
+           schedule / start / complete / reject / cancel / expire).
+         - referral_id is a raw UUID (no FK) so audit rows outlive
+           hard-deletes of the parent referral, matching the
+           encounter_note_history pattern.
+         - actor_label follows the LabResult system-actor convention:
+           USER for an authenticated principal, SYSTEM:<source> for
+           non-user writers (e.g. the @Scheduled SLA sweep).
+         - Composite index on (referral_id, recorded_at) so the
+           per-referral timeline read is a single index scan.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V71-referral-events" author="hms-team" runOnChange="false">
+        <sqlFile path="V71__referral_events.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

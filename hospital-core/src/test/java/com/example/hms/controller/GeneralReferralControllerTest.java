@@ -6,6 +6,8 @@ import com.example.hms.enums.ReferralType;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.enums.ReferralEventType;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
@@ -290,6 +292,41 @@ class GeneralReferralControllerTest {
 
     @SuppressWarnings("java:S1075")
     private static final String EXPIRE_OVERDUE_PATH = "/referrals/admin/expire-overdue";
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    @DisplayName("GET /{id}/events returns the chronological audit trail")
+    void getReferralEventsReturnsTimeline() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ReferralEventResponseDTO submit = ReferralEventResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(ReferralEventType.SUBMIT)
+            .toStatus(ReferralStatus.SUBMITTED)
+            .actorUsername("dr.amy")
+            .actorLabel("USER")
+            .recordedAt(LocalDateTime.now())
+            .build();
+        ReferralEventResponseDTO expire = ReferralEventResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(ReferralEventType.EXPIRE)
+            .toStatus(ReferralStatus.EXPIRED)
+            .actorLabel("SYSTEM:scheduler")
+            .recordedAt(LocalDateTime.now().plusHours(1))
+            .build();
+        when(referralService.getReferralEvents(referralId)).thenReturn(List.of(submit, expire));
+
+        mockMvc.perform(get("/referrals/{id}/events", referralId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].eventType").value("SUBMIT"))
+            .andExpect(jsonPath("$[0].actorLabel").value("USER"))
+            .andExpect(jsonPath("$[1].eventType").value("EXPIRE"))
+            .andExpect(jsonPath("$[1].actorLabel").value("SYSTEM:scheduler"));
+
+        verify(referralService).getReferralEvents(referralId);
+    }
 
     @Test
     @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})

@@ -12,14 +12,19 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.ReferralAttachmentResponseDTO;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
+import com.example.hms.enums.ReferralEventType;
+import com.example.hms.model.ReferralEvent;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.ReferralEventRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralEventRecorder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -47,6 +52,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final RoleValidator roleValidator;
+    private final ReferralEventRecorder eventRecorder;
+    private final ReferralEventRepository eventRepository;
 
     @Override
     @Transactional
@@ -121,8 +128,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO submitReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.submit();
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.SUBMIT, before, null);
         return toResponse(referral);
     }
 
@@ -132,8 +141,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         GeneralReferral referral = findReferral(referralId);
         Staff receivingProvider = staffRepository.findById(receivingProviderId)
             .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+        ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.ACKNOWLEDGE, before, notes);
         return toResponse(referral);
     }
 
@@ -141,8 +152,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
         referral = referralRepository.save(referral);
+        String note = "appointmentTime=" + request.getAppointmentTime()
+            + (request.getLocation() == null ? "" : ", location=" + request.getLocation());
+        eventRecorder.recordUserEvent(referral, ReferralEventType.SCHEDULE, before, note);
         return toResponse(referral);
     }
 
@@ -150,8 +165,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO startReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.start();
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.START, before, null);
         return toResponse(referral);
     }
 
@@ -159,8 +176,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.complete(summary, followUp);
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.COMPLETE, before, summary);
         return toResponse(referral);
     }
 
@@ -168,8 +187,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.reject(request.getReason());
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.REJECT, before, request.getReason());
         return toResponse(referral);
     }
 
@@ -177,8 +198,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public void cancelReferral(UUID referralId, String reason) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.cancel(reason);
-        referralRepository.save(referral);
+        referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, reason);
     }
 
     @Override
@@ -281,6 +304,29 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referrals.stream()
             .map(this::toResponse)
             .toList();
+    }
+
+    @Override
+    public List<ReferralEventResponseDTO> getReferralEvents(UUID referralId) {
+        // Validate the referral exists in the caller's scope before exposing its history.
+        findReferral(referralId);
+        return eventRepository.findByReferralIdOrderByRecordedAtAsc(referralId).stream()
+            .map(GeneralReferralServiceImpl::toEventResponse)
+            .toList();
+    }
+
+    private static ReferralEventResponseDTO toEventResponse(ReferralEvent event) {
+        return ReferralEventResponseDTO.builder()
+            .id(event.getId())
+            .referralId(event.getReferralId())
+            .eventType(event.getEventType())
+            .fromStatus(event.getFromStatus())
+            .toStatus(event.getToStatus())
+            .actorUsername(event.getActorUsername())
+            .actorLabel(event.getActorLabel())
+            .note(event.getNote())
+            .recordedAt(event.getRecordedAt())
+            .build();
     }
 
     private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";

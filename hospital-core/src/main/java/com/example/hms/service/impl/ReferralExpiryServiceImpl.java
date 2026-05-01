@@ -1,7 +1,10 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.ReferralEventType;
+import com.example.hms.enums.ReferralStatus;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.repository.GeneralReferralRepository;
+import com.example.hms.service.ReferralEventRecorder;
 import com.example.hms.service.ReferralExpiryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +22,10 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
 
     private static final String EXPIRY_REASON =
         "Auto-expired by SLA sweep — no acknowledgement / appointment within urgency window";
+    private static final String EVENT_SOURCE = "scheduler";
 
     private final GeneralReferralRepository referralRepository;
+    private final ReferralEventRecorder eventRecorder;
 
     @Override
     @Transactional
@@ -36,9 +41,12 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
 
         int expired = 0;
         for (GeneralReferral referral : eligible) {
+            ReferralStatus before = referral.getStatus();
             try {
                 referral.expire(EXPIRY_REASON);
                 expired++;
+                eventRecorder.recordSystemEvent(
+                    referral, ReferralEventType.EXPIRE, before, EVENT_SOURCE, EXPIRY_REASON);
             } catch (IllegalStateException ex) {
                 // Race: referral changed status between query and update. Skip and move on.
                 log.warn("Referral {} skipped — state changed mid-sweep: {}",

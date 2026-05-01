@@ -1,11 +1,13 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.ReferralEventType;
 import com.example.hms.enums.ReferralSpecialty;
 import com.example.hms.enums.ReferralStatus;
 import com.example.hms.enums.ReferralType;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.repository.GeneralReferralRepository;
+import com.example.hms.service.ReferralEventRecorder;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,9 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +42,7 @@ import static org.mockito.Mockito.when;
 class ReferralExpiryServiceImplTest {
 
     @Mock private GeneralReferralRepository referralRepository;
+    @Mock private ReferralEventRecorder eventRecorder;
 
     @InjectMocks private ReferralExpiryServiceImpl service;
 
@@ -76,6 +82,13 @@ class ReferralExpiryServiceImplTest {
         // Reason is the same audit-friendly sentinel for every sweep entry
         assertThat(a.getCancellationReason()).isNotBlank();
         assertThat(a.getCancellationReason()).isEqualTo(b.getCancellationReason());
+        // One SYSTEM-actor audit row per expired referral, source=scheduler
+        verify(eventRecorder, times(3)).recordSystemEvent(
+            any(GeneralReferral.class),
+            eq(ReferralEventType.EXPIRE),
+            any(ReferralStatus.class),
+            eq("scheduler"),
+            any());
     }
 
     @Test
@@ -91,6 +104,24 @@ class ReferralExpiryServiceImplTest {
         assertThat(result).isEqualTo(1);
         assertThat(racy.getStatus()).isEqualTo(ReferralStatus.IN_PROGRESS);
         assertThat(healthy.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
+        // Audit row only for the successful expiry — racy referral's failed transition
+        // must NOT leak into the audit trail.
+        verify(eventRecorder, times(1)).recordSystemEvent(
+            any(GeneralReferral.class),
+            eq(ReferralEventType.EXPIRE),
+            any(ReferralStatus.class),
+            eq("scheduler"),
+            any());
+    }
+
+    @Test
+    void noEventEmittedWhenNothingExpires() {
+        when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of());
+
+        service.expireOverdueReferrals(Duration.ZERO);
+
+        verify(eventRecorder, never()).recordSystemEvent(
+            any(), any(), any(), any(), any());
     }
 
     @Test

@@ -90,6 +90,14 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "integration", "dhis2_export_run");
             assertTableExists(stmt, "integration", "dhis2_export_outbox");
             assertColumnExists(stmt, "hospital", "hospitals", "dhis2_org_unit_uid");
+
+            // V71: referral state-machine audit trail
+            final String publicSchema = "public";
+            final String referralEventsTable = "referral_events";
+            assertTableExists(stmt, publicSchema, referralEventsTable);
+            assertColumnExists(stmt, publicSchema, referralEventsTable, "actor_label");
+            assertColumnExists(stmt, publicSchema, referralEventsTable, "from_status");
+            assertColumnExists(stmt, publicSchema, referralEventsTable, "to_status");
         }
     }
 

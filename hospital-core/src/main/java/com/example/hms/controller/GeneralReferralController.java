@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
@@ -164,6 +165,18 @@ public class GeneralReferralController {
     @Operation(summary = "Get overdue referrals", description = "Retrieve all overdue referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getOverdueReferrals() {
         return ResponseEntity.ok(referralService.getOverdueReferrals());
+    }
+
+    @GetMapping("/{referralId}/events")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(
+        summary = "Get referral state-machine audit trail",
+        description = "Chronological list of every transition (submit / acknowledge / schedule / "
+            + "start / complete / reject / cancel / expire) recorded for the referral, with the "
+            + "actor that triggered each transition."
+    )
+    public ResponseEntity<List<ReferralEventResponseDTO>> getReferralEvents(@PathVariable UUID referralId) {
+        return ResponseEntity.ok(referralService.getReferralEvents(referralId));
     }
 
     @PostMapping("/admin/expire-overdue")
