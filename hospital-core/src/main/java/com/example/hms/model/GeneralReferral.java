@@ -216,6 +216,11 @@ public class GeneralReferral {
     private String appointmentLocation;
 
     /**
+     * When the consultation/care actually began (status moved to IN_PROGRESS)
+     */
+    private LocalDateTime startedAt;
+
+    /**
      * When referral was completed
      */
     private LocalDateTime completedAt;
@@ -270,60 +275,83 @@ public class GeneralReferral {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    // Business methods
+    // Business methods (state-machine guarded — illegal transitions throw IllegalStateException)
+    //
+    // DRAFT → SUBMITTED → ACKNOWLEDGED → SCHEDULED → IN_PROGRESS → COMPLETED
+    // CANCELLED is reachable from any non-terminal status by the referring side.
+    // REJECTED is reachable from SUBMITTED or ACKNOWLEDGED by the receiving side.
+    // Terminal states (COMPLETED/CANCELLED/REJECTED/EXPIRED) admit no further transitions.
 
-    /**
-     * Submit referral
-     */
     public void submit() {
+        requireStatus("submit", ReferralStatus.DRAFT);
         this.status = ReferralStatus.SUBMITTED;
         this.submittedAt = LocalDateTime.now();
         calculateSlaDueDate();
     }
 
-    /**
-     * Acknowledge referral
-     */
     public void acknowledge(String notes, Staff receivingProvider) {
+        requireStatus("acknowledge", ReferralStatus.SUBMITTED);
         this.status = ReferralStatus.ACKNOWLEDGED;
         this.acknowledgedAt = LocalDateTime.now();
         this.acknowledgementNotes = notes;
         this.receivingProvider = receivingProvider;
     }
 
-    /**
-     * Schedule appointment
-     */
     public void schedule(LocalDateTime appointmentTime, String location) {
+        requireStatus("schedule", ReferralStatus.ACKNOWLEDGED);
         this.status = ReferralStatus.SCHEDULED;
         this.scheduledAppointmentAt = appointmentTime;
         this.appointmentLocation = location;
     }
 
-    /**
-     * Complete referral
-     */
+    public void start() {
+        requireStatus("start", ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED);
+        this.status = ReferralStatus.IN_PROGRESS;
+        this.startedAt = LocalDateTime.now();
+    }
+
     public void complete(String summary, String followUp) {
+        // Complete is reachable from any post-acknowledgement non-terminal status:
+        // some referrals never get a formal appointment slot (SCHEDULED) or explicit
+        // "start" click (IN_PROGRESS) before being closed out.
+        requireStatus("complete",
+            ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED, ReferralStatus.IN_PROGRESS);
         this.status = ReferralStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
         this.completionSummary = summary;
         this.followUpRecommendations = followUp;
     }
 
-    /**
-     * Cancel referral
-     */
     public void cancel(String reason) {
+        if (isTerminal(this.status)) {
+            throw new IllegalStateException(
+                "Cannot cancel referral in terminal status " + this.status);
+        }
         this.status = ReferralStatus.CANCELLED;
         this.cancellationReason = reason;
     }
 
-    /**
-     * Reject referral
-     */
     public void reject(String reason) {
+        requireStatus("reject", ReferralStatus.SUBMITTED, ReferralStatus.ACKNOWLEDGED);
         this.status = ReferralStatus.REJECTED;
         this.cancellationReason = reason;
+    }
+
+    private void requireStatus(String action, ReferralStatus... allowed) {
+        for (ReferralStatus s : allowed) {
+            if (this.status == s) {
+                return;
+            }
+        }
+        throw new IllegalStateException(
+            "Cannot " + action + " referral in status " + this.status);
+    }
+
+    private static boolean isTerminal(ReferralStatus s) {
+        return s == ReferralStatus.COMPLETED
+            || s == ReferralStatus.CANCELLED
+            || s == ReferralStatus.REJECTED
+            || s == ReferralStatus.EXPIRED;
     }
 
     /**

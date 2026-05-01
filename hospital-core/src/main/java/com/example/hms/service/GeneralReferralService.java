@@ -2,6 +2,8 @@ package com.example.hms.service;
 
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 
 import java.util.List;
 import java.util.UUID;
@@ -18,9 +20,15 @@ public interface GeneralReferralService {
     GeneralReferralResponseDTO submitReferral(UUID referralId);
     
     GeneralReferralResponseDTO acknowledgeReferral(UUID referralId, String notes, UUID receivingProviderId);
-    
+
+    GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request);
+
+    GeneralReferralResponseDTO startReferral(UUID referralId);
+
     GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp);
-    
+
+    GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request);
+
     void cancelReferral(UUID referralId, String reason);
     
     List<GeneralReferralResponseDTO> getReferralsByPatient(UUID patientId);

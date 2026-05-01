@@ -2,6 +2,8 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -64,6 +66,23 @@ public class GeneralReferralController {
         return ResponseEntity.ok(referralService.acknowledgeReferral(referralId, notes, receivingProviderId));
     }
 
+    @PostMapping("/{referralId}/schedule")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Schedule referral", description = "Receiving provider schedules an appointment")
+    public ResponseEntity<GeneralReferralResponseDTO> scheduleReferral(
+        @PathVariable UUID referralId,
+        @Valid @RequestBody ScheduleReferralRequestDTO request
+    ) {
+        return ResponseEntity.ok(referralService.scheduleReferral(referralId, request));
+    }
+
+    @PostMapping("/{referralId}/start")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Start referral", description = "Mark referral consultation as in progress")
+    public ResponseEntity<GeneralReferralResponseDTO> startReferral(@PathVariable UUID referralId) {
+        return ResponseEntity.ok(referralService.startReferral(referralId));
+    }
+
     @PostMapping("/{referralId}/complete")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Complete referral", description = "Mark referral as completed with summary")
@@ -73,6 +92,16 @@ public class GeneralReferralController {
         @RequestParam(required = false) String followUp
     ) {
         return ResponseEntity.ok(referralService.completeReferral(referralId, summary, followUp));
+    }
+
+    @PostMapping("/{referralId}/reject")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Reject referral", description = "Receiving provider declines the referral")
+    public ResponseEntity<GeneralReferralResponseDTO> rejectReferral(
+        @PathVariable UUID referralId,
+        @Valid @RequestBody RejectReferralRequestDTO request
+    ) {
+        return ResponseEntity.ok(referralService.rejectReferral(referralId, request));
     }
 
     @PostMapping("/{referralId}/cancel")

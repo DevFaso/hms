@@ -12,6 +12,8 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.ReferralAttachmentResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -137,9 +139,36 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     @Transactional
+    public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
+        GeneralReferral referral = findReferral(referralId);
+        referral.schedule(request.getAppointmentTime(), request.getLocation());
+        referral = referralRepository.save(referral);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
+    public GeneralReferralResponseDTO startReferral(UUID referralId) {
+        GeneralReferral referral = findReferral(referralId);
+        referral.start();
+        referral = referralRepository.save(referral);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
     public GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp) {
         GeneralReferral referral = findReferral(referralId);
         referral.complete(summary, followUp);
+        referral = referralRepository.save(referral);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
+    public GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request) {
+        GeneralReferral referral = findReferral(referralId);
+        referral.reject(request.getReason());
         referral = referralRepository.save(referral);
         return toResponse(referral);
     }
@@ -307,6 +336,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         dto.setAcknowledgementNotes(referral.getAcknowledgementNotes());
         dto.setScheduledAppointmentAt(referral.getScheduledAppointmentAt());
         dto.setAppointmentLocation(referral.getAppointmentLocation());
+        dto.setStartedAt(referral.getStartedAt());
         dto.setCompletedAt(referral.getCompletedAt());
         dto.setCompletionSummary(referral.getCompletionSummary());
         dto.setFollowUpRecommendations(referral.getFollowUpRecommendations());

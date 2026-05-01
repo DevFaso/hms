@@ -6,6 +6,8 @@ import com.example.hms.enums.ReferralType;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -118,6 +120,122 @@ class GeneralReferralControllerTest {
             .andExpect(jsonPath("$.status").value(ReferralStatus.ACKNOWLEDGED.name()));
 
         verify(referralService).acknowledgeReferral(referralId, "notes", providerId);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_returnsScheduledStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .appointmentTime(LocalDateTime.now().plusDays(3))
+            .location("Clinic 4 — Room 12")
+            .build();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.SCHEDULED);
+        response.setScheduledAppointmentAt(request.getAppointmentTime());
+        response.setAppointmentLocation(request.getLocation());
+
+        when(referralService.scheduleReferral(Mockito.eq(referralId), any(ScheduleReferralRequestDTO.class)))
+            .thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.SCHEDULED.name()))
+            .andExpect(jsonPath("$.appointmentLocation").value("Clinic 4 — Room 12"));
+
+        verify(referralService).scheduleReferral(Mockito.eq(referralId), any(ScheduleReferralRequestDTO.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_missingAppointmentTime_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .location("only location")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_pastAppointmentTime_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .appointmentTime(LocalDateTime.now().minusDays(1))
+            .location("Clinic 4")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void startReferral_returnsInProgressStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.IN_PROGRESS);
+        response.setStartedAt(LocalDateTime.now());
+
+        when(referralService.startReferral(referralId)).thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/start", referralId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.IN_PROGRESS.name()));
+
+        verify(referralService).startReferral(referralId);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void rejectReferral_returnsRejectedStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        RejectReferralRequestDTO request = RejectReferralRequestDTO.builder()
+            .reason("Out of scope for our service")
+            .build();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.REJECTED);
+        response.setCancellationReason(request.getReason());
+
+        when(referralService.rejectReferral(Mockito.eq(referralId), any(RejectReferralRequestDTO.class)))
+            .thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/reject", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.REJECTED.name()))
+            .andExpect(jsonPath("$.cancellationReason").value(request.getReason()));
+
+        verify(referralService).rejectReferral(Mockito.eq(referralId), any(RejectReferralRequestDTO.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void rejectReferral_blankReason_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        RejectReferralRequestDTO request = RejectReferralRequestDTO.builder()
+            .reason("   ")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/reject", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
     }
 
     @Test
