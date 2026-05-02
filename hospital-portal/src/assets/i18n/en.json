@@ -4,6 +4,58 @@
     "SUBTITLE": "Admin panel",
     "TITLE": "Administration"
   },
+  "TENANT_LIFECYCLE": {
+    "BACK_TO_LIST": "Back to organizations",
+    "LOADING": "Loading lifecycle…",
+    "PANEL_TITLE": "Tenant lifecycle",
+    "CONFIRM": "Confirm",
+    "CANCEL": "Cancel",
+    "OPTIONAL": "optional",
+    "DEFAULT_30_DAYS": "default 30 days from now",
+    "MFA_HINT": "6-digit code from your authenticator — required if MFA is enrolled",
+    "STATE": {
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "ARCHIVED": "Archived",
+      "PENDING_PURGE": "Pending purge",
+      "PURGED": "Purged"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspend",
+      "RESTORE": "Restore",
+      "ARCHIVE": "Archive",
+      "SCHEDULE_PURGE": "Schedule purge",
+      "CANCEL_PURGE": "Cancel purge"
+    },
+    "FIELD": {
+      "STATE": "State",
+      "REASON": "Reason",
+      "SUSPENDED_AT": "Suspended at",
+      "SUSPENSION_REASON": "Suspension reason",
+      "ARCHIVED_AT": "Archived at",
+      "ARCHIVE_REASON": "Archive reason",
+      "PURGE_AT": "Purge scheduled for",
+      "PURGE_REASON": "Purge reason",
+      "PURGED_AT": "Purged at",
+      "TYPE_CODE_TO_CONFIRM": "Type the org code to confirm:",
+      "MFA_CODE": "MFA step-up code"
+    },
+    "PLACEHOLDER": {
+      "REASON": "Why is this happening? (visible in the audit trail)"
+    },
+    "MODAL": {
+      "SUSPEND_TITLE": "Suspend this organization",
+      "SUSPEND_DESC": "All users in this organization will be blocked from logging in until you restore it. Super admins can still access. The action is permanently audited.",
+      "RESTORE_TITLE": "Restore this organization",
+      "RESTORE_DESC": "Returns the organization to ACTIVE. Users will be able to log in again on their next attempt.",
+      "ARCHIVE_TITLE": "Archive this organization",
+      "ARCHIVE_DESC": "The organization is hidden from default views but data is retained. You can restore later or schedule a purge.",
+      "SCHEDULE_PURGE_TITLE": "Schedule purge",
+      "SCHEDULE_PURGE_DESC": "Schedules deletion after a 30-day grace window (configurable). The purge can be cancelled before it runs. Data is exported then deleted.",
+      "CANCEL_PURGE_TITLE": "Cancel scheduled purge",
+      "CANCEL_PURGE_DESC": "The organization returns to the ARCHIVED state. No data is touched."
+    }
+  },
   "SUPER_ADMIN": {
     "TITLE": "Super-Admin Control Tower",
     "SUBTITLE": "Cross-tenant operations and platform health at a glance",

@@ -581,6 +581,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./organizations/organization-list').then((m) => m.OrganizationListComponent),
       },
+      {
+        path: 'organizations/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./organizations/organization-detail').then((m) => m.OrganizationDetailComponent),
+      },
 
       // Users (Admin)
       {

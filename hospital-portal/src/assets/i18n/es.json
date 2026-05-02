@@ -4,6 +4,58 @@
     "SUBTITLE": "Panel de administración",
     "TITLE": "Administración"
   },
+  "TENANT_LIFECYCLE": {
+    "BACK_TO_LIST": "Volver a organizaciones",
+    "LOADING": "Cargando ciclo de vida…",
+    "PANEL_TITLE": "Ciclo de vida del inquilino",
+    "CONFIRM": "Confirmar",
+    "CANCEL": "Cancelar",
+    "OPTIONAL": "opcional",
+    "DEFAULT_30_DAYS": "30 días por defecto",
+    "MFA_HINT": "Código de 6 dígitos de tu autenticador — requerido si MFA está activo",
+    "STATE": {
+      "ACTIVE": "Activo",
+      "SUSPENDED": "Suspendido",
+      "ARCHIVED": "Archivado",
+      "PENDING_PURGE": "Purga pendiente",
+      "PURGED": "Purgado"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspender",
+      "RESTORE": "Restaurar",
+      "ARCHIVE": "Archivar",
+      "SCHEDULE_PURGE": "Programar purga",
+      "CANCEL_PURGE": "Cancelar purga"
+    },
+    "FIELD": {
+      "STATE": "Estado",
+      "REASON": "Motivo",
+      "SUSPENDED_AT": "Suspendido el",
+      "SUSPENSION_REASON": "Motivo de suspensión",
+      "ARCHIVED_AT": "Archivado el",
+      "ARCHIVE_REASON": "Motivo de archivado",
+      "PURGE_AT": "Purga programada para",
+      "PURGE_REASON": "Motivo de purga",
+      "PURGED_AT": "Purgado el",
+      "TYPE_CODE_TO_CONFIRM": "Escribe el código de la organización para confirmar:",
+      "MFA_CODE": "Código MFA"
+    },
+    "PLACEHOLDER": {
+      "REASON": "¿Por qué esta acción? (visible en la pista de auditoría)"
+    },
+    "MODAL": {
+      "SUSPEND_TITLE": "Suspender esta organización",
+      "SUSPEND_DESC": "Todos los usuarios de esta organización serán bloqueados hasta la restauración. Los super admins conservan acceso. La acción queda auditada permanentemente.",
+      "RESTORE_TITLE": "Restaurar esta organización",
+      "RESTORE_DESC": "Devuelve la organización a ACTIVO. Los usuarios podrán volver a iniciar sesión en su próximo intento.",
+      "ARCHIVE_TITLE": "Archivar esta organización",
+      "ARCHIVE_DESC": "La organización queda oculta por defecto pero los datos se conservan. Se puede restaurar más tarde o programar una purga.",
+      "SCHEDULE_PURGE_TITLE": "Programar purga",
+      "SCHEDULE_PURGE_DESC": "Programa la eliminación tras un margen de 30 días (configurable). La purga se puede cancelar antes de ejecutarse. Los datos se exportan y luego se eliminan.",
+      "CANCEL_PURGE_TITLE": "Cancelar purga programada",
+      "CANCEL_PURGE_DESC": "La organización vuelve al estado ARCHIVADO. No se toca ningún dato."
+    }
+  },
   "SUPER_ADMIN": {
     "TITLE": "Torre de control Super-Admin",
     "SUBTITLE": "Operaciones multi-inquilino y estado de la plataforma de un vistazo",

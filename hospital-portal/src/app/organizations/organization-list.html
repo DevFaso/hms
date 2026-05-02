@@ -45,17 +45,49 @@
           @for (org of filtered(); track org.id) {
             <tr>
               <td class="name-cell">
-                <div class="org-name-wrap">
-                  <div class="org-icon">
-                    <span class="material-symbols-outlined">corporate_fare</span>
+                @if (isSuperAdmin()) {
+                  <a class="org-name-wrap" [routerLink]="['/organizations', org.id]">
+                    <div class="org-icon">
+                      <span class="material-symbols-outlined">corporate_fare</span>
+                    </div>
+                    <div>
+                      <span class="org-name">{{ org.name }}</span>
+                      @if (org.description) {
+                        <span class="org-desc">{{ org.description }}</span>
+                      }
+                      @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
+                        <span
+                          class="lifecycle-chip"
+                          [style.background]="lifecycleColor(org.lifecycleState) + '14'"
+                          [style.color]="lifecycleColor(org.lifecycleState)"
+                        >
+                          {{ 'TENANT_LIFECYCLE.STATE.' + org.lifecycleState | translate }}
+                        </span>
+                      }
+                    </div>
+                  </a>
+                } @else {
+                  <div class="org-name-wrap">
+                    <div class="org-icon">
+                      <span class="material-symbols-outlined">corporate_fare</span>
+                    </div>
+                    <div>
+                      <span class="org-name">{{ org.name }}</span>
+                      @if (org.description) {
+                        <span class="org-desc">{{ org.description }}</span>
+                      }
+                      @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
+                        <span
+                          class="lifecycle-chip"
+                          [style.background]="lifecycleColor(org.lifecycleState) + '14'"
+                          [style.color]="lifecycleColor(org.lifecycleState)"
+                        >
+                          {{ 'TENANT_LIFECYCLE.STATE.' + org.lifecycleState | translate }}
+                        </span>
+                      }
+                    </div>
                   </div>
-                  <div>
-                    <span class="org-name">{{ org.name }}</span>
-                    @if (org.description) {
-                      <span class="org-desc">{{ org.description }}</span>
-                    }
-                  </div>
-                </div>
+                }
               </td>
               <td>
                 <span class="code-badge">{{ org.code }}</span>
