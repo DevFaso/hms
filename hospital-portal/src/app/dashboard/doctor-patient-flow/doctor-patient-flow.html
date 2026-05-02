@@ -9,8 +9,8 @@
 
   <div class="flow-columns">
     @for (col of columns(); track col.key) {
-      <div class="flow-col">
-        <div class="flow-col-header" [style.--col-color]="col.color">
+      <div class="flow-col" [class.flow-col-empty]="getColumnItems(col.key).length === 0">
+        <div class="flow-col-header" [style.--col-color]="col.color" [attr.title]="col.label">
           <span class="material-symbols-outlined">{{ col.icon }}</span>
           <span class="flow-col-label">{{ col.label }}</span>
           <span class="flow-col-count">{{ getColumnItems(col.key).length }}</span>

@@ -99,6 +99,60 @@ $shadow-md:
   color: $text;
   box-shadow: $shadow;
   flex-wrap: wrap;
+
+  // Doctor view: compact hero so the page leads with action, not identity.
+  // The greeting + name row collapses to ~half the previous height; the
+  // calendar-date sub disappears (the live-clock pill already shows time);
+  // the progress ring shrinks. Other roles render the default hero unchanged.
+  &.hero-compact {
+    align-items: center;
+    padding: 14px 20px;
+    border-radius: 12px;
+
+    .hero-greeting {
+      margin-bottom: 0;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .greeting-tag {
+      font-size: 11px;
+    }
+
+    .hero-name {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .hero-sub {
+      display: none;
+    }
+
+    .doctor-hero-info {
+      margin-top: 6px;
+    }
+
+    // SVG scales via viewBox; wrap also needs to shrink to match.
+    .progress-ring-wrap,
+    .progress-ring {
+      width: 56px;
+      height: 56px;
+    }
+
+    .ring-pct {
+      font-size: 14px;
+      small {
+        font-size: 9px;
+      }
+    }
+
+    .ring-sub,
+    .ring-caption {
+      font-size: 9px;
+    }
+  }
 }
 
 .hero-left {
