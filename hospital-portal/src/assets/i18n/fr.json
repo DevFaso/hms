@@ -1186,6 +1186,34 @@
       "NURSING_NOTES_DESC": "Documenter les notes patient",
       "CHECK_IN": "Enregistrement",
       "CHECK_IN_DESC": "Enregistrer un patient"
+    },
+    "WL_TAB": {
+      "ALL": "Tout",
+      "WAITING": "En attente",
+      "IN_PROGRESS": "En cours",
+      "CONSULTS": "Consultations",
+      "COMPLETED": "Terminé"
+    },
+    "WL_STATUS": {
+      "SCHEDULED": "Planifié",
+      "CHECKED_IN": "Enregistré",
+      "TRIAGE": "En triage",
+      "WAITING": "En attente",
+      "IN_PROGRESS": "En cours",
+      "COMPLETED": "Terminé",
+      "CANCELLED": "Annulé",
+      "CONSULTATION": "Consultation"
+    },
+    "FLOW_COL": {
+      "SCHEDULED": "Planifié",
+      "CHECKED_IN": "Enregistré",
+      "TRIAGE": "Triage",
+      "WAITING_FOR_MD": "En attente du médecin",
+      "IN_ENCOUNTER": "En consultation",
+      "AWAITING_RESULTS": "En attente des résultats",
+      "READY_TO_DISCHARGE": "Prêt pour la sortie",
+      "COMPLETED": "Terminé",
+      "CANCELLED": "Annulé"
     }
   },
   "DEPARTMENTS": {
@@ -2442,7 +2470,27 @@
       "STATUS": "Statut",
       "NOT_ASSIGNED": "Non assigné",
       "GENERAL_VISIT": "Visite générale",
-      "GENERAL": "Général"
+      "GENERAL": "Général",
+      "BOOKING": {
+        "TITLE": "Planifier un rendez-vous",
+        "FORM_TITLE": "Planifier un nouveau rendez-vous",
+        "SUCCESS": "Rendez-vous planifié avec succès !",
+        "HOSPITAL": "Hôpital",
+        "SELECT_HOSPITAL": "Sélectionner un hôpital",
+        "SELECT_DEPARTMENT": "Sélectionner un service",
+        "PROVIDER_OPTIONAL": "Praticien (facultatif)",
+        "ANY_PROVIDER": "Tout praticien disponible",
+        "REASON": "Motif de la visite",
+        "REASON_PLACEHOLDER": "ex. : Bilan de santé annuel",
+        "NOTES": "Notes supplémentaires",
+        "NOTES_PLACEHOLDER": "Toute information supplémentaire pour le praticien",
+        "SCHEDULING": "Planification…",
+        "MISSING_FIELDS": "Veuillez remplir tous les champs obligatoires.",
+        "FAILED": "Échec de la planification du rendez-vous. Veuillez réessayer.",
+        "CLOSE_LABEL": "Fermer",
+        "PRECHECKIN_BTN": "Pré-enregistrement en ligne",
+        "PRECHECKIN_DONE": "Pré-enregistrement complété"
+      }
     },
     "MEDICATIONS": {
       "TITLE": "Mes médicaments",
@@ -2525,6 +2573,7 @@
       "PAY": "Payer",
       "DONE": "Terminé",
       "PAYMENT_SUCCESS": "Paiement enregistré avec succès !",
+      "PAYMENT_SUCCESS_AMOUNT": "Paiement de {{amount}} enregistré avec succès !",
       "PAYMENT_FAILED": "Échec du paiement. Veuillez réessayer.",
       "AMOUNT_EXCEEDS": "Le montant ne peut pas dépasser le solde dû.",
       "CARD": "Carte de crédit / débit",
@@ -3739,8 +3788,11 @@
     "CONTACT_INFO": "Coordonnées",
     "PHONE": "Numéro de téléphone",
     "EMAIL": "Courriel",
+    "EMAIL_PLACEHOLDER": "ex. patient@example.com",
+    "PHONE_PLACEHOLDER": "ex. (555) 123-4567",
     "ADDRESS": "Adresse",
     "ADDRESS_LINE1": "Adresse ligne 1",
+    "ADDRESS_PLACEHOLDER": "Adresse postale",
     "CITY": "Ville",
     "STATE": "État/Province",
     "ZIP": "Code postal",

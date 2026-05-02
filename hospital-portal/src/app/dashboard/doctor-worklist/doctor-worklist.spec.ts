@@ -97,14 +97,17 @@ describe('DoctorWorklistComponent', () => {
   });
 
   describe('Status Labels', () => {
-    it('should label CHECKED_IN as Checked In', () => {
-      expect(component.getStatusLabel('CHECKED_IN')).toBe('Checked In');
+    // With TranslateModule.forRoot() and no loader, instant() returns the key
+    // string, which is exactly what we want to assert here — the mapping from
+    // domain status to translation key is what this test owns.
+    it('should map CHECKED_IN to its translation key', () => {
+      expect(component.getStatusLabel('CHECKED_IN')).toBe('DASHBOARD.WL_STATUS.CHECKED_IN');
     });
-    it('should label TRIAGE as In Triage', () => {
-      expect(component.getStatusLabel('TRIAGE')).toBe('In Triage');
+    it('should map TRIAGE to its translation key', () => {
+      expect(component.getStatusLabel('TRIAGE')).toBe('DASHBOARD.WL_STATUS.TRIAGE');
     });
-    it('should label WAITING as Waiting', () => {
-      expect(component.getStatusLabel('WAITING')).toBe('Waiting');
+    it('should map WAITING to its translation key', () => {
+      expect(component.getStatusLabel('WAITING')).toBe('DASHBOARD.WL_STATUS.WAITING');
     });
     it('should return raw value for unknown status', () => {
       expect(component.getStatusLabel('UNKNOWN')).toBe('UNKNOWN');

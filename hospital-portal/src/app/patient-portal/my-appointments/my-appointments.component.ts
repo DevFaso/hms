@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PortalAppointment,
@@ -29,6 +29,7 @@ import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.com
 })
 export class MyAppointmentsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
+  private readonly translate = inject(TranslateService);
   appointments = signal<PortalAppointment[]>([]);
   loading = signal(true);
   expandedId = signal<string | null>(null);
@@ -145,7 +146,7 @@ export class MyAppointmentsComponent implements OnInit {
       !this.selectedDate ||
       !this.selectedTime
     ) {
-      this.bookingError.set('Please fill in all required fields.');
+      this.bookingError.set(this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'));
       return;
     }
 
@@ -174,7 +175,7 @@ export class MyAppointmentsComponent implements OnInit {
         const msg =
           err?.error?.message ||
           err?.error?.error ||
-          'Failed to schedule appointment. Please try again.';
+          this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.FAILED');
         this.bookingError.set(msg);
       },
     });

@@ -107,7 +107,8 @@ describe('MyAppointmentsComponent', () => {
   describe('submitBooking', () => {
     it('should set error when required fields are missing', () => {
       component.submitBooking();
-      expect(component.bookingError()).toBe('Please fill in all required fields.');
+      // No translations are loaded in TranslateModule.forRoot(); instant() returns the key.
+      expect(component.bookingError()).toBe('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS');
       expect(portalService.bookAppointment).not.toHaveBeenCalled();
     });
 

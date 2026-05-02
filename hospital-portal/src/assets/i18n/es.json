@@ -1187,6 +1187,34 @@
       "NURSING_NOTES_DESC": "Documentar notas del paciente",
       "CHECK_IN": "Registro",
       "CHECK_IN_DESC": "Registrar un paciente"
+    },
+    "WL_TAB": {
+      "ALL": "Todos",
+      "WAITING": "En espera",
+      "IN_PROGRESS": "En curso",
+      "CONSULTS": "Consultas",
+      "COMPLETED": "Completados"
+    },
+    "WL_STATUS": {
+      "SCHEDULED": "Programado",
+      "CHECKED_IN": "Registrado",
+      "TRIAGE": "En triaje",
+      "WAITING": "En espera",
+      "IN_PROGRESS": "En curso",
+      "COMPLETED": "Completado",
+      "CANCELLED": "Cancelado",
+      "CONSULTATION": "Consulta"
+    },
+    "FLOW_COL": {
+      "SCHEDULED": "Programado",
+      "CHECKED_IN": "Registrado",
+      "TRIAGE": "Triaje",
+      "WAITING_FOR_MD": "Esperando médico",
+      "IN_ENCOUNTER": "En consulta",
+      "AWAITING_RESULTS": "Esperando resultados",
+      "READY_TO_DISCHARGE": "Listo para alta",
+      "COMPLETED": "Completado",
+      "CANCELLED": "Cancelado"
     }
   },
   "DEPARTMENTS": {
@@ -2301,6 +2329,31 @@
         "QUALITY_MANAGER": "Gestor(a) de Calidad",
         "RECEPTIONIST": "Recepcionista"
       }
+    },
+    "APPOINTMENTS": {
+      "BOOKING": {
+        "TITLE": "Programar cita",
+        "FORM_TITLE": "Programar una nueva cita",
+        "SUCCESS": "¡Cita programada con éxito!",
+        "HOSPITAL": "Hospital",
+        "SELECT_HOSPITAL": "Seleccionar un hospital",
+        "SELECT_DEPARTMENT": "Seleccionar un departamento",
+        "PROVIDER_OPTIONAL": "Proveedor (opcional)",
+        "ANY_PROVIDER": "Cualquier proveedor disponible",
+        "REASON": "Motivo de la visita",
+        "REASON_PLACEHOLDER": "p. ej., Chequeo anual",
+        "NOTES": "Notas adicionales",
+        "NOTES_PLACEHOLDER": "Cualquier información adicional para el proveedor",
+        "SCHEDULING": "Programando…",
+        "MISSING_FIELDS": "Por favor complete todos los campos obligatorios.",
+        "FAILED": "Error al programar la cita. Por favor inténtelo de nuevo.",
+        "CLOSE_LABEL": "Cerrar",
+        "PRECHECKIN_BTN": "Pre-registro en línea",
+        "PRECHECKIN_DONE": "Pre-registro completado"
+      }
+    },
+    "BILLING": {
+      "PAYMENT_SUCCESS_AMOUNT": "¡Pago de {{amount}} registrado con éxito!"
     }
   },
   "PLATFORM": {
@@ -3366,8 +3419,11 @@
     "CONTACT_INFO": "Información de contacto",
     "PHONE": "Número de teléfono",
     "EMAIL": "Correo electrónico",
+    "EMAIL_PLACEHOLDER": "ej. paciente@ejemplo.com",
+    "PHONE_PLACEHOLDER": "ej. (555) 123-4567",
     "ADDRESS": "Dirección",
     "ADDRESS_LINE1": "Dirección línea 1",
+    "ADDRESS_PLACEHOLDER": "Dirección",
     "CITY": "Ciudad",
     "STATE": "Estado/Provincia",
     "ZIP": "Código postal",

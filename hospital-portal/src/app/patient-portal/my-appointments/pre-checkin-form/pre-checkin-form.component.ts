@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PortalAppointment,
@@ -33,6 +33,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
   @Output() preCheckinCompleted = new EventEmitter<void>();
 
   private readonly portal = inject(PatientPortalService);
+  private readonly translate = inject(TranslateService);
 
   // ── State ──────────────────────────────────────────────────────────
   step = signal<'demographics' | 'questionnaires' | 'review'>('demographics');
@@ -153,14 +154,12 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
     this.portal.submitPreCheckIn(this.appointment.id, dto).subscribe({
       next: () => {
         this.saving.set(false);
-        this.successMessage.set('Pre-check-in completed successfully!');
+        this.successMessage.set(this.translate.instant('PRE_CHECKIN.SUCCESS'));
         setTimeout(() => this.preCheckinCompleted.emit(), 1500);
       },
       error: (err) => {
         this.saving.set(false);
-        this.errorMessage.set(
-          err?.error?.message || 'Failed to submit pre-check-in. Please try again.',
-        );
+        this.errorMessage.set(err?.error?.message || this.translate.instant('PRE_CHECKIN.ERROR'));
       },
     });
   }

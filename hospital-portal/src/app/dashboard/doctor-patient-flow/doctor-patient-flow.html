@@ -8,7 +8,7 @@
   </div>
 
   <div class="flow-columns">
-    @for (col of columns; track col.key) {
+    @for (col of columns(); track col.key) {
       <div class="flow-col">
         <div class="flow-col-header" [style.--col-color]="col.color">
           <span class="material-symbols-outlined">{{ col.icon }}</span>
