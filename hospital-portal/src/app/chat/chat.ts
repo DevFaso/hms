@@ -217,8 +217,10 @@ export class ChatComponent implements OnInit {
     if (!this.messageText.trim() && attachments.length === 0) return;
 
     this.sendingMessage.set(true);
+    // Backend derives sender from SecurityContext; the senderId field on
+    // the request DTO has been deprecated since v1.0 and is removed in
+    // chore/remove-deprecated-2025.
     const req: ChatSendRequest = {
-      senderId: this.currentUserId,
       recipientId: conv.conversationUserId,
       content: this.messageText.trim(),
       attachments: attachments.length > 0 ? attachments : undefined,
