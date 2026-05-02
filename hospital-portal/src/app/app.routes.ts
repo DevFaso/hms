@@ -526,8 +526,13 @@ export const routes: Routes = [
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
 
-      // Settings → redirect to profile (edit tab)
-      { path: 'settings', redirectTo: 'profile', pathMatch: 'full' },
+      // Settings hub — preferences, language, shortcuts to security/notification
+      // pages. Replaced the old /settings → /profile redirect because both
+      // header menu items pointed at the same screen, which surprised users.
+      {
+        path: 'settings',
+        loadComponent: () => import('./settings/settings').then((m) => m.SettingsComponent),
+      },
 
       // Notifications
       {
