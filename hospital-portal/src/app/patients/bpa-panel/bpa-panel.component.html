@@ -1,0 +1,66 @@
+<section class="bpa-panel" data-testid="bpa-panel" *ngIf="patientId()" [attr.data-state]="state()">
+  <header class="bpa-panel__header">
+    <h2 class="bpa-panel__title">{{ 'BPA.HEADING' | translate }}</h2>
+  </header>
+
+  <p *ngIf="state() === 'loading'" class="bpa-panel__loading" data-testid="bpa-panel-loading">
+    {{ 'BPA.LOADING' | translate }}
+  </p>
+
+  <p *ngIf="state() === 'error'" class="bpa-panel__error" data-testid="bpa-panel-error">
+    {{ 'BPA.ERROR' | translate }}
+  </p>
+
+  <p *ngIf="state() === 'empty'" class="bpa-panel__empty" data-testid="bpa-panel-empty">
+    {{ 'BPA.NONE_ACTIVE' | translate }}
+  </p>
+
+  <app-cds-card-list *ngIf="state() === 'ready'" [cards]="cards()" data-testid="bpa-panel-cards" />
+</section>
+
+<div *ngIf="criticalCard() as critical" class="bpa-modal-backdrop" data-testid="bpa-critical-modal">
+  <div class="bpa-modal" role="dialog" aria-modal="true" aria-labelledby="bpa-critical-modal-title">
+    <header class="bpa-modal__header">
+      <span class="bpa-modal__indicator" aria-hidden="true">!</span>
+      <h2 id="bpa-critical-modal-title">{{ 'BPA.CRITICAL_TITLE' | translate }}</h2>
+    </header>
+
+    <p class="bpa-modal__summary" data-testid="bpa-critical-summary">{{ critical.summary }}</p>
+    <p class="bpa-modal__detail" *ngIf="critical.detail">{{ critical.detail }}</p>
+    <p class="bpa-modal__source" *ngIf="critical.source?.label">
+      {{ 'CDS.SECTION_LABEL' | translate }}: {{ critical.source.label }}
+    </p>
+
+    <label class="bpa-modal__reason">
+      <span>{{ 'BPA.OVERRIDE_REASON' | translate }}</span>
+      <textarea
+        rows="3"
+        [(ngModel)]="reason"
+        name="reason"
+        data-testid="bpa-critical-reason"
+        [placeholder]="'BPA.OVERRIDE_REASON_PLACEHOLDER' | translate"
+      ></textarea>
+    </label>
+
+    <div class="bpa-modal__actions">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="submitting()"
+        (click)="acknowledge()"
+        data-testid="bpa-critical-acknowledge"
+      >
+        {{ 'BPA.ACTION_ACKNOWLEDGE' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-danger"
+        [disabled]="submitting()"
+        (click)="override()"
+        data-testid="bpa-critical-override"
+      >
+        {{ 'BPA.ACTION_OVERRIDE' | translate }}
+      </button>
+    </div>
+  </div>
+</div>

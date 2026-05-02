@@ -4,18 +4,27 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { BpaPanelComponent } from './bpa-panel.component';
 import { BpaService } from '../../services/bpa.service';
+import { CdsAcknowledgementService } from '../../services/cds-acknowledgement.service';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
 
 describe('BpaPanelComponent', () => {
   let fixture: ComponentFixture<BpaPanelComponent>;
   let bpaSpy: jasmine.SpyObj<BpaService>;
+  let ackSpy: jasmine.SpyObj<CdsAcknowledgementService>;
 
   beforeEach(async () => {
     bpaSpy = jasmine.createSpyObj<BpaService>('BpaService', ['evaluate']);
+    ackSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
+      'record',
+      'active',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [BpaPanelComponent, TranslateModule.forRoot()],
-      providers: [{ provide: BpaService, useValue: bpaSpy }],
+      providers: [
+        { provide: BpaService, useValue: bpaSpy },
+        { provide: CdsAcknowledgementService, useValue: ackSpy },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(BpaPanelComponent);

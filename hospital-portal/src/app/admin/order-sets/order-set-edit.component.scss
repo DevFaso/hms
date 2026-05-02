@@ -1,0 +1,169 @@
+.order-set-edit {
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+
+.order-set-edit__header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .back-link {
+    text-decoration: none;
+    font-size: 1.4rem;
+    color: var(--text-muted, #555);
+  }
+}
+
+.order-set-edit__form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 500;
+  }
+
+  input,
+  textarea,
+  select {
+    font-weight: normal;
+    padding: 0.45rem;
+    border-radius: 4px;
+    border: 1px solid var(--border, #d0d4d9);
+  }
+}
+
+.order-set-edit__error {
+  color: var(--danger, #b00020);
+}
+
+.order-set-edit__history {
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.05rem;
+  }
+
+  .badge {
+    margin-left: 0.5rem;
+    padding: 0.1rem 0.5rem;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: #555;
+  }
+}
+
+.order-set-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border: 1px solid var(--border, #d0d4d9);
+  border-radius: 8px;
+  padding: 0.75rem 1rem 1rem;
+
+  legend {
+    padding: 0 0.5rem;
+    font-weight: 600;
+  }
+}
+
+.order-set-item {
+  border: 1px solid var(--border-subtle, #ececec);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--bg-subtle, #f9fafb);
+}
+
+.order-set-item__row {
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  gap: 0.75rem;
+  align-items: end;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-weight: 500;
+    font-size: 0.85rem;
+  }
+}
+
+.order-set-item__synonyms,
+.order-set-item__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.order-set-item__dose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem 0.75rem;
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-weight: 500;
+    font-size: 0.82rem;
+  }
+}
+
+.btn-icon {
+  background: transparent;
+  border: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  color: var(--danger, #b00020);
+
+  &:hover {
+    background: rgba(176, 0, 32, 0.08);
+    border-radius: 4px;
+  }
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 0.55rem 1rem;
+  border-radius: 6px;
+  border: 0;
+  font-weight: 500;
+  cursor: pointer;
+  align-self: flex-start;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.btn-primary {
+  background: var(--primary, #1a73e8);
+  color: #fff;
+}
+
+.btn-secondary {
+  background: var(--bg-subtle, #f0f2f5);
+  color: var(--text, #222);
+  border: 1px solid var(--border, #d0d4d9);
+}

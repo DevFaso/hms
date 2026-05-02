@@ -1,0 +1,202 @@
+<section class="order-set-edit" data-testid="order-set-edit">
+  <header class="order-set-edit__header">
+    <a
+      class="back-link"
+      routerLink="/admin/order-sets"
+      [attr.aria-label]="'COMMON.BACK' | translate"
+      ><span aria-hidden="true">←</span></a
+    >
+    <h1>
+      {{
+        mode() === 'edit' ? ('ORDER_SETS.EDIT_TITLE' | translate) : ('ORDER_SETS.NEW' | translate)
+      }}
+    </h1>
+  </header>
+
+  <p *ngIf="loadError()" class="order-set-edit__error" data-testid="order-set-edit-error">
+    {{ 'ORDER_SETS.ERROR' | translate }}
+  </p>
+
+  <form
+    class="order-set-edit__form"
+    (ngSubmit)="save()"
+    *ngIf="!loadError()"
+    data-testid="order-set-edit-form"
+  >
+    <label>
+      {{ 'ORDER_SETS.FIELD_NAME' | translate }}
+      <input type="text" [(ngModel)]="form.name" name="name" required />
+    </label>
+
+    <label>
+      {{ 'ORDER_SETS.FIELD_DESCRIPTION' | translate }}
+      <textarea [(ngModel)]="form.description" name="description" rows="2"></textarea>
+    </label>
+
+    <label>
+      {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }}
+      <select [(ngModel)]="form.admissionType" name="admissionType" required>
+        <option *ngFor="let t of admissionTypes" [value]="t">{{ t }}</option>
+      </select>
+    </label>
+
+    <label>
+      {{ 'ORDER_SETS.FIELD_CLINICAL_GUIDELINES' | translate }}
+      <input type="text" [(ngModel)]="form.clinicalGuidelines" name="clinicalGuidelines" />
+    </label>
+
+    <fieldset class="order-set-items" data-testid="order-set-items">
+      <legend>{{ 'ORDER_SETS.ITEMS_TITLE' | translate }}</legend>
+
+      <div
+        class="order-set-item"
+        *ngFor="let item of items(); let i = index; trackBy: trackByIndex"
+        [attr.data-testid]="'order-set-item-' + i"
+      >
+        <div class="order-set-item__row">
+          <label class="order-set-item__type">
+            <span>{{ 'ORDER_SETS.FIELD_ITEM_TYPE' | translate }}</span>
+            <select
+              [(ngModel)]="item.orderType"
+              [name]="'orderType-' + i"
+              [attr.data-testid]="'order-set-item-type-' + i"
+            >
+              <option *ngFor="let t of orderItemTypes" [value]="t">{{ t }}</option>
+            </select>
+          </label>
+
+          <label class="order-set-item__name">
+            <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span>
+            <input
+              type="text"
+              [ngModel]="itemName(item)"
+              (ngModelChange)="setItemName(item, $event)"
+              [name]="'itemName-' + i"
+              required
+              [attr.data-testid]="'order-set-item-name-' + i"
+            />
+          </label>
+
+          <button
+            type="button"
+            class="btn-icon"
+            (click)="removeItem(i)"
+            [attr.aria-label]="'COMMON.DELETE' | translate"
+            [attr.data-testid]="'order-set-item-remove-' + i"
+          >
+            ×
+          </button>
+        </div>
+
+        <label class="order-set-item__synonyms">
+          <span>{{ 'ORDER_SETS.FIELD_SYNONYMS' | translate }}</span>
+          <input
+            type="text"
+            [(ngModel)]="item._synonymsText"
+            [name]="'synonyms-' + i"
+            [placeholder]="'ORDER_SETS.SYNONYMS_PLACEHOLDER' | translate"
+            [attr.data-testid]="'order-set-item-synonyms-' + i"
+          />
+        </label>
+
+        <ng-container *ngIf="isMedicationLike(item.orderType)">
+          <div class="order-set-item__dose-grid">
+            <label>
+              <span>{{ 'ORDER_SETS.FIELD_DOSE_MIN' | translate }}</span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                [(ngModel)]="item.doseRangeMin"
+                [name]="'doseMin-' + i"
+                [attr.data-testid]="'order-set-item-dose-min-' + i"
+              />
+            </label>
+            <label>
+              <span>{{ 'ORDER_SETS.FIELD_DOSE_MAX' | translate }}</span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                [(ngModel)]="item.doseRangeMax"
+                [name]="'doseMax-' + i"
+                [attr.data-testid]="'order-set-item-dose-max-' + i"
+              />
+            </label>
+            <label>
+              <span>{{ 'ORDER_SETS.FIELD_DOSE_UNIT' | translate }}</span>
+              <select
+                [(ngModel)]="item.doseUnit"
+                [name]="'doseUnit-' + i"
+                [attr.data-testid]="'order-set-item-dose-unit-' + i"
+              >
+                <option value=""></option>
+                <option *ngFor="let u of doseUnits" [value]="u">{{ u }}</option>
+              </select>
+            </label>
+            <label>
+              <span>{{ 'ORDER_SETS.FIELD_ROUTE' | translate }}</span>
+              <select
+                [(ngModel)]="item.route"
+                [name]="'route-' + i"
+                [attr.data-testid]="'order-set-item-route-' + i"
+              >
+                <option value=""></option>
+                <option *ngFor="let r of routes" [value]="r">{{ r }}</option>
+              </select>
+            </label>
+            <label>
+              <span>{{ 'ORDER_SETS.FIELD_FREQUENCY' | translate }}</span>
+              <select
+                [(ngModel)]="item.frequency"
+                [name]="'frequency-' + i"
+                [attr.data-testid]="'order-set-item-frequency-' + i"
+              >
+                <option value=""></option>
+                <option *ngFor="let f of frequencyPresets" [value]="f">{{ f }}</option>
+              </select>
+            </label>
+          </div>
+        </ng-container>
+
+        <label class="order-set-item__notes">
+          <span>{{ 'ORDER_SETS.FIELD_NOTES' | translate }}</span>
+          <input
+            type="text"
+            [(ngModel)]="item.notes"
+            [name]="'notes-' + i"
+            [attr.data-testid]="'order-set-item-notes-' + i"
+          />
+        </label>
+      </div>
+
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="addItem()"
+        data-testid="order-set-item-add"
+      >
+        + {{ 'ORDER_SETS.ADD_ITEM' | translate }}
+      </button>
+    </fieldset>
+
+    <button
+      type="submit"
+      class="btn-primary"
+      [disabled]="saving()"
+      data-testid="order-set-edit-save"
+    >
+      {{ 'COMMON.SAVE' | translate }}
+    </button>
+  </form>
+
+  <aside *ngIf="versionHistory().length > 0" class="order-set-edit__history">
+    <h2>{{ 'ORDER_SETS.VERSION_HISTORY' | translate }}</h2>
+    <ol>
+      <li *ngFor="let v of versionHistory()">
+        v{{ v.version }} — {{ v.updatedAt | date: 'short' }}
+        <span *ngIf="!v.active" class="badge">retired</span>
+      </li>
+    </ol>
+  </aside>
+</section>

@@ -1,14 +1,14 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.payload.dto.PharmacyLocationResponseDTO;
+import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.service.PharmacyDirectoryService;
 import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.media.ArraySchema;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -37,17 +37,45 @@ public class PharmacyDirectoryController {
 
     private final PharmacyDirectoryService pharmacyDirectoryService;
     private final RoleValidator roleValidator;
+    private final PharmacyRepository pharmacyRepository;
+    private final ControllerAuthUtils authUtils;
 
     @Operation(
-        summary = "List pharmacies available for a patient",
-        description = "Returns preferred, hospital, and mail-order options to support prescribing",
+        summary = "List community / partner pharmacies for the current hospital",
+        description = "Used by the SMS-dispatch picker on the prescription page. "
+            + "Returns active pharmacies whose type is COMMUNITY_PHARMACY or PARTNER_PHARMACY.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Pharmacies returned successfully",
-        content = @Content(array = @ArraySchema(schema = @Schema(implementation = PharmacyLocationResponseDTO.class)))
-    )
+    @GetMapping("/community")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    public ResponseEntity<List<PharmacyOptionDTO>> listCommunityPharmacies(
+        @RequestParam(required = false) UUID hospitalId,
+        @RequestHeader(value = "X-Hospital-Id", required = false) UUID headerHospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID resolvedHospital = authUtils.resolveHospitalScope(auth, hospitalId, headerHospitalId, true);
+        if (resolvedHospital == null) {
+            throw new BusinessException(
+                "Hospital context is required. Provide hospitalId parameter, X-Hospital-Id header, or include hospitalId claim in the token.");
+        }
+        List<Pharmacy> community = pharmacyRepository
+            .findByHospitalIdAndPharmacyTypeAndActiveTrue(resolvedHospital, PharmacyType.COMMUNITY_PHARMACY);
+        List<Pharmacy> partner = pharmacyRepository
+            .findByHospitalIdAndPharmacyTypeAndActiveTrue(resolvedHospital, PharmacyType.PARTNER_PHARMACY);
+        List<PharmacyOptionDTO> options = java.util.stream.Stream.concat(community.stream(), partner.stream())
+            .map(p -> new PharmacyOptionDTO(
+                p.getId(),
+                p.getName(),
+                p.getPhoneNumber(),
+                p.getPharmacyType() != null ? p.getPharmacyType().name() : null))
+            .toList();
+        return ResponseEntity.ok(options);
+    }
+
+    /** Lightweight projection for the SMS-dispatch dropdown. */
+    public record PharmacyOptionDTO(UUID id, String name, String phoneNumber, String pharmacyType) { }
+
     @GetMapping("/patients/{patientId}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<PharmacyLocationResponseDTO>> listPatientPharmacies(

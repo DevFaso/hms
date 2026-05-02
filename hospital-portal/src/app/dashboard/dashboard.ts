@@ -2296,6 +2296,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   handleInboxAction(item: ClinicalInboxItem): void {
+    if (item.category === 'REFILL_REQUEST') {
+      this.router.navigate(['/refills']);
+      return;
+    }
     switch (item.actionType) {
       case 'SIGN':
         this.router.navigate(['/encounters']);

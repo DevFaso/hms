@@ -103,6 +103,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.mapper.CheckOutMapper checkOutMapper;
     @Mock private com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    @Mock private com.example.hms.service.PatientTrackerEventPublisher trackerEventPublisher;
 
     @InjectMocks private EncounterServiceImpl service;
 

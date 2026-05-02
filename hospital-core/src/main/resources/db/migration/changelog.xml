@@ -1011,4 +1011,42 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V75: Gap #23 — DICOM/PACS link
+         - hospital.hospitals.pacs_viewer_url_template VARCHAR(500) NULL
+           holds a per-hospital URL template (e.g.
+           https://orthanc.local/viewer.html?studyUid={studyInstanceUid}).
+           The ImagingReport mapper resolves {studyInstanceUid} and
+           {accessionNumber} placeholders so the imaging detail panel
+           surfaces a "View in PACS" link without per-report URLs.
+         - Optional: hospitals without a template render no link, which
+           preserves the deferred-for-district-level posture.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V75-pacs-viewer-url-template" author="hms-team" runOnChange="false">
+        <sqlFile path="V75__pacs_viewer_url_template.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V76: Gap #18 — BPA / CDS card acknowledgements
+         - clinical.cds_acknowledgements: one row per dismissal or override
+           of a Best-Practice Advisory. Drives suppression on subsequent
+           rule-engine runs (24 h ack TTL, 72 h override TTL — set in the
+           service layer).
+         - Cards are matched by stable cardUuid when present; otherwise
+           by the (summary, indicator) fingerprint scoped to the patient.
+         - updated_at NOT NULL is required because the entity extends
+           BaseEntity which maps both createdAt and updatedAt.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V76-cds-acknowledgements" author="hms-team" runOnChange="false">
+        <sqlFile path="V76__cds_acknowledgements.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
