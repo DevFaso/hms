@@ -1123,8 +1123,10 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void createDepartment_hospitalAdmin_crossHospitalId_throwsBusinessRule() {
-        // HOSPITAL_ADMIN sends DTO with a DIFFERENT hospital → must be rejected
+    void createDepartment_hospitalAdmin_crossHospitalId_throwsAccessDenied() {
+        // HOSPITAL_ADMIN sends DTO with a DIFFERENT hospital → must be rejected.
+        // Surface as AccessDeniedException so GlobalExceptionHandler returns 403,
+        // not the 500 that BusinessRuleException would produce (it is unmapped).
         UUID otherHospitalId = UUID.randomUUID();
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -1135,7 +1137,7 @@ class DepartmentServiceImplTest {
         dto.setName("Evil Dept");
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
-            .isInstanceOf(BusinessRuleException.class)
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
             .hasMessageContaining("assigned hospital");
     }
 
@@ -1250,5 +1252,180 @@ class DepartmentServiceImplTest {
         departmentService.deleteDepartment(deptId, locale);
 
         verify(departmentRepository).delete(department);
+    }
+
+    // ========== Tenant-scoping on READ paths ==========
+    // These cover the gap Copilot flagged: prior to this guard, non-super-admins could
+    // list / read / search / filter departments belonging to other hospitals.
+
+    @Test
+    void getAllDepartments_nonSuperAdmin_pinsFilterToActiveHospital() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findAll(any(Specification.class))).thenReturn(List.of(department));
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        // No caller-supplied filters — guard should still scope by active hospital.
+        List<DepartmentResponseDTO> result =
+            departmentService.getAllDepartments(null, null, null, null, locale);
+
+        assertThat(result).hasSize(1);
+        // findAllWithHospitalAndHead() (the unfiltered path) must NOT be hit.
+        verify(departmentRepository, never()).findAllWithHospitalAndHead();
+        verify(departmentRepository).findAll(any(Specification.class));
+    }
+
+    @Test
+    void getAllDepartments_pageable_nonSuperAdmin_usesFindByHospitalId() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Department> page = new PageImpl<>(List.of(department));
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findByHospitalId(hospitalId, pageable)).thenReturn(page);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        Page<DepartmentResponseDTO> result = departmentService.getAllDepartments(pageable, locale);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(departmentRepository).findByHospitalId(hospitalId, pageable);
+        verify(departmentRepository, never()).findAll(pageable);
+    }
+
+    @Test
+    void getDepartmentById_nonSuperAdmin_otherHospital_throwsNotFound() {
+        // Returning ResourceNotFound (not 403) so cross-hospital existence is not leaked.
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(otherHospitalId);
+        department.setHospital(otherHospital);
+
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.of(department));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> departmentService.getDepartmentById(deptId, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getDepartmentById_nonSuperAdmin_ownHospital_succeeds() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findByIdWithHeadOfDepartment(deptId)).thenReturn(Optional.of(department));
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        DepartmentResponseDTO result = departmentService.getDepartmentById(deptId, locale);
+
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void getDepartmentsByHospital_nonSuperAdmin_crossHospital_throwsAccessDenied() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> departmentService.getDepartmentsByHospital(otherHospitalId, pageable, locale))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            .hasMessageContaining("assigned hospital");
+
+        verify(departmentRepository, never()).findByHospitalId(any(UUID.class), any(Pageable.class));
+    }
+
+    @Test
+    void getDepartmentsByHospital_nonSuperAdmin_ownHospital_succeeds() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Department> page = new PageImpl<>(List.of(department));
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findByHospitalId(hospitalId, pageable)).thenReturn(page);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        Page<DepartmentResponseDTO> result =
+            departmentService.getDepartmentsByHospital(hospitalId, pageable, locale);
+
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_nonSuperAdmin_crossHospital_throwsAccessDenied() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        verify(departmentRepository, never()).findByHospitalId(any(UUID.class));
+    }
+
+    @Test
+    void searchDepartments_nonSuperAdmin_addsHospitalPredicate() {
+        // Even with no query text, non-super-admin must search through a Specification
+        // (so the hospital predicate is applied) instead of an unfiltered findAll.
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Department> page = new PageImpl<>(List.of(department));
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        Page<DepartmentResponseDTO> result = departmentService.searchDepartments(null, pageable, locale);
+
+        assertThat(result.getContent()).hasSize(1);
+        verify(departmentRepository).findAll(any(Specification.class), eq(pageable));
+        verify(departmentRepository, never()).findAll(pageable);
+    }
+
+    @Test
+    void filterDepartments_nonSuperAdmin_forcesActiveHospitalIdOnFilter() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentFilterDTO filter = DepartmentFilterDTO.builder().build();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Department> page = new PageImpl<>(List.of(department));
+        DepartmentResponseDTO dto = new DepartmentResponseDTO();
+        when(departmentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(dto);
+
+        departmentService.filterDepartments(filter, pageable, locale);
+
+        // Guard mutates the input filter with the caller's active hospital.
+        assertThat(filter.getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test
+    void filterDepartments_nonSuperAdmin_crossHospitalFilter_throwsAccessDenied() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        DepartmentFilterDTO filter = DepartmentFilterDTO.builder().hospitalId(otherHospitalId).build();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        assertThatThrownBy(() -> departmentService.filterDepartments(filter, pageable, locale))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            .hasMessageContaining("assigned hospital");
+
+        verify(departmentRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
 }
