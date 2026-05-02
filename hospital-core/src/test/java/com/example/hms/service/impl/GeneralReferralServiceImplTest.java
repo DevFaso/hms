@@ -860,4 +860,73 @@ class GeneralReferralServiceImplTest {
         assertThrows(ResourceNotFoundException.class,
             () -> generalReferralService.completeReferral(referralId, "Done", null));
     }
+
+    @Test
+    void getReferralEventsReturnsChronologicalTimeline() {
+        // Cover the new getReferralEvents path + the toEventResponse mapper:
+        // findReferral validates scope first, then the repository is queried in
+        // chronological order, and each row is mapped to a DTO with all fields.
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(buildHospital(activeHospId, "Active Hospital"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        com.example.hms.model.ReferralEvent submit = com.example.hms.model.ReferralEvent.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(com.example.hms.enums.ReferralEventType.SUBMIT)
+            .fromStatus(ReferralStatus.DRAFT)
+            .toStatus(ReferralStatus.SUBMITTED)
+            .actorUsername("dr.amy@hms.test")
+            .actorLabel("USER")
+            .note(null)
+            .recordedAt(LocalDateTime.of(2026, 5, 1, 10, 0))
+            .build();
+        com.example.hms.model.ReferralEvent expire = com.example.hms.model.ReferralEvent.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(com.example.hms.enums.ReferralEventType.EXPIRE)
+            .fromStatus(ReferralStatus.SUBMITTED)
+            .toStatus(ReferralStatus.EXPIRED)
+            .actorUsername(null)
+            .actorLabel("SYSTEM:scheduler")
+            .note("auto-expired")
+            .recordedAt(LocalDateTime.of(2026, 5, 1, 11, 0))
+            .build();
+        when(eventRepository.findByReferralIdOrderByRecordedAtAsc(referralId))
+            .thenReturn(java.util.List.of(submit, expire));
+
+        java.util.List<com.example.hms.payload.dto.referral.ReferralEventResponseDTO> result =
+            generalReferralService.getReferralEvents(referralId);
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getEventType())
+            .isEqualTo(com.example.hms.enums.ReferralEventType.SUBMIT);
+        assertThat(result.get(0).getActorLabel()).isEqualTo("USER");
+        assertThat(result.get(0).getActorUsername()).isEqualTo("dr.amy@hms.test");
+        assertThat(result.get(0).getFromStatus()).isEqualTo(ReferralStatus.DRAFT);
+        assertThat(result.get(0).getToStatus()).isEqualTo(ReferralStatus.SUBMITTED);
+        assertThat(result.get(1).getEventType())
+            .isEqualTo(com.example.hms.enums.ReferralEventType.EXPIRE);
+        assertThat(result.get(1).getActorLabel()).isEqualTo("SYSTEM:scheduler");
+        assertThat(result.get(1).getActorUsername()).isNull();
+        assertThat(result.get(1).getNote()).isEqualTo("auto-expired");
+        assertThat(result.get(1).getRecordedAt()).isEqualTo(LocalDateTime.of(2026, 5, 1, 11, 0));
+    }
+
+    @Test
+    void getReferralEventsThrowsWhenReferralOutOfScope() {
+        // The events list must not leak — findReferral runs first, so a missing
+        // referral never even hits the events repository.
+        UUID referralId = UUID.randomUUID();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> generalReferralService.getReferralEvents(referralId));
+
+        // Critically: the events repo must NOT be hit when the parent is missing.
+        verify(eventRepository, never()).findByReferralIdOrderByRecordedAtAsc(any(UUID.class));
+    }
 }

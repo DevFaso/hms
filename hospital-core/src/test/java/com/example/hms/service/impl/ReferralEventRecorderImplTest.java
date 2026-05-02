@@ -107,6 +107,38 @@ class ReferralEventRecorderImplTest {
     }
 
     @Test
+    void unauthenticatedTokenLeavesUsernameNull() {
+        // Cover the `auth != null && !auth.isAuthenticated()` branch — most token
+        // implementations return true, so we use a TestingAuthenticationToken without
+        // marking it authenticated.
+        org.springframework.security.authentication.TestingAuthenticationToken token =
+            new org.springframework.security.authentication.TestingAuthenticationToken(
+                "dr.bob@hms.test", null);
+        token.setAuthenticated(false);
+        SecurityContextHolder.getContext().setAuthentication(token);
+        GeneralReferral r = referralIn(ReferralStatus.SUBMITTED);
+
+        recorder.recordUserEvent(r, ReferralEventType.SUBMIT, ReferralStatus.DRAFT, null);
+
+        ArgumentCaptor<ReferralEvent> captor = ArgumentCaptor.forClass(ReferralEvent.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getActorUsername()).isNull();
+    }
+
+    @Test
+    void systemEventWithNullSourceFallsBackToUnknown() {
+        // Cover the `source == null` short-circuit branch in the SYSTEM label builder —
+        // distinct from the existing isBlank case which exercises an empty string.
+        GeneralReferral r = referralIn(ReferralStatus.SCHEDULED);
+
+        recorder.recordSystemEvent(r, ReferralEventType.EXPIRE, ReferralStatus.SCHEDULED, null, "x");
+
+        ArgumentCaptor<ReferralEvent> captor = ArgumentCaptor.forClass(ReferralEvent.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getActorLabel()).isEqualTo("SYSTEM:unknown");
+    }
+
+    @Test
     void anonymousAuthenticationLeavesUsernameNull() {
         // Spring's AnonymousAuthenticationToken returns isAuthenticated()==true and a
         // principal of "anonymousUser". Recording that as the actor would pollute the
