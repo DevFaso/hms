@@ -103,18 +103,33 @@ $shadow-md:
   // Doctor view: compact hero so the page leads with action, not identity.
   // The greeting + name row collapses to ~half the previous height; the
   // calendar-date sub disappears (the live-clock pill already shows time);
-  // the progress ring shrinks. Other roles render the default hero unchanged.
+  // the progress ring shrinks. The hero-left's child blocks (greeting, meta,
+  // doctor-info chips, search) all flow inline on a wrapping row so the
+  // primary CTA on the right doesn't get isolated. Other roles render the
+  // default hero unchanged.
   &.hero-compact {
     align-items: center;
     padding: 14px 20px;
     border-radius: 12px;
+    gap: 14px;
+
+    // Don't let hero-left greedy-grow — keeps hero-actions visually adjacent
+    // instead of pushing them to a lonely right edge.
+    .hero-left {
+      flex: 0 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+    }
 
     .hero-greeting {
       margin-bottom: 0;
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
     }
 
     .greeting-tag {
@@ -130,8 +145,42 @@ $shadow-md:
       display: none;
     }
 
+    .hero-meta,
     .doctor-hero-info {
-      margin-top: 6px;
+      margin-top: 0;
+    }
+
+    // The default search uses translucent-white-on-white, which is invisible
+    // on the white compact hero. Switch to a slate background with a real
+    // border so it's discoverable.
+    .header-search-inline {
+      background: #f1f5f9;
+      border-color: $border;
+
+      &:focus-within {
+        background: #fff;
+        border-color: $primary;
+      }
+    }
+
+    .header-search-input::placeholder {
+      color: $text-muted;
+      opacity: 1;
+    }
+
+    .hero-actions {
+      padding-top: 0;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .hero-btn {
+      padding: 7px 12px;
+      font-size: 12px;
+
+      .material-symbols-outlined {
+        font-size: 16px;
+      }
     }
 
     // SVG scales via viewBox; wrap also needs to shrink to match.

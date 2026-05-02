@@ -47,7 +47,7 @@
               {{ specialization() }}
             </span>
           }
-          @if (departmentName()) {
+          @if (departmentName() && departmentName() !== specialization()) {
             <span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ departmentName() }}
@@ -126,7 +126,7 @@
         </a>
       }
       @if (permissions.hasPermission('Create Encounters')) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/encounters/new">
+        <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
           <span class="material-symbols-outlined">stethoscope</span>
           {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
         </a>
