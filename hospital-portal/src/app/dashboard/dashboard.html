@@ -4,6 +4,7 @@
        ═══════════════════════════════════════════════════════════════════════ -->
   <header
     class="hero-header"
+    [ngClass]="heroGradientClass()"
     [class.hero-compact]="isDoctor() || isReceptionist() || isPharmacist()"
   >
     <div class="hero-left">
