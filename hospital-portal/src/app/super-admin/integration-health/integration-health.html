@@ -1,0 +1,138 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INTEGRATION_HEALTH.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INTEGRATION_HEALTH.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'COMMON.BACK' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+      <span>{{ 'INTEGRATION_HEALTH.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{{ 'INTEGRATION_HEALTH.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="load()">
+        {{ 'INTEGRATION_HEALTH.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (integrations().length === 0) {
+    <div class="state-panel" data-test="empty">
+      <span class="material-symbols-outlined" aria-hidden="true">power_off</span>
+      <span>{{ 'INTEGRATION_HEALTH.EMPTY' | translate }}</span>
+    </div>
+  } @else {
+    <div class="chips" data-test="status-chips">
+      @for (chip of chips(); track chip.status) {
+        <div class="chip" [style.borderColor]="chip.color" [style.color]="chip.color">
+          <span class="chip-value">{{ countFor(chip.status) }}</span>
+          <span class="chip-label">{{ chip.labelKey | translate }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="integration-list" data-test="integration-list">
+      @for (row of integrations(); track row.integrationId) {
+        <section class="integration-card">
+          <button
+            type="button"
+            class="integration-header"
+            [attr.aria-expanded]="expandedIntegrationId() === row.integrationId"
+            (click)="toggle(row.integrationId)"
+          >
+            <div class="integration-meta">
+              <h2 class="integration-name">{{ row.displayName }}</h2>
+              <p class="integration-sub">
+                @if (row.serviceType) {
+                  <span class="badge">{{ row.serviceType }}</span>
+                }
+                @if (row.provider) {
+                  <span class="provider">{{ row.provider }}</span>
+                }
+                <span class="enabled" [class.off]="!row.enabled">
+                  {{ row.enabled
+                    ? ('INTEGRATION_HEALTH.ENABLED' | translate)
+                    : ('INTEGRATION_HEALTH.DISABLED' | translate) }}
+                </span>
+              </p>
+            </div>
+            <div class="integration-status">
+              <span
+                class="status-pill"
+                [style.backgroundColor]="statusColor(row.rolledUpStatus) + '22'"
+                [style.color]="statusColor(row.rolledUpStatus)"
+              >
+                {{ ('INTEGRATION_HEALTH.STATUS.' + row.rolledUpStatus) | translate }}
+              </span>
+              <span class="material-symbols-outlined chevron" aria-hidden="true">
+                {{ expandedIntegrationId() === row.integrationId ? 'expand_less' : 'expand_more' }}
+              </span>
+            </div>
+          </button>
+
+          @if (expandedIntegrationId() === row.integrationId) {
+            <div class="integration-body">
+              @if (row.capabilities && row.capabilities.length) {
+                <ul class="capability-list">
+                  @for (cap of row.capabilities; track cap) {
+                    <li>{{ cap }}</li>
+                  }
+                </ul>
+              }
+              @if (row.organizations.length === 0) {
+                <p class="empty-org">{{ 'INTEGRATION_HEALTH.NO_ORG_HISTORY' | translate }}</p>
+              } @else {
+                <table class="org-table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'INTEGRATION_HEALTH.ORG' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.STATUS_HEAD' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.LAST_SUCCESS' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.LAST_FAILURE' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.SUCCESSES_24H' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.FAILURES_24H' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (org of row.organizations; track org.organizationId ?? '') {
+                      <tr>
+                        <td>{{ org.organizationName ?? ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate) }}</td>
+                        <td>
+                          <span
+                            class="status-pill small"
+                            [style.backgroundColor]="statusColor(org.status) + '22'"
+                            [style.color]="statusColor(org.status)"
+                          >
+                            {{ ('INTEGRATION_HEALTH.STATUS.' + org.status) | translate }}
+                          </span>
+                        </td>
+                        <td>{{ org.lastSuccessAt ? (org.lastSuccessAt | date: 'short') : '—' }}</td>
+                        <td>
+                          {{ org.lastFailureAt ? (org.lastFailureAt | date: 'short') : '—' }}
+                          @if (org.lastErrorMessage) {
+                            <span class="err-tooltip" [title]="org.lastErrorMessage">
+                              <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                            </span>
+                          }
+                        </td>
+                        <td>{{ org.successCount24h }}</td>
+                        <td>{{ org.failureCount24h }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          }
+        </section>
+      }
+    </div>
+  }
+</div>

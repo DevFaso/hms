@@ -1026,6 +1026,17 @@ export const routes: Routes = [
         loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
       },
 
+      // Super-Admin Integration Health Console (MVP-3 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/integrations',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/integration-health/integration-health').then(
+            (m) => m.IntegrationHealthComponent,
+          ),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
