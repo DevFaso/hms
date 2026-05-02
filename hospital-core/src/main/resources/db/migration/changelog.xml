@@ -956,4 +956,22 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V72: P1 #12 follow-up — JPA optimistic-lock version on general_referrals
+         - public.general_referrals.version BIGINT NOT NULL DEFAULT 0
+         - Required by the EXPIRED auto-sweep: without @Version, a
+           concurrent transaction that flips status between the sweep's
+           SELECT and its UPDATE would be silently overwritten (lost
+           update). With @Version, the second writer's flush throws
+           ObjectOptimisticLockingFailureException and the sweep skips
+           the row.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V72-general-referrals-version" author="hms-team" runOnChange="false">
+        <sqlFile path="V72__general_referrals_version.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

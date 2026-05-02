@@ -98,6 +98,9 @@ class LiquibaseSchemaIT {
             assertColumnExists(stmt, publicSchema, referralEventsTable, "actor_label");
             assertColumnExists(stmt, publicSchema, referralEventsTable, "from_status");
             assertColumnExists(stmt, publicSchema, referralEventsTable, "to_status");
+
+            // V72: optimistic-lock @Version on general_referrals
+            assertColumnExists(stmt, publicSchema, "general_referrals", "version");
         }
     }
 

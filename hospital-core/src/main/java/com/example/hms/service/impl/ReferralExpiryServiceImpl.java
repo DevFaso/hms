@@ -1,10 +1,7 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.ReferralEventType;
-import com.example.hms.enums.ReferralStatus;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.repository.GeneralReferralRepository;
-import com.example.hms.service.ReferralEventRecorder;
 import com.example.hms.service.ReferralExpiryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,18 +25,23 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
     private static final String EVENT_SOURCE = "scheduler";
 
     private final GeneralReferralRepository referralRepository;
-    private final ReferralEventRecorder eventRecorder;
+    private final ReferralExpiryPersistence expiryPersistence;
     private final Clock clock;
 
+    /**
+     * Outer SELECT runs read-only; each referral is then expired inside a
+     * fresh transaction via {@link ReferralExpiryPersistence#tryExpire}, so
+     * an optimistic-lock failure on one row never rolls back the whole batch.
+     */
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public int expireOverdueReferrals(Duration gracePeriod) {
         final LocalDateTime cutoff = computeCutoff(gracePeriod);
         return expire(referralRepository.findExpirableReferrals(cutoff), cutoff, "global");
     }
 
     @Override
-    @Transactional
+    @Transactional(readOnly = true)
     public int expireOverdueReferralsForHospital(Duration gracePeriod, UUID hospitalId) {
         Objects.requireNonNull(hospitalId, "hospitalId is required for scoped expiry sweep");
         final LocalDateTime cutoff = computeCutoff(gracePeriod);
@@ -64,16 +66,10 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
         }
         int expired = 0;
         for (GeneralReferral referral : eligible) {
-            ReferralStatus before = referral.getStatus();
-            try {
-                referral.expire(EXPIRY_REASON);
+            // Each row commits independently via REQUIRES_NEW so an optimistic-lock
+            // failure on one row never rolls back the whole batch.
+            if (expiryPersistence.tryExpire(referral.getId(), EXPIRY_REASON, EVENT_SOURCE)) {
                 expired++;
-                eventRecorder.recordSystemEvent(
-                    referral, ReferralEventType.EXPIRE, before, EVENT_SOURCE, EXPIRY_REASON);
-            } catch (IllegalStateException ex) {
-                // Race: referral changed status between query and update. Skip and move on.
-                log.warn("Referral {} skipped — state changed mid-sweep: {}",
-                    referral.getId(), ex.getMessage());
             }
         }
         log.info("Referral expiry sweep ({}) — {} of {} candidate(s) expired (cutoff={})",

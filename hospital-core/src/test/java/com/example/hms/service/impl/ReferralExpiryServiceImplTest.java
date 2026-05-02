@@ -1,13 +1,11 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.ReferralEventType;
 import com.example.hms.enums.ReferralSpecialty;
 import com.example.hms.enums.ReferralStatus;
 import com.example.hms.enums.ReferralType;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.repository.GeneralReferralRepository;
-import com.example.hms.service.ReferralEventRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,6 +25,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -36,14 +35,12 @@ import static org.mockito.Mockito.when;
 /**
  * Unit tests for {@link ReferralExpiryServiceImpl}.
  *
- * <p>The repository query already filters by status so the service mainly has
- * to translate the grace period into a cutoff and apply the entity guard. The
- * race-condition skip path is covered explicitly because it is the silent
- * branch — without a test, it would never be exercised in CI.
- *
- * <p>Time is supplied via a fixed {@link Clock} so the cutoff assertions are
- * deterministic — earlier versions used {@code LocalDateTime.now()} with
- * {@code ±1s} bounds, which was prone to flake under slow CI hosts.
+ * <p>The service is now an orchestrator: it picks the right repository
+ * query (global vs hospital-scoped), computes the cutoff from a fixed
+ * {@link Clock}, and delegates the actual UPDATE + audit row to
+ * {@link ReferralExpiryPersistence#tryExpire}. Per-row optimistic-lock
+ * skip semantics live in the persistence helper and are covered by
+ * {@code ReferralExpiryPersistenceTest}.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReferralExpiryServiceImpl")
@@ -53,17 +50,16 @@ class ReferralExpiryServiceImplTest {
         LocalDateTime.of(2026, 5, 1, 12, 0, 0).toInstant(ZoneOffset.UTC);
     private static final LocalDateTime NOW_AS_LOCAL =
         LocalDateTime.ofInstant(FIXED_NOW, ZoneOffset.UTC);
-    private static final String SYSTEM_SOURCE = "scheduler";
 
     @Mock private GeneralReferralRepository referralRepository;
-    @Mock private ReferralEventRecorder eventRecorder;
+    @Mock private ReferralExpiryPersistence expiryPersistence;
 
     private ReferralExpiryServiceImpl service;
 
     @BeforeEach
     void setUp() {
         Clock fixed = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
-        service = new ReferralExpiryServiceImpl(referralRepository, eventRecorder, fixed);
+        service = new ReferralExpiryServiceImpl(referralRepository, expiryPersistence, fixed);
     }
 
     private static GeneralReferral newReferralIn(ReferralStatus status) {
@@ -84,64 +80,39 @@ class ReferralExpiryServiceImplTest {
         int result = service.expireOverdueReferrals(Duration.ZERO);
 
         assertThat(result).isZero();
+        verify(expiryPersistence, never()).tryExpire(any(), anyString(), anyString());
     }
 
     @Test
-    void allEligibleReferralsAreExpired() {
+    void everyEligibleReferralIsDelegatedToPersistence() {
         GeneralReferral a = newReferralIn(ReferralStatus.SUBMITTED);
         GeneralReferral b = newReferralIn(ReferralStatus.ACKNOWLEDGED);
         GeneralReferral c = newReferralIn(ReferralStatus.SCHEDULED);
         when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of(a, b, c));
+        when(expiryPersistence.tryExpire(any(), anyString(), anyString())).thenReturn(true);
 
         int result = service.expireOverdueReferrals(Duration.ofHours(1));
 
         assertThat(result).isEqualTo(3);
-        assertThat(a.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
-        assertThat(b.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
-        assertThat(c.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
-        // Reason is the same audit-friendly sentinel for every sweep entry
-        assertThat(a.getCancellationReason()).isNotBlank();
-        assertThat(a.getCancellationReason()).isEqualTo(b.getCancellationReason());
-        // One SYSTEM-actor audit row per expired referral, source=scheduler
-        verify(eventRecorder, times(3)).recordSystemEvent(
-            any(GeneralReferral.class),
-            eq(ReferralEventType.EXPIRE),
-            any(ReferralStatus.class),
-            eq(SYSTEM_SOURCE),
-            any());
+        verify(expiryPersistence, times(3)).tryExpire(any(UUID.class), anyString(), eq("scheduler"));
     }
 
     @Test
-    void raceConditionSkippedAndCountsOnlySuccessful() {
-        // A referral that has already moved past SCHEDULED between the SELECT and the loop
-        // (status flipped by an admin in another transaction) must NOT crash the sweep.
-        GeneralReferral racy = newReferralIn(ReferralStatus.IN_PROGRESS);
+    void countReflectsOnlyPersistenceSuccesses() {
+        // The persistence helper returns false for both entity-guard and optimistic-lock
+        // skip paths. The service must report only the count of successful commits.
+        GeneralReferral skipped = newReferralIn(ReferralStatus.IN_PROGRESS);
         GeneralReferral healthy = newReferralIn(ReferralStatus.SUBMITTED);
-        when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of(racy, healthy));
+        when(referralRepository.findExpirableReferrals(any()))
+            .thenReturn(List.of(skipped, healthy));
+        when(expiryPersistence.tryExpire(eq(skipped.getId()), anyString(), anyString()))
+            .thenReturn(false);
+        when(expiryPersistence.tryExpire(eq(healthy.getId()), anyString(), anyString()))
+            .thenReturn(true);
 
         int result = service.expireOverdueReferrals(Duration.ZERO);
 
         assertThat(result).isEqualTo(1);
-        assertThat(racy.getStatus()).isEqualTo(ReferralStatus.IN_PROGRESS);
-        assertThat(healthy.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
-        // Audit row only for the successful expiry — racy referral's failed transition
-        // must NOT leak into the audit trail.
-        verify(eventRecorder, times(1)).recordSystemEvent(
-            any(GeneralReferral.class),
-            eq(ReferralEventType.EXPIRE),
-            any(ReferralStatus.class),
-            eq(SYSTEM_SOURCE),
-            any());
-    }
-
-    @Test
-    void noEventEmittedWhenNothingExpires() {
-        when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of());
-
-        service.expireOverdueReferrals(Duration.ZERO);
-
-        verify(eventRecorder, never()).recordSystemEvent(
-            any(), any(), any(), any(), any());
     }
 
     @Test
@@ -187,21 +158,15 @@ class ReferralExpiryServiceImplTest {
         GeneralReferral r = newReferralIn(ReferralStatus.SUBMITTED);
         when(referralRepository.findExpirableReferralsByHospital(eq(hospitalId), any()))
             .thenReturn(List.of(r));
+        when(expiryPersistence.tryExpire(any(), anyString(), anyString())).thenReturn(true);
 
         int result = service.expireOverdueReferralsForHospital(Duration.ofHours(2), hospitalId);
 
         assertThat(result).isEqualTo(1);
-        assertThat(r.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
         // Critically: the unscoped query must NOT have been called.
         verify(referralRepository, never()).findExpirableReferrals(any());
         verify(referralRepository).findExpirableReferralsByHospital(eq(hospitalId),
             eq(NOW_AS_LOCAL.minusHours(2)));
-        verify(eventRecorder).recordSystemEvent(
-            any(GeneralReferral.class),
-            eq(ReferralEventType.EXPIRE),
-            any(ReferralStatus.class),
-            eq(SYSTEM_SOURCE),
-            any());
     }
 
     @Test

@@ -18,6 +18,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -274,6 +275,18 @@ public class GeneralReferral {
     @UpdateTimestamp
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * JPA optimistic-lock version. Required for the SLA expiry sweep: without it,
+     * a concurrent transaction that flips status (e.g. SUBMITTED → IN_PROGRESS)
+     * between the sweep's SELECT and its UPDATE would be silently overwritten,
+     * because the in-memory entity would still report the stale status. With
+     * @Version, the second writer's flush throws ObjectOptimisticLockingFailureException
+     * and the sweep skips the row.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     // Business methods (state-machine guarded — illegal transitions throw IllegalStateException)
     //
