@@ -4,7 +4,34 @@ import { Observable } from 'rxjs';
 
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 
-export type OrderSetItem = Record<string, unknown>;
+export type OrderItemType = 'MEDICATION' | 'LAB' | 'IMAGING' | 'DIET' | 'PROCEDURE' | 'OTHER';
+
+/**
+ * Structured shape for a single item in an order-set template. Persisted as
+ * JSONB on the backend (no schema migration required); legacy items written
+ * with extra unknown keys round-trip via the index signature.
+ *
+ * <p>Synonyms enable type-ahead matching against locally-known names
+ * (e.g. "Tylenol" → paracetamol). Dose-range fields drive the structured
+ * editor that replaced the v0 raw-JSON textarea (gap #19).
+ */
+export interface OrderSetItem {
+  orderType?: string;
+  medicationName?: string;
+  orderName?: string;
+  testName?: string;
+  studyType?: string;
+  dietType?: string;
+  dose?: string;
+  route?: string;
+  frequency?: string;
+  synonyms?: string[];
+  doseRangeMin?: number;
+  doseRangeMax?: number;
+  doseUnit?: string;
+  notes?: string;
+  [key: string]: unknown;
+}
 
 export interface OrderSetSummary {
   id: string;

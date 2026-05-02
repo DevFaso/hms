@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import {
+  OrderItemType,
   OrderSetItem,
   OrderSetRequest,
   OrderSetService,
@@ -28,10 +29,27 @@ const ADMISSION_TYPES = [
   'PSYCHIATRIC',
 ];
 
+const ORDER_ITEM_TYPES: OrderItemType[] = [
+  'MEDICATION',
+  'LAB',
+  'IMAGING',
+  'DIET',
+  'PROCEDURE',
+  'OTHER',
+];
+
+const DOSE_UNITS = ['mg', 'g', 'mcg', 'mL', 'IU', 'tablet', 'puff', 'drop', 'unit'];
+const FREQUENCY_PRESETS = ['QD', 'BID', 'TID', 'QID', 'Q4H', 'Q6H', 'Q8H', 'PRN'];
+const ROUTES = ['PO', 'IV', 'IM', 'SC', 'PR', 'INH', 'TOPICAL', 'NASAL'];
+
+interface EditableItem extends OrderSetItem {
+  _synonymsText: string;
+}
+
 /**
- * Admin form for authoring or editing a CPOE order-set template. The
- * orderItems JSONB is edited as raw JSON in v0; a structured per-item
- * editor is the next pairing with gap #19 (order catalog).
+ * Admin form for authoring or editing a CPOE order-set template. Each item is
+ * edited in a structured per-row form (gap #19): synonyms (chip-style list)
+ * and dose ranges (min/max/unit/frequency) replace the v0 raw-JSON textarea.
  *
  * <p>Save behaviour: in {@code edit} mode the backend creates a new
  * version row and freezes the parent (see V65). The version-history
@@ -42,134 +60,21 @@ const ADMISSION_TYPES = [
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section class="order-set-edit" data-testid="order-set-edit">
-      <header class="order-set-edit__header">
-        <a class="back-link" routerLink="/admin/order-sets">←</a>
-        <h1>
-          {{
-            mode() === 'edit'
-              ? ('ORDER_SETS.EDIT_TITLE' | translate)
-              : ('ORDER_SETS.NEW' | translate)
-          }}
-        </h1>
-      </header>
-
-      <p *ngIf="loadError()" class="order-set-edit__error" data-testid="order-set-edit-error">
-        {{ 'ORDER_SETS.ERROR' | translate }}
-      </p>
-
-      <form
-        class="order-set-edit__form"
-        (ngSubmit)="save()"
-        *ngIf="!loadError()"
-        data-testid="order-set-edit-form"
-      >
-        <label>
-          {{ 'ORDER_SETS.FIELD_NAME' | translate }}
-          <input type="text" [(ngModel)]="form.name" name="name" required />
-        </label>
-
-        <label>
-          {{ 'ORDER_SETS.FIELD_DESCRIPTION' | translate }}
-          <textarea [(ngModel)]="form.description" name="description" rows="2"></textarea>
-        </label>
-
-        <label>
-          {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }}
-          <select [(ngModel)]="form.admissionType" name="admissionType" required>
-            <option *ngFor="let t of admissionTypes" [value]="t">{{ t }}</option>
-          </select>
-        </label>
-
-        <label>
-          {{ 'ORDER_SETS.FIELD_CLINICAL_GUIDELINES' | translate }}
-          <input type="text" [(ngModel)]="form.clinicalGuidelines" name="clinicalGuidelines" />
-        </label>
-
-        <label>
-          {{ 'ORDER_SETS.FIELD_ORDER_ITEMS_JSON' | translate }}
-          <textarea
-            [(ngModel)]="orderItemsJson"
-            name="orderItemsJson"
-            rows="14"
-            data-testid="order-set-edit-items-json"
-          ></textarea>
-        </label>
-
-        <p
-          *ngIf="jsonError()"
-          class="order-set-edit__error"
-          data-testid="order-set-edit-json-error"
-        >
-          {{ jsonError() }}
-        </p>
-
-        <button
-          type="submit"
-          class="btn-primary"
-          [disabled]="saving()"
-          data-testid="order-set-edit-save"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
-      </form>
-
-      <aside *ngIf="versionHistory().length > 0" class="order-set-edit__history">
-        <h2>{{ 'ORDER_SETS.VERSION_HISTORY' | translate }}</h2>
-        <ol>
-          <li *ngFor="let v of versionHistory()">
-            v{{ v.version }} — {{ v.updatedAt | date: 'short' }}
-            <span *ngIf="!v.active" class="badge">retired</span>
-          </li>
-        </ol>
-      </aside>
-    </section>
-  `,
-  styles: [
-    `
-      .order-set-edit {
-        padding: 1.5rem;
-        display: grid;
-        grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-        gap: 2rem;
-      }
-      .order-set-edit__header {
-        grid-column: 1 / -1;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-      .order-set-edit__form {
-        display: flex;
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-      .order-set-edit__form label {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        font-weight: 500;
-      }
-      .order-set-edit__form input,
-      .order-set-edit__form textarea,
-      .order-set-edit__form select {
-        font-weight: normal;
-        padding: 0.45rem;
-      }
-      .order-set-edit__error {
-        color: var(--danger, #b00020);
-      }
-    `,
-  ],
+  templateUrl: './order-set-edit.component.html',
+  styleUrls: ['./order-set-edit.component.scss'],
 })
 export class OrderSetEditComponent implements OnInit {
   protected readonly admissionTypes = ADMISSION_TYPES;
+  protected readonly orderItemTypes = ORDER_ITEM_TYPES;
+  protected readonly doseUnits = DOSE_UNITS;
+  protected readonly frequencyPresets = FREQUENCY_PRESETS;
+  protected readonly routes = ROUTES;
+
   protected readonly mode = signal<Mode>('new');
   protected readonly saving = signal(false);
-  protected readonly jsonError = signal<string | null>(null);
   protected readonly loadError = signal(false);
   protected readonly versionHistory = signal<OrderSetSummary[]>([]);
+  protected readonly items = signal<EditableItem[]>([]);
 
   protected form: {
     name: string;
@@ -182,7 +87,6 @@ export class OrderSetEditComponent implements OnInit {
     admissionType: 'ELECTIVE',
     clinicalGuidelines: '',
   };
-  protected orderItemsJson = '[]';
   private editingId: string | null = null;
 
   private readonly route = inject(ActivatedRoute);
@@ -196,6 +100,7 @@ export class OrderSetEditComponent implements OnInit {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id || id === 'new') {
       this.mode.set('new');
+      this.items.set([this.blankItem()]);
       return;
     }
     this.mode.set('edit');
@@ -206,7 +111,7 @@ export class OrderSetEditComponent implements OnInit {
         this.form.description = os.description ?? '';
         this.form.admissionType = os.admissionType;
         this.form.clinicalGuidelines = os.clinicalGuidelines ?? '';
-        this.orderItemsJson = JSON.stringify(os.orderItems ?? [], null, 2);
+        this.items.set(this.toEditable(os.orderItems ?? []));
       },
       error: () => this.loadError.set(true),
     });
@@ -216,16 +121,29 @@ export class OrderSetEditComponent implements OnInit {
     });
   }
 
+  protected addItem(): void {
+    this.items.update((rows) => [...rows, this.blankItem()]);
+  }
+
+  protected removeItem(index: number): void {
+    this.items.update((rows) => rows.filter((_, i) => i !== index));
+  }
+
+  protected trackByIndex(index: number): number {
+    return index;
+  }
+
   protected save(): void {
-    let parsed: OrderSetItem[];
-    try {
-      parsed = JSON.parse(this.orderItemsJson) as OrderSetItem[];
-      if (!Array.isArray(parsed)) throw new Error('orderItems must be a JSON array');
-    } catch (err) {
-      this.jsonError.set(err instanceof Error ? err.message : 'Invalid JSON');
+    const itemsOut = this.items().map((it) => this.toPersisted(it));
+    if (itemsOut.length === 0) {
+      this.toast.error('Add at least one order item');
       return;
     }
-    this.jsonError.set(null);
+    const missing = itemsOut.findIndex((it) => !this.itemDisplayName(it));
+    if (missing !== -1) {
+      this.toast.error(`Item #${missing + 1} is missing a name`);
+      return;
+    }
 
     const hospitalId = this.roleContext.activeHospitalId ?? '';
     const staffId = this.auth.getUserProfile()?.staffId ?? '';
@@ -239,7 +157,7 @@ export class OrderSetEditComponent implements OnInit {
       description: this.form.description,
       admissionType: this.form.admissionType,
       hospitalId,
-      orderItems: parsed,
+      orderItems: itemsOut,
       clinicalGuidelines: this.form.clinicalGuidelines,
       createdByStaffId: staffId,
     };
@@ -260,5 +178,62 @@ export class OrderSetEditComponent implements OnInit {
         this.toast.error('Could not save order set');
       },
     });
+  }
+
+  protected isMedicationLike(type: string | undefined): boolean {
+    return type === 'MEDICATION' || type === 'PROCEDURE' || !type;
+  }
+
+  protected itemDisplayName(it: OrderSetItem): string {
+    return (
+      (it.medicationName as string) ||
+      (it.orderName as string) ||
+      (it.testName as string) ||
+      (it.studyType as string) ||
+      (it.dietType as string) ||
+      ''
+    );
+  }
+
+  private blankItem(): EditableItem {
+    return {
+      orderType: 'MEDICATION',
+      medicationName: '',
+      dose: '',
+      route: '',
+      frequency: '',
+      synonyms: [],
+      _synonymsText: '',
+    };
+  }
+
+  private toEditable(items: OrderSetItem[]): EditableItem[] {
+    if (items.length === 0) return [this.blankItem()];
+    return items.map((it) => ({
+      ...it,
+      synonyms: Array.isArray(it.synonyms) ? it.synonyms : [],
+      _synonymsText: Array.isArray(it.synonyms) ? it.synonyms.join(', ') : '',
+    }));
+  }
+
+  private toPersisted(it: EditableItem): OrderSetItem {
+    const { _synonymsText, ...rest } = it;
+    const synonyms = (_synonymsText || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    const out: OrderSetItem = { ...rest };
+    if (synonyms.length > 0) {
+      out.synonyms = synonyms;
+    } else {
+      delete out.synonyms;
+    }
+    if (out.doseRangeMin === undefined || (out.doseRangeMin as unknown) === null) {
+      delete out.doseRangeMin;
+    }
+    if (out.doseRangeMax === undefined || (out.doseRangeMax as unknown) === null) {
+      delete out.doseRangeMax;
+    }
+    return out;
   }
 }
