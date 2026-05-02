@@ -878,20 +878,29 @@
               </div>
               <a routerLink="/audit-logs" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
-            <div class="schedule-list">
+            <div class="audit-list">
               @for (evt of hospitalAdminAuditEvents(); track evt.id) {
-                <div class="sched-row">
-                  <div class="sched-time">
-                    <span class="time-val">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
+                <div class="audit-row">
+                  <span class="audit-time">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
+                  <div class="audit-body">
+                    <span class="audit-actor">{{ evt.userName ?? 'System' }}</span>
+                    <span class="audit-summary"
+                      >{{ evt.eventType | titlecase }}
+                      @if (evt.entityType || evt.resourceName) {
+                        — {{ evt.entityType ?? '' }} {{ evt.resourceName ?? '' }}
+                      }
+                    </span>
                   </div>
-                  <div class="sched-info">
-                    <span class="sched-name">{{ evt.userName ?? 'System' }}</span>
-                    <span class="sched-reason"
-                      >{{ evt.eventType | titlecase }} — {{ evt.entityType ?? '' }}
-                      {{ evt.resourceName ?? '' }}</span
-                    >
-                  </div>
-                  <span class="appt-status">{{ evt.status | titlecase }}</span>
+                  <span
+                    class="audit-status"
+                    [class.audit-status-success]="evt.status === 'SUCCESS'"
+                    [class.audit-status-failure]="evt.status === 'FAILURE'"
+                    [class.audit-status-warning]="
+                      evt.status !== 'SUCCESS' && evt.status !== 'FAILURE'
+                    "
+                  >
+                    {{ evt.status | titlecase }}
+                  </span>
                 </div>
               }
             </div>
@@ -906,35 +915,17 @@
                 <h2 class="card-title">{{ 'DASHBOARD.ACTIVITY_TREND_7D' | translate }}</h2>
               </div>
             </div>
-            <div
-              style="display: flex; align-items: flex-end; gap: 6px; padding: 16px; height: 100px"
-            >
+            <div class="trend-chart">
               @for (day of auditTrend(); track day.date) {
-                <div
-                  style="
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    flex: 1;
-                    gap: 4px;
-                  "
-                >
-                  <span style="font-size: 11px; color: #64748b; font-weight: 600">{{
-                    day.count
-                  }}</span>
+                <div class="trend-col" [class.trend-col-empty]="day.count === 0">
+                  <span class="trend-count">{{ day.count }}</span>
                   <div
+                    class="trend-bar"
                     [style.height.px]="
-                      auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 60 + 4 : 4
-                    "
-                    style="
-                      width: 100%;
-                      max-width: 32px;
-                      background: #3b82f6;
-                      border-radius: 4px 4px 0 0;
-                      min-height: 4px;
+                      auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 70 + 4 : 4
                     "
                   ></div>
-                  <span style="font-size: 10px; color: #94a3b8">{{ day.date | date: 'EEE' }}</span>
+                  <span class="trend-day">{{ day.date | date: 'EEE' }}</span>
                 </div>
               }
             </div>
@@ -1091,23 +1082,23 @@
               </div>
               <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
             </div>
-            <div class="stat-strip" style="padding: 0 16px 16px">
-              <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
-                <div class="stat-icon-wrap">
-                  <span class="material-symbols-outlined stat-icon">event_busy</span>
+            <div class="metric-pair">
+              <div class="metric-block" style="--metric-color: #1d4ed8; --metric-bg: #dbeafe">
+                <div class="metric-icon">
+                  <span class="material-symbols-outlined">event_busy</span>
                 </div>
-                <div class="stat-body">
-                  <span class="stat-value">{{ leaveMetrics()!.onLeaveToday }}</span>
-                  <span class="stat-label">{{ 'DASHBOARD.ON_LEAVE_TODAY' | translate }}</span>
+                <div class="metric-body">
+                  <span class="metric-value">{{ leaveMetrics()!.onLeaveToday }}</span>
+                  <span class="metric-label">{{ 'DASHBOARD.ON_LEAVE_TODAY' | translate }}</span>
                 </div>
               </div>
-              <div class="stat-card" style="--stat-color: #2563eb; --stat-bg: #eff6ff; flex: 1">
-                <div class="stat-icon-wrap">
-                  <span class="material-symbols-outlined stat-icon">date_range</span>
+              <div class="metric-block" style="--metric-color: #0369a1; --metric-bg: #e0f2fe">
+                <div class="metric-icon">
+                  <span class="material-symbols-outlined">date_range</span>
                 </div>
-                <div class="stat-body">
-                  <span class="stat-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
-                  <span class="stat-label">{{ 'DASHBOARD.UPCOMING_7_DAYS' | translate }}</span>
+                <div class="metric-body">
+                  <span class="metric-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
+                  <span class="metric-label">{{ 'DASHBOARD.UPCOMING_7_DAYS' | translate }}</span>
                 </div>
               </div>
             </div>
@@ -1191,25 +1182,25 @@
                 'DASHBOARD.VIEW_BILLING' | translate
               }}</a>
             </div>
-            <div class="stat-strip" style="padding: 0 16px 16px">
-              <div class="stat-card" style="--stat-color: #dc2626; --stat-bg: #fee2e2; flex: 1">
-                <div class="stat-icon-wrap">
-                  <span class="material-symbols-outlined stat-icon">block</span>
+            <div class="metric-pair">
+              <div class="metric-block" style="--metric-color: #b91c1c; --metric-bg: #fee2e2">
+                <div class="metric-icon">
+                  <span class="material-symbols-outlined">block</span>
                 </div>
-                <div class="stat-body">
-                  <span class="stat-value">{{ writeOffs()!.cancelledCount }}</span>
-                  <span class="stat-label">{{ 'DASHBOARD.CANCELLED_INVOICES' | translate }}</span>
+                <div class="metric-body">
+                  <span class="metric-value">{{ writeOffs()!.cancelledCount }}</span>
+                  <span class="metric-label">{{ 'DASHBOARD.CANCELLED_INVOICES' | translate }}</span>
                 </div>
               </div>
-              <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
-                <div class="stat-icon-wrap">
-                  <span class="material-symbols-outlined stat-icon">money_off</span>
+              <div class="metric-block" style="--metric-color: #92400e; --metric-bg: #fef3c7">
+                <div class="metric-icon">
+                  <span class="material-symbols-outlined">money_off</span>
                 </div>
-                <div class="stat-body">
-                  <span class="stat-value"
+                <div class="metric-body">
+                  <span class="metric-value"
                     >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
                   >
-                  <span class="stat-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
+                  <span class="metric-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
                 </div>
               </div>
             </div>
@@ -1225,106 +1216,36 @@
                 <h2 class="card-title">{{ 'DASHBOARD.BED_OCCUPANCY' | translate }}</h2>
               </div>
             </div>
-            <div style="padding: 0 16px 16px">
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
-                <div
-                  style="
-                    flex: 1;
-                    min-width: 80px;
-                    padding: 10px;
-                    border-radius: 8px;
-                    text-align: center;
-                    background: #eff6ff;
-                    border-left: 3px solid #2563eb;
-                  "
-                >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                    {{ 'DASHBOARD.TOTAL' | translate }}
-                  </div>
-                  <div style="font-size: 18px; font-weight: 700; color: #2563eb">
-                    {{ bedOccupancy()!.totalBeds }}
-                  </div>
-                </div>
-                <div
-                  style="
-                    flex: 1;
-                    min-width: 80px;
-                    padding: 10px;
-                    border-radius: 8px;
-                    text-align: center;
-                    background: #fef2f2;
-                    border-left: 3px solid #dc2626;
-                  "
-                >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                    {{ 'DASHBOARD.OCCUPIED' | translate }}
-                  </div>
-                  <div style="font-size: 18px; font-weight: 700; color: #dc2626">
-                    {{ bedOccupancy()!.occupiedBeds }}
-                  </div>
-                </div>
-                <div
-                  style="
-                    flex: 1;
-                    min-width: 80px;
-                    padding: 10px;
-                    border-radius: 8px;
-                    text-align: center;
-                    background: #f0fdf4;
-                    border-left: 3px solid #059669;
-                  "
-                >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                    {{ 'DASHBOARD.AVAILABLE' | translate }}
-                  </div>
-                  <div style="font-size: 18px; font-weight: 700; color: #059669">
-                    {{ bedOccupancy()!.availableBeds }}
-                  </div>
-                </div>
-                <div
-                  style="
-                    flex: 1;
-                    min-width: 80px;
-                    padding: 10px;
-                    border-radius: 8px;
-                    text-align: center;
-                    background: #fefce8;
-                    border-left: 3px solid #d97706;
-                  "
-                >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                    {{ 'DASHBOARD.RESERVED' | translate }}
-                  </div>
-                  <div style="font-size: 18px; font-weight: 700; color: #d97706">
-                    {{ bedOccupancy()!.reservedBeds }}
-                  </div>
-                </div>
+            <div class="metric-quad">
+              <div class="metric-tile" style="--metric-color: #1d4ed8; --metric-bg: #eff6ff">
+                <div class="metric-tile-label">{{ 'DASHBOARD.TOTAL' | translate }}</div>
+                <div class="metric-tile-value">{{ bedOccupancy()!.totalBeds }}</div>
               </div>
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  padding: 8px 12px;
-                  background: #f8fafc;
-                  border-radius: 8px;
-                "
-              >
-                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
-                  'DASHBOARD.OCCUPANCY_RATE' | translate
-                }}</span>
-                <span
-                  style="font-size: 16px; font-weight: 700"
-                  [style.color]="
-                    bedOccupancy()!.occupancyRate > 90
-                      ? '#dc2626'
-                      : bedOccupancy()!.occupancyRate > 75
-                        ? '#d97706'
-                        : '#059669'
-                  "
-                  >{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span
-                >
+              <div class="metric-tile" style="--metric-color: #b91c1c; --metric-bg: #fef2f2">
+                <div class="metric-tile-label">{{ 'DASHBOARD.OCCUPIED' | translate }}</div>
+                <div class="metric-tile-value">{{ bedOccupancy()!.occupiedBeds }}</div>
               </div>
+              <div class="metric-tile" style="--metric-color: #047857; --metric-bg: #f0fdf4">
+                <div class="metric-tile-label">{{ 'DASHBOARD.AVAILABLE' | translate }}</div>
+                <div class="metric-tile-value">{{ bedOccupancy()!.availableBeds }}</div>
+              </div>
+              <div class="metric-tile" style="--metric-color: #92400e; --metric-bg: #fefce8">
+                <div class="metric-tile-label">{{ 'DASHBOARD.RESERVED' | translate }}</div>
+                <div class="metric-tile-value">{{ bedOccupancy()!.reservedBeds }}</div>
+              </div>
+            </div>
+            <div
+              class="kv-row"
+              [style.--kv-color]="
+                bedOccupancy()!.occupancyRate > 90
+                  ? '#b91c1c'
+                  : bedOccupancy()!.occupancyRate > 75
+                    ? '#92400e'
+                    : '#047857'
+              "
+            >
+              <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
+              <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
             </div>
           </section>
         }
