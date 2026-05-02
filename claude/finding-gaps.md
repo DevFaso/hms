@@ -147,4 +147,25 @@ Same numbering as the gap list above. Priority is top-down; each ships as one PR
 11. **DHIS2 ADX export** (gap #14) — immunization, ANC, malaria reporting tied to FHIR `Immunization`.
 12. **Referral lifecycle** (gap #13) — accept/decline/complete states on `GeneralReferral`.
 
-P2 items (#9 OpTime, #11 prior-auth, #18 BPA pop-ups UX, #19 order catalog UX, #20 push tracker, #23 DICOM/PACS, #24 e-prescribing) remain on the backlog and are expected to be picked up after P1 #1–#5 land.
+P2 items (#9 OpTime, #18 BPA pop-ups UX, #19 order catalog UX, #20 push tracker, #23 DICOM/PACS, #24 e-prescribing) remain on the backlog and are expected to be picked up after P1 #1–#5 land.
+
+## P1 #12 follow-up — items 4 / 5 / 6 (shipped)
+
+Three closely-coupled items from the P1 #12 follow-up tail — real-time
+eligibility, per-section encounter notes, and the SmartPhrase library —
+ship together because the note form (item 5) and the SmartPhrase macro
+library (item 6) are the same UX feature, and the eligibility dialog
+(item 4) hangs off the same encounter detail panel.
+
+| # | Item | Code | Docs |
+|---|---|---|---|
+| 4 | Real-time eligibility / prior-auth API (NHIS / NHIA / CNAMGS / mutuelle / generic) | `hospital-core/src/main/java/com/example/hms/{enums/Eligibility*,model/insurance,repository/EligibilityCheckRepository,service/{Eligibility*,integration/eligibility},controller/EligibilityController}.java`, `db/migration/V73__eligibility_checks.sql`, `hospital-portal/src/app/services/eligibility.service.ts`, `hospital-portal/src/app/encounters/eligibility-check-dialog/` | [`docs/p1-12-followup-eligibility-notes-smartphrase.md`](../docs/p1-12-followup-eligibility-notes-smartphrase.md) |
+| 5 | Per-section EncounterNote form (chief complaint, HPI, ROS, exam, diagnostic results, S/O/A/P [+ I/E for SOAPIE], patient instructions, attestations, signature) | Backend SOAP/SOAPIE columns already on `EncounterNote`; FE: `hospital-portal/src/app/encounters/encounter-note-form/` | same as above |
+| 6 | SmartPhrase / dot-phrase macro library — GLOBAL/HOSPITAL/USER scope precedence + autocomplete | `hospital-core/.../{enums/SmartPhraseScope,model/SmartPhrase,repository/SmartPhraseRepository,service/SmartPhrase*,controller/SmartPhraseController}.java`, `db/migration/V74__smart_phrases.sql`, `hospital-portal/src/app/services/smart-phrase.service.ts` (autocomplete embedded in encounter-note-form) | same as above |
+
+Real partner connectors for item 4 (NHIS, CNAMGS, mutuelle network APIs)
+remain deferred — the shipped backend resolves an `EligibilityProvider` SPI
+bean per scheme and falls back to a deterministic stub. Real connectors
+register a more specific bean and the wire format does not change.
+
+Remaining P2: gap #9 OpTime / surgical scheduling, gap #18 BPA pop-up UX, gap #19 order catalog UX, gap #20 WebSocket push tracker, gap #23 DICOM/PACS, and gap #24 SMS e-prescribing routing.
