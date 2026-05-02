@@ -2329,6 +2329,31 @@
         "QUALITY_MANAGER": "Gestor(a) de Calidad",
         "RECEPTIONIST": "Recepcionista"
       }
+    },
+    "APPOINTMENTS": {
+      "BOOKING": {
+        "TITLE": "Programar cita",
+        "FORM_TITLE": "Programar una nueva cita",
+        "SUCCESS": "¡Cita programada con éxito!",
+        "HOSPITAL": "Hospital",
+        "SELECT_HOSPITAL": "Seleccionar un hospital",
+        "SELECT_DEPARTMENT": "Seleccionar un departamento",
+        "PROVIDER_OPTIONAL": "Proveedor (opcional)",
+        "ANY_PROVIDER": "Cualquier proveedor disponible",
+        "REASON": "Motivo de la visita",
+        "REASON_PLACEHOLDER": "p. ej., Chequeo anual",
+        "NOTES": "Notas adicionales",
+        "NOTES_PLACEHOLDER": "Cualquier información adicional para el proveedor",
+        "SCHEDULING": "Programando…",
+        "MISSING_FIELDS": "Por favor complete todos los campos obligatorios.",
+        "FAILED": "Error al programar la cita. Por favor inténtelo de nuevo.",
+        "CLOSE_LABEL": "Cerrar",
+        "PRECHECKIN_BTN": "Pre-registro en línea",
+        "PRECHECKIN_DONE": "Pre-registro completado"
+      }
+    },
+    "BILLING": {
+      "PAYMENT_SUCCESS_AMOUNT": "¡Pago de {{amount}} registrado con éxito!"
     }
   },
   "PLATFORM": {
