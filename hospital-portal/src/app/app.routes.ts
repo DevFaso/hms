@@ -1011,6 +1011,14 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // Super-Admin Control Tower (SUPER_ADMIN only)
+      {
+        path: 'super-admin',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',

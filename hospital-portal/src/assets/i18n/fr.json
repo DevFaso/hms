@@ -4,6 +4,53 @@
     "SUBTITLE": "Panneau d'administration",
     "TITLE": "Administration"
   },
+  "SUPER_ADMIN": {
+    "TITLE": "Tour de contrôle Super-Admin",
+    "SUBTITLE": "Vue d'ensemble multi-tenant et état de la plateforme",
+    "AS_OF": "Au",
+    "LOADING": "Chargement de l'état de la plateforme…",
+    "LOAD_ERROR": "Impossible de charger la tour de contrôle. Réessayez.",
+    "RETRY": "Réessayer",
+    "PLATFORM_HEALTH": "État de la plateforme",
+    "QUICK_LINKS": "Liens rapides",
+    "RECENT_AUDIT": "Événements d'audit récents",
+    "VIEW_ALL_AUDIT": "Voir tous les journaux d'audit",
+    "STAT": {
+      "ORGANIZATIONS": "Organisations",
+      "HOSPITALS": "Hôpitaux",
+      "USERS": "Utilisateurs",
+      "PATIENTS": "Patients",
+      "TODAY_APPOINTMENTS": "Rendez-vous du jour",
+      "DEPARTMENTS": "Services",
+      "ROLES": "Rôles",
+      "ASSIGNMENTS": "Affectations de rôles",
+      "ACTIVE": "actifs"
+    },
+    "PLATFORM": {
+      "INTEGRATIONS": "Intégrations totales",
+      "PENDING": "Intégrations en attente",
+      "DISABLED": "Liens désactivés",
+      "RELEASES": "Fenêtres de release actives"
+    },
+    "LINK": {
+      "ORGANIZATIONS_TITLE": "Organisations",
+      "ORGANIZATIONS_DESC": "Tenants, affectations d'hôpitaux, contacts",
+      "USERS_TITLE": "Utilisateurs",
+      "USERS_DESC": "Gouvernance et provisionnement multi-tenant",
+      "ROLES_TITLE": "Rôles",
+      "ROLES_DESC": "Catalogue de rôles et matrice des permissions",
+      "FEATURE_FLAGS_TITLE": "Feature flags",
+      "FEATURE_FLAGS_DESC": "Surcharges par tenant et contrôle de déploiement",
+      "ANALYTICS_TITLE": "Analytique plateforme",
+      "ANALYTICS_DESC": "Métriques et tendances multi-tenant",
+      "PLATFORM_TITLE": "Registre plateforme",
+      "PLATFORM_DESC": "Intégrations, fenêtres de release, snapshots",
+      "AUDIT_TITLE": "Journaux d'audit",
+      "AUDIT_DESC": "Piste d'audit système et conformité",
+      "HOSPITALS_TITLE": "Hôpitaux",
+      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues"
+    }
+  },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
@@ -1770,7 +1817,8 @@
     "GOODS_RECEIPT": "Réception de Marchandises",
     "STOCK_ADJUSTMENT": "Ajustement de Stock",
     "DISPENSING": "Dispensation",
-    "STOCK_ROUTING": "Routage de Stock"
+    "STOCK_ROUTING": "Routage de Stock",
+    "SUPER_ADMIN": "Super Admin"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",

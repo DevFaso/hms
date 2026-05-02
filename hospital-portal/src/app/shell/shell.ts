@@ -364,6 +364,9 @@ export class ShellComponent implements OnInit, OnDestroy {
       },
     ];
 
+    // Super-Admin control tower (visible only to ROLE_SUPER_ADMIN)
+    this.appendSuperAdminEntry(items);
+
     // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
     if (this.permissions.hasPermission('View Hospitals')) {
       items.push({
@@ -568,6 +571,16 @@ export class ShellComponent implements OnInit, OnDestroy {
       return roles.includes(activeRole);
     }
     return this.auth.hasAnyRole(roles);
+  }
+
+  private appendSuperAdminEntry(items: NavItem[]): void {
+    if (!this.roleContext.isSuperAdmin()) return;
+    items.push({
+      icon: 'admin_panel_settings',
+      label: 'Super Admin',
+      translationKey: 'NAV.SUPER_ADMIN',
+      route: '/super-admin',
+    });
   }
 
   /**
