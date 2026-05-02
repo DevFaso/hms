@@ -974,4 +974,41 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V73: P1 #12 follow-up #4 — Real-time eligibility / prior-auth API
+         - clinical.eligibility_checks: one row per call to a public-payer
+           scheme (NHIS, NHIA, CNAMGS, mutuelle) or generic private payer.
+         - Most-recent row per (patient_id, scheme, check_type) is the
+           authoritative current state.
+         - @Version (BIGINT NOT NULL DEFAULT 0) protects against the rare
+           race where two clinicians submit a check simultaneously.
+         - Composite (patient_id, scheme, completed_at) drives the "fresh
+           answer?" lookup on the encounter and checkout screens.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V73-eligibility-checks" author="hms-team" runOnChange="false">
+        <sqlFile path="V73__eligibility_checks.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V74: SmartPhrase / dot-phrase macro library (item 6)
+         - clinical.smart_phrases stores the macro library used by the
+           per-section EncounterNote form (item 5). Triggers like ".normexam"
+           expand to a multi-line block when typed in any note section.
+         - Scope precedence USER > HOSPITAL > GLOBAL is enforced in the
+           service; the table just stores the rows.
+         - Composite (scope, hospital_id, owner_user_id, lower(trigger))
+           drives the autocomplete lookup.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V74-smart-phrases" author="hms-team" runOnChange="false">
+        <sqlFile path="V74__smart_phrases.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
