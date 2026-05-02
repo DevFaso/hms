@@ -2,7 +2,11 @@
   <!-- ═══════════════════════════════════════════════════════════════════════
        HERO HEADER — role-adaptive gradient via heroGradientClass()
        ═══════════════════════════════════════════════════════════════════════ -->
-  <header class="hero-header">
+  <header
+    class="hero-header"
+    [ngClass]="heroGradientClass()"
+    [class.hero-compact]="isDoctor() || isReceptionist() || isPharmacist()"
+  >
     <div class="hero-left">
       <div class="hero-greeting">
         <span class="role-badge">
@@ -47,7 +51,7 @@
               {{ specialization() }}
             </span>
           }
-          @if (departmentName()) {
+          @if (departmentName() && departmentName() !== specialization()) {
             <span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ departmentName() }}
@@ -126,7 +130,7 @@
         </a>
       }
       @if (permissions.hasPermission('Create Encounters')) {
-        <a class="hero-btn hero-btn-secondary" routerLink="/encounters/new">
+        <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
           <span class="material-symbols-outlined">stethoscope</span>
           {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
         </a>
@@ -1442,6 +1446,13 @@
           [class.stat-card-alert]="
             +stat.value > 0 && (stat.key === 'critical_labs' || stat.key === 'safety_alerts')
           "
+          [class.stat-card-critical-tier]="
+            stat.key === 'critical_labs' || stat.key === 'safety_alerts'
+          "
+          [class.stat-card-zero]="+stat.value === 0"
+          [class.stat-card-active]="
+            +stat.value > 0 && stat.key !== 'critical_labs' && stat.key !== 'safety_alerts'
+          "
           [routerLink]="stat.route ?? null"
           [style.--stat-color]="stat.color"
           [style.--stat-bg]="stat.bgColor"
@@ -1456,6 +1467,34 @@
         </a>
       }
     </section>
+
+    <!-- ── Quick Actions (promoted above the kanban) ── -->
+    @if (quickActions().length > 0) {
+      <section class="card quick-actions-strip">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+          </div>
+        </div>
+        <div class="qa-grid qa-grid-compact qa-grid-strip">
+          @for (action of quickActions(); track action.label) {
+            <a
+              class="qa-card qa-card-compact"
+              [routerLink]="action.route"
+              [queryParams]="action.queryParams ?? null"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
 
     <div class="clinical-workspace">
       <div class="workspace-left">
@@ -1552,34 +1591,6 @@
             </div>
           }
         </section>
-
-        <!-- ── Quick Actions (compact) ── -->
-        @if (quickActions().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
-              </div>
-            </div>
-            <div class="qa-grid qa-grid-compact" style="padding: 12px 16px">
-              @for (action of quickActions(); track action.label) {
-                <a
-                  class="qa-card qa-card-compact"
-                  [routerLink]="action.route"
-                  [queryParams]="action.queryParams ?? null"
-                  [style.--qa-color]="action.color"
-                  [style.--qa-bg]="action.bgColor"
-                >
-                  <div class="qa-icon-wrap">
-                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-                  </div>
-                  <span class="qa-label">{{ action.label }}</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
       </div>
 
       <!-- RIGHT RAIL -->
@@ -1714,7 +1725,7 @@
                   >
                     <a
                       class="row-action-btn"
-                      routerLink="/encounters/new"
+                      routerLink="/encounters"
                       [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                     >
                       <span class="material-symbols-outlined">stethoscope</span>
@@ -1812,7 +1823,12 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'nurse') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/appointments">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="todayAppointments().length === 0"
+        [class.stat-card-active]="todayAppointments().length > 0"
+        routerLink="/appointments"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">calendar_today</span>
         </div>
@@ -1821,7 +1837,12 @@
           ><span class="stat-label">{{ 'DASHBOARD.PATIENTS_TODAY' | translate }}</span>
         </div>
       </a>
-      <a class="stat-card" routerLink="/nurse-station">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="roomedPatients().length === 0"
+        [class.stat-card-active]="roomedPatients().length > 0"
+        routerLink="/nurse-station"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">hotel</span>
         </div>
@@ -1830,7 +1851,11 @@
           ><span class="stat-label">{{ 'DASHBOARD.ROOMED' | translate }}</span>
         </div>
       </a>
-      <div class="stat-card">
+      <div
+        class="stat-card stat-card-critical-tier"
+        [class.stat-card-zero]="unacknowledgedAlerts().length === 0"
+        [class.stat-card-alert]="unacknowledgedAlerts().length > 0"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">notification_important</span>
         </div>
@@ -1839,7 +1864,12 @@
           ><span class="stat-label">{{ 'DASHBOARD.ALERTS' | translate }}</span>
         </div>
       </div>
-      <a class="stat-card" routerLink="/encounters">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="completedToday() === 0"
+        [class.stat-card-active]="completedToday() > 0"
+        routerLink="/encounters"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>

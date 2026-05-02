@@ -1,127 +1,164 @@
-# PR #202 — Copilot review archive
+# 2026-05-02 — Copilot review archive
 
-**Branch:** `feature/p1-12-followup-eligibility-notes-smartphrase`
+Four PRs in this batch went through Copilot review. Eight comments total;
+all addressed below before merging into `develop`.
 
-Copilot raised ten review comments on the initial commit. Every one was
-addressed in the fixup commit on this branch; this file is the durable record
-of what was flagged and how each comment was resolved, mirroring the convention
-PR #203 established.
+---
 
-## Resolved
+## PR #213 — `feature/doctor-dashboard-styling`
 
-### 1. `EligibilityServiceImpl#submit` — non-deterministic provider resolution
+### 1. `doctor-patient-flow.scss` — `display: none` on the stage label removes it from the accessibility tree
 
-> `providers.stream().findFirst()` on the injected `List<EligibilityProvider>`
-> isn't ordered unless beans implement `Ordered` / `@Order`. With
-> `StubEligibilityProvider.supports(...) == true` for every scheme, the stub
-> can be selected ahead of a real scheme-specific provider depending on bean
-> order.
+> `.flow-col-label` is set to `display: none` for empty columns. That removes
+> the stage label from the accessibility tree, leaving only the icon/count
+> (and `title`, which isn't reliably exposed on touch devices). Prefer
+> keeping an accessible name via `aria-label` / `aria-labelledby` or a
+> visually-hidden label (and consider marking the icon as `aria-hidden`).
 
-**Fix:** added `@Order(Ordered.LOWEST_PRECEDENCE)` to `StubEligibilityProvider`.
-Spring's `List<T>` injection respects `@Order`, so when a real partner-API
-connector is registered (P1 #12 follow-up #4), it sits ahead of the stub for
-its scheme; the service's `findFirst` resolves deterministically.
+**Fix:** swapped `display: none` for the standard visually-hidden / sr-only
+CSS pattern (`position: absolute; width: 1px; clip: rect(0,0,0,0); ...`)
+inside `.flow-col-empty .flow-col-label`. The label text is still in the
+DOM and reachable by screen readers; it just doesn't take visual space.
+Added `aria-hidden="true"` on the decorative material icon and the count
+chip, and an explicit `[attr.aria-label]="col.label + ' (' + count + ')'"`
+on `.flow-col-header` so the column has a single, complete accessible name
+regardless of empty/non-empty state.
 
-### 2. `EligibilityCheckRequestDTO.checkType` — validated before controller forces it
+### 2. `dashboard.scss` — `opacity: 0.55` on `.stat-card-zero` drops text contrast below WCAG
 
-> `@NotNull` on `checkType` runs at `@Valid` time, but the controller sets it
-> server-side after validation — so a caller omitting the field still 400s.
+> `opacity: 0.55` on `.stat-card-zero` will also dim all child text/icons
+> and can drop text contrast below WCAG thresholds (especially with
+> `$text-muted`). Consider reducing emphasis without lowering overall
+> opacity (e.g., adjust background/border colors, or apply opacity only
+> to non-text decorative elements).
 
-**Fix:** dropped `@NotNull` on `checkType`. The `/check` and `/prior-auth`
-endpoints continue to overwrite the field server-side; the Schema doc is
-updated to call this out.
+**Fix:** removed the card-wide `opacity: 0.55`. Recede now uses
+non-text-impacting changes: lighter background (`#f8fafc`), lighter
+border (`#e2e8f0` / `#cbd5e1` left accent), no shadow. Opacity is
+applied only to `.stat-icon-wrap` (decorative), keeping `.stat-value`
+and `.stat-label` text fully opaque so contrast against the new
+background still clears WCAG AA. Hover restores shadow + border + icon
+opacity for inspection.
 
-### 3 + 10. SmartPhrase scope authorization
+---
 
-> `create` / `update` / `delete` are gated only by clinician roles, but the
-> request body controls scope, hospitalId, and ownerUserId. Any clinician can
-> create GLOBAL macros, hospital-wide macros for arbitrary hospitals, or USER
-> macros for other users.
+## PR #216 — `feature/role-dashboards-polish`
 
-**Fix:** added scope-aware authorization in `SmartPhraseServiceImpl`:
+### 1. `doctor-patient-flow.html` — accessibility (same root cause as PR #213)
 
-- GLOBAL — only `ROLE_SUPER_ADMIN`.
-- HOSPITAL — `ROLE_SUPER_ADMIN`, or `ROLE_HOSPITAL_ADMIN` with an active
-  assignment at the target hospital
-  (`UserRoleHospitalAssignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode`).
-- USER — the request's `ownerUserId` is overridden server-side to the
-  authenticated caller (`applyOwnershipDefaults`); update / delete on a
-  USER-scope macro further checks `caller.id == existing.owner.id`.
+The PR #216 review re-flagged the same `display: none` a11y concern from
+PR #213. Resolved by the same fix described above; PR #216 inherits it
+because role-dashboards-polish is branched from doctor-dashboard-styling.
 
-`update` is gated against the EXISTING macro's scope first (so a clinician
-can't "rebase" a macro they do not own to a scope they DO control), then
-against the requested scope.
+### 2. `dashboard.html` — `heroGradientClass()` is computed but never bound
 
-### 4. Autocomplete short prefixes
+> `heroGradientClass()` is computed in the component and matching
+> `.hero-gradient-*` classes exist in `dashboard.scss`, but the
+> `<header>` doesn't apply that class, so role-specific gradient styling
+> will never take effect. Consider binding the computed class onto the
+> header (while keeping `hero-header` and `hero-compact`).
 
-> `autocomplete` will hit the DB for `"."` (the controller default) and return
-> the entire visible library.
+**Fix:** added `[ngClass]="heroGradientClass()"` to the
+`<header class="hero-header">` element so each role gets its own
+background gradient (`.hero-gradient-doctor`, `.hero-gradient-nurse`,
+`.hero-gradient-superadmin`, etc.). Latent dead code is now wired up.
 
-**Fix:** `MIN_AUTOCOMPLETE_PREFIX = 2` in `SmartPhraseServiceImpl`. The
-service short-circuits before any DB call when the prefix is shorter than
-two characters or doesn't begin with `.`.
+### 3. `dashboard.scss` — comment claims "doctor-only" but the condition is broader
 
-### 5. Autocomplete cross-tenant leak
+> The comment block says "Doctor view: compact hero… Other roles render
+> the default hero unchanged," but `hero-compact` is also applied for
+> receptionist and pharmacist in the template. Please update the comment
+> to match actual behavior (or narrow the condition if doctor-only is
+> intended) to avoid future confusion.
 
-> The endpoint accepts an arbitrary `hospitalId` and forwards it without
-> validating against the caller's allowed hospital scope. A clinician at
-> hospital A can query hospital B's HOSPITAL-scope macros if they know the
-> UUID.
+**Fix:** rewrote the comment to enumerate the three roles that get
+`.hero-compact` and to explain why (workflow-heavy roles that benefit
+from vertical-space conservation), so the comment matches the actual
+gating condition.
 
-**Fix:** the controller now resolves the hospital scope through
-`ControllerAuthUtils.resolveHospitalScope(...)` before calling the service.
-Non-`SUPER_ADMIN` callers cannot query a hospital they don't staff.
+---
 
-### 6. `latestForPatient` / `listByPatient` cross-tenant leak
+## PR #214 — `feature/backend-dx-startup`
 
-> Eligibility history is queried purely by `patientId`. Without a hospital
-> scope check, a user who knows another patient UUID can read eligibility
-> results from any hospital.
+### 1. `StartupSubsystemLogger.java` — MAIL detection too narrow
 
-**Fix:** added `EligibilityCheckRepository`
-`findByPatient_IdAndHospital_IdOrderByRequestedAtDesc` and
-`findFirstByPatient_IdAndHospital_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc`.
-Service overloads accept `UUID hospitalId`. Controller derives the hospital
-scope via `ControllerAuthUtils.resolveHospitalScope(...)` and passes through;
-`null` is intentionally allowed for `SUPER_ADMIN`'s unscoped global view.
+> MAIL detection is based only on `spring.mail.username` being blank.
+> This will miss common misconfigs (username set but password missing)
+> and can also false-positive for setups where SMTP auth is disabled.
+> Consider checking `spring.mail.host` / `spring.mail.properties.mail.smtp.auth`
+> and validating both username + password only when auth is enabled (or
+> emit a more accurate message like "mail credentials not configured").
 
-### 7. USER-scope uniqueness when hospitalId is null
+**Fix:** detection rewritten to check `spring.mail.host` first (no host
+→ "mail not configured"), then check whether SMTP auth is enabled
+(`spring.mail.properties.mail.smtp.auth`, defaulting to true), and only
+require username+password if auth is on. Distinct messages for
+"no host", "auth required but credentials missing", and "host set with
+auth disabled" so the operator can tell at a glance which case applies.
 
-> `findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwner_Id` with
-> `hospital.id = NULL` doesn't match rows where `hospital_id IS NULL` (JPA
-> equality semantics). Duplicates pass the guard and trip the DB unique index
-> at save time.
+### 2. `StartupSubsystemLogger.java` — Kafka per-flag mismatch goes unannounced
 
-**Fix:** added
-`findFirstByTriggerIgnoreCaseAndScopeAndHospitalIsNullAndOwner_Id`. The
-service branches on `hospitalId == null` and uses the `IsNull` variant, so
-the guard catches the conflict before the DB does.
+> Kafka "disabled" log only triggers when both `spring.kafka.enabled`
+> and `app.kafka.enabled` are false. In this codebase, either flag
+> being false effectively disables parts of Kafka (Kafka beans vs.
+> app-level publishing), and mismatched values (one true, one false)
+> are exactly the cases you likely want to surface.
 
-### 8. `LOWER(sp.trigger)` defeats the trigger index
+**Fix:** the two flags are now evaluated and logged independently.
+Three explicit outcomes: both off ("Kafka fully disabled"), both on
+(no log), or mismatched ("partial Kafka — beans on but app publishing
+off" / vice versa). The mismatched cases are logged as `WARN` since
+they're almost always misconfiguration, not intent.
 
-> The autocomplete query wraps `sp.trigger` in `LOWER(...)` even though writes
-> normalise to lowercase, preventing PostgreSQL from using the indexed
-> `phrase_trigger` btree for prefix lookups.
+---
 
-**Fix:** the JPQL now compares `sp.trigger LIKE CONCAT(:prefix, '%')`
-directly. The service already lowercases the prefix on the way in, and
-`SmartPhrase#normalize` lowercases the trigger on write — so the comparison
-is correct without the wrapper, and the existing index is usable.
+## PR #215 / #218 — `chore/remove-deprecated-2025`
 
-### 9. `incrementUsage` doesn't bump `updatedAt`
+### 1. `ChatMessageRequestDTO.senderId` removal breaks the Angular chat caller
 
-> Other atomic-counter repos (`BreakGlassSessionRepository.incrementAuditCount`)
-> also bump `updatedAt`; leaving it stale is confusing for "recently updated"
-> views and audit.
+> Removing `senderId` from `ChatMessageRequestDTO` changes the
+> `/chat/send` request contract. The Angular portal still includes
+> `senderId` in its send payload (e.g.,
+> `hospital-portal/src/app/chat/chat.ts`), which can cause request
+> failures if Jackson is configured to fail on unknown properties in
+> some environments and also leaves the clients out of sync with the
+> OpenAPI schema. Please update the frontend (and any other clients) to
+> stop sending `senderId`, or explicitly annotate the request DTO to
+> ignore unknown properties for backward compatibility during the
+> transition.
 
-**Fix:** the JPQL `UPDATE` now sets `sp.updatedAt = :ts` alongside
-`sp.usageCount` and `sp.lastUsedAt`.
+**Fix (frontend cleanup, not backward-compat shim):** updated
+`chat.ts:221` to drop `senderId` from the `ChatSendRequest` payload —
+backend has always derived the sender from `SecurityContext`, and the
+field has been documented as ignored since v1.0. Also removed the
+field from the `ChatSendRequest` TypeScript type so the compiler
+prevents future regressions. Read-side usage at `chat.ts:504`
+(`msg.senderId === currentUserId`) is unchanged: that reads from the
+*response* DTO (`ChatMessage`), which still carries the server-derived
+sender id.
 
-## Out-of-scope follow-ups (not addressed in this PR)
+We picked the frontend cleanup over a backward-compat
+`@JsonIgnoreProperties(ignoreUnknown = true)` because Jackson in this
+project is already lenient by default (no callers were actually 4xx-ing
+on extra fields in production) and a permanent shim hides the contract
+drift Copilot rightly flagged.
 
-- The Sonar `S6916` "use pattern-match guard" hint on the new authz `switch`
-  statements (a stylistic preference, not a correctness issue).
-- Real partner-API connectors for NHIS / NHIA / CNAMGS / mutuelle are still
-  the deferred `EligibilityProvider` bean SPI integration work — when one
-  registers with default (non-`LOWEST_PRECEDENCE`) order, it automatically
-  wins for its scheme.
+---
+
+## Out-of-scope follow-ups (not addressed in this batch)
+
+- Full Spanish backfill for `PORTAL.{APPOINTMENTS, BILLING, FAMILY,
+  SHARING, MEDICATIONS, LAB_RESULTS, VISITS, CARE_TEAM, RECORDS,
+  SUMMARIES}` — ngx-translate's English fallback shields the UI today
+  but Spanish-speaking patients see English copy across most of the
+  patient portal. Tracked separately.
+- Backend HTTP-layer test coverage for the seven `SuperAdminDashboardController`
+  endpoints — flagged in the audit, deliberately deferred for a focused
+  testing PR.
+- Auth-flow fix for the MFA chicken-and-egg bug surfaced during this
+  session (a doctor with no MFA enrollment cannot enroll because
+  `/auth/mfa/enroll` requires full auth that enrollment is supposed
+  to grant). Workaround landed on `feature/backend-dx-startup`: MFA
+  disabled in the local-h2 dev profile and the NPE replaced with a
+  clean 401. The proper fix (accept `mfaToken` for first-time
+  enrollment, or issue a scoped enrollment token at login) is deferred.

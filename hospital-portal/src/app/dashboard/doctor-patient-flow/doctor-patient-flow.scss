@@ -42,18 +42,60 @@
 }
 
 // ── Kanban Columns ──
+// Flex layout (was grid) so empty columns can shrink to icon-only and active
+// columns expand to fill the row. flex-wrap keeps responsive behavior.
 .flow-columns {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 0;
   min-height: 180px;
 }
 
 .flow-col {
+  flex: 1 1 200px;
+  min-width: 180px;
   border-right: 1px solid #f1f5f9;
+  transition:
+    flex-basis 0.25s ease,
+    min-width 0.25s ease;
 
   &:last-child {
     border-right: none;
+  }
+
+  // Empty column: shrink to icon-only rail. The header still shows the icon
+  // and the "0" count so doctors keep the spatial pattern (column position =
+  // workflow stage); when an item arrives, the column smoothly expands.
+  // The label is hidden VISUALLY but kept in the accessibility tree (the
+  // standard "visually-hidden" / "sr-only" pattern). `display: none` would
+  // have removed it from a11y entirely, leaving screen-reader users with
+  // only the decorative icon and a tooltip-only stage name.
+  &.flow-col-empty {
+    flex: 0 1 80px;
+    min-width: 70px;
+
+    .flow-col-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .flow-col-count {
+      background: transparent;
+      color: #cbd5e1;
+      padding: 0;
+    }
+
+    .flow-col-body {
+      min-height: 60px;
+    }
   }
 }
 
@@ -207,14 +249,29 @@
 }
 
 // ── Responsive ──
+// Flex-wrap handles most reflow automatically. On narrow screens, force empty
+// columns to take the same width as active ones so they don't all squeeze
+// into the same row as a thin sliver.
 @media (max-width: 768px) {
-  .flow-columns {
-    grid-template-columns: repeat(2, 1fr);
+  .flow-col {
+    flex-basis: 45%;
+    min-width: 45%;
+
+    &.flow-col-empty {
+      flex-basis: 45%;
+      min-width: 45%;
+    }
   }
 }
 
 @media (max-width: 480px) {
-  .flow-columns {
-    grid-template-columns: 1fr;
+  .flow-col {
+    flex-basis: 100%;
+    min-width: 100%;
+
+    &.flow-col-empty {
+      flex-basis: 100%;
+      min-width: 100%;
+    }
   }
 }

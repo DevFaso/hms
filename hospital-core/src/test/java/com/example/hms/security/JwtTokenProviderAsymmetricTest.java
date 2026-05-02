@@ -14,7 +14,6 @@ import java.security.KeyPairGenerator;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Tests for Phase 6: RS256 asymmetric JWT signing, key rotation, and backward compatibility.
@@ -37,7 +36,6 @@ class JwtTokenProviderAsymmetricTest {
 
     @Nested
     @DisplayName("HMAC fallback (no RSA keys)")
-    @SuppressWarnings("removal")
     class HmacFallback {
 
         @Test
@@ -55,19 +53,6 @@ class JwtTokenProviderAsymmetricTest {
             assertThat(provider.isAsymmetric()).isFalse();
             assertThat(provider.getVerificationKey()).isInstanceOf(javax.crypto.SecretKey.class);
             assertThat(provider.getRsaPublicKey()).isNull();
-            assertThat(provider.getSecretKey()).isNotNull(); // deprecated but still works in HMAC mode
-        }
-
-        @Test
-        @DisplayName("getSecretKey() throws in asymmetric mode")
-        void getSecretKeyThrowsInRsaMode() throws Exception {
-            KeyPair kp = generateRsaKeyPair();
-            setRsaKeys(kp, null);
-
-            provider.init();
-
-            assertThatThrownBy(() -> provider.getSecretKey())
-                    .isInstanceOf(UnsupportedOperationException.class);
         }
     }
 

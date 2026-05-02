@@ -31,14 +31,6 @@ public class ChatMessageRequestDTO {
 
     private String roleCode;
 
-    /**
-     * Deprecated: ignored by the current messaging implementation.
-     * The sender is always derived from the SecurityContext.
-     * @deprecated since 1.0, forRemoval in a future release.
-     */
-    @Deprecated(since = "1.0", forRemoval = true)
-    private UUID senderId;
-
     /** Recipient UUID – alternative to recipientEmail. */
     private UUID recipientId;
 
