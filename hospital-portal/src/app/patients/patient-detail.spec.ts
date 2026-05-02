@@ -13,6 +13,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { BpaService } from '../services/bpa.service';
+import { CdsAcknowledgementService } from '../services/cds-acknowledgement.service';
 import { StoryboardService } from '../services/storyboard.service';
 import { BreakGlassService } from '../services/break-glass.service';
 import { AuthService } from '../auth/auth.service';
@@ -67,6 +68,11 @@ describe('PatientDetailComponent', () => {
       activeHospitalId: 'h1',
     });
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
+    const cdsAckSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
+      'record',
+      'active',
+    ]);
+    cdsAckSpy.active.and.returnValue(of([]));
     storyboardServiceSpy = jasmine.createSpyObj('StoryboardService', ['getStoryboard']);
     const breakGlassSpy = jasmine.createSpyObj<BreakGlassService>('BreakGlassService', [
       'declare',
@@ -117,6 +123,7 @@ describe('PatientDetailComponent', () => {
         { provide: PermissionService, useValue: permissionSpy },
         { provide: RoleContextService, useValue: roleContextSpy },
         { provide: BpaService, useValue: bpaServiceSpy },
+        { provide: CdsAcknowledgementService, useValue: cdsAckSpy },
         { provide: StoryboardService, useValue: storyboardServiceSpy },
         { provide: BreakGlassService, useValue: breakGlassSpy },
         { provide: AuthService, useValue: authSpy },

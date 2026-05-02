@@ -8,6 +8,8 @@ import {
   PrescriptionService,
   PrescriptionResponse,
   PrescriptionRequest,
+  CommunityPharmacyService,
+  CommunityPharmacyOption,
 } from '../services/prescription.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -31,6 +33,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
+  private readonly communityPharmacyService = inject(CommunityPharmacyService);
 
   prescriptions = signal<PrescriptionResponse[]>([]);
   filtered = signal<PrescriptionResponse[]>([]);
@@ -331,6 +334,53 @@ export class PrescriptionsComponent implements OnInit {
   }
   closeDetail(): void {
     this.selectedPrescription.set(null);
+  }
+
+  /* ── SMS dispatch ────────────────────────────────────────── */
+  showDispatchModal = signal(false);
+  dispatchTarget = signal<PrescriptionResponse | null>(null);
+  pharmacyOptions = signal<CommunityPharmacyOption[]>([]);
+  dispatchPharmacyId = '';
+  dispatchNote = '';
+  dispatching = signal(false);
+
+  openDispatchModal(p: PrescriptionResponse): void {
+    this.dispatchTarget.set(p);
+    this.dispatchPharmacyId = '';
+    this.dispatchNote = '';
+    this.showDispatchModal.set(true);
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.communityPharmacyService.list(hospitalId).subscribe({
+      next: (list) => this.pharmacyOptions.set(list ?? []),
+      error: () => this.pharmacyOptions.set([]),
+    });
+  }
+
+  closeDispatchModal(): void {
+    this.showDispatchModal.set(false);
+    this.dispatchTarget.set(null);
+    this.dispatchPharmacyId = '';
+    this.dispatchNote = '';
+  }
+
+  submitDispatch(): void {
+    const target = this.dispatchTarget();
+    if (!target || !this.dispatchPharmacyId || this.dispatching()) return;
+    this.dispatching.set(true);
+    this.prescriptionService
+      .dispatchSms(target.id, this.dispatchPharmacyId, this.dispatchNote || undefined)
+      .subscribe({
+        next: (result) => {
+          this.dispatching.set(false);
+          this.toast.success(`SMS sent to ${result.pharmacyName}`);
+          this.closeDispatchModal();
+        },
+        error: (err) => {
+          this.dispatching.set(false);
+          const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
+          this.toast.error(msg);
+        },
+      });
   }
 
   getStatusClass(status?: string): string {

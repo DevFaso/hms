@@ -9,19 +9,26 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
 import { BpaService } from '../../services/bpa.service';
+import {
+  CdsAcknowledgementAction,
+  CdsAcknowledgementService,
+} from '../../services/cds-acknowledgement.service';
+import { ToastService } from '../../core/toast.service';
 
 /**
  * Best-Practice Advisory panel rendered at the top of the patient
- * chart. On every {@code patientId} change it calls
- * {@link BpaService} which posts to
- * {@code /api/cds-services/hms-bpa-protocols} and renders any
- * advisory cards via the shared {@link CdsCardListComponent}.
+ * chart. Pairs the inline {@link CdsCardListComponent} with a modal
+ * pop-up that auto-opens for {@code critical} cards (gap #18 polish):
+ * the clinician must acknowledge or override with a documented reason
+ * before the modal closes; the recorded {@code CdsAcknowledgement}
+ * suppresses the same card on subsequent rule-engine runs.
  *
  * <p>Failure mode: a network error degrades to the empty/error
  * state and never throws — BPAs are advisory and must not block
@@ -30,64 +37,10 @@ import { BpaService } from '../../services/bpa.service';
 @Component({
   selector: 'app-bpa-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, CdsCardListComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
-  template: `
-    <section
-      class="bpa-panel"
-      data-testid="bpa-panel"
-      *ngIf="patientId()"
-      [attr.data-state]="state()"
-    >
-      <header class="bpa-panel__header">
-        <h2 class="bpa-panel__title">{{ 'BPA.HEADING' | translate }}</h2>
-      </header>
-
-      <p *ngIf="state() === 'loading'" class="bpa-panel__loading" data-testid="bpa-panel-loading">
-        {{ 'BPA.LOADING' | translate }}
-      </p>
-
-      <p *ngIf="state() === 'error'" class="bpa-panel__error" data-testid="bpa-panel-error">
-        {{ 'BPA.ERROR' | translate }}
-      </p>
-
-      <p *ngIf="state() === 'empty'" class="bpa-panel__empty" data-testid="bpa-panel-empty">
-        {{ 'BPA.NONE_ACTIVE' | translate }}
-      </p>
-
-      <app-cds-card-list
-        *ngIf="state() === 'ready'"
-        [cards]="cards()"
-        data-testid="bpa-panel-cards"
-      />
-    </section>
-  `,
-  styles: [
-    `
-      .bpa-panel {
-        background: var(--surface-2, #fafafa);
-        border: 1px solid var(--border, #e5e5e5);
-        border-radius: 6px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-      }
-      .bpa-panel__title {
-        margin: 0 0 0.5rem;
-        font-size: 1rem;
-        font-weight: 600;
-      }
-      .bpa-panel__loading,
-      .bpa-panel__empty,
-      .bpa-panel__error {
-        margin: 0;
-        font-size: 0.875rem;
-        color: var(--text-muted, #666);
-      }
-      .bpa-panel__error {
-        color: var(--danger, #b00020);
-      }
-    `,
-  ],
+  templateUrl: './bpa-panel.component.html',
+  styleUrls: ['./bpa-panel.component.scss'],
 })
 export class BpaPanelComponent implements OnChanges, OnDestroy {
   readonly patientId = input<string | null | undefined>(null);
@@ -95,8 +48,13 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
 
   protected readonly cards = signal<CdsCard[]>([]);
   protected readonly state = signal<'loading' | 'ready' | 'empty' | 'error'>('loading');
+  protected readonly criticalCard = signal<CdsCard | null>(null);
+  protected reason = '';
+  protected readonly submitting = signal(false);
 
   private readonly bpa = inject(BpaService);
+  private readonly ackService = inject(CdsAcknowledgementService);
+  private readonly toast = inject(ToastService);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
@@ -106,6 +64,7 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
       this.cancelInFlight();
       this.cards.set([]);
       this.state.set('empty');
+      this.criticalCard.set(null);
       return;
     }
     this.load(id, this.encounterId() ?? undefined);
@@ -117,6 +76,55 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
     this.destroyed$.complete();
   }
 
+  protected acknowledge(): void {
+    this.submitDecision('ACKNOWLEDGED');
+  }
+
+  protected override(): void {
+    if (!this.reason.trim()) {
+      this.toast.error('Please provide a reason to override this critical advisory.');
+      return;
+    }
+    this.submitDecision('OVERRIDDEN');
+  }
+
+  protected dismissModal(): void {
+    this.criticalCard.set(null);
+    this.reason = '';
+  }
+
+  private submitDecision(action: CdsAcknowledgementAction): void {
+    const card = this.criticalCard();
+    const patientId = this.patientId();
+    if (!card || !patientId || this.submitting()) return;
+
+    this.submitting.set(true);
+    this.ackService
+      .record({
+        patientId,
+        cardUuid: card.uuid ?? null,
+        cardSummary: card.summary,
+        indicator: card.indicator,
+        action,
+        reason: this.reason.trim() || null,
+      })
+      .pipe(takeUntil(this.destroyed$))
+      .subscribe({
+        next: () => {
+          this.submitting.set(false);
+          this.dismissModal();
+          this.cards.update((list) => list.filter((c) => c !== card));
+          if (this.cards().length === 0) {
+            this.state.set('empty');
+          }
+        },
+        error: () => {
+          this.submitting.set(false);
+          this.toast.error('Could not record advisory acknowledgement.');
+        },
+      });
+  }
+
   /**
    * Cancel the previous request before issuing a new one. Without this,
    * a stale response from a prior `patientId` could land *after* a newer
@@ -125,13 +133,20 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
   private load(patientId: string, encounterId?: string): void {
     this.cancelInFlight();
     this.state.set('loading');
+    this.criticalCard.set(null);
+    this.reason = '';
     this.inFlight = this.bpa
       .evaluate(patientId, encounterId)
       .pipe(takeUntil(this.destroyed$))
       .subscribe({
         next: (cards) => {
-          this.cards.set(cards ?? []);
-          this.state.set((cards ?? []).length > 0 ? 'ready' : 'empty');
+          const list = cards ?? [];
+          this.cards.set(list);
+          this.state.set(list.length > 0 ? 'ready' : 'empty');
+          const critical = list.find((c) => c.indicator === 'critical');
+          if (critical) {
+            this.criticalCard.set(critical);
+          }
         },
         error: () => {
           this.cards.set([]);
