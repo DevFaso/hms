@@ -4,6 +4,105 @@
     "SUBTITLE": "Panneau d'administration",
     "TITLE": "Administration"
   },
+  "TENANT_LIFECYCLE": {
+    "BACK_TO_LIST": "Retour aux organisations",
+    "LOADING": "Chargement du cycle de vie…",
+    "PANEL_TITLE": "Cycle de vie du tenant",
+    "CONFIRM": "Confirmer",
+    "CANCEL": "Annuler",
+    "OPTIONAL": "optionnel",
+    "DEFAULT_30_DAYS": "30 jours par défaut",
+    "MFA_HINT": "Code à 6 chiffres de votre authentificateur — requis si MFA activé",
+    "STATE": {
+      "ACTIVE": "Actif",
+      "SUSPENDED": "Suspendu",
+      "ARCHIVED": "Archivé",
+      "PENDING_PURGE": "Purge en attente",
+      "PURGED": "Purgé"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspendre",
+      "RESTORE": "Restaurer",
+      "ARCHIVE": "Archiver",
+      "SCHEDULE_PURGE": "Planifier la purge",
+      "CANCEL_PURGE": "Annuler la purge"
+    },
+    "FIELD": {
+      "STATE": "État",
+      "REASON": "Motif",
+      "SUSPENDED_AT": "Suspendu le",
+      "SUSPENSION_REASON": "Motif de suspension",
+      "ARCHIVED_AT": "Archivé le",
+      "ARCHIVE_REASON": "Motif d'archivage",
+      "PURGE_AT": "Purge planifiée pour",
+      "PURGE_REASON": "Motif de purge",
+      "PURGED_AT": "Purgé le",
+      "TYPE_CODE_TO_CONFIRM": "Saisir le code de l'organisation pour confirmer :",
+      "MFA_CODE": "Code MFA"
+    },
+    "PLACEHOLDER": {
+      "REASON": "Pourquoi cette action ? (visible dans la piste d'audit)"
+    },
+    "MODAL": {
+      "SUSPEND_TITLE": "Suspendre cette organisation",
+      "SUSPEND_DESC": "Tous les utilisateurs de cette organisation seront bloqués jusqu'à la restauration. Les super admins gardent accès. L'action est tracée de façon permanente.",
+      "RESTORE_TITLE": "Restaurer cette organisation",
+      "RESTORE_DESC": "Remet l'organisation en ACTIF. Les utilisateurs pourront se reconnecter à leur prochaine tentative.",
+      "ARCHIVE_TITLE": "Archiver cette organisation",
+      "ARCHIVE_DESC": "L'organisation est masquée par défaut mais les données sont conservées. Vous pouvez restaurer plus tard ou planifier une purge.",
+      "SCHEDULE_PURGE_TITLE": "Planifier la purge",
+      "SCHEDULE_PURGE_DESC": "Planifie la suppression après un délai de 30 jours (configurable). La purge peut être annulée avant exécution. Les données sont exportées puis supprimées.",
+      "CANCEL_PURGE_TITLE": "Annuler la purge planifiée",
+      "CANCEL_PURGE_DESC": "L'organisation revient à l'état ARCHIVÉ. Aucune donnée n'est modifiée."
+    }
+  },
+  "SUPER_ADMIN": {
+    "TITLE": "Tour de contrôle Super-Admin",
+    "SUBTITLE": "Vue d'ensemble multi-tenant et état de la plateforme",
+    "AS_OF": "Au",
+    "LOADING": "Chargement de l'état de la plateforme…",
+    "LOAD_ERROR": "Impossible de charger la tour de contrôle. Réessayez.",
+    "RETRY": "Réessayer",
+    "PLATFORM_HEALTH": "État de la plateforme",
+    "QUICK_LINKS": "Liens rapides",
+    "RECENT_AUDIT": "Événements d'audit récents",
+    "VIEW_ALL_AUDIT": "Voir tous les journaux d'audit",
+    "STAT": {
+      "ORGANIZATIONS": "Organisations",
+      "HOSPITALS": "Hôpitaux",
+      "USERS": "Utilisateurs",
+      "PATIENTS": "Patients",
+      "TODAY_APPOINTMENTS": "Rendez-vous du jour",
+      "DEPARTMENTS": "Services",
+      "ROLES": "Rôles",
+      "ASSIGNMENTS": "Affectations de rôles",
+      "ACTIVE": "actifs"
+    },
+    "PLATFORM": {
+      "INTEGRATIONS": "Intégrations totales",
+      "PENDING": "Intégrations en attente",
+      "DISABLED": "Liens désactivés",
+      "RELEASES": "Fenêtres de release actives"
+    },
+    "LINK": {
+      "ORGANIZATIONS_TITLE": "Organisations",
+      "ORGANIZATIONS_DESC": "Tenants, affectations d'hôpitaux, contacts",
+      "USERS_TITLE": "Utilisateurs",
+      "USERS_DESC": "Gouvernance et provisionnement multi-tenant",
+      "ROLES_TITLE": "Rôles",
+      "ROLES_DESC": "Catalogue de rôles et matrice des permissions",
+      "FEATURE_FLAGS_TITLE": "Feature flags",
+      "FEATURE_FLAGS_DESC": "Surcharges par tenant et contrôle de déploiement",
+      "ANALYTICS_TITLE": "Analytique plateforme",
+      "ANALYTICS_DESC": "Métriques et tendances multi-tenant",
+      "PLATFORM_TITLE": "Registre plateforme",
+      "PLATFORM_DESC": "Intégrations, fenêtres de release, snapshots",
+      "AUDIT_TITLE": "Journaux d'audit",
+      "AUDIT_DESC": "Piste d'audit système et conformité",
+      "HOSPITALS_TITLE": "Hôpitaux",
+      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues"
+    }
+  },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
@@ -1798,7 +1897,8 @@
     "GOODS_RECEIPT": "Réception de Marchandises",
     "STOCK_ADJUSTMENT": "Ajustement de Stock",
     "DISPENSING": "Dispensation",
-    "STOCK_ROUTING": "Routage de Stock"
+    "STOCK_ROUTING": "Routage de Stock",
+    "SUPER_ADMIN": "Super Admin"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",

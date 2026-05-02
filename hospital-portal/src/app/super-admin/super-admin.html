@@ -1,0 +1,128 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'SUPER_ADMIN.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'SUPER_ADMIN.SUBTITLE' | translate }}</p>
+    </div>
+    @if (generatedAt()) {
+      <div class="header-meta">
+        <span class="material-symbols-outlined">schedule</span>
+        <span>{{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | date: 'medium' }}</span>
+      </div>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <span>{{ 'SUPER_ADMIN.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined">error</span>
+      <span>{{ 'SUPER_ADMIN.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="loadAll()">
+        {{ 'SUPER_ADMIN.RETRY' | translate }}
+      </button>
+    </div>
+  } @else {
+    <!-- Stats grid -->
+    <div class="stats-grid" data-test="stats-grid">
+      @for (stat of stats(); track stat.key) {
+        <a class="stat-card" [routerLink]="stat.route">
+          <div class="stat-icon" [style.background]="stat.color + '14'" [style.color]="stat.color">
+            <span class="material-symbols-outlined">{{ stat.icon }}</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stat.value }}</span>
+            <span class="stat-label">{{ stat.labelKey | translate }}</span>
+            @if (stat.sublabelKey) {
+              <span class="stat-sub">
+                <em>{{ stat.subvalue }}</em>
+                {{ stat.sublabelKey | translate }}
+              </span>
+            }
+          </div>
+        </a>
+      }
+    </div>
+
+    <!-- Platform integrations strip -->
+    @if (platformActions(); as actions) {
+      <h2 class="section-heading">{{ 'SUPER_ADMIN.PLATFORM_HEALTH' | translate }}</h2>
+      <div class="platform-strip" data-test="platform-strip">
+        <a class="strip-card" routerLink="/platform">
+          <span class="strip-value">{{ actions.totalIntegrations }}</span>
+          <span class="strip-label">{{ 'SUPER_ADMIN.PLATFORM.INTEGRATIONS' | translate }}</span>
+        </a>
+        <a class="strip-card warn" routerLink="/platform">
+          <span class="strip-value">{{ actions.pendingIntegrations }}</span>
+          <span class="strip-label">{{ 'SUPER_ADMIN.PLATFORM.PENDING' | translate }}</span>
+        </a>
+        <a class="strip-card warn" routerLink="/platform">
+          <span class="strip-value">{{ actions.disabledLinks }}</span>
+          <span class="strip-label">{{ 'SUPER_ADMIN.PLATFORM.DISABLED' | translate }}</span>
+        </a>
+        <a class="strip-card" routerLink="/platform">
+          <span class="strip-value">{{ actions.activeReleaseWindows }}</span>
+          <span class="strip-label">{{ 'SUPER_ADMIN.PLATFORM.RELEASES' | translate }}</span>
+        </a>
+      </div>
+    }
+
+    <!-- Quick links grid -->
+    <h2 class="section-heading">{{ 'SUPER_ADMIN.QUICK_LINKS' | translate }}</h2>
+    <div class="links-grid" data-test="links-grid">
+      @for (link of quickLinks; track link.route) {
+        <a class="link-card" [routerLink]="link.route">
+          <div class="card-icon" [style.background]="link.color + '14'" [style.color]="link.color">
+            <span class="material-symbols-outlined">{{ link.icon }}</span>
+          </div>
+          <div class="card-body">
+            <h3 class="card-title">{{ link.titleKey | translate }}</h3>
+            <p class="card-desc">{{ link.descKey | translate }}</p>
+          </div>
+          <span class="material-symbols-outlined card-arrow">arrow_forward</span>
+        </a>
+      }
+    </div>
+
+    <!-- Recent audit events -->
+    @if (recentAudit().length > 0) {
+      <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_AUDIT' | translate }}</h2>
+      <div class="audit-list" data-test="audit-list">
+        @for (event of recentAudit(); track event.id) {
+          <div class="audit-row" [class.audit-failed]="event.status === 'FAILURE'">
+            <div class="audit-icon">
+              <span class="material-symbols-outlined">
+                {{ event.status === 'FAILURE' ? 'cancel' : 'check_circle' }}
+              </span>
+            </div>
+            <div class="audit-body">
+              <div class="audit-line">
+                <strong>{{ event.eventType }}</strong>
+                @if (event.entityType) {
+                  <span class="audit-entity">· {{ event.entityType }}</span>
+                }
+                @if (event.resourceName) {
+                  <span class="audit-resource">{{ event.resourceName }}</span>
+                }
+              </div>
+              <div class="audit-meta">
+                <span>{{ event.userName || '—' }}</span>
+                <span>·</span>
+                <span>{{ event.hospitalName || '—' }}</span>
+                <span>·</span>
+                <span>{{ event.eventTimestamp | date: 'short' }}</span>
+              </div>
+            </div>
+          </div>
+        }
+        <a class="audit-footer" routerLink="/audit-logs">
+          {{ 'SUPER_ADMIN.VIEW_ALL_AUDIT' | translate }}
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+    }
+  }
+</div>

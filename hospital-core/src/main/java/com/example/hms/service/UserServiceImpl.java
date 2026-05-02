@@ -324,6 +324,14 @@ public class UserServiceImpl implements UserService {
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, username, email, phone, roles));
 
+        // Re-registration after a frontend compensation delete: the previous
+        // attempt soft-deleted the user (FE rolls back when /api/patients
+        // fails), so the lookup above returns a row with isDeleted=true.
+        // Without restoring it, reloadAndMap()'s `where u.isDeleted = false`
+        // filter would later report the misleading "User disappeared after
+        // save" diagnostic.
+        restoreIfSoftDeleted(user);
+
         applyForcePasswordChangeIfReturning(user, newUserCreated, request);
 
         // ---- 4) Ensure roles + hospital-scoped assignments ----
@@ -384,6 +392,29 @@ public class UserServiceImpl implements UserService {
         if (!newUserCreated && Boolean.TRUE.equals(request.getForcePasswordChange())) {
             user.setForcePasswordChange(true);
             user.setPasswordRotationForcedAt(LocalDateTime.now());
+        }
+    }
+
+    /**
+     * Clear the soft-delete flag on a previously deleted user found during
+     * admin-register so downstream reloads (which filter `isDeleted = false`)
+     * see a live row. Also reactivates any soft-deactivated Staff records
+     * tied to the same user to mirror {@link #restoreUser(UUID)}.
+     */
+    private void restoreIfSoftDeleted(User user) {
+        if (user == null || !user.isDeleted()) {
+            return;
+        }
+        log.info("♻️ Re-registering soft-deleted user {} ({}); restoring account.",
+                user.getId(), user.getUsername());
+        user.setDeleted(false);
+        userRepository.save(user);
+
+        for (Staff staff : staffRepository.findByUserId(user.getId())) {
+            if (!staff.isActive()) {
+                staff.setActive(true);
+                staffRepository.save(staff);
+            }
         }
     }
 

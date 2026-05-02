@@ -364,6 +364,9 @@ export class ShellComponent implements OnInit, OnDestroy {
       },
     ];
 
+    // Super-Admin control tower (visible only to ROLE_SUPER_ADMIN)
+    this.appendSuperAdminEntry(items);
+
     // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
     if (this.permissions.hasPermission('View Hospitals')) {
       items.push({
@@ -568,6 +571,20 @@ export class ShellComponent implements OnInit, OnDestroy {
       return roles.includes(activeRole);
     }
     return this.auth.hasAnyRole(roles);
+  }
+
+  private appendSuperAdminEntry(items: NavItem[]): void {
+    // Use the same hasAnyRole helper the rest of baseNavItems relies on so the
+    // sidebar respects the role the user picked at login. Using the raw role
+    // list (isSuperAdmin) would surface this entry for a multi-role user who
+    // selected a non-super active role and route them straight to /error/403.
+    if (!this.hasAnyRole(['ROLE_SUPER_ADMIN'])) return;
+    items.push({
+      icon: 'admin_panel_settings',
+      label: 'Super Admin',
+      translationKey: 'NAV.SUPER_ADMIN',
+      route: '/super-admin',
+    });
   }
 
   /**

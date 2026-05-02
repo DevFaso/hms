@@ -3,6 +3,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
 import { AuthService, type SessionBootstrapResponse } from './auth.service';
+import { RoleContextService } from '../core/role-context.service';
 
 describe('AuthService — S-01 refresh-token cookie behaviour', () => {
   let service: AuthService;
@@ -144,5 +145,38 @@ describe('AuthService — sessionBootstrap', () => {
     httpMock
       .expectOne((r) => r.url === 'auth/session/bootstrap')
       .flush({ message: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' });
+  });
+});
+
+describe('AuthService — resolveLandingPath', () => {
+  let service: AuthService;
+  let roleContext: RoleContextService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    roleContext = TestBed.inject(RoleContextService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('lands a super admin (active role ROLE_SUPER_ADMIN) on /super-admin', () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.activeRole = 'ROLE_SUPER_ADMIN';
+    expect(service.resolveLandingPath()).toBe('/super-admin');
+  });
+
+  it('lands every other role on /dashboard', () => {
+    roleContext.setRoles(['ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.resolveLandingPath()).toBe('/dashboard');
+  });
+
+  it('lands a multi-role user who picked a non-super role on /dashboard', () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.resolveLandingPath()).toBe('/dashboard');
   });
 });

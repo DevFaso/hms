@@ -1,6 +1,7 @@
 package com.example.hms.repository;
 
 import com.example.hms.model.Organization;
+import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.enums.OrganizationType;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,4 +48,15 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
            countQuery = "SELECT COUNT(o) FROM Organization o WHERE o.active = true")
     org.springframework.data.domain.Page<Organization> findAllActiveWithHospitals(
             org.springframework.data.domain.Pageable pageable);
+
+    /** All organization IDs whose lifecycle state matches one of the given states. */
+    @Query("SELECT o.id FROM Organization o WHERE o.lifecycleState IN :states")
+    List<UUID> findIdsByLifecycleStateIn(@Param("states") Collection<OrganizationLifecycleState> states);
+
+    /** Organizations whose purge has been scheduled and is now due (or past due). */
+    @Query("SELECT o FROM Organization o "
+        + "WHERE o.lifecycleState = com.example.hms.enums.OrganizationLifecycleState.PENDING_PURGE "
+        + "AND o.purgeScheduledFor IS NOT NULL "
+        + "AND o.purgeScheduledFor <= :asOf")
+    List<Organization> findDuePurges(@Param("asOf") java.time.Instant asOf);
 }
