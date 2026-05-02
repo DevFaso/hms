@@ -274,11 +274,14 @@ class GeneralReferralStateMachineTest {
         }
 
         @Test
-        void expire_fromOtherStatuses_throws() {
+        void expire_fromTerminalStatuses_throws() {
+            // IN_PROGRESS is covered by its own dedicated case above; this loop
+            // exercises only the terminal sources so the two tests don't overlap.
             for (ReferralStatus s : ReferralStatus.values()) {
                 if (s == ReferralStatus.SUBMITTED
                     || s == ReferralStatus.ACKNOWLEDGED
-                    || s == ReferralStatus.SCHEDULED) {
+                    || s == ReferralStatus.SCHEDULED
+                    || s == ReferralStatus.IN_PROGRESS) {
                     continue;
                 }
                 GeneralReferral r = newReferralIn(s);

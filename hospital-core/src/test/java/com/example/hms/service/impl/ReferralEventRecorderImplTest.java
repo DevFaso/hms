@@ -105,4 +105,24 @@ class ReferralEventRecorderImplTest {
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getActorLabel()).isEqualTo("SYSTEM:unknown");
     }
+
+    @Test
+    void anonymousAuthenticationLeavesUsernameNull() {
+        // Spring's AnonymousAuthenticationToken returns isAuthenticated()==true and a
+        // principal of "anonymousUser". Recording that as the actor would pollute the
+        // audit trail with a meaningless name; the recorder must treat it as unauthenticated.
+        SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.AnonymousAuthenticationToken(
+                "anon-key", "anonymousUser",
+                java.util.List.of(
+                    new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
+        GeneralReferral r = referralIn(ReferralStatus.SUBMITTED);
+
+        recorder.recordUserEvent(r, ReferralEventType.SUBMIT, ReferralStatus.DRAFT, null);
+
+        ArgumentCaptor<ReferralEvent> captor = ArgumentCaptor.forClass(ReferralEvent.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getActorUsername()).isNull();
+        assertThat(captor.getValue().getActorLabel()).isEqualTo("USER");
+    }
 }

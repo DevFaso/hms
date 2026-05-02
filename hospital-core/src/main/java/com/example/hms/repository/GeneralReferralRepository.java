@@ -80,10 +80,26 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
      * post-submission, pre-consultation statuses with slaDueAt before the cutoff.
      * IN_PROGRESS is intentionally excluded — once a consultation has actually begun,
      * it must terminate via complete() or cancel(), not by an SLA sweep.
+     *
+     * <p>Unscoped variant — used by the {@code @Scheduled} sweep (system actor)
+     * and by SUPER_ADMIN-driven global runs from the admin endpoint.
      */
     @Query("SELECT r FROM GeneralReferral r WHERE r.slaDueAt < :cutoff " +
            "AND r.status IN ('SUBMITTED', 'ACKNOWLEDGED', 'SCHEDULED') ORDER BY r.slaDueAt ASC")
     List<GeneralReferral> findExpirableReferrals(@Param("cutoff") LocalDateTime cutoff);
+
+    /**
+     * Hospital-scoped counterpart for the manual admin endpoint. A
+     * ROLE_HOSPITAL_ADMIN must only sweep their own hospital, so the
+     * controller resolves the active hospital and the service routes to
+     * this query instead of the unscoped one.
+     */
+    @Query("SELECT r FROM GeneralReferral r WHERE r.hospital.id = :hospitalId " +
+           "AND r.slaDueAt < :cutoff " +
+           "AND r.status IN ('SUBMITTED', 'ACKNOWLEDGED', 'SCHEDULED') ORDER BY r.slaDueAt ASC")
+    List<GeneralReferral> findExpirableReferralsByHospital(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("cutoff") LocalDateTime cutoff);
 
     /**
      * Find pending referrals for provider

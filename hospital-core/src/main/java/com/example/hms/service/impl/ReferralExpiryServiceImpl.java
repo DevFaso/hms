@@ -11,9 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -26,19 +29,39 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
 
     private final GeneralReferralRepository referralRepository;
     private final ReferralEventRecorder eventRecorder;
+    private final Clock clock;
 
     @Override
     @Transactional
     public int expireOverdueReferrals(Duration gracePeriod) {
-        final Duration grace = gracePeriod == null ? Duration.ZERO : gracePeriod;
-        final LocalDateTime cutoff = LocalDateTime.now().minus(grace);
+        final LocalDateTime cutoff = computeCutoff(gracePeriod);
+        return expire(referralRepository.findExpirableReferrals(cutoff), cutoff, "global");
+    }
 
-        final List<GeneralReferral> eligible = referralRepository.findExpirableReferrals(cutoff);
+    @Override
+    @Transactional
+    public int expireOverdueReferralsForHospital(Duration gracePeriod, UUID hospitalId) {
+        Objects.requireNonNull(hospitalId, "hospitalId is required for scoped expiry sweep");
+        final LocalDateTime cutoff = computeCutoff(gracePeriod);
+        return expire(
+            referralRepository.findExpirableReferralsByHospital(hospitalId, cutoff),
+            cutoff,
+            "hospital=" + hospitalId);
+    }
+
+    private LocalDateTime computeCutoff(Duration gracePeriod) {
+        // Negative durations would yield a future cutoff (now + |grace|), expiring referrals
+        // before they are actually overdue — clamp to ZERO so a malformed caller is harmless.
+        Duration grace = (gracePeriod == null || gracePeriod.isNegative())
+            ? Duration.ZERO : gracePeriod;
+        return LocalDateTime.now(clock).minus(grace);
+    }
+
+    private int expire(List<GeneralReferral> eligible, LocalDateTime cutoff, String scopeLabel) {
         if (eligible.isEmpty()) {
-            log.debug("Referral expiry sweep — 0 candidates at cutoff {}", cutoff);
+            log.debug("Referral expiry sweep — 0 candidates ({}) at cutoff {}", scopeLabel, cutoff);
             return 0;
         }
-
         int expired = 0;
         for (GeneralReferral referral : eligible) {
             ReferralStatus before = referral.getStatus();
@@ -53,8 +76,8 @@ public class ReferralExpiryServiceImpl implements ReferralExpiryService {
                     referral.getId(), ex.getMessage());
             }
         }
-        log.info("Referral expiry sweep — {} of {} candidate(s) expired (cutoff={}, grace={})",
-            expired, eligible.size(), cutoff, grace);
+        log.info("Referral expiry sweep ({}) — {} of {} candidate(s) expired (cutoff={})",
+            scopeLabel, expired, eligible.size(), cutoff);
         return expired;
     }
 }

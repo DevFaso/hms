@@ -8,20 +8,24 @@ import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.service.ReferralEventRecorder;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -36,15 +40,31 @@ import static org.mockito.Mockito.when;
  * to translate the grace period into a cutoff and apply the entity guard. The
  * race-condition skip path is covered explicitly because it is the silent
  * branch — without a test, it would never be exercised in CI.
+ *
+ * <p>Time is supplied via a fixed {@link Clock} so the cutoff assertions are
+ * deterministic — earlier versions used {@code LocalDateTime.now()} with
+ * {@code ±1s} bounds, which was prone to flake under slow CI hosts.
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ReferralExpiryServiceImpl")
 class ReferralExpiryServiceImplTest {
 
+    private static final Instant FIXED_NOW =
+        LocalDateTime.of(2026, 5, 1, 12, 0, 0).toInstant(ZoneOffset.UTC);
+    private static final LocalDateTime NOW_AS_LOCAL =
+        LocalDateTime.ofInstant(FIXED_NOW, ZoneOffset.UTC);
+    private static final String SYSTEM_SOURCE = "scheduler";
+
     @Mock private GeneralReferralRepository referralRepository;
     @Mock private ReferralEventRecorder eventRecorder;
 
-    @InjectMocks private ReferralExpiryServiceImpl service;
+    private ReferralExpiryServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        Clock fixed = Clock.fixed(FIXED_NOW, ZoneOffset.UTC);
+        service = new ReferralExpiryServiceImpl(referralRepository, eventRecorder, fixed);
+    }
 
     private static GeneralReferral newReferralIn(ReferralStatus status) {
         GeneralReferral r = new GeneralReferral();
@@ -87,7 +107,7 @@ class ReferralExpiryServiceImplTest {
             any(GeneralReferral.class),
             eq(ReferralEventType.EXPIRE),
             any(ReferralStatus.class),
-            eq("scheduler"),
+            eq(SYSTEM_SOURCE),
             any());
     }
 
@@ -110,7 +130,7 @@ class ReferralExpiryServiceImplTest {
             any(GeneralReferral.class),
             eq(ReferralEventType.EXPIRE),
             any(ReferralStatus.class),
-            eq("scheduler"),
+            eq(SYSTEM_SOURCE),
             any());
     }
 
@@ -126,18 +146,14 @@ class ReferralExpiryServiceImplTest {
 
     @Test
     void cutoffEqualsNowMinusGraceWindow() {
-        // A 6h grace window should query with a cutoff ≈ now() - 6h. Allow ±1s drift.
+        // With a fixed Clock, the cutoff is exactly now() - grace — no drift, no flakes.
         when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of());
-        LocalDateTime before = LocalDateTime.now();
 
         service.expireOverdueReferrals(Duration.ofHours(6));
 
         ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(referralRepository).findExpirableReferrals(cutoffCaptor.capture());
-
-        LocalDateTime cutoff = cutoffCaptor.getValue();
-        LocalDateTime expected = before.minusHours(6);
-        assertThat(cutoff).isBetween(expected.minusSeconds(1), expected.plusSeconds(2));
+        assertThat(cutoffCaptor.getValue()).isEqualTo(NOW_AS_LOCAL.minusHours(6));
     }
 
     @Test
@@ -147,6 +163,51 @@ class ReferralExpiryServiceImplTest {
         int result = service.expireOverdueReferrals(null);
 
         assertThat(result).isZero();
-        verify(referralRepository).findExpirableReferrals(any(LocalDateTime.class));
+        ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(referralRepository).findExpirableReferrals(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue()).isEqualTo(NOW_AS_LOCAL);
+    }
+
+    @Test
+    void negativeGracePeriodClampedToZero() {
+        // A negative Duration would yield cutoff = now() + |grace|, expiring referrals
+        // that are not actually overdue. The service must clamp to ZERO.
+        when(referralRepository.findExpirableReferrals(any())).thenReturn(List.of());
+
+        service.expireOverdueReferrals(Duration.ofHours(-3));
+
+        ArgumentCaptor<LocalDateTime> cutoffCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(referralRepository).findExpirableReferrals(cutoffCaptor.capture());
+        assertThat(cutoffCaptor.getValue()).isEqualTo(NOW_AS_LOCAL);
+    }
+
+    @Test
+    void hospitalScopedSweepUsesByHospitalQuery() {
+        UUID hospitalId = UUID.randomUUID();
+        GeneralReferral r = newReferralIn(ReferralStatus.SUBMITTED);
+        when(referralRepository.findExpirableReferralsByHospital(eq(hospitalId), any()))
+            .thenReturn(List.of(r));
+
+        int result = service.expireOverdueReferralsForHospital(Duration.ofHours(2), hospitalId);
+
+        assertThat(result).isEqualTo(1);
+        assertThat(r.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
+        // Critically: the unscoped query must NOT have been called.
+        verify(referralRepository, never()).findExpirableReferrals(any());
+        verify(referralRepository).findExpirableReferralsByHospital(eq(hospitalId),
+            eq(NOW_AS_LOCAL.minusHours(2)));
+        verify(eventRecorder).recordSystemEvent(
+            any(GeneralReferral.class),
+            eq(ReferralEventType.EXPIRE),
+            any(ReferralStatus.class),
+            eq(SYSTEM_SOURCE),
+            any());
+    }
+
+    @Test
+    void hospitalScopedSweepRequiresHospitalId() {
+        assertThatThrownBy(() -> service.expireOverdueReferralsForHospital(Duration.ZERO, null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessageContaining("hospitalId");
     }
 }
