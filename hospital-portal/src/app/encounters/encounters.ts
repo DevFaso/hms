@@ -8,6 +8,7 @@ import {
   EncounterRequest,
   EncounterResponse,
   EncounterType,
+  EncounterNoteRequest,
 } from '../services/encounter.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
@@ -16,11 +17,19 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note-form.component';
+import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EncounterNoteFormComponent,
+    EligibilityCheckDialogComponent,
+  ],
   templateUrl: './encounters.html',
   styleUrl: './encounters.scss',
 })
@@ -46,8 +55,9 @@ export class EncountersComponent implements OnInit {
   searchTerm = '';
   activeTab = signal<'all' | 'open' | 'completed'>('all');
   selectedEncounter = signal<EncounterResponse | null>(null);
-  noteContent = '';
   showNoteForm = signal(false);
+  savingNote = signal(false);
+  showEligibilityDialog = signal(false);
 
   // Dropdowns
   hospitals = signal<HospitalResponse[]>([]);
@@ -363,26 +373,41 @@ export class EncountersComponent implements OnInit {
   selectEncounter(enc: EncounterResponse): void {
     this.selectedEncounter.set(enc);
     this.showNoteForm.set(false);
-    this.noteContent = '';
   }
 
   closeDetail(): void {
     this.selectedEncounter.set(null);
+    this.showEligibilityDialog.set(false);
   }
 
-  addNote(): void {
+  /** Per-section EncounterNote save (item 5). */
+  saveStructuredNote(payload: EncounterNoteRequest): void {
     const enc = this.selectedEncounter();
-    if (!enc || !this.noteContent.trim()) return;
-    this.encounterService
-      .addNote(enc.id, { template: 'SOAP', summary: this.noteContent })
-      .subscribe({
-        next: () => {
-          this.toast.success('Note added successfully');
-          this.noteContent = '';
-          this.showNoteForm.set(false);
-        },
-        error: () => this.toast.error('Failed to add note'),
-      });
+    if (!enc) return;
+    this.savingNote.set(true);
+    this.encounterService.addNote(enc.id, payload).subscribe({
+      next: () => {
+        this.toast.success('Note saved');
+        this.savingNote.set(false);
+        this.showNoteForm.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to save note');
+        this.savingNote.set(false);
+      },
+    });
+  }
+
+  cancelNote(): void {
+    this.showNoteForm.set(false);
+  }
+
+  openEligibilityDialog(): void {
+    this.showEligibilityDialog.set(true);
+  }
+
+  closeEligibilityDialog(): void {
+    this.showEligibilityDialog.set(false);
   }
 
   getStatusClass(status: string): string {

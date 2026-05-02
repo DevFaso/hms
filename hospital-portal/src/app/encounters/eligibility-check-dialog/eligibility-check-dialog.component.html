@@ -1,0 +1,141 @@
+@if (open) {
+  <div class="elig-dialog">
+    <button
+      type="button"
+      class="elig-dialog__backdrop"
+      aria-label="Close eligibility dialog"
+      (click)="close()"
+      (keydown.escape)="close()"
+    ></button>
+
+    <dialog
+      class="elig-dialog__panel"
+      aria-modal="true"
+      aria-labelledby="elig-dialog-title"
+      [open]="true"
+    >
+      <header class="elig-dialog__header">
+        <h3 id="elig-dialog-title">Eligibility &amp; prior-auth</h3>
+        <button type="button" class="elig-dialog__close" (click)="close()" aria-label="Close">
+          ×
+        </button>
+      </header>
+
+      <section class="elig-dialog__body">
+        <div class="elig-dialog__row">
+          <label class="elig-dialog__field">
+            <span>Scheme</span>
+            <select [ngModel]="scheme()" (ngModelChange)="onSchemeChange($event)" name="scheme">
+              @for (s of schemes; track s.value) {
+                <option [ngValue]="s.value">{{ s.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label class="elig-dialog__field">
+            <span>Check type</span>
+            <select [ngModel]="checkType()" (ngModelChange)="onTypeChange($event)" name="checkType">
+              @for (t of types; track t) {
+                <option [ngValue]="t">{{ t }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <label class="elig-dialog__field">
+          <span>Member id</span>
+          <input
+            type="text"
+            [ngModel]="memberId()"
+            (ngModelChange)="memberId.set($event)"
+            name="memberId"
+            placeholder="NHIS card number, mutuelle id, …"
+          />
+        </label>
+
+        @if (checkType() === 'PRIOR_AUTH') {
+          <label class="elig-dialog__field">
+            <span>Service code</span>
+            <input
+              type="text"
+              [ngModel]="serviceCode()"
+              (ngModelChange)="serviceCode.set($event)"
+              name="serviceCode"
+              placeholder="CT-HEAD-WO-CONTRAST"
+            />
+          </label>
+        }
+
+        <div class="elig-dialog__actions">
+          <button type="button" class="btn btn--primary" (click)="run()" [disabled]="running()">
+            {{ running() ? 'Running…' : 'Run check' }}
+          </button>
+        </div>
+
+        @if (latest(); as r) {
+          <article class="elig-dialog__result">
+            <header>
+              <h4>
+                {{ r.checkType === 'PRIOR_AUTH' ? 'Prior-auth' : 'Coverage' }}
+                — {{ r.scheme }}
+              </h4>
+              <span [class]="statusClass(r.status)">{{ r.status }}</span>
+            </header>
+
+            <dl>
+              @if (r.responseCode) {
+                <div>
+                  <dt>Response</dt>
+                  <dd>
+                    {{ r.responseCode }}
+                    @if (r.payerResponseText) {
+                      — {{ r.payerResponseText }}
+                    }
+                  </dd>
+                </div>
+              }
+              @if (r.copayAmount !== null && r.copayAmount !== undefined) {
+                <div>
+                  <dt>Copay</dt>
+                  <dd>{{ r.copayAmount }} {{ r.copayCurrency }}</dd>
+                </div>
+              }
+              @if (r.priorAuthRequired !== null && r.priorAuthRequired !== undefined) {
+                <div>
+                  <dt>Prior auth required</dt>
+                  <dd>{{ r.priorAuthRequired ? 'Yes' : 'No' }}</dd>
+                </div>
+              }
+              @if (r.priorAuthNumber) {
+                <div>
+                  <dt>Auth number</dt>
+                  <dd>{{ r.priorAuthNumber }}</dd>
+                </div>
+              }
+              @if (r.validUntil) {
+                <div>
+                  <dt>Valid through</dt>
+                  <dd>{{ r.validUntil }}</dd>
+                </div>
+              }
+              @if (r.errorMessage) {
+                <div>
+                  <dt>Error</dt>
+                  <dd>{{ r.errorMessage }}</dd>
+                </div>
+              }
+              <div>
+                <dt>Checked at</dt>
+                <dd>{{ r.completedAt ?? r.requestedAt }}</dd>
+              </div>
+            </dl>
+          </article>
+        } @else if (!running()) {
+          <p class="elig-dialog__empty">
+            No prior check on file for this scheme — run one to populate the timeline.
+          </p>
+        }
+      </section>
+    </dialog>
+  </div>
+}

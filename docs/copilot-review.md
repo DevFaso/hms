@@ -1,96 +1,127 @@
-feature/recep-department
+# PR #202 — Copilot review archive
 
- Quality Gate failed
-Failed conditions
- 45.6% Coverage on New Code (required ≥ 80%)
+**Branch:** `feature/p1-12-followup-eligibility-notes-smartphrase`
 
-See analysis details on SonarQube Cloud
+Copilot raised ten review comments on the initial commit. Every one was
+addressed in the fixup commit on this branch; this file is the durable record
+of what was flagged and how each comment was resolved, mirroring the convention
+PR #203 established.
 
-hospital-core/src/main/java/com/example/hms/service/DepartmentServiceImpl.java
-Comment on lines 112 to +116
-    public Page<DepartmentResponseDTO> getAllDepartments(Pageable pageable, Locale locale) {
-        return departmentRepository.findAll(pageable)
-                .map(department -> buildLocalizedResponse(department, locale));
-        UUID activeHospitalId = resolveActiveHospitalScope();
-        Page<Department> page = (activeHospitalId != null)
-            ? departmentRepository.findByHospitalId(activeHospitalId, pageable)
-            : departmentRepository.findAll(pageable);
-Copilot commented 2 minutes ago
-Copilot
-Copilot
-AI
-2 minutes ago
-New tenant-scoped behavior is introduced here (non-super-admins are now restricted to activeHospitalId and super-admins are unscoped), but DepartmentServiceImplTest currently only exercises these read paths in the default super-admin setup. Please add/extend unit tests covering at least: (1) non-super-admin list/read/search/filter only returns departments for requireActiveHospitalId(), and (2) cross-hospital hospitalId requests are rejected.
+## Resolved
 
-Copilot generated this review using guidance from repository custom instructions.
-@TiegoOuedraogo	Reply...
-hospital-core/src/main/java/com/example/hms/service/DepartmentServiceImpl.java
-Comment on lines +441 to +446
-        if (filter.getHospitalId() != null && !filter.getHospitalId().equals(activeHospitalId)) {
-            log.warn("[dept:tenantGuard] User {} attempted to filter by hospital {} but is scoped to {}",
-                    roleValidator.getCurrentUserId(), filter.getHospitalId(), activeHospitalId);
-            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
-        }
-        filter.setHospitalId(activeHospitalId);
-Copilot commented 2 minutes ago
-Copilot
-Copilot
-AI
-2 minutes ago
-applyTenantScopeToFilter throws BusinessRuleException, but BusinessRuleException is not mapped in GlobalExceptionHandler, so this will currently fall through to the generic runtime handler and return HTTP 500. Consider switching this to a handled exception type (e.g., BusinessException, IllegalStateException, AccessDeniedException, or ResourceNotFoundException) so invalid cross-hospital filters return a 4xx response.
+### 1. `EligibilityServiceImpl#submit` — non-deterministic provider resolution
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-hospital-core/src/main/java/com/example/hms/service/DepartmentServiceImpl.java
-Comment on lines +423 to +428
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (requestedHospitalId != null && !requestedHospitalId.equals(activeHospitalId)) {
-            log.warn("[dept:tenantGuard] User {} attempted to address hospital {} but is scoped to {}",
-                    roleValidator.getCurrentUserId(), requestedHospitalId, activeHospitalId);
-            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
-        }
-Copilot commented 2 minutes ago
-Copilot
-Copilot
-AI
-2 minutes ago
-enforceHospitalScopeOnHospitalId throws BusinessRuleException, but BusinessRuleException is not handled by GlobalExceptionHandler (only BusinessException/IllegalStateException etc. are), so this will currently fall through to the generic @ExceptionHandler(RuntimeException) and return HTTP 500. Consider throwing AccessDeniedException/ResourceNotFoundException (or BusinessException) instead, or add explicit handling for BusinessRuleException so cross-hospital requests don’t become 500s.
+> `providers.stream().findFirst()` on the injected `List<EligibilityProvider>`
+> isn't ordered unless beans implement `Ordered` / `@Order`. With
+> `StubEligibilityProvider.supports(...) == true` for every scheme, the stub
+> can be selected ahead of a real scheme-specific provider depending on bean
+> order.
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-hospital-core/src/main/java/com/example/hms/service/DepartmentServiceImpl.java
-Comment on lines 267 to +268
-        Department department = findDepartmentOrThrow(departmentId, locale);
-        enforceHospitalScopeOnEntity(department);
-Copilot commented 2 minutes ago
-Copilot
-Copilot
-AI
-2 minutes ago
-These newly added read paths call enforceHospitalScopeOnEntity(...), but that helper currently builds the “not found” message using DEFAULT_LOCALE rather than the request locale. That means a tenant-scope 404 can ignore the caller’s language even though the controller/service received a locale; consider passing locale into the helper (or otherwise using the request locale) while still returning a generic not-found message.
+**Fix:** added `@Order(Ordered.LOWEST_PRECEDENCE)` to `StubEligibilityProvider`.
+Spring's `List<T>` injection respects `@Order`, so when a real partner-API
+connector is registered (P1 #12 follow-up #4), it sits ahead of the stub for
+its scheme; the service's `findFirst` resolves deterministically.
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-hospital-portal/src/app/core/role-context.service.ts
-  isReceptionist(): boolean {
-    return this.hasRole('RECEPTIONIST');
-    // Roles in the JWT/auth context are stored with the `ROLE_` prefix.
-    // Accept both shapes so a missing prefix never silently passes the check.
-Copilot commented 2 minutes ago
-Copilot
-Copilot
-AI
-2 minutes ago
-The comment says “missing prefix never silently passes the check”, but based on the logic here the goal is to avoid the check silently failing when roles are stored as ROLE_*. Please update the wording so it matches the intent/behavior.
+### 2. `EligibilityCheckRequestDTO.checkType` — validated before controller forces it
 
-Suggested changeset 1 (1)
-hospital-portal/src/app/core/role-context.service.ts
-Original file line number	Diff line number	Diff line change
- export class RoleContextService {
-   isReceptionist(): boolean {
-     // Roles in the JWT/auth context are stored with the `ROLE_` prefix.
-     // Accept both shapes so a missing prefix never silently passes the check.
-     // Accept both shapes so a missing prefix never silently fails the check.
-     return this.hasRole('ROLE_RECEPTIONIST') || this.hasRole('RECEPTIONIST');
-   }
-   private readonly _activeHospitalId = signal<string | null>(null);
+> `@NotNull` on `checkType` runs at `@Valid` time, but the controller sets it
+> server-side after validation — so a caller omitting the field still 400s.
+
+**Fix:** dropped `@NotNull` on `checkType`. The `/check` and `/prior-auth`
+endpoints continue to overwrite the field server-side; the Schema doc is
+updated to call this out.
+
+### 3 + 10. SmartPhrase scope authorization
+
+> `create` / `update` / `delete` are gated only by clinician roles, but the
+> request body controls scope, hospitalId, and ownerUserId. Any clinician can
+> create GLOBAL macros, hospital-wide macros for arbitrary hospitals, or USER
+> macros for other users.
+
+**Fix:** added scope-aware authorization in `SmartPhraseServiceImpl`:
+
+- GLOBAL — only `ROLE_SUPER_ADMIN`.
+- HOSPITAL — `ROLE_SUPER_ADMIN`, or `ROLE_HOSPITAL_ADMIN` with an active
+  assignment at the target hospital
+  (`UserRoleHospitalAssignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode`).
+- USER — the request's `ownerUserId` is overridden server-side to the
+  authenticated caller (`applyOwnershipDefaults`); update / delete on a
+  USER-scope macro further checks `caller.id == existing.owner.id`.
+
+`update` is gated against the EXISTING macro's scope first (so a clinician
+can't "rebase" a macro they do not own to a scope they DO control), then
+against the requested scope.
+
+### 4. Autocomplete short prefixes
+
+> `autocomplete` will hit the DB for `"."` (the controller default) and return
+> the entire visible library.
+
+**Fix:** `MIN_AUTOCOMPLETE_PREFIX = 2` in `SmartPhraseServiceImpl`. The
+service short-circuits before any DB call when the prefix is shorter than
+two characters or doesn't begin with `.`.
+
+### 5. Autocomplete cross-tenant leak
+
+> The endpoint accepts an arbitrary `hospitalId` and forwards it without
+> validating against the caller's allowed hospital scope. A clinician at
+> hospital A can query hospital B's HOSPITAL-scope macros if they know the
+> UUID.
+
+**Fix:** the controller now resolves the hospital scope through
+`ControllerAuthUtils.resolveHospitalScope(...)` before calling the service.
+Non-`SUPER_ADMIN` callers cannot query a hospital they don't staff.
+
+### 6. `latestForPatient` / `listByPatient` cross-tenant leak
+
+> Eligibility history is queried purely by `patientId`. Without a hospital
+> scope check, a user who knows another patient UUID can read eligibility
+> results from any hospital.
+
+**Fix:** added `EligibilityCheckRepository`
+`findByPatient_IdAndHospital_IdOrderByRequestedAtDesc` and
+`findFirstByPatient_IdAndHospital_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc`.
+Service overloads accept `UUID hospitalId`. Controller derives the hospital
+scope via `ControllerAuthUtils.resolveHospitalScope(...)` and passes through;
+`null` is intentionally allowed for `SUPER_ADMIN`'s unscoped global view.
+
+### 7. USER-scope uniqueness when hospitalId is null
+
+> `findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwner_Id` with
+> `hospital.id = NULL` doesn't match rows where `hospital_id IS NULL` (JPA
+> equality semantics). Duplicates pass the guard and trip the DB unique index
+> at save time.
+
+**Fix:** added
+`findFirstByTriggerIgnoreCaseAndScopeAndHospitalIsNullAndOwner_Id`. The
+service branches on `hospitalId == null` and uses the `IsNull` variant, so
+the guard catches the conflict before the DB does.
+
+### 8. `LOWER(sp.trigger)` defeats the trigger index
+
+> The autocomplete query wraps `sp.trigger` in `LOWER(...)` even though writes
+> normalise to lowercase, preventing PostgreSQL from using the indexed
+> `phrase_trigger` btree for prefix lookups.
+
+**Fix:** the JPQL now compares `sp.trigger LIKE CONCAT(:prefix, '%')`
+directly. The service already lowercases the prefix on the way in, and
+`SmartPhrase#normalize` lowercases the trigger on write — so the comparison
+is correct without the wrapper, and the existing index is usable.
+
+### 9. `incrementUsage` doesn't bump `updatedAt`
+
+> Other atomic-counter repos (`BreakGlassSessionRepository.incrementAuditCount`)
+> also bump `updatedAt`; leaving it stale is confusing for "recently updated"
+> views and audit.
+
+**Fix:** the JPQL `UPDATE` now sets `sp.updatedAt = :ts` alongside
+`sp.usageCount` and `sp.lastUsedAt`.
+
+## Out-of-scope follow-ups (not addressed in this PR)
+
+- The Sonar `S6916` "use pattern-match guard" hint on the new authz `switch`
+  statements (a stylistic preference, not a correctness issue).
+- Real partner-API connectors for NHIS / NHIA / CNAMGS / mutuelle are still
+  the deferred `EligibilityProvider` bean SPI integration work — when one
+  registers with default (non-`LOWEST_PRECEDENCE`) order, it automatically
+  wins for its scheme.
