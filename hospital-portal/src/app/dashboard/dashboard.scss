@@ -2113,6 +2113,18 @@ $shadow-md:
   }
 }
 
+// Analytics row that sits BELOW .admin-workspace and lays the metric/audit
+// panels out as an auto-fit grid. Replaces the previous pattern of stacking
+// 11 panels inside a 420px right column, which left a wall of blank space
+// to the left of the lower analytics cards once the operational content
+// (Schedule / Recent Patients) finished above.
+.admin-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
 // Admin metric panels — replace nested .stat-strip cards + inline styles.
 .metric-pair {
   display: grid;

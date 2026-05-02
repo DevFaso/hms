@@ -445,6 +445,37 @@
       }
     </section>
 
+    <!-- Quick Actions promoted to the top, matching the nurse / receptionist
+         layout. Was previously the first card inside .admin-workspace-right
+         where it pushed the analytics panels down a tall narrow column. -->
+    @if (quickActions().length > 0) {
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+          </div>
+        </div>
+        <div class="qa-grid">
+          @for (action of quickActions(); track action.label) {
+            <a
+              class="qa-card"
+              [routerLink]="action.route"
+              [queryParams]="action.queryParams ?? null"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+              <span class="qa-desc">{{ action.description }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
+
     <div class="admin-workspace">
       <div class="admin-workspace-left">
         <section class="schedule-panel card">
@@ -532,308 +563,9 @@
             }
           </div>
         </div>
-
-        <!-- MVP 17: Staffing by Department -->
-        @if (staffingByDepartment().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">groups</span>
-                <h2 class="card-title">{{ 'DASHBOARD.STAFFING_BY_DEPARTMENT' | translate }}</h2>
-                <span class="count-badge">{{ staffingByDepartment().length }}</span>
-              </div>
-              <a routerLink="/staff" class="card-link">{{
-                'DASHBOARD.MANAGE_STAFF' | translate
-              }}</a>
-            </div>
-            <div style="overflow-x: auto; padding: 0 16px 16px">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
-                <thead>
-                  <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
-                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">
-                      {{ 'STAFF.DEPARTMENT' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'APPOINTMENTS.SCHEDULED' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'APPOINTMENTS.CANCELLED' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'COMMON.ACTIVE' | translate }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of staffingByDepartment(); track row.departmentId) {
-                    <tr style="border-bottom: 1px solid #f1f5f9">
-                      <td style="padding: 8px 12px">{{ row.departmentName }}</td>
-                      <td style="padding: 8px 12px; text-align: center">
-                        {{ row.scheduledShifts }}
-                      </td>
-                      <td style="padding: 8px 12px; text-align: center; color: #dc2626">
-                        {{ row.cancelledShifts }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 12px;
-                          text-align: center;
-                          color: #059669;
-                          font-weight: 600;
-                        "
-                      >
-                        {{ row.activeStaff }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </section>
-        }
-
-        <!-- MVP 17: Consultation Backlog -->
-        @if (consultBacklog().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">forum</span>
-                <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
-                <span class="count-badge">{{ consultBacklog().length }}</span>
-                @if (overdueConsults() > 0) {
-                  <span
-                    class="count-badge"
-                    style="background: #fee2e2; color: #dc2626; margin-left: 4px"
-                    >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
-                  >
-                }
-              </div>
-              <a routerLink="/consultations" class="card-link">{{
-                'COMMON.VIEW_ALL' | translate
-              }}</a>
-            </div>
-            <div class="schedule-list">
-              @for (c of consultBacklog(); track c.consultationId) {
-                <div
-                  class="sched-row"
-                  [style.border-left]="c.overdue ? '3px solid #dc2626' : '3px solid transparent'"
-                >
-                  <div class="sched-info" style="flex: 1">
-                    <span class="sched-name">{{ c.patientName }}</span>
-                    <span class="sched-reason"
-                      >{{ c.specialtyRequested }} — {{ c.urgency | titlecase }}</span
-                    >
-                  </div>
-                  <div
-                    style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px"
-                  >
-                    <span [class]="'appt-status appt-status-' + c.status.toLowerCase()">{{
-                      c.status | titlecase
-                    }}</span>
-                    @if (c.overdue) {
-                      <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
-                        'DASHBOARD.SLA_OVERDUE' | translate
-                      }}</span>
-                    }
-                  </div>
-                </div>
-              }
-            </div>
-          </section>
-        }
-
-        <!-- MVP 18: Invoice Aging -->
-        @if (invoiceAging()) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">receipt_long</span>
-                <h2 class="card-title">{{ 'DASHBOARD.INVOICE_AGING' | translate }}</h2>
-              </div>
-              <a routerLink="/billing" class="card-link">{{
-                'DASHBOARD.VIEW_BILLING' | translate
-              }}</a>
-            </div>
-            <div style="padding: 0 16px 16px">
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
-                @for (bucket of invoiceAgingBuckets(); track bucket.label; let i = $index) {
-                  <div
-                    style="
-                      flex: 1;
-                      min-width: 100px;
-                      padding: 10px;
-                      border-radius: 8px;
-                      text-align: center;
-                    "
-                    [style.background]="getAgingBucketColor(i) + '15'"
-                    [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
-                  >
-                    <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                      {{ bucket.label }}
-                    </div>
-                    <div
-                      style="font-size: 18px; font-weight: 700; margin: 2px 0"
-                      [style.color]="getAgingBucketColor(i)"
-                    >
-                      {{ bucket.count }}
-                    </div>
-                    <div style="font-size: 11px; color: #475569">
-                      ${{ bucket.total | number: '1.0-0' }}
-                    </div>
-                  </div>
-                }
-              </div>
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  padding: 8px 12px;
-                  background: #f8fafc;
-                  border-radius: 8px;
-                "
-              >
-                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
-                  'DASHBOARD.TOTAL_OUTSTANDING' | translate
-                }}</span>
-                <span style="font-size: 16px; font-weight: 700; color: #0f172a"
-                  >${{ invoiceAging()!.grandTotal | number: '1.0-0' }}</span
-                >
-              </div>
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  padding: 8px 12px;
-                  margin-top: 6px;
-                  background: #f0fdf4;
-                  border-radius: 8px;
-                "
-              >
-                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
-                  'DASHBOARD.COLLECTION_RATE' | translate
-                }}</span>
-                <span style="font-size: 16px; font-weight: 700; color: #059669"
-                  >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
-                >
-              </div>
-            </div>
-          </section>
-        }
-
-        <!-- MVP 20: Daily Collection Trend (30 days) -->
-        @if (paymentTrend().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">trending_up</span>
-                <h2 class="card-title">{{ 'DASHBOARD.DAILY_COLLECTIONS_30D' | translate }}</h2>
-              </div>
-              <a routerLink="/billing" class="card-link">{{
-                'DASHBOARD.VIEW_BILLING' | translate
-              }}</a>
-            </div>
-            <div style="padding: 0 16px 16px">
-              <div
-                style="
-                  display: flex;
-                  align-items: flex-end;
-                  gap: 2px;
-                  height: 120px;
-                  padding: 8px 0;
-                "
-              >
-                @for (point of paymentTrend(); track point.date) {
-                  <div
-                    style="
-                      flex: 1;
-                      display: flex;
-                      flex-direction: column;
-                      align-items: center;
-                      justify-content: flex-end;
-                      height: 100%;
-                    "
-                    [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
-                  >
-                    <div
-                      style="
-                        width: 100%;
-                        min-height: 2px;
-                        border-radius: 2px 2px 0 0;
-                        background: #059669;
-                      "
-                      [style.height.%]="(point.amount / paymentTrendMax()) * 100"
-                    ></div>
-                  </div>
-                }
-              </div>
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  font-size: 10px;
-                  color: #94a3b8;
-                  margin-top: 4px;
-                "
-              >
-                <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
-                <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
-              </div>
-            </div>
-          </section>
-        }
       </div>
 
       <div class="admin-workspace-right">
-        @if (quickActions().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
-              </div>
-            </div>
-            <div class="qa-grid">
-              @for (action of quickActions(); track action.label) {
-                <a
-                  class="qa-card"
-                  [routerLink]="action.route"
-                  [queryParams]="action.queryParams ?? null"
-                  [style.--qa-color]="action.color"
-                  [style.--qa-bg]="action.bgColor"
-                >
-                  <div class="qa-icon-wrap">
-                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-                  </div>
-                  <span class="qa-label">{{ action.label }}</span>
-                  <span class="qa-desc">{{ action.description }}</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
         @if (recentPatients().length > 0) {
           <section class="card">
             <div class="card-head">
@@ -906,452 +638,653 @@
             </div>
           </section>
         }
-        <!-- MVP 17: Audit Trend (last 7 days) -->
-        @if (auditTrend().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">trending_up</span>
-                <h2 class="card-title">{{ 'DASHBOARD.ACTIVITY_TREND_7D' | translate }}</h2>
+      </div>
+    </div>
+
+    <!-- ── Analytics grid: full-width auto-fit row of metric/audit panels.
+         Replaces the previous pattern where the right column held 11 tall
+         analytics cards in a 420px column, leaving the left side blank
+         once the operational content (Schedule + Recent Patients) ended.
+         ────────────────────────────────────────────────────────── -->
+    <div class="admin-analytics-grid">
+      @if (auditTrend().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">trending_up</span>
+              <h2 class="card-title">{{ 'DASHBOARD.ACTIVITY_TREND_7D' | translate }}</h2>
+            </div>
+          </div>
+          <div class="trend-chart">
+            @for (day of auditTrend(); track day.date) {
+              <div class="trend-col" [class.trend-col-empty]="day.count === 0">
+                <span class="trend-count">{{ day.count }}</span>
+                <div
+                  class="trend-bar"
+                  [style.height.px]="
+                    auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 70 + 4 : 4
+                  "
+                ></div>
+                <span class="trend-day">{{ day.date | date: 'EEE' }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (leaveMetrics()) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">event_busy</span>
+              <h2 class="card-title">{{ 'DASHBOARD.WORKFORCE_ABSENCE' | translate }}</h2>
+            </div>
+            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
+          </div>
+          <div class="metric-pair">
+            <div class="metric-block" style="--metric-color: #1d4ed8; --metric-bg: #dbeafe">
+              <div class="metric-icon">
+                <span class="material-symbols-outlined">event_busy</span>
+              </div>
+              <div class="metric-body">
+                <span class="metric-value">{{ leaveMetrics()!.onLeaveToday }}</span>
+                <span class="metric-label">{{ 'DASHBOARD.ON_LEAVE_TODAY' | translate }}</span>
               </div>
             </div>
-            <div class="trend-chart">
-              @for (day of auditTrend(); track day.date) {
-                <div class="trend-col" [class.trend-col-empty]="day.count === 0">
-                  <span class="trend-count">{{ day.count }}</span>
-                  <div
-                    class="trend-bar"
-                    [style.height.px]="
-                      auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 70 + 4 : 4
-                    "
-                  ></div>
-                  <span class="trend-day">{{ day.date | date: 'EEE' }}</span>
-                </div>
-              }
-            </div>
-          </section>
-        }
-        <!-- MVP 18: Integrations Visibility -->
-        @if (integrations().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">hub</span>
-                <h2 class="card-title">{{ 'DASHBOARD.INTEGRATIONS' | translate }}</h2>
-                <span class="count-badge">{{ integrations().length }}</span>
+            <div class="metric-block" style="--metric-color: #0369a1; --metric-bg: #e0f2fe">
+              <div class="metric-icon">
+                <span class="material-symbols-outlined">date_range</span>
+              </div>
+              <div class="metric-body">
+                <span class="metric-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
+                <span class="metric-label">{{ 'DASHBOARD.UPCOMING_7_DAYS' | translate }}</span>
               </div>
             </div>
-            <div style="padding: 0 16px 16px">
-              @for (svc of integrations(); track svc.serviceType + svc.provider) {
+          </div>
+        </section>
+      }
+      @if (writeOffs()) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">cancel</span>
+              <h2 class="card-title">{{ 'DASHBOARD.WRITE_OFFS' | translate }}</h2>
+            </div>
+            <a routerLink="/billing" class="card-link">{{
+              'DASHBOARD.VIEW_BILLING' | translate
+            }}</a>
+          </div>
+          <div class="metric-pair">
+            <div class="metric-block" style="--metric-color: #b91c1c; --metric-bg: #fee2e2">
+              <div class="metric-icon">
+                <span class="material-symbols-outlined">block</span>
+              </div>
+              <div class="metric-body">
+                <span class="metric-value">{{ writeOffs()!.cancelledCount }}</span>
+                <span class="metric-label">{{ 'DASHBOARD.CANCELLED_INVOICES' | translate }}</span>
+              </div>
+            </div>
+            <div class="metric-block" style="--metric-color: #92400e; --metric-bg: #fef3c7">
+              <div class="metric-icon">
+                <span class="material-symbols-outlined">money_off</span>
+              </div>
+              <div class="metric-body">
+                <span class="metric-value"
+                  >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
+                >
+                <span class="metric-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+      @if (bedOccupancy()) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">bed</span>
+              <h2 class="card-title">{{ 'DASHBOARD.BED_OCCUPANCY' | translate }}</h2>
+            </div>
+          </div>
+          <div class="metric-quad">
+            <div class="metric-tile" style="--metric-color: #1d4ed8; --metric-bg: #eff6ff">
+              <div class="metric-tile-label">{{ 'DASHBOARD.TOTAL' | translate }}</div>
+              <div class="metric-tile-value">{{ bedOccupancy()!.totalBeds }}</div>
+            </div>
+            <div class="metric-tile" style="--metric-color: #b91c1c; --metric-bg: #fef2f2">
+              <div class="metric-tile-label">{{ 'DASHBOARD.OCCUPIED' | translate }}</div>
+              <div class="metric-tile-value">{{ bedOccupancy()!.occupiedBeds }}</div>
+            </div>
+            <div class="metric-tile" style="--metric-color: #047857; --metric-bg: #f0fdf4">
+              <div class="metric-tile-label">{{ 'DASHBOARD.AVAILABLE' | translate }}</div>
+              <div class="metric-tile-value">{{ bedOccupancy()!.availableBeds }}</div>
+            </div>
+            <div class="metric-tile" style="--metric-color: #92400e; --metric-bg: #fefce8">
+              <div class="metric-tile-label">{{ 'DASHBOARD.RESERVED' | translate }}</div>
+              <div class="metric-tile-value">{{ bedOccupancy()!.reservedBeds }}</div>
+            </div>
+          </div>
+          <div
+            class="kv-row"
+            [style.--kv-color]="
+              bedOccupancy()!.occupancyRate > 90
+                ? '#b91c1c'
+                : bedOccupancy()!.occupancyRate > 75
+                  ? '#92400e'
+                  : '#047857'
+            "
+          >
+            <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
+            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
+          </div>
+        </section>
+      }
+      @if (invoiceAging()) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">receipt_long</span>
+              <h2 class="card-title">{{ 'DASHBOARD.INVOICE_AGING' | translate }}</h2>
+            </div>
+            <a routerLink="/billing" class="card-link">{{
+              'DASHBOARD.VIEW_BILLING' | translate
+            }}</a>
+          </div>
+          <div style="padding: 0 16px 16px">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+              @for (bucket of invoiceAgingBuckets(); track bucket.label; let i = $index) {
                 <div
                   style="
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 8px 0;
-                    border-bottom: 1px solid #f1f5f9;
+                    flex: 1;
+                    min-width: 100px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    text-align: center;
                   "
+                  [style.background]="getAgingBucketColor(i) + '15'"
+                  [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
                 >
-                  <span class="material-symbols-outlined" style="font-size: 20px; color: #64748b">
-                    @switch (svc.serviceType) {
-                      @case ('EHR') {
-                        clinical_notes
-                      }
-                      @case ('BILLING') {
-                        receipt_long
-                      }
-                      @case ('INVENTORY') {
-                        inventory_2
-                      }
-                      @case ('LIMS') {
-                        science
-                      }
-                      @case ('ANALYTICS') {
-                        analytics
-                      }
-                      @default {
-                        extension
-                      }
-                    }
-                  </span>
-                  <div style="flex: 1; min-width: 0">
-                    <div style="font-size: 13px; font-weight: 600; color: #0f172a">
-                      {{ svc.provider ?? svc.serviceType }}
-                    </div>
-                    <div style="font-size: 11px; color: #94a3b8">{{ svc.serviceType }}</div>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 6px">
-                    @if (svc.enabled) {
-                      <span
-                        style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e"
-                      ></span>
-                    } @else {
-                      <span
-                        style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8"
-                      ></span>
-                    }
-                    <span
-                      [class]="getIntegrationStatusClass(svc.status)"
-                      style="
-                        font-size: 11px;
-                        font-weight: 600;
-                        padding: 2px 8px;
-                        border-radius: 12px;
-                      "
-                    >
-                      {{ svc.status | titlecase }}
-                    </span>
-                  </div>
-                </div>
-              }
-            </div>
-          </section>
-        }
-
-        <!-- MVP 19: License Expiry Alerts -->
-        @if (licenseAlerts().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">gpp_maybe</span>
-                <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
-                <span class="count-badge">{{ licenseAlerts().length }}</span>
-                @if (expiredLicenseCount() > 0) {
-                  <span
-                    class="count-badge"
-                    style="background: #fee2e2; color: #dc2626; margin-left: 4px"
-                    >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
-                  >
-                }
-              </div>
-              <a routerLink="/staff" class="card-link">{{
-                'DASHBOARD.MANAGE_STAFF' | translate
-              }}</a>
-            </div>
-            <div class="schedule-list">
-              @for (alert of licenseAlerts(); track alert.staffId) {
-                <div
-                  class="sched-row"
-                  [style.border-left]="
-                    alert.severity === 'EXPIRED'
-                      ? '3px solid #dc2626'
-                      : alert.severity === 'CRITICAL'
-                        ? '3px solid #d97706'
-                        : '3px solid #eab308'
-                  "
-                >
-                  <div class="sched-info" style="flex: 1">
-                    <span class="sched-name">{{ alert.staffName }}</span>
-                    <span class="sched-reason"
-                      >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
-                    >
-                    <span class="sched-reason"
-                      >License: {{ alert.licenseNumber }} — {{ 'DASHBOARD.EXPIRES' | translate }}:
-                      {{ alert.licenseExpiryDate }}</span
-                    >
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                    {{ bucket.label }}
                   </div>
                   <div
-                    style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px"
+                    style="font-size: 18px; font-weight: 700; margin: 2px 0"
+                    [style.color]="getAgingBucketColor(i)"
                   >
-                    <span
-                      [class]="'license-severity license-severity-' + alert.severity.toLowerCase()"
-                    >
-                      @if (alert.severity === 'EXPIRED') {
-                        {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
-                      } @else if (alert.severity === 'CRITICAL') {
-                        {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
-                        {{ 'DASHBOARD.CRITICAL' | translate }}
-                      } @else {
-                        {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
-                      }
-                    </span>
+                    {{ bucket.count }}
+                  </div>
+                  <div style="font-size: 11px; color: #475569">
+                    ${{ bucket.total | number: '1.0-0' }}
                   </div>
                 </div>
               }
-            </div>
-          </section>
-        }
-
-        <!-- MVP 19: Leave Summary -->
-        @if (leaveMetrics()) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">event_busy</span>
-                <h2 class="card-title">{{ 'DASHBOARD.WORKFORCE_ABSENCE' | translate }}</h2>
-              </div>
-              <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
-            </div>
-            <div class="metric-pair">
-              <div class="metric-block" style="--metric-color: #1d4ed8; --metric-bg: #dbeafe">
-                <div class="metric-icon">
-                  <span class="material-symbols-outlined">event_busy</span>
-                </div>
-                <div class="metric-body">
-                  <span class="metric-value">{{ leaveMetrics()!.onLeaveToday }}</span>
-                  <span class="metric-label">{{ 'DASHBOARD.ON_LEAVE_TODAY' | translate }}</span>
-                </div>
-              </div>
-              <div class="metric-block" style="--metric-color: #0369a1; --metric-bg: #e0f2fe">
-                <div class="metric-icon">
-                  <span class="material-symbols-outlined">date_range</span>
-                </div>
-                <div class="metric-body">
-                  <span class="metric-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
-                  <span class="metric-label">{{ 'DASHBOARD.UPCOMING_7_DAYS' | translate }}</span>
-                </div>
-              </div>
-            </div>
-          </section>
-        }
-
-        <!-- MVP 20: Payment Method Breakdown -->
-        @if (paymentMethodBreakdown().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">credit_card</span>
-                <h2 class="card-title">{{ 'DASHBOARD.PAYMENT_METHODS_30D' | translate }}</h2>
-              </div>
-            </div>
-            <div style="padding: 0 16px 16px">
-              @for (pm of paymentMethodBreakdown(); track pm.method) {
-                <div
-                  style="
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 8px 0;
-                    border-bottom: 1px solid #f1f5f9;
-                  "
-                >
-                  <div
-                    style="width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0"
-                    [style.background]="getPaymentMethodColor(pm.method)"
-                  ></div>
-                  <span style="flex: 1; font-size: 13px; font-weight: 500; color: #334155">{{
-                    formatMethodLabel(pm.method)
-                  }}</span>
-                  <span
-                    style="font-size: 12px; color: #64748b; min-width: 30px; text-align: right"
-                    >{{ pm.count }}</span
-                  >
-                  <span
-                    style="
-                      font-size: 13px;
-                      font-weight: 600;
-                      color: #0f172a;
-                      min-width: 70px;
-                      text-align: right;
-                    "
-                    >${{ pm.total | number: '1.0-0' }}</span
-                  >
-                </div>
-              }
-              @if (paymentMethodTotal() > 0) {
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 10px 0 0;
-                    margin-top: 4px;
-                  "
-                >
-                  <span style="font-size: 13px; font-weight: 600; color: #475569">{{
-                    'DASHBOARD.TOTAL_COLLECTED' | translate
-                  }}</span>
-                  <span style="font-size: 15px; font-weight: 700; color: #059669"
-                    >${{ paymentMethodTotal() | number: '1.0-0' }}</span
-                  >
-                </div>
-              }
-            </div>
-          </section>
-        }
-
-        <!-- MVP 20: Write-Off Tracking -->
-        @if (writeOffs()) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">cancel</span>
-                <h2 class="card-title">{{ 'DASHBOARD.WRITE_OFFS' | translate }}</h2>
-              </div>
-              <a routerLink="/billing" class="card-link">{{
-                'DASHBOARD.VIEW_BILLING' | translate
-              }}</a>
-            </div>
-            <div class="metric-pair">
-              <div class="metric-block" style="--metric-color: #b91c1c; --metric-bg: #fee2e2">
-                <div class="metric-icon">
-                  <span class="material-symbols-outlined">block</span>
-                </div>
-                <div class="metric-body">
-                  <span class="metric-value">{{ writeOffs()!.cancelledCount }}</span>
-                  <span class="metric-label">{{ 'DASHBOARD.CANCELLED_INVOICES' | translate }}</span>
-                </div>
-              </div>
-              <div class="metric-block" style="--metric-color: #92400e; --metric-bg: #fef3c7">
-                <div class="metric-icon">
-                  <span class="material-symbols-outlined">money_off</span>
-                </div>
-                <div class="metric-body">
-                  <span class="metric-value"
-                    >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
-                  >
-                  <span class="metric-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
-                </div>
-              </div>
-            </div>
-          </section>
-        }
-
-        <!-- MVP 21: Bed Occupancy Overview -->
-        @if (bedOccupancy()) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bed</span>
-                <h2 class="card-title">{{ 'DASHBOARD.BED_OCCUPANCY' | translate }}</h2>
-              </div>
-            </div>
-            <div class="metric-quad">
-              <div class="metric-tile" style="--metric-color: #1d4ed8; --metric-bg: #eff6ff">
-                <div class="metric-tile-label">{{ 'DASHBOARD.TOTAL' | translate }}</div>
-                <div class="metric-tile-value">{{ bedOccupancy()!.totalBeds }}</div>
-              </div>
-              <div class="metric-tile" style="--metric-color: #b91c1c; --metric-bg: #fef2f2">
-                <div class="metric-tile-label">{{ 'DASHBOARD.OCCUPIED' | translate }}</div>
-                <div class="metric-tile-value">{{ bedOccupancy()!.occupiedBeds }}</div>
-              </div>
-              <div class="metric-tile" style="--metric-color: #047857; --metric-bg: #f0fdf4">
-                <div class="metric-tile-label">{{ 'DASHBOARD.AVAILABLE' | translate }}</div>
-                <div class="metric-tile-value">{{ bedOccupancy()!.availableBeds }}</div>
-              </div>
-              <div class="metric-tile" style="--metric-color: #92400e; --metric-bg: #fefce8">
-                <div class="metric-tile-label">{{ 'DASHBOARD.RESERVED' | translate }}</div>
-                <div class="metric-tile-value">{{ bedOccupancy()!.reservedBeds }}</div>
-              </div>
             </div>
             <div
-              class="kv-row"
-              [style.--kv-color]="
-                bedOccupancy()!.occupancyRate > 90
-                  ? '#b91c1c'
-                  : bedOccupancy()!.occupancyRate > 75
-                    ? '#92400e'
-                    : '#047857'
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 12px;
+                background: #f8fafc;
+                border-radius: 8px;
               "
             >
-              <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
-              <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
+              <span style="font-size: 13px; color: #475569; font-weight: 500">{{
+                'DASHBOARD.TOTAL_OUTSTANDING' | translate
+              }}</span>
+              <span style="font-size: 16px; font-weight: 700; color: #0f172a"
+                >${{ invoiceAging()!.grandTotal | number: '1.0-0' }}</span
+              >
             </div>
-          </section>
-        }
-
-        <!-- MVP 21: Ward-Level Occupancy Table -->
-        @if (wardOccupancy().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">domain</span>
-                <h2 class="card-title">{{ 'DASHBOARD.WARD_OCCUPANCY' | translate }}</h2>
-                <span class="count-badge">{{ wardOccupancy().length }}</span>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 12px;
+                margin-top: 6px;
+                background: #f0fdf4;
+                border-radius: 8px;
+              "
+            >
+              <span style="font-size: 13px; color: #475569; font-weight: 500">{{
+                'DASHBOARD.COLLECTION_RATE' | translate
+              }}</span>
+              <span style="font-size: 16px; font-weight: 700; color: #059669"
+                >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
+              >
+            </div>
+          </div>
+        </section>
+      }
+      @if (paymentTrend().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">trending_up</span>
+              <h2 class="card-title">{{ 'DASHBOARD.DAILY_COLLECTIONS_30D' | translate }}</h2>
+            </div>
+            <a routerLink="/billing" class="card-link">{{
+              'DASHBOARD.VIEW_BILLING' | translate
+            }}</a>
+          </div>
+          <div style="padding: 0 16px 16px">
+            <div
+              style="display: flex; align-items: flex-end; gap: 2px; height: 120px; padding: 8px 0"
+            >
+              @for (point of paymentTrend(); track point.date) {
+                <div
+                  style="
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: flex-end;
+                    height: 100%;
+                  "
+                  [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
+                >
+                  <div
+                    style="
+                      width: 100%;
+                      min-height: 2px;
+                      border-radius: 2px 2px 0 0;
+                      background: #059669;
+                    "
+                    [style.height.%]="(point.amount / paymentTrendMax()) * 100"
+                  ></div>
+                </div>
+              }
+            </div>
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                font-size: 10px;
+                color: #94a3b8;
+                margin-top: 4px;
+              "
+            >
+              <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
+            </div>
+          </div>
+        </section>
+      }
+      @if (paymentMethodBreakdown().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">credit_card</span>
+              <h2 class="card-title">{{ 'DASHBOARD.PAYMENT_METHODS_30D' | translate }}</h2>
+            </div>
+          </div>
+          <div style="padding: 0 16px 16px">
+            @for (pm of paymentMethodBreakdown(); track pm.method) {
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  padding: 8px 0;
+                  border-bottom: 1px solid #f1f5f9;
+                "
+              >
+                <div
+                  style="width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0"
+                  [style.background]="getPaymentMethodColor(pm.method)"
+                ></div>
+                <span style="flex: 1; font-size: 13px; font-weight: 500; color: #334155">{{
+                  formatMethodLabel(pm.method)
+                }}</span>
+                <span style="font-size: 12px; color: #64748b; min-width: 30px; text-align: right">{{
+                  pm.count
+                }}</span>
+                <span
+                  style="
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: #0f172a;
+                    min-width: 70px;
+                    text-align: right;
+                  "
+                  >${{ pm.total | number: '1.0-0' }}</span
+                >
               </div>
+            }
+            @if (paymentMethodTotal() > 0) {
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 10px 0 0;
+                  margin-top: 4px;
+                "
+              >
+                <span style="font-size: 13px; font-weight: 600; color: #475569">{{
+                  'DASHBOARD.TOTAL_COLLECTED' | translate
+                }}</span>
+                <span style="font-size: 15px; font-weight: 700; color: #059669"
+                  >${{ paymentMethodTotal() | number: '1.0-0' }}</span
+                >
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (staffingByDepartment().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">groups</span>
+              <h2 class="card-title">{{ 'DASHBOARD.STAFFING_BY_DEPARTMENT' | translate }}</h2>
+              <span class="count-badge">{{ staffingByDepartment().length }}</span>
             </div>
-            <div style="overflow-x: auto; padding: 0 16px 16px">
-              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
-                <thead>
-                  <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
-                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">
-                      {{ 'DASHBOARD.WARD' | translate }}
-                    </th>
-                    <th
+            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a>
+          </div>
+          <div style="overflow-x: auto; padding: 0 16px 16px">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+              <thead>
+                <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
+                  <th style="padding: 8px 12px; font-weight: 600; color: #475569">
+                    {{ 'STAFF.DEPARTMENT' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'APPOINTMENTS.SCHEDULED' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'APPOINTMENTS.CANCELLED' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'COMMON.ACTIVE' | translate }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of staffingByDepartment(); track row.departmentId) {
+                  <tr style="border-bottom: 1px solid #f1f5f9">
+                    <td style="padding: 8px 12px">{{ row.departmentName }}</td>
+                    <td style="padding: 8px 12px; text-align: center">
+                      {{ row.scheduledShifts }}
+                    </td>
+                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                      {{ row.cancelledShifts }}
+                    </td>
+                    <td
                       style="
                         padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
                         text-align: center;
+                        color: #059669;
+                        font-weight: 600;
                       "
                     >
-                      {{ 'DASHBOARD.TOTAL' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'DASHBOARD.OCCUPIED' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'DASHBOARD.AVAILABLE' | translate }}
-                    </th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      {{ 'DASHBOARD.RATE' | translate }}
-                    </th>
+                      {{ row.activeStaff }}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  @for (row of wardOccupancy(); track row.wardId) {
-                    <tr style="border-bottom: 1px solid #f1f5f9">
-                      <td style="padding: 8px 12px">
-                        <div>{{ row.wardName }}</div>
-                        <div style="font-size: 11px; color: #94a3b8">
-                          {{ row.wardType | titlecase }}
-                        </div>
-                      </td>
-                      <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
-                      <td style="padding: 8px 12px; text-align: center; color: #dc2626">
-                        {{ row.occupiedBeds }}
-                      </td>
-                      <td
-                        style="
-                          padding: 8px 12px;
-                          text-align: center;
-                          color: #059669;
-                          font-weight: 600;
-                        "
-                      >
-                        {{ row.availableBeds }}
-                      </td>
-                      <td
-                        style="padding: 8px 12px; text-align: center; font-weight: 600"
-                        [style.color]="
-                          row.occupancyRate > 90
-                            ? '#dc2626'
-                            : row.occupancyRate > 75
-                              ? '#d97706'
-                              : '#059669'
-                        "
-                      >
-                        {{ row.occupancyRate | number: '1.1-1' }}%
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+      @if (consultBacklog().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">forum</span>
+              <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
+              <span class="count-badge">{{ consultBacklog().length }}</span>
+              @if (overdueConsults() > 0) {
+                <span
+                  class="count-badge"
+                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
+                >
+              }
             </div>
-          </section>
-        }
-      </div>
+            <a routerLink="/consultations" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          </div>
+          <div class="schedule-list">
+            @for (c of consultBacklog(); track c.consultationId) {
+              <div
+                class="sched-row"
+                [style.border-left]="c.overdue ? '3px solid #dc2626' : '3px solid transparent'"
+              >
+                <div class="sched-info" style="flex: 1">
+                  <span class="sched-name">{{ c.patientName }}</span>
+                  <span class="sched-reason"
+                    >{{ c.specialtyRequested }} — {{ c.urgency | titlecase }}</span
+                  >
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+                  <span [class]="'appt-status appt-status-' + c.status.toLowerCase()">{{
+                    c.status | titlecase
+                  }}</span>
+                  @if (c.overdue) {
+                    <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
+                      'DASHBOARD.SLA_OVERDUE' | translate
+                    }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (licenseAlerts().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">gpp_maybe</span>
+              <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
+              <span class="count-badge">{{ licenseAlerts().length }}</span>
+              @if (expiredLicenseCount() > 0) {
+                <span
+                  class="count-badge"
+                  style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                  >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
+                >
+              }
+            </div>
+            <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.MANAGE_STAFF' | translate }}</a>
+          </div>
+          <div class="schedule-list">
+            @for (alert of licenseAlerts(); track alert.staffId) {
+              <div
+                class="sched-row"
+                [style.border-left]="
+                  alert.severity === 'EXPIRED'
+                    ? '3px solid #dc2626'
+                    : alert.severity === 'CRITICAL'
+                      ? '3px solid #d97706'
+                      : '3px solid #eab308'
+                "
+              >
+                <div class="sched-info" style="flex: 1">
+                  <span class="sched-name">{{ alert.staffName }}</span>
+                  <span class="sched-reason"
+                    >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
+                  >
+                  <span class="sched-reason"
+                    >License: {{ alert.licenseNumber }} — {{ 'DASHBOARD.EXPIRES' | translate }}:
+                    {{ alert.licenseExpiryDate }}</span
+                  >
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
+                  <span
+                    [class]="'license-severity license-severity-' + alert.severity.toLowerCase()"
+                  >
+                    @if (alert.severity === 'EXPIRED') {
+                      {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
+                    } @else if (alert.severity === 'CRITICAL') {
+                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
+                      {{ 'DASHBOARD.CRITICAL' | translate }}
+                    } @else {
+                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
+                    }
+                  </span>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (integrations().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">hub</span>
+              <h2 class="card-title">{{ 'DASHBOARD.INTEGRATIONS' | translate }}</h2>
+              <span class="count-badge">{{ integrations().length }}</span>
+            </div>
+          </div>
+          <div style="padding: 0 16px 16px">
+            @for (svc of integrations(); track svc.serviceType + svc.provider) {
+              <div
+                style="
+                  display: flex;
+                  align-items: center;
+                  gap: 10px;
+                  padding: 8px 0;
+                  border-bottom: 1px solid #f1f5f9;
+                "
+              >
+                <span class="material-symbols-outlined" style="font-size: 20px; color: #64748b">
+                  @switch (svc.serviceType) {
+                    @case ('EHR') {
+                      clinical_notes
+                    }
+                    @case ('BILLING') {
+                      receipt_long
+                    }
+                    @case ('INVENTORY') {
+                      inventory_2
+                    }
+                    @case ('LIMS') {
+                      science
+                    }
+                    @case ('ANALYTICS') {
+                      analytics
+                    }
+                    @default {
+                      extension
+                    }
+                  }
+                </span>
+                <div style="flex: 1; min-width: 0">
+                  <div style="font-size: 13px; font-weight: 600; color: #0f172a">
+                    {{ svc.provider ?? svc.serviceType }}
+                  </div>
+                  <div style="font-size: 11px; color: #94a3b8">{{ svc.serviceType }}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px">
+                  @if (svc.enabled) {
+                    <span
+                      style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e"
+                    ></span>
+                  } @else {
+                    <span
+                      style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8"
+                    ></span>
+                  }
+                  <span
+                    [class]="getIntegrationStatusClass(svc.status)"
+                    style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 12px"
+                  >
+                    {{ svc.status | titlecase }}
+                  </span>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (wardOccupancy().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">domain</span>
+              <h2 class="card-title">{{ 'DASHBOARD.WARD_OCCUPANCY' | translate }}</h2>
+              <span class="count-badge">{{ wardOccupancy().length }}</span>
+            </div>
+          </div>
+          <div style="overflow-x: auto; padding: 0 16px 16px">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+              <thead>
+                <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
+                  <th style="padding: 8px 12px; font-weight: 600; color: #475569">
+                    {{ 'DASHBOARD.WARD' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'DASHBOARD.TOTAL' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'DASHBOARD.OCCUPIED' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'DASHBOARD.AVAILABLE' | translate }}
+                  </th>
+                  <th
+                    style="padding: 8px 12px; font-weight: 600; color: #475569; text-align: center"
+                  >
+                    {{ 'DASHBOARD.RATE' | translate }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of wardOccupancy(); track row.wardId) {
+                  <tr style="border-bottom: 1px solid #f1f5f9">
+                    <td style="padding: 8px 12px">
+                      <div>{{ row.wardName }}</div>
+                      <div style="font-size: 11px; color: #94a3b8">
+                        {{ row.wardType | titlecase }}
+                      </div>
+                    </td>
+                    <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
+                    <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                      {{ row.occupiedBeds }}
+                    </td>
+                    <td
+                      style="
+                        padding: 8px 12px;
+                        text-align: center;
+                        color: #059669;
+                        font-weight: 600;
+                      "
+                    >
+                      {{ row.availableBeds }}
+                    </td>
+                    <td
+                      style="padding: 8px 12px; text-align: center; font-weight: 600"
+                      [style.color]="
+                        row.occupancyRate > 90
+                          ? '#dc2626'
+                          : row.occupancyRate > 75
+                            ? '#d97706'
+                            : '#059669'
+                      "
+                    >
+                      {{ row.occupancyRate | number: '1.1-1' }}%
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
     </div>
   }
 
