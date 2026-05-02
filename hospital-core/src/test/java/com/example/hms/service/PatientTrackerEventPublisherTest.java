@@ -18,6 +18,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -87,6 +88,8 @@ class PatientTrackerEventPublisherTest {
                         org.mockito.ArgumentMatchers.anyString(),
                         (Object) org.mockito.ArgumentMatchers.any());
 
-        publisher.publishStatusTransition(encounter, "IN_PROGRESS", "AWAITING_RESULTS");
+        assertThatCode(() ->
+                publisher.publishStatusTransition(encounter, "IN_PROGRESS", "AWAITING_RESULTS"))
+                .doesNotThrowAnyException();
     }
 }
