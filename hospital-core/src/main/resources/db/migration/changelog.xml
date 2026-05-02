@@ -1049,4 +1049,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V77 — Tenant lifecycle (MVP-2)
+         Adds suspend / archive / restore / schedule-purge state machine
+         columns to organizations. Strictly additive; default 'ACTIVE'.
+         ================================================================= -->
+    <changeSet id="V77-tenant-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V77__tenant_lifecycle.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

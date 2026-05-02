@@ -581,6 +581,13 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./organizations/organization-list').then((m) => m.OrganizationListComponent),
       },
+      {
+        path: 'organizations/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./organizations/organization-detail').then((m) => m.OrganizationDetailComponent),
+      },
 
       // Users (Admin)
       {
@@ -1009,6 +1016,14 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
+      },
+
+      // Super-Admin Control Tower (SUPER_ADMIN only)
+      {
+        path: 'super-admin',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
       },
 
       // Refill approval queue (provider-facing — pairs with patient portal refills)

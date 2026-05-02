@@ -72,6 +72,9 @@ class PlatformRegistryControllerTest {
     private HospitalUserDetailsService hospitalUserDetailsService;
 
     @MockitoBean
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
+    @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;
 
     private UUID organizationId;

@@ -1,24 +1,36 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
+  OrganizationLifecycleState,
   OrganizationService,
   OrganizationResponse,
   OrganizationCreateRequest,
 } from '../services/organization.service';
+import { stateColor as lifecycleStateColor } from './organization-detail';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './organization-list.html',
   styleUrl: './organization-list.scss',
 })
 export class OrganizationListComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * Only super admins can open /organizations/:id (gated by RoleGuard).
+   * Render the row name as a clickable link only for them; ROLE_ADMIN sees
+   * a non-clickable row instead of being routed to /error/403 on click.
+   */
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
 
   organizations = signal<OrganizationResponse[]>([]);
   filtered = signal<OrganizationResponse[]>([]);
@@ -225,5 +237,9 @@ export class OrganizationListComponent implements OnInit {
       .split('_')
       .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
       .join(' ');
+  }
+
+  lifecycleColor(state: OrganizationLifecycleState | undefined): string {
+    return lifecycleStateColor(state);
   }
 }
