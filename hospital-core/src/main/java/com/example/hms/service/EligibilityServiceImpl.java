@@ -7,7 +7,6 @@ import com.example.hms.enums.EligibilityScheme;
 import com.example.hms.enums.EligibilityStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.exception.UnauthorizedAccessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientInsurance;
@@ -165,19 +164,26 @@ public class EligibilityServiceImpl implements EligibilityService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<EligibilityResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
-        return checkRepository.findByPatient_IdOrderByRequestedAtDesc(patientId, pageable)
-            .map(this::toDto);
+    public Page<EligibilityResponseDTO> listByPatient(UUID patientId, UUID hospitalId, Pageable pageable) {
+        Page<EligibilityCheck> page = (hospitalId == null)
+            ? checkRepository.findByPatient_IdOrderByRequestedAtDesc(patientId, pageable)
+            : checkRepository.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(
+                patientId, hospitalId, pageable);
+        return page.map(this::toDto);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Optional<EligibilityResponseDTO> findLatestForPatient(UUID patientId,
+                                                                 UUID hospitalId,
                                                                  EligibilityScheme scheme,
                                                                  EligibilityCheckType type) {
-        return checkRepository
-            .findFirstByPatient_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(patientId, scheme, type)
-            .map(this::toDto);
+        Optional<EligibilityCheck> hit = (hospitalId == null)
+            ? checkRepository.findFirstByPatient_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
+                patientId, scheme, type)
+            : checkRepository.findFirstByPatient_IdAndHospital_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
+                patientId, hospitalId, scheme, type);
+        return hit.map(this::toDto);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -261,11 +267,4 @@ public class EligibilityServiceImpl implements EligibilityService {
             .build();
     }
 
-    /** Defensive guard against an authentication slip in test contexts. */
-    @SuppressWarnings("unused")
-    private void requireAuthenticated() {
-        if (SecurityUtils.getCurrentUsername() == null) {
-            throw new UnauthorizedAccessException("No authenticated user in security context.");
-        }
-    }
 }

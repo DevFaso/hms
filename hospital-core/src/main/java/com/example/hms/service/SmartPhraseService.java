@@ -14,6 +14,12 @@ import java.util.UUID;
  * form. Resolution precedence at autocomplete time is USER > HOSPITAL > GLOBAL
  * — a user macro shadows a hospital one with the same trigger; a hospital
  * macro shadows a global one.
+ *
+ * <p>Mutations ({@link #create}, {@link #update}, {@link #delete}) read the
+ * authenticated principal from the Spring Security context and enforce
+ * scope-based authorization internally — a clinician with a known id cannot
+ * edit another user's macros or create GLOBAL/HOSPITAL macros for hospitals
+ * they do not staff.
  */
 public interface SmartPhraseService {
 

@@ -40,9 +40,10 @@ public class EligibilityCheckRequestDTO {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private EligibilityScheme scheme;
 
-    @NotNull
-    @Schema(description = "Coverage / member-status check or prior-auth request.",
-            requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Coverage / member-status check or prior-auth request. "
+                       + "The /check and /prior-auth endpoints force this field server-side, "
+                       + "so callers using those endpoints can omit it.",
+            example = "COVERAGE")
     private EligibilityCheckType checkType;
 
     @Size(max = 64)

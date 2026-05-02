@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EligibilityCheckType;
 import com.example.hms.enums.EligibilityScheme;
 import com.example.hms.payload.dto.insurance.EligibilityCheckRequestDTO;
@@ -16,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +41,7 @@ public class EligibilityController {
         "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')";
 
     private final EligibilityService eligibilityService;
+    private final ControllerAuthUtils authUtils;
 
     @PostMapping("/check")
     @Operation(summary = "Run a coverage / member-status check",
@@ -79,25 +82,34 @@ public class EligibilityController {
 
     @GetMapping("/patient/{patientId}")
     @Operation(summary = "Page through eligibility checks for a patient",
-               description = "Returns most-recent first. Powers the patient-detail eligibility timeline.")
+               description = "Returns most-recent first. Powers the patient-detail eligibility timeline. "
+                           + "Scoped to the caller's active hospital (or the explicit hospitalId for "
+                           + "SUPER_ADMIN) to prevent cross-tenant leakage of eligibility history.")
     @PreAuthorize(CLINICAL_ROLES)
     public ResponseEntity<Page<EligibilityResponseDTO>> listByPatient(
             @PathVariable UUID patientId,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(eligibilityService.listByPatient(patientId, pageable));
+            @RequestParam(required = false) UUID hospitalId,
+            @PageableDefault(size = 20) Pageable pageable,
+            Authentication auth) {
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        return ResponseEntity.ok(eligibilityService.listByPatient(patientId, resolvedHospitalId, pageable));
     }
 
     @GetMapping("/patient/{patientId}/latest")
     @Operation(summary = "Most-recent check for the (patient, scheme, type) tuple",
                description = "Returns 204 No Content when no prior check exists. Used by the encounter and "
                            + "checkout screens to show whether the patient already has a fresh eligibility "
-                           + "answer before re-running the check.")
+                           + "answer before re-running the check. Scoped to the caller's active hospital "
+                           + "(or the explicit hospitalId for SUPER_ADMIN).")
     @PreAuthorize(CLINICAL_ROLES)
     public ResponseEntity<EligibilityResponseDTO> latestForPatient(
             @PathVariable UUID patientId,
             @RequestParam EligibilityScheme scheme,
-            @RequestParam(defaultValue = "COVERAGE") EligibilityCheckType type) {
-        return eligibilityService.findLatestForPatient(patientId, scheme, type)
+            @RequestParam(defaultValue = "COVERAGE") EligibilityCheckType type,
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        return eligibilityService.findLatestForPatient(patientId, resolvedHospitalId, scheme, type)
             .map(ResponseEntity::ok)
             .orElseGet(() -> ResponseEntity.noContent().build());
     }

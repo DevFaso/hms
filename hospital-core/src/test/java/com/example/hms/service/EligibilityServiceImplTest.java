@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -279,10 +280,235 @@ class EligibilityServiceImplTest {
                 .thenReturn(Optional.of(check));
 
             Optional<EligibilityResponseDTO> result = service.findLatestForPatient(
-                patientId, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE);
+                patientId, /* hospitalId */ null, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE);
 
             assertThat(result).isPresent();
             assertThat(result.get().getResponseCode()).isEqualTo("ACTIVE");
+        }
+
+        @Test
+        @DisplayName("delegates to the hospital-scoped repo when hospitalId is non-null")
+        void hospitalScopedDelegate() {
+            EligibilityCheck check = EligibilityCheck.builder()
+                .patient(patient).hospital(hospital)
+                .scheme(EligibilityScheme.NHIS_GH)
+                .checkType(EligibilityCheckType.COVERAGE)
+                .status(EligibilityStatus.ELIGIBLE)
+                .responseCode("ACTIVE")
+                .build();
+            check.setId(UUID.randomUUID());
+            when(checkRepository
+                .findFirstByPatient_IdAndHospital_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
+                    patientId, hospitalId, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE))
+                .thenReturn(Optional.of(check));
+
+            Optional<EligibilityResponseDTO> result = service.findLatestForPatient(
+                patientId, hospitalId, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE);
+
+            assertThat(result).isPresent();
+            verify(checkRepository, never())
+                .findFirstByPatient_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
+                    any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("submit — guard rails")
+    class SubmitGuards {
+
+        @Test
+        @DisplayName("null request throws BusinessException")
+        void nullRequest() {
+            assertThatThrownBy(() -> service.submit(null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("required");
+        }
+
+        @Test
+        @DisplayName("missing hospital throws ResourceNotFoundException")
+        void missingHospital() {
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.submit(
+                baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(hospitalId.toString());
+            verify(checkRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("missing PatientInsurance throws ResourceNotFoundException")
+        void missingInsurance() {
+            stubLookups();
+            UUID insuranceId = UUID.randomUUID();
+            when(patientInsuranceRepository.findById(insuranceId)).thenReturn(Optional.empty());
+
+            EligibilityCheckRequestDTO req = baseRequest(EligibilityScheme.NHIS_GH,
+                EligibilityCheckType.COVERAGE, "NHIS-001");
+            req.setPatientInsuranceId(insuranceId);
+
+            assertThatThrownBy(() -> service.submit(req))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(insuranceId.toString());
+        }
+
+        @Test
+        @DisplayName("no provider matches the requested scheme throws BusinessException")
+        void noProviderMatches() {
+            EligibilityProvider noneMatch = new EligibilityProvider() {
+                @Override public boolean supports(EligibilityScheme scheme) { return false; }
+                @Override public EligibilityProviderResult checkCoverage(EligibilityProviderRequest r) {
+                    throw new IllegalStateException("must not call");
+                }
+                @Override public EligibilityProviderResult requestPriorAuth(EligibilityProviderRequest r) {
+                    throw new IllegalStateException("must not call");
+                }
+            };
+            service = new EligibilityServiceImpl(
+                checkRepository, patientRepository, hospitalRepository,
+                patientInsuranceRepository, userRepository, auditService,
+                List.of(noneMatch), fixedClock
+            );
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+            assertThatThrownBy(() -> service.submit(
+                baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No eligibility provider");
+        }
+
+        @Test
+        @DisplayName("provider throws RuntimeException → persisted as ERROR with the message")
+        void providerThrows() {
+            EligibilityProvider throwing = new EligibilityProvider() {
+                @Override public boolean supports(EligibilityScheme scheme) { return true; }
+                @Override public EligibilityProviderResult checkCoverage(EligibilityProviderRequest r) {
+                    throw new IllegalStateException("partner socket reset");
+                }
+                @Override public EligibilityProviderResult requestPriorAuth(EligibilityProviderRequest r) {
+                    return checkCoverage(r);
+                }
+            };
+            service = new EligibilityServiceImpl(
+                checkRepository, patientRepository, hospitalRepository,
+                patientInsuranceRepository, userRepository, auditService,
+                List.of(throwing), fixedClock
+            );
+            stubLookups();
+
+            EligibilityResponseDTO out = service.submit(
+                baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001"));
+
+            assertThat(out.getStatus()).isEqualTo(EligibilityStatus.ERROR);
+            assertThat(out.getErrorMessage()).isEqualTo("partner socket reset");
+        }
+
+        @Test
+        @DisplayName("PRIOR_AUTH dispatches to provider.requestPriorAuth, not checkCoverage")
+        void priorAuthDispatch() {
+            stubLookups();
+            EligibilityCheckRequestDTO req =
+                baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.PRIOR_AUTH, "OK-1");
+            req.setServiceCode("CT-HEAD");
+
+            EligibilityResponseDTO out = service.submit(req);
+
+            assertThat(out.getStatus()).isEqualTo(EligibilityStatus.ELIGIBLE);
+            assertThat(out.getPriorAuthNumber()).startsWith("PA-");
+        }
+    }
+
+    @Nested
+    @DisplayName("get / listByPatient")
+    class Reads {
+        @Test
+        @DisplayName("get(id) maps the persisted check to a DTO")
+        void getMaps() {
+            UUID id = UUID.randomUUID();
+            EligibilityCheck check = EligibilityCheck.builder()
+                .patient(patient).hospital(hospital)
+                .scheme(EligibilityScheme.MUTUELLE_RW)
+                .checkType(EligibilityCheckType.COVERAGE)
+                .status(EligibilityStatus.ELIGIBLE)
+                .build();
+            check.setId(id);
+            when(checkRepository.findById(id)).thenReturn(Optional.of(check));
+
+            EligibilityResponseDTO out = service.get(id);
+            assertThat(out.getId()).isEqualTo(id);
+            assertThat(out.getScheme()).isEqualTo(EligibilityScheme.MUTUELLE_RW);
+        }
+
+        @Test
+        @DisplayName("get(id) 404s when the row is gone")
+        void getNotFound() {
+            UUID id = UUID.randomUUID();
+            when(checkRepository.findById(id)).thenReturn(Optional.empty());
+            assertThatThrownBy(() -> service.get(id))
+                .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("listByPatient pages through the repository")
+        void listByPatientPasses() {
+            EligibilityCheck check = EligibilityCheck.builder()
+                .patient(patient).hospital(hospital)
+                .scheme(EligibilityScheme.NHIS_GH)
+                .checkType(EligibilityCheckType.COVERAGE)
+                .status(EligibilityStatus.ELIGIBLE)
+                .build();
+            check.setId(UUID.randomUUID());
+            org.springframework.data.domain.Page<EligibilityCheck> page =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of(check));
+            when(checkRepository.findByPatient_IdOrderByRequestedAtDesc(eq(patientId), any()))
+                .thenReturn(page);
+
+            org.springframework.data.domain.Page<EligibilityResponseDTO> out =
+                service.listByPatient(patientId, /* hospitalId */ null,
+                    org.springframework.data.domain.PageRequest.of(0, 20));
+
+            assertThat(out.getContent()).hasSize(1);
+            assertThat(out.getContent().get(0).getStatus()).isEqualTo(EligibilityStatus.ELIGIBLE);
+        }
+
+        @Test
+        @DisplayName("listByPatient with hospitalId routes to the hospital-scoped repo")
+        void listByPatientHospitalScoped() {
+            EligibilityCheck check = EligibilityCheck.builder()
+                .patient(patient).hospital(hospital)
+                .scheme(EligibilityScheme.NHIS_GH)
+                .checkType(EligibilityCheckType.COVERAGE)
+                .status(EligibilityStatus.ELIGIBLE)
+                .build();
+            check.setId(UUID.randomUUID());
+            org.springframework.data.domain.Page<EligibilityCheck> page =
+                new org.springframework.data.domain.PageImpl<>(java.util.List.of(check));
+            when(checkRepository.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(
+                eq(patientId), eq(hospitalId), any())).thenReturn(page);
+
+            service.listByPatient(patientId, hospitalId,
+                org.springframework.data.domain.PageRequest.of(0, 20));
+
+            verify(checkRepository, never()).findByPatient_IdOrderByRequestedAtDesc(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("audit failure does not break the clinical flow")
+    class AuditFailure {
+        @Test
+        @DisplayName("audit logEvent throwing is swallowed")
+        void auditThrows() {
+            stubLookups();
+            org.mockito.Mockito.doThrow(new RuntimeException("audit pipeline down"))
+                .when(auditService).logEvent(any());
+
+            EligibilityResponseDTO out = service.submit(
+                baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001"));
+
+            assertThat(out.getStatus()).isEqualTo(EligibilityStatus.ELIGIBLE);
         }
     }
 }

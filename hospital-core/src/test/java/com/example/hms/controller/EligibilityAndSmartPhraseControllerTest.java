@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EligibilityCheckType;
 import com.example.hms.enums.EligibilityScheme;
 import com.example.hms.enums.EligibilityStatus;
@@ -74,12 +75,17 @@ class EligibilityAndSmartPhraseControllerTest {
     class EligibilityTests {
 
         private EligibilityService eligibilityService;
+        private ControllerAuthUtils authUtils;
         private MockMvc mockMvc;
 
         @BeforeEach
         void setUp() {
             eligibilityService = mock(EligibilityService.class);
-            EligibilityController controller = new EligibilityController(eligibilityService);
+            authUtils = mock(ControllerAuthUtils.class);
+            // Default scope resolution: caller has no specific hospital — service should
+            // see hospitalId == null. Specific tests override this when needed.
+            when(authUtils.resolveHospitalScope(any(), any(), any(Boolean.class))).thenReturn(null);
+            EligibilityController controller = new EligibilityController(eligibilityService, authUtils);
             mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setMessageConverters(jacksonConverter(objectMapper))
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
@@ -170,7 +176,7 @@ class EligibilityAndSmartPhraseControllerTest {
             UUID patientId = UUID.randomUUID();
             EligibilityResponseDTO resp = buildResponse(EligibilityCheckType.COVERAGE, EligibilityStatus.ELIGIBLE);
             Page<EligibilityResponseDTO> page = new PageImpl<>(List.of(resp));
-            when(eligibilityService.listByPatient(eq(patientId), any(Pageable.class))).thenReturn(page);
+            when(eligibilityService.listByPatient(eq(patientId), eq(null), any(Pageable.class))).thenReturn(page);
 
             // Standalone MockMvc has no Page-to-JSON serializer configured, so we can't
             // assert the body — but the service-call signature is the controller contract
@@ -178,7 +184,24 @@ class EligibilityAndSmartPhraseControllerTest {
             mockMvc.perform(get("/eligibility/patient/{patientId}", patientId)
                     .param("page", "0").param("size", "20"));
 
-            verify(eligibilityService).listByPatient(eq(patientId), any(Pageable.class));
+            verify(eligibilityService).listByPatient(eq(patientId), eq(null), any(Pageable.class));
+        }
+
+        @Test
+        @DisplayName("GET /eligibility/patient/{id} forwards an explicit hospitalId from the resolver")
+        void listByPatient_forwardsHospitalScope() throws Exception {
+            UUID patientId = UUID.randomUUID();
+            UUID resolvedHid = UUID.randomUUID();
+            when(authUtils.resolveHospitalScope(any(), any(), any(Boolean.class))).thenReturn(resolvedHid);
+            EligibilityResponseDTO resp = buildResponse(EligibilityCheckType.COVERAGE, EligibilityStatus.ELIGIBLE);
+            Page<EligibilityResponseDTO> page = new PageImpl<>(List.of(resp));
+            when(eligibilityService.listByPatient(eq(patientId), eq(resolvedHid), any(Pageable.class)))
+                .thenReturn(page);
+
+            mockMvc.perform(get("/eligibility/patient/{patientId}", patientId)
+                    .param("hospitalId", resolvedHid.toString()));
+
+            verify(eligibilityService).listByPatient(eq(patientId), eq(resolvedHid), any(Pageable.class));
         }
 
         @Test
@@ -187,7 +210,7 @@ class EligibilityAndSmartPhraseControllerTest {
             UUID patientId = UUID.randomUUID();
             EligibilityResponseDTO resp = buildResponse(EligibilityCheckType.COVERAGE, EligibilityStatus.ELIGIBLE);
             when(eligibilityService.findLatestForPatient(
-                patientId, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE))
+                patientId, null, EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE))
                 .thenReturn(Optional.of(resp));
 
             mockMvc.perform(get("/eligibility/patient/{patientId}/latest", patientId)
@@ -201,7 +224,7 @@ class EligibilityAndSmartPhraseControllerTest {
         void latestForPatient_returns204WhenAbsent() throws Exception {
             UUID patientId = UUID.randomUUID();
             when(eligibilityService.findLatestForPatient(
-                patientId, EligibilityScheme.CNAMGS_GA, EligibilityCheckType.PRIOR_AUTH))
+                patientId, null, EligibilityScheme.CNAMGS_GA, EligibilityCheckType.PRIOR_AUTH))
                 .thenReturn(Optional.empty());
 
             mockMvc.perform(get("/eligibility/patient/{patientId}/latest", patientId)
@@ -220,12 +243,17 @@ class EligibilityAndSmartPhraseControllerTest {
     class SmartPhraseTests {
 
         private SmartPhraseService smartPhraseService;
+        private ControllerAuthUtils authUtils;
         private MockMvc mockMvc;
 
         @BeforeEach
         void setUp() {
             smartPhraseService = mock(SmartPhraseService.class);
-            SmartPhraseController controller = new SmartPhraseController(smartPhraseService);
+            authUtils = mock(ControllerAuthUtils.class);
+            // Default: caller has no resolved hospital scope. Tests that exercise
+            // the autocomplete hospital-scope path stub a non-null UUID.
+            when(authUtils.resolveHospitalScope(any(), any(), any(Boolean.class))).thenReturn(null);
+            SmartPhraseController controller = new SmartPhraseController(smartPhraseService, authUtils);
             mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setMessageConverters(jacksonConverter(objectMapper))
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
@@ -333,11 +361,16 @@ class EligibilityAndSmartPhraseControllerTest {
         }
 
         @Test
-        @DisplayName("GET /smart-phrases/autocomplete passes through service results")
+        @DisplayName("GET /smart-phrases/autocomplete forwards the resolver-derived hospital scope")
         void autocomplete_passesThrough() throws Exception {
             UUID hospitalId = UUID.randomUUID();
+            // The query-param hospitalId is intentionally a different value — the
+            // controller MUST consult the resolver, not blindly trust the query string.
+            UUID resolvedHid = UUID.randomUUID();
+            when(authUtils.resolveHospitalScope(any(), eq(hospitalId), any(Boolean.class)))
+                .thenReturn(resolvedHid);
             SmartPhraseResponseDTO resp = buildResponse(".normexam", SmartPhraseScope.HOSPITAL);
-            when(smartPhraseService.autocomplete(".norm", hospitalId)).thenReturn(List.of(resp));
+            when(smartPhraseService.autocomplete(".norm", resolvedHid)).thenReturn(List.of(resp));
 
             mockMvc.perform(get("/smart-phrases/autocomplete")
                     .param("prefix", ".norm")

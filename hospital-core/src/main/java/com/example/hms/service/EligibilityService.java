@@ -28,11 +28,22 @@ public interface EligibilityService {
     /** Fetch a single persisted check (404s if not found). */
     EligibilityResponseDTO get(UUID checkId);
 
-    /** Page through all checks for a patient, most-recent first. */
-    Page<EligibilityResponseDTO> listByPatient(UUID patientId, Pageable pageable);
+    /**
+     * Page through all checks for a patient, most-recent first. When
+     * {@code hospitalId} is non-null the result is scoped to that hospital so
+     * a clinician at hospital A cannot see hospital B's eligibility history
+     * for the same patient. {@code hospitalId == null} returns all hospitals
+     * (intended for SUPER_ADMIN, who is allowed to query unscoped).
+     */
+    Page<EligibilityResponseDTO> listByPatient(UUID patientId, UUID hospitalId, Pageable pageable);
 
-    /** Most-recent check for the (patient, scheme, type) tuple, if any. */
+    /**
+     * Most-recent check for the (patient, scheme, type) tuple, optionally
+     * scoped to a hospital. Same null-means-unscoped semantics as
+     * {@link #listByPatient}.
+     */
     Optional<EligibilityResponseDTO> findLatestForPatient(UUID patientId,
+                                                          UUID hospitalId,
                                                           EligibilityScheme scheme,
                                                           EligibilityCheckType type);
 }

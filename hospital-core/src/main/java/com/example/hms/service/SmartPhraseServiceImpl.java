@@ -12,10 +12,14 @@ import com.example.hms.payload.dto.SmartPhraseResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.SmartPhraseRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,24 +31,36 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @Slf4j
 public class SmartPhraseServiceImpl implements SmartPhraseService {
 
+    private static final String SUPER_ADMIN_AUTHORITY = "ROLE_SUPER_ADMIN";
+
+    /** Persisted role codes that may declare/edit HOSPITAL-scope macros at a hospital. */
+    private static final Set<String> HOSPITAL_ADMIN_ROLES =
+        Set.of("ROLE_HOSPITAL_ADMIN", SUPER_ADMIN_AUTHORITY);
+
+    private static final String NOT_FOUND_PREFIX = "SmartPhrase not found: ";
+
     private final SmartPhraseRepository repository;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final Clock clock;
 
     public SmartPhraseServiceImpl(SmartPhraseRepository repository,
                                   HospitalRepository hospitalRepository,
                                   UserRepository userRepository,
+                                  UserRoleHospitalAssignmentRepository assignmentRepository,
                                   Clock clock) {
         this.repository = repository;
         this.hospitalRepository = hospitalRepository;
         this.userRepository = userRepository;
+        this.assignmentRepository = assignmentRepository;
         this.clock = clock;
     }
 
@@ -52,6 +68,10 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     @Transactional
     public SmartPhraseResponseDTO create(SmartPhraseRequestDTO request) {
         validateRequest(request);
+        User caller = currentUserOrThrow();
+        applyOwnershipDefaults(request, caller);
+        authorizeForScope(request.getScope(), request.getHospitalId(), caller);
+
         String normalisedTrigger = request.getTrigger().trim().toLowerCase();
         ensureUniqueTrigger(normalisedTrigger, request, /* excludeId */ null);
 
@@ -73,7 +93,19 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO update(UUID id, SmartPhraseRequestDTO request) {
         validateRequest(request);
         SmartPhrase existing = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("SmartPhrase not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
+        User caller = currentUserOrThrow();
+
+        // Authorize against the EXISTING macro's scope first — a clinician must not be
+        // able to "rebase" a macro they do not own to a scope they DO control.
+        UUID existingHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        authorizeForExisting(existing.getScope(), existingHospitalId,
+            existing.getOwner() != null ? existing.getOwner().getId() : null, caller);
+
+        // Then check that the caller can land the macro at the REQUESTED scope.
+        applyOwnershipDefaults(request, caller);
+        authorizeForScope(request.getScope(), request.getHospitalId(), caller);
+
         String normalisedTrigger = request.getTrigger().trim().toLowerCase();
         ensureUniqueTrigger(normalisedTrigger, request, existing.getId());
 
@@ -90,9 +122,12 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        if (!repository.existsById(id)) {
-            throw new ResourceNotFoundException("SmartPhrase not found: " + id);
-        }
+        SmartPhrase existing = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
+        User caller = currentUserOrThrow();
+        UUID hid = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        UUID oid = existing.getOwner() != null ? existing.getOwner().getId() : null;
+        authorizeForExisting(existing.getScope(), hid, oid, caller);
         repository.deleteById(id);
     }
 
@@ -101,7 +136,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public SmartPhraseResponseDTO get(UUID id) {
         return repository.findById(id)
             .map(this::toDto)
-            .orElseThrow(() -> new ResourceNotFoundException("SmartPhrase not found: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(NOT_FOUND_PREFIX + id));
     }
 
     @Override
@@ -110,11 +145,15 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
         return repository.findByScope(SmartPhraseScope.GLOBAL, pageable).map(this::toDto);
     }
 
+    /** Below this length the autocomplete short-circuits without touching the DB. */
+    private static final int MIN_AUTOCOMPLETE_PREFIX = 2;
+
     @Override
     @Transactional(readOnly = true)
     public List<SmartPhraseResponseDTO> autocomplete(String rawPrefix, UUID hospitalId) {
         String prefix = rawPrefix == null ? "" : rawPrefix.trim().toLowerCase();
-        if (prefix.isEmpty() || prefix.charAt(0) != '.') {
+        // Need at least ".x" — a bare "." would otherwise return the entire visible library.
+        if (prefix.length() < MIN_AUTOCOMPLETE_PREFIX || prefix.charAt(0) != '.') {
             return List.of();
         }
         UUID userId = currentUserIdOrNull();
@@ -142,7 +181,7 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
     public void recordUsage(UUID id) {
         int updated = repository.incrementUsage(id, LocalDateTime.now(clock));
         if (updated == 0) {
-            throw new ResourceNotFoundException("SmartPhrase not found: " + id);
+            throw new ResourceNotFoundException(NOT_FOUND_PREFIX + id);
         }
     }
 
@@ -203,8 +242,10 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
             case HOSPITAL -> repository
                 .findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
                     trigger, SmartPhraseScope.HOSPITAL, request.getHospitalId());
-            case USER -> repository
-                .findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwner_Id(
+            case USER -> request.getHospitalId() == null
+                ? repository.findFirstByTriggerIgnoreCaseAndScopeAndHospitalIsNullAndOwner_Id(
+                    trigger, SmartPhraseScope.USER, request.getOwnerUserId())
+                : repository.findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwner_Id(
                     trigger, SmartPhraseScope.USER,
                     request.getHospitalId(), request.getOwnerUserId());
         };
@@ -245,11 +286,107 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
             .orElse(null);
     }
 
-    @SuppressWarnings("unused")
-    private void requireAuthenticated() {
-        if (SecurityUtils.getCurrentUsername() == null) {
+    private User currentUserOrThrow() {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null || username.isBlank()) {
             throw new UnauthorizedAccessException("No authenticated user in security context.");
         }
+        return userRepository.findByUsernameIgnoreCase(username)
+            .orElseThrow(() -> new UnauthorizedAccessException(
+                "Authenticated user not resolvable: " + username));
+    }
+
+    /**
+     * Replace the client-supplied {@code ownerUserId} on USER-scope payloads with
+     * the authenticated caller. A clinician must never be able to forge ownership
+     * of another user's macros by sending an arbitrary UUID in the request body.
+     */
+    private void applyOwnershipDefaults(SmartPhraseRequestDTO request, User caller) {
+        if (request.getScope() == SmartPhraseScope.USER) {
+            request.setOwnerUserId(caller.getId());
+        } else if (request.getScope() == SmartPhraseScope.GLOBAL) {
+            request.setHospitalId(null);
+            request.setOwnerUserId(null);
+        }
+    }
+
+    /**
+     * Authorize a request to LAND a macro at the given scope/hospital.
+     * <ul>
+     *   <li>GLOBAL — only SUPER_ADMIN.</li>
+     *   <li>HOSPITAL — SUPER_ADMIN, or HOSPITAL_ADMIN with an active assignment at the target hospital.</li>
+     *   <li>USER — any authenticated clinician (the request body has already been forced to {@code caller}).</li>
+     * </ul>
+     */
+    private void authorizeForScope(SmartPhraseScope scope, UUID hospitalId, User caller) {
+        switch (scope) {
+            case GLOBAL -> requireSuperAdmin("manage GLOBAL SmartPhrase");
+            case HOSPITAL -> {
+                if (isSuperAdmin()) {
+                    return;
+                }
+                if (hospitalId == null
+                    || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                        caller.getId(), hospitalId, HOSPITAL_ADMIN_ROLES)) {
+                    throw new UnauthorizedAccessException(
+                        "Caller lacks HOSPITAL_ADMIN at hospital " + hospitalId
+                            + " required to manage a HOSPITAL SmartPhrase.");
+                }
+            }
+            case USER -> {
+                // applyOwnershipDefaults forced ownerUserId = caller.id; nothing extra to check.
+            }
+        }
+    }
+
+    /**
+     * Authorize the caller against the EXISTING macro for an update or delete.
+     * Looser than {@link #authorizeForScope}: a USER macro can be edited by its
+     * owner; HOSPITAL and GLOBAL still require admin / super-admin.
+     */
+    private void authorizeForExisting(SmartPhraseScope scope,
+                                      UUID hospitalId,
+                                      UUID ownerUserId,
+                                      User caller) {
+        switch (scope) {
+            case GLOBAL -> requireSuperAdmin("edit GLOBAL SmartPhrase");
+            case HOSPITAL -> {
+                if (!isSuperAdmin()
+                    && (hospitalId == null
+                        || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                            caller.getId(), hospitalId, HOSPITAL_ADMIN_ROLES))) {
+                    throw new UnauthorizedAccessException(
+                        "Caller lacks HOSPITAL_ADMIN at hospital " + hospitalId
+                            + " required to edit a HOSPITAL SmartPhrase.");
+                }
+            }
+            case USER -> {
+                if (!caller.getId().equals(ownerUserId) && !isSuperAdmin()) {
+                    throw new UnauthorizedAccessException(
+                        "USER SmartPhrase can only be edited by its owner.");
+                }
+            }
+        }
+    }
+
+    private void requireSuperAdmin(String action) {
+        if (!isSuperAdmin()) {
+            throw new UnauthorizedAccessException(
+                "SUPER_ADMIN required to " + action + ".");
+        }
+    }
+
+    private boolean isSuperAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+        for (GrantedAuthority granted : auth.getAuthorities()) {
+            if (SUPER_ADMIN_AUTHORITY.equalsIgnoreCase(granted.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private SmartPhraseResponseDTO toDto(SmartPhrase phrase) {

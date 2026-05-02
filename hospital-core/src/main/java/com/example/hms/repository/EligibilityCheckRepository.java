@@ -16,6 +16,12 @@ public interface EligibilityCheckRepository extends JpaRepository<EligibilityChe
 
     Page<EligibilityCheck> findByPatient_IdOrderByRequestedAtDesc(UUID patientId, Pageable pageable);
 
+    Page<EligibilityCheck> findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(
+        UUID patientId, UUID hospitalId, Pageable pageable);
+
     Optional<EligibilityCheck> findFirstByPatient_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
         UUID patientId, EligibilityScheme scheme, EligibilityCheckType checkType);
+
+    Optional<EligibilityCheck> findFirstByPatient_IdAndHospital_IdAndSchemeAndCheckTypeOrderByRequestedAtDesc(
+        UUID patientId, UUID hospitalId, EligibilityScheme scheme, EligibilityCheckType checkType);
 }

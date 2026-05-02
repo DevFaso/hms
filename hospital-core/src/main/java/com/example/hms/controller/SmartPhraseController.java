@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.SmartPhraseRequestDTO;
 import com.example.hms.payload.dto.SmartPhraseResponseDTO;
 import com.example.hms.service.SmartPhraseService;
@@ -14,6 +15,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,9 +43,14 @@ public class SmartPhraseController {
         "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')";
 
     private final SmartPhraseService smartPhraseService;
+    private final ControllerAuthUtils authUtils;
 
     @PostMapping
-    @Operation(summary = "Create a SmartPhrase macro")
+    @Operation(summary = "Create a SmartPhrase macro",
+               description = "Authorization is enforced in the service: GLOBAL requires SUPER_ADMIN, "
+                           + "HOSPITAL requires HOSPITAL_ADMIN/SUPER_ADMIN at the target hospital, "
+                           + "USER is forced to the authenticated user (any client-supplied ownerUserId "
+                           + "is overridden).")
     @ApiResponse(responseCode = "201", description = "Macro created")
     @PreAuthorize(CLINICIAN_ROLES)
     public ResponseEntity<SmartPhraseResponseDTO> create(
@@ -53,7 +60,10 @@ public class SmartPhraseController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update an existing SmartPhrase macro")
+    @Operation(summary = "Update an existing SmartPhrase macro",
+               description = "Authorization mirrors create: callers may only edit GLOBAL with SUPER_ADMIN, "
+                           + "HOSPITAL macros at hospitals where they hold HOSPITAL_ADMIN/SUPER_ADMIN, and "
+                           + "USER macros that they own.")
     @PreAuthorize(CLINICIAN_ROLES)
     public ResponseEntity<SmartPhraseResponseDTO> update(
             @PathVariable UUID id,
@@ -62,7 +72,8 @@ public class SmartPhraseController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Delete a SmartPhrase macro")
+    @Operation(summary = "Delete a SmartPhrase macro",
+               description = "Same authorization gate as update.")
     @PreAuthorize(CLINICIAN_ROLES)
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         smartPhraseService.delete(id);
@@ -88,12 +99,16 @@ public class SmartPhraseController {
     @GetMapping("/autocomplete")
     @Operation(summary = "Trigger-prefix autocomplete for the calling user",
                description = "Returns macros visible to the caller (USER overrides HOSPITAL overrides GLOBAL). "
-                           + "Returns an empty list when prefix does not begin with '.'.")
+                           + "Returns an empty list when prefix does not begin with '.' or is shorter than two "
+                           + "characters. The optional hospitalId is validated against the caller's active "
+                           + "assignments — non-SUPER_ADMIN callers cannot query a hospital they do not work at.")
     @PreAuthorize(CLINICIAN_ROLES)
     public ResponseEntity<List<SmartPhraseResponseDTO>> autocomplete(
             @RequestParam(defaultValue = ".") String prefix,
-            @RequestParam(required = false) UUID hospitalId) {
-        return ResponseEntity.ok(smartPhraseService.autocomplete(prefix, hospitalId));
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        return ResponseEntity.ok(smartPhraseService.autocomplete(prefix, resolvedHospitalId));
     }
 
     @PostMapping("/{id}/usage")

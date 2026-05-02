@@ -2,6 +2,8 @@ package com.example.hms.service.integration.eligibility;
 
 import com.example.hms.enums.EligibilityScheme;
 import com.example.hms.enums.EligibilityStatus;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -10,10 +12,13 @@ import java.util.Set;
 
 /**
  * Deterministic stub implementation that handles every {@link EligibilityScheme}
- * at low priority. Real partner-API connectors register Spring beans for their
- * specific scheme; the {@link com.example.hms.service.EligibilityService}
- * resolves more specific providers first and falls back to this one only when
- * none are wired in.
+ * at low priority. {@link Order} = {@code LOWEST_PRECEDENCE} pins the resolution
+ * order so a real partner-API connector registered with default precedence wins
+ * for its scheme — Spring's {@code List<EligibilityProvider>} injection respects
+ * {@code @Order}, so the
+ * {@link com.example.hms.service.EligibilityService}'s {@code findFirst}
+ * deterministically falls back to this stub only when no scheme-specific
+ * provider exists.
  *
  * <p>The stub is deterministic by design: a memberId starting with "X" is
  * NOT_ELIGIBLE, one ending with "?" is UNKNOWN, an empty / null memberId is
@@ -23,6 +28,7 @@ import java.util.Set;
  * real connector in P1 #12 follow-up #4.
  */
 @Component
+@Order(Ordered.LOWEST_PRECEDENCE)
 public class StubEligibilityProvider implements EligibilityProvider {
 
     /** Default copay currency by scheme — only used when the stub returns ELIGIBLE. */

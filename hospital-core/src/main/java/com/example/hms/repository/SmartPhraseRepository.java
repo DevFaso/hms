@@ -37,10 +37,16 @@ public interface SmartPhraseRepository extends JpaRepository<SmartPhrase, UUID> 
     /**
      * Trigger-prefix lookup for autocomplete. Works against the same visibility
      * rules as {@link #findVisibleTo} — the service narrows down further.
+     *
+     * <p>{@code phrase_trigger} is normalised to lowercase on write
+     * (see {@link com.example.hms.model.SmartPhrase#normalize()}) and the
+     * service lowercases {@code :prefix} before calling this method, so the
+     * comparison can use the indexed column directly without a {@code LOWER}
+     * wrapper that would defeat the btree index.
      */
     @Query("""
         SELECT sp FROM SmartPhrase sp
-         WHERE LOWER(sp.trigger) LIKE LOWER(CONCAT(:prefix, '%'))
+         WHERE sp.trigger LIKE CONCAT(:prefix, '%')
            AND (sp.scope = com.example.hms.enums.SmartPhraseScope.GLOBAL
              OR (sp.scope = com.example.hms.enums.SmartPhraseScope.HOSPITAL
                  AND sp.hospital.id = :hospitalId)
@@ -56,6 +62,9 @@ public interface SmartPhraseRepository extends JpaRepository<SmartPhrase, UUID> 
     Optional<SmartPhrase> findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwner_Id(
         String trigger, SmartPhraseScope scope, UUID hospitalId, UUID ownerId);
 
+    Optional<SmartPhrase> findFirstByTriggerIgnoreCaseAndScopeAndHospitalIsNullAndOwner_Id(
+        String trigger, SmartPhraseScope scope, UUID ownerId);
+
     Optional<SmartPhrase> findFirstByTriggerIgnoreCaseAndScopeAndHospital_IdAndOwnerIsNull(
         String trigger, SmartPhraseScope scope, UUID hospitalId);
 
@@ -68,7 +77,8 @@ public interface SmartPhraseRepository extends JpaRepository<SmartPhrase, UUID> 
     @Query("""
         UPDATE SmartPhrase sp
            SET sp.usageCount = sp.usageCount + 1,
-               sp.lastUsedAt = :ts
+               sp.lastUsedAt = :ts,
+               sp.updatedAt = :ts
          WHERE sp.id = :id
         """)
     int incrementUsage(@Param("id") UUID id, @Param("ts") LocalDateTime ts);
