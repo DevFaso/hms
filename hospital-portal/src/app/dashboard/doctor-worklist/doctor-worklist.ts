@@ -1,7 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  input,
+  output,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 import { DoctorWorklistItem } from '../../services/dashboard.service';
 
 type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
@@ -14,7 +25,13 @@ type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
   styleUrl: './doctor-worklist.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DoctorWorklistComponent {
+export class DoctorWorklistComponent implements OnInit, OnDestroy {
+  private readonly translate = inject(TranslateService);
+
+  // Bumped on every language change so computed labels re-evaluate.
+  private readonly langTick = signal(0);
+  private langSub?: Subscription;
+
   items = input<DoctorWorklistItem[]>([]);
   patientSelected = output<string>();
   encounterStarted = output<string>();
@@ -41,13 +58,16 @@ export class DoctorWorklistComponent {
     () => !!(this.urgencyFilter() || this.locationFilter() || this.dateFilter() !== this.today),
   );
 
-  readonly tabs: { key: WorklistTab; label: string }[] = [
-    { key: 'ALL', label: 'All' },
-    { key: 'WAITING', label: 'Waiting' },
-    { key: 'IN_PROGRESS', label: 'In Progress' },
-    { key: 'CONSULTS', label: 'Consults' },
-    { key: 'COMPLETED', label: 'Completed' },
-  ];
+  readonly tabs = computed<{ key: WorklistTab; label: string }[]>(() => {
+    this.langTick();
+    return [
+      { key: 'ALL', label: this.translate.instant('DASHBOARD.WL_TAB.ALL') },
+      { key: 'WAITING', label: this.translate.instant('DASHBOARD.WL_TAB.WAITING') },
+      { key: 'IN_PROGRESS', label: this.translate.instant('DASHBOARD.WL_TAB.IN_PROGRESS') },
+      { key: 'CONSULTS', label: this.translate.instant('DASHBOARD.WL_TAB.CONSULTS') },
+      { key: 'COMPLETED', label: this.translate.instant('DASHBOARD.WL_TAB.COMPLETED') },
+    ];
+  });
 
   filteredItems = computed(() => {
     const tab = this.activeTab();
@@ -126,18 +146,23 @@ export class DoctorWorklistComponent {
     return map[urgency] ?? 'urgency-routine';
   }
 
+  // Read in templates via the langTick-driven tabs() computed; the underlying
+  // ngx-translate `instant()` returns the localized value for the current lang.
+  private static readonly STATUS_KEYS: Record<string, string> = {
+    SCHEDULED: 'DASHBOARD.WL_STATUS.SCHEDULED',
+    CHECKED_IN: 'DASHBOARD.WL_STATUS.CHECKED_IN',
+    TRIAGE: 'DASHBOARD.WL_STATUS.TRIAGE',
+    WAITING: 'DASHBOARD.WL_STATUS.WAITING',
+    IN_PROGRESS: 'DASHBOARD.WL_STATUS.IN_PROGRESS',
+    COMPLETED: 'DASHBOARD.WL_STATUS.COMPLETED',
+    CANCELLED: 'DASHBOARD.WL_STATUS.CANCELLED',
+    CONSULTATION: 'DASHBOARD.WL_STATUS.CONSULTATION',
+  };
+
   getStatusLabel(status: string): string {
-    const map: Record<string, string> = {
-      SCHEDULED: 'Scheduled',
-      CHECKED_IN: 'Checked In',
-      TRIAGE: 'In Triage',
-      WAITING: 'Waiting',
-      IN_PROGRESS: 'In Progress',
-      COMPLETED: 'Completed',
-      CANCELLED: 'Cancelled',
-      CONSULTATION: 'Consult',
-    };
-    return map[status] ?? status;
+    this.langTick();
+    const key = DoctorWorklistComponent.STATUS_KEYS[status];
+    return key ? this.translate.instant(key) : status;
   }
 
   getStatusClass(status: string): string {
@@ -169,5 +194,15 @@ export class DoctorWorklistComponent {
     let hash = 0;
     for (let i = 0; i < (name?.length ?? 0); i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
+  }
+
+  ngOnInit(): void {
+    this.langSub = this.translate.onLangChange.subscribe(() => {
+      this.langTick.update((v) => v + 1);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.langSub?.unsubscribe();
   }
 }
