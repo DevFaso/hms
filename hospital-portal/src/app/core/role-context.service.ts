@@ -3,7 +3,9 @@ import { Injectable, signal, computed } from '@angular/core';
 @Injectable({ providedIn: 'root' })
 export class RoleContextService {
   isReceptionist(): boolean {
-    return this.hasRole('RECEPTIONIST');
+    // Roles in the JWT/auth context are stored with the `ROLE_` prefix.
+    // Accept both shapes so a missing prefix never silently passes the check.
+    return this.hasRole('ROLE_RECEPTIONIST') || this.hasRole('RECEPTIONIST');
   }
   private readonly _activeHospitalId = signal<string | null>(null);
   private readonly _activeRoles = signal<string[]>([]);

@@ -95,12 +95,14 @@ public class DepartmentServiceImpl implements DepartmentService {
             .state(state)
             .build();
 
+        applyTenantScopeToFilter(filter);
+
         List<Department> entities = hasFilterCriteria(filter)
             ? departmentRepository.findAll(createDepartmentSpecification(filter))
             : departmentRepository.findAllWithHospitalAndHead();
 
-        log.debug("Loaded {} departments with filters org={} unassigned={} city={} state={}",
-            entities.size(), organizationId, unassignedOnly, city, state);
+        log.debug("Loaded {} departments with filters org={} unassigned={} city={} state={} hospital={}",
+            entities.size(), organizationId, unassignedOnly, city, state, filter.getHospitalId());
 
         return mapDepartments(locale, entities);
     }
@@ -108,8 +110,11 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     @Override
     public Page<DepartmentResponseDTO> getAllDepartments(Pageable pageable, Locale locale) {
-        return departmentRepository.findAll(pageable)
-                .map(department -> buildLocalizedResponse(department, locale));
+        UUID activeHospitalId = resolveActiveHospitalScope();
+        Page<Department> page = (activeHospitalId != null)
+            ? departmentRepository.findByHospitalId(activeHospitalId, pageable)
+            : departmentRepository.findAll(pageable);
+        return page.map(department -> buildLocalizedResponse(department, locale));
     }
 
     @Override
@@ -157,6 +162,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentMinimalDTO> getActiveDepartmentsMinimal(UUID hospitalId, Locale locale) {
+        enforceHospitalScopeOnHospitalId(hospitalId);
         return departmentRepository.findByHospitalId(hospitalId).stream()
                 .map(dept -> new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber()))
                 .toList();
@@ -171,6 +177,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public Page<DepartmentResponseDTO> getDepartmentsByHospital(UUID hospitalId, Pageable pageable, Locale locale) {
+        enforceHospitalScopeOnHospitalId(hospitalId);
         Page<Department> page = departmentRepository.findByHospitalId(hospitalId, pageable);
         return page.map(d -> departmentMapper.toDepartmentResponseDTO(d, locale));
     }
@@ -179,31 +186,41 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public Page<DepartmentResponseDTO> searchDepartments(String query, Pageable pageable, Locale locale) {
         String normalized = normalize(query);
+        UUID activeHospitalId = resolveActiveHospitalScope();
         Page<Department> page;
-        if (normalized == null) {
+        if (normalized == null && activeHospitalId == null) {
             page = departmentRepository.findAll(pageable);
         } else {
+            final String likePattern = (normalized != null)
+                ? "%" + normalized.toLowerCase(Locale.ROOT) + "%"
+                : null;
             Specification<Department> spec = (root, criteriaQuery, cb) -> {
                 if (criteriaQuery != null) {
                     criteriaQuery.distinct(true);
                 }
-                String likePattern = "%" + normalized.toLowerCase(Locale.ROOT) + "%";
                 Join<Department, Hospital> hospitalJoin = root.join(FIELD_HOSPITAL, JoinType.LEFT);
-                Join<Department, Staff> headJoin = root.join(FIELD_HEAD_OF_DEPARTMENT, JoinType.LEFT);
-                Join<Staff, User> userJoin = headJoin.join("user", JoinType.LEFT);
 
-                return cb.or(
-                        cb.like(cb.lower(root.get("name")), likePattern),
-                        cb.like(cb.lower(root.get("code")), likePattern),
-                        cb.like(cb.lower(root.get(FIELD_EMAIL)), likePattern),
-                        cb.like(cb.lower(root.get("phoneNumber")), likePattern),
-                        cb.like(cb.lower(hospitalJoin.get("name")), likePattern),
-                        cb.like(cb.lower(hospitalJoin.get("code")), likePattern),
-                        cb.like(cb.lower(hospitalJoin.get("city")), likePattern),
-                        cb.like(cb.lower(userJoin.get(FIELD_EMAIL)), likePattern),
-                        cb.like(cb.lower(userJoin.get("firstName")), likePattern),
-                        cb.like(cb.lower(userJoin.get("lastName")), likePattern)
-                );
+                List<Predicate> predicates = new ArrayList<>();
+                if (likePattern != null) {
+                    Join<Department, Staff> headJoin = root.join(FIELD_HEAD_OF_DEPARTMENT, JoinType.LEFT);
+                    Join<Staff, User> userJoin = headJoin.join("user", JoinType.LEFT);
+                    predicates.add(cb.or(
+                            cb.like(cb.lower(root.get("name")), likePattern),
+                            cb.like(cb.lower(root.get("code")), likePattern),
+                            cb.like(cb.lower(root.get(FIELD_EMAIL)), likePattern),
+                            cb.like(cb.lower(root.get("phoneNumber")), likePattern),
+                            cb.like(cb.lower(hospitalJoin.get("name")), likePattern),
+                            cb.like(cb.lower(hospitalJoin.get("code")), likePattern),
+                            cb.like(cb.lower(hospitalJoin.get("city")), likePattern),
+                            cb.like(cb.lower(userJoin.get(FIELD_EMAIL)), likePattern),
+                            cb.like(cb.lower(userJoin.get("firstName")), likePattern),
+                            cb.like(cb.lower(userJoin.get("lastName")), likePattern)
+                    ));
+                }
+                if (activeHospitalId != null) {
+                    predicates.add(cb.equal(hospitalJoin.get("id"), activeHospitalId));
+                }
+                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
             };
             page = departmentRepository.findAll(spec, pageable);
         }
@@ -248,6 +265,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public DepartmentWithStaffDTO getDepartmentWithStaff(UUID departmentId, Locale locale) {
         Department department = findDepartmentOrThrow(departmentId, locale);
+        enforceHospitalScopeOnEntity(department);
 
         List<StaffMinimalDTO> staffList = department.getStaffMembers() != null ?
                 department.getStaffMembers().stream()
@@ -275,7 +293,9 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public Page<DepartmentResponseDTO> filterDepartments(DepartmentFilterDTO filter, Pageable pageable, Locale locale) {
-        Specification<Department> spec = createDepartmentSpecification(filter);
+        DepartmentFilterDTO scopedFilter = (filter != null) ? filter : DepartmentFilterDTO.builder().build();
+        applyTenantScopeToFilter(scopedFilter);
+        Specification<Department> spec = createDepartmentSpecification(scopedFilter);
         return departmentRepository.findAll(spec, pageable)
                 .map(department -> buildLocalizedResponse(department, locale));
     }
@@ -288,6 +308,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{id}, locale)
                 ));
 
+        enforceHospitalScopeOnEntity(department);
         return buildLocalizedResponse(department, locale);
     }
 
@@ -298,6 +319,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{departmentId}, locale)
                 ));
+
+        enforceHospitalScopeOnEntity(department);
 
         int totalStaff = department.getStaffMembers() != null ? department.getStaffMembers().size() : 0;
         assert department.getStaffMembers() != null;
@@ -368,7 +391,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     /**
-     * Tenant-isolation guard for entity-level operations (update / delete).
+     * Tenant-isolation guard for entity-level operations (update / delete / read-by-id).
      * Ensures the existing department belongs to the caller's active hospital.
      */
     private void enforceHospitalScopeOnEntity(Department department) {
@@ -387,6 +410,52 @@ public class DepartmentServiceImpl implements DepartmentService {
                     messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND,
                             new Object[]{department.getId()}, DEFAULT_LOCALE));
         }
+    }
+
+    /**
+     * Tenant-isolation guard for endpoints that take a {@code hospitalId} path/query parameter.
+     * Non-super-admins must only ever address their own active hospital.
+     */
+    private void enforceHospitalScopeOnHospitalId(UUID requestedHospitalId) {
+        if (roleValidator.isSuperAdminFromAuth()) {
+            return;
+        }
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (requestedHospitalId != null && !requestedHospitalId.equals(activeHospitalId)) {
+            log.warn("[dept:tenantGuard] User {} attempted to address hospital {} but is scoped to {}",
+                    roleValidator.getCurrentUserId(), requestedHospitalId, activeHospitalId);
+            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
+        }
+    }
+
+    /**
+     * Tenant-isolation guard for read-list endpoints driven by a {@link DepartmentFilterDTO}.
+     * Non-super-admins are pinned to their active hospital. Any caller-supplied
+     * {@code hospitalId} that does not match is rejected to prevent cross-hospital probing.
+     */
+    private void applyTenantScopeToFilter(DepartmentFilterDTO filter) {
+        if (filter == null || roleValidator.isSuperAdminFromAuth()) {
+            return;
+        }
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (filter.getHospitalId() != null && !filter.getHospitalId().equals(activeHospitalId)) {
+            log.warn("[dept:tenantGuard] User {} attempted to filter by hospital {} but is scoped to {}",
+                    roleValidator.getCurrentUserId(), filter.getHospitalId(), activeHospitalId);
+            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
+        }
+        filter.setHospitalId(activeHospitalId);
+    }
+
+    /**
+     * Returns the active hospital scope for the caller, or {@code null} for super-admins
+     * (who may operate cross-hospital). Used by repository-level filters that need to
+     * silently restrict results without altering DTOs.
+     */
+    private UUID resolveActiveHospitalScope() {
+        if (roleValidator.isSuperAdminFromAuth()) {
+            return null;
+        }
+        return roleValidator.requireActiveHospitalId();
     }
 
     private void ensureDepartmentUniqueness(DepartmentRequestDTO dto, Hospital hospital, Locale locale) {

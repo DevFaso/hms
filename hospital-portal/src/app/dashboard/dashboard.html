@@ -17,7 +17,7 @@
         </h1>
         <p class="hero-sub">
           <span class="material-symbols-outlined">calendar_today</span>
-          {{ todayLabel }}
+          {{ todayLabel() }}
         </p>
       </div>
       <div class="hero-meta">
@@ -32,7 +32,9 @@
               oc.isOnCall ? ('DASHBOARD.ON_CALL' | translate) : ('DASHBOARD.OFF_DUTY' | translate)
             }}
             @if (oc.isOnCall && oc.shiftEnd) {
-              <span class="oncall-until">until {{ oc.shiftEnd | date: 'shortTime' }}</span>
+              <span class="oncall-until"
+                >{{ 'DASHBOARD.UNTIL' | translate }} {{ oc.shiftEnd | date: 'shortTime' }}</span
+              >
             }
           </div>
         }
@@ -445,7 +447,7 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">calendar_clock</span>
-              <h2 class="card-title">Today's Schedule</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.TODAYS_SCHEDULE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
             <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
@@ -1480,7 +1482,7 @@
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
             <div class="card-head-right">
-              <span class="schedule-date-pill">{{ todayLabel }}</span>
+              <span class="schedule-date-pill">{{ todayLabel() }}</span>
               <a routerLink="/appointments" class="card-link">{{
                 'COMMON.VIEW_ALL' | translate
               }}</a>
@@ -1958,7 +1960,12 @@
                     }
                     <div class="wait-bar">
                       <span class="material-symbols-outlined wait-icon">hourglass_top</span
-                      ><span>{{ pt.waitTimeMinutes }}m wait</span>
+                      ><span
+                        >{{
+                          'DASHBOARD.WAIT_MINUTES'
+                            | translate: { minutes: pt.waitTimeMinutes }
+                        }}</span
+                      >
                     </div>
                   </div>
                 </div>
