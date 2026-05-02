@@ -53,3 +53,10 @@ app:
       enabled: true
   security:
     totp-encryption-key: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+  # PHI column encryption (Base64-encoded 32 bytes). DEV ONLY — overridden in
+  # every non-local environment via the APP_ENCRYPTION_KEY env var. Without
+  # this, EncryptedStringConverter throws on the first PHI write and the
+  # whole app shuts down ~14s after Tomcat reports "Started" — frustrating
+  # default for new contributors running the local-h2 profile.
+  encryption:
+    key: "ZGV2LW9ubHktcmVwbGFjZS1tZS1pbi1wcm9kLTMyYiE="
