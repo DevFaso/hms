@@ -35,6 +35,16 @@ app:
       enabled: false
   security:
     totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
+  # PHI column encryption (Base64-encoded 32 bytes). Dev fallback so the
+  # Railway dev environment keeps working when APP_ENCRYPTION_KEY isn't
+  # set as an env var. Without this, EncryptedStringConverter throws on
+  # the first PHI write — which silently rolled back the surrounding
+  # transaction during admin-register and surfaced as the misleading
+  # "User disappeared after save" 400 in the patient-registration flow.
+  # Override with APP_ENCRYPTION_KEY in Railway when rotating the dev key.
+  # Production (application-prod.yml) has NO default and will fail fast.
+  encryption:
+    key: ${APP_ENCRYPTION_KEY:ZGV2LW9ubHktcmVwbGFjZS1tZS1pbi1wcm9kLTMyYiE=}
   # Frontend base URL used in emails, activation links, and onboarding flows.
   # Set FRONTEND_BASE_URL=https://hms.dev.bitnesttechs.com in Railway env vars.
   frontend:
