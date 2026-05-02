@@ -100,13 +100,17 @@ $shadow-md:
   box-shadow: $shadow;
   flex-wrap: wrap;
 
-  // Doctor view: compact hero so the page leads with action, not identity.
-  // The greeting + name row collapses to ~half the previous height; the
-  // calendar-date sub disappears (the live-clock pill already shows time);
-  // the progress ring shrinks. The hero-left's child blocks (greeting, meta,
-  // doctor-info chips, search) all flow inline on a wrapping row so the
-  // primary CTA on the right doesn't get isolated. Other roles render the
-  // default hero unchanged.
+  // Compact hero — applied for the three workflow-heavy roles (doctor,
+  // receptionist, pharmacist) where keeping action above the fold matters
+  // more than identity. Gated in dashboard.html via
+  //   [class.hero-compact]="isDoctor() || isReceptionist() || isPharmacist()"
+  // so other roles (nurse, admin, lab director, super-admin, patient, etc.)
+  // continue to render the default tall hero. Visually: greeting + name row
+  // collapses to ~half the previous height, calendar-date sub disappears
+  // (the live-clock pill already shows time), the progress ring shrinks,
+  // and the hero-left's child blocks (greeting, meta, doctor-info chips,
+  // search) all flow inline on a wrapping row so the primary CTA on the
+  // right doesn't get isolated.
   &.hero-compact {
     align-items: center;
     padding: 14px 20px;
