@@ -99,6 +99,22 @@ public class ObgynReferralController {
         return ResponseEntity.ok(referralService.acknowledgeReferral(id, request, authentication.getName()));
     }
 
+    @PostMapping("/{id}/start")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
+    @Operation(
+        summary = "Start referral consultation",
+        description = "Move ACKNOWLEDGED → IN_PROGRESS once the receiving midwife begins "
+            + "the consult. Required precursor for the IN_PROGRESS bucket on the worklist; "
+            + "without this transition, IN_PROGRESS is unreachable and the worklist counts "
+            + "are wrong."
+    )
+    public ResponseEntity<ObgynReferralResponseDTO> startReferral(
+        @PathVariable UUID id,
+        Authentication authentication
+    ) {
+        return ResponseEntity.ok(referralService.startReferral(id, authentication.getName()));
+    }
+
     @PostMapping("/{id}/complete")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_SUPER_ADMIN','MANAGE_OBGYN_REFERRAL')")
     @Operation(summary = "Complete referral")

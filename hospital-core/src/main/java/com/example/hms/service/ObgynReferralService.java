@@ -32,6 +32,9 @@ public interface ObgynReferralService {
         String username
     );
 
+    /** Move ACKNOWLEDGED → IN_PROGRESS when the receiving midwife starts the consult. */
+    ObgynReferralResponseDTO startReferral(UUID referralId, String username);
+
     ObgynReferralResponseDTO completeReferral(
         UUID referralId,
         ObgynReferralCompletionRequestDTO request,

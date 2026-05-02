@@ -235,6 +235,63 @@ class GeneralReferralStateMachineTest {
         }
     }
 
+    @Nested
+    @DisplayName("expire() — SUBMITTED / ACKNOWLEDGED / SCHEDULED only")
+    @SuppressWarnings("java:S100")
+    class ExpireGuard {
+        private static final String SLA_BREACH = "sla breach";
+
+        @Test
+        void expire_fromSubmitted_succeeds() {
+            GeneralReferral r = newReferralIn(ReferralStatus.SUBMITTED);
+            r.expire(SLA_BREACH);
+            assertThat(r.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
+            assertThat(r.getCancellationReason()).isEqualTo(SLA_BREACH);
+        }
+
+        @Test
+        void expire_fromAcknowledged_succeeds() {
+            GeneralReferral r = newReferralIn(ReferralStatus.ACKNOWLEDGED);
+            r.expire(SLA_BREACH);
+            assertThat(r.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
+        }
+
+        @Test
+        void expire_fromScheduled_succeeds() {
+            GeneralReferral r = newReferralIn(ReferralStatus.SCHEDULED);
+            r.expire(SLA_BREACH);
+            assertThat(r.getStatus()).isEqualTo(ReferralStatus.EXPIRED);
+        }
+
+        @Test
+        void expire_fromInProgress_throws() {
+            // Once a consultation has begun, the SLA sweep must not interfere.
+            GeneralReferral r = newReferralIn(ReferralStatus.IN_PROGRESS);
+            assertThatThrownBy(() -> r.expire(SLA_BREACH))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("expire")
+                .hasMessageContaining("IN_PROGRESS");
+        }
+
+        @Test
+        void expire_fromTerminalStatuses_throws() {
+            // IN_PROGRESS is covered by its own dedicated case above; this loop
+            // exercises only the terminal sources so the two tests don't overlap.
+            for (ReferralStatus s : ReferralStatus.values()) {
+                if (s == ReferralStatus.SUBMITTED
+                    || s == ReferralStatus.ACKNOWLEDGED
+                    || s == ReferralStatus.SCHEDULED
+                    || s == ReferralStatus.IN_PROGRESS) {
+                    continue;
+                }
+                GeneralReferral r = newReferralIn(s);
+                assertThatThrownBy(() -> r.expire(SLA_BREACH))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("expire");
+            }
+        }
+    }
+
     @Test
     @DisplayName("Full happy path: DRAFT → SUBMITTED → ACKNOWLEDGED → SCHEDULED → IN_PROGRESS → COMPLETED")
     void fullHappyPath() {

@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 
@@ -42,4 +43,7 @@ public interface GeneralReferralService {
     List<GeneralReferralResponseDTO> getAllReferrals(String status);
     
     List<GeneralReferralResponseDTO> getOverdueReferrals();
+
+    /** Chronological state-machine audit trail for one referral. */
+    List<ReferralEventResponseDTO> getReferralEvents(UUID referralId);
 }
