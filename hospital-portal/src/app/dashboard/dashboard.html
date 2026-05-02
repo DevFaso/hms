@@ -2,7 +2,10 @@
   <!-- ═══════════════════════════════════════════════════════════════════════
        HERO HEADER — role-adaptive gradient via heroGradientClass()
        ═══════════════════════════════════════════════════════════════════════ -->
-  <header class="hero-header" [class.hero-compact]="isDoctor()">
+  <header
+    class="hero-header"
+    [class.hero-compact]="isDoctor() || isReceptionist() || isPharmacist()"
+  >
     <div class="hero-left">
       <div class="hero-greeting">
         <span class="role-badge">
@@ -1819,7 +1822,12 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'nurse') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/appointments">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="todayAppointments().length === 0"
+        [class.stat-card-active]="todayAppointments().length > 0"
+        routerLink="/appointments"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">calendar_today</span>
         </div>
@@ -1828,7 +1836,12 @@
           ><span class="stat-label">{{ 'DASHBOARD.PATIENTS_TODAY' | translate }}</span>
         </div>
       </a>
-      <a class="stat-card" routerLink="/nurse-station">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="roomedPatients().length === 0"
+        [class.stat-card-active]="roomedPatients().length > 0"
+        routerLink="/nurse-station"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">hotel</span>
         </div>
@@ -1837,7 +1850,11 @@
           ><span class="stat-label">{{ 'DASHBOARD.ROOMED' | translate }}</span>
         </div>
       </a>
-      <div class="stat-card">
+      <div
+        class="stat-card stat-card-critical-tier"
+        [class.stat-card-zero]="unacknowledgedAlerts().length === 0"
+        [class.stat-card-alert]="unacknowledgedAlerts().length > 0"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">notification_important</span>
         </div>
@@ -1846,7 +1863,12 @@
           ><span class="stat-label">{{ 'DASHBOARD.ALERTS' | translate }}</span>
         </div>
       </div>
-      <a class="stat-card" routerLink="/encounters">
+      <a
+        class="stat-card"
+        [class.stat-card-zero]="completedToday() === 0"
+        [class.stat-card-active]="completedToday() > 0"
+        routerLink="/encounters"
+      >
         <div class="stat-icon-wrap">
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
