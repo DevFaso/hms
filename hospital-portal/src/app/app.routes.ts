@@ -1011,6 +1011,17 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // Refill approval queue (provider-facing — pairs with patient portal refills)
+      {
+        path: 'refills',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'] },
+        loadComponent: () =>
+          import('./refills/refill-approval-list.component').then(
+            (m) => m.RefillApprovalListComponent,
+          ),
+      },
+
       // CPOE order-set authoring (admin)
       {
         path: 'admin/order-sets',

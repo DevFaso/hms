@@ -8,6 +8,7 @@ import {
   PatientTrackerBoard,
   PatientTrackerItem,
 } from '../services/patient-tracker.service';
+import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
 import {
   EncounterService,
@@ -56,11 +57,20 @@ describe('PatientTrackerComponent', () => {
   let component: PatientTrackerComponent;
   let fixture: ComponentFixture<PatientTrackerComponent>;
   let trackerSpy: jasmine.SpyObj<PatientTrackerService>;
+  let trackerWsSpy: jasmine.SpyObj<PatientTrackerWsService>;
   let authSpy: jasmine.SpyObj<AuthService>;
   let encounterSpy: jasmine.SpyObj<EncounterService>;
 
   beforeEach(async () => {
     trackerSpy = jasmine.createSpyObj('PatientTrackerService', ['getTrackerBoard']);
+    trackerWsSpy = jasmine.createSpyObj('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    trackerWsSpy.getEvents.and.returnValue(of());
+    trackerWsSpy.getConnectionState.and.returnValue(of(false));
     authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
     encounterSpy = jasmine.createSpyObj('EncounterService', [
       'getById',
@@ -79,6 +89,7 @@ describe('PatientTrackerComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: PatientTrackerService, useValue: trackerSpy },
+        { provide: PatientTrackerWsService, useValue: trackerWsSpy },
         { provide: AuthService, useValue: authSpy },
         { provide: EncounterService, useValue: encounterSpy },
       ],
