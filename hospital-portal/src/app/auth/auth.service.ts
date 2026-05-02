@@ -427,6 +427,9 @@ export class AuthService {
   }
 
   resolveLandingPath(): string {
+    if (this.roleContext.activeRole === 'ROLE_SUPER_ADMIN') {
+      return '/super-admin';
+    }
     return '/dashboard';
   }
 
