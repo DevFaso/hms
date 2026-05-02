@@ -418,6 +418,47 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("re-registering a soft-deleted user clears isDeleted before reload")
+        void reRegisterClearsSoftDeleteFlag() {
+            UUID hospitalId = UUID.fromString("00000000-0000-0000-0000-000000000004");
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital C");
+
+            // Existing user was soft-deleted by the FE compensation flow
+            // (admin-register succeeded → /api/patients failed → DELETE /users/{id}).
+            user.setDeleted(true);
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "patient.doe", "existing@test.com", "+1111111111"))
+                .thenReturn(Optional.of(user));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
+            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(false);
+            when(staffRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("patient.doe");
+            req.setEmail("existing@test.com");
+            req.setPhoneNumber("+1111111111");
+            req.setFirstName("Jane");
+            req.setLastName("Doe");
+            req.setPassword("Temp@1234");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(hospitalId);
+
+            // The flow will fail downstream (no role/assignment mocks beyond the
+            // restore step), but the soft-delete flag MUST be cleared and the
+            // user re-saved before that — otherwise reloadAndMap() will report
+            // the misleading "User disappeared after save" diagnostic.
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isNotInstanceOf(ConflictException.class);
+
+            assertThat(user.isDeleted()).isFalse();
+            verify(userRepository).save(user);
+        }
+
+        @Test
         @DisplayName("brand-new patient (no existing user) passes duplicate check")
         void brandNewPatientPassesDuplicateCheck() {
             when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
