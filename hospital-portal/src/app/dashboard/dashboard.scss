@@ -551,11 +551,19 @@ $shadow-md:
   }
 
   // Zero-value tiles recede so non-zero ones pop visually.
-  // Hover lifts to full opacity so users can still inspect.
+  // We deliberately do NOT use `opacity` on the whole card — that would
+  // dim the value/label text and drop contrast below WCAG AA (4.5:1).
+  // Instead we recede via background + border weight, fade only the
+  // decorative icon, and leave text colours fully opaque.
   &.stat-card-zero {
-    opacity: 0.55;
     box-shadow: none;
     background: #f8fafc;
+    border-color: #e2e8f0;
+    border-left-color: #cbd5e1;
+
+    .stat-icon-wrap {
+      opacity: 0.6;
+    }
 
     .stat-value {
       color: $text-muted;
@@ -563,8 +571,12 @@ $shadow-md:
     }
 
     &:hover {
-      opacity: 1;
       box-shadow: $shadow;
+      border-color: $border;
+
+      .stat-icon-wrap {
+        opacity: 1;
+      }
     }
   }
 }
