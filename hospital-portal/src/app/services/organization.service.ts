@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
@@ -121,10 +121,15 @@ export class OrganizationService {
     return this.http.get<TenantLifecycleResponse>(`/super-admin/organizations/${id}/lifecycle`);
   }
 
-  suspend(id: string, body: TenantLifecycleActionRequest): Observable<TenantLifecycleResponse> {
+  suspend(
+    id: string,
+    body: TenantLifecycleActionRequest,
+    mfaToken?: string,
+  ): Observable<TenantLifecycleResponse> {
     return this.http.post<TenantLifecycleResponse>(
       `/super-admin/organizations/${id}/suspend`,
       body,
+      mfaToken ? { headers: this.mfaHeaders(mfaToken) } : {},
     );
   }
 
@@ -138,21 +143,37 @@ export class OrganizationService {
     );
   }
 
-  archive(id: string, body: TenantLifecycleActionRequest): Observable<TenantLifecycleResponse> {
+  archive(
+    id: string,
+    body: TenantLifecycleActionRequest,
+    mfaToken?: string,
+  ): Observable<TenantLifecycleResponse> {
     return this.http.post<TenantLifecycleResponse>(
       `/super-admin/organizations/${id}/archive`,
       body,
+      mfaToken ? { headers: this.mfaHeaders(mfaToken) } : {},
     );
   }
 
   schedulePurge(
     id: string,
     body: TenantLifecycleActionRequest,
+    mfaToken?: string,
   ): Observable<TenantLifecycleResponse> {
     return this.http.post<TenantLifecycleResponse>(
       `/super-admin/organizations/${id}/schedule-purge`,
       body,
+      mfaToken ? { headers: this.mfaHeaders(mfaToken) } : {},
     );
+  }
+
+  /**
+   * Build the X-Mfa-Token header for destructive lifecycle actions. Backend
+   * enforces this when {@code hms.tenant-lifecycle.require-mfa} is on; the
+   * frontend should always send it when the user provides a TOTP code.
+   */
+  private mfaHeaders(mfaToken: string): HttpHeaders {
+    return new HttpHeaders({ 'X-Mfa-Token': mfaToken });
   }
 
   cancelPurge(

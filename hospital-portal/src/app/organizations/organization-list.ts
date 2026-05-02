@@ -9,6 +9,7 @@ import {
   OrganizationCreateRequest,
 } from '../services/organization.service';
 import { stateColor as lifecycleStateColor } from './organization-detail';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -22,6 +23,14 @@ import { TranslateModule } from '@ngx-translate/core';
 export class OrganizationListComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * Only super admins can open /organizations/:id (gated by RoleGuard).
+   * Render the row name as a clickable link only for them; ROLE_ADMIN sees
+   * a non-clickable row instead of being routed to /error/403 on click.
+   */
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
 
   organizations = signal<OrganizationResponse[]>([]);
   filtered = signal<OrganizationResponse[]>([]);

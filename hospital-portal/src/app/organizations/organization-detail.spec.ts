@@ -142,6 +142,7 @@ describe('OrganizationDetailComponent', () => {
     expect(orgService.suspend).toHaveBeenCalledWith(
       'o1',
       jasmine.objectContaining({ reason: 'non-payment' }),
+      undefined,
     );
     expect(c.lifecycle()?.lifecycleState).toBe('SUSPENDED');
     expect(c.activeAction()).toBeNull();
@@ -217,7 +218,52 @@ describe('OrganizationDetailComponent', () => {
         reason: 'retention',
         purgeScheduledFor: jasmine.stringMatching(/2026-07-01/),
       }),
+      undefined,
     );
     expect(c.lifecycle()?.lifecycleState).toBe('PENDING_PURGE');
+  });
+
+  it('forwards the captured MFA token to suspend()', () => {
+    orgService.getById.and.returnValue(of(fakeOrg()));
+    orgService.getLifecycle.and.returnValue(of(fakeLifecycle()));
+    orgService.suspend.and.returnValue(
+      of(
+        fakeLifecycle({
+          lifecycleState: 'SUSPENDED',
+          canSuspend: false,
+          canRestore: true,
+        }),
+      ),
+    );
+
+    const c = setup();
+    c.openAction('suspend');
+    c.modalReason.set('non-payment');
+    c.modalConfirmText.set('ACME');
+    c.modalMfaToken.set('123456');
+    c.confirm();
+
+    expect(orgService.suspend).toHaveBeenCalledWith(
+      'o1',
+      jasmine.objectContaining({ reason: 'non-payment' }),
+      '123456',
+    );
+  });
+
+  it('does not forward an MFA token on the non-destructive restore path', () => {
+    orgService.getById.and.returnValue(of(fakeOrg()));
+    orgService.getLifecycle.and.returnValue(
+      of(fakeLifecycle({ lifecycleState: 'SUSPENDED', canSuspend: false, canRestore: true })),
+    );
+    orgService.restoreLifecycle.and.returnValue(of(fakeLifecycle()));
+
+    const c = setup();
+    c.openAction('restore');
+    c.modalMfaToken.set('this-should-not-be-sent');
+    c.confirm();
+
+    // restoreLifecycle has no mfaToken parameter — the component must not
+    // attempt to attach one on non-destructive transitions.
+    expect(orgService.restoreLifecycle).toHaveBeenCalledWith('o1', jasmine.any(Object));
   });
 });

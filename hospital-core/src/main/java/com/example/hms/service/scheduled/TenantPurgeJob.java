@@ -1,19 +1,13 @@
 package com.example.hms.service.scheduled;
 
-import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.AuditStatus;
-import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.model.Organization;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.OrganizationRepository;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.OrganizationLifecycleStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -46,8 +40,8 @@ import java.util.List;
 public class TenantPurgeJob {
 
     private final OrganizationRepository organizationRepository;
-    private final AuditEventLogService auditEventLogService;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
+    private final TenantPurgeExecutor purgeExecutor;
 
     @Value("${hms.tenant-purge.enabled:false}")
     private boolean enabled;
@@ -55,9 +49,16 @@ public class TenantPurgeJob {
     @Value("${hms.tenant-purge.execute-deletion:false}")
     private boolean executeDeletion;
 
-    /** Cron: every day at 03:00. Configurable via {@code hms.tenant-purge.cron}. */
+    /**
+     * Cron: every day at 03:00. Configurable via {@code hms.tenant-purge.cron}.
+     *
+     * <p>Notably <b>not</b> {@code @Transactional} — each org is purged inside
+     * its own transaction in {@link TenantPurgeExecutor#executePurge}. Wrapping
+     * the loop in a single transaction would let one failed save mark the
+     * whole transaction rollback-only and silently revert the orgs already
+     * processed earlier in the iteration.
+     */
     @Scheduled(cron = "${hms.tenant-purge.cron:0 0 3 * * *}")
-    @Transactional
     public void runSweep() {
         if (!enabled) {
             log.debug("[TENANT-PURGE] Skipping sweep — disabled in this environment");
@@ -76,45 +77,16 @@ public class TenantPurgeJob {
 
         for (Organization org : due) {
             try {
-                executePurge(org);
+                purgeExecutor.executePurge(org, executeDeletion);
             } catch (RuntimeException ex) {
                 // Don't let one failed org break the rest of the sweep.
+                // Each executePurge runs in its own REQUIRES_NEW transaction,
+                // so a rollback here does not affect orgs already purged in
+                // prior iterations of this loop.
                 log.error("[TENANT-PURGE] Failed to purge org {}: {}", org.getId(), ex.getMessage(), ex);
             }
         }
 
         lifecycleStatusService.invalidate();
-    }
-
-    private void executePurge(Organization org) {
-        // Step 1 (future MVP): export org metadata + child data to long-term store.
-        // Step 2 (future MVP, gated by executeDeletion): cascade-delete child rows.
-        if (executeDeletion) {
-            log.warn("[TENANT-PURGE] execute-deletion=true was set but data deletion is not implemented in MVP-2 "
-                + "for org {}. State transition to PURGED will proceed; data is retained.", org.getId());
-        }
-
-        org.setLifecycleState(OrganizationLifecycleState.PURGED);
-        org.setPurgedAt(Instant.now());
-        organizationRepository.save(org);
-
-        recordAudit(org);
-        log.info("[TENANT-PURGE] Org {} ({}) transitioned to PURGED", org.getId(), org.getCode());
-    }
-
-    private void recordAudit(Organization org) {
-        try {
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userName("system:tenant-purge-job")
-                .eventType(AuditEventType.TENANT_PURGED)
-                .eventDescription("Scheduled purge executed for organization " + org.getCode())
-                .resourceId(org.getId().toString())
-                .resourceName(org.getName())
-                .entityType("ORGANIZATION")
-                .status(AuditStatus.SUCCESS)
-                .build());
-        } catch (RuntimeException ex) {
-            log.error("[TENANT-PURGE] Audit emission failed for purged org {}", org.getId(), ex);
-        }
     }
 }

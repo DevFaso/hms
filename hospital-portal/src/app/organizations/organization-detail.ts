@@ -3,6 +3,8 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 import {
   OrganizationLifecycleState,
@@ -93,6 +95,7 @@ export class OrganizationDetailComponent implements OnInit {
   readonly modalReason = signal('');
   readonly modalConfirmText = signal('');
   readonly modalPurgeAt = signal('');
+  readonly modalMfaToken = signal('');
   readonly submitting = signal(false);
 
   readonly stateLabelKey = computed(() => {
@@ -124,19 +127,24 @@ export class OrganizationDetailComponent implements OnInit {
 
   loadAll(id: string): void {
     this.loading.set(true);
-    this.orgService.getById(id).subscribe({
-      next: (org) => this.organization.set(org),
-      error: () => this.toast.error('Failed to load organization'),
-    });
-    this.orgService.getLifecycle(id).subscribe({
-      next: (lc) => {
-        this.lifecycle.set(lc);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to load lifecycle');
-        this.loading.set(false);
-      },
+    // Wait for BOTH calls to settle before clearing the loading state — if
+    // only the lifecycle call returns first, the template would drop out of
+    // the loading branch while organization() is still null and render blank.
+    forkJoin({
+      org: this.orgService.getById(id).pipe(
+        map((o) => ({ ok: true, value: o }) as const),
+        catchError(() => of({ ok: false } as const)),
+      ),
+      lc: this.orgService.getLifecycle(id).pipe(
+        map((l) => ({ ok: true, value: l }) as const),
+        catchError(() => of({ ok: false } as const)),
+      ),
+    }).subscribe(({ org, lc }) => {
+      if (org.ok) this.organization.set(org.value);
+      else this.toast.error('Failed to load organization');
+      if (lc.ok) this.lifecycle.set(lc.value);
+      else this.toast.error('Failed to load lifecycle');
+      this.loading.set(false);
     });
   }
 
@@ -144,6 +152,7 @@ export class OrganizationDetailComponent implements OnInit {
     this.modalReason.set('');
     this.modalConfirmText.set('');
     this.modalPurgeAt.set('');
+    this.modalMfaToken.set('');
     this.activeAction.set(ACTION_CONFIG[action]);
   }
 
@@ -165,8 +174,13 @@ export class OrganizationDetailComponent implements OnInit {
           : undefined,
     };
 
+    // MFA token is captured for destructive actions only; the backend ignores
+    // it on restore/cancel-purge. Trim whitespace so leading/trailing spaces
+    // from autofill don't pre-fail TOTP verification on the server side.
+    const mfaToken = cfg.destructive ? this.modalMfaToken().trim() || undefined : undefined;
+
     this.submitting.set(true);
-    const op = this.dispatch(cfg.action, org.id, body);
+    const op = this.dispatch(cfg.action, org.id, body, mfaToken);
 
     op.subscribe({
       next: (lc) => {
@@ -186,16 +200,17 @@ export class OrganizationDetailComponent implements OnInit {
     action: LifecycleAction,
     id: string,
     body: { reason?: string; purgeScheduledFor?: string },
+    mfaToken: string | undefined,
   ) {
     switch (action) {
       case 'suspend':
-        return this.orgService.suspend(id, body);
+        return this.orgService.suspend(id, body, mfaToken);
       case 'restore':
         return this.orgService.restoreLifecycle(id, body);
       case 'archive':
-        return this.orgService.archive(id, body);
+        return this.orgService.archive(id, body, mfaToken);
       case 'schedule-purge':
-        return this.orgService.schedulePurge(id, body);
+        return this.orgService.schedulePurge(id, body, mfaToken);
       case 'cancel-purge':
         return this.orgService.cancelPurge(id, body);
     }

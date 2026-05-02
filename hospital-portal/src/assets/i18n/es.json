@@ -12,6 +12,7 @@
     "CANCEL": "Cancelar",
     "OPTIONAL": "opcional",
     "DEFAULT_30_DAYS": "30 días por defecto",
+    "MFA_HINT": "Código de 6 dígitos de tu autenticador — requerido si MFA está activo",
     "STATE": {
       "ACTIVE": "Activo",
       "SUSPENDED": "Suspendido",
@@ -36,7 +37,8 @@
       "PURGE_AT": "Purga programada para",
       "PURGE_REASON": "Motivo de purga",
       "PURGED_AT": "Purgado el",
-      "TYPE_CODE_TO_CONFIRM": "Escribe el código de la organización para confirmar:"
+      "TYPE_CODE_TO_CONFIRM": "Escribe el código de la organización para confirmar:",
+      "MFA_CODE": "Código MFA"
     },
     "PLACEHOLDER": {
       "REASON": "¿Por qué esta acción? (visible en la pista de auditoría)"

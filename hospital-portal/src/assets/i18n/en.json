@@ -12,6 +12,7 @@
     "CANCEL": "Cancel",
     "OPTIONAL": "optional",
     "DEFAULT_30_DAYS": "default 30 days from now",
+    "MFA_HINT": "6-digit code from your authenticator — required if MFA is enrolled",
     "STATE": {
       "ACTIVE": "Active",
       "SUSPENDED": "Suspended",
@@ -36,7 +37,8 @@
       "PURGE_AT": "Purge scheduled for",
       "PURGE_REASON": "Purge reason",
       "PURGED_AT": "Purged at",
-      "TYPE_CODE_TO_CONFIRM": "Type the org code to confirm:"
+      "TYPE_CODE_TO_CONFIRM": "Type the org code to confirm:",
+      "MFA_CODE": "MFA step-up code"
     },
     "PLACEHOLDER": {
       "REASON": "Why is this happening? (visible in the audit trail)"

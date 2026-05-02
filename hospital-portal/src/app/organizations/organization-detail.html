@@ -233,6 +233,26 @@
           </label>
         }
 
+        @if (cfg.destructive) {
+          <label class="field">
+            <span class="field-label">
+              {{ 'TENANT_LIFECYCLE.FIELD.MFA_CODE' | translate }}
+              ({{ 'TENANT_LIFECYCLE.MFA_HINT' | translate }})
+            </span>
+            <input
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              maxlength="8"
+              [ngModel]="modalMfaToken()"
+              (ngModelChange)="modalMfaToken.set($event)"
+              autocomplete="one-time-code"
+              spellcheck="false"
+              data-test="mfa-token"
+            />
+          </label>
+        }
+
         <footer class="modal-footer">
           <button class="btn btn-ghost" (click)="closeModal()" [disabled]="submitting()">
             {{ 'TENANT_LIFECYCLE.CANCEL' | translate }}

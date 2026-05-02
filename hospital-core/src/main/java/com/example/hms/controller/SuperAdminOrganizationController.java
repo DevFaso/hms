@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -157,9 +158,10 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> suspend(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(lifecycleService.suspend(organizationId, request));
+        return ResponseEntity.ok(lifecycleService.suspend(organizationId, request, mfaToken));
     }
 
     @PostMapping("/{organizationId}/restore")
@@ -179,9 +181,10 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> archive(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(lifecycleService.archive(organizationId, request));
+        return ResponseEntity.ok(lifecycleService.archive(organizationId, request, mfaToken));
     }
 
     @PostMapping("/{organizationId}/schedule-purge")
@@ -190,9 +193,10 @@ public class SuperAdminOrganizationController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<TenantLifecycleResponseDTO> schedulePurge(
         @PathVariable UUID organizationId,
-        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(lifecycleService.schedulePurge(organizationId, request));
+        return ResponseEntity.ok(lifecycleService.schedulePurge(organizationId, request, mfaToken));
     }
 
     @PostMapping("/{organizationId}/cancel-purge")

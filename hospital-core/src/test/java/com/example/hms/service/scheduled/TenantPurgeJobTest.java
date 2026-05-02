@@ -1,19 +1,17 @@
 package com.example.hms.service.scheduled;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.OrganizationLifecycleState;
 import com.example.hms.model.Organization;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.OrganizationRepository;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.OrganizationLifecycleStatusService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -22,12 +20,19 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+/**
+ * Unit tests for {@link TenantPurgeJob}'s sweep loop.
+ *
+ * <p>The actual per-org purge logic now lives in {@link TenantPurgeExecutor}
+ * (split out so each call runs in its own REQUIRES_NEW transaction). The
+ * sweep test is therefore narrowed to: enabled-flag short-circuit, due-list
+ * fetch, per-org delegation, failure isolation, and cache invalidation.
+ */
 @ExtendWith(MockitoExtension.class)
 class TenantPurgeJobTest {
 
@@ -35,10 +40,10 @@ class TenantPurgeJobTest {
     private OrganizationRepository organizationRepository;
 
     @Mock
-    private AuditEventLogService auditEventLogService;
+    private OrganizationLifecycleStatusService lifecycleStatusService;
 
     @Mock
-    private OrganizationLifecycleStatusService lifecycleStatusService;
+    private TenantPurgeExecutor purgeExecutor;
 
     @InjectMocks
     private TenantPurgeJob job;
@@ -64,7 +69,8 @@ class TenantPurgeJobTest {
         job.runSweep();
 
         verify(organizationRepository, never()).findDuePurges(any());
-        verify(organizationRepository, never()).save(any());
+        verify(purgeExecutor, never()).executePurge(any(), anyBoolean());
+        verify(lifecycleStatusService, never()).invalidate();
     }
 
     @Test
@@ -75,73 +81,55 @@ class TenantPurgeJobTest {
         job.runSweep();
 
         verify(organizationRepository).findDuePurges(any());
-        verify(organizationRepository, never()).save(any());
-        verify(auditEventLogService, never()).logEvent(any());
+        verify(purgeExecutor, never()).executePurge(any(), anyBoolean());
     }
 
     @Test
-    void enabledJobTransitionsDueOrgsToPurgedAndAuditsEachOne() {
+    void enabledJobDelegatesToTheExecutorOncePerDueOrg() {
         ReflectionTestUtils.setField(job, "enabled", true);
-        UUID idA = UUID.randomUUID();
-        UUID idB = UUID.randomUUID();
-        Organization a = due(idA, "ACME");
-        Organization b = due(idB, "BETA");
+        Organization a = due(UUID.randomUUID(), "ACME");
+        Organization b = due(UUID.randomUUID(), "BETA");
         when(organizationRepository.findDuePurges(any())).thenReturn(List.of(a, b));
-        when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
         job.runSweep();
 
-        assertThat(a.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PURGED);
-        assertThat(a.getPurgedAt()).isNotNull();
-        assertThat(b.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PURGED);
-        verify(organizationRepository, times(2)).save(any(Organization.class));
-
-        ArgumentCaptor<AuditEventRequestDTO> auditCap = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-        verify(auditEventLogService, times(2)).logEvent(auditCap.capture());
-        assertThat(auditCap.getAllValues()).allMatch(e ->
-            e.getEventType() == AuditEventType.TENANT_PURGED
-                && "ORGANIZATION".equals(e.getEntityType()));
-
+        verify(purgeExecutor).executePurge(same(a), eqBoolean(false));
+        verify(purgeExecutor).executePurge(same(b), eqBoolean(false));
         verify(lifecycleStatusService).invalidate();
     }
 
     @Test
     void singleOrgFailureDoesNotPreventTheRestOfTheSweep() {
         ReflectionTestUtils.setField(job, "enabled", true);
-        UUID idA = UUID.randomUUID();
-        UUID idB = UUID.randomUUID();
-        Organization a = due(idA, "ACME");
-        Organization b = due(idB, "BETA");
+        Organization a = due(UUID.randomUUID(), "ACME");
+        Organization b = due(UUID.randomUUID(), "BETA");
         when(organizationRepository.findDuePurges(any())).thenReturn(List.of(a, b));
-        when(organizationRepository.save(same(a))).thenThrow(new RuntimeException("save fail"));
-        when(organizationRepository.save(same(b))).thenAnswer(inv -> inv.getArgument(0));
+        // Each executePurge call is a REQUIRES_NEW transaction in production,
+        // so a runtime exception escaping from the first call can be caught
+        // by the loop without poisoning the second.
+        doThrow(new RuntimeException("rolled back")).when(purgeExecutor).executePurge(same(a), eqBoolean(false));
 
         job.runSweep();
 
-        // The save on `a` threw — DB state was not committed for `a`. The
-        // in-memory mutation to PURGED is irrelevant; what matters is that
-        // the failure didn't abort the sweep and `b` was successfully audited.
-        verify(organizationRepository, times(1)).save(same(a));
-        verify(organizationRepository, times(1)).save(same(b));
-        verify(auditEventLogService, times(1)).logEvent(any()); // only b
+        verify(purgeExecutor, times(1)).executePurge(same(a), eqBoolean(false));
+        verify(purgeExecutor, times(1)).executePurge(same(b), eqBoolean(false));
         verify(lifecycleStatusService).invalidate();
     }
 
     @Test
-    void executeDeletionFlagDoesNotChangeBehaviourInMvp2() {
-        // Future MVPs will gate cascade deletes behind this flag. For MVP-2 we
-        // pin the contract: the flag is recognised but the job only flips state.
+    void executeDeletionFlagIsForwardedToTheExecutor() {
         ReflectionTestUtils.setField(job, "enabled", true);
         ReflectionTestUtils.setField(job, "executeDeletion", true);
         Organization a = due(UUID.randomUUID(), "ACME");
         when(organizationRepository.findDuePurges(any())).thenReturn(List.of(a));
-        when(organizationRepository.save(any(Organization.class))).thenAnswer(inv -> inv.getArgument(0));
 
         job.runSweep();
 
-        assertThat(a.getLifecycleState()).isEqualTo(OrganizationLifecycleState.PURGED);
-        // No cascade-delete repository methods exist yet — the job logs a
-        // warning and proceeds with the state transition only.
-        verify(organizationRepository, times(1)).save(any(Organization.class));
+        verify(purgeExecutor).executePurge(same(a), eqBoolean(true));
+    }
+
+    /** Tiny helper to keep the verify call sites readable when paired with same(). */
+    private static boolean eqBoolean(boolean expected) {
+        return org.mockito.ArgumentMatchers.eq(expected);
     }
 }

@@ -373,11 +373,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return false;
     }
 
-    /** 423 LOCKED with a clear, non-PII message that the org is blocked. */
+    /** 423 LOCKED with a clear, non-PII JSON body so the portal can surface
+     *  an actionable message. The frontend interceptor only special-cases
+     *  401/403 today, so a bare 423 with no body would render as a generic
+     *  request failure with no explanation. */
     private void respondTenantBlocked(HttpServletResponse response) {
-        if (!response.isCommitted()) {
-            response.setStatus(423); // LOCKED — RFC 4918
-            response.setHeader("X-Block-Reason", "tenant-lifecycle");
+        if (response.isCommitted()) {
+            return;
+        }
+        response.setStatus(423); // LOCKED — RFC 4918
+        response.setHeader("X-Block-Reason", "tenant-lifecycle");
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        try {
+            response.getWriter().write(
+                "{\"error\":\"tenant_blocked\","
+                    + "\"message\":\"Access to this organization is currently unavailable due to its lifecycle status. "
+                    + "Contact your super-admin if this is unexpected.\","
+                    + "\"status\":423,"
+                    + "\"blockReason\":\"tenant-lifecycle\"}"
+            );
+        } catch (IOException ex) {
+            log.warn("[JWT] Failed to write 423 tenant-blocked response body", ex);
         }
     }
 
