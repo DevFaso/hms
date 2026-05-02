@@ -8,11 +8,12 @@ import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
- * Logs a one-line INFO at startup for each optional integration subsystem
- * that is currently disabled. Without this, a fresh dev or staging
- * environment can run for weeks before someone notices that emails were
- * never sent, the token blacklist is in-memory only (so logout doesn't
- * propagate across instances), or Kafka events are silently dropped.
+ * Logs a one-line INFO (or WARN) at startup for each optional integration
+ * subsystem that is currently disabled or misconfigured. Without this, a
+ * fresh dev or staging environment can run for weeks before someone notices
+ * that emails were never sent, the token blacklist is in-memory only (so
+ * logout doesn't propagate across instances), or Kafka events are silently
+ * dropped.
  *
  * <p>Triggered on {@link ApplicationReadyEvent} so the lines land at the
  * very end of the startup log where they're easy to spot.
@@ -30,25 +31,92 @@ public class StartupSubsystemLogger {
 
     @EventListener(ApplicationReadyEvent.class)
     public void announceDisabledSubsystems() {
-        if (isEmpty(env.getProperty("spring.mail.username"))) {
+        announceMail();
+        announceRedisBlacklist();
+        announceKafka();
+    }
+
+    /**
+     * Mail is "configured" when the host is set AND, if SMTP auth is
+     * enabled (the default), both username and password are present.
+     * Splitting into three explicit cases makes it obvious which knob
+     * is missing instead of the previous opaque "set username and
+     * password" message that fired even when the host wasn't set yet.
+     */
+    private void announceMail() {
+        String host = env.getProperty("spring.mail.host");
+        if (isEmpty(host)) {
             log.info(
-                    "Subsystem disabled: outbound MAIL — set spring.mail.username + spring.mail.password "
+                    "Subsystem disabled: outbound MAIL — spring.mail.host not set "
                             + "(activation, password reset, notification emails will not be delivered)");
+            return;
         }
+        // Default Spring Boot value when the property is unset is true; only
+        // an explicit "false" disables auth.
+        boolean authEnabled =
+                !"false".equalsIgnoreCase(env.getProperty("spring.mail.properties.mail.smtp.auth"));
+        if (!authEnabled) {
+            log.info(
+                    "Subsystem note: outbound MAIL host {} configured WITHOUT SMTP auth "
+                            + "(spring.mail.properties.mail.smtp.auth=false) — username/password not required",
+                    host);
+            return;
+        }
+        boolean userMissing = isEmpty(env.getProperty("spring.mail.username"));
+        boolean passMissing = isEmpty(env.getProperty("spring.mail.password"));
+        if (userMissing || passMissing) {
+            log.info(
+                    "Subsystem disabled: outbound MAIL host {} configured but credentials missing "
+                            + "(username={}, password={}). Set spring.mail.username + spring.mail.password "
+                            + "or disable SMTP auth.",
+                    host,
+                    userMissing ? "MISSING" : "set",
+                    passMissing ? "MISSING" : "set");
+        }
+    }
+
+    private void announceRedisBlacklist() {
         if (!isTrue(env.getProperty("app.redis.token-blacklist.enabled"))) {
             log.info(
                     "Subsystem disabled: REDIS token blacklist — using in-memory store. "
                             + "OK for single-instance dev; in multi-instance deployments revoked tokens will "
                             + "remain valid on other instances. Set app.redis.token-blacklist.enabled=true.");
         }
+    }
+
+    /**
+     * Kafka is gated by two flags that toggle different layers — the
+     * {@code spring.kafka.enabled} flag controls whether Kafka beans
+     * (consumers, listener containers) are created, and {@code app.kafka.enabled}
+     * controls whether the application's domain publishers actually emit.
+     * Reporting them independently makes a partial / mismatched setup
+     * visible. Mismatch is almost always misconfiguration, so it's WARN.
+     */
+    private void announceKafka() {
         boolean springKafka = isTrue(env.getProperty("spring.kafka.enabled"));
         boolean appKafka = isTrue(env.getProperty("app.kafka.enabled"));
+
         if (!springKafka && !appKafka) {
             log.info(
-                    "Subsystem disabled: KAFKA event streaming — no broker configured. "
-                            + "Chat / EMPI / patient-movement / platform-registry events will not be published. "
-                            + "Set spring.kafka.enabled=true and app.kafka.enabled=true to enable.");
+                    "Subsystem disabled: KAFKA fully off (spring.kafka.enabled=false, "
+                            + "app.kafka.enabled=false). Chat / EMPI / patient-movement / "
+                            + "platform-registry events will not be published.");
+            return;
         }
+        if (springKafka && !appKafka) {
+            log.warn(
+                    "Subsystem partially enabled: KAFKA beans are CREATED (spring.kafka.enabled=true) "
+                            + "but app-level publishing is OFF (app.kafka.enabled=false). Consumers may run "
+                            + "without producers — likely a misconfig.");
+            return;
+        }
+        if (!springKafka && appKafka) {
+            log.warn(
+                    "Subsystem partially enabled: app.kafka.enabled=true but Kafka beans are NOT "
+                            + "created (spring.kafka.enabled=false). Publishers will fail at runtime — "
+                            + "likely a misconfig.");
+        }
+        // Both true: nothing to log; Kafka is fully enabled.
     }
 
     private static boolean isEmpty(String s) {
