@@ -1186,6 +1186,34 @@
       "NURSING_NOTES_DESC": "Document patient notes",
       "CHECK_IN": "Check-in",
       "CHECK_IN_DESC": "Check in a patient"
+    },
+    "WL_TAB": {
+      "ALL": "All",
+      "WAITING": "Waiting",
+      "IN_PROGRESS": "In Progress",
+      "CONSULTS": "Consults",
+      "COMPLETED": "Completed"
+    },
+    "WL_STATUS": {
+      "SCHEDULED": "Scheduled",
+      "CHECKED_IN": "Checked In",
+      "TRIAGE": "In Triage",
+      "WAITING": "Waiting",
+      "IN_PROGRESS": "In Progress",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "CONSULTATION": "Consult"
+    },
+    "FLOW_COL": {
+      "SCHEDULED": "Scheduled",
+      "CHECKED_IN": "Checked In",
+      "TRIAGE": "Triage",
+      "WAITING_FOR_MD": "Waiting for MD",
+      "IN_ENCOUNTER": "In Encounter",
+      "AWAITING_RESULTS": "Awaiting Results",
+      "READY_TO_DISCHARGE": "Ready to Discharge",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled"
     }
   },
   "DEPARTMENTS": {
@@ -2443,7 +2471,27 @@
       "STATUS": "Status",
       "NOT_ASSIGNED": "Not assigned",
       "GENERAL_VISIT": "General Visit",
-      "GENERAL": "General"
+      "GENERAL": "General",
+      "BOOKING": {
+        "TITLE": "Schedule Appointment",
+        "FORM_TITLE": "Schedule a New Appointment",
+        "SUCCESS": "Appointment scheduled successfully!",
+        "HOSPITAL": "Hospital",
+        "SELECT_HOSPITAL": "Select a hospital",
+        "SELECT_DEPARTMENT": "Select a department",
+        "PROVIDER_OPTIONAL": "Provider (optional)",
+        "ANY_PROVIDER": "Any available provider",
+        "REASON": "Reason for visit",
+        "REASON_PLACEHOLDER": "e.g., Annual checkup",
+        "NOTES": "Additional notes",
+        "NOTES_PLACEHOLDER": "Any additional information for the provider",
+        "SCHEDULING": "Scheduling...",
+        "MISSING_FIELDS": "Please fill in all required fields.",
+        "FAILED": "Failed to schedule appointment. Please try again.",
+        "CLOSE_LABEL": "Close",
+        "PRECHECKIN_BTN": "Pre-Check-In Online",
+        "PRECHECKIN_DONE": "Pre-check-in completed"
+      }
     },
     "MEDICATIONS": {
       "TITLE": "My Medications",
@@ -2526,6 +2574,7 @@
       "PAY": "Pay",
       "DONE": "Done",
       "PAYMENT_SUCCESS": "Payment recorded successfully!",
+      "PAYMENT_SUCCESS_AMOUNT": "Payment of {{amount}} recorded successfully!",
       "PAYMENT_FAILED": "Payment failed. Please try again.",
       "AMOUNT_EXCEEDS": "Amount cannot exceed balance due.",
       "CARD": "Credit / Debit Card",
@@ -3798,8 +3847,11 @@
     "CONTACT_INFO": "Contact Information",
     "PHONE": "Phone Number",
     "EMAIL": "Email",
+    "EMAIL_PLACEHOLDER": "e.g. patient@example.com",
+    "PHONE_PLACEHOLDER": "e.g. (555) 123-4567",
     "ADDRESS": "Address",
     "ADDRESS_LINE1": "Address Line 1",
+    "ADDRESS_PLACEHOLDER": "Street address",
     "CITY": "City",
     "STATE": "State",
     "ZIP": "Zip Code",

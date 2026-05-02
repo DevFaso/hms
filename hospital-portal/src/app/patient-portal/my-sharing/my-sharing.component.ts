@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PatientConsent,
@@ -20,6 +20,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 export class MySharingComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   activeTab = signal<'consents' | 'access-log'>('consents');
   loadingConsents = signal(true);
@@ -74,11 +75,11 @@ export class MySharingComponent implements OnInit {
         this.consents.update((list) =>
           list.map((item) => (item.id === c.id ? { ...item, status: 'REVOKED' } : item)),
         );
-        this.toast.success('Consent revoked successfully');
+        this.toast.success(this.translate.instant('PORTAL.SHARING.CONSENT_REVOKED'));
         this.revoking.set(false);
       },
       error: () => {
-        this.toast.error('Failed to revoke consent');
+        this.toast.error(this.translate.instant('PORTAL.SHARING.CONSENT_REVOKE_FAILED'));
         this.revoking.set(false);
       },
     });
@@ -108,12 +109,12 @@ export class MySharingComponent implements OnInit {
       .subscribe({
         next: (consent) => {
           this.consents.update((list) => [consent, ...list]);
-          this.toast.success('PORTAL.SHARING.CONSENT_GRANTED');
+          this.toast.success(this.translate.instant('PORTAL.SHARING.CONSENT_GRANTED'));
           this.sharing.set(false);
           this.showShareForm.set(false);
         },
         error: () => {
-          this.toast.error('PORTAL.SHARING.CONSENT_GRANT_FAILED');
+          this.toast.error(this.translate.instant('PORTAL.SHARING.CONSENT_GRANT_FAILED'));
           this.sharing.set(false);
         },
       });

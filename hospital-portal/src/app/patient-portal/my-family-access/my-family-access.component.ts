@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   ProxyResponse,
@@ -20,6 +20,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 export class MyFamilyAccessComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   proxies = signal<ProxyResponse[]>([]);
   proxyAccess = signal<ProxyResponse[]>([]);
@@ -47,7 +48,7 @@ export class MyFamilyAccessComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load proxy grants');
+        this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -63,7 +64,7 @@ export class MyFamilyAccessComponent implements OnInit {
           this.loadingReceived.set(false);
         },
         error: () => {
-          this.toast.error('Failed to load proxy access');
+          this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'));
           this.loadingReceived.set(false);
         },
       });
@@ -72,7 +73,7 @@ export class MyFamilyAccessComponent implements OnInit {
 
   grantAccess(): void {
     if (!this.form.proxyUsername || !this.form.relationship) {
-      this.toast.error('Username and relationship are required');
+      this.toast.error(this.translate.instant('PORTAL.FAMILY.REQUIRED_FIELDS'));
       return;
     }
     this.granting.set(true);
@@ -82,11 +83,11 @@ export class MyFamilyAccessComponent implements OnInit {
         this.showGrantForm.set(false);
         this.form = { proxyUsername: '', relationship: '', permissions: 'ALL' };
         this.granting.set(false);
-        this.toast.success('Proxy access granted');
+        this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_GRANTED'));
       },
       error: () => {
         this.granting.set(false);
-        this.toast.error('Failed to grant proxy access');
+        this.toast.error(this.translate.instant('PORTAL.FAMILY.GRANT_FAILED'));
       },
     });
   }
@@ -95,9 +96,10 @@ export class MyFamilyAccessComponent implements OnInit {
     this.portalService.revokeProxy(proxyId).subscribe({
       next: () => {
         this.proxies.update((list) => list.filter((p) => p.id !== proxyId));
-        this.toast.success('Proxy access revoked');
+        this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_REVOKED'));
       },
-      error: () => this.toast.error('Failed to revoke proxy access'),
+      error: () =>
+        this.toast.error(this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED')),
     });
   }
 }
