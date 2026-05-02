@@ -183,10 +183,14 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.activeView()).toBe('lab-director');
   });
 
-  it('roleLabel should be "Lab Director" for ROLE_LAB_DIRECTOR', () => {
+  it('roleLabel should resolve the lab-director key for ROLE_LAB_DIRECTOR', () => {
+    // The test harness installs TranslateModule.forRoot() with no loader, so
+    // translate.instant() returns the key itself. We assert on the key (proves
+    // the right branch fired) — the rendered French/English string is verified
+    // by the i18n JSON snapshots.
     const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
     c.isLabDirector.set(true);
-    expect(c.roleLabel()).toBe('Lab Director');
+    expect(c.roleLabel()).toBe('DASHBOARD.ROLE.LAB_DIRECTOR');
   });
 
   it('heroGradientClass should be "hero-gradient-lab-director" for ROLE_LAB_DIRECTOR', () => {
@@ -269,7 +273,9 @@ describe('Dashboard navigation & RBAC', () => {
     });
     const tiles = c.labDirectorNavTiles();
     expect(tiles.length).toBe(13);
-    const approvalTile = tiles.find((t) => t.label === 'Approval Queue');
+    // Identify the approval-queue tile by its icon (unique within the array)
+    // rather than its translated label, so the lookup survives i18n changes.
+    const approvalTile = tiles.find((t) => t.icon === 'approval');
     expect(approvalTile?.count).toBe(5);
   });
 
@@ -281,10 +287,10 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.activeView()).toBe('quality-manager');
   });
 
-  it('roleLabel should be "Quality Manager" for ROLE_QUALITY_MANAGER', () => {
+  it('roleLabel should resolve the quality-manager key for ROLE_QUALITY_MANAGER', () => {
     const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
     c.isQualityManager.set(true);
-    expect(c.roleLabel()).toBe('Quality Manager');
+    expect(c.roleLabel()).toBe('DASHBOARD.ROLE.QUALITY_MANAGER');
   });
 
   it('heroGradientClass should be "hero-gradient-quality-manager" for ROLE_QUALITY_MANAGER', () => {
@@ -360,7 +366,9 @@ describe('Dashboard navigation & RBAC', () => {
     );
     c.isReceptionist.set(true);
     const actions = c.quickActions();
-    const checkIn = actions.find((a) => a.label === 'Check-in');
+    // Identify the check-in action by the unique route+icon pair instead of
+    // its translated label, so this assertion is i18n-stable.
+    const checkIn = actions.find((a) => a.route === '/reception' && a.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected receptionist quick actions to include a Check-in action')
       .toBeDefined();
@@ -371,7 +379,9 @@ describe('Dashboard navigation & RBAC', () => {
     const c = createComponent(['ROLE_NURSE'], []);
     c.isNurse.set(true);
     const tiles = c.nurseWorkflowTiles();
-    const checkIn = tiles.find((t) => t.label === 'Check-In');
+    // The check-in tile is the only nurse-station tile that uses the
+    // how_to_reg icon, so look it up by that pair instead of by label.
+    const checkIn = tiles.find((t) => t.route === '/nurse-station' && t.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected nurse workflow tiles to include a Check-In tile')
       .toBeDefined();
@@ -382,7 +392,7 @@ describe('Dashboard navigation & RBAC', () => {
     const c = createComponent(['ROLE_RECEPTIONIST'], []);
     c.isReceptionist.set(true);
     const tiles = c.receptionistWorkflowTiles();
-    const checkIn = tiles.find((t) => t.label === 'Check-In');
+    const checkIn = tiles.find((t) => t.route === '/reception' && t.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected receptionist workflow tiles to include a Check-In tile')
       .toBeDefined();
