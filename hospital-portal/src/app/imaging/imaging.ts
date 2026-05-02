@@ -10,6 +10,7 @@ import {
   ImagingModality,
   ImagingPriority,
   ImagingLaterality,
+  ImagingReportResponse,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -41,6 +42,7 @@ export class ImagingComponent implements OnInit {
   searchTerm = '';
   activeTab = signal<'all' | 'ordered' | 'completed' | 'cancelled'>('all');
   selectedOrder = signal<ImagingOrderResponse | null>(null);
+  selectedOrderReports = signal<ImagingReportResponse[]>([]);
 
   hospitals = signal<HospitalResponse[]>([]);
 
@@ -307,9 +309,20 @@ export class ImagingComponent implements OnInit {
 
   viewDetail(o: ImagingOrderResponse): void {
     this.selectedOrder.set(o);
+    this.selectedOrderReports.set([]);
+    this.imagingService.getReportsForOrder(o.id).subscribe({
+      next: (reports) => this.selectedOrderReports.set(reports ?? []),
+      error: () => this.selectedOrderReports.set([]),
+    });
   }
   closeDetail(): void {
     this.selectedOrder.set(null);
+    this.selectedOrderReports.set([]);
+  }
+
+  openPacsViewer(url: string): void {
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   getStatusClass(status: string): string {

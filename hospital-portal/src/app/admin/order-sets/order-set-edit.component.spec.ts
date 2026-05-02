@@ -21,7 +21,18 @@ describe('OrderSetEditComponent', () => {
     description: 'Hour-1 sepsis',
     admissionType: 'EMERGENCY',
     hospitalId: 'h1',
-    orderItems: [{ orderType: 'LAB', orderName: 'Lactate' }],
+    orderItems: [
+      {
+        orderType: 'MEDICATION',
+        medicationName: 'Acetaminophen',
+        synonyms: ['paracetamol', 'Tylenol'],
+        doseRangeMin: 500,
+        doseRangeMax: 1000,
+        doseUnit: 'mg',
+        route: 'PO',
+        frequency: 'Q6H',
+      },
+    ],
     clinicalGuidelines: 'Surviving Sepsis Campaign 2021',
     active: true,
     version: 1,
@@ -73,18 +84,23 @@ describe('OrderSetEditComponent', () => {
     }).compileComponents();
   }
 
-  it('loads the existing template into the form when id != "new"', async () => {
+  it('loads the existing template into the structured editor when id != "new"', async () => {
     await configure('os-9');
     fixture = TestBed.createComponent(OrderSetEditComponent);
     fixture.detectChanges();
 
     expect(svc.getById).toHaveBeenCalledOnceWith('os-9');
     expect(svc.versions).toHaveBeenCalledOnceWith('os-9');
-    const formEl = fixture.nativeElement.querySelector('[data-testid="order-set-edit-form"]');
-    expect(formEl).not.toBeNull();
+
+    const items = fixture.componentInstance['items']();
+    expect(items.length).toBe(1);
+    expect(items[0].medicationName).toBe('Acetaminophen');
+    expect(items[0]._synonymsText).toBe('paracetamol, Tylenol');
+    expect(items[0].doseRangeMin).toBe(500);
+    expect(items[0].doseRangeMax).toBe(1000);
   });
 
-  it('uses create when id == "new" and emits a success toast on save', async () => {
+  it('persists synonyms (parsed from comma list) and dose-range fields on save', async () => {
     await configure('new');
     const navigateSpy = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     fixture = TestBed.createComponent(OrderSetEditComponent);
@@ -92,28 +108,41 @@ describe('OrderSetEditComponent', () => {
 
     fixture.componentInstance['form'].name = 'New bundle';
     fixture.componentInstance['form'].admissionType = 'ELECTIVE';
-    fixture.componentInstance['orderItemsJson'] = '[]';
+    const items = fixture.componentInstance['items']();
+    items[0].medicationName = 'Ibuprofen';
+    items[0]._synonymsText = 'Advil, Motrin';
+    items[0].doseRangeMin = 200;
+    items[0].doseRangeMax = 400;
+    items[0].doseUnit = 'mg';
+    items[0].frequency = 'Q6H';
+    items[0].route = 'PO';
+    fixture.componentInstance['items'].set([...items]);
 
     (fixture.componentInstance as unknown as { save(): void }).save();
 
     expect(svc.create).toHaveBeenCalled();
+    const sent = svc.create.calls.mostRecent().args[0];
+    expect(sent.orderItems.length).toBe(1);
+    expect(sent.orderItems[0].synonyms).toEqual(['Advil', 'Motrin']);
+    expect(sent.orderItems[0].doseRangeMin).toBe(200);
+    expect(sent.orderItems[0].doseRangeMax).toBe(400);
     expect(toast.success).toHaveBeenCalled();
     expect(navigateSpy).toHaveBeenCalledWith(['/admin/order-sets']);
   });
 
-  it('surfaces a json error when orderItems text is not valid JSON', async () => {
+  it('errors when an item is missing a name', async () => {
     await configure('new');
     fixture = TestBed.createComponent(OrderSetEditComponent);
     fixture.detectChanges();
 
     fixture.componentInstance['form'].name = 'X';
-    fixture.componentInstance['orderItemsJson'] = '{ not json';
+    const items = fixture.componentInstance['items']();
+    items[0].medicationName = '';
+    fixture.componentInstance['items'].set([...items]);
+
     (fixture.componentInstance as unknown as { save(): void }).save();
-    fixture.detectChanges();
 
     expect(svc.create).not.toHaveBeenCalled();
-    expect(
-      fixture.nativeElement.querySelector('[data-testid="order-set-edit-json-error"]'),
-    ).not.toBeNull();
+    expect(toast.error).toHaveBeenCalled();
   });
 });

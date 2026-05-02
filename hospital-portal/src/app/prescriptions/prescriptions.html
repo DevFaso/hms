@@ -148,6 +148,14 @@
                     <span class="material-symbols-outlined">edit</span>
                   </button>
                   <button
+                    class="action-link"
+                    (click)="openDispatchModal(p)"
+                    [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                    [attr.data-testid]="'rx-dispatch-sms-' + p.id"
+                  >
+                    <span class="material-symbols-outlined">sms</span>
+                  </button>
+                  <button
                     class="action-link delete-link"
                     (click)="confirmDelete(p)"
                     [title]="'COMMON.DELETE' | translate"
@@ -469,6 +477,84 @@
           {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
         </button>
       </div>
+    </div>
+  </div>
+}
+
+@if (showDispatchModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDispatchModal()"
+    (keydown.escape)="closeDispatchModal()"
+    data-testid="rx-dispatch-modal"
+  ></div>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <h2>{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}</h2>
+      <button
+        type="button"
+        class="btn-close"
+        (click)="closeDispatchModal()"
+        [title]="'COMMON.CANCEL' | translate"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p>
+        {{ 'PRESCRIPTIONS.DISPATCH_SMS_FOR' | translate }}:
+        <strong>{{ dispatchTarget()?.medicationName }}</strong>
+      </p>
+      <label class="form-field">
+        <span>{{ 'PRESCRIPTIONS.DISPATCH_PHARMACY' | translate }}</span>
+        <select
+          [(ngModel)]="dispatchPharmacyId"
+          name="dispatchPharmacyId"
+          required
+          data-testid="rx-dispatch-pharmacy"
+        >
+          <option value="" disabled>
+            {{ 'PRESCRIPTIONS.DISPATCH_PHARMACY_PLACEHOLDER' | translate }}
+          </option>
+          @for (opt of pharmacyOptions(); track opt.id) {
+            <option [value]="opt.id">{{ opt.name }} ({{ opt.phoneNumber }})</option>
+          }
+        </select>
+      </label>
+      <label class="form-field">
+        <span>{{ 'PRESCRIPTIONS.DISPATCH_NOTE' | translate }}</span>
+        <textarea
+          rows="2"
+          [(ngModel)]="dispatchNote"
+          name="dispatchNote"
+          [placeholder]="'PRESCRIPTIONS.DISPATCH_NOTE_PLACEHOLDER' | translate"
+          data-testid="rx-dispatch-note"
+        ></textarea>
+      </label>
+    </div>
+    <div class="modal-actions">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="dispatching()"
+        (click)="closeDispatchModal()"
+      >
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-primary"
+        [disabled]="!dispatchPharmacyId || dispatching()"
+        (click)="submitDispatch()"
+        data-testid="rx-dispatch-submit"
+      >
+        {{
+          dispatching()
+            ? ('PRESCRIPTIONS.DISPATCH_SENDING' | translate)
+            : ('PRESCRIPTIONS.DISPATCH_SEND' | translate)
+        }}
+      </button>
     </div>
   </div>
 }

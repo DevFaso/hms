@@ -265,6 +265,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
+    private final PatientTrackerEventPublisher trackerEventPublisher;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -1267,10 +1268,14 @@ public class EncounterServiceImpl implements EncounterService {
 
         // (e) Transition ARRIVED → TRIAGE → WAITING_FOR_PHYSICIAN
         LocalDateTime now = LocalDateTime.now();
+        EncounterStatus previousStatus = encounter.getStatus();
         encounter.setTriageTimestamp(now);
         encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
 
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved,
+                previousStatus != null ? previousStatus.name() : null,
+                EncounterStatus.WAITING_FOR_PHYSICIAN.name());
 
         return com.example.hms.payload.dto.TriageSubmissionResponseDTO.builder()
                 .encounterId(saved.getId())
@@ -1541,6 +1546,7 @@ public class EncounterServiceImpl implements EncounterService {
         LocalDateTime now = LocalDateTime.now();
 
         // (a) Transition encounter → COMPLETED
+        EncounterStatus previousStatus = encounter.getStatus();
         encounter.setStatus(EncounterStatus.COMPLETED);
         encounter.setCheckoutTimestamp(now);
 
@@ -1553,6 +1559,9 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(encounter,
+                previousStatus != null ? previousStatus.name() : null,
+                EncounterStatus.COMPLETED.name());
         upsertDischargeSummaryForCheckout(encounter, request, now);
         notifyPatientAfterVisitSummary(encounter);
 
@@ -1740,6 +1749,8 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.IN_PROGRESS.name());
 
         return encounterMapper.toEncounterResponseDTO(saved);
     }
@@ -1767,6 +1778,8 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
         Encounter saved = encounterRepository.save(encounter);
 
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.WAITING_FOR_PHYSICIAN.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
@@ -1825,6 +1838,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(next);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(), next.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
@@ -1864,6 +1878,8 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.READY_FOR_DISCHARGE.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 

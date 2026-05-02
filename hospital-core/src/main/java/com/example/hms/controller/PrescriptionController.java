@@ -1,8 +1,13 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchRequestDTO;
+import com.example.hms.payload.dto.prescription.PrescriptionSmsDispatchResponseDTO;
 import com.example.hms.service.PrescriptionService;
+import com.example.hms.service.PrescriptionSmsDispatchService;
+import org.springframework.security.core.Authentication;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +43,7 @@ import java.util.UUID;
 public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
+    private final PrescriptionSmsDispatchService smsDispatchService;
     private final MessageSource messageSource;
 
     @PostMapping
@@ -95,5 +101,19 @@ public class PrescriptionController {
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_PLAIN)
                 .body(safeMessage);
+    }
+
+    @PostMapping("/{id}/dispatch-sms")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @Operation(summary = "Dispatch a prescription summary by SMS to a community pharmacy",
+        description = "Sends a templated SMS to the chosen pharmacy's phone number and records a "
+            + "PrescriptionTransmission. Pharmacy must be active at the same hospital and not "
+            + "of type HOSPITAL_DISPENSARY.")
+    public ResponseEntity<ApiResponseWrapper<PrescriptionSmsDispatchResponseDTO>> dispatchSms(
+        Authentication auth,
+        @PathVariable UUID id,
+        @Valid @RequestBody PrescriptionSmsDispatchRequestDTO request) {
+        PrescriptionSmsDispatchResponseDTO result = smsDispatchService.dispatch(auth, id, request);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 }

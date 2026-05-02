@@ -8,6 +8,7 @@ import {
   PatientTrackerBoard,
   PatientTrackerItem,
 } from '../services/patient-tracker.service';
+import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
@@ -40,11 +41,18 @@ export interface TrackerColumn {
 })
 export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
+  private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
   private readonly encounterService = inject(EncounterService);
 
   private refreshSub?: Subscription;
-  private static readonly REFRESH_MS = 30_000;
+  private wsEventsSub?: Subscription;
+  private wsStateSub?: Subscription;
+  /** Poll interval when the WebSocket is offline — preserves the original behaviour on flaky 3G/4G. */
+  private static readonly POLL_OFFLINE_MS = 30_000;
+  /** Slow heartbeat poll while WebSocket is connected — guards against missed events. */
+  private static readonly POLL_ONLINE_MS = 120_000;
+  private wsConnected = false;
 
   board = signal<PatientTrackerBoard | null>(null);
   loading = signal(false);
@@ -70,7 +78,33 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadBoard();
-    this.refreshSub = interval(PatientTrackerComponent.REFRESH_MS)
+
+    const hospitalId = this.auth.getHospitalId();
+    if (hospitalId) {
+      this.wsStateSub = this.trackerWs.getConnectionState().subscribe((connected) => {
+        this.wsConnected = connected;
+        this.startPoll();
+      });
+      this.wsEventsSub = this.trackerWs.getEvents().subscribe(() => this.loadBoard());
+      this.trackerWs.connect(hospitalId);
+    }
+
+    this.startPoll();
+  }
+
+  ngOnDestroy(): void {
+    this.refreshSub?.unsubscribe();
+    this.wsEventsSub?.unsubscribe();
+    this.wsStateSub?.unsubscribe();
+    this.trackerWs.disconnect();
+  }
+
+  private startPoll(): void {
+    this.refreshSub?.unsubscribe();
+    const ms = this.wsConnected
+      ? PatientTrackerComponent.POLL_ONLINE_MS
+      : PatientTrackerComponent.POLL_OFFLINE_MS;
+    this.refreshSub = interval(ms)
       .pipe(
         exhaustMap(() => {
           const hospitalId = this.auth.getHospitalId();
@@ -84,10 +118,6 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
           this.lastRefreshed.set(new Date());
         }
       });
-  }
-
-  ngOnDestroy(): void {
-    this.refreshSub?.unsubscribe();
   }
 
   loadBoard(): void {
