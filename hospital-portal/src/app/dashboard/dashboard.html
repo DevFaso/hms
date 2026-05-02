@@ -815,7 +815,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -2009,7 +2009,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -2194,17 +2194,39 @@
       </a>
     </section>
 
-    <!-- ── Receptionist Workflow Tiles (Epic-style Front Desk) ── -->
-    <section class="nurse-workflow-tiles">
-      @for (tile of receptionistWorkflowTiles(); track tile.label) {
-        <a class="workflow-tile" [routerLink]="tile.route" [style.--tile-color]="tile.color">
-          <div class="workflow-tile-icon">
-            <span class="material-symbols-outlined">{{ tile.icon }}</span>
+    <!-- ── Quick Actions: primary action surface, kept directly under the
+         stat-strip so the most-used flows are above the fold. The legacy
+         workflow-tiles row was removed because it duplicated every route
+         already present here (see receptionistWorkflowTiles in
+         dashboard.ts) and pushed the appointment queue + patient lookup
+         below the fold. ─── -->
+    @if (quickActions().length > 0) {
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
           </div>
-          <span class="workflow-tile-label">{{ tile.label }}</span>
-        </a>
-      }
-    </section>
+        </div>
+        <div class="qa-grid">
+          @for (action of quickActions(); track action.label) {
+            <a
+              class="qa-card"
+              [routerLink]="action.route"
+              [queryParams]="action.queryParams ?? null"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+              <span class="qa-desc">{{ action.description }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
 
     <div class="clinical-workspace">
       <div class="workspace-left">
@@ -2253,34 +2275,6 @@
             </div>
           }
         </section>
-
-        @if (quickActions().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
-              </div>
-            </div>
-            <div class="qa-grid" style="padding: 16px">
-              @for (action of quickActions(); track action.label) {
-                <a
-                  class="qa-card"
-                  [routerLink]="action.route"
-                  [queryParams]="action.queryParams ?? null"
-                  [style.--qa-color]="action.color"
-                  [style.--qa-bg]="action.bgColor"
-                >
-                  <div class="qa-icon-wrap">
-                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-                  </div>
-                  <span class="qa-label">{{ action.label }}</span>
-                  <span class="qa-desc">{{ action.description }}</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
       </div>
 
       <aside class="workspace-right">
@@ -2439,7 +2433,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -2687,7 +2681,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -2855,7 +2849,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -2989,7 +2983,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"
@@ -3123,7 +3117,7 @@
                 <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
-            <div class="qa-grid" style="padding: 16px">
+            <div class="qa-grid">
               @for (action of quickActions(); track action.label) {
                 <a
                   class="qa-card"

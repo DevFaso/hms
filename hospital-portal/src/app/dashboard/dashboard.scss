@@ -1601,6 +1601,7 @@ $shadow-md:
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
   gap: 14px;
+  padding: 16px;
 }
 
 .qa-card {
