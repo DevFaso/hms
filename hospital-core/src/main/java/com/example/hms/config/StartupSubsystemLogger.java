@@ -43,6 +43,11 @@ public class StartupSubsystemLogger {
      * is missing instead of the previous opaque "set username and
      * password" message that fired even when the host wasn't set yet.
      */
+    // Sonar S2068 false positive: the literal word "password" inside the
+    // log messages refers to the Spring property name spring.mail.password,
+    // not a hardcoded credential. The actual values are read from
+    // Environment via env.getProperty() and never written to logs.
+    @SuppressWarnings("java:S2068")
     private void announceMail() {
         String host = env.getProperty("spring.mail.host");
         if (isEmpty(host)) {
@@ -110,7 +115,12 @@ public class StartupSubsystemLogger {
                             + "without producers — likely a misconfig.");
             return;
         }
-        if (!springKafka && appKafka) {
+        // Past the two earlier returns, (springKafka || appKafka) AND
+        // (!springKafka || appKafka) both hold, which together imply
+        // appKafka is true. So the third partial-enable case is just
+        // !springKafka — the explicit `&& appKafka` is a tautology Sonar
+        // (correctly) flags as always true.
+        if (!springKafka) {
             log.warn(
                     "Subsystem partially enabled: app.kafka.enabled=true but Kafka beans are NOT "
                             + "created (spring.kafka.enabled=false). Publishers will fail at runtime — "
