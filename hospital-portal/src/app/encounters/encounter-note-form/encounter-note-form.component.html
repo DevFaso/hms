@@ -2,7 +2,9 @@
   <header class="enc-note-form__header">
     <div class="enc-note-form__title">
       <h3>Encounter note</h3>
-      <p>Per-section documentation. Type <code>.</code> in any section to expand a SmartPhrase macro.</p>
+      <p>
+        Per-section documentation. Type <code>.</code> in any section to expand a SmartPhrase macro.
+      </p>
     </div>
     <div class="enc-note-form__template" role="radiogroup" aria-label="Note template">
       <button
@@ -129,9 +131,7 @@
         (input)="onTextareaInput('objective', $event)"
         (keydown)="onTextareaKeydown('objective', $event)"
       ></textarea>
-      <ng-container
-        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'objective' }"
-      ></ng-container>
+      <ng-container *ngTemplateOutlet="popupTpl; context: { fieldKey: 'objective' }"></ng-container>
     </label>
 
     <label class="enc-note-form__field">
@@ -159,9 +159,7 @@
         (input)="onTextareaInput('plan', $event)"
         (keydown)="onTextareaKeydown('plan', $event)"
       ></textarea>
-      <ng-container
-        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'plan' }"
-      ></ng-container>
+      <ng-container *ngTemplateOutlet="popupTpl; context: { fieldKey: 'plan' }"></ng-container>
     </label>
 
     <ng-container *ngIf="isSoapie()">

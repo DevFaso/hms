@@ -14,14 +14,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
 import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import {
-  EncounterNoteRequest,
-  EncounterNoteTemplate,
-} from '../../services/encounter.service';
-import {
-  SmartPhrase,
-  SmartPhraseService,
-} from '../../services/smart-phrase.service';
+import { EncounterNoteRequest, EncounterNoteTemplate } from '../../services/encounter.service';
+import { SmartPhrase, SmartPhraseService } from '../../services/smart-phrase.service';
 
 type NoteFieldKey =
   | 'chiefComplaint'
@@ -101,7 +95,11 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
 
   readonly popup = signal<SmartPhrasePopupState | null>(null);
 
-  private readonly searchTerm$ = new Subject<{ field: NoteFieldKey; prefix: string; triggerStart: number }>();
+  private readonly searchTerm$ = new Subject<{
+    field: NoteFieldKey;
+    prefix: string;
+    triggerStart: number;
+  }>();
   private destroyed = false;
 
   ngOnInit(): void {
@@ -116,17 +114,16 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
       .pipe(
         debounceTime(150),
         distinctUntilChanged(
-          (a, b) => a.field === b.field && a.prefix === b.prefix && a.triggerStart === b.triggerStart,
+          (a, b) =>
+            a.field === b.field && a.prefix === b.prefix && a.triggerStart === b.triggerStart,
         ),
         switchMap((q) =>
-          this.smartPhraseService
-            .autocomplete(q.prefix, this.hospitalId ?? undefined)
-            .pipe(
-              catchError(() => of([] as SmartPhrase[])),
-              switchMap((suggestions) =>
-                of({ field: q.field, prefix: q.prefix, triggerStart: q.triggerStart, suggestions }),
-              ),
+          this.smartPhraseService.autocomplete(q.prefix, this.hospitalId ?? undefined).pipe(
+            catchError(() => of([] as SmartPhrase[])),
+            switchMap((suggestions) =>
+              of({ field: q.field, prefix: q.prefix, triggerStart: q.triggerStart, suggestions }),
             ),
+          ),
         ),
       )
       .subscribe((result) => {

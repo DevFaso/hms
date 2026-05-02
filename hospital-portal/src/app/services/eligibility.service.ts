@@ -13,12 +13,7 @@ export type EligibilityScheme =
 
 export type EligibilityCheckType = 'COVERAGE' | 'PRIOR_AUTH';
 
-export type EligibilityStatus =
-  | 'ELIGIBLE'
-  | 'NOT_ELIGIBLE'
-  | 'PENDING'
-  | 'UNKNOWN'
-  | 'ERROR';
+export type EligibilityStatus = 'ELIGIBLE' | 'NOT_ELIGIBLE' | 'PENDING' | 'UNKNOWN' | 'ERROR';
 
 export interface EligibilityCheckRequest {
   patientId: string;

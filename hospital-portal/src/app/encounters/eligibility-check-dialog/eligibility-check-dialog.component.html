@@ -25,11 +25,7 @@
         <div class="elig-dialog__row">
           <label class="elig-dialog__field">
             <span>Scheme</span>
-            <select
-              [ngModel]="scheme()"
-              (ngModelChange)="onSchemeChange($event)"
-              name="scheme"
-            >
+            <select [ngModel]="scheme()" (ngModelChange)="onSchemeChange($event)" name="scheme">
               @for (s of schemes; track s.value) {
                 <option [ngValue]="s.value">{{ s.label }}</option>
               }
@@ -38,11 +34,7 @@
 
           <label class="elig-dialog__field">
             <span>Check type</span>
-            <select
-              [ngModel]="checkType()"
-              (ngModelChange)="onTypeChange($event)"
-              name="checkType"
-            >
+            <select [ngModel]="checkType()" (ngModelChange)="onTypeChange($event)" name="checkType">
               @for (t of types; track t) {
                 <option [ngValue]="t">{{ t }}</option>
               }
@@ -95,7 +87,10 @@
                 <div>
                   <dt>Response</dt>
                   <dd>
-                    {{ r.responseCode }}@if (r.payerResponseText) { — {{ r.payerResponseText }} }
+                    {{ r.responseCode }}
+                    @if (r.payerResponseText) {
+                      — {{ r.payerResponseText }}
+                    }
                   </dd>
                 </div>
               }
