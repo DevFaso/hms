@@ -4,6 +4,53 @@
     "SUBTITLE": "Panel de administración",
     "TITLE": "Administración"
   },
+  "SUPER_ADMIN": {
+    "TITLE": "Torre de control Super-Admin",
+    "SUBTITLE": "Operaciones multi-inquilino y estado de la plataforma de un vistazo",
+    "AS_OF": "Al",
+    "LOADING": "Cargando estado de la plataforma…",
+    "LOAD_ERROR": "No se pudo cargar la torre de control. Reintente.",
+    "RETRY": "Reintentar",
+    "PLATFORM_HEALTH": "Estado de la plataforma",
+    "QUICK_LINKS": "Enlaces rápidos",
+    "RECENT_AUDIT": "Eventos de auditoría recientes",
+    "VIEW_ALL_AUDIT": "Ver todos los registros de auditoría",
+    "STAT": {
+      "ORGANIZATIONS": "Organizaciones",
+      "HOSPITALS": "Hospitales",
+      "USERS": "Usuarios",
+      "PATIENTS": "Pacientes",
+      "TODAY_APPOINTMENTS": "Citas de hoy",
+      "DEPARTMENTS": "Departamentos",
+      "ROLES": "Roles",
+      "ASSIGNMENTS": "Asignaciones de rol",
+      "ACTIVE": "activos"
+    },
+    "PLATFORM": {
+      "INTEGRATIONS": "Total integraciones",
+      "PENDING": "Integraciones pendientes",
+      "DISABLED": "Enlaces deshabilitados",
+      "RELEASES": "Ventanas de release activas"
+    },
+    "LINK": {
+      "ORGANIZATIONS_TITLE": "Organizaciones",
+      "ORGANIZATIONS_DESC": "Inquilinos, asignaciones de hospitales, contactos",
+      "USERS_TITLE": "Usuarios",
+      "USERS_DESC": "Gobernanza y aprovisionamiento multi-inquilino",
+      "ROLES_TITLE": "Roles",
+      "ROLES_DESC": "Catálogo de roles y matriz de permisos",
+      "FEATURE_FLAGS_TITLE": "Feature flags",
+      "FEATURE_FLAGS_DESC": "Sobrescrituras por inquilino y control de despliegue",
+      "ANALYTICS_TITLE": "Analítica de plataforma",
+      "ANALYTICS_DESC": "Métricas y tendencias multi-inquilino",
+      "PLATFORM_TITLE": "Registro de plataforma",
+      "PLATFORM_DESC": "Integraciones, ventanas de release, snapshots",
+      "AUDIT_TITLE": "Registros de auditoría",
+      "AUDIT_DESC": "Pista de auditoría del sistema y cumplimiento",
+      "HOSPITALS_TITLE": "Hospitales",
+      "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones"
+    }
+  },
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",
     "FORCE_OVERRIDE": "Anular alerta crítica tras revisión clínica",
@@ -1792,7 +1839,8 @@
     "VISIT_SUMMARIES": "Resúmenes de Visitas",
     "VITALS": "Signos Vitales",
     "PATIENT_TRACKER": "Seguimiento de Pacientes",
-    "IN_BASKET": "Bandeja de Entrada"
+    "IN_BASKET": "Bandeja de Entrada",
+    "SUPER_ADMIN": "Super Admin"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

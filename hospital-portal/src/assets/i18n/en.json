@@ -4,6 +4,53 @@
     "SUBTITLE": "Admin panel",
     "TITLE": "Administration"
   },
+  "SUPER_ADMIN": {
+    "TITLE": "Super-Admin Control Tower",
+    "SUBTITLE": "Cross-tenant operations and platform health at a glance",
+    "AS_OF": "As of",
+    "LOADING": "Loading platform state…",
+    "LOAD_ERROR": "Could not load the control tower. Try again.",
+    "RETRY": "Retry",
+    "PLATFORM_HEALTH": "Platform health",
+    "QUICK_LINKS": "Quick links",
+    "RECENT_AUDIT": "Recent audit events",
+    "VIEW_ALL_AUDIT": "View all audit logs",
+    "STAT": {
+      "ORGANIZATIONS": "Organizations",
+      "HOSPITALS": "Hospitals",
+      "USERS": "Users",
+      "PATIENTS": "Patients",
+      "TODAY_APPOINTMENTS": "Today's appointments",
+      "DEPARTMENTS": "Departments",
+      "ROLES": "Roles",
+      "ASSIGNMENTS": "Role assignments",
+      "ACTIVE": "active"
+    },
+    "PLATFORM": {
+      "INTEGRATIONS": "Total integrations",
+      "PENDING": "Pending integrations",
+      "DISABLED": "Disabled links",
+      "RELEASES": "Active release windows"
+    },
+    "LINK": {
+      "ORGANIZATIONS_TITLE": "Organizations",
+      "ORGANIZATIONS_DESC": "Tenants, hospital assignments, contact info",
+      "USERS_TITLE": "Users",
+      "USERS_DESC": "Cross-tenant user governance and provisioning",
+      "ROLES_TITLE": "Roles",
+      "ROLES_DESC": "Role catalogue and permission matrix",
+      "FEATURE_FLAGS_TITLE": "Feature flags",
+      "FEATURE_FLAGS_DESC": "Per-tenant overrides and rollout control",
+      "ANALYTICS_TITLE": "Platform analytics",
+      "ANALYTICS_DESC": "Cross-tenant metrics and trends",
+      "PLATFORM_TITLE": "Platform registry",
+      "PLATFORM_DESC": "Integrations, release windows, snapshots",
+      "AUDIT_TITLE": "Audit logs",
+      "AUDIT_DESC": "System-wide audit trail and compliance",
+      "HOSPITALS_TITLE": "Hospitals",
+      "HOSPITALS_DESC": "All hospitals across organizations"
+    }
+  },
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
     "FORCE_OVERRIDE": "Override critical advisory after clinical review",
@@ -1799,7 +1846,8 @@
     "GOODS_RECEIPT": "Goods Receipt",
     "STOCK_ADJUSTMENT": "Stock Adjustment",
     "DISPENSING": "Dispensing",
-    "STOCK_ROUTING": "Stock Routing"
+    "STOCK_ROUTING": "Stock Routing",
+    "SUPER_ADMIN": "Super Admin"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
