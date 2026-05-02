@@ -1,0 +1,57 @@
+<div class="settings-page">
+  <header class="settings-page-head">
+    <div>
+      <h1 class="settings-page-title">
+        <span class="material-symbols-outlined">settings</span>
+        {{ 'SETTINGS_HUB.PAGE_TITLE' | translate }}
+      </h1>
+      <p class="settings-page-sub">{{ 'SETTINGS_HUB.PAGE_SUBTITLE' | translate }}</p>
+    </div>
+  </header>
+
+  <section class="settings-grid">
+    @for (card of cards(); track card.titleKey) {
+      <article class="settings-card">
+        <div class="settings-card-icon">
+          <span class="material-symbols-outlined">{{ card.icon }}</span>
+        </div>
+        <div class="settings-card-body">
+          <h2 class="settings-card-title">{{ card.titleKey | translate }}</h2>
+          <p class="settings-card-desc">{{ card.descKey | translate }}</p>
+        </div>
+        <a
+          class="settings-card-action"
+          [routerLink]="card.route"
+          [queryParams]="card.queryParams ?? null"
+        >
+          {{ card.actionKey | translate }}
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </article>
+    }
+  </section>
+
+  <section class="settings-card settings-language">
+    <div class="settings-card-icon">
+      <span class="material-symbols-outlined">translate</span>
+    </div>
+    <div class="settings-card-body">
+      <h2 class="settings-card-title">{{ 'SETTINGS_HUB.LANGUAGE_TITLE' | translate }}</h2>
+      <p class="settings-card-desc">{{ 'SETTINGS_HUB.LANGUAGE_DESC' | translate }}</p>
+      <div class="lang-row" role="radiogroup" [attr.aria-label]="'SETTINGS_HUB.LANGUAGE_TITLE' | translate">
+        @for (lang of languages; track lang.code) {
+          <button
+            type="button"
+            class="lang-chip"
+            role="radio"
+            [attr.aria-checked]="currentLang() === lang.code"
+            [class.lang-chip-active]="currentLang() === lang.code"
+            (click)="switchLang(lang.code)"
+          >
+            {{ lang.labelKey | translate }}
+          </button>
+        }
+      </div>
+    </div>
+  </section>
+</div>

@@ -1298,6 +1298,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   // ── Receptionist workflow tiles (Epic-style Front Desk) ──────
+  // Tiles ordered by daily front-desk workflow:
+  //   patient lifecycle → schedule → billing → comms.
+  // Two routes were previously duplicated (REGISTER + Patients both went to
+  // /patients); REGISTER now points at /patients/new so each tile leads
+  // somewhere distinct. Color palette is constrained to the same blue/teal
+  // family as the hero banner so the dashboard reads as one product
+  // surface rather than a rainbow of unrelated apps.
   receptionistWorkflowTiles = computed<NavTile[]>(() => {
     this.langTick();
     return [
@@ -1305,8 +1312,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
         icon: 'how_to_reg',
         label: this.t('DASHBOARD.TILE.CHECK_IN'),
         route: '/reception',
-        color: '#059669',
-        bg: '#d1fae5',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'person_add',
+        label: this.t('DASHBOARD.TILE.REGISTER'),
+        route: '/patients/new',
+        color: '#0e7490',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0369a1',
+        bg: '#e0f2fe',
       },
       {
         icon: 'calendar_add_on',
@@ -1316,46 +1337,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
         bg: '#dbeafe',
       },
       {
-        icon: 'person_add',
-        label: this.t('DASHBOARD.TILE.REGISTER'),
-        route: '/patients',
-        color: '#0891b2',
-        bg: '#cffafe',
-      },
-      {
-        icon: 'people',
-        label: this.t('PATIENTS.TITLE'),
-        route: '/patients',
-        color: '#7c3aed',
-        bg: '#ede9fe',
+        icon: 'event_note',
+        label: this.t('DASHBOARD.TILE.SCHEDULING'),
+        route: '/scheduling',
+        color: '#1e40af',
+        bg: '#dbeafe',
       },
       {
         icon: 'receipt_long',
         label: this.t('DASHBOARD.BILLING'),
         route: '/billing',
-        color: '#d97706',
-        bg: '#fef3c7',
-      },
-      {
-        icon: 'notifications',
-        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
-        route: '/notifications',
-        color: '#dc2626',
-        bg: '#fee2e2',
+        color: '#0891b2',
+        bg: '#cffafe',
       },
       {
         icon: 'chat',
         label: this.t('DASHBOARD.MESSAGES'),
         route: '/chat',
-        color: '#4f46e5',
-        bg: '#eef2ff',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
       },
       {
-        icon: 'event_note',
-        label: this.t('DASHBOARD.TILE.SCHEDULING'),
-        route: '/scheduling',
-        color: '#ea580c',
-        bg: '#fff7ed',
+        icon: 'notifications',
+        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
+        route: '/notifications',
+        color: '#0369a1',
+        bg: '#e0f2fe',
       },
     ];
   });

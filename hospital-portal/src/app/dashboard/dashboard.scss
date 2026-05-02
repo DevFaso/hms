@@ -2040,64 +2040,31 @@ $shadow-md:
 }
 
 // ── Role-specific hero gradient overrides ───────────────────────────────────
-.hero-gradient-superadmin {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%);
-  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.45);
+//
+// All roles share a single light-blue → white gradient for visual coherence
+// across the product. The per-role classes are retained (referenced in
+// tests + dashboard.ts heroGradientClass()) so each role can still ship a
+// subtle accent if we ever want to differentiate again, but for now they
+// alias the shared palette. Do NOT reintroduce purple/teal/red gradients
+// without product approval — see UI consistency note 2026-05-02.
+%hero-gradient-shared {
+  background: linear-gradient(135deg, #2563eb 0%, #60a5fa 55%, #e0f2fe 100%);
+  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.28);
 }
 
-.hero-gradient-hospital-admin {
-  background: linear-gradient(135deg, #1e3a5f 0%, #1d4ed8 60%, #3b82f6 100%);
-  box-shadow: 0 8px 32px rgba(29, 78, 216, 0.38);
-}
-
-.hero-gradient-doctor {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
-  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.38);
-}
-
-.hero-gradient-nurse {
-  background: linear-gradient(135deg, #134e4a 0%, #0d9488 60%, #14b8a6 100%);
-  box-shadow: 0 8px 32px rgba(13, 148, 136, 0.38);
-}
-
-.hero-gradient-receptionist {
-  background: linear-gradient(135deg, #3b0764 0%, #7c3aed 60%, #a78bfa 100%);
-  box-shadow: 0 8px 32px rgba(124, 58, 237, 0.38);
-}
-
-.hero-gradient-lab-director {
-  background: linear-gradient(135deg, #134e4a 0%, #0d9488 60%, #2dd4bf 100%);
-  box-shadow: 0 8px 32px rgba(13, 148, 136, 0.38);
-}
-
-.hero-gradient-quality-manager {
-  background: linear-gradient(135deg, #14532d 0%, #15803d 60%, #4ade80 100%);
-  box-shadow: 0 8px 32px rgba(21, 128, 61, 0.38);
-}
-
-.hero-gradient-lab {
-  background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 60%, #ef4444 100%);
-  box-shadow: 0 8px 32px rgba(220, 38, 38, 0.38);
-}
-
-.hero-gradient-pharmacist {
-  background: linear-gradient(135deg, #14532d 0%, #16a34a 60%, #22c55e 100%);
-  box-shadow: 0 8px 32px rgba(22, 163, 74, 0.38);
-}
-
-.hero-gradient-radiologist {
-  background: linear-gradient(135deg, #164e63 0%, #0891b2 60%, #22d3ee 100%);
-  box-shadow: 0 8px 32px rgba(8, 145, 178, 0.38);
-}
-
-.hero-gradient-patient {
-  background: linear-gradient(135deg, #064e3b 0%, #059669 60%, #34d399 100%);
-  box-shadow: 0 8px 32px rgba(5, 150, 105, 0.38);
-}
-
+.hero-gradient-superadmin,
+.hero-gradient-hospital-admin,
+.hero-gradient-doctor,
+.hero-gradient-nurse,
+.hero-gradient-receptionist,
+.hero-gradient-lab-director,
+.hero-gradient-quality-manager,
+.hero-gradient-lab,
+.hero-gradient-pharmacist,
+.hero-gradient-radiologist,
+.hero-gradient-patient,
 .hero-gradient-default {
-  background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
-  box-shadow: 0 8px 32px rgba(37, 99, 235, 0.38);
+  @extend %hero-gradient-shared;
 }
 
 // ── Role badge ───────────────────────────────────────────────────────────────
