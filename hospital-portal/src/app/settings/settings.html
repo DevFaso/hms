@@ -38,7 +38,11 @@
     <div class="settings-card-body">
       <h2 class="settings-card-title">{{ 'SETTINGS_HUB.LANGUAGE_TITLE' | translate }}</h2>
       <p class="settings-card-desc">{{ 'SETTINGS_HUB.LANGUAGE_DESC' | translate }}</p>
-      <div class="lang-row" role="radiogroup" [attr.aria-label]="'SETTINGS_HUB.LANGUAGE_TITLE' | translate">
+      <div
+        class="lang-row"
+        role="radiogroup"
+        [attr.aria-label]="'SETTINGS_HUB.LANGUAGE_TITLE' | translate"
+      >
         @for (lang of languages; track lang.code) {
           <button
             type="button"

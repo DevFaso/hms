@@ -2127,7 +2127,9 @@ $shadow-md:
   padding: 16px 16px 0;
 }
 @media (max-width: 520px) {
-  .metric-quad { grid-template-columns: repeat(2, 1fr); }
+  .metric-quad {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 .metric-block {
   display: flex;
@@ -2149,10 +2151,21 @@ $shadow-md:
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  .material-symbols-outlined { font-size: 20px; }
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
 }
-.metric-body { display: flex; flex-direction: column; min-width: 0; }
-.metric-value { font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.1; }
+.metric-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+}
 .metric-label {
   font-size: 11px;
   text-transform: uppercase;
@@ -2192,13 +2205,38 @@ $shadow-md:
   border: 1px solid #e2e8f0;
   border-radius: 10px;
 }
-.kv-label { font-size: 13px; color: #475569; font-weight: 600; }
-.kv-value { font-size: 16px; font-weight: 700; color: var(--kv-color, #1d4ed8); }
+.kv-label {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 600;
+}
+.kv-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--kv-color, #1d4ed8);
+}
 
 // Activity Trend (7d) chart — class-based replacement for inline bar styles.
-.trend-chart { display: flex; align-items: flex-end; gap: 8px; padding: 16px; height: 120px; }
-.trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
-.trend-count { font-size: 11px; color: #475569; font-weight: 700; }
+.trend-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 16px;
+  height: 120px;
+}
+.trend-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.trend-count {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 700;
+}
 .trend-bar {
   width: 100%;
   max-width: 28px;
@@ -2206,7 +2244,9 @@ $shadow-md:
   background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
   border-radius: 4px 4px 0 0;
 }
-.trend-col-empty .trend-bar { background: #e2e8f0; }
+.trend-col-empty .trend-bar {
+  background: #e2e8f0;
+}
 .trend-day {
   font-size: 10px;
   color: #94a3b8;
@@ -2216,7 +2256,10 @@ $shadow-md:
 }
 
 // Audit timeline rows — distinct from appointment-shaped .sched-row.
-.audit-list { display: flex; flex-direction: column; }
+.audit-list {
+  display: flex;
+  flex-direction: column;
+}
 .audit-row {
   display: grid;
   grid-template-columns: 56px 1fr auto;
@@ -2224,10 +2267,21 @@ $shadow-md:
   gap: 10px;
   padding: 10px 16px;
   border-bottom: 1px solid #f1f5f9;
-  &:last-child { border-bottom: none; }
+  &:last-child {
+    border-bottom: none;
+  }
 }
-.audit-time { font-size: 11px; color: #64748b; font-weight: 600; line-height: 1.2; }
-.audit-body { display: flex; flex-direction: column; min-width: 0; }
+.audit-time {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.audit-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .audit-actor {
   font-size: 13px;
   font-weight: 600;
@@ -2251,9 +2305,18 @@ $shadow-md:
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.audit-status-success { background: #dcfce7; color: #15803d; }
-.audit-status-failure { background: #fee2e2; color: #b91c1c; }
-.audit-status-warning { background: #fef3c7; color: #92400e; }
+.audit-status-success {
+  background: #dcfce7;
+  color: #15803d;
+}
+.audit-status-failure {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.audit-status-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
 
 // ── Navigation tile grid ─────────────────────────────────────────────────────
 .nav-tile-grid {
