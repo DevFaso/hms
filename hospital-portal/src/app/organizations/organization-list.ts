@@ -1,18 +1,21 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
+  OrganizationLifecycleState,
   OrganizationService,
   OrganizationResponse,
   OrganizationCreateRequest,
 } from '../services/organization.service';
+import { stateColor as lifecycleStateColor } from './organization-detail';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './organization-list.html',
   styleUrl: './organization-list.scss',
 })
@@ -225,5 +228,9 @@ export class OrganizationListComponent implements OnInit {
       .split('_')
       .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
       .join(' ');
+  }
+
+  lifecycleColor(state: OrganizationLifecycleState | undefined): string {
+    return lifecycleStateColor(state);
   }
 }

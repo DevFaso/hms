@@ -54,6 +54,9 @@ class UserRoleHospitalAssignmentControllerTest {
     @MockitoBean
     private HospitalUserDetailsService hospitalUserDetailsService;
 
+    @MockitoBean
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {
         UUID userId = UUID.randomUUID();

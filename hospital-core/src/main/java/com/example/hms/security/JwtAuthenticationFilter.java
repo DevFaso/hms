@@ -3,6 +3,7 @@ package com.example.hms.security;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
+import com.example.hms.service.OrganizationLifecycleStatusService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,6 +39,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final TokenBlacklistService tokenBlacklistService;
     private final WsTicketService wsTicketService;
     private final HospitalUserDetailsService hospitalUserDetailsService;
+    private final OrganizationLifecycleStatusService lifecycleStatusService;
 
     private static final Set<String> EXACT_SKIP_PATHS = Set.of(
         "/", "/index.html", "/favicon.ico",
@@ -166,6 +168,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             boolean authenticated = applyAuthentication(jwt, request, extractedSubject);
             if (!authenticated) {
                 respondUnauthorized(response, extractedSubject);
+                return false;
+            }
+
+            // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
+            // After authentication has populated the HospitalContext, refuse
+            // requests whose user is attached to an org in a non-active state
+            // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
+            // bypass — they need cross-tenant access to manage these orgs.
+            if (isBlockedByTenantLifecycle(HospitalContextHolder.getContextOrEmpty())) {
+                log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
+                SecurityContextHolder.clearContext();
+                HospitalContextHolder.clear();
+                respondTenantBlocked(response);
                 return false;
             }
         } else {
@@ -326,6 +341,43 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         if (log.isTraceEnabled()) {
             log.trace("[JWT] Responded 401 for missing user '{}'", subject);
+        }
+    }
+
+    /**
+     * Returns {@code true} when the authenticated user is attached to an
+     * organization in a non-active lifecycle state and is not a super admin.
+     * Super admins always pass — they need to manage the blocked tenant.
+     */
+    private boolean isBlockedByTenantLifecycle(HospitalContext context) {
+        if (context.isSuperAdmin()) {
+            return false;
+        }
+        Set<UUID> permitted = context.getPermittedOrganizationIds();
+        UUID active = context.getActiveOrganizationId();
+        if (permitted.isEmpty() && active == null) {
+            return false;
+        }
+        Set<UUID> blocked = lifecycleStatusService.getBlockedOrganizationIds();
+        if (blocked.isEmpty()) {
+            return false;
+        }
+        if (active != null && blocked.contains(active)) {
+            return true;
+        }
+        for (UUID orgId : permitted) {
+            if (blocked.contains(orgId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 423 LOCKED with a clear, non-PII message that the org is blocked. */
+    private void respondTenantBlocked(HttpServletResponse response) {
+        if (!response.isCommitted()) {
+            response.setStatus(423); // LOCKED — RFC 4918
+            response.setHeader("X-Block-Reason", "tenant-lifecycle");
         }
     }
 

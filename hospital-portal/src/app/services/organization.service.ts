@@ -23,6 +23,7 @@ export interface OrganizationResponse {
   primaryContactPhone: string;
   defaultTimezone: string;
   onboardingNotes: string;
+  lifecycleState?: OrganizationLifecycleState;
   hospitals: OrganizationHospital[];
 }
 
@@ -42,6 +43,43 @@ export interface OrganizationCreateRequest {
   contactPhone?: string;
   notes?: string;
   type?: string;
+}
+
+/* ── Tenant lifecycle (MVP-2) ─────────────────────────────────────── */
+
+export type OrganizationLifecycleState =
+  | 'ACTIVE'
+  | 'SUSPENDED'
+  | 'ARCHIVED'
+  | 'PENDING_PURGE'
+  | 'PURGED';
+
+export interface TenantLifecycleResponse {
+  organizationId: string;
+  organizationName: string;
+  organizationCode: string;
+  lifecycleState: OrganizationLifecycleState;
+  suspendedAt?: string;
+  suspendedBy?: string;
+  suspensionReason?: string;
+  archivedAt?: string;
+  archivedBy?: string;
+  archiveReason?: string;
+  purgeScheduledFor?: string;
+  purgeScheduledBy?: string;
+  purgeReason?: string;
+  purgedAt?: string;
+  canSuspend: boolean;
+  canRestore: boolean;
+  canArchive: boolean;
+  canSchedulePurge: boolean;
+  canCancelPurge: boolean;
+}
+
+export interface TenantLifecycleActionRequest {
+  reason?: string;
+  /** ISO datetime — only consulted by schedule-purge */
+  purgeScheduledFor?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -75,5 +113,55 @@ export class OrganizationService {
 
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`/organizations/${id}`);
+  }
+
+  /* ── Tenant lifecycle (MVP-2) ─────────────────────────────────────── */
+
+  getLifecycle(id: string): Observable<TenantLifecycleResponse> {
+    return this.http.get<TenantLifecycleResponse>(`/super-admin/organizations/${id}/lifecycle`);
+  }
+
+  suspend(id: string, body: TenantLifecycleActionRequest): Observable<TenantLifecycleResponse> {
+    return this.http.post<TenantLifecycleResponse>(
+      `/super-admin/organizations/${id}/suspend`,
+      body,
+    );
+  }
+
+  restoreLifecycle(
+    id: string,
+    body?: TenantLifecycleActionRequest,
+  ): Observable<TenantLifecycleResponse> {
+    return this.http.post<TenantLifecycleResponse>(
+      `/super-admin/organizations/${id}/restore`,
+      body ?? {},
+    );
+  }
+
+  archive(id: string, body: TenantLifecycleActionRequest): Observable<TenantLifecycleResponse> {
+    return this.http.post<TenantLifecycleResponse>(
+      `/super-admin/organizations/${id}/archive`,
+      body,
+    );
+  }
+
+  schedulePurge(
+    id: string,
+    body: TenantLifecycleActionRequest,
+  ): Observable<TenantLifecycleResponse> {
+    return this.http.post<TenantLifecycleResponse>(
+      `/super-admin/organizations/${id}/schedule-purge`,
+      body,
+    );
+  }
+
+  cancelPurge(
+    id: string,
+    body?: TenantLifecycleActionRequest,
+  ): Observable<TenantLifecycleResponse> {
+    return this.http.post<TenantLifecycleResponse>(
+      `/super-admin/organizations/${id}/cancel-purge`,
+      body ?? {},
+    );
   }
 }

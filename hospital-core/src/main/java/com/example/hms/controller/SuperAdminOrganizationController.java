@@ -7,6 +7,9 @@ import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationReques
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationHierarchyResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationsSummaryDTO;
+import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
+import com.example.hms.payload.dto.superadmin.TenantLifecycleResponseDTO;
+import com.example.hms.service.OrganizationLifecycleService;
 import com.example.hms.service.SuperAdminOrganizationOverviewService;
 import com.example.hms.service.SuperAdminOrganizationProvisioningService;
 import com.example.hms.service.HospitalService;
@@ -40,6 +43,7 @@ public class SuperAdminOrganizationController {
     private final SuperAdminOrganizationOverviewService overviewService;
     private final SuperAdminOrganizationProvisioningService provisioningService;
     private final HospitalService hospitalService;
+    private final OrganizationLifecycleService lifecycleService;
 
     @GetMapping("/summary")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -136,5 +140,68 @@ public class SuperAdminOrganizationController {
 
         HospitalResponseDTO updated = hospitalService.unassignHospitalFromOrganization(hospitalId, locale);
         return ResponseEntity.ok(updated);
+    }
+
+    // ── Tenant lifecycle (MVP-2 — gap #2 in docs/super-admin-gaps.md) ──
+
+    @GetMapping("/{organizationId}/lifecycle")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Get tenant-lifecycle snapshot", security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> getLifecycle(@PathVariable UUID organizationId) {
+        return ResponseEntity.ok(lifecycleService.getLifecycle(organizationId));
+    }
+
+    @PostMapping("/{organizationId}/suspend")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Suspend an organization (block all logins org-wide)",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> suspend(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+    ) {
+        return ResponseEntity.ok(lifecycleService.suspend(organizationId, request));
+    }
+
+    @PostMapping("/{organizationId}/restore")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Restore a suspended or archived organization",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> restore(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody(required = false) TenantLifecycleActionRequestDTO request
+    ) {
+        return ResponseEntity.ok(lifecycleService.restore(organizationId, request));
+    }
+
+    @PostMapping("/{organizationId}/archive")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Archive an organization (soft delete; data retained, hidden by default)",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> archive(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+    ) {
+        return ResponseEntity.ok(lifecycleService.archive(organizationId, request));
+    }
+
+    @PostMapping("/{organizationId}/schedule-purge")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Schedule purge for an archived organization (default 30-day grace)",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> schedulePurge(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody TenantLifecycleActionRequestDTO request
+    ) {
+        return ResponseEntity.ok(lifecycleService.schedulePurge(organizationId, request));
+    }
+
+    @PostMapping("/{organizationId}/cancel-purge")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Cancel a scheduled purge", security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<TenantLifecycleResponseDTO> cancelPurge(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody(required = false) TenantLifecycleActionRequestDTO request
+    ) {
+        return ResponseEntity.ok(lifecycleService.cancelPurge(organizationId, request));
     }
 }

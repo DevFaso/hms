@@ -1,0 +1,257 @@
+<div class="page-container">
+  <a class="back-link" routerLink="/organizations">
+    <span class="material-symbols-outlined">arrow_back</span>
+    {{ 'TENANT_LIFECYCLE.BACK_TO_LIST' | translate }}
+  </a>
+
+  @if (loading()) {
+    <div class="state-panel">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <span>{{ 'TENANT_LIFECYCLE.LOADING' | translate }}</span>
+    </div>
+  } @else if (organization(); as org) {
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">{{ org.name }}</h1>
+        <p class="page-subtitle">
+          <span class="code-badge">{{ org.code }}</span>
+          @if (lifecycle(); as lc) {
+            <span
+              class="state-chip"
+              [style.background]="stateColor() + '14'"
+              [style.color]="stateColor()"
+            >
+              {{ stateLabelKey() | translate }}
+            </span>
+          }
+        </p>
+      </div>
+    </div>
+
+    @if (lifecycle(); as lc) {
+      <!-- Lifecycle panel -->
+      <section class="panel" data-test="lifecycle-panel">
+        <h2 class="panel-title">{{ 'TENANT_LIFECYCLE.PANEL_TITLE' | translate }}</h2>
+
+        <div class="lifecycle-grid">
+          <div class="lifecycle-row">
+            <span class="lifecycle-label">{{ 'TENANT_LIFECYCLE.FIELD.STATE' | translate }}</span>
+            <span
+              class="state-chip"
+              [style.background]="stateColor() + '14'"
+              [style.color]="stateColor()"
+            >
+              {{ stateLabelKey() | translate }}
+            </span>
+          </div>
+
+          @if (lc.suspendedAt) {
+            <div class="lifecycle-row">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.SUSPENDED_AT' | translate
+              }}</span>
+              <span>{{ lc.suspendedAt | date: 'medium' }}</span>
+            </div>
+          }
+          @if (lc.suspensionReason) {
+            <div class="lifecycle-row">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.SUSPENSION_REASON' | translate
+              }}</span>
+              <span>{{ lc.suspensionReason }}</span>
+            </div>
+          }
+          @if (lc.archivedAt) {
+            <div class="lifecycle-row">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.ARCHIVED_AT' | translate
+              }}</span>
+              <span>{{ lc.archivedAt | date: 'medium' }}</span>
+            </div>
+          }
+          @if (lc.archiveReason) {
+            <div class="lifecycle-row">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.ARCHIVE_REASON' | translate
+              }}</span>
+              <span>{{ lc.archiveReason }}</span>
+            </div>
+          }
+          @if (lc.purgeScheduledFor) {
+            <div class="lifecycle-row warn">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.PURGE_AT' | translate
+              }}</span>
+              <span>{{ lc.purgeScheduledFor | date: 'medium' }}</span>
+            </div>
+          }
+          @if (lc.purgeReason) {
+            <div class="lifecycle-row">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.PURGE_REASON' | translate
+              }}</span>
+              <span>{{ lc.purgeReason }}</span>
+            </div>
+          }
+          @if (lc.purgedAt) {
+            <div class="lifecycle-row warn">
+              <span class="lifecycle-label">{{
+                'TENANT_LIFECYCLE.FIELD.PURGED_AT' | translate
+              }}</span>
+              <span>{{ lc.purgedAt | date: 'medium' }}</span>
+            </div>
+          }
+        </div>
+
+        <!-- Actions -->
+        <div class="actions" data-test="lifecycle-actions">
+          @if (lc.canSuspend) {
+            <button class="btn btn-warn" (click)="openAction('suspend')" data-test="action-suspend">
+              <span class="material-symbols-outlined">block</span>
+              {{ 'TENANT_LIFECYCLE.ACTION.SUSPEND' | translate }}
+            </button>
+          }
+          @if (lc.canRestore) {
+            <button
+              class="btn btn-primary"
+              (click)="openAction('restore')"
+              data-test="action-restore"
+            >
+              <span class="material-symbols-outlined">restart_alt</span>
+              {{ 'TENANT_LIFECYCLE.ACTION.RESTORE' | translate }}
+            </button>
+          }
+          @if (lc.canArchive) {
+            <button class="btn btn-warn" (click)="openAction('archive')" data-test="action-archive">
+              <span class="material-symbols-outlined">archive</span>
+              {{ 'TENANT_LIFECYCLE.ACTION.ARCHIVE' | translate }}
+            </button>
+          }
+          @if (lc.canSchedulePurge) {
+            <button
+              class="btn btn-danger"
+              (click)="openAction('schedule-purge')"
+              data-test="action-schedule-purge"
+            >
+              <span class="material-symbols-outlined">delete_forever</span>
+              {{ 'TENANT_LIFECYCLE.ACTION.SCHEDULE_PURGE' | translate }}
+            </button>
+          }
+          @if (lc.canCancelPurge) {
+            <button
+              class="btn btn-primary"
+              (click)="openAction('cancel-purge')"
+              data-test="action-cancel-purge"
+            >
+              <span class="material-symbols-outlined">undo</span>
+              {{ 'TENANT_LIFECYCLE.ACTION.CANCEL_PURGE' | translate }}
+            </button>
+          }
+        </div>
+      </section>
+    }
+  }
+
+  <!-- Action modal -->
+  @if (activeAction(); as cfg) {
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+      >
+        <header class="modal-header">
+          <span class="material-symbols-outlined" [class.danger]="cfg.destructive">{{
+            cfg.iconKey
+          }}</span>
+          <h3>{{ cfg.titleKey | translate }}</h3>
+        </header>
+
+        <p class="modal-desc">{{ cfg.descKey | translate }}</p>
+
+        @if (cfg.reasonRequired) {
+          <label class="field">
+            <span class="field-label">{{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}</span>
+            <textarea
+              [ngModel]="modalReason()"
+              (ngModelChange)="modalReason.set($event)"
+              required
+              rows="3"
+              maxlength="1000"
+              [attr.placeholder]="'TENANT_LIFECYCLE.PLACEHOLDER.REASON' | translate"
+            ></textarea>
+          </label>
+        } @else {
+          <label class="field">
+            <span class="field-label">
+              {{ 'TENANT_LIFECYCLE.FIELD.REASON' | translate }}
+              ({{ 'TENANT_LIFECYCLE.OPTIONAL' | translate }})
+            </span>
+            <textarea
+              [ngModel]="modalReason()"
+              (ngModelChange)="modalReason.set($event)"
+              rows="2"
+              maxlength="1000"
+            ></textarea>
+          </label>
+        }
+
+        @if (cfg.action === 'schedule-purge') {
+          <label class="field">
+            <span class="field-label">
+              {{ 'TENANT_LIFECYCLE.FIELD.PURGE_AT' | translate }}
+              ({{ 'TENANT_LIFECYCLE.OPTIONAL' | translate }} —
+              {{ 'TENANT_LIFECYCLE.DEFAULT_30_DAYS' | translate }})
+            </span>
+            <input
+              type="datetime-local"
+              [ngModel]="modalPurgeAt()"
+              (ngModelChange)="modalPurgeAt.set($event)"
+            />
+          </label>
+        }
+
+        @if (cfg.needsTypedConfirm && organization(); as org) {
+          <label class="field">
+            <span class="field-label">
+              {{ 'TENANT_LIFECYCLE.FIELD.TYPE_CODE_TO_CONFIRM' | translate }}
+              <code>{{ org.code }}</code>
+            </span>
+            <input
+              type="text"
+              [ngModel]="modalConfirmText()"
+              (ngModelChange)="modalConfirmText.set($event)"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        }
+
+        <footer class="modal-footer">
+          <button class="btn btn-ghost" (click)="closeModal()" [disabled]="submitting()">
+            {{ 'TENANT_LIFECYCLE.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn"
+            [class.btn-danger]="cfg.destructive"
+            [class.btn-primary]="!cfg.destructive"
+            [disabled]="!canConfirm() || submitting()"
+            (click)="confirm()"
+            data-test="action-confirm"
+          >
+            @if (submitting()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+            }
+            {{ 'TENANT_LIFECYCLE.CONFIRM' | translate }}
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+</div>
