@@ -225,7 +225,7 @@
             </div>
           }
 
-          <div class="detail-section">
+          <div class="detail-section detail-section--actions">
             @if (!showNoteForm()) {
               <button
                 class="btn-secondary"
@@ -235,29 +235,38 @@
                 <span class="material-symbols-outlined">add</span>
                 {{ 'ENCOUNTERS.ADD_NOTE' | translate }}
               </button>
-            } @else {
-              <h3>{{ 'ENCOUNTERS.ADD_NOTE' | translate }}</h3>
-              <textarea
-                class="note-input"
-                [(ngModel)]="noteContent"
-                rows="4"
-                [placeholder]="'ENCOUNTERS.NOTE_PLACEHOLDER' | translate"
-                aria-label="Clinical note"
-              ></textarea>
-              <div class="note-actions">
-                <button class="btn-primary" (click)="addNote()" [disabled]="!noteContent.trim()">
-                  {{ 'COMMON.SAVE' | translate }} {{ 'ENCOUNTERS.NOTES' | translate }}
-                </button>
-                <button class="btn-secondary" (click)="showNoteForm.set(false)">
-                  {{ 'COMMON.CANCEL' | translate }}
-                </button>
-              </div>
             }
+            <button
+              class="btn-secondary"
+              title="Run eligibility / prior-auth check"
+              (click)="openEligibilityDialog()"
+            >
+              <span class="material-symbols-outlined">verified_user</span>
+              Eligibility &amp; prior-auth
+            </button>
           </div>
+
+          @if (showNoteForm()) {
+            <div class="detail-section">
+              <app-encounter-note-form
+                [saving]="savingNote()"
+                [hospitalId]="enc.hospitalId"
+                (noteSubmit)="saveStructuredNote($event)"
+                (noteCancel)="cancelNote()"
+              ></app-encounter-note-form>
+            </div>
+          }
         </div>
       </div>
     </div>
   }
+
+  <app-eligibility-check-dialog
+    [open]="showEligibilityDialog()"
+    [patientId]="selectedEncounter()?.patientId ?? null"
+    [hospitalId]="selectedEncounter()?.hospitalId ?? null"
+    (closed)="closeEligibilityDialog()"
+  ></app-eligibility-check-dialog>
 </div>
 
 <!-- ═══ CREATE/EDIT ENCOUNTER MODAL ═══ -->
