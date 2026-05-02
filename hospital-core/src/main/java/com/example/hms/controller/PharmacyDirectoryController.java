@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.pharmacy.Pharmacy;
@@ -37,6 +38,7 @@ public class PharmacyDirectoryController {
     private final PharmacyDirectoryService pharmacyDirectoryService;
     private final RoleValidator roleValidator;
     private final PharmacyRepository pharmacyRepository;
+    private final ControllerAuthUtils authUtils;
 
     @Operation(
         summary = "List community / partner pharmacies for the current hospital",
@@ -51,8 +53,12 @@ public class PharmacyDirectoryController {
         @RequestHeader(value = "X-Hospital-Id", required = false) UUID headerHospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID resolvedHospital = resolveHospitalContext(auth, hospitalId, headerHospitalId);
+        authUtils.requireAuth(auth);
+        UUID resolvedHospital = authUtils.resolveHospitalScope(auth, hospitalId, headerHospitalId, true);
+        if (resolvedHospital == null) {
+            throw new BusinessException(
+                "Hospital context is required. Provide hospitalId parameter, X-Hospital-Id header, or include hospitalId claim in the token.");
+        }
         List<Pharmacy> community = pharmacyRepository
             .findByHospitalIdAndPharmacyTypeAndActiveTrue(resolvedHospital, PharmacyType.COMMUNITY_PHARMACY);
         List<Pharmacy> partner = pharmacyRepository

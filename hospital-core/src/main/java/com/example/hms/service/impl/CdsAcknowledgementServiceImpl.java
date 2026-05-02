@@ -17,6 +17,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.service.CdsAcknowledgementService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService {
 
+    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final Duration ACKNOWLEDGED_TTL = Duration.ofHours(24);
     private static final Duration OVERRIDDEN_TTL = Duration.ofHours(72);
 
@@ -42,7 +44,8 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
 
     @Override
     @Transactional
-    public CdsAcknowledgementResponseDTO record(Authentication auth, CdsAcknowledgementRequestDTO request) {
+    public CdsAcknowledgementResponseDTO acknowledge(Authentication auth,
+                                                     CdsAcknowledgementRequestDTO request) {
         authUtils.requireAuth(auth);
 
         if (request.getAction() == CdsAcknowledgementAction.OVERRIDDEN
@@ -58,9 +61,13 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(
+                auth, request.getHospitalId(), false);
+        requirePatientAccessible(auth, patient, resolvedHospitalId);
+
         Hospital hospital = null;
-        if (request.getHospitalId() != null) {
-            hospital = hospitalRepository.findById(request.getHospitalId()).orElse(null);
+        if (resolvedHospitalId != null) {
+            hospital = hospitalRepository.findById(resolvedHospitalId).orElse(null);
         }
 
         Duration ttl = request.getAction() == CdsAcknowledgementAction.OVERRIDDEN
@@ -88,11 +95,35 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<CdsAcknowledgementResponseDTO> activeForPatient(UUID patientId) {
+    public List<CdsAcknowledgementResponseDTO> activeForPatient(Authentication auth, UUID patientId) {
+        authUtils.requireAuth(auth);
+        Patient patient = patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, null, false);
+        requirePatientAccessible(auth, patient, resolvedHospitalId);
+
         return repository.findActiveForPatient(patientId, LocalDateTime.now())
                 .stream()
                 .map(this::toDTO)
                 .toList();
+    }
+
+    /**
+     * Reject access when the patient's hospital is outside the caller's scope.
+     * SUPER_ADMIN bypasses the check; for everyone else the resolved hospital
+     * (from the JWT / active assignment) must match the patient's hospital.
+     */
+    private void requirePatientAccessible(Authentication auth, Patient patient, UUID resolvedHospitalId) {
+        if (authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN)) {
+            return;
+        }
+        UUID patientHospitalId = patient.getHospitalId();
+        if (patientHospitalId != null && resolvedHospitalId != null
+                && patientHospitalId.equals(resolvedHospitalId)) {
+            return;
+        }
+        throw new AccessDeniedException(
+            "You do not have access to this patient's chart in the resolved hospital scope.");
     }
 
     private CdsAcknowledgementResponseDTO toDTO(CdsAcknowledgement a) {

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS clinical.cds_acknowledgements (
     action          VARCHAR(20)     NOT NULL, -- ACKNOWLEDGED | OVERRIDDEN
     reason          VARCHAR(1000),
     created_at      TIMESTAMP       NOT NULL,
+    updated_at      TIMESTAMP       NOT NULL,
     expires_at      TIMESTAMP       NOT NULL,
     CONSTRAINT fk_cds_ack_patient   FOREIGN KEY (patient_id)  REFERENCES clinical.patients(id)  ON DELETE CASCADE,
     CONSTRAINT fk_cds_ack_hospital  FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals(id) ON DELETE SET NULL,

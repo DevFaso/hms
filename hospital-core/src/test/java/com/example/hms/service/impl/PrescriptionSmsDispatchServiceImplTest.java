@@ -88,6 +88,11 @@ class PrescriptionSmsDispatchServiceImplTest {
         pharmacy.setPhoneNumber("+22670111222");
         pharmacy.setPharmacyType(PharmacyType.COMMUNITY_PHARMACY);
         pharmacy.setHospital(hospital);
+        pharmacy.setActive(true);
+    }
+
+    private PrescriptionSmsDispatchRequestDTO requestForCurrentPharmacy() {
+        return PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build();
     }
 
     @Test
@@ -123,11 +128,26 @@ class PrescriptionSmsDispatchServiceImplTest {
         pharmacy.setPharmacyType(PharmacyType.HOSPITAL_DISPENSARY);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
-        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
-                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("dispensary");
+
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("inactive pharmacies are rejected")
+    void dispatch_rejectsInactivePharmacy() {
+        pharmacy.setActive(false);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("inactive");
 
         verify(smsService, never()).send(anyString(), anyString());
     }
@@ -140,9 +160,9 @@ class PrescriptionSmsDispatchServiceImplTest {
         pharmacy.setHospital(otherHospital);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
-        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
-                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(AccessDeniedException.class);
 
         verify(smsService, never()).send(anyString(), anyString());
@@ -154,9 +174,9 @@ class PrescriptionSmsDispatchServiceImplTest {
         pharmacy.setPhoneNumber(null);
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
-        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
-                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("phone number");
     }
@@ -167,9 +187,9 @@ class PrescriptionSmsDispatchServiceImplTest {
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(rx));
         when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
         doThrow(new RuntimeException("twilio offline")).when(smsService).send(anyString(), anyString());
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
 
-        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId,
-                PrescriptionSmsDispatchRequestDTO.builder().pharmacyId(pharmacyId).build()))
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("twilio offline");
 

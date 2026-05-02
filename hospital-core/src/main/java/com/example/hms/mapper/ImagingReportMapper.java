@@ -28,8 +28,10 @@ public class ImagingReportMapper {
 
     /**
      * Resolves the PACS viewer URL: explicit value on the report wins; otherwise
-     * substitute the report's UIDs into the hospital's template (if any). Returns
-     * null when neither is available — callers render no link.
+     * substitute the report's UIDs into the hospital's template. Returns null
+     * when the template is missing OR when the template references a placeholder
+     * the report has no value for — better to surface no link than a broken one
+     * with empty-string identifiers.
      */
     private String resolvePacsViewerUrl(ImagingReport report) {
         String explicit = report.getPacsViewerUrl();
@@ -45,8 +47,10 @@ public class ImagingReportMapper {
         }
         String studyUid = report.getStudyInstanceUid();
         String accession = report.getAccessionNumber();
-        if ((studyUid == null || studyUid.isBlank())
-                && (accession == null || accession.isBlank())) {
+        if (template.contains("{studyInstanceUid}") && (studyUid == null || studyUid.isBlank())) {
+            return null;
+        }
+        if (template.contains("{accessionNumber}") && (accession == null || accession.isBlank())) {
             return null;
         }
         return template

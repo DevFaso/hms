@@ -7,5 +7,5 @@
 -- own pacs_viewer_url are null, no link is surfaced. Additive — no rollback
 -- script needed; drop the column to revert.
 
-ALTER TABLE hospitals
+ALTER TABLE hospital.hospitals
     ADD COLUMN IF NOT EXISTS pacs_viewer_url_template VARCHAR(500);

@@ -5,12 +5,13 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
+import com.example.hms.model.CdsAcknowledgement;
 import com.example.hms.model.Patient;
-import com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO;
+import com.example.hms.repository.CdsAcknowledgementRepository;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.service.CdsAcknowledgementService;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -33,14 +34,14 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
     private final BpaRuleEngine ruleEngine;
     private final PatientRepository patientRepository;
-    private final CdsAcknowledgementService acknowledgementService;
+    private final CdsAcknowledgementRepository acknowledgementRepository;
 
     public BpaProtocolsCdsService(BpaRuleEngine ruleEngine,
                                   PatientRepository patientRepository,
-                                  CdsAcknowledgementService acknowledgementService) {
+                                  CdsAcknowledgementRepository acknowledgementRepository) {
         this.ruleEngine = ruleEngine;
         this.patientRepository = patientRepository;
-        this.acknowledgementService = acknowledgementService;
+        this.acknowledgementRepository = acknowledgementRepository;
     }
 
     @Override
@@ -78,12 +79,16 @@ public class BpaProtocolsCdsService implements CdsHookService {
         if (cards == null || cards.isEmpty()) {
             return cards == null ? List.of() : cards;
         }
-        List<CdsAcknowledgementResponseDTO> active = acknowledgementService.activeForPatient(patientId);
+        // Read directly from the repository — patient access is already enforced
+        // upstream by the CdsHooksController, so the auth-gated service path is
+        // not needed here.
+        List<CdsAcknowledgement> active =
+                acknowledgementRepository.findActiveForPatient(patientId, LocalDateTime.now());
         if (active.isEmpty()) {
             return cards;
         }
         Set<String> ackedUuids = active.stream()
-                .map(CdsAcknowledgementResponseDTO::getCardUuid)
+                .map(CdsAcknowledgement::getCardUuid)
                 .filter(u -> u != null && !u.isBlank())
                 .collect(Collectors.toSet());
         Set<String> ackedFingerprints = active.stream()

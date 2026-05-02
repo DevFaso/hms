@@ -41,10 +41,10 @@ public class CdsAcknowledgementController {
     @Operation(summary = "Record an acknowledgement / override of a CDS card")
     @PostMapping
     @PreAuthorize(CLINICIAN_ROLES)
-    public ResponseEntity<ApiResponseWrapper<CdsAcknowledgementResponseDTO>> record(
+    public ResponseEntity<ApiResponseWrapper<CdsAcknowledgementResponseDTO>> acknowledge(
             Authentication auth,
             @Valid @RequestBody CdsAcknowledgementRequestDTO request) {
-        CdsAcknowledgementResponseDTO result = service.record(auth, request);
+        CdsAcknowledgementResponseDTO result = service.acknowledge(auth, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
     }
 
@@ -53,7 +53,8 @@ public class CdsAcknowledgementController {
     @GetMapping
     @PreAuthorize(CLINICIAN_ROLES)
     public ResponseEntity<ApiResponseWrapper<List<CdsAcknowledgementResponseDTO>>> active(
+            Authentication auth,
             @RequestParam UUID patientId) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(service.activeForPatient(patientId)));
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.activeForPatient(auth, patientId)));
     }
 }

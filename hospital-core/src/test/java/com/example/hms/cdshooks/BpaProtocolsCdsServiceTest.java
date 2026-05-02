@@ -6,11 +6,13 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.cdshooks.service.BpaProtocolsCdsService;
+import com.example.hms.model.CdsAcknowledgement;
 import com.example.hms.model.Patient;
+import com.example.hms.repository.CdsAcknowledgementRepository;
 import com.example.hms.repository.PatientRepository;
-import com.example.hms.service.CdsAcknowledgementService;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +20,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -28,7 +29,7 @@ class BpaProtocolsCdsServiceTest {
 
     private final BpaRuleEngine engine = mock(BpaRuleEngine.class);
     private final PatientRepository patients = mock(PatientRepository.class);
-    private final CdsAcknowledgementService acknowledgements = mock(CdsAcknowledgementService.class);
+    private final CdsAcknowledgementRepository acknowledgements = mock(CdsAcknowledgementRepository.class);
     private final BpaProtocolsCdsService service =
         new BpaProtocolsCdsService(engine, patients, acknowledgements);
 
@@ -77,9 +78,9 @@ class BpaProtocolsCdsServiceTest {
         CdsCard card = new CdsCard("Sepsis — Hour-1 bundle", "detail",
             CdsCard.Indicator.WARNING, new Source("HMS", null, null),
             null, null, null, UUID.randomUUID().toString());
-        when(engine.evaluateForPatient(eq(patient), eq(hospitalId)))
-            .thenReturn(List.of(card));
-        when(acknowledgements.activeForPatient(patientId)).thenReturn(List.of());
+        when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(card));
+        when(acknowledgements.findActiveForPatient(any(UUID.class), any(LocalDateTime.class)))
+            .thenReturn(List.of());
 
         CdsHookResponse response = service.evaluate(viewRequest(patientId));
         assertThat(response.cards()).containsExactly(card);
@@ -99,16 +100,15 @@ class BpaProtocolsCdsServiceTest {
             new Source("HMS", null, null), null, null, null, ackedUuid);
         CdsCard fresh = new CdsCard("Malaria", null, CdsCard.Indicator.WARNING,
             new Source("HMS", null, null), null, null, null, UUID.randomUUID().toString());
-        when(engine.evaluateForPatient(eq(patient), eq(hospitalId)))
-            .thenReturn(List.of(acked, fresh));
+        when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(acked, fresh));
 
-        com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO ackEntry =
-            com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO.builder()
-                .cardUuid(ackedUuid)
-                .cardSummary("Sepsis")
-                .indicator("critical")
-                .build();
-        when(acknowledgements.activeForPatient(patientId)).thenReturn(List.of(ackEntry));
+        CdsAcknowledgement ackEntry = CdsAcknowledgement.builder()
+            .cardUuid(ackedUuid)
+            .cardSummary("Sepsis")
+            .indicator("critical")
+            .build();
+        when(acknowledgements.findActiveForPatient(any(UUID.class), any(LocalDateTime.class)))
+            .thenReturn(List.of(ackEntry));
 
         CdsHookResponse response = service.evaluate(viewRequest(patientId));
         assertThat(response.cards()).containsExactly(fresh);

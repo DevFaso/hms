@@ -18,17 +18,11 @@
   <app-cds-card-list *ngIf="state() === 'ready'" [cards]="cards()" data-testid="bpa-panel-cards" />
 </section>
 
-<div
-  *ngIf="criticalCard() as critical"
-  class="bpa-modal-backdrop"
-  role="dialog"
-  aria-modal="true"
-  data-testid="bpa-critical-modal"
->
-  <div class="bpa-modal" role="document">
+<div *ngIf="criticalCard() as critical" class="bpa-modal-backdrop" data-testid="bpa-critical-modal">
+  <div class="bpa-modal" role="dialog" aria-modal="true" aria-labelledby="bpa-critical-modal-title">
     <header class="bpa-modal__header">
       <span class="bpa-modal__indicator" aria-hidden="true">!</span>
-      <h2>{{ 'BPA.CRITICAL_TITLE' | translate }}</h2>
+      <h2 id="bpa-critical-modal-title">{{ 'BPA.CRITICAL_TITLE' | translate }}</h2>
     </header>
 
     <p class="bpa-modal__summary" data-testid="bpa-critical-summary">{{ critical.summary }}</p>
