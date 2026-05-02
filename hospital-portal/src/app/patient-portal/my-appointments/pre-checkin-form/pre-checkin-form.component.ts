@@ -159,9 +159,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
       },
       error: (err) => {
         this.saving.set(false);
-        this.errorMessage.set(
-          err?.error?.message || this.translate.instant('PRE_CHECKIN.ERROR'),
-        );
+        this.errorMessage.set(err?.error?.message || this.translate.instant('PRE_CHECKIN.ERROR'));
       },
     });
   }

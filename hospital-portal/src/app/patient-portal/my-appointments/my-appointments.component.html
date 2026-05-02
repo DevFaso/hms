@@ -62,7 +62,9 @@
                 [(ngModel)]="selectedHospitalId"
                 (ngModelChange)="onHospitalChange()"
               >
-                <option value="">{{ 'PORTAL.APPOINTMENTS.BOOKING.SELECT_HOSPITAL' | translate }}</option>
+                <option value="">
+                  {{ 'PORTAL.APPOINTMENTS.BOOKING.SELECT_HOSPITAL' | translate }}
+                </option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -98,7 +100,9 @@
                 [(ngModel)]="selectedProviderId"
                 [disabled]="!selectedDepartmentId"
               >
-                <option value="">{{ 'PORTAL.APPOINTMENTS.BOOKING.ANY_PROVIDER' | translate }}</option>
+                <option value="">
+                  {{ 'PORTAL.APPOINTMENTS.BOOKING.ANY_PROVIDER' | translate }}
+                </option>
                 @for (p of providers(); track p.id) {
                   <option [value]="p.id">
                     {{ p.fullName || p.name }}{{ p.role ? ' — ' + p.role : '' }}

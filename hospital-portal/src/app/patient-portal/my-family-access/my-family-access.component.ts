@@ -98,8 +98,7 @@ export class MyFamilyAccessComponent implements OnInit {
         this.proxies.update((list) => list.filter((p) => p.id !== proxyId));
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_REVOKED'));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED')),
+      error: () => this.toast.error(this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED')),
     });
   }
 }

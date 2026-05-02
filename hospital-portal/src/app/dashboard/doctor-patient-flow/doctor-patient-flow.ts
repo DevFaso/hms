@@ -43,16 +43,36 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
     this.langTick();
     const t = (key: string) => this.translate.instant(key);
     return [
-      { key: 'SCHEDULED', label: t('DASHBOARD.FLOW_COL.SCHEDULED'), icon: 'event', color: '#6366f1' },
-      { key: 'ARRIVED', label: t('DASHBOARD.FLOW_COL.CHECKED_IN'), icon: 'how_to_reg', color: '#0891b2' },
-      { key: 'TRIAGE', label: t('DASHBOARD.FLOW_COL.TRIAGE'), icon: 'monitor_heart', color: '#e11d48' },
+      {
+        key: 'SCHEDULED',
+        label: t('DASHBOARD.FLOW_COL.SCHEDULED'),
+        icon: 'event',
+        color: '#6366f1',
+      },
+      {
+        key: 'ARRIVED',
+        label: t('DASHBOARD.FLOW_COL.CHECKED_IN'),
+        icon: 'how_to_reg',
+        color: '#0891b2',
+      },
+      {
+        key: 'TRIAGE',
+        label: t('DASHBOARD.FLOW_COL.TRIAGE'),
+        icon: 'monitor_heart',
+        color: '#e11d48',
+      },
       {
         key: 'WAITING_FOR_PHYSICIAN',
         label: t('DASHBOARD.FLOW_COL.WAITING_FOR_MD'),
         icon: 'person_search',
         color: '#d97706',
       },
-      { key: 'IN_PROGRESS', label: t('DASHBOARD.FLOW_COL.IN_ENCOUNTER'), icon: 'stethoscope', color: '#2563eb' },
+      {
+        key: 'IN_PROGRESS',
+        label: t('DASHBOARD.FLOW_COL.IN_ENCOUNTER'),
+        icon: 'stethoscope',
+        color: '#2563eb',
+      },
       {
         key: 'AWAITING_RESULTS',
         label: t('DASHBOARD.FLOW_COL.AWAITING_RESULTS'),
@@ -65,8 +85,18 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
         icon: 'exit_to_app',
         color: '#059669',
       },
-      { key: 'COMPLETED', label: t('DASHBOARD.FLOW_COL.COMPLETED'), icon: 'task_alt', color: '#059669' },
-      { key: 'CANCELLED', label: t('DASHBOARD.FLOW_COL.CANCELLED'), icon: 'cancel', color: '#94a3b8' },
+      {
+        key: 'COMPLETED',
+        label: t('DASHBOARD.FLOW_COL.COMPLETED'),
+        icon: 'task_alt',
+        color: '#059669',
+      },
+      {
+        key: 'CANCELLED',
+        label: t('DASHBOARD.FLOW_COL.CANCELLED'),
+        icon: 'cancel',
+        color: '#94a3b8',
+      },
     ];
   });
 
