@@ -60,3 +60,13 @@ app:
   # default for new contributors running the local-h2 profile.
   encryption:
     key: "ZGV2LW9ubHktcmVwbGFjZS1tZS1pbi1wcm9kLTMyYiE="
+  # MFA disabled in dev. application.properties defaults required-roles to
+  # ROLE_DOCTOR / ROLE_HOSPITAL_ADMIN / ROLE_PHARMACIST / ROLE_FINANCE,
+  # but a doctor logging in for the first time cannot enroll because
+  # /auth/mfa/enroll requires @AuthenticationPrincipal (full auth) while
+  # a fresh MFA-required login only yields the partial mfaToken — a
+  # chicken-and-egg loop that 500s with NPE on principal.getUsername().
+  # Disabling MFA in local-h2 unblocks new contributors. Production
+  # still requires MFA via the MFA_REQUIRED_ROLES env var.
+  mfa:
+    required-roles: ""
