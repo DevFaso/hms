@@ -1,6 +1,11 @@
 <section class="order-set-edit" data-testid="order-set-edit">
   <header class="order-set-edit__header">
-    <a class="back-link" routerLink="/admin/order-sets">←</a>
+    <a
+      class="back-link"
+      routerLink="/admin/order-sets"
+      [attr.aria-label]="'COMMON.BACK' | translate"
+      ><span aria-hidden="true">←</span></a
+    >
     <h1>
       {{
         mode() === 'edit' ? ('ORDER_SETS.EDIT_TITLE' | translate) : ('ORDER_SETS.NEW' | translate)
@@ -64,8 +69,9 @@
             <span>{{ 'ORDER_SETS.FIELD_ITEM_NAME' | translate }}</span>
             <input
               type="text"
-              [(ngModel)]="item.medicationName"
-              [name]="'medicationName-' + i"
+              [ngModel]="itemName(item)"
+              (ngModelChange)="setItemName(item, $event)"
+              [name]="'itemName-' + i"
               required
               [attr.data-testid]="'order-set-item-name-' + i"
             />

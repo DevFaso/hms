@@ -34,9 +34,19 @@ const ORDER_ITEM_TYPES: OrderItemType[] = [
   'LAB',
   'IMAGING',
   'DIET',
-  'PROCEDURE',
-  'OTHER',
+  'ACTIVITY',
+  'MONITORING',
 ];
+
+/** Maps an item type to the JSONB key the backend dispatcher reads as the item name. */
+const NAME_KEY_BY_TYPE: Record<string, keyof OrderSetItem> = {
+  MEDICATION: 'medicationName',
+  LAB: 'orderName',
+  IMAGING: 'studyType',
+  DIET: 'dietType',
+  ACTIVITY: 'activityLevel',
+  MONITORING: 'monitoringType',
+};
 
 const DOSE_UNITS = ['mg', 'g', 'mcg', 'mL', 'IU', 'tablet', 'puff', 'drop', 'unit'];
 const FREQUENCY_PRESETS = ['QD', 'BID', 'TID', 'QID', 'Q4H', 'Q6H', 'Q8H', 'PRN'];
@@ -181,7 +191,21 @@ export class OrderSetEditComponent implements OnInit {
   }
 
   protected isMedicationLike(type: string | undefined): boolean {
-    return type === 'MEDICATION' || type === 'PROCEDURE' || !type;
+    return !type || type === 'MEDICATION';
+  }
+
+  protected nameKey(type: string | undefined): keyof OrderSetItem {
+    const key = type ? NAME_KEY_BY_TYPE[type] : undefined;
+    return key ?? 'medicationName';
+  }
+
+  protected itemName(it: OrderSetItem): string {
+    return (it[this.nameKey(it.orderType)] as string) ?? '';
+  }
+
+  protected setItemName(it: EditableItem, value: string): void {
+    const key = this.nameKey(it.orderType);
+    (it as Record<string, unknown>)[key as string] = value;
   }
 
   protected itemDisplayName(it: OrderSetItem): string {
@@ -191,6 +215,8 @@ export class OrderSetEditComponent implements OnInit {
       (it.testName as string) ||
       (it.studyType as string) ||
       (it.dietType as string) ||
+      (it.activityLevel as string) ||
+      (it.monitoringType as string) ||
       ''
     );
   }

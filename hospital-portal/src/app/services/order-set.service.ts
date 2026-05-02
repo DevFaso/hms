@@ -4,7 +4,14 @@ import { Observable } from 'rxjs';
 
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 
-export type OrderItemType = 'MEDICATION' | 'LAB' | 'IMAGING' | 'DIET' | 'PROCEDURE' | 'OTHER';
+/**
+ * Order item types recognized by the backend dispatcher
+ * ({@code OrderSetItemDispatcher}). MEDICATION/LAB/IMAGING fan out into
+ * orders on apply; DIET/ACTIVITY/MONITORING are captured as encounter notes
+ * in v0 (deferred fan-out). Any other value is silently skipped on apply,
+ * so the editor must constrain to this list.
+ */
+export type OrderItemType = 'MEDICATION' | 'LAB' | 'IMAGING' | 'DIET' | 'ACTIVITY' | 'MONITORING';
 
 /**
  * Structured shape for a single item in an order-set template. Persisted as
@@ -14,6 +21,11 @@ export type OrderItemType = 'MEDICATION' | 'LAB' | 'IMAGING' | 'DIET' | 'PROCEDU
  * <p>Synonyms enable type-ahead matching against locally-known names
  * (e.g. "Tylenol" → paracetamol). Dose-range fields drive the structured
  * editor that replaced the v0 raw-JSON textarea (gap #19).
+ *
+ * <p>Name field is type-specific and matches what the backend dispatcher
+ * reads: {@code medicationName} for MEDICATION, {@code orderName} for LAB,
+ * {@code studyType} for IMAGING, {@code dietType} for DIET, {@code
+ * activityLevel} for ACTIVITY, {@code monitoringType} for MONITORING.
  */
 export interface OrderSetItem {
   orderType?: string;
@@ -22,6 +34,8 @@ export interface OrderSetItem {
   testName?: string;
   studyType?: string;
   dietType?: string;
+  activityLevel?: string;
+  monitoringType?: string;
   dose?: string;
   route?: string;
   frequency?: string;

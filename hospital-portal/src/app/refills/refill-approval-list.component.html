@@ -1,6 +1,8 @@
 <section class="refill-list" data-testid="refill-approval-list">
   <header class="refill-list__header">
-    <a class="back-link" routerLink="/dashboard">←</a>
+    <a class="back-link" routerLink="/dashboard" [attr.aria-label]="'COMMON.BACK' | translate"
+      ><span aria-hidden="true">←</span></a
+    >
     <h1>{{ 'REFILLS.QUEUE_TITLE' | translate }}</h1>
   </header>
 

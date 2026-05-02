@@ -228,12 +228,11 @@
   },
   "REFILLS": {
     "QUEUE_TITLE": "Solicitudes de recarga",
-    "STATUS_PENDING": "Pendiente",
+    "STATUS_REQUESTED": "Pendiente",
     "STATUS_APPROVED": "Aprobada",
     "STATUS_DENIED": "Denegada",
     "STATUS_DISPENSED": "Dispensada",
     "STATUS_CANCELLED": "Cancelada",
-    "STATUS_REQUESTED": "Pendiente",
     "STATUS_ALL": "Todas",
     "EMPTY": "Sin solicitudes en esta vista.",
     "LOAD_ERROR": "No se pudieron cargar las solicitudes. Intenta nuevamente.",

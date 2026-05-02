@@ -228,12 +228,11 @@
   },
   "REFILLS": {
     "QUEUE_TITLE": "Refill requests",
-    "STATUS_PENDING": "Pending",
+    "STATUS_REQUESTED": "Pending",
     "STATUS_APPROVED": "Approved",
     "STATUS_DENIED": "Denied",
     "STATUS_DISPENSED": "Dispensed",
     "STATUS_CANCELLED": "Cancelled",
-    "STATUS_REQUESTED": "Pending",
     "STATUS_ALL": "All",
     "EMPTY": "No refill requests in this view.",
     "LOAD_ERROR": "Could not load refill requests. Try again.",

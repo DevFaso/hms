@@ -228,12 +228,11 @@
   },
   "REFILLS": {
     "QUEUE_TITLE": "Demandes de renouvellement",
-    "STATUS_PENDING": "En attente",
+    "STATUS_REQUESTED": "En attente",
     "STATUS_APPROVED": "Approuvée",
     "STATUS_DENIED": "Refusée",
     "STATUS_DISPENSED": "Délivrée",
     "STATUS_CANCELLED": "Annulée",
-    "STATUS_REQUESTED": "En attente",
     "STATUS_ALL": "Toutes",
     "EMPTY": "Aucune demande dans cette vue.",
     "LOAD_ERROR": "Impossible de charger les demandes. Réessayez.",

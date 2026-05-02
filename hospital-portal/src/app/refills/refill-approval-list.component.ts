@@ -12,7 +12,7 @@ import {
 import { ToastService } from '../core/toast.service';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
-  { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_PENDING' },
+  { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
   { value: 'APPROVED', labelKey: 'REFILLS.STATUS_APPROVED' },
   { value: 'DENIED', labelKey: 'REFILLS.STATUS_DENIED' },
   { value: 'ALL', labelKey: 'REFILLS.STATUS_ALL' },

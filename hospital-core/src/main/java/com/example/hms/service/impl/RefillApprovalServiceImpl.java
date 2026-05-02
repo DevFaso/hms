@@ -129,7 +129,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
             notificationService.createNotification(message, username, NOTIFICATION_TYPE);
         } catch (Exception ex) {
             log.warn("Failed to deliver refill decision notification to {} for refill {}",
-                    username, refill.getId());
+                    username, refill.getId(), ex);
         }
     }
 
