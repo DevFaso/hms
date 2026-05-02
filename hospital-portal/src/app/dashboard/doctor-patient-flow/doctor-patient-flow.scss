@@ -66,12 +66,25 @@
   // Empty column: shrink to icon-only rail. The header still shows the icon
   // and the "0" count so doctors keep the spatial pattern (column position =
   // workflow stage); when an item arrives, the column smoothly expands.
+  // The label is hidden VISUALLY but kept in the accessibility tree (the
+  // standard "visually-hidden" / "sr-only" pattern). `display: none` would
+  // have removed it from a11y entirely, leaving screen-reader users with
+  // only the decorative icon and a tooltip-only stage name.
   &.flow-col-empty {
     flex: 0 1 80px;
     min-width: 70px;
 
     .flow-col-label {
-      display: none;
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
     }
 
     .flow-col-count {

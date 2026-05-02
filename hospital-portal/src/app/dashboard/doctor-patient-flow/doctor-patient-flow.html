@@ -10,10 +10,17 @@
   <div class="flow-columns">
     @for (col of columns(); track col.key) {
       <div class="flow-col" [class.flow-col-empty]="getColumnItems(col.key).length === 0">
-        <div class="flow-col-header" [style.--col-color]="col.color" [attr.title]="col.label">
-          <span class="material-symbols-outlined">{{ col.icon }}</span>
+        <div
+          class="flow-col-header"
+          [style.--col-color]="col.color"
+          [attr.title]="col.label"
+          [attr.aria-label]="col.label + ' (' + getColumnItems(col.key).length + ')'"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">{{ col.icon }}</span>
           <span class="flow-col-label">{{ col.label }}</span>
-          <span class="flow-col-count">{{ getColumnItems(col.key).length }}</span>
+          <span class="flow-col-count" aria-hidden="true">{{
+            getColumnItems(col.key).length
+          }}</span>
         </div>
         <div class="flow-col-body">
           @if (getColumnItems(col.key).length === 0) {
