@@ -8,6 +8,7 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.cdshooks.service.BpaProtocolsCdsService;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.CdsAcknowledgementService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -27,7 +28,9 @@ class BpaProtocolsCdsServiceTest {
 
     private final BpaRuleEngine engine = mock(BpaRuleEngine.class);
     private final PatientRepository patients = mock(PatientRepository.class);
-    private final BpaProtocolsCdsService service = new BpaProtocolsCdsService(engine, patients);
+    private final CdsAcknowledgementService acknowledgements = mock(CdsAcknowledgementService.class);
+    private final BpaProtocolsCdsService service =
+        new BpaProtocolsCdsService(engine, patients, acknowledgements);
 
     private static CdsHookRequest viewRequest(UUID patientId) {
         Map<String, Object> ctx = Map.of("patientId", patientId.toString());
@@ -76,8 +79,38 @@ class BpaProtocolsCdsServiceTest {
             null, null, null, UUID.randomUUID().toString());
         when(engine.evaluateForPatient(eq(patient), eq(hospitalId)))
             .thenReturn(List.of(card));
+        when(acknowledgements.activeForPatient(patientId)).thenReturn(List.of());
 
         CdsHookResponse response = service.evaluate(viewRequest(patientId));
         assertThat(response.cards()).containsExactly(card);
+    }
+
+    @Test
+    void suppressesAcknowledgedCardsByUuid() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        patient.setHospitalId(hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+
+        String ackedUuid = UUID.randomUUID().toString();
+        CdsCard acked = new CdsCard("Sepsis", null, CdsCard.Indicator.CRITICAL,
+            new Source("HMS", null, null), null, null, null, ackedUuid);
+        CdsCard fresh = new CdsCard("Malaria", null, CdsCard.Indicator.WARNING,
+            new Source("HMS", null, null), null, null, null, UUID.randomUUID().toString());
+        when(engine.evaluateForPatient(eq(patient), eq(hospitalId)))
+            .thenReturn(List.of(acked, fresh));
+
+        com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO ackEntry =
+            com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO.builder()
+                .cardUuid(ackedUuid)
+                .cardSummary("Sepsis")
+                .indicator("critical")
+                .build();
+        when(acknowledgements.activeForPatient(patientId)).thenReturn(List.of(ackEntry));
+
+        CdsHookResponse response = service.evaluate(viewRequest(patientId));
+        assertThat(response.cards()).containsExactly(fresh);
     }
 }

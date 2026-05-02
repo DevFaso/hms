@@ -246,6 +246,43 @@
               <p>{{ ord.clinicalQuestion }}</p>
             </div>
           }
+
+          @if (selectedOrderReports().length > 0) {
+            <div class="detail-reports" data-testid="imaging-reports">
+              <h3>{{ 'IMAGING.REPORTS' | translate }}</h3>
+              @for (rep of selectedOrderReports(); track rep.id) {
+                <div class="report-card" [attr.data-testid]="'imaging-report-' + rep.id">
+                  <div class="report-meta">
+                    <span class="status-badge {{ getStatusClass(rep.reportStatus) }}">{{
+                      rep.reportStatus
+                    }}</span>
+                    <span class="report-author">{{
+                      rep.interpretingProviderName || rep.performedByName
+                    }}</span>
+                    @if (rep.pacsViewerUrl) {
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="openPacsViewer(rep.pacsViewerUrl!)"
+                        [attr.data-testid]="'imaging-pacs-link-' + rep.id"
+                      >
+                        <span class="material-symbols-outlined">open_in_new</span>
+                        {{ 'IMAGING.VIEW_IN_PACS' | translate }}
+                      </button>
+                    }
+                  </div>
+                  @if (rep.impression) {
+                    <p class="report-impression">
+                      <strong>{{ 'IMAGING.IMPRESSION' | translate }}:</strong> {{ rep.impression }}
+                    </p>
+                  }
+                  @if (rep.findings) {
+                    <p class="report-findings">{{ rep.findings }}</p>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     </div>

@@ -26,6 +26,34 @@ import java.util.stream.Collectors;
 @Component
 public class ImagingReportMapper {
 
+    /**
+     * Resolves the PACS viewer URL: explicit value on the report wins; otherwise
+     * substitute the report's UIDs into the hospital's template (if any). Returns
+     * null when neither is available — callers render no link.
+     */
+    private String resolvePacsViewerUrl(ImagingReport report) {
+        String explicit = report.getPacsViewerUrl();
+        if (explicit != null && !explicit.isBlank()) {
+            return explicit;
+        }
+        if (report.getHospital() == null) {
+            return null;
+        }
+        String template = report.getHospital().getPacsViewerUrlTemplate();
+        if (template == null || template.isBlank()) {
+            return null;
+        }
+        String studyUid = report.getStudyInstanceUid();
+        String accession = report.getAccessionNumber();
+        if ((studyUid == null || studyUid.isBlank())
+                && (accession == null || accession.isBlank())) {
+            return null;
+        }
+        return template
+                .replace("{studyInstanceUid}", studyUid != null ? studyUid : "")
+                .replace("{accessionNumber}", accession != null ? accession : "");
+    }
+
     public ImagingReportResponseDTO toResponseDTO(ImagingReport report) {
         if (report == null) {
             return null;
@@ -44,7 +72,7 @@ public class ImagingReportMapper {
             .studyInstanceUid(report.getStudyInstanceUid())
             .seriesInstanceUid(report.getSeriesInstanceUid())
             .accessionNumber(report.getAccessionNumber())
-            .pacsViewerUrl(report.getPacsViewerUrl())
+            .pacsViewerUrl(resolvePacsViewerUrl(report))
             .modality(report.getModality())
             .bodyRegion(report.getBodyRegion())
             .reportTitle(report.getReportTitle())

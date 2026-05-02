@@ -6,11 +6,15 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
 import com.example.hms.model.Patient;
+import com.example.hms.payload.dto.cds.CdsAcknowledgementResponseDTO;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.CdsAcknowledgementService;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * CDS Hooks 1.0 {@code patient-view} service that runs the
@@ -29,11 +33,14 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
     private final BpaRuleEngine ruleEngine;
     private final PatientRepository patientRepository;
+    private final CdsAcknowledgementService acknowledgementService;
 
     public BpaProtocolsCdsService(BpaRuleEngine ruleEngine,
-                                  PatientRepository patientRepository) {
+                                  PatientRepository patientRepository,
+                                  CdsAcknowledgementService acknowledgementService) {
         this.ruleEngine = ruleEngine;
         this.patientRepository = patientRepository;
+        this.acknowledgementService = acknowledgementService;
     }
 
     @Override
@@ -58,6 +65,44 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
         UUID hospitalId = patient.getHospitalId();
         List<CdsCard> cards = ruleEngine.evaluateForPatient(patient, hospitalId);
-        return CdsHookResponse.of(cards);
+        return CdsHookResponse.of(suppressAcknowledged(cards, patientId));
+    }
+
+    /**
+     * Drop cards the clinician has already acknowledged or overridden within
+     * the suppression window. Match by stable {@code uuid} when present; fall
+     * back to the {summary, indicator} pair so v0 cards (no uuid) still
+     * suppress correctly.
+     */
+    private List<CdsCard> suppressAcknowledged(List<CdsCard> cards, UUID patientId) {
+        if (cards == null || cards.isEmpty()) {
+            return cards == null ? List.of() : cards;
+        }
+        List<CdsAcknowledgementResponseDTO> active = acknowledgementService.activeForPatient(patientId);
+        if (active.isEmpty()) {
+            return cards;
+        }
+        Set<String> ackedUuids = active.stream()
+                .map(CdsAcknowledgementResponseDTO::getCardUuid)
+                .filter(u -> u != null && !u.isBlank())
+                .collect(Collectors.toSet());
+        Set<String> ackedFingerprints = active.stream()
+                .map(a -> fingerprint(a.getCardSummary(), a.getIndicator()))
+                .collect(Collectors.toSet());
+        return cards.stream()
+                .filter(c -> {
+                    if (c.uuid() != null && ackedUuids.contains(c.uuid())) {
+                        return false;
+                    }
+                    String indicator = c.indicator() != null ? c.indicator().wire() : null;
+                    return !ackedFingerprints.contains(fingerprint(c.summary(), indicator));
+                })
+                .toList();
+    }
+
+    private static String fingerprint(String summary, String indicator) {
+        String s = summary == null ? "" : summary;
+        String i = indicator == null ? "" : indicator.toLowerCase(java.util.Locale.ROOT);
+        return s + "::" + i;
     }
 }

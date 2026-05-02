@@ -104,6 +104,16 @@ public class Hospital extends BaseEntity {
     @Column(name = "dhis2_org_unit_uid", length = 11)
     private String dhis2OrgUnitUid;
 
+    /**
+     * URL template for the hospital's PACS viewer (e.g.
+     * {@code https://orthanc.local/viewer.html?studyUid={studyInstanceUid}}).
+     * Resolved by the imaging-report mapper to surface a "View in PACS" link
+     * when only a study UID is available. Null when the hospital has no PACS.
+     */
+    @Size(max = 500)
+    @Column(name = "pacs_viewer_url_template", length = 500)
+    private String pacsViewerUrlTemplate;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;

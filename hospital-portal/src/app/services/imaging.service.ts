@@ -76,6 +76,10 @@ export interface ImagingReportResponse {
   isCritical: boolean;
   performedByName: string;
   interpretingProviderName: string;
+  studyInstanceUid?: string | null;
+  seriesInstanceUid?: string | null;
+  accessionNumber?: string | null;
+  pacsViewerUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -142,5 +146,13 @@ export class ImagingService {
     return this.http.get<ImagingOrderResponse[]>(
       `${this.baseUrl}/orders/patient/${patientId}/duplicates`,
     );
+  }
+
+  getReportsForOrder(orderId: string): Observable<ImagingReportResponse[]> {
+    return this.http.get<ImagingReportResponse[]>(`${this.baseUrl}/results/order/${orderId}/all`);
+  }
+
+  getReport(reportId: string): Observable<ImagingReportResponse> {
+    return this.http.get<ImagingReportResponse>(`${this.baseUrl}/results/${reportId}`);
   }
 }
