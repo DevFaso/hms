@@ -18,6 +18,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -275,6 +276,18 @@ public class GeneralReferral {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
+    /**
+     * JPA optimistic-lock version. Required for the SLA expiry sweep: without it,
+     * a concurrent transaction that flips status (e.g. SUBMITTED → IN_PROGRESS)
+     * between the sweep's SELECT and its UPDATE would be silently overwritten,
+     * because the in-memory entity would still report the stale status. With
+     * @Version, the second writer's flush throws ObjectOptimisticLockingFailureException
+     * and the sweep skips the row.
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     // Business methods (state-machine guarded — illegal transitions throw IllegalStateException)
     //
     // DRAFT → SUBMITTED → ACKNOWLEDGED → SCHEDULED → IN_PROGRESS → COMPLETED
@@ -337,6 +350,15 @@ public class GeneralReferral {
         this.cancellationReason = reason;
     }
 
+    public void expire(String reason) {
+        // IN_PROGRESS is intentionally excluded — once a consultation has actually begun,
+        // it must terminate via complete() or cancel(), not by SLA expiry sweep.
+        requireStatus("expire",
+            ReferralStatus.SUBMITTED, ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED);
+        this.status = ReferralStatus.EXPIRED;
+        this.cancellationReason = reason;
+    }
+
     private void requireStatus(String action, ReferralStatus... allowed) {
         for (ReferralStatus s : allowed) {
             if (this.status == s) {
@@ -383,8 +405,7 @@ public class GeneralReferral {
      * Check if referral is overdue
      */
     public boolean isOverdue() {
-        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt) 
-               && status != ReferralStatus.COMPLETED && status != ReferralStatus.CANCELLED 
-               && status != ReferralStatus.REJECTED;
+        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt)
+               && !isTerminal(this.status);
     }
 }

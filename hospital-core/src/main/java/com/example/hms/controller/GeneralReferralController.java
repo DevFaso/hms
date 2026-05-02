@@ -2,9 +2,13 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralExpiryService;
+import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,7 +27,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -32,7 +41,11 @@ import java.util.UUID;
 @Tag(name = "General Referral Management", description = "Multi-specialty referral system")
 public class GeneralReferralController {
 
+    private static final String SUPER_ADMIN_AUTHORITY = "ROLE_SUPER_ADMIN";
+
     private final GeneralReferralService referralService;
+    private final ReferralExpiryService referralExpiryService;
+    private final RoleValidator roleValidator;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
@@ -160,5 +173,65 @@ public class GeneralReferralController {
     @Operation(summary = "Get overdue referrals", description = "Retrieve all overdue referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getOverdueReferrals() {
         return ResponseEntity.ok(referralService.getOverdueReferrals());
+    }
+
+    @GetMapping("/{referralId}/events")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(
+        summary = "Get referral state-machine audit trail",
+        description = "Chronological list of every transition (submit / acknowledge / schedule / "
+            + "start / complete / reject / cancel / expire) recorded for the referral, with the "
+            + "actor that triggered each transition."
+    )
+    public ResponseEntity<List<ReferralEventResponseDTO>> getReferralEvents(@PathVariable UUID referralId) {
+        return ResponseEntity.ok(referralService.getReferralEvents(referralId));
+    }
+
+    @PostMapping("/admin/expire-overdue")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(
+        summary = "Manually trigger the EXPIRED auto-sweep",
+        description = "Transition every SUBMITTED/ACKNOWLEDGED/SCHEDULED referral whose SLA "
+            + "fell before now() - graceHours to EXPIRED. Mirrors the @Scheduled sweep so "
+            + "operators can run it ad-hoc when the scheduler is OFF or after extended downtime. "
+            + "ROLE_HOSPITAL_ADMIN sweeps are scoped to the caller's active hospital; "
+            + "ROLE_SUPER_ADMIN can pass ?global=true to sweep across all hospitals."
+    )
+    public ResponseEntity<Map<String, Integer>> expireOverdueReferrals(
+        @RequestParam(name = "graceHours", required = false, defaultValue = "0") long graceHours,
+        @RequestParam(name = "global", required = false, defaultValue = "false") boolean global
+    ) {
+        long bounded = Math.max(0L, graceHours);
+        Duration grace = Duration.ofHours(bounded);
+        boolean callerIsSuperAdmin = isSuperAdmin();
+
+        // Cross-hospital sweeps are reserved for SUPER_ADMIN. A HOSPITAL_ADMIN that
+        // passes ?global=true must be rejected — silently ignoring the flag would
+        // hide a privilege-escalation attempt.
+        if (global && !callerIsSuperAdmin) {
+            throw new BusinessException("referral.expireOverdue.globalRequiresSuperAdmin");
+        }
+
+        int expired;
+        if (global) {
+            expired = referralExpiryService.expireOverdueReferrals(grace);
+        } else {
+            UUID activeHospital = roleValidator.requireActiveHospitalId();
+            expired = referralExpiryService.expireOverdueReferralsForHospital(grace, activeHospital);
+        }
+        return ResponseEntity.ok(Map.of("expired", expired));
+    }
+
+    private static boolean isSuperAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        for (GrantedAuthority granted : auth.getAuthorities()) {
+            if (SUPER_ADMIN_AUTHORITY.equals(granted.getAuthority())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
