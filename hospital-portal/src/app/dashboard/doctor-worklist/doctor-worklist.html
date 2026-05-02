@@ -10,7 +10,7 @@
 
   <!-- Tab Bar -->
   <div class="worklist-tabs">
-    @for (tab of tabs; track tab.key) {
+    @for (tab of tabs(); track tab.key) {
       <button
         class="wl-tab"
         [class.wl-tab-active]="activeTab() === tab.key"
@@ -56,7 +56,11 @@
       </select>
     }
     @if (hasActiveFilters()) {
-      <button class="wl-filter-clear" title="Clear filters" (click)="clearFilters()">
+      <button
+        class="wl-filter-clear"
+        [title]="'COMMON.CLEAR_ALL_FILTERS' | translate"
+        (click)="clearFilters()"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     }

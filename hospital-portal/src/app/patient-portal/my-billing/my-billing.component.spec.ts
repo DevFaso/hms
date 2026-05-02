@@ -48,6 +48,7 @@ describe('MyBillingComponent', () => {
     component.openPayDialog(mockInvoice);
     component.payAmount = 100;
     component.submitPayment();
-    expect(component.payError()).toContain('exceed');
+    // No translations are loaded in TranslateModule.forRoot(); instant() returns the key.
+    expect(component.payError()).toBe('PORTAL.BILLING.AMOUNT_EXCEEDS');
   });
 });
