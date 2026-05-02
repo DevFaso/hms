@@ -140,7 +140,6 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
-        ensureEditable(referral);
 
         if (request.getObgynUserId() == null) {
             throw new BusinessException("obgynReferral.acknowledge.obgynRequired");
@@ -149,13 +148,20 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         User assignedObgyn = userRepository.findByIdWithRolesAndProfiles(request.getObgynUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_WITH_ID, request.getObgynUserId()));
 
-        referral.setObgyn(assignedObgyn);
-        referral.setPlanSummary(request.getPlanSummary());
-        referral.setAcknowledgementTimestamp(LocalDateTime.now());
-        referral.setStatus(ObgynReferralStatus.ACKNOWLEDGED);
+        referral.acknowledge(request.getPlanSummary(), assignedObgyn);
         referral.setUpdatedBy(username);
 
         log.info("Referral {} acknowledged by {}", referralId, assignedObgyn.getUsername());
+        return referralMapper.toResponseDTO(referral);
+    }
+
+    @Override
+    public ObgynReferralResponseDTO startReferral(UUID referralId, String username) {
+        ObgynReferral referral = findReferral(referralId);
+        referral.start();
+        referral.setUpdatedBy(username);
+
+        log.info("Referral {} started by {}", referralId, username);
         return referralMapper.toResponseDTO(referral);
     }
 
@@ -166,16 +172,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
-        ensureEditable(referral);
-
-        referral.setPlanSummary(request.getPlanSummary());
-        referral.setCompletionTimestamp(LocalDateTime.now());
-        referral.setStatus(ObgynReferralStatus.COMPLETED);
+        referral.complete(request.getPlanSummary(), request.isUpdateCareTeam());
         referral.setUpdatedBy(username);
-
-        if (request.isUpdateCareTeam()) {
-            referral.setCareTeamUpdatedAt(LocalDateTime.now());
-        }
 
         log.info("Referral {} marked complete by {}", referralId, username);
         return referralMapper.toResponseDTO(referral);
@@ -188,11 +186,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
-        ensureEditable(referral);
-
-        referral.setCancellationReason(request.getReason());
-        referral.setCancelledTimestamp(LocalDateTime.now());
-        referral.setStatus(ObgynReferralStatus.CANCELLED);
+        referral.cancel(request.getReason());
         referral.setUpdatedBy(username);
 
         log.info("Referral {} cancelled by {}", referralId, username);
@@ -277,13 +271,6 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private User resolveUserByUsername(String username) {
         return userRepository.findByUsername(username)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_WITH_USERNAME, username));
-    }
-
-    private void ensureEditable(ObgynReferral referral) {
-        if (referral.getStatus() == ObgynReferralStatus.CANCELLED
-            || referral.getStatus() == ObgynReferralStatus.COMPLETED) {
-            throw new BusinessException(REFERRAL_ALREADY_CLOSED);
-        }
     }
 
     private void ensureNotCancelled(ObgynReferral referral) {

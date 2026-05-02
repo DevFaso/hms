@@ -176,4 +176,65 @@ public class ObgynReferral extends BaseEntity {
         messages.add(message);
         message.setReferral(this);
     }
+
+    // Business methods (state-machine guarded — illegal transitions throw IllegalStateException)
+    //
+    // SUBMITTED → ACKNOWLEDGED → IN_PROGRESS → COMPLETED
+    // CANCELLED is reachable from any non-terminal status (any side may withdraw).
+    // Terminal states (COMPLETED, CANCELLED) admit no further transitions.
+    //
+    // Intentionally simpler than GeneralReferral: no DRAFT / SCHEDULED / REJECTED
+    // / EXPIRED — the OB-GYN flow always starts as SUBMITTED, never schedules a
+    // discrete appointment slot, and uses cancel(reason) for any decline path.
+
+    public void acknowledge(String planSummary, User assignedObgyn) {
+        requireStatus("acknowledge", ObgynReferralStatus.SUBMITTED);
+        this.status = ObgynReferralStatus.ACKNOWLEDGED;
+        this.acknowledgementTimestamp = LocalDateTime.now();
+        this.planSummary = planSummary;
+        this.obgyn = assignedObgyn;
+    }
+
+    public void start() {
+        requireStatus("start", ObgynReferralStatus.ACKNOWLEDGED);
+        this.status = ObgynReferralStatus.IN_PROGRESS;
+    }
+
+    public void complete(String planSummary, boolean updateCareTeam) {
+        // Allow direct ACKNOWLEDGED → COMPLETED for retro-active close-out where the
+        // midwife never clicked Start before recording the outcome.
+        requireStatus("complete",
+            ObgynReferralStatus.ACKNOWLEDGED, ObgynReferralStatus.IN_PROGRESS);
+        this.status = ObgynReferralStatus.COMPLETED;
+        this.completionTimestamp = LocalDateTime.now();
+        this.planSummary = planSummary;
+        if (updateCareTeam) {
+            this.careTeamUpdatedAt = LocalDateTime.now();
+        }
+    }
+
+    public void cancel(String reason) {
+        if (isTerminal(this.status)) {
+            throw new IllegalStateException(
+                "Cannot cancel referral in terminal status " + this.status);
+        }
+        this.status = ObgynReferralStatus.CANCELLED;
+        this.cancelledTimestamp = LocalDateTime.now();
+        this.cancellationReason = reason;
+    }
+
+    private void requireStatus(String action, ObgynReferralStatus... allowed) {
+        for (ObgynReferralStatus s : allowed) {
+            if (this.status == s) {
+                return;
+            }
+        }
+        throw new IllegalStateException(
+            "Cannot " + action + " referral in status " + this.status);
+    }
+
+    private static boolean isTerminal(ObgynReferralStatus s) {
+        return s == ObgynReferralStatus.COMPLETED
+            || s == ObgynReferralStatus.CANCELLED;
+    }
 }
