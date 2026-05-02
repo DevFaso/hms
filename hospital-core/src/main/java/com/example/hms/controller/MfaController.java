@@ -42,6 +42,8 @@ import java.util.Map;
 public class MfaController {
 
     private static final String AUTHENTICATED_USER_NOT_FOUND = "Authenticated user not found";
+    private static final String NOT_FULLY_AUTHENTICATED =
+            "MFA enrollment requires a fully authenticated session — partial mfaToken is not sufficient.";
 
     private final MfaService mfaService;
     private final UserRepository userRepository;
@@ -52,10 +54,27 @@ public class MfaController {
     private final RefreshTokenCookieService refreshTokenCookieService;
 
     /**
+     * Resolves the authenticated user from the security principal.
+     * Returns 401 with a clear message if the principal is null, which
+     * happens when the caller only holds a partial mfaToken instead of
+     * a full access token. Avoids the historical NullPointerException
+     * that bubbled up as an opaque HTTP 500.
+     */
+    private ResponseEntity<Object> requireFullAuth(UserDetails principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
+        }
+        return null;
+    }
+
+    /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
      */
     @PostMapping("/enroll")
     public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal) {
+        ResponseEntity<Object> authError = requireFullAuth(principal);
+        if (authError != null) return authError;
+
         User user = userRepository.findByUsername(principal.getUsername())
                 .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
 
@@ -84,6 +103,9 @@ public class MfaController {
     public ResponseEntity<Object> verifyEnrollment(
             @AuthenticationPrincipal UserDetails principal,
             @Valid @RequestBody MfaVerifyRequest request) {
+
+        ResponseEntity<Object> authError = requireFullAuth(principal);
+        if (authError != null) return authError;
 
         User user = userRepository.findByUsername(principal.getUsername())
                 .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
@@ -116,6 +138,9 @@ public class MfaController {
      */
     @GetMapping("/status")
     public ResponseEntity<Object> status(@AuthenticationPrincipal UserDetails principal) {
+        ResponseEntity<Object> authError = requireFullAuth(principal);
+        if (authError != null) return authError;
+
         User user = userRepository.findByUsername(principal.getUsername())
                 .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
 

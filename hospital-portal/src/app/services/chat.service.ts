@@ -38,7 +38,6 @@ export interface ChatConversation {
 }
 
 export interface ChatSendRequest {
-  senderId: string;
   recipientId: string;
   content: string;
   attachments?: ChatAttachment[];

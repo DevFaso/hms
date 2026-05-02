@@ -116,7 +116,9 @@ public class UserServiceImpl implements UserService {
         user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         user.setActive(false);
 
-        User saved = userRepository.save(user);
+        // saveAndFlush forces the INSERT to hit the DB before any follow-up
+        // writes — see createNewUser() for the full rationale.
+        User saved = userRepository.saveAndFlush(user);
 
         if (existingUsers == 0) {
             Role superAdmin = getRoleByCode(ROLE_SUPER_ADMIN);
@@ -152,7 +154,12 @@ public class UserServiceImpl implements UserService {
         }
 
         User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
-                .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "User disappeared after save (id=" + saved.getId()
+                                + ", username=" + saved.getUsername()
+                                + "). With saveAndFlush in place this should be unreachable; "
+                                + "if you see it, check for a concurrent delete or a "
+                                + "@Transactional propagation mistake."));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
         return userMapper.toResponseDTO(reloaded, assignments);
@@ -392,7 +399,11 @@ public class UserServiceImpl implements UserService {
     /** Reload user from DB, map to DTO, and attach role counts. */
     private UserResponseDTO reloadAndMap(UUID userId) {
         final User reloaded = userRepository.findByIdWithRolesAndProfiles(userId)
-                .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "User disappeared after save (id=" + userId
+                                + "). With saveAndFlush in createNewUser this should be unreachable; "
+                                + "if you see it, check for a concurrent delete or a "
+                                + "@Transactional propagation mistake on the calling method."));
         final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
         final long roleCount = assignmentRepository.countDistinctRolesByUserId(reloaded.getId());
@@ -545,7 +556,15 @@ public class UserServiceImpl implements UserService {
         // includes the 6-digit confirmation code, temp credentials, and a link to
         // the RoleWelcomeComponent verification page.
 
-        return userRepository.save(u);
+        // saveAndFlush (vs save) forces the INSERT to hit the DB synchronously
+        // here. If a unique constraint or NOT NULL fails, the caller gets a
+        // DataIntegrityViolationException with the actual constraint name —
+        // mapped to a 400 with that cause by GlobalExceptionHandler. With the
+        // previous deferred-flush save(), the violation only surfaced later
+        // (during a flush triggered by a follow-up read), the transaction
+        // rolled back silently, and reloadAndMap() reported the meaningless
+        // "User disappeared after save".
+        return userRepository.saveAndFlush(u);
     }
 
         private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {

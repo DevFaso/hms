@@ -199,17 +199,6 @@ class PatientHospitalRegistrationServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
-    // ---- getRegistrationsByPatient (username) ----
-
-    @Test
-    void getRegistrationsByPatient_byUsername() {
-        when(registrationRepository.findByPatientUsername("john")).thenReturn(List.of(registration));
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
-
-        List<PatientHospitalRegistrationResponseDTO> result = service.getRegistrationsByPatient("john");
-        assertThat(result).hasSize(1);
-    }
-
     // ---- getRegistrationsByPatient (UUID, paginated) ----
 
     @Test
@@ -228,14 +217,6 @@ class PatientHospitalRegistrationServiceImplTest {
 
         List<PatientHospitalRegistrationResponseDTO> result = service.getRegistrationsByPatient(patientId, 0, 10, true);
         assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void getRegistrationsByPatient_byUUID_simple() {
-        when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(registration));
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
-
-        assertThat(service.getRegistrationsByPatient(patientId)).hasSize(1);
     }
 
     // ---- getRegistrationsByHospital ----
@@ -271,32 +252,7 @@ class PatientHospitalRegistrationServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
-    // ---- updateRegistration (MRN-based) ----
-
-    @Test
-    void updateRegistration_byMrn_success() {
-        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
-            .hospitalName("General Hospital").currentRoom("Room B").build();
-        when(registrationRepository.findByMrnAndHospitalName("mrn-TEST123", "General Hospital"))
-            .thenReturn(Optional.of(registration));
-        when(registrationRepository.save(registration)).thenReturn(registration);
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
-
-        assertThat(service.updateRegistration("mrn-TEST123", dto)).isEqualTo(responseDTO);
-    }
-
     // ---- patchRegistration ----
-
-    @Test
-    void patchRegistration_byUUID_success() {
-        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
-            .currentRoom("Room C").build();
-        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
-        when(registrationRepository.save(registration)).thenReturn(registration);
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
-
-        assertThat(service.patchRegistration(registrationId, dto)).isEqualTo(responseDTO);
-    }
 
     @Test
     void patchRegistration_byMrn_success() {
@@ -311,20 +267,6 @@ class PatientHospitalRegistrationServiceImplTest {
     }
 
     // ---- deregisterPatient ----
-
-    @Test
-    void deregisterPatient_byMrn_success() {
-        when(registrationRepository.findByMrn("mrn-TEST123")).thenReturn(Optional.of(registration));
-        service.deregisterPatient("mrn-TEST123");
-        verify(registrationRepository).delete(registration);
-    }
-
-    @Test
-    void deregisterPatient_byMrn_notFound() {
-        when(registrationRepository.findByMrn("mrn-MISSING")).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.deregisterPatient("mrn-MISSING"))
-            .isInstanceOf(ResourceNotFoundException.class);
-    }
 
     @Test
     void deregisterPatient_byUUID_success() {

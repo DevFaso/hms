@@ -99,6 +99,113 @@ $shadow-md:
   color: $text;
   box-shadow: $shadow;
   flex-wrap: wrap;
+
+  // Compact hero — applied for the three workflow-heavy roles (doctor,
+  // receptionist, pharmacist) where keeping action above the fold matters
+  // more than identity. Gated in dashboard.html via
+  //   [class.hero-compact]="isDoctor() || isReceptionist() || isPharmacist()"
+  // so other roles (nurse, admin, lab director, super-admin, patient, etc.)
+  // continue to render the default tall hero. Visually: greeting + name row
+  // collapses to ~half the previous height, calendar-date sub disappears
+  // (the live-clock pill already shows time), the progress ring shrinks,
+  // and the hero-left's child blocks (greeting, meta, doctor-info chips,
+  // search) all flow inline on a wrapping row so the primary CTA on the
+  // right doesn't get isolated.
+  &.hero-compact {
+    align-items: center;
+    padding: 14px 20px;
+    border-radius: 12px;
+    gap: 14px;
+
+    // Don't let hero-left greedy-grow — keeps hero-actions visually adjacent
+    // instead of pushing them to a lonely right edge.
+    .hero-left {
+      flex: 0 1 auto;
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+    }
+
+    .hero-greeting {
+      margin-bottom: 0;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .greeting-tag {
+      font-size: 11px;
+    }
+
+    .hero-name {
+      font-size: 18px;
+      margin: 0;
+    }
+
+    .hero-sub {
+      display: none;
+    }
+
+    .hero-meta,
+    .doctor-hero-info {
+      margin-top: 0;
+    }
+
+    // The default search uses translucent-white-on-white, which is invisible
+    // on the white compact hero. Switch to a slate background with a real
+    // border so it's discoverable.
+    .header-search-inline {
+      background: #f1f5f9;
+      border-color: $border;
+
+      &:focus-within {
+        background: #fff;
+        border-color: $primary;
+      }
+    }
+
+    .header-search-input::placeholder {
+      color: $text-muted;
+      opacity: 1;
+    }
+
+    .hero-actions {
+      padding-top: 0;
+      gap: 6px;
+      margin-left: auto;
+    }
+
+    .hero-btn {
+      padding: 7px 12px;
+      font-size: 12px;
+
+      .material-symbols-outlined {
+        font-size: 16px;
+      }
+    }
+
+    // SVG scales via viewBox; wrap also needs to shrink to match.
+    .progress-ring-wrap,
+    .progress-ring {
+      width: 56px;
+      height: 56px;
+    }
+
+    .ring-pct {
+      font-size: 14px;
+      small {
+        font-size: 9px;
+      }
+    }
+
+    .ring-sub,
+    .ring-caption {
+      font-size: 9px;
+    }
+  }
 }
 
 .hero-left {
@@ -426,6 +533,55 @@ $shadow-md:
     background: #fff5f5;
     border-color: #fca5a5;
     animation: pulse-red 2s ease-in-out infinite;
+  }
+
+  // Always-on marker for safety-critical tiles (critical_labs, safety_alerts).
+  // Thicker red left border so doctors learn the spatial position even when 0.
+  &.stat-card-critical-tier {
+    border-left-width: 4px;
+    border-left-color: #dc2626;
+  }
+
+  // Non-critical tile that has work in it — subtle highlight with the tile's
+  // own accent color, raised border weight, full opacity.
+  &.stat-card-active {
+    border-left-width: 4px;
+    background: linear-gradient(
+      135deg,
+      $card 0%,
+      $card 65%,
+      color-mix(in srgb, var(--stat-bg, #dbeafe) 80%, transparent) 100%
+    );
+  }
+
+  // Zero-value tiles recede so non-zero ones pop visually.
+  // We deliberately do NOT use `opacity` on the whole card — that would
+  // dim the value/label text and drop contrast below WCAG AA (4.5:1).
+  // Instead we recede via background + border weight, fade only the
+  // decorative icon, and leave text colours fully opaque.
+  &.stat-card-zero {
+    box-shadow: none;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    border-left-color: #cbd5e1;
+
+    .stat-icon-wrap {
+      opacity: 0.6;
+    }
+
+    .stat-value {
+      color: $text-muted;
+      font-weight: 600;
+    }
+
+    &:hover {
+      box-shadow: $shadow;
+      border-color: $border;
+
+      .stat-icon-wrap {
+        opacity: 1;
+      }
+    }
   }
 }
 
@@ -2880,6 +3036,18 @@ $shadow-md:
 .qa-grid-compact {
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
   gap: 8px !important;
+}
+
+// Full-width quick-actions strip that sits above the worklist on the doctor
+// dashboard. Wider tiles, more breathing room than the side-rail compact grid.
+.quick-actions-strip {
+  margin-bottom: 14px;
+
+  .qa-grid-strip {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+    gap: 10px !important;
+    padding: 12px 16px;
+  }
 }
 
 .qa-card-compact {

@@ -106,18 +106,6 @@ public class JwtTokenProvider {
     @Getter
     private boolean asymmetric;
 
-    /**
-     * @deprecated Use {@link #getVerificationKey()} instead. Kept for backward compatibility.
-     */
-    @Deprecated(since = "6.0", forRemoval = true)
-    public SecretKey getSecretKey() {
-        if (verificationKey instanceof SecretKey sk) {
-            return sk;
-        }
-        throw new UnsupportedOperationException(
-            "getSecretKey() is not supported when using asymmetric (RS256) JWT signing. Use getVerificationKey() instead.");
-    }
-
     public JwtTokenProvider(HospitalUserDetailsService userDetailsService,
                              TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor) {
         this.userDetailsService = userDetailsService;
