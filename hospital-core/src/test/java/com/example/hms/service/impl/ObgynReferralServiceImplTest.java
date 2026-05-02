@@ -178,15 +178,44 @@ class ObgynReferralServiceImplTest {
     }
 
     @Test void acknowledgeReferral_closedReferral_throws() {
+        // Closed referrals are now blocked by the entity guard, which throws
+        // IllegalStateException with a deterministic message — the previous
+        // BusinessException("obgynReferral.closed") path is gone.
         referral.setStatus(ObgynReferralStatus.CANCELLED);
         ObgynReferralAcknowledgeRequestDTO req = new ObgynReferralAcknowledgeRequestDTO();
         req.setObgynUserId(userId);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.acknowledgeReferral(referralId, req, "admin"))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("acknowledge");
+    }
+
+    @Test void startReferralSuccess() {
+        // ACKNOWLEDGED → IN_PROGRESS is the new transition this PR adds.
+        referral.setStatus(ObgynReferralStatus.ACKNOWLEDGED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralMapper.toResponseDTO(any())).thenReturn(
+            ObgynReferralResponseDTO.builder().id(referralId).status(ObgynReferralStatus.IN_PROGRESS).build());
+        ObgynReferralResponseDTO result = service.startReferral(referralId, "admin");
+        assertThat(result.getStatus()).isEqualTo(ObgynReferralStatus.IN_PROGRESS);
+        assertThat(referral.getStatus()).isEqualTo(ObgynReferralStatus.IN_PROGRESS);
+    }
+
+    @Test void startReferralFromSubmittedThrows() {
+        // start() requires ACKNOWLEDGED — direct SUBMITTED → IN_PROGRESS must be blocked
+        // because it would bypass the receiving-midwife assignment captured in acknowledge().
+        referral.setStatus(ObgynReferralStatus.SUBMITTED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        assertThatThrownBy(() -> service.startReferral(referralId, "admin"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("start");
     }
 
     @Test void completeReferral_success() {
+        // Now requires ACKNOWLEDGED or IN_PROGRESS — direct SUBMITTED → COMPLETED is no
+        // longer permitted (would skip the receiving-midwife assignment).
+        referral.setStatus(ObgynReferralStatus.ACKNOWLEDGED);
         ObgynReferralCompletionRequestDTO req = new ObgynReferralCompletionRequestDTO();
         req.setPlanSummary("Completed plan"); req.setUpdateCareTeam(true);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -209,7 +238,8 @@ class ObgynReferralServiceImplTest {
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("terminal status");
     }
 
     @Test void addMessage_success() {
