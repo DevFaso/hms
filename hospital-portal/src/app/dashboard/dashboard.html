@@ -1442,6 +1442,13 @@
           [class.stat-card-alert]="
             +stat.value > 0 && (stat.key === 'critical_labs' || stat.key === 'safety_alerts')
           "
+          [class.stat-card-critical-tier]="
+            stat.key === 'critical_labs' || stat.key === 'safety_alerts'
+          "
+          [class.stat-card-zero]="+stat.value === 0"
+          [class.stat-card-active]="
+            +stat.value > 0 && stat.key !== 'critical_labs' && stat.key !== 'safety_alerts'
+          "
           [routerLink]="stat.route ?? null"
           [style.--stat-color]="stat.color"
           [style.--stat-bg]="stat.bgColor"
@@ -1456,6 +1463,34 @@
         </a>
       }
     </section>
+
+    <!-- ── Quick Actions (promoted above the kanban) ── -->
+    @if (quickActions().length > 0) {
+      <section class="card quick-actions-strip">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon">bolt</span>
+            <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+          </div>
+        </div>
+        <div class="qa-grid qa-grid-compact qa-grid-strip">
+          @for (action of quickActions(); track action.label) {
+            <a
+              class="qa-card qa-card-compact"
+              [routerLink]="action.route"
+              [queryParams]="action.queryParams ?? null"
+              [style.--qa-color]="action.color"
+              [style.--qa-bg]="action.bgColor"
+            >
+              <div class="qa-icon-wrap">
+                <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+              </div>
+              <span class="qa-label">{{ action.label }}</span>
+            </a>
+          }
+        </div>
+      </section>
+    }
 
     <div class="clinical-workspace">
       <div class="workspace-left">
@@ -1552,34 +1587,6 @@
             </div>
           }
         </section>
-
-        <!-- ── Quick Actions (compact) ── -->
-        @if (quickActions().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
-              </div>
-            </div>
-            <div class="qa-grid qa-grid-compact" style="padding: 12px 16px">
-              @for (action of quickActions(); track action.label) {
-                <a
-                  class="qa-card qa-card-compact"
-                  [routerLink]="action.route"
-                  [queryParams]="action.queryParams ?? null"
-                  [style.--qa-color]="action.color"
-                  [style.--qa-bg]="action.bgColor"
-                >
-                  <div class="qa-icon-wrap">
-                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-                  </div>
-                  <span class="qa-label">{{ action.label }}</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
       </div>
 
       <!-- RIGHT RAIL -->
