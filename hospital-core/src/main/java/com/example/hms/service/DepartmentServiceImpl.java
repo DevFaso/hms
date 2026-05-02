@@ -40,6 +40,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -232,7 +233,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponseDTO updateDepartment(UUID id, DepartmentRequestDTO dto, Locale locale) {
         Department department = findDepartmentOrThrow(id, locale);
-        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnEntity(department, locale);
         enforceHospitalScopeOnDto(dto);
         validateDepartmentRequest(dto, locale);
 
@@ -265,7 +266,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public DepartmentWithStaffDTO getDepartmentWithStaff(UUID departmentId, Locale locale) {
         Department department = findDepartmentOrThrow(departmentId, locale);
-        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnEntity(department, locale);
 
         List<StaffMinimalDTO> staffList = department.getStaffMembers() != null ?
                 department.getStaffMembers().stream()
@@ -308,7 +309,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{id}, locale)
                 ));
 
-        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnEntity(department, locale);
         return buildLocalizedResponse(department, locale);
     }
 
@@ -320,7 +321,7 @@ public class DepartmentServiceImpl implements DepartmentService {
                         messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND, new Object[]{departmentId}, locale)
                 ));
 
-        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnEntity(department, locale);
 
         int totalStaff = department.getStaffMembers() != null ? department.getStaffMembers().size() : 0;
         assert department.getStaffMembers() != null;
@@ -341,7 +342,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Department department = departmentRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Department not found"));
 
-        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnEntity(department, locale);
 
         if (departmentRepository.hasStaffMembers(id)) {
             throw new BusinessRuleException(
@@ -383,7 +384,9 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (dto.getHospitalId() != null && !dto.getHospitalId().equals(activeHospitalId)) {
             log.warn("[dept:tenantGuard] User {} attempted cross-hospital operation: dto.hospitalId={} activeHospital={}",
                     roleValidator.getCurrentUserId(), dto.getHospitalId(), activeHospitalId);
-            throw new BusinessRuleException("You may only manage departments within your assigned hospital.");
+            // 403 — handled by GlobalExceptionHandler#handleAccessDenied. BusinessRuleException
+            // is unmapped and would surface as a 500.
+            throw new AccessDeniedException("You may only manage departments within your assigned hospital.");
         }
 
         // Force the DTO to carry the caller's active hospital
@@ -393,8 +396,12 @@ public class DepartmentServiceImpl implements DepartmentService {
     /**
      * Tenant-isolation guard for entity-level operations (update / delete / read-by-id).
      * Ensures the existing department belongs to the caller's active hospital.
+     *
+     * <p>Throws {@link ResourceNotFoundException} (rather than 403) so cross-hospital
+     * existence is not leaked. The localized message is rendered in the caller's locale;
+     * pass {@code null} to fall back to {@link #DEFAULT_LOCALE}.
      */
-    private void enforceHospitalScopeOnEntity(Department department) {
+    private void enforceHospitalScopeOnEntity(Department department, Locale locale) {
         if (roleValidator.isSuperAdminFromAuth()) {
             return;
         }
@@ -408,7 +415,8 @@ public class DepartmentServiceImpl implements DepartmentService {
                     department.getHospital().getId(), activeHospitalId);
             throw new ResourceNotFoundException(
                     messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND,
-                            new Object[]{department.getId()}, DEFAULT_LOCALE));
+                            new Object[]{department.getId()},
+                            locale != null ? locale : DEFAULT_LOCALE));
         }
     }
 
@@ -424,7 +432,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (requestedHospitalId != null && !requestedHospitalId.equals(activeHospitalId)) {
             log.warn("[dept:tenantGuard] User {} attempted to address hospital {} but is scoped to {}",
                     roleValidator.getCurrentUserId(), requestedHospitalId, activeHospitalId);
-            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
+            throw new AccessDeniedException("You may only access departments within your assigned hospital.");
         }
     }
 
@@ -441,7 +449,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (filter.getHospitalId() != null && !filter.getHospitalId().equals(activeHospitalId)) {
             log.warn("[dept:tenantGuard] User {} attempted to filter by hospital {} but is scoped to {}",
                     roleValidator.getCurrentUserId(), filter.getHospitalId(), activeHospitalId);
-            throw new BusinessRuleException("You may only access departments within your assigned hospital.");
+            throw new AccessDeniedException("You may only access departments within your assigned hospital.");
         }
         filter.setHospitalId(activeHospitalId);
     }
