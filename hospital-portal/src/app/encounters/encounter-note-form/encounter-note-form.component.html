@@ -1,0 +1,325 @@
+<form #noteForm="ngForm" (ngSubmit)="submit(noteForm)" class="enc-note-form" novalidate>
+  <header class="enc-note-form__header">
+    <div class="enc-note-form__title">
+      <h3>Encounter note</h3>
+      <p>Per-section documentation. Type <code>.</code> in any section to expand a SmartPhrase macro.</p>
+    </div>
+    <div class="enc-note-form__template" role="radiogroup" aria-label="Note template">
+      <button
+        type="button"
+        *ngFor="let tpl of templates"
+        class="enc-note-form__template-btn"
+        [class.is-active]="form().template === tpl"
+        (click)="setTemplate(tpl)"
+      >
+        {{ tpl }}
+      </button>
+    </div>
+  </header>
+
+  <fieldset class="enc-note-form__group">
+    <legend>Visit context</legend>
+
+    <label class="enc-note-form__field">
+      <span>Chief complaint</span>
+      <textarea
+        name="chiefComplaint"
+        rows="2"
+        data-note-field="chiefComplaint"
+        [ngModel]="form().chiefComplaint"
+        (input)="onTextareaInput('chiefComplaint', $event)"
+        (keydown)="onTextareaKeydown('chiefComplaint', $event)"
+        placeholder="Patient's reason for the visit (in their own words)"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'chiefComplaint' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>History of present illness (HPI)</span>
+      <textarea
+        name="hpi"
+        rows="3"
+        data-note-field="historyOfPresentIllness"
+        [ngModel]="form().historyOfPresentIllness"
+        (input)="onTextareaInput('historyOfPresentIllness', $event)"
+        (keydown)="onTextareaKeydown('historyOfPresentIllness', $event)"
+        placeholder="Onset, location, duration, character, aggravating / relieving factors, severity, …"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'historyOfPresentIllness' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>Review of systems (ROS)</span>
+      <textarea
+        name="ros"
+        rows="3"
+        data-note-field="reviewOfSystems"
+        [ngModel]="form().reviewOfSystems"
+        (input)="onTextareaInput('reviewOfSystems', $event)"
+        (keydown)="onTextareaKeydown('reviewOfSystems', $event)"
+        placeholder="Type .normros to insert a normal-ROS template"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'reviewOfSystems' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>Physical exam</span>
+      <textarea
+        name="exam"
+        rows="3"
+        data-note-field="physicalExam"
+        [ngModel]="form().physicalExam"
+        (input)="onTextareaInput('physicalExam', $event)"
+        (keydown)="onTextareaKeydown('physicalExam', $event)"
+        placeholder="Type .normexam to insert a normal-exam template"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'physicalExam' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>Diagnostic results</span>
+      <textarea
+        name="diag"
+        rows="2"
+        data-note-field="diagnosticResults"
+        [ngModel]="form().diagnosticResults"
+        (input)="onTextareaInput('diagnosticResults', $event)"
+        (keydown)="onTextareaKeydown('diagnosticResults', $event)"
+        placeholder="Labs, imaging, point-of-care results"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'diagnosticResults' }"
+      ></ng-container>
+    </label>
+  </fieldset>
+
+  <fieldset class="enc-note-form__group">
+    <legend>{{ form().template }} sections</legend>
+
+    <label class="enc-note-form__field">
+      <span>S — Subjective</span>
+      <textarea
+        name="subjective"
+        rows="3"
+        data-note-field="subjective"
+        [ngModel]="form().subjective"
+        (input)="onTextareaInput('subjective', $event)"
+        (keydown)="onTextareaKeydown('subjective', $event)"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'subjective' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>O — Objective</span>
+      <textarea
+        name="objective"
+        rows="3"
+        data-note-field="objective"
+        [ngModel]="form().objective"
+        (input)="onTextareaInput('objective', $event)"
+        (keydown)="onTextareaKeydown('objective', $event)"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'objective' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>A — Assessment</span>
+      <textarea
+        name="assessment"
+        rows="3"
+        data-note-field="assessment"
+        [ngModel]="form().assessment"
+        (input)="onTextareaInput('assessment', $event)"
+        (keydown)="onTextareaKeydown('assessment', $event)"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'assessment' }"
+      ></ng-container>
+    </label>
+
+    <label class="enc-note-form__field">
+      <span>P — Plan</span>
+      <textarea
+        name="plan"
+        rows="3"
+        data-note-field="plan"
+        [ngModel]="form().plan"
+        (input)="onTextareaInput('plan', $event)"
+        (keydown)="onTextareaKeydown('plan', $event)"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'plan' }"
+      ></ng-container>
+    </label>
+
+    <ng-container *ngIf="isSoapie()">
+      <label class="enc-note-form__field">
+        <span>I — Implementation</span>
+        <textarea
+          name="implementation"
+          rows="2"
+          data-note-field="implementation"
+          [ngModel]="form().implementation"
+          (input)="onTextareaInput('implementation', $event)"
+          (keydown)="onTextareaKeydown('implementation', $event)"
+        ></textarea>
+        <ng-container
+          *ngTemplateOutlet="popupTpl; context: { fieldKey: 'implementation' }"
+        ></ng-container>
+      </label>
+
+      <label class="enc-note-form__field">
+        <span>E — Evaluation</span>
+        <textarea
+          name="evaluation"
+          rows="2"
+          data-note-field="evaluation"
+          [ngModel]="form().evaluation"
+          (input)="onTextareaInput('evaluation', $event)"
+          (keydown)="onTextareaKeydown('evaluation', $event)"
+        ></textarea>
+        <ng-container
+          *ngTemplateOutlet="popupTpl; context: { fieldKey: 'evaluation' }"
+        ></ng-container>
+      </label>
+    </ng-container>
+  </fieldset>
+
+  <fieldset class="enc-note-form__group">
+    <legend>Patient instructions</legend>
+    <label class="enc-note-form__field">
+      <textarea
+        name="instructions"
+        rows="3"
+        data-note-field="patientInstructions"
+        [ngModel]="form().patientInstructions"
+        (input)="onTextareaInput('patientInstructions', $event)"
+        (keydown)="onTextareaKeydown('patientInstructions', $event)"
+        placeholder="Discharge instructions handed to the patient"
+      ></textarea>
+      <ng-container
+        *ngTemplateOutlet="popupTpl; context: { fieldKey: 'patientInstructions' }"
+      ></ng-container>
+    </label>
+  </fieldset>
+
+  <fieldset class="enc-note-form__group">
+    <legend>Late entry &amp; attestations</legend>
+    <label class="enc-note-form__check">
+      <input
+        type="checkbox"
+        name="lateEntry"
+        [checked]="!!form().lateEntry"
+        (change)="toggleLateEntry()"
+      />
+      <span>This is a late entry</span>
+    </label>
+    <label class="enc-note-form__field" *ngIf="form().lateEntry">
+      <span>Event occurred at</span>
+      <input
+        type="datetime-local"
+        name="eventOccurredAt"
+        [value]="form().eventOccurredAt ?? ''"
+        (change)="setEventOccurredAt($any($event.target).value)"
+      />
+    </label>
+    <div class="enc-note-form__attestations">
+      <label class="enc-note-form__check">
+        <input
+          type="checkbox"
+          name="attestAccuracy"
+          [checked]="!!form().attestAccuracy"
+          (change)="toggleAttestation('attestAccuracy')"
+        />
+        <span>I attest the documentation is accurate to the best of my knowledge.</span>
+      </label>
+      <label class="enc-note-form__check">
+        <input
+          type="checkbox"
+          name="attestNoAbbreviations"
+          [checked]="!!form().attestNoAbbreviations"
+          (change)="toggleAttestation('attestNoAbbreviations')"
+        />
+        <span>I have not used dangerous / Do-Not-Use abbreviations.</span>
+      </label>
+      <label class="enc-note-form__check">
+        <input
+          type="checkbox"
+          name="attestSpellCheck"
+          [checked]="!!form().attestSpellCheck"
+          (change)="toggleAttestation('attestSpellCheck')"
+        />
+        <span>I have spell-checked the documentation.</span>
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset class="enc-note-form__group">
+    <legend>Signature</legend>
+    <p class="enc-note-form__hint">
+      Filling in a signer name closes the note for further edits when saved.
+    </p>
+    <label class="enc-note-form__field">
+      <span>Signer name</span>
+      <input
+        type="text"
+        name="signedByName"
+        [ngModel]="form().signedByName"
+        (ngModelChange)="patch({ signedByName: $event })"
+        placeholder="Dr. Ama Owusu"
+      />
+    </label>
+    <label class="enc-note-form__field">
+      <span>Credentials</span>
+      <input
+        type="text"
+        name="signedByCredentials"
+        [ngModel]="form().signedByCredentials"
+        (ngModelChange)="patch({ signedByCredentials: $event })"
+        placeholder="MD, MBChB, BSN, …"
+      />
+    </label>
+  </fieldset>
+
+  <footer class="enc-note-form__footer">
+    <button type="button" class="btn btn--ghost" (click)="cancelEdit()" [disabled]="saving">
+      Cancel
+    </button>
+    <button type="submit" class="btn btn--primary" [disabled]="saving">
+      {{ saving ? 'Saving…' : 'Save note' }}
+    </button>
+  </footer>
+</form>
+
+<ng-template #popupTpl let-fieldKey="fieldKey">
+  <div
+    class="enc-note-form__popup"
+    *ngIf="popup() && popup()!.fieldKey === fieldKey"
+    role="listbox"
+  >
+    <button
+      *ngFor="let suggestion of popup()!.suggestions; let i = index"
+      type="button"
+      class="enc-note-form__popup-item"
+      [class.is-highlighted]="i === popup()!.highlightedIndex"
+      (mousedown)="$event.preventDefault()"
+      (click)="pickSuggestion(i, fieldKey)"
+    >
+      <strong>{{ suggestion.trigger }}</strong>
+      <span>{{ suggestion.title }}</span>
+      <small>{{ suggestion.scope }}</small>
+    </button>
+  </div>
+</ng-template>
