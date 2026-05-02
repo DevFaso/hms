@@ -109,16 +109,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
     @Override
     @Transactional(readOnly = true)
-    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(String patientUsername) {
-        log.debug("Fetching registrations for patient username: {}", patientUsername);
-        return registrationRepository.findByPatientUsername(patientUsername)
-            .stream()
-            .map(mapper::toResponseDTO)
-            .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(String patientUsername, int page, int size, Boolean active) {
         log.debug("Fetching registrations for patient username: {}, page: {}, size: {}, active: {}", patientUsername, page, size, active);
 
@@ -157,15 +147,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
     @Override
     @Transactional(readOnly = true)
-    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(UUID patientId) {
-        log.debug("Fetch by patientId={}", patientId);
-        return registrationRepository.findByPatientId(patientId).stream()
-            .map(mapper::toResponseDTO)
-            .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
     public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByHospital(
         UUID hospitalId, int page, int size, Boolean active
     ) {
@@ -190,22 +171,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     }
 
     // -------------------- UPDATE --------------------
-    // MRI-based (kept)
-    @Override
-    @Transactional
-    public PatientHospitalRegistrationResponseDTO updateRegistration(String mrn, PatientHospitalRegistrationRequestDTO dto) {
-        log.debug("Updating registration mrn: {}", mrn);
-
-        PatientHospitalRegistration registration = registrationRepository.findByMrnAndHospitalName(mrn, dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_MRN + mrn));
-
-        applyEditableFields(registration, dto, false);
-        PatientHospitalRegistration updated = registrationRepository.save(registration);
-
-        log.info("✅ Updated registration mrn: {}", mrn);
-        return mapper.toResponseDTO(updated);
-    }
-
     @Override
     public PatientHospitalRegistrationResponseDTO patchRegistration(String mrn, PatientHospitalRegistrationRequestDTO dto) {
         log.debug("Patching registration mrn: {}", mrn);
@@ -219,20 +184,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         return mapper.toResponseDTO(updated);
     }
 
-    // UUID-based (primary for your controller)
-    @Override
-    @Transactional
-    public void deregisterPatient(String mrn) {
-        log.debug("Deregistering patient registration mrn: {}", mrn);
-
-        PatientHospitalRegistration registration = registrationRepository.findByMrn(mrn)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_MRN + mrn));
-
-        registrationRepository.delete(registration);
-        log.info("🗑️ Deregistered Patient Registration mrn '{}'", mrn);
-    }
-
-    // UUID-based (primary for your controller)
     @Override
     @Transactional
     public void deregisterPatient(UUID id) {
@@ -251,15 +202,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         PatientHospitalRegistration registration = registrationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
         applyEditableFields(registration, dto, false);
-        return mapper.toResponseDTO(registrationRepository.save(registration));
-    }
-
-    @Override
-    public PatientHospitalRegistrationResponseDTO patchRegistration(UUID id, PatientHospitalRegistrationRequestDTO dto) {
-        log.debug("Patch by registration UUID={}", id);
-        PatientHospitalRegistration registration = registrationRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
-        applyEditableFields(registration, dto, true);
         return mapper.toResponseDTO(registrationRepository.save(registration));
     }
 

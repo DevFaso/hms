@@ -80,7 +80,6 @@ describe('ChatService', () => {
 
   it('forwards attachments on /chat/send when present', (done) => {
     const send: ChatSendRequest = {
-      senderId: 's',
       recipientId: 'r',
       content: 'hi',
       attachments: [{ storageKey: 'k', kind: 'PHOTO' }],
@@ -106,7 +105,7 @@ describe('ChatService', () => {
   });
 
   it('omits attachments key entirely when caller passes none', (done) => {
-    const send: ChatSendRequest = { senderId: 's', recipientId: 'r', content: 'hi' };
+    const send: ChatSendRequest = { recipientId: 'r', content: 'hi' };
     service.sendMessage(send).subscribe(() => done());
     const req = httpMock.expectOne('/chat/send');
     expect('attachments' in req.request.body).toBe(false);
