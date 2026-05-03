@@ -134,7 +134,21 @@
       "STATUS": "Estado",
       "FROM_DATE": "Desde",
       "TO_DATE": "Hasta",
-      "ANY": "Cualquiera"
+      "ANY": "Cualquiera",
+      "TENANT_REGION": "Región del inquilino"
+    },
+    "EXPORT": {
+      "CSV": "Exportar CSV",
+      "FAILED": "La exportación CSV falló. Inténtelo de nuevo."
+    },
+    "SAVED": {
+      "LABEL": "Búsquedas guardadas",
+      "EMPTY": "Aún no hay búsquedas guardadas — nombre los filtros actuales y guarde.",
+      "NAME_PLACEHOLDER": "Nombre este conjunto de filtros",
+      "SAVE_CURRENT": "Guardar",
+      "DELETE": "Eliminar búsqueda guardada",
+      "NAME_REQUIRED": "El nombre es obligatorio.",
+      "SAVE_FAILED": "No se pudo guardar la búsqueda."
     },
     "COL": {
       "TIME": "Hora",
@@ -177,6 +191,10 @@
       "SEVERITY": "Gravedad",
       "ACTION": "Enviar difusión"
     }
+  },
+  "EMERGENCY_BANNER": {
+    "ISSUED_BY": "Emitido por",
+    "DISMISS": "Descartar difusión"
   },
   "SUBSCRIPTIONS": {
     "TITLE": "Planes de suscripción",

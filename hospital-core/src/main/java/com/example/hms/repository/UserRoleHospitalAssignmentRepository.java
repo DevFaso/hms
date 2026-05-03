@@ -169,6 +169,19 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     @Query("SELECT a FROM UserRoleHospitalAssignment a WHERE a.user.id IN :userIds")
     List<UserRoleHospitalAssignment> findByUserIdIn(@Param("userIds") Set<UUID> userIds);
 
+    /**
+     * MVP-7b — distinct active user ids for one hospital, used by
+     * {@code EmergencyControlService.forceMfaReenrol} to narrow an MFA
+     * reset to one site instead of every enrolled user platform-wide.
+     */
+    @Query("""
+        select distinct a.user.id
+          from UserRoleHospitalAssignment a
+         where a.active = true
+           and a.hospital.id = :hospitalId
+        """)
+    Set<UUID> findActiveUserIdsByHospitalId(@Param("hospitalId") UUID hospitalId);
+
     /* ------------ Lightweight projection for lists (optional) ------------ */
 
     interface AssignmentSummary {

@@ -12,6 +12,8 @@ import { NotificationService, Notification } from '../services/notification.serv
 import { LockScreenComponent } from '../lock-screen/lock-screen';
 import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
 import { ImpersonationService } from '../services/impersonation.service';
+import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadcast-banner';
+import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { NavOrderService } from './nav-order.service';
 
 interface NavItem {
@@ -33,6 +35,7 @@ interface NavItem {
     RouterLinkActive,
     LockScreenComponent,
     ImpersonationBannerComponent,
+    EmergencyBroadcastBannerComponent,
     TranslateModule,
   ],
   templateUrl: './shell.html',
@@ -48,6 +51,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
   private readonly impersonation = inject(ImpersonationService);
+  private readonly emergencyBroadcast = inject(EmergencyBroadcastService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -673,6 +677,10 @@ export class ShellComponent implements OnInit, OnDestroy {
     // silently dropping it.
     this.impersonation.refreshActive().subscribe({ error: () => undefined });
 
+    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
+    // broadcast surfaces in the banner across every authenticated route.
+    this.emergencyBroadcast.connect();
+
     const username = this.auth.getSubject();
     if (username) {
       this.notifService.connectWebSocket();
@@ -693,6 +701,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
+    // MVP-7b — release the emergency-broadcast STOMP socket on shell teardown.
+    this.emergencyBroadcast.disconnect();
     this.idle.stop();
   }
 

@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
@@ -150,7 +151,8 @@ class SuperAdminAuditSearchServiceImplTest {
             "USER",
             "res-1",
             LocalDateTime.now().minusDays(1),
-            LocalDateTime.now());
+            LocalDateTime.now(),
+            null);
 
         service.search(filter, PageRequest.of(0, 10));
 
@@ -168,7 +170,7 @@ class SuperAdminAuditSearchServiceImplTest {
             .thenReturn(Page.empty());
 
         AuditSearchFilter filter = new AuditSearchFilter(
-            null, "  ", List.of(), null, null, null, null, "  ", "  ", null, null);
+            null, "  ", List.of(), null, null, null, null, "  ", "  ", null, null, null);
 
         AuditSearchPageDTO out = service.search(filter, PageRequest.of(0, 10));
 
@@ -200,7 +202,8 @@ class SuperAdminAuditSearchServiceImplTest {
             "USER",
             "res-1",
             LocalDateTime.now().minusDays(1),
-            LocalDateTime.now());
+            LocalDateTime.now(),
+            null);
 
         service.search(filter, PageRequest.of(0, 10));
 
@@ -220,12 +223,68 @@ class SuperAdminAuditSearchServiceImplTest {
             .thenReturn(Page.empty());
 
         AuditSearchFilter filter = new AuditSearchFilter(
-            UUID.randomUUID(), null, null, null, null, null, null, null, null, null, null);
+            UUID.randomUUID(), null, null, null, null, null, null, null, null, null, null, null);
 
         service.search(filter, PageRequest.of(0, 10));
 
         Specification<AuditEventLog> spec = captureSpec();
         invokeSpec(spec, false);
+    }
+
+    @Test
+    @DisplayName("MVP-9b — tenantRegion filter triggers a hospital→organization join")
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void tenantRegionFilterJoinsThroughHospitalAndOrganization() {
+        when(repository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(Page.empty());
+
+        AuditSearchFilter filter = new AuditSearchFilter(
+            null, null, null, null, null, null, null, null, null, null, null,
+            OrganizationRegion.EU);
+
+        service.search(filter, PageRequest.of(0, 10));
+
+        Specification<AuditEventLog> spec = captureSpec();
+        invokeSpec(spec, true);
+    }
+
+    @Test
+    @DisplayName("MVP-8b — exportCsv emits header + escaped rows for the same filter")
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void exportCsvProducesHeaderAndRows() {
+        AuditEventLog row = event();
+        // event() already populates resourceId="res-1" and the standard
+        // SECURITY_ALERT_TRIGGERED type — assert against fields the lite
+        // mapper actually surfaces (the userName fallback path varies by
+        // mapper config and is exercised by the lite-mapper tests, not here).
+        when(repository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(new PageImpl<>(List.of(row)));
+
+        byte[] bytes = service.exportCsv(AuditSearchFilter.empty(), 100);
+        String csv = new String(bytes);
+
+        assertThat(csv)
+            .startsWith("eventTimestamp,eventType,userName,roleName,hospitalName,")
+            .contains(AuditEventType.SECURITY_ALERT_TRIGGERED.name())
+            .contains("res-1");
+    }
+
+    @Test
+    @DisplayName("MVP-8b — exportCsv clamps maxRows into the safe range [1, 50_000]")
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void exportCsvClampsMaxRows() {
+        when(repository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(Page.empty());
+
+        // Negative maxRows would be a bug; clamp to 1. Excessive maxRows clamps to 50_000.
+        service.exportCsv(AuditSearchFilter.empty(), -5);
+        ArgumentCaptor<PageRequest> pageCaptor = ArgumentCaptor.forClass(PageRequest.class);
+        verify(repository).findAll(any(Specification.class), pageCaptor.capture());
+        assertThat(pageCaptor.getValue().getPageSize()).isEqualTo(1);
+
+        service.exportCsv(AuditSearchFilter.empty(), 1_000_000);
+        verify(repository, atLeastOnce()).findAll(any(Specification.class), pageCaptor.capture());
+        assertThat(pageCaptor.getValue().getPageSize()).isEqualTo(50_000);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

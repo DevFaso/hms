@@ -134,7 +134,21 @@
       "STATUS": "Status",
       "FROM_DATE": "From",
       "TO_DATE": "To",
-      "ANY": "Any"
+      "ANY": "Any",
+      "TENANT_REGION": "Tenant region"
+    },
+    "EXPORT": {
+      "CSV": "Export CSV",
+      "FAILED": "CSV export failed. Try again."
+    },
+    "SAVED": {
+      "LABEL": "Saved searches",
+      "EMPTY": "No saved searches yet — name the current filters and save.",
+      "NAME_PLACEHOLDER": "Name this filter set",
+      "SAVE_CURRENT": "Save current",
+      "DELETE": "Delete saved search",
+      "NAME_REQUIRED": "Name is required.",
+      "SAVE_FAILED": "Could not save the search."
     },
     "COL": {
       "TIME": "Time",
@@ -177,6 +191,10 @@
       "SEVERITY": "Severity",
       "ACTION": "Send broadcast"
     }
+  },
+  "EMERGENCY_BANNER": {
+    "ISSUED_BY": "Issued by",
+    "DISMISS": "Dismiss broadcast"
   },
   "SUBSCRIPTIONS": {
     "TITLE": "Subscription Plans",

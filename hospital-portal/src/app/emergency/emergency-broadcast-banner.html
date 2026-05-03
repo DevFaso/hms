@@ -1,0 +1,30 @@
+@if (visible()) {
+  <div
+    class="emergency-broadcast"
+    [class]="severityClass()"
+    role="alert"
+    data-test="emergency-broadcast"
+  >
+    <span class="material-symbols-outlined banner-icon" aria-hidden="true">campaign</span>
+    <div class="banner-body">
+      <div class="banner-message">{{ frame()?.message }}</div>
+      <div class="banner-meta">
+        <span>{{ 'EMERGENCY_BANNER.ISSUED_BY' | translate }} {{ frame()?.issuedBy || '—' }}</span>
+        @if (frame()?.issuedAt) {
+          <span>· {{ frame()?.issuedAt | date: 'short' }}</span>
+        }
+        @if (frame()?.severity) {
+          <span class="severity-tag">{{ frame()?.severity }}</span>
+        }
+      </div>
+    </div>
+    <button
+      type="button"
+      class="dismiss-btn"
+      (click)="dismiss()"
+      [attr.aria-label]="'EMERGENCY_BANNER.DISMISS' | translate"
+    >
+      <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+  </div>
+}

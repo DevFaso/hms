@@ -10,6 +10,51 @@
     </a>
   </div>
 
+  <!-- MVP-8b — saved-search strip. Per-operator (localStorage); server-side
+       persistence + sharing is deferred to MVP-8c. -->
+  <section class="saved-strip" data-test="saved-strip">
+    <div class="saved-row">
+      <strong class="saved-label">{{ 'AUDIT_SEARCH.SAVED.LABEL' | translate }}</strong>
+      @if (savedSearches().length === 0) {
+        <span class="saved-empty">{{ 'AUDIT_SEARCH.SAVED.EMPTY' | translate }}</span>
+      } @else {
+        @for (saved of savedSearches(); track saved.id) {
+          <span class="saved-chip" data-test="saved-chip">
+            <button type="button" class="saved-chip-load" (click)="applySaved(saved)">
+              {{ saved.name }}
+            </button>
+            <button
+              type="button"
+              class="saved-chip-delete"
+              [attr.aria-label]="'AUDIT_SEARCH.SAVED.DELETE' | translate"
+              (click)="deleteSaved(saved)"
+            >
+              ×
+            </button>
+          </span>
+        }
+      }
+    </div>
+    <div class="saved-row">
+      <input
+        type="text"
+        class="saved-name-input"
+        [ngModel]="newSavedSearchName()"
+        (ngModelChange)="newSavedSearchName.set($event)"
+        [placeholder]="'AUDIT_SEARCH.SAVED.NAME_PLACEHOLDER' | translate"
+        [attr.aria-label]="'AUDIT_SEARCH.SAVED.NAME_PLACEHOLDER' | translate"
+        data-test="saved-name-input"
+      />
+      <button type="button" class="btn-secondary" (click)="saveCurrent()" data-test="saved-save">
+        <span class="material-symbols-outlined" aria-hidden="true">bookmark_add</span>
+        {{ 'AUDIT_SEARCH.SAVED.SAVE_CURRENT' | translate }}
+      </button>
+      @if (saveError()) {
+        <span class="export-error">{{ saveError()! | translate }}</span>
+      }
+    </div>
+  </section>
+
   <section class="filter-card">
     <div class="filter-grid">
       <label class="filter-field">
@@ -52,6 +97,21 @@
           }
         </select>
       </label>
+      <!-- MVP-9b — region scope, options sourced from the Data Residency
+           service so a new code is one backend addition not a parallel UI change. -->
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.TENANT_REGION' | translate }}</span>
+        <select
+          [ngModel]="tenantRegion()"
+          (ngModelChange)="tenantRegion.set($event)"
+          data-test="tenant-region"
+        >
+          <option value="">{{ 'AUDIT_SEARCH.FILTER.ANY' | translate }}</option>
+          @for (code of availableRegions(); track code) {
+            <option [value]="code">{{ 'ORG_REGION.CODE.' + code | translate }}</option>
+          }
+        </select>
+      </label>
       <label class="filter-field">
         <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
         <input
@@ -72,6 +132,20 @@
       <button type="button" class="btn-secondary" (click)="resetFilters()">
         {{ 'AUDIT_SEARCH.RESET' | translate }}
       </button>
+      <!-- MVP-8b — CSV export uses the same live filters as the JSON view. -->
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="exportCsv()"
+        [disabled]="exporting()"
+        data-test="export-csv"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+        {{ 'AUDIT_SEARCH.EXPORT.CSV' | translate }}
+      </button>
+      @if (exportError()) {
+        <span class="export-error">{{ exportError()! | translate }}</span>
+      }
     </div>
   </section>
 

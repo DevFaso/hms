@@ -19,4 +19,12 @@ public interface SuperAdminAuditSearchService {
      * supplied as a single parameter object — see {@link AuditSearchFilter}.
      */
     AuditSearchPageDTO search(AuditSearchFilter filter, Pageable pageable);
+
+    /**
+     * MVP-8b: render the same filter as a CSV byte stream for download.
+     * Hard-capped at {@code maxRows} so a runaway export can't OOM the
+     * service (the caller — controller — picks a sane ceiling, e.g.
+     * 10 000 rows).
+     */
+    byte[] exportCsv(AuditSearchFilter filter, int maxRows);
 }
