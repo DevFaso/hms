@@ -1,7 +1,9 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> 006384fc · `develop` @ `6d3c9d15` · Branches:
+> 34cd0c56 (MVP-3 + MVP-4 + MVP-5 promoted) · `develop` @ `f7fbfc9d` ·
+> MVP-6 + MVP-7 + MVP-8 trio in progress on
+> `feature/super-admin-gaps-mvp6-7-8-trio`. Earlier branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
 > `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
 > into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
@@ -83,9 +85,9 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
 4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
 5. **Super-Admin Surface Consolidation** · *in progress on `feature/super-admin-gaps-mvp5-surface-consolidation` — retires `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
-6. Subscription / Plan / Quotas
-7. Emergency Global Controls
-8. Cross-Tenant Audit Search UI
+6. **Subscription / Plan / Quotas** · *in progress on `feature/super-admin-gaps-mvp6-7-8-trio` — MVP scope: schema + plan CRUD + per-org assign/cancel; plan-tier feature enforcement deferred to MVP-6b*
+7. **Emergency Global Controls** · *in progress on the same branch — force-logout-all (global min-iat), kill-feature, force-MFA-reenrol, broadcast banner; all MFA-stepped-up + audited as `SECURITY_ALERT_TRIGGERED`*
+8. **Cross-Tenant Audit Search UI** · *in progress on the same branch — JPA Specification search across `AuditEventLog` with impersonator filter from MVP-4*
 9. Data-Residency / Region Tagging
 
 ---
@@ -659,13 +661,125 @@ guard + side-nav filter).
 
 ---
 
-## MVPs 6–9: Forward Queue
+## MVP 6 + MVP 7 + MVP 8 — bundled trio (IN PROGRESS — branch `feature/super-admin-gaps-mvp6-7-8-trio`)
+
+Three MVPs delivered as one PR per the user's "all in one" instruction
+on 2026-05-03. Order of implementation within the branch: MVP-8 (smallest,
+mostly frontend) → MVP-7 (backend + UI, touches the JWT filter) → MVP-6
+(largest schema work).
+
+### MVP 8: Cross-Tenant Audit Search UI
+
+- **Backend.** `AuditEventLogRepository` extended with
+  `JpaSpecificationExecutor<AuditEventLog>`. New
+  `SuperAdminAuditSearchService(Impl)` builds a Specification from the
+  optional filter args (actor user id, userName substring, eventType
+  list, status, hospital, organization via assignment.hospital
+  .organization, **impersonatorUserId** from MVP-4, entityType,
+  resourceId, fromDate, toDate). Default sort `eventTimestamp DESC`.
+  `SuperAdminAuditSearchController` exposes
+  `GET /super-admin/audit-search` gated to `ROLE_SUPER_ADMIN`. Returns
+  `AuditSearchPageDTO` (content, pageNumber, pageSize, totalElements,
+  totalPages) so the frontend doesn't bind to internal Spring types.
+- **Frontend.** New `/super-admin/audit-search` route with filter form
+  (user name, impersonator id, entity type, resource id, status, date
+  range), paginated results table, and a row-highlighting class for
+  impersonated actions. Sidebar entry + Control Tower quick-link card.
+  EN i18n added; FR/ES bundles deferred (translate pipe falls back to
+  the key, so functional but un-localised — flagged for a follow-up).
+- **Out of scope (deferred to MVP-8b).** Cross-source aggregation
+  spanning `FrontendAuditEvent` and `PermissionMatrixAuditEvent`; CSV
+  export; saved-search persistence.
+
+### MVP 7: Emergency Global Controls
+
+- **Backend.** Liquibase **V80** (additive only) creates singleton
+  `security.security_revocations` (id=1, `global_min_token_iat`).
+  `SecurityRevocation` entity + repo. `GlobalSessionRevocationService`
+  caches the timestamp via `@Scheduled(fixedDelay=30_000)` so multi-
+  instance deployments converge within 30 s without Redis pub/sub; a
+  hot bump on the same instance is instantaneous via the volatile
+  cached field. `JwtAuthenticationFilter` checks
+  `iat >= globalMinTokenIat` after the existing blacklist check —
+  short-circuits to `respondUnauthorized` on revoked tokens. Defensive:
+  the new check returns false (=not revoked) when the cached value is
+  EPOCH or the token has no iat claim or extraction throws, so a
+  parser hiccup or DB blip never locks every user out.
+- New `EmergencyControlService(Impl)` with four ops:
+  - `forceLogoutAll(reason)` — calls
+    `GlobalSessionRevocationService.revokeAll`, audits as
+    `SECURITY_ALERT_TRIGGERED` with prefix `EMERGENCY_FORCE_LOGOUT_ALL`.
+  - `killFeature(flagKey, reason)` — calls
+    `FeatureFlagService.upsertOverride(flagKey, enabled=false)` and
+    audits.
+  - `forceMfaReenrol(userIds, reason)` — when `userIds` empty, falls
+    back to every user with an enrolment row. Deletes
+    `UserMfaEnrollment` rows + `MfaBackupCode` rows for each target,
+    forcing re-enrolment on next login.
+  - `broadcast(message, severity)` — publishes a STOMP frame to
+    `/topic/emergency-broadcast` with `type=EMERGENCY_BROADCAST`,
+    `severity`, `issuedBy`, `issuedAt`. Broker failures are swallowed
+    with a warn so the audit trail is preserved.
+- `SuperAdminEmergencyController` exposes
+  `POST /super-admin/emergency/{force-logout-all,kill-feature,force-mfa-reenrol,broadcast}`,
+  all `ROLE_SUPER_ADMIN` and validated DTOs (`@NotBlank` reason ≥ 5
+  chars).
+- **Frontend.** `/super-admin/emergency` console with four panels (one
+  per action); each requires reason + MFA code + (for force-logout-all)
+  typed-confirmation `FORCE LOGOUT ALL`. `EmergencyControlService`
+  posts `X-Mfa-Token` headers reusing the MVP-2 / MVP-4 plumbing.
+  Sidebar entry + Control Tower quick-link card.
+- **Out of scope (deferred to MVP-7b).** Per-tenant kill-switch (the
+  existing `FeatureFlagOverride` is global by design — multi-tenant
+  override semantics is a separate design decision). MFA re-enrol
+  filtered by hospital. Frontend STOMP subscription that surfaces the
+  banner on every authenticated route (the backend already publishes;
+  the consumer is small and will land in MVP-7b).
+
+### MVP 6: Subscription / Plan / Quotas
+
+- **Backend.** Liquibase **V81** (additive only) creates
+  `platform.subscription_plans` and `platform.organization_subscriptions`.
+  Partial unique index `uq_orgsub_active_per_org ON
+  organization_subscriptions (organization_id) WHERE status = 'ACTIVE'`
+  enforces one active subscription per org while allowing CANCELLED /
+  EXPIRED rows to accumulate for billing audits. FK back to
+  `hospital.organizations(id)` (Organization lives in the `hospital`
+  schema, not `platform`).
+- `SubscriptionPlan` + `OrganizationSubscription` entities (extend
+  `BaseEntity`) with enum `Status` (ACTIVE / CANCELLED / EXPIRED) and
+  `BillingPeriod` (MONTHLY / QUARTERLY / ANNUAL).
+  `SubscriptionMapper` follows the project convention (hand-written
+  `@Component` mapper, no MapStruct). `SubscriptionService(Impl)`
+  exposes plan CRUD + assign/cancel per organization; assignment
+  cancels any pre-existing ACTIVE row in the same tx so the partial
+  index holds. Throws `ResourceNotFoundException` on missing plan /
+  org / subscription.
+- `SuperAdminSubscriptionController` exposes 7 endpoints:
+  `GET / POST / PUT / DELETE /plans`, `GET / POST /organizations/{id}`,
+  `GET /organizations/{id}/active`, `DELETE /organizations/{id}/{subId}`.
+  All `ROLE_SUPER_ADMIN`. `featureKeys` is a comma-separated string
+  for this MVP — moves to a jsonb column in MVP-6b once enforcement
+  against `FeatureFlagOverride` lands.
+- **Frontend.** `/super-admin/subscriptions` with plan grid + create/
+  edit form + active-only toggle. Sidebar entry + Control Tower
+  quick-link card.
+- **Out of scope (deferred to MVP-6b).** Plan-tier feature enforcement
+  (the JWT filter / FeatureFlagService will consult the active
+  subscription's `featureKeys` to gate access). Self-service org-side
+  upgrade UI. Proration / mid-period billing changes.
+
+### Trio QA gate
+
+`./gradlew :hospital-core:compileJava :hospital-core:compileTestJava`
+clean. Frontend: `npm run lint` clean, `npm run format:check` clean,
+full Karma sweep **802 specs green** (super-admin Control Tower spec
+updated for the +3 quick-link cards: 9 → 12).
+
+## MVP 9: Forward Queue
 
 | # | MVP | Trigger |
 | --- | --- | --- |
-| 6 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
-| 7 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
-| 8 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
 | 9 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
 
 ## Risks & Open Questions

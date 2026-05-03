@@ -1,0 +1,155 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'SUBSCRIPTIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'SUBSCRIPTIONS.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'COMMON.BACK_TO_CONTROL_TOWER' | translate }}
+    </a>
+  </div>
+
+  <div class="toolbar">
+    <label class="toggle">
+      <input type="checkbox" [checked]="showActiveOnly()" (change)="toggleActiveFilter()" />
+      {{ 'SUBSCRIPTIONS.ACTIVE_ONLY' | translate }}
+    </label>
+    <button type="button" class="btn-primary" (click)="startCreate()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'SUBSCRIPTIONS.NEW_PLAN' | translate }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      {{ 'COMMON.LOADING' | translate }}
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error">
+      <span class="material-symbols-outlined">error</span>
+      {{ 'SUBSCRIPTIONS.LOAD_ERROR' | translate }}
+      <button type="button" class="retry-btn" (click)="refresh()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (!hasPlans()) {
+    <div class="state-panel empty">
+      <span class="material-symbols-outlined">subscriptions</span>
+      {{ 'SUBSCRIPTIONS.NO_PLANS' | translate }}
+    </div>
+  } @else {
+    <div class="plan-grid" data-test="plan-grid">
+      @for (plan of plans(); track plan.id) {
+        <div class="plan-card" [class.inactive]="!plan.active">
+          <header>
+            <h2>{{ plan.name }}</h2>
+            <span class="tier-pill">{{ plan.tierCode }}</span>
+          </header>
+          <p class="desc">{{ plan.description || '—' }}</p>
+          <ul class="meta">
+            <li>
+              <strong>{{ formatPrice(plan.monthlyPriceCents, plan.currency) }}</strong>
+              {{ 'SUBSCRIPTIONS.PER_MONTH' | translate }}
+            </li>
+            <li>{{ plan.includedSeats }} {{ 'SUBSCRIPTIONS.SEATS' | translate }}</li>
+            <li class="features">
+              {{ plan.featureKeys || ('SUBSCRIPTIONS.NO_FEATURES' | translate) }}
+            </li>
+          </ul>
+          <footer>
+            <button type="button" class="btn-ghost" (click)="startEdit(plan)">
+              {{ 'SUBSCRIPTIONS.EDIT' | translate }}
+            </button>
+            @if (plan.active) {
+              <button type="button" class="btn-ghost danger" (click)="deactivate(plan)">
+                {{ 'SUBSCRIPTIONS.DEACTIVATE' | translate }}
+              </button>
+            }
+          </footer>
+        </div>
+      }
+    </div>
+  }
+
+  @if (editing() || form().name !== '' || form().tierCode !== '') {
+    <section class="edit-card" data-test="edit-card">
+      <h2>
+        {{
+          editing()
+            ? ('SUBSCRIPTIONS.EDIT_PLAN' | translate)
+            : ('SUBSCRIPTIONS.NEW_PLAN' | translate)
+        }}
+      </h2>
+      <div class="grid">
+        <label>
+          <span>{{ 'SUBSCRIPTIONS.FORM.NAME' | translate }}</span>
+          <input type="text" [ngModel]="form().name" (ngModelChange)="updateForm('name', $event)" />
+        </label>
+        <label>
+          <span>{{ 'SUBSCRIPTIONS.FORM.TIER_CODE' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="form().tierCode"
+            (ngModelChange)="updateForm('tierCode', $event)"
+          />
+        </label>
+        <label class="span-2">
+          <span>{{ 'SUBSCRIPTIONS.FORM.DESCRIPTION' | translate }}</span>
+          <textarea
+            rows="2"
+            [ngModel]="form().description"
+            (ngModelChange)="updateForm('description', $event)"
+          ></textarea>
+        </label>
+        <label>
+          <span>{{ 'SUBSCRIPTIONS.FORM.PRICE_CENTS' | translate }}</span>
+          <input
+            type="number"
+            min="0"
+            [ngModel]="form().monthlyPriceCents"
+            (ngModelChange)="updateForm('monthlyPriceCents', +$event)"
+          />
+        </label>
+        <label>
+          <span>{{ 'SUBSCRIPTIONS.FORM.CURRENCY' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="form().currency"
+            (ngModelChange)="updateForm('currency', $event)"
+          />
+        </label>
+        <label>
+          <span>{{ 'SUBSCRIPTIONS.FORM.INCLUDED_SEATS' | translate }}</span>
+          <input
+            type="number"
+            min="0"
+            [ngModel]="form().includedSeats"
+            (ngModelChange)="updateForm('includedSeats', +$event)"
+          />
+        </label>
+        <label class="span-2">
+          <span>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS' | translate }}</span>
+          <input
+            type="text"
+            placeholder="comma-separated keys"
+            [ngModel]="form().featureKeys"
+            (ngModelChange)="updateForm('featureKeys', $event)"
+          />
+        </label>
+      </div>
+      @if (formError()) {
+        <p class="form-error">{{ formError() }}</p>
+      }
+      <div class="actions">
+        <button type="button" class="btn-primary" (click)="submit()" [disabled]="formBusy()">
+          {{ 'SUBSCRIPTIONS.SAVE' | translate }}
+        </button>
+        <button type="button" class="btn-ghost" (click)="cancelEdit()">
+          {{ 'SUBSCRIPTIONS.CANCEL' | translate }}
+        </button>
+      </div>
+    </section>
+  }
+</div>
