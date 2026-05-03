@@ -222,6 +222,13 @@ export class SuperAdminComponent implements OnInit {
       route: '/super-admin/subscriptions',
       color: '#16a34a',
     },
+    {
+      titleKey: 'SUPER_ADMIN.LINK.REGIONS_TITLE',
+      descKey: 'SUPER_ADMIN.LINK.REGIONS_DESC',
+      icon: 'public',
+      route: '/super-admin/data-residency',
+      color: '#0d9488',
+    },
   ];
 
   ngOnInit(): void {

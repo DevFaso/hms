@@ -114,6 +114,9 @@ public enum AuditEventType {
     IMPERSONATION_STARTED,
     IMPERSONATION_ENDED,
 
+    // Data residency (MVP-9 — gap #9 in docs/super-admin-gaps.md)
+    ORGANIZATION_REGION_UPDATED,
+
     OTHER
 }
 

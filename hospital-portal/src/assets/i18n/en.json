@@ -108,7 +108,9 @@
       "EMERGENCY_TITLE": "Emergency controls",
       "EMERGENCY_DESC": "Force-logout-all, kill-feature, force MFA re-enrol, broadcast",
       "SUBSCRIPTIONS_TITLE": "Subscriptions",
-      "SUBSCRIPTIONS_DESC": "Plan catalogue and per-organization assignment"
+      "SUBSCRIPTIONS_DESC": "Plan catalogue and per-organization assignment",
+      "REGIONS_TITLE": "Data residency",
+      "REGIONS_DESC": "Per-organization region tagging for cross-border compliance"
     }
   },
   "AUDIT_SEARCH": {
@@ -199,6 +201,49 @@
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
       "FEATURE_KEYS": "Feature keys"
+    },
+    "ERROR": {
+      "REQUIRED_FIELDS": "Name and tier code are required.",
+      "SAVE_FAILED": "Save failed.",
+      "DEACTIVATE_FAILED": "Deactivation failed."
+    }
+  },
+  "ORG_REGION": {
+    "TITLE": "Data Residency",
+    "SUBTITLE": "Per-organization region tagging for cross-border compliance.",
+    "LOADING": "Loading region inventory…",
+    "LOAD_ERROR": "Could not load the region inventory. Try again.",
+    "EMPTY": "No organizations match the current filter.",
+    "DISTRIBUTION": "Distribution",
+    "RETAG": "Retag",
+    "EDIT_TITLE": "Update region",
+    "FIELD": {
+      "REGION": "Region",
+      "REASON": "Reason (audited, optional)",
+      "REASON_PLACEHOLDER": "e.g. Tenant relocated to Senegal jurisdiction"
+    },
+    "COL": {
+      "ORG": "Organization",
+      "CODE": "Code",
+      "REGION": "Region"
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "Region update failed. Try again."
+    },
+    "CODE": {
+      "BF": "Burkina Faso (BF)",
+      "CI": "Côte d'Ivoire (CI)",
+      "SN": "Senegal (SN)",
+      "GA": "Gabon (GA)",
+      "CM": "Cameroon (CM)",
+      "BJ": "Benin (BJ)",
+      "TG": "Togo (TG)",
+      "ML": "Mali (ML)",
+      "NE": "Niger (NE)",
+      "ML_OAPI": "UEMOA / OAPI (multi-state)",
+      "EU": "European Union (EU / GDPR)",
+      "US": "United States (US / HIPAA)",
+      "OTHER": "Other"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -2000,6 +2045,7 @@
     "AUDIT_SEARCH": "Audit Search",
     "EMERGENCY_CONTROLS": "Emergency Controls",
     "SUBSCRIPTIONS": "Subscriptions",
+    "DATA_RESIDENCY": "Data Residency",
     "AVAILABILITY": "Availability",
     "BILLING": "Billing",
     "CONSENT_MANAGEMENT": "Consent Management",

@@ -1,23 +1,28 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> 34cd0c56 (MVP-3 + MVP-4 + MVP-5 promoted) · `develop` @ `f7fbfc9d` ·
-> MVP-6 + MVP-7 + MVP-8 trio in progress on
-> `feature/super-admin-gaps-mvp6-7-8-trio`. Earlier branches:
-> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
-> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
-> into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
-> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — merged
-> into develop in `bbf09844` via PR #224 with all six Copilot review
-> findings folded in; awaits next promote-to-main),
-> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — in
-> progress on this branch; targets the next develop merge).
+> `6530997f` (MVPs 1–8 all in production) · `uat` @ `188fd9e4` ·
+> `develop` @ `9c06ef22`. Branches:
+> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped to main `006384fc`),
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — PR #223 →
+> develop `b280a0bd` → main `34cd0c56`),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — PR #224
+> → develop `bbf09844` → main `34cd0c56`; six Copilot security findings
+> folded in `db49e73e`),
+> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — PR #225
+> → develop `f7fbfc9d` → main `34cd0c56`; two Copilot review findings
+> folded in `c03bd80a`),
+> `feature/super-admin-gaps-mvp6-7-8-trio` (MVP-6 + MVP-7 + MVP-8 —
+> PR #228 → develop `9c06ef22` → main `6530997f`; six fixup commits
+> covering CI build break, 12 Copilot review findings including 2
+> critical security, 19 cascading test-context failures, SonarCloud
+> coverage 0.3% → 94.3%, and 16 SonarCloud code-smell findings).
 
 ## Executive Summary
 
 The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is in progress** on `feature/super-admin-gaps-mvp5-surface-consolidation` — frontend-only redirect guard + dashboard cleanup + side-nav role filter to retire the duplicate `/dashboard` superadmin branch and the duplicate `/admin` reachability so `/super-admin` is the single mission-control. MVPs 6–9 remain in the forward queue.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–9 are all in production on `main`.** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) shipped on `006384fc` (2026-05-02). MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) + MVP-5 (Super-Admin Surface Consolidation) shipped on `34cd0c56` (2026-05-03 batch1). MVP-6 (Subscription / Plan / Quotas) + MVP-7 (Emergency Global Controls) + MVP-8 (Cross-Tenant Audit Search UI) shipped on `6530997f` (2026-05-03 batch2). **MVP-9 (Data-Residency / Region Tagging) shipped on the same day as a follow-up branch** alongside two pre-existing UX defects from the batch2 release: the Subscriptions "New plan" button was inert (form-card visibility was gated on populated form fields, hidden right after the reset) and the EN-only i18n bundles meant the Subscriptions / Emergency / Audit-Search pages rendered raw `KEY.NAME` strings under FR/ES locales.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -82,13 +87,13 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 1. **Super-Admin Control Tower** — landing page · *shipped to main `006384fc`*
 2. **Tenant Lifecycle** — suspend / archive / restore / purge · *shipped to main `006384fc`*
-3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
-4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
-5. **Super-Admin Surface Consolidation** · *in progress on `feature/super-admin-gaps-mvp5-surface-consolidation` — retires `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
-6. **Subscription / Plan / Quotas** · *in progress on `feature/super-admin-gaps-mvp6-7-8-trio` — MVP scope: schema + plan CRUD + per-org assign/cancel; plan-tier feature enforcement deferred to MVP-6b*
-7. **Emergency Global Controls** · *in progress on the same branch — force-logout-all (global min-iat), kill-feature, force-MFA-reenrol, broadcast banner; all MFA-stepped-up + audited as `SECURITY_ALERT_TRIGGERED`*
-8. **Cross-Tenant Audit Search UI** · *in progress on the same branch — JPA Specification search across `AuditEventLog` with impersonator filter from MVP-4*
-9. Data-Residency / Region Tagging
+3. **Partner-Connector / Integration Health Console** · *PR #223 → develop `b280a0bd` → main `34cd0c56`*
+4. **Support Impersonation with Audit** · *PR #224 → develop `bbf09844` → main `34cd0c56` (six Copilot security findings folded in `db49e73e`)*
+5. **Super-Admin Surface Consolidation** · *PR #225 → develop `f7fbfc9d` → main `34cd0c56` (two Copilot review findings folded in `c03bd80a`)*
+6. **Subscription / Plan / Quotas** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+7. **Emergency Global Controls** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+8. **Cross-Tenant Audit Search UI** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+9. **Data-Residency / Region Tagging** · *shipped on `feature/super-admin-gaps-doc-refresh` — V82 migration + region picker + audit*
 
 ---
 
@@ -516,7 +521,7 @@ existing call paths refactored, only EligibilityServiceImpl wired).
 
 ---
 
-## MVP 5: Super-Admin Surface Consolidation (IN PROGRESS — branch `feature/super-admin-gaps-mvp5-surface-consolidation`)
+## MVP 5: Super-Admin Surface Consolidation (SHIPPED to main `34cd0c56` via PR #225 → promote chain)
 
 **Closure notes (this branch):**
 
@@ -661,12 +666,66 @@ guard + side-nav filter).
 
 ---
 
-## MVP 6 + MVP 7 + MVP 8 — bundled trio (IN PROGRESS — branch `feature/super-admin-gaps-mvp6-7-8-trio`)
+## MVP 6 + MVP 7 + MVP 8 — bundled trio (SHIPPED to main `6530997f` via PR #228 → promote chain)
 
 Three MVPs delivered as one PR per the user's "all in one" instruction
 on 2026-05-03. Order of implementation within the branch: MVP-8 (smallest,
 mostly frontend) → MVP-7 (backend + UI, touches the JWT filter) → MVP-6
 (largest schema work).
+
+**Promote chain:** develop `9c06ef22` (merge of feature branch) →
+uat `188fd9e4` via PR #229 (batch2) → main `6530997f` via PR #230
+(batch2). Carries the feature commit + 6 fixup commits:
+
+1. **CI build break** — `audit-search.html` `@for` track expression
+   used nullable string fields (TS2531); surfaced `AuditEventLog.id`
+   on the response DTO + new `toDtoLite` mapper variant; track is now
+   `row.id`. Dropped unused `DatePipe` import from
+   `SubscriptionsComponent` (NG8113).
+2. **PR #228 Copilot review (10 findings)** — most critical: V80 + V81
+   were not referenced from `db/migration/changelog.xml` (Liquibase
+   would never apply them in any environment using the changelog),
+   and the emergency endpoints advertised `X-Mfa-Token` enforcement
+   but the controller never read the header (super admin could
+   trigger force-logout / kill-feature / MFA reset / broadcast on a
+   plain bearer token). Both fixed; service-layer `verifyMfaStepUp`
+   now mirrors the MVP-4 impersonation pattern (enrolled → verify;
+   unenrolled non-strict → audit bypass; unenrolled strict → reject).
+   Also: `assignPlan` rejects deactivated plans, `billingPeriod` is a
+   typed enum on the DTO (Spring 400s on unknown values), `cancel`
+   verifies subscription belongs to the org on the URL,
+   `SuperAdminAuditSearchServiceImpl` collapses redundant joins / drops
+   unconditional `distinct(true)` / uses `toDtoLite` to avoid N+1
+   `PatientRepository` lookups, `GlobalSessionRevocationService.refresh`
+   resets cache to `EPOCH` on missing singleton row, audit-search
+   frontend status pill distinguishes SUCCESS / FAILURE / PENDING /
+   unknown.
+3. **Test-context fixup** — `JwtAuthenticationFilterTest` +
+   `UserRoleHospitalAssignmentControllerTest` +
+   `PlatformRegistryControllerTest` were missing `@Mock` /
+   `@MockitoBean GlobalSessionRevocationService`, so slice contexts
+   could not autowire `JwtAuthenticationFilter` and 19 specs cascaded
+   from a single context-load failure.
+4. **SonarCloud coverage gate** — coverage on new code was 0.3%; lifted
+   to **94.3% lines / 86.8% branches** by adding 5 new test classes
+   (+56 specs). Notable trick: invoking `Specification.toPredicate(...)`
+   directly with mocked `Root` / `CriteriaBuilder` / `CriteriaQuery`
+   to exercise every filter branch in the audit-search lambda
+   (otherwise the spec is captured-but-not-invoked and branch
+   coverage floors at 5.6%).
+5. **SonarCloud code smells (16 findings)** — 6 production: new
+   `AuditSearchFilter` parameter object record kills the 12-param +
+   11-param + cognitive-complexity-29 findings on
+   `SuperAdminAuditSearchService(Impl)`; `FIELD_EVENT_TIMESTAMP` and
+   `ERROR_PLAN_NOT_FOUND` constants close 3-duplications findings;
+   `JwtAuthenticationFilter.handleValidatedToken` extracted to drop
+   cognitive complexity 17 → ≤15. 10 test cleanups: unused import,
+   useless `eq(...)` wrappers, `containsEntry` chain, multi-throw
+   lambda hoists.
+
+**Final QA gate:** all 13 CI checks green; backend 4783 specs pass;
+full Karma sweep 802 specs green; `npm run lint` + `format:check` +
+`ng build` clean; SonarCloud quality gate green.
 
 ### MVP 8: Cross-Tenant Audit Search UI
 
@@ -776,11 +835,157 @@ clean. Frontend: `npm run lint` clean, `npm run format:check` clean,
 full Karma sweep **802 specs green** (super-admin Control Tower spec
 updated for the +3 quick-link cards: 9 → 12).
 
-## MVP 9: Forward Queue
+## MVP 9: Data-Residency / Region Tagging (SHIPPED on `feature/super-admin-gaps-doc-refresh`)
 
-| # | MVP | Trigger |
-| --- | --- | --- |
-| 9 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
+**Goal:** Give every organization a first-class data-residency label so the
+Control Tower can show which compliance posture applies to each tenant
+and so a compliance officer can re-tag a tenant (e.g. an org migrating
+from a CNAMGS-managed BF deployment to an EU/GDPR-managed one) with full
+audit, without a schema migration each time.
+
+**Closure notes (this branch):**
+
+- Two pre-existing UX defects from the MVP-{6,7,8} batch were fixed
+  alongside MVP-9 in the same branch:
+  - **Subscriptions "New plan" button was inert.** The form-card was
+    gated on `editing() || form().name !== '' || form().tierCode !== ''`,
+    all of which are falsy right after `startCreate()` resets the form,
+    so the panel never appeared. Fixed with an explicit `formOpen`
+    signal flipped on by `startCreate` / `startEdit` and off by
+    `cancelEdit`. Also moved the inline error strings
+    (`'Name and tier code are required.'`, `'Save failed.'`,
+    `'Deactivation failed.'`) to translation keys
+    (`SUBSCRIPTIONS.ERROR.{REQUIRED_FIELDS,SAVE_FAILED,DEACTIVATE_FAILED}`)
+    so FR/ES users no longer see English error toasts. `npx prettier
+    --write` + `npm run lint` clean. New `subscriptions.spec.ts` with 4
+    specs locks the regression: form opens after reset / cancel closes
+    it / submit emits a translation key not raw English / save-failure
+    stores a translation key.
+  - **FR/ES bundles missing every super-admin MVP block.** `en.json`
+    had `SUBSCRIPTIONS`, `EMERGENCY`, `AUDIT_SEARCH`, `INTEGRATION_HEALTH`,
+    `IMPERSONATION`, the new `SUPER_ADMIN.LINK.*` cards, plus the
+    `NAV.{AUDIT_SEARCH,EMERGENCY_CONTROLS,SUBSCRIPTIONS}` and
+    `COMMON.BACK_TO_CONTROL_TOWER` strings — but `fr.json` and `es.json`
+    had only `SUPER_ADMIN`, `INTEGRATION_HEALTH`, and `IMPERSONATION`.
+    Result: a FR/ES super admin saw raw `SUBSCRIPTIONS.TITLE` /
+    `EMERGENCY.WARNING` / `NAV.AUDIT_SEARCH` everywhere. Added the full
+    French and Spanish translations for all three top-level blocks +
+    the supplementary keys.
+- **Backend.** New enum
+  `com.example.hms.enums.OrganizationRegion` covers the West/Central
+  Africa focus countries (BF / CI / SN / GA / CM / BJ / TG / ML / NE),
+  the umbrella `ML_OAPI` for shared UEMOA / OAPI rows, plus `EU` /
+  `US` / `OTHER`. `Organization` gains an `@Enumerated(STRING)`
+  `region` column with the same `BF` default the V82 migration
+  backfills, so legacy rows are guaranteed non-null after the upgrade.
+  V82 (additive only) adds `hospital.organizations.region VARCHAR(32)
+  NOT NULL DEFAULT 'BF'` and a single index `idx_organization_region`
+  for the Control Tower region filter.
+- New `OrganizationRegionService(Impl)` exposes `listAvailableRegions`
+  (the catalogue, driven by enum order so a new code is one line of
+  Java + i18n), `listOrganizationRegions` (per-org snapshot sorted by
+  name for a deterministic UI), `getOrganizationRegion`, and
+  `updateOrganizationRegion`. Updates emit a new
+  `AuditEventType.ORGANIZATION_REGION_UPDATED` with description
+  `Organization region changed from <previous> to <next>: <reason>`
+  (or `reaffirmed at <next>` when the value is unchanged so a noop
+  click still records the operator's intent). Audit failures are
+  swallowed so a region change is never rolled back by an audit-store
+  hiccup — same pattern as `OrganizationLifecycleServiceImpl.recordAudit`.
+- Four new endpoints on `SuperAdminOrganizationController`, all
+  `ROLE_SUPER_ADMIN`:
+  - `GET /super-admin/organizations/regions` — region catalogue.
+  - `GET /super-admin/organizations/region-snapshot` — per-org rows.
+  - `GET /super-admin/organizations/{id}/region` — single org read.
+  - `POST /super-admin/organizations/{id}/region` — update with
+    `OrganizationRegionUpdateRequestDTO` (`@NotNull region` + optional
+    `@Size(max=1000) reason`).
+- `SuperAdminCreateOrganizationRequestDTO` gains an optional
+  `region` field; provisioning service falls back to `BF` when null,
+  matching the V82 default.
+- `OrganizationResponseDTO` + `OrganizationMapper` now carry the
+  region so the existing org list and the Control Tower hierarchy
+  view surface the badge without a second round-trip.
+- **Frontend.** New `/super-admin/data-residency` route
+  (SUPER_ADMIN-only). `DataResidencyComponent` renders:
+  - Distribution chip strip (one chip per active region with a
+    count, plus an "All" reset chip) that doubles as a filter; click a
+    chip to narrow the table.
+  - Per-org table (Organization / Code / Region badge / Retag action).
+    The badge uses per-region accent classes (`region-badge--bf`,
+    `--ci`, `--sn`, `--ga`, `--cm`, `--eu`, `--us`, `--other`) so the
+    grid is scannable at a glance.
+  - Inline editor opened by **Retag**: dropdown sourced from the
+    backend region catalogue + optional reason textarea. Submit calls
+    `POST /region` and patches the row in place on success; on failure
+    the form stays open and surfaces the
+    `ORG_REGION.ERROR.UPDATE_FAILED` translation key.
+- New `DataResidencyService` mirrors the four endpoints. Sidebar gets
+  a "Data Residency" entry behind `RoleContextService.isSuperAdmin()`
+  using a `public` material icon. Control Tower gets a 13th
+  quick-link card pointing at `/super-admin/data-residency`.
+- EN / FR / ES bundles all carry the new `ORG_REGION.*` namespace
+  (TITLE / SUBTITLE / LOADING / LOAD_ERROR / EMPTY / DISTRIBUTION /
+  RETAG / EDIT_TITLE / `FIELD.*` / `COL.*` / ERROR.UPDATE_FAILED +
+  the 13 per-code labels under
+  `ORG_REGION.CODE.{BF,CI,SN,GA,CM,BJ,TG,ML,NE,ML_OAPI,EU,US,OTHER}`)
+  plus the matching `SUPER_ADMIN.LINK.REGIONS_*` and
+  `NAV.DATA_RESIDENCY` entries.
+
+**Out of scope (this MVP, deferred to MVP-9b):**
+
+- Per-region routing of new tenants to a region-specific deployment
+  (the column already records the jurisdiction; physical multi-region
+  deployment is a separate infra item).
+- Per-region retention overrides (today every tenant follows the
+  global retention policy regardless of region).
+- Per-region export-format defaults (e.g. GDPR portability vs. HIPAA).
+- Region-aware cross-tenant audit-search filter (the existing UI shows
+  all rows; adding a "filter by tenant region" needs a join through
+  the assignment chain — small but waiting for the first user request).
+
+**Acceptance Criteria — met:**
+
+- V82 ships additively; existing rows backfill to `BF`; rollback is a
+  single `ALTER TABLE … DROP COLUMN` with no FK cleanup.
+- Region update is idempotent (no `save()` when value unchanged) but
+  still audited so the operator's intent is captured.
+- Audit row carries the previous → next transition + the optional
+  reason in the description; resourceId / resourceName / userName
+  populate from the request-scoped `HospitalContextHolder`.
+- 5 service-layer tests + 3 controller IT tests + 8 Karma specs cover
+  the catalogue / snapshot ordering / unknown-id 404 / change vs.
+  noop save / audit-failure swallow / frontend filter / edit submit /
+  failure path / cancel.
+- `./gradlew :hospital-core:compileJava :hospital-core:compileTestJava`
+  clean. `npm run lint` clean, `npm run format:check` clean,
+  `ng build` clean, full Karma sweep **814 specs green** (up from 802;
+  +8 data-residency, +4 subscriptions, super-admin Control Tower spec
+  bumped 12 → 13 quick-links).
+
+**Developer Tasks — done:**
+
+1. `OrganizationRegion` enum + Liquibase V82 (additive,
+   default `'BF'`, indexed) + changelog.xml entry.
+2. `Organization.region` column + builder default + import.
+3. `OrganizationResponseDTO.region` + `OrganizationMapper`.
+4. `SuperAdminCreateOrganizationRequestDTO.region` + provisioning
+   service fallback.
+5. `AuditEventType.ORGANIZATION_REGION_UPDATED`.
+6. `OrganizationRegionService` + impl with audit + idempotent update.
+7. `OrganizationRegionUpdateRequestDTO` + `OrganizationRegionResponseDTO`.
+8. Four new endpoints on `SuperAdminOrganizationController`.
+9. `OrganizationRegionServiceImplTest` (5 specs) + extended
+   `SuperAdminOrganizationControllerIT` (3 region specs).
+10. Frontend `data-residency` component + `DataResidencyService` +
+    `data-residency.model.ts` + spec (8 specs).
+11. Side-nav entry, Control Tower quick-link card, route registration.
+12. EN / FR / ES `ORG_REGION.*` + `SUPER_ADMIN.LINK.REGIONS_*` +
+    `NAV.DATA_RESIDENCY` strings.
+13. Subscriptions "New plan" fix + `subscriptions.spec.ts` (4 specs).
+14. FR/ES backfill of MVP-{6,7,8} translation blocks +
+    `COMMON.BACK_TO_CONTROL_TOWER` + the three new NAV entries.
+15. Update this doc.
 
 ## Risks & Open Questions
 

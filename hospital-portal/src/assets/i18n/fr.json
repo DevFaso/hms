@@ -102,7 +102,148 @@
       "HOSPITALS_TITLE": "Hôpitaux",
       "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues",
       "INTEGRATIONS_TITLE": "Santé des intégrations",
-      "INTEGRATIONS_DESC": "Inventaire des connecteurs et santé des appels par tenant"
+      "INTEGRATIONS_DESC": "Inventaire des connecteurs et santé des appels par tenant",
+      "AUDIT_SEARCH_TITLE": "Recherche d'audit",
+      "AUDIT_SEARCH_DESC": "Recherche d'audit multi-tenant avec filtre d'usurpation",
+      "EMERGENCY_TITLE": "Contrôles d'urgence",
+      "EMERGENCY_DESC": "Déconnexion globale, désactivation de feature, ré-enrôlement MFA, diffusion",
+      "SUBSCRIPTIONS_TITLE": "Abonnements",
+      "SUBSCRIPTIONS_DESC": "Catalogue de plans et affectation par organisation",
+      "REGIONS_TITLE": "Résidence des données",
+      "REGIONS_DESC": "Étiquetage de région par organisation pour la conformité transfrontalière"
+    }
+  },
+  "AUDIT_SEARCH": {
+    "TITLE": "Recherche d'audit multi-tenant",
+    "SUBTITLE": "Recherchez chaque événement d'audit à travers les organisations et hôpitaux.",
+    "LOADING": "Recherche dans les journaux d'audit…",
+    "LOAD_ERROR": "La recherche d'audit a échoué. Réessayez.",
+    "NO_RESULTS": "Aucun événement d'audit ne correspond aux filtres actuels.",
+    "APPLY": "Appliquer les filtres",
+    "RESET": "Réinitialiser",
+    "PREV": "Précédent",
+    "NEXT": "Suivant",
+    "PAGE_OF": "Page {{current}} sur {{total}}",
+    "RESULTS_COUNT": "{{shown}} affichés sur {{total}} au total",
+    "FILTER": {
+      "USER_NAME": "Nom d'utilisateur",
+      "USER_NAME_PLACEHOLDER": "correspondance partielle sur l'acteur",
+      "IMPERSONATOR_USER_ID": "ID de l'usurpateur",
+      "ENTITY_TYPE": "Type d'entité cible",
+      "RESOURCE_ID": "ID de la ressource cible",
+      "STATUS": "Statut",
+      "FROM_DATE": "Du",
+      "TO_DATE": "Au",
+      "ANY": "Tout"
+    },
+    "COL": {
+      "TIME": "Heure",
+      "EVENT": "Événement",
+      "USER": "Utilisateur",
+      "HOSPITAL": "Hôpital",
+      "RESOURCE": "Ressource",
+      "STATUS": "Statut",
+      "IMPERSONATOR": "Usurpateur"
+    }
+  },
+  "EMERGENCY": {
+    "TITLE": "Contrôles globaux d'urgence",
+    "SUBTITLE": "À utiliser uniquement lors d'un incident de sécurité. Chaque action est auditée de manière permanente.",
+    "WARNING": "Ces contrôles s'appliquent immédiatement à toute la plateforme. Validez votre MFA avant chaque clic.",
+    "REASON": "Motif (audité, ≥ 5 caractères)",
+    "MFA_TOKEN": "Code MFA",
+    "CONFIRM_TYPED": "Tapez FORCE LOGOUT ALL pour confirmer",
+    "FORCE_LOGOUT": {
+      "TITLE": "Déconnecter toutes les sessions",
+      "DESC": "Avance le min-iat global ; chaque JWT actif est invalidé.",
+      "ACTION": "Déconnecter tous"
+    },
+    "KILL_FEATURE": {
+      "TITLE": "Désactiver un feature flag",
+      "DESC": "Définit la surcharge globale de FeatureFlag pour cette clé sur désactivé.",
+      "FLAG_KEY": "Clé du flag",
+      "ACTION": "Désactiver la feature"
+    },
+    "FORCE_MFA": {
+      "TITLE": "Forcer le ré-enrôlement MFA",
+      "DESC": "Efface l'enrôlement MFA + les codes de secours pour les utilisateurs listés (ou tous si vide).",
+      "USER_IDS": "Identifiants utilisateur (séparés par virgule, optionnel)",
+      "ACTION": "Forcer le ré-enrôlement"
+    },
+    "BROADCAST": {
+      "TITLE": "Bannière de diffusion",
+      "DESC": "Publie un message bannière sur /topic/emergency-broadcast.",
+      "MESSAGE": "Message",
+      "SEVERITY": "Gravité",
+      "ACTION": "Envoyer la diffusion"
+    }
+  },
+  "SUBSCRIPTIONS": {
+    "TITLE": "Plans d'abonnement",
+    "SUBTITLE": "Catalogue de plans et affectations par organisation.",
+    "ACTIVE_ONLY": "Plans actifs uniquement",
+    "NEW_PLAN": "Nouveau plan",
+    "EDIT_PLAN": "Modifier le plan",
+    "EDIT": "Modifier",
+    "DEACTIVATE": "Désactiver",
+    "SAVE": "Enregistrer",
+    "CANCEL": "Annuler",
+    "PER_MONTH": "/ mois",
+    "SEATS": "sièges inclus",
+    "NO_FEATURES": "Aucune clé de fonctionnalité",
+    "NO_PLANS": "Aucun plan pour le moment — créez le premier.",
+    "LOAD_ERROR": "Impossible de charger les plans. Réessayez.",
+    "FORM": {
+      "NAME": "Nom",
+      "TIER_CODE": "Code de palier (unique)",
+      "DESCRIPTION": "Description",
+      "PRICE_CENTS": "Prix mensuel (centimes)",
+      "CURRENCY": "Devise",
+      "INCLUDED_SEATS": "Sièges inclus",
+      "FEATURE_KEYS": "Clés de fonctionnalité"
+    },
+    "ERROR": {
+      "REQUIRED_FIELDS": "Le nom et le code de palier sont requis.",
+      "SAVE_FAILED": "L'enregistrement a échoué.",
+      "DEACTIVATE_FAILED": "La désactivation a échoué."
+    }
+  },
+  "ORG_REGION": {
+    "TITLE": "Résidence des données",
+    "SUBTITLE": "Étiquetage de région par organisation pour la conformité transfrontalière.",
+    "LOADING": "Chargement de l'inventaire des régions…",
+    "LOAD_ERROR": "Impossible de charger l'inventaire des régions. Réessayez.",
+    "EMPTY": "Aucune organisation ne correspond au filtre courant.",
+    "DISTRIBUTION": "Répartition",
+    "RETAG": "Réétiqueter",
+    "EDIT_TITLE": "Modifier la région",
+    "FIELD": {
+      "REGION": "Région",
+      "REASON": "Motif (audité, optionnel)",
+      "REASON_PLACEHOLDER": "ex. Tenant relocalisé vers la juridiction sénégalaise"
+    },
+    "COL": {
+      "ORG": "Organisation",
+      "CODE": "Code",
+      "REGION": "Région"
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "La mise à jour de la région a échoué. Réessayez."
+    },
+    "CODE": {
+      "BF": "Burkina Faso (BF)",
+      "CI": "Côte d'Ivoire (CI)",
+      "SN": "Sénégal (SN)",
+      "GA": "Gabon (GA)",
+      "CM": "Cameroun (CM)",
+      "BJ": "Bénin (BJ)",
+      "TG": "Togo (TG)",
+      "ML": "Mali (ML)",
+      "NE": "Niger (NE)",
+      "ML_OAPI": "UEMOA / OAPI (multi-États)",
+      "EU": "Union européenne (UE / RGPD)",
+      "US": "États-Unis (US / HIPAA)",
+      "OTHER": "Autre"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -684,6 +825,7 @@
     "ALL": "Tous",
     "ALL_HOSPITALS": "Hôpitaux",
     "BACK": "Retour",
+    "BACK_TO_CONTROL_TOWER": "Retour à la tour de contrôle",
     "CANCEL": "Annuler",
     "CANCELLING": "Annulation…",
     "CANNOT_UNDO": "Cette action est irréversible.",
@@ -1947,7 +2089,11 @@
     "DISPENSING": "Dispensation",
     "STOCK_ROUTING": "Routage de Stock",
     "SUPER_ADMIN": "Super Admin",
-    "INTEGRATIONS_HEALTH": "Santé des intégrations"
+    "INTEGRATIONS_HEALTH": "Santé des intégrations",
+    "AUDIT_SEARCH": "Recherche d'audit",
+    "EMERGENCY_CONTROLS": "Contrôles d'urgence",
+    "SUBSCRIPTIONS": "Abonnements",
+    "DATA_RESIDENCY": "Résidence des données"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
