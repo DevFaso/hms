@@ -152,15 +152,19 @@ describe('SuperAdminComponent', () => {
     expect(routes).toContain('/super-admin/emergency');
     expect(routes).toContain('/super-admin/subscriptions');
     expect(routes).toContain('/super-admin/data-residency');
+    // MVP-5b: the four super-admin-namespaced cards now use the
+    // /super-admin/* aliases; legacy URLs are reachable via the
+    // path-rewrite guard but the Control Tower advertises the
+    // canonical paths.
     expect(routes).toEqual(
       jasmine.arrayContaining([
         '/organizations',
         '/users',
         '/roles',
-        '/feature-flags',
-        '/analytics',
-        '/platform',
-        '/audit-logs',
+        '/super-admin/feature-flags',
+        '/super-admin/analytics',
+        '/super-admin/platform',
+        '/super-admin/audit-logs',
         '/hospitals',
       ]),
     );

@@ -1,5 +1,10 @@
 @if (visible()) {
-  <div class="impersonation-banner" role="alert" data-test="impersonation-banner">
+  <div
+    class="impersonation-banner"
+    [class.warning]="nearingExpiry()"
+    role="alert"
+    data-test="impersonation-banner"
+  >
     <span class="material-symbols-outlined banner-icon" aria-hidden="true">visibility</span>
     <span class="banner-text">
       {{ 'IMPERSONATION.BANNER_PREFIX' | translate }}
@@ -9,6 +14,17 @@
         ({{ 'IMPERSONATION.AS' | translate }} {{ active()?.impersonatorUsername }})
       </span>
     </span>
+    @if (remainingLabel()) {
+      <span
+        class="countdown-badge"
+        [class.countdown-warning]="nearingExpiry()"
+        data-test="impersonation-countdown"
+        [attr.aria-label]="('IMPERSONATION.COUNTDOWN_LABEL' | translate) + ' ' + remainingLabel()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+        {{ remainingLabel() }}
+      </span>
+    }
     <button type="button" class="exit-btn" [disabled]="busy()" (click)="exit()">
       <span class="material-symbols-outlined" aria-hidden="true">logout</span>
       {{ 'IMPERSONATION.EXIT' | translate }}

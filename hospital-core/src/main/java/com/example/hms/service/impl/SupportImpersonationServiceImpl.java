@@ -228,12 +228,21 @@ public class SupportImpersonationServiceImpl implements SupportImpersonationServ
         UUID targetId = username != null
             ? userRepository.findByUsername(username).map(User::getId).orElse(null)
             : null;
+        // MVP-4b — surface the session expiry so the frontend can re-arm
+        // its countdown on a page refresh. Tracker is the source of truth
+        // (it stored the expiry at start time); the JWT also carries an
+        // exp claim but going through the tracker keeps the DTO aligned
+        // with what /auth/refresh checks against.
+        Instant expiresAt = sessionTracker.get(ctx.impersonatorUserId())
+            .map(ImpersonationSessionTracker.ImpersonationSessionInfo::expiresAt)
+            .orElse(null);
         return ImpersonationActiveResponseDTO.builder()
             .impersonating(true)
             .impersonatorUserId(ctx.impersonatorUserId())
             .impersonatorUsername(ctx.impersonatorUsername())
             .targetUserId(targetId)
             .targetUsername(username)
+            .expiresAt(expiresAt)
             .build();
     }
 
