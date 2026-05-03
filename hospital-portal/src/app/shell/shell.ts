@@ -10,6 +10,8 @@ import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
+import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
+import { ImpersonationService } from '../services/impersonation.service';
 import { NavOrderService } from './nav-order.service';
 
 interface NavItem {
@@ -30,6 +32,7 @@ interface NavItem {
     RouterLink,
     RouterLinkActive,
     LockScreenComponent,
+    ImpersonationBannerComponent,
     TranslateModule,
   ],
   templateUrl: './shell.html',
@@ -44,6 +47,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly notifService = inject(NotificationService);
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
+  private readonly impersonation = inject(ImpersonationService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -609,6 +613,11 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     this.loadNotifications();
     this.idle.start();
+
+    // MVP-4: hydrate the impersonation banner state on every shell mount so a
+    // page refresh while impersonating re-paints the banner instead of
+    // silently dropping it.
+    this.impersonation.refreshActive().subscribe({ error: () => undefined });
 
     const username = this.auth.getSubject();
     if (username) {

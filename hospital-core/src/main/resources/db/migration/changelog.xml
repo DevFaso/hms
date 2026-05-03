@@ -1074,4 +1074,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V79 — Impersonator stamp on audit events (MVP-4)
+         Adds impersonator_user_id + impersonator_username columns to
+         support.audit_event_logs so every action a super admin takes
+         while impersonating is traceable back to the real human.
+         Strictly additive; pre-existing rows stay at NULL.
+         ================================================================= -->
+    <changeSet id="V79-audit-impersonator" author="hms-team" runOnChange="false">
+        <sqlFile path="V79__audit_impersonator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

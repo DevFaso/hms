@@ -135,6 +135,22 @@
       "NO_HISTORY": "Sin historial"
     }
   },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "Está actuando como",
+    "BANNER_SUFFIX": "mediante suplantación de soporte.",
+    "AS": "como",
+    "EXIT": "Salir de la suplantación",
+    "IMPERSONATE_USER": "Suplantar a este usuario",
+    "MODAL_TITLE": "Iniciar suplantación de soporte",
+    "MODAL_PREFIX": "Está a punto de actuar como",
+    "MODAL_WARNING": "Cada acción se etiquetará con su identidad real. La sesión expira automáticamente a los 30 minutos.",
+    "REASON_LABEL": "Motivo (obligatorio, guardado en auditoría)",
+    "REASON_PLACEHOLDER": "p. ej. Validar un fallo de recarga reportado por el paciente",
+    "MFA_LABEL": "Código MFA (obligatorio si MFA activado)",
+    "MFA_PLACEHOLDER": "Código de 6 dígitos",
+    "START_BUTTON": "Iniciar suplantación",
+    "STARTING": "Iniciando…"
+  },
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",
     "FORCE_OVERRIDE": "Anular alerta crítica tras revisión clínica",

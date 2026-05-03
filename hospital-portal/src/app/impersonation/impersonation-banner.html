@@ -1,0 +1,17 @@
+@if (visible()) {
+  <div class="impersonation-banner" role="alert" data-test="impersonation-banner">
+    <span class="material-symbols-outlined banner-icon" aria-hidden="true">visibility</span>
+    <span class="banner-text">
+      {{ 'IMPERSONATION.BANNER_PREFIX' | translate }}
+      <strong>{{ active()?.targetUsername }}</strong>
+      {{ 'IMPERSONATION.BANNER_SUFFIX' | translate }}
+      <span class="impersonator-tag">
+        ({{ 'IMPERSONATION.AS' | translate }} {{ active()?.impersonatorUsername }})
+      </span>
+    </span>
+    <button type="button" class="exit-btn" [disabled]="busy()" (click)="exit()">
+      <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+      {{ 'IMPERSONATION.EXIT' | translate }}
+    </button>
+  </div>
+}

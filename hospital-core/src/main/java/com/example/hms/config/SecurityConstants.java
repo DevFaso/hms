@@ -59,6 +59,14 @@ public class SecurityConstants {
     public static final String CLAIM_IS_SUPER_ADMIN = "isSuperAdmin";
     public static final String CLAIM_IS_HOSPITAL_ADMIN = "isHospitalAdmin";
 
+    // Support impersonation claims (MVP-4 — gap #4 in docs/super-admin-gaps.md).
+    // Present only on tokens minted by SupportImpersonationService.start; the
+    // JWT subject and roles claim represent the *target* user so downstream
+    // RBAC behaves as that user, while these two claims preserve the
+    // forensic trail back to the real super admin.
+    public static final String CLAIM_IMPERSONATOR_USER_ID = "impersonatorUserId";
+    public static final String CLAIM_IMPERSONATOR_USERNAME = "impersonatorUsername";
+
     // Prevent instantiation
     private SecurityConstants() {
         throw new UnsupportedOperationException("Utility class");
