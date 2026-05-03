@@ -144,8 +144,12 @@ describe('SuperAdminComponent', () => {
     const c = setup();
     const routes = c.quickLinks.map((l) => l.route);
 
-    expect(c.quickLinks.length).toBe(9);
+    // MVP-{6,7,8} added Audit Search / Emergency / Subscriptions cards on top of MVP-3.
+    expect(c.quickLinks.length).toBe(12);
     expect(routes).toContain('/super-admin/integrations');
+    expect(routes).toContain('/super-admin/audit-search');
+    expect(routes).toContain('/super-admin/emergency');
+    expect(routes).toContain('/super-admin/subscriptions');
     expect(routes).toEqual(
       jasmine.arrayContaining([
         '/organizations',

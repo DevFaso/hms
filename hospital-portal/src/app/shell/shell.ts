@@ -614,6 +614,24 @@ export class ShellComponent implements OnInit, OnDestroy {
       translationKey: 'NAV.INTEGRATIONS_HEALTH',
       route: '/super-admin/integrations',
     });
+    items.push({
+      icon: 'policy',
+      label: 'Audit Search',
+      translationKey: 'NAV.AUDIT_SEARCH',
+      route: '/super-admin/audit-search',
+    });
+    items.push({
+      icon: 'emergency',
+      label: 'Emergency Controls',
+      translationKey: 'NAV.EMERGENCY_CONTROLS',
+      route: '/super-admin/emergency',
+    });
+    items.push({
+      icon: 'subscriptions',
+      label: 'Subscriptions',
+      translationKey: 'NAV.SUBSCRIPTIONS',
+      route: '/super-admin/subscriptions',
+    });
   }
 
   /**
