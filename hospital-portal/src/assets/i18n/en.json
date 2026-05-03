@@ -100,7 +100,39 @@
       "AUDIT_TITLE": "Audit logs",
       "AUDIT_DESC": "System-wide audit trail and compliance",
       "HOSPITALS_TITLE": "Hospitals",
-      "HOSPITALS_DESC": "All hospitals across organizations"
+      "HOSPITALS_DESC": "All hospitals across organizations",
+      "INTEGRATIONS_TITLE": "Integration health",
+      "INTEGRATIONS_DESC": "Per-tenant connector inventory and call health"
+    }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Integration Health Console",
+    "SUBTITLE": "Per-tenant inventory and call health for partner connectors and platform integrations",
+    "LOADING": "Loading integration inventory…",
+    "LOAD_ERROR": "Could not load the integration inventory. Try again.",
+    "RETRY": "Retry",
+    "EMPTY": "No integrations are registered.",
+    "ENABLED": "Enabled",
+    "DISABLED": "Disabled",
+    "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
+    "PLATFORM_WIDE": "Platform-wide",
+    "ORG": "Organization",
+    "STATUS_HEAD": "Status",
+    "LAST_SUCCESS": "Last success",
+    "LAST_FAILURE": "Last failure",
+    "SUCCESSES_24H": "Successes (24h)",
+    "FAILURES_24H": "Failures (24h)",
+    "STATUS": {
+      "HEALTHY": "Healthy",
+      "DEGRADED": "Degraded",
+      "FAILING": "Failing",
+      "NO_HISTORY": "No history"
+    },
+    "CHIP": {
+      "HEALTHY": "Healthy",
+      "DEGRADED": "Degraded",
+      "FAILING": "Failing",
+      "NO_HISTORY": "No history"
     }
   },
   "IMPERSONATION": {
@@ -1915,7 +1947,8 @@
     "STOCK_ADJUSTMENT": "Stock Adjustment",
     "DISPENSING": "Dispensing",
     "STOCK_ROUTING": "Stock Routing",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Integration Health"
   },
   "NOTIFICATIONS": {
     "ALL": "All",

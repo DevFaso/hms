@@ -100,7 +100,39 @@
       "AUDIT_TITLE": "Registros de auditoría",
       "AUDIT_DESC": "Pista de auditoría del sistema y cumplimiento",
       "HOSPITALS_TITLE": "Hospitales",
-      "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones"
+      "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones",
+      "INTEGRATIONS_TITLE": "Salud de integraciones",
+      "INTEGRATIONS_DESC": "Inventario de conectores y salud de llamadas por inquilino"
+    }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Consola de salud de integraciones",
+    "SUBTITLE": "Inventario y salud de llamadas por inquilino para conectores de socios e integraciones de plataforma",
+    "LOADING": "Cargando inventario…",
+    "LOAD_ERROR": "No se pudo cargar el inventario. Inténtelo de nuevo.",
+    "RETRY": "Reintentar",
+    "EMPTY": "No hay integraciones registradas.",
+    "ENABLED": "Activada",
+    "DISABLED": "Desactivada",
+    "NO_ORG_HISTORY": "Aún no hay historial de llamadas para esta integración.",
+    "PLATFORM_WIDE": "Plataforma completa",
+    "ORG": "Organización",
+    "STATUS_HEAD": "Estado",
+    "LAST_SUCCESS": "Último éxito",
+    "LAST_FAILURE": "Último fallo",
+    "SUCCESSES_24H": "Éxitos (24 h)",
+    "FAILURES_24H": "Fallos (24 h)",
+    "STATUS": {
+      "HEALTHY": "Sano",
+      "DEGRADED": "Degradado",
+      "FAILING": "Fallando",
+      "NO_HISTORY": "Sin historial"
+    },
+    "CHIP": {
+      "HEALTHY": "Sano",
+      "DEGRADED": "Degradado",
+      "FAILING": "Fallando",
+      "NO_HISTORY": "Sin historial"
     }
   },
   "IMPERSONATION": {
@@ -1908,7 +1940,8 @@
     "VITALS": "Signos Vitales",
     "PATIENT_TRACKER": "Seguimiento de Pacientes",
     "IN_BASKET": "Bandeja de Entrada",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Salud de integraciones"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

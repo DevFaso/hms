@@ -2,8 +2,8 @@
 
 > Audit date: 2026-05-02 · Baseline: `main` @ 006384fc · Branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped),
-> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — open PR),
-> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — IN PROGRESS).
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged to develop in `b280a0bd`),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — IN PROGRESS, PR #224).
 
 ## Executive Summary
 
@@ -361,6 +361,123 @@ discipline).
     integration, user-list "Impersonate" button + inline modal.
 11. EN / FR / ES i18n strings.
 12. Update this doc.
+
+---
+
+## MVP 3: Partner-Connector / Integration Health Console (IN SCOPE — `feature/super-admin-gaps-mvp3-integration-health`)
+
+**Goal:** Give a super admin a single read-only console answering *which
+integrations are wired up for which tenants, are they healthy, when did
+they last succeed, and what's failing*.
+
+**Scope — Backend:**
+
+- New entity `IntegrationHealthSnapshot` in `clinical` schema (V78,
+  additive only) keyed on `(integration_id, organization_id NULL)` with
+  `last_status` enum (`HEALTHY` / `DEGRADED` / `FAILING` / `NO_HISTORY`),
+  `last_success_at`, `last_failure_at`, `last_error_message`,
+  `success_count_24h`, `failure_count_24h`, `counts_window_started_at`.
+- `IntegrationHealthRecorder` (`@Component`) with `recordSuccess` /
+  `recordFailure` upsert helpers. Runs in its own `REQUIRES_NEW`
+  transaction and swallows exceptions so a recorder failure never
+  unrolls the caller's primary unit of work. Status derivation:
+  `FAILING` when most recent call failed or failures ≥ 50 % of the
+  window; `DEGRADED` when both successes and failures present with
+  failures < 50 %; `HEALTHY` when last call succeeded and no failures
+  in the window.
+- `EligibilityServiceImpl` wired to call the recorder after every
+  provider invocation with `integration_id = "eligibility"` and the
+  caller's organisation id (derived from `Hospital.getOrganization`).
+  `EligibilityStatus.ERROR` and `UNKNOWN` map to `recordFailure`,
+  everything else to `recordSuccess`.
+- `SuperAdminIntegrationHealthService` aggregates the live inventory
+  (every `PlatformIntegrationAdapter` bean + a synthetic `eligibility`
+  row when at least one `EligibilityProvider` bean is registered) with
+  the persisted snapshots. Worst-case status is rolled up across orgs
+  per integration.
+- New controller `SuperAdminIntegrationHealthController` exposes:
+  - `GET /super-admin/integrations` — full inventory grid.
+  - `GET /super-admin/integrations/{integrationId}` — per-integration
+    drill-down with all org snapshot rows. Throws `ResourceNotFoundException`
+    (HTTP 404) for unknown ids.
+- Both endpoints gated to `ROLE_SUPER_ADMIN`.
+- i18n string `integration.health.notfound` added to EN / FR / default
+  bundles.
+
+**Scope — Frontend:**
+
+- New route `/super-admin/integrations` (SUPER_ADMIN only).
+- `IntegrationHealthComponent` renders four status chips
+  (HEALTHY / DEGRADED / FAILING / NO_HISTORY) and an integration list
+  where each row expands to a per-org table showing last success,
+  last failure (with error message tooltip), and 24 h counts. Loading,
+  error, and empty states are explicit.
+- `IntegrationHealthService` calls the two REST endpoints.
+- `super-admin` Control Tower gets a new "Integration health" quick-link
+  card; sidebar gets an "Integration Health" entry behind
+  `RoleContextService.isSuperAdmin()`.
+- EN / FR / ES i18n bundles extended with the
+  `INTEGRATION_HEALTH.*` namespace.
+
+**Out of scope (this MVP):**
+
+- "Test connection" / "Re-sync now" actions — deferred to MVP-3b once
+  adapter call paths exist.
+- Per-integration time-series history endpoint — `EligibilityCheck`
+  already records every call, but Billing / EHR / Inventory adapters
+  have no call sites yet, so a generic event log waits until MVP-3b.
+- Actual NHIS / NHIA / CNAMGS / mutuelle connectors (separate
+  partner-API track).
+
+**Priority:** P2 (after MVP-1 + MVP-2 shipped on `006384fc`).
+
+**Complexity:** Low–Medium (additive backend + new console UI; no
+existing call paths refactored, only EligibilityServiceImpl wired).
+
+**Effort:** ~5 story points.
+
+**Acceptance Criteria — met:**
+
+- V78 ships additively; no destructive changes; rollback note included.
+- `EligibilityServiceImpl` records success / failure on every
+  `submit()` call (verified by unit tests on the success and error
+  paths).
+- `IntegrationHealthRecorder` upserts the snapshot, rolls the 24 h
+  window, and swallows DB failures (5 unit tests cover create / update
+  / window-rollover / DEGRADED-after-failure / DB-down swallowed).
+- `SuperAdminIntegrationHealthServiceImpl` lists every adapter even
+  when no snapshot exists, rolls FAILING / DEGRADED / HEALTHY worst-case
+  per integration, and throws 404 for unknown ids (3 service tests).
+- Controller passes through to service and propagates 404 (3 controller
+  tests).
+- Frontend renders the inventory, errors gracefully on API failure, and
+  toggles per-integration drill-down (4 Karma specs).
+- EN / FR / ES i18n strings present for all new keys.
+- `npm run lint` and `./gradlew :hospital-core:compileJava
+  :hospital-core:compileTestJava` clean.
+
+**Developer Tasks — done:**
+
+1. Liquibase V78 migration (additive).
+2. `IntegrationHealthStatus` enum + `IntegrationHealthSnapshot` entity.
+3. `IntegrationHealthSnapshotRepository`.
+4. `IntegrationHealthRecorder` (REQUIRES_NEW, swallowing).
+5. `IntegrationHealthSnapshotMapper` (`toDto`).
+6. `SuperAdminIntegrationHealthService` interface +
+   `SuperAdminIntegrationHealthServiceImpl`.
+7. `SuperAdminIntegrationHealthController` (2 endpoints, ROLE_SUPER_ADMIN).
+8. Wire `EligibilityServiceImpl` to call the recorder after each
+   provider invocation.
+9. JUnit + MockMvc tests at every layer (recorder, service, controller).
+10. Update existing `EligibilityServiceImplTest` for the new
+    constructor arg and verify the recorder is called on success
+    and failure.
+11. Frontend `integration-health` component triplet + service + model,
+    plus Karma spec.
+12. Add quick-link card on `/super-admin` + sidebar entry behind
+    `isSuperAdmin()`.
+13. EN / FR / ES i18n strings.
+14. Update this doc.
 
 ---
 

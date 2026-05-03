@@ -50,7 +50,10 @@
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 16px;
-  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
 
   &:hover {
     border-color: #bfdbfe;
@@ -106,7 +109,9 @@
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
-  transition: background 0.18s ease, color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
 
   .material-symbols-outlined {
     font-size: 18px;
@@ -143,7 +148,10 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease;
 
   &:hover:not(.lang-chip-active) {
     background: #eff6ff;
