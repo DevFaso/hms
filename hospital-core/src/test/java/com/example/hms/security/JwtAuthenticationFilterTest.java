@@ -43,6 +43,18 @@ class JwtAuthenticationFilterTest {
     @Mock
     private HospitalUserDetailsService hospitalUserDetailsService;
 
+    /** PR #228 review fixup — JwtAuthenticationFilter now also depends on
+     *  OrganizationLifecycleStatusService and GlobalSessionRevocationService.
+     *  Both are mocked here so @InjectMocks can populate every constructor
+     *  parameter; the lifecycle service is only consulted post-auth and the
+     *  revocation service returns null by default which my filter check
+     *  treats as "not revoked". */
+    @Mock
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
+    @Mock
+    private GlobalSessionRevocationService globalSessionRevocationService;
+
     @InjectMocks
     private JwtAuthenticationFilter filter;
 
