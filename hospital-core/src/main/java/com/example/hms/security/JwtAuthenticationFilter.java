@@ -3,6 +3,7 @@ package com.example.hms.security;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
+import com.example.hms.security.context.ImpersonationContextHolder;
 import com.example.hms.service.OrganizationLifecycleStatusService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -96,6 +97,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } finally {
             long elapsed = (System.nanoTime() - start) / 1_000_000;
             HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
             if (log.isTraceEnabled()) {
                 log.trace("[JWT] Completed filter for path={} in {}ms status={}", path, elapsed, response.getStatus());
             }
@@ -180,6 +182,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
                 SecurityContextHolder.clearContext();
                 HospitalContextHolder.clear();
+                ImpersonationContextHolder.clear();
                 respondTenantBlocked(response);
                 return false;
             }
@@ -233,12 +236,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HospitalContext context = tokenProvider.extractHospitalContext(jwt, authentication);
             context = applyRequestOverrides(context, request);
             HospitalContextHolder.setContext(context);
+            tokenProvider.extractImpersonationContext(jwt)
+                .ifPresent(ImpersonationContextHolder::set);
             forgetMissingPrincipal(extractedSubject);
             return true;
         } catch (UsernameNotFoundException missingPrincipal) {
             handleMissingPrincipal(jwt, extractedSubject, missingPrincipal);
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
             return false;
         } catch (DisabledException disabled) {
             // The JWT is signed and unexpired but belongs to a user whose account is
@@ -252,6 +258,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             log.warn("[JWT] Rejecting token for a disabled/unverified principal.");
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
             return false;
         }
     }

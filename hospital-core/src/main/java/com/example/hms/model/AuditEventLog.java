@@ -29,6 +29,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -121,6 +122,21 @@ public class AuditEventLog extends BaseEntity {
     @Size(max = 255)
     @Column(name = "actor_label", length = 255)
     private String actorLabel;
+
+    /**
+     * Real super-admin user id when this event was performed under an
+     * impersonation token (MVP-4). Null for normal sessions. The {@link #user}
+     * column still points at the impersonated target so downstream RBAC /
+     * tenant-scope queries continue to work; this column preserves the
+     * forensic trail back to the human who started the session.
+     */
+    @Column(name = "impersonator_user_id")
+    private UUID impersonatorUserId;
+
+    /** Real super-admin username at the time the action was taken. */
+    @Size(max = 255)
+    @Column(name = "impersonator_username", length = 255)
+    private String impersonatorUsername;
 
     @PrePersist
     @PreUpdate
