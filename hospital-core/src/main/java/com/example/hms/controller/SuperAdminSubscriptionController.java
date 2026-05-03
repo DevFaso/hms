@@ -107,13 +107,15 @@ public class SuperAdminSubscriptionController {
 
     @DeleteMapping("/organizations/{organizationId}/{subscriptionId}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Cancel an existing subscription row")
+    @Operation(summary = "Cancel an existing subscription row (must belong to the organization on the URL)")
     public ResponseEntity<OrganizationSubscriptionResponseDTO> cancel(
         @PathVariable UUID organizationId,
         @PathVariable UUID subscriptionId
     ) {
-        // organizationId is on the URL for clarity / authorization scoping in
-        // a future MVP; this MVP simply cancels by subscription id.
-        return ResponseEntity.ok(service.cancel(subscriptionId));
+        // PR #228 review — the service now verifies that the subscription
+        // actually belongs to the organization on the URL and throws 400
+        // otherwise. Closes the cross-tenant cancel hole the controller
+        // previously left open.
+        return ResponseEntity.ok(service.cancel(organizationId, subscriptionId));
     }
 }

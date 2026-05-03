@@ -1,5 +1,5 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -22,7 +22,7 @@ const FRESH_REQUEST: SubscriptionPlanRequest = {
 @Component({
   selector: 'app-super-admin-subscriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './subscriptions.html',
   styleUrl: './subscriptions.scss',
 })

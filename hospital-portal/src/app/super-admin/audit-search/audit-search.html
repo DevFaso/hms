@@ -117,7 +117,7 @@
             </tr>
           </thead>
           <tbody>
-            @for (row of rows(); track row.eventTimestamp + row.eventType + row.resourceId) {
+            @for (row of rows(); track row.id) {
               <tr [class.row-impersonated]="row.impersonatorUserId">
                 <td class="cell-time">{{ row.eventTimestamp | date: 'short' }}</td>
                 <td>
@@ -133,13 +133,7 @@
                   <div class="cell-secondary">{{ row.entityType || '' }}</div>
                 </td>
                 <td>
-                  <span
-                    [class]="
-                      row.status === 'SUCCESS'
-                        ? 'status-pill pill-success'
-                        : 'status-pill pill-fail'
-                    "
-                  >
+                  <span [class]="statusPillClass(row.status)">
                     {{ row.status || '—' }}
                   </span>
                 </td>

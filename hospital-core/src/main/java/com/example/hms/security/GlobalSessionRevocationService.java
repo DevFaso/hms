@@ -42,10 +42,16 @@ public class GlobalSessionRevocationService {
     @Scheduled(fixedDelay = 30_000L)
     public void refresh() {
         try {
-            repository.findById(SecurityRevocation.SINGLETON_ID).ifPresent(row -> {
-                Instant value = row.getGlobalMinTokenIat();
-                cachedGlobalMinTokenIat = value != null ? value : EPOCH;
-            });
+            // PR #228 review — fail open when the singleton row is missing
+            // (accidental delete / partial rollback) by resetting the cache
+            // to EPOCH, matching the class-level "treats absence as
+            // iat=epoch" contract. Previously we kept whatever stale value
+            // the cache held, which could leave the system permanently
+            // locked out after a manual DB cleanup.
+            Instant refreshed = repository.findById(SecurityRevocation.SINGLETON_ID)
+                .map(SecurityRevocation::getGlobalMinTokenIat)
+                .orElse(EPOCH);
+            cachedGlobalMinTokenIat = refreshed != null ? refreshed : EPOCH;
         } catch (RuntimeException ex) {
             // Don't let a transient DB blip break authentication. Log and keep
             // the previous cached value — same defensive posture used by

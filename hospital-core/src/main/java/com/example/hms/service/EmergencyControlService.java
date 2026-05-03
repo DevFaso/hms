@@ -13,11 +13,11 @@ import com.example.hms.payload.dto.superadmin.EmergencyKillFeatureRequestDTO;
  */
 public interface EmergencyControlService {
 
-    EmergencyActionResponseDTO forceLogoutAll(EmergencyForceLogoutRequestDTO request);
+    EmergencyActionResponseDTO forceLogoutAll(EmergencyForceLogoutRequestDTO request, String mfaToken);
 
-    EmergencyActionResponseDTO killFeature(EmergencyKillFeatureRequestDTO request);
+    EmergencyActionResponseDTO killFeature(EmergencyKillFeatureRequestDTO request, String mfaToken);
 
-    EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request);
+    EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request, String mfaToken);
 
-    EmergencyActionResponseDTO broadcast(EmergencyBroadcastRequestDTO request);
+    EmergencyActionResponseDTO broadcast(EmergencyBroadcastRequestDTO request, String mfaToken);
 }

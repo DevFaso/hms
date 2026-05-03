@@ -1,8 +1,8 @@
 package com.example.hms.payload.dto.superadmin;
 
+import com.example.hms.model.platform.OrganizationSubscription;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -24,6 +24,11 @@ public class OrganizationSubscriptionRequestDTO {
     @PositiveOrZero
     private int seatLimit;
 
-    @Size(max = 20)
-    private String billingPeriod;
+    /**
+     * PR #228 review — typed as the enum so unknown values are rejected
+     * with HTTP 400 by Spring's enum binder instead of being silently
+     * coerced to MONTHLY by the service. Null is still allowed and
+     * defaulted to MONTHLY at the service boundary.
+     */
+    private OrganizationSubscription.BillingPeriod billingPeriod;
 }

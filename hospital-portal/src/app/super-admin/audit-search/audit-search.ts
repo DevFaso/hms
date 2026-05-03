@@ -123,4 +123,23 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     if (!v) return undefined;
     return v.length === 16 ? `${v}:00` : v;
   }
+
+  /**
+   * PR #228 review — status pill colour now distinguishes SUCCESS,
+   * FAILURE/ERROR, PENDING/IN_PROGRESS, and unknown values instead of
+   * collapsing every non-SUCCESS into the failure style.
+   */
+  statusPillClass(status: string | null): string {
+    const normalised = (status ?? '').toUpperCase();
+    if (normalised === 'SUCCESS' || normalised === 'COMPLETED') {
+      return 'status-pill pill-success';
+    }
+    if (normalised === 'FAILURE' || normalised === 'FAILED' || normalised === 'ERROR') {
+      return 'status-pill pill-fail';
+    }
+    if (normalised === 'PENDING' || normalised === 'IN_PROGRESS') {
+      return 'status-pill pill-pending';
+    }
+    return 'status-pill pill-neutral';
+  }
 }

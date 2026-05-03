@@ -52,8 +52,12 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
         Pageable effective = ensureSorted(pageable);
         Page<AuditEventLog> page = auditEventLogRepository.findAll(spec, effective);
 
+        // PR #228 review — use the lite mapper variant: it skips the
+        // per-row PatientRepository.findById lookup that the standard toDto
+        // performs for PATIENT events, which would be a textbook N+1 across
+        // a paged search result.
         List<AuditEventLogResponseDTO> content = page.getContent().stream()
-            .map(mapper::toDto)
+            .map(mapper::toDtoLite)
             .toList();
 
         return AuditSearchPageDTO.builder()
@@ -105,19 +109,21 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             if (status != null) {
                 predicates.add(cb.equal(root.get("status"), status));
             }
+            // PR #228 review — share a single assignment+hospital join
+            // chain across the hospital and organization filters instead of
+            // creating two redundant join paths in the generated SQL.
+            jakarta.persistence.criteria.Join<?, ?> assignmentJoin = null;
+            jakarta.persistence.criteria.Join<?, ?> hospitalJoin = null;
+            if (hospitalId != null || organizationId != null) {
+                assignmentJoin = root.join("assignment", JoinType.LEFT);
+                hospitalJoin = assignmentJoin.join("hospital", JoinType.LEFT);
+            }
             if (hospitalId != null) {
-                predicates.add(cb.equal(
-                    root.join("assignment", JoinType.LEFT)
-                        .join("hospital", JoinType.LEFT)
-                        .get("id"),
-                    hospitalId));
+                predicates.add(cb.equal(hospitalJoin.get("id"), hospitalId));
             }
             if (organizationId != null) {
                 predicates.add(cb.equal(
-                    root.join("assignment", JoinType.LEFT)
-                        .join("hospital", JoinType.LEFT)
-                        .join("organization", JoinType.LEFT)
-                        .get("id"),
+                    hospitalJoin.join("organization", JoinType.LEFT).get("id"),
                     organizationId));
             }
             if (impersonatorUserId != null) {
@@ -138,9 +144,11 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
                 predicates.add(cb.lessThanOrEqualTo(root.get("eventTimestamp"), toDate));
             }
 
-            if (query != null) {
-                query.distinct(true);
-            }
+            // PR #228 review — distinct(true) was applied unconditionally
+            // even when no multi-valued joins are used. All joins above are
+            // many-to-one (assignment → hospital → organization), so an
+            // AuditEventLog row cannot duplicate. Removed to keep count
+            // queries fast and let the planner pick the obvious path.
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }

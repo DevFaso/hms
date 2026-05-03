@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,37 +37,41 @@ public class SuperAdminEmergencyController {
 
     @PostMapping("/force-logout-all")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Force-logout every active session by bumping the global min-iat timestamp")
+    @Operation(summary = "Force-logout every active session by bumping the global min-iat timestamp. Requires X-Mfa-Token when actor has MFA enrolled.")
     public ResponseEntity<EmergencyActionResponseDTO> forceLogoutAll(
-        @Valid @RequestBody EmergencyForceLogoutRequestDTO request
+        @Valid @RequestBody EmergencyForceLogoutRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(service.forceLogoutAll(request));
+        return ResponseEntity.ok(service.forceLogoutAll(request, mfaToken));
     }
 
     @PostMapping("/kill-feature")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Kill-switch a feature flag platform-wide via FeatureFlagOverride")
+    @Operation(summary = "Kill-switch a feature flag platform-wide via FeatureFlagOverride. Requires X-Mfa-Token when actor has MFA enrolled.")
     public ResponseEntity<EmergencyActionResponseDTO> killFeature(
-        @Valid @RequestBody EmergencyKillFeatureRequestDTO request
+        @Valid @RequestBody EmergencyKillFeatureRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(service.killFeature(request));
+        return ResponseEntity.ok(service.killFeature(request, mfaToken));
     }
 
     @PostMapping("/force-mfa-reenrol")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Clear MFA enrolment for the listed users (or all enrolled users when empty)")
+    @Operation(summary = "Clear MFA enrolment for the listed users (or all enrolled users when empty). Requires X-Mfa-Token when actor has MFA enrolled.")
     public ResponseEntity<EmergencyActionResponseDTO> forceMfaReenrol(
-        @Valid @RequestBody EmergencyForceMfaRequestDTO request
+        @Valid @RequestBody EmergencyForceMfaRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(service.forceMfaReenrol(request));
+        return ResponseEntity.ok(service.forceMfaReenrol(request, mfaToken));
     }
 
     @PostMapping("/broadcast")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Publish a banner message to /topic/emergency-broadcast for every connected client")
+    @Operation(summary = "Publish a banner message to /topic/emergency-broadcast for every connected client. Requires X-Mfa-Token when actor has MFA enrolled.")
     public ResponseEntity<EmergencyActionResponseDTO> broadcast(
-        @Valid @RequestBody EmergencyBroadcastRequestDTO request
+        @Valid @RequestBody EmergencyBroadcastRequestDTO request,
+        @RequestHeader(value = "X-Mfa-Token", required = false) String mfaToken
     ) {
-        return ResponseEntity.ok(service.broadcast(request));
+        return ResponseEntity.ok(service.broadcast(request, mfaToken));
     }
 }

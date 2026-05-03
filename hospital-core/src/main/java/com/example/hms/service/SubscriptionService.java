@@ -27,7 +27,7 @@ public interface SubscriptionService {
     OrganizationSubscriptionResponseDTO assignPlan(
         UUID organizationId, OrganizationSubscriptionRequestDTO request);
 
-    OrganizationSubscriptionResponseDTO cancel(UUID subscriptionId);
+    OrganizationSubscriptionResponseDTO cancel(UUID organizationId, UUID subscriptionId);
 
     List<OrganizationSubscriptionResponseDTO> listForOrganization(UUID organizationId);
 

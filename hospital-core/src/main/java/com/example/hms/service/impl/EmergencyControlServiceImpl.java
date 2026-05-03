@@ -13,13 +13,16 @@ import com.example.hms.payload.dto.superadmin.EmergencyKillFeatureRequestDTO;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.EmergencyControlService;
 import com.example.hms.service.FeatureFlagService;
+import com.example.hms.service.MfaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,12 +61,18 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final MfaService mfaService;
+
+    /** Reuses the same strict-mode flag MVP-4 uses for impersonation start. */
+    @Value("${hms.support-impersonation.require-mfa-strict:false}")
+    private boolean requireMfaStrict;
 
     @Override
     @Transactional
-    public EmergencyActionResponseDTO forceLogoutAll(EmergencyForceLogoutRequestDTO request) {
+    public EmergencyActionResponseDTO forceLogoutAll(EmergencyForceLogoutRequestDTO request, String mfaToken) {
         UUID actorId = currentUserId();
         String actorUsername = SecurityUtils.getCurrentUsername();
+        verifyMfaStepUp(actorId, mfaToken, "force-logout-all");
         Instant takenAt = revocationService.revokeAll(actorId, actorUsername, request.getReason());
         audit(actorId, actorUsername, "EMERGENCY_FORCE_LOGOUT_ALL", request.getReason());
         return EmergencyActionResponseDTO.builder()
@@ -77,8 +86,9 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
 
     @Override
     @Transactional
-    public EmergencyActionResponseDTO killFeature(EmergencyKillFeatureRequestDTO request) {
+    public EmergencyActionResponseDTO killFeature(EmergencyKillFeatureRequestDTO request, String mfaToken) {
         String actorUsername = SecurityUtils.getCurrentUsername();
+        verifyMfaStepUp(currentUserId(), mfaToken, "kill-feature");
         featureFlagService.upsertOverride(
             request.getFlagKey(),
             false,
@@ -100,8 +110,9 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
 
     @Override
     @Transactional
-    public EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request) {
+    public EmergencyActionResponseDTO forceMfaReenrol(EmergencyForceMfaRequestDTO request, String mfaToken) {
         String actorUsername = SecurityUtils.getCurrentUsername();
+        verifyMfaStepUp(currentUserId(), mfaToken, "force-mfa-reenrol");
         List<UUID> targets = request.getUserIds();
         if (targets == null || targets.isEmpty()) {
             // Fall back to every user with an active enrolment row.
@@ -142,8 +153,9 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
 
     @Override
     @Transactional
-    public EmergencyActionResponseDTO broadcast(EmergencyBroadcastRequestDTO request) {
+    public EmergencyActionResponseDTO broadcast(EmergencyBroadcastRequestDTO request, String mfaToken) {
         String actorUsername = SecurityUtils.getCurrentUsername();
+        verifyMfaStepUp(currentUserId(), mfaToken, "broadcast");
         String severity = request.getSeverity() == null ? "INFO" : request.getSeverity();
 
         Map<String, Object> payload = new HashMap<>();
@@ -180,6 +192,55 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
         return Optional.ofNullable(userRepository.findByUsername(username).orElse(null))
             .map(User::getId)
             .orElse(null);
+    }
+
+    /**
+     * PR #228 review — emergency endpoints now require an MFA step-up
+     * (X-Mfa-Token header) before they take effect, mirroring the same
+     * pattern MVP-2 tenant lifecycle and MVP-4 impersonation start use.
+     * Behaviour:
+     *   - Actor enrolled in MFA → token must verify; missing / invalid
+     *     token rejects with UnauthorizedException.
+     *   - Actor not enrolled, strict mode on → reject (must enrol first).
+     *   - Actor not enrolled, strict mode off → allow but emit a
+     *     SECURITY_ALERT_TRIGGERED audit row recording the bypass, so the
+     *     forensic trail survives.
+     */
+    private void verifyMfaStepUp(UUID actorId, String mfaToken, String action) {
+        if (actorId == null) {
+            throw new UnauthorizedException("emergency_unauth: missing super-admin actor for " + action);
+        }
+        boolean enrolled;
+        try {
+            enrolled = mfaService.isMfaEnabled(actorId);
+        } catch (RuntimeException ex) {
+            log.warn("[EMERGENCY] MFA enrollment lookup failed for actor {}: {}", actorId, ex.getMessage());
+            throw new UnauthorizedException("mfa_required: enrollment lookup unavailable");
+        }
+        if (enrolled) {
+            if (mfaToken == null || mfaToken.isBlank() || !mfaService.verifyCode(actorId, mfaToken)) {
+                throw new UnauthorizedException(
+                    "mfa_required: invalid or missing X-Mfa-Token for emergency " + action);
+            }
+            return;
+        }
+        if (requireMfaStrict) {
+            throw new UnauthorizedException(
+                "mfa_required: actor must enrol MFA before triggering emergency " + action);
+        }
+        // Unenrolled actor — let it through but audit the bypass.
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actorId)
+                .userName(SecurityUtils.getCurrentUsername())
+                .eventType(AuditEventType.SECURITY_ALERT_TRIGGERED)
+                .eventDescription("Emergency " + action + " performed without MFA step-up "
+                    + "(actor not enrolled, non-strict mode).")
+                .status(AuditStatus.SUCCESS)
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("[EMERGENCY] Failed to audit MFA-bypass event", ex);
+        }
     }
 
     private void audit(UUID userId, String username, String descriptionPrefix, String description) {

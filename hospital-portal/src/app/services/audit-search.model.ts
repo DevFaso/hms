@@ -3,6 +3,7 @@
  * Mirrors the backend AuditEventLogResponseDTO and AuditSearchPageDTO.
  */
 export interface AuditSearchRow {
+  id: string;
   userName: string | null;
   hospitalName: string | null;
   roleName: string | null;

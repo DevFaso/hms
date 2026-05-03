@@ -26,7 +26,6 @@ import java.util.UUID;
 public class SubscriptionServiceImpl implements SubscriptionService {
 
     private static final String DEFAULT_CURRENCY = "USD";
-    private static final String DEFAULT_BILLING_PERIOD = "MONTHLY";
 
     private final SubscriptionPlanRepository planRepository;
     private final OrganizationSubscriptionRepository subscriptionRepository;
@@ -99,6 +98,14 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         SubscriptionPlan plan = planRepository.findById(request.getPlanId())
             .orElseThrow(() -> new ResourceNotFoundException("SubscriptionPlan not found: " + request.getPlanId()));
 
+        // PR #228 review — refuse to assign a deactivated plan. The
+        // controller summary advertises that deactivated plans "reject new
+        // assignments", which only holds if we enforce it here.
+        if (!plan.isActive()) {
+            throw new IllegalArgumentException(
+                "Cannot assign deactivated subscription plan: " + plan.getTierCode());
+        }
+
         // Cancel any existing ACTIVE subscription so the partial unique index
         // (one ACTIVE per org) holds. Done in-memory then saved — keeps the
         // entire assignment in a single tx.
@@ -109,14 +116,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 subscriptionRepository.save(existing);
             });
 
-        OrganizationSubscription.BillingPeriod period;
-        try {
-            period = request.getBillingPeriod() == null
-                ? OrganizationSubscription.BillingPeriod.MONTHLY
-                : OrganizationSubscription.BillingPeriod.valueOf(request.getBillingPeriod());
-        } catch (IllegalArgumentException ex) {
-            period = OrganizationSubscription.BillingPeriod.valueOf(DEFAULT_BILLING_PERIOD);
-        }
+        // PR #228 review — billing period is now a typed enum on the DTO,
+        // so Spring rejects unknown values with HTTP 400 before we ever get
+        // here. Null still defaults to MONTHLY for backwards compatibility.
+        OrganizationSubscription.BillingPeriod period = request.getBillingPeriod() == null
+            ? OrganizationSubscription.BillingPeriod.MONTHLY
+            : request.getBillingPeriod();
 
         OrganizationSubscription sub = OrganizationSubscription.builder()
             .organization(organization)
@@ -131,9 +136,17 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
     @Override
     @Transactional
-    public OrganizationSubscriptionResponseDTO cancel(UUID subscriptionId) {
+    public OrganizationSubscriptionResponseDTO cancel(UUID organizationId, UUID subscriptionId) {
         OrganizationSubscription sub = subscriptionRepository.findById(subscriptionId)
             .orElseThrow(() -> new ResourceNotFoundException("Subscription not found: " + subscriptionId));
+        // PR #228 review — verify the subscription belongs to the
+        // organization on the URL. Otherwise a super admin who knows a
+        // subscription id could cancel it via any org's cancel route.
+        if (sub.getOrganization() == null
+                || !organizationId.equals(sub.getOrganization().getId())) {
+            throw new IllegalArgumentException(
+                "Subscription " + subscriptionId + " does not belong to organization " + organizationId);
+        }
         sub.setStatus(OrganizationSubscription.Status.CANCELLED);
         sub.setEndsAt(Instant.now());
         return mapper.toDto(subscriptionRepository.save(sub));
