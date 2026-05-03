@@ -3,6 +3,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -53,6 +54,7 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
+        canActivate: [SuperAdminRedirectGuard],
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
@@ -1015,10 +1017,11 @@ export const routes: Routes = [
           import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
       },
 
-      // Administration
+      // Administration — hospital-admin landing. Super admins are redirected
+      // by SuperAdminRedirectGuard to /super-admin (MVP-5).
       {
         path: 'admin',
-        canActivate: [RoleGuard],
+        canActivate: [SuperAdminRedirectGuard, RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },

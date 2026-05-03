@@ -174,13 +174,22 @@ export class ShellComponent implements OnInit, OnDestroy {
       ];
     }
 
+    // MVP-5: when the active role is super admin, the side-nav drops the
+    // generic Dashboard entry — the Control Tower (/super-admin, appended by
+    // appendSuperAdminEntry) is their landing page. Other roles still see it.
+    const isActiveSuperAdmin = activeRole === 'ROLE_SUPER_ADMIN';
+
     const items: NavItem[] = [
-      {
-        icon: 'dashboard',
-        label: 'Dashboard',
-        translationKey: 'NAV.DASHBOARD',
-        route: '/dashboard',
-      },
+      ...(isActiveSuperAdmin
+        ? []
+        : [
+            {
+              icon: 'dashboard',
+              label: 'Dashboard',
+              translationKey: 'NAV.DASHBOARD',
+              route: '/dashboard',
+            },
+          ]),
       {
         icon: 'people',
         label: 'Patients',
@@ -391,13 +400,18 @@ export class ShellComponent implements OnInit, OnDestroy {
         { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
         { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
-        {
+      );
+      // MVP-5: keep the hospital-admin "Administration" entry only for ADMIN /
+      // HOSPITAL_ADMIN. Super admins are redirected from /admin to
+      // /super-admin and shouldn't see a duplicate side-nav entry.
+      if (!isActiveSuperAdmin) {
+        items.push({
           icon: 'admin_panel_settings',
           label: 'Administration',
           translationKey: 'NAV.ADMINISTRATION',
           route: '/admin',
-        },
-      );
+        });
+      }
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({
