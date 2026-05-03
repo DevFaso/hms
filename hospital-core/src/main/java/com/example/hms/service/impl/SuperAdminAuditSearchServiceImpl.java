@@ -20,6 +20,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,6 +56,68 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             .totalElements(page.getTotalElements())
             .totalPages(page.getTotalPages())
             .build();
+    }
+
+    @Override
+    public byte[] exportCsv(AuditSearchFilter filter, int maxRows) {
+        AuditSearchFilter effective = filter == null ? AuditSearchFilter.empty() : filter;
+        Specification<AuditEventLog> spec = buildSpec(effective);
+        // Cap the result so a wide-open filter cannot OOM the JVM. The
+        // controller passes a sane ceiling; we re-clamp here as defence
+        // in depth so a future caller can't bypass it by passing
+        // Integer.MAX_VALUE.
+        int safeMax = Math.clamp(maxRows, 1, 50_000);
+        Pageable bounded = PageRequest.of(
+            0, safeMax, Sort.by(Sort.Direction.DESC, FIELD_EVENT_TIMESTAMP));
+
+        List<AuditEventLog> rows = auditEventLogRepository.findAll(spec, bounded).getContent();
+
+        StringBuilder out = new StringBuilder(rows.size() * 256);
+        appendCsvHeader(out);
+        for (AuditEventLog row : rows) {
+            // Reuse the lite mapper so PATIENT events don't trigger the
+            // per-row PatientRepository lookup the standard mapper does.
+            AuditEventLogResponseDTO dto = mapper.toDtoLite(row);
+            appendCsvRow(out, dto);
+        }
+        return out.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private void appendCsvHeader(StringBuilder out) {
+        out.append("eventTimestamp,eventType,userName,roleName,hospitalName,")
+           .append("entityType,resourceId,resourceName,status,impersonatorUsername\n");
+    }
+
+    private void appendCsvRow(StringBuilder out, AuditEventLogResponseDTO dto) {
+        out.append(csvField(dto.getEventTimestamp() == null ? "" : dto.getEventTimestamp().toString())).append(',')
+           .append(csvField(dto.getEventType())).append(',')
+           .append(csvField(dto.getUserName())).append(',')
+           .append(csvField(dto.getRoleName())).append(',')
+           .append(csvField(dto.getHospitalName())).append(',')
+           .append(csvField(dto.getEntityType())).append(',')
+           .append(csvField(dto.getResourceId())).append(',')
+           .append(csvField(dto.getResourceName())).append(',')
+           .append(csvField(dto.getStatus())).append(',')
+           .append(csvField(dto.getImpersonatorUsername())).append('\n');
+    }
+
+    /**
+     * Minimal RFC 4180-style escape: any field that contains a quote,
+     * comma, CR, or LF is wrapped in double-quotes with embedded
+     * quotes doubled. Plain fields pass through unwrapped.
+     */
+    private String csvField(String value) {
+        if (value == null) {
+            return "";
+        }
+        boolean needsQuote = value.indexOf('"') >= 0
+            || value.indexOf(',') >= 0
+            || value.indexOf('\n') >= 0
+            || value.indexOf('\r') >= 0;
+        if (!needsQuote) {
+            return value;
+        }
+        return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
     private Pageable ensureSorted(Pageable pageable) {
@@ -115,9 +178,10 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
     }
 
     /**
-     * Single assignment+hospital join chain shared across the hospital and
-     * organization filters (PR #228 review — was creating two redundant
-     * join paths).
+     * Single assignment+hospital join chain shared across the hospital,
+     * organization, and tenantRegion filters (PR #228 review — was
+     * creating redundant join paths). MVP-9b reuses the same chain by
+     * walking one extra hop into hospital.organization.region.
      */
     private void addHospitalAndOrgPredicates(
         List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
@@ -130,10 +194,18 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
         if (f.hospitalId() != null) {
             predicates.add(cb.equal(hospitalJoin.get("id"), f.hospitalId()));
         }
-        if (f.organizationId() != null) {
-            predicates.add(cb.equal(
-                hospitalJoin.join("organization", JoinType.LEFT).get("id"),
-                f.organizationId()));
+        // Both organizationId and tenantRegion live on hospital.organization,
+        // so share the join even when only one of the two is set.
+        if (f.organizationId() != null || f.tenantRegion() != null) {
+            Join<?, ?> orgJoin = hospitalJoin.join("organization", JoinType.LEFT);
+            if (f.organizationId() != null) {
+                predicates.add(cb.equal(orgJoin.get("id"), f.organizationId()));
+            }
+            if (f.tenantRegion() != null) {
+                // MVP-9b — region is an enum mapped EnumType.STRING; equality
+                // works directly without any case folding.
+                predicates.add(cb.equal(orgJoin.get("region"), f.tenantRegion()));
+            }
         }
     }
 

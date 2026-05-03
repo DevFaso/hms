@@ -87,7 +87,7 @@ class FeatureFlagServiceImplTest {
 
     @Test
     void upsertOverrideCreatesOrUpdatesRecord() {
-        when(overrideRepository.findByFlagKeyIgnoreCase("feature.delta"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.delta", null))
             .thenReturn(Optional.empty());
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(
             FeatureFlagOverride.builder().flagKey("feature.delta").enabled(false).build()
@@ -115,13 +115,36 @@ class FeatureFlagServiceImplTest {
     }
 
     @Test
+    void perTenantUpsertWritesOrgScopedRow() {
+        UUID orgId = UUID.randomUUID();
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.beta", orgId))
+            .thenReturn(Optional.empty());
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
+
+        service.upsertOverride(
+            "feature.beta",
+            true,
+            "tenant-only override",
+            "tester",
+            null,
+            orgId,
+            Locale.ENGLISH);
+
+        verify(overrideRepository).save(overrideCaptor.capture());
+        FeatureFlagOverride saved = overrideCaptor.getValue();
+        assertThat(saved.getFlagKey()).isEqualTo("feature.beta");
+        assertThat(saved.getOrganizationId()).isEqualTo(orgId);
+        assertThat(saved.isEnabled()).isTrue();
+    }
+
+    @Test
     void deleteOverrideRemovesRecordAndRecalculatesFlags() {
         FeatureFlagOverride stored = FeatureFlagOverride.builder()
             .flagKey("feature.beta")
             .enabled(false)
             .build();
 
-        when(overrideRepository.findByFlagKeyIgnoreCase("feature.beta"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.beta", null))
             .thenReturn(Optional.of(stored));
         when(overrideRepository.findAllByOrderByFlagKeyAsc())
             .thenReturn(List.of());

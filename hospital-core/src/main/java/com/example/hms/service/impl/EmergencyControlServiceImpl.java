@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.superadmin.EmergencyKillFeatureRequestDTO;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.exception.UnauthorizedException;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.security.SecurityUtils;
@@ -62,6 +63,7 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
     private final AuditEventLogService auditEventLogService;
     private final SimpMessagingTemplate messagingTemplate;
     private final MfaService mfaService;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     /** Reuses the same strict-mode flag MVP-4 uses for impersonation start. */
     @Value("${hms.support-impersonation.require-mfa-strict:false}")
@@ -127,6 +129,19 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
                 .toList();
         }
 
+        // MVP-7b: optional hospital scope. Intersect the target list with
+        // users who have an active assignment to the named hospital so a
+        // platform-wide reset can be narrowed to one site (e.g. one
+        // hospital reports a phishing incident — reset only its staff).
+        UUID hospitalScope = request.getHospitalId();
+        if (hospitalScope != null) {
+            java.util.Set<UUID> hospitalUserIds = assignmentRepository
+                .findActiveUserIdsByHospitalId(hospitalScope);
+            targets = targets.stream()
+                .filter(hospitalUserIds::contains)
+                .toList();
+        }
+
         int affected = 0;
         // Snapshot the resolved target list so the audit + response message
         // stay consistent even if the loop encounters a user with no rows.
@@ -140,14 +155,19 @@ public class EmergencyControlServiceImpl implements EmergencyControlService {
             mfaBackupCodeRepository.deleteAllByUserId(userId);
         }
 
+        String scopeSuffix = hospitalScope != null
+            ? " (scoped to hospital " + hospitalScope + ")"
+            : "";
         audit(currentUserId(), actorUsername, "EMERGENCY_FORCE_MFA_REENROL",
-            "Cleared MFA for " + targets.size() + " user(s): " + request.getReason());
+            "Cleared MFA for " + resolvedTargets.size() + " user(s)" + scopeSuffix
+                + ": " + request.getReason());
         return EmergencyActionResponseDTO.builder()
             .action("FORCE_MFA_REENROL")
             .takenAt(Instant.now())
             .actorUsername(actorUsername)
             .affectedRows(affected)
-            .message("Cleared " + affected + " MFA enrolment row(s) for " + targets.size() + " user(s).")
+            .message("Cleared " + affected + " MFA enrolment row(s) for "
+                + resolvedTargets.size() + " user(s)" + scopeSuffix + ".")
             .build();
     }
 

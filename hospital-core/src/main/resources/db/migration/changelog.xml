@@ -1136,4 +1136,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V83 — Per-tenant feature-flag overrides (MVP-7b)
+         Adds organization_id NULL to FeatureFlagOverride so a flag key
+         can carry both a global row (org NULL) and per-tenant rows.
+         Replaces the single-column UNIQUE(flag_key) with a composite
+         UNIQUE(flag_key, organization_id) so global + per-tenant rows
+         coexist. Strictly additive; rollback path documented in the
+         SQL file.
+         ================================================================= -->
+    <changeSet id="V83-feature-flag-override-organization" author="hms-team" runOnChange="false">
+        <sqlFile path="V83__feature_flag_override_organization.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
