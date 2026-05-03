@@ -137,14 +137,15 @@ describe('SuperAdminComponent', () => {
     expect(c.platformActions()).toBeNull();
   });
 
-  it('exposes 8 quick links covering core super-admin destinations', () => {
+  it('exposes the quick-link grid covering core super-admin destinations', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
 
     const c = setup();
     const routes = c.quickLinks.map((l) => l.route);
 
-    expect(c.quickLinks.length).toBe(8);
+    expect(c.quickLinks.length).toBe(9);
+    expect(routes).toContain('/super-admin/integrations');
     expect(routes).toEqual(
       jasmine.arrayContaining([
         '/organizations',

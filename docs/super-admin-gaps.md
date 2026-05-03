@@ -1,12 +1,21 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
-> Audit date: 2026-05-02 · Baseline: `main` @ 4ef74a08 · Branch: `feature/super-admin-gaps`
+> Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
+> 006384fc · `develop` @ `6d3c9d15` · Branches:
+> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
+> into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — merged
+> into develop in `bbf09844` via PR #224 with all six Copilot review
+> findings folded in; awaits next promote-to-main),
+> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — in
+> progress on this branch; targets the next develop merge).
 
 ## Executive Summary
 
-The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry). The frontend exposes super-admin functions via ~10 separate top-level routes but lacks a **unified super-admin landing page** and several SaaS-grade capabilities (tenant lifecycle, support impersonation, partner-connector status, subscription/quotas).
+The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVP-1 (Control Tower) and MVP-2 (Tenant Lifecycle) are scoped to land on this feature branch.** The remaining MVPs are tracked here as the forward queue.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is in progress** on `feature/super-admin-gaps-mvp5-surface-consolidation` — frontend-only redirect guard + dashboard cleanup + side-nav role filter to retire the duplicate `/dashboard` superadmin branch and the duplicate `/admin` reachability so `/super-admin` is the single mission-control. MVPs 6–9 remain in the forward queue.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -65,21 +74,30 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 | 6 | **Emergency global controls** | None | Force-logout-all, kill-switch a feature globally, force MFA re-enrolment, broadcast banner. |
 | 7 | **Cross-tenant audit search UI** | Backend present, no UI | `AuditEventLog`, `FrontendAuditEvent`, `PermissionMatrixAuditEvent` exist; super admin has no unified search/filter UI spanning them. |
 | 8 | **Data-residency / region tagging on Organization** | None | Cross-border (BF / SN / CI) compliance — schema-level decision worth flagging early. |
+| 9 | **Super-admin surface duplication** | Three landing pages live side-by-side: `/dashboard` still renders a `'superadmin'` view branch (stat strip + quick actions + recent audit), `/admin` is still in the side-nav for ADMIN+SUPER_ADMIN, and `/super-admin` (the Control Tower from MVP-1) is the intended single home. *Identified after MVP-4 review* — MVP-1 added the Control Tower without retiring the duplicates. |
 
 ## MVP List (Priority Order)
 
-1. **Super-Admin Control Tower** — landing page · *in scope for this branch*
-2. **Tenant Lifecycle** — suspend / archive / restore / purge · *in scope for this branch*
-3. Partner-Connector / Integration Health Console
-4. Support Impersonation with Audit
-5. Subscription / Plan / Quotas
-6. Emergency Global Controls
-7. Cross-Tenant Audit Search UI
-8. Data-Residency / Region Tagging
+1. **Super-Admin Control Tower** — landing page · *shipped to main `006384fc`*
+2. **Tenant Lifecycle** — suspend / archive / restore / purge · *shipped to main `006384fc`*
+3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
+4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
+5. **Super-Admin Surface Consolidation** · *in progress on `feature/super-admin-gaps-mvp5-surface-consolidation` — retires `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
+6. Subscription / Plan / Quotas
+7. Emergency Global Controls
+8. Cross-Tenant Audit Search UI
+9. Data-Residency / Region Tagging
 
 ---
 
-## MVP 1: Super-Admin Control Tower (IN SCOPE)
+## MVP 1: Super-Admin Control Tower (SHIPPED to main `006384fc` via promote chain — historical)
+
+> Retrospective note: this MVP introduced `/super-admin` as the
+> intended single landing page, but did **not** retire the existing
+> super-admin views on `/dashboard` and `/admin`. Both remain
+> reachable, creating the duplication that MVP-5 now closes out.
+> The original "Side-nav restructuring" risk-and-open-question
+> below pre-empted exactly this — it has been folded into MVP-5.
 
 **Goal:** Give a logged-in super admin a single landing page that surfaces every cross-tenant capability they govern.
 
@@ -135,7 +153,7 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVP 2: Tenant Lifecycle (IN SCOPE)
+## MVP 2: Tenant Lifecycle (SHIPPED to main `006384fc` via promote chain — historical)
 
 **Goal:** Allow a super admin to suspend, archive, restore, and purge an Organization (tenant) and its hospitals, with full audit and a safe two-step confirmation.
 
@@ -214,23 +232,448 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVPs 3–8: Forward Queue (not in scope this branch)
+## MVP 4: Support Impersonation with Audit (MERGED into develop `bbf09844` via PR #224)
+
+**Goal:** Let a super admin act as another (non-super-admin) user for
+support purposes, with every action under that session traceable back to
+the real human.
+
+**Scope — Backend:**
+
+- V79 migration (additive): `support.audit_event_logs` gains
+  `impersonator_user_id UUID` + `impersonator_username VARCHAR(255)`,
+  partial index on `(impersonator_user_id, event_timestamp DESC) WHERE
+  impersonator_user_id IS NOT NULL` for forensic queries.
+- New JWT claims `CLAIM_IMPERSONATOR_USER_ID` + `CLAIM_IMPERSONATOR_USERNAME`
+  in `SecurityConstants`. JWT subject + roles claim represent the
+  *target* user so all downstream RBAC and `TenantScopeSpecification`
+  behave as if the target had logged in.
+- `JwtTokenProvider.generateImpersonationAccessToken(target,
+  impersonatorUserId, impersonatorUsername, ttlMillis)` mints a
+  short-lived (default 30 min, configurable via
+  `hms.support-impersonation.ttl-ms`) token. **No refresh token is
+  issued** — when the TTL expires the super admin must call `start`
+  again. This caps the blast radius of a leaked impersonation token at
+  the chosen TTL.
+- `JwtTokenProvider.extractImpersonationContext(token)` reads the two
+  claims and wraps them in an `ImpersonationContext`.
+- `ImpersonationContext` (record) + `ImpersonationContextHolder`
+  (thread-local utility class mirroring `HospitalContextHolder`).
+  `JwtAuthenticationFilter` populates the holder from the JWT claims
+  and clears it in every `finally` / failure branch alongside
+  `HospitalContextHolder.clear()`.
+- `AuditEventLogServiceImpl` reads the holder before persisting and
+  auto-stamps `impersonator_user_id` / `impersonator_username` on every
+  audit row. Boundary events (start/stop) bypass the holder by setting
+  the impersonator fields explicitly on the request DTO so the audit
+  trail is complete even when the JWT subject is the actor (start) or
+  when the holder is cleared mid-call (stop).
+- `AuditEventType.IMPERSONATION_STARTED` + `…ENDED` enum values.
+- `SupportImpersonationService` interface + impl with three operations:
+  - `start(request, mfaToken)` — ROLE_SUPER_ADMIN, validates target
+    exists, target is not super admin (anti-collusion), target is not
+    self, no nested impersonation, MFA step-up via the existing
+    `X-Mfa-Token` plumbing reused from MVP-2. Mints the token, emits
+    `IMPERSONATION_STARTED`, returns DTO with `accessToken` +
+    `expiresAt` + actor + target info.
+  - `stop()` — emits `IMPERSONATION_ENDED`. The JWT subject at this
+    call is the target; the impersonator is read off the holder.
+  - `getActive()` — reflects the holder state for the frontend.
+- `SuperAdminImpersonationController` exposes `POST /super-admin/
+  impersonation/{start,stop}` and `GET .../active`. `start` is gated
+  to `ROLE_SUPER_ADMIN`; `stop` and `active` to `isAuthenticated()`
+  because the bearer is the impersonation token (which carries the
+  target's roles, not super admin).
+- Cross-tenant audit response DTO + mapper carry the new impersonator
+  fields so the existing audit-log UI (and the future MVP-7 cross-tenant
+  audit search) can surface them.
+
+**Scope — Frontend:**
+
+- New `ImpersonationService` (`/super-admin/impersonation/{start,stop,active}`)
+  with a `signal` mirroring active state. `start()` saves the original
+  super-admin token under `sessionStorage['auth_token_pre_impersonation']`
+  before swapping in the impersonation token; `stop()` restores it.
+  `forceStop()` drops the impersonation token without hitting the
+  server (used on 401 / TTL expiry). `refreshActive()` re-hydrates the
+  signal on shell mount so a page refresh while impersonating re-paints
+  the banner.
+- Persistent red banner (`ImpersonationBannerComponent`) at the top of
+  every authenticated route showing "You are acting as $target as
+  $impersonator" plus an **Exit impersonation** button. Wired into the
+  shell so it survives navigation. Banner is a real `<button>` with
+  `aria-expanded`/focus handling; SCSS uses CSS-only animation so the
+  banner is visible even when JS is mid-render.
+- "Impersonate this user" icon button on each row of `/users`, gated on
+  super admin + target active + target not super admin + not currently
+  impersonating. Click opens an inline modal collecting reason
+  (≥ 5 chars, persisted in audit) + MFA code (sent as `X-Mfa-Token`).
+  Submit calls `ImpersonationService.start` and on success routes to
+  `/dashboard` so the super admin lands on the target's home view.
+- EN / FR / ES `IMPERSONATION.*` i18n bundles.
+
+**Out of scope (this MVP):**
+
+- "Impersonate" button on org-detail / user-detail pages — list view is
+  the most common entry point and ships first.
+- Browser warning / countdown timer when impersonation is about to
+  expire — defer to MVP-4b along with auto-stop on 401 from the JWT
+  filter rejecting an expired token.
+- Cross-tenant audit search UI surfacing impersonator filter — that's
+  MVP-7. The DTO + mapper already carry the data so MVP-7 only needs
+  the search UI.
+
+**Priority:** P2 (after MVP-3 lands).
+
+**Complexity:** Medium-High (auth-flow change + JWT mint path + new
+context holder + UI banner + per-row entry point + boundary audit
+discipline).
+
+**Effort:** ~8 story points.
+
+**Acceptance Criteria — met:**
+
+- V79 ships additively with rollback-safe partial index. No destructive
+  changes; pre-existing rows stay at NULL.
+- Super admin can mint an impersonation token with reason + MFA;
+  rejected for self-impersonation, target=super-admin, nested
+  impersonation, missing/invalid MFA when actor is enrolled.
+- Unenrolled actor in non-strict mode passes through but the bypass is
+  audited as `SECURITY_ALERT_TRIGGERED` (matches MVP-2 tenant-lifecycle
+  pattern).
+- Every action under the impersonation token carries
+  `impersonator_user_id` + `impersonator_username` on its audit row
+  (auto-stamped from the request-scoped holder).
+- Frontend banner appears on every authenticated route during
+  impersonation; "Exit impersonation" calls `stop` and routes back to
+  `/super-admin`. Page refresh re-paints the banner via
+  `refreshActive()` on shell mount.
+- All boundary transitions (`start` and `stop`) emit
+  `IMPERSONATION_STARTED` / `IMPERSONATION_ENDED` with the impersonator
+  set explicitly on the request DTO — independent of the holder.
+- 8 backend tests (`SupportImpersonationServiceImpl` + controller +
+  audit-log entity), 8 frontend tests (`ImpersonationService` +
+  banner). `./gradlew :hospital-core:compileJava
+  :hospital-core:compileTestJava` clean; `npm run lint` clean; full
+  788-test Karma sweep green.
+
+**Developer Tasks — done:**
+
+1. Liquibase V79 migration (additive).
+2. Entity + request DTO + response DTO + mapper updated for
+   impersonator fields.
+3. Two new `AuditEventType` values.
+4. JWT claim constants + `JwtTokenProvider` builder + extractor.
+5. `ImpersonationContext` + holder.
+6. `JwtAuthenticationFilter` wires the holder into the per-request
+   lifecycle and clears it in every cleanup branch.
+7. `AuditEventLogServiceImpl` auto-stamps from the holder; explicit
+   request fields take precedence so boundary events stay complete.
+8. `SupportImpersonationService` + impl + DTOs + controller (3
+   endpoints, role-gated).
+9. JUnit + MockMvc tests at every layer.
+10. Frontend `ImpersonationService`, model, banner component, shell
+    integration, user-list "Impersonate" button + inline modal.
+11. EN / FR / ES i18n strings.
+12. Update this doc.
+
+**Copilot review on PR #224 — six findings, all addressed in fixup
+commit `db49e73e`:**
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | High (UX) | After stop, `RoleContextService` and stored profile stay on the impersonated target → `RoleGuard` bounces operator to `/error/403`. | `ImpersonationService.restoreOriginalSession` now restores from a sessionStorage profile snapshot taken at start, falling back to a JWT-claim decode of the restored token. |
+| 2 | **Critical (security)** | Remember-me login leaves the original token in `localStorage`; `setToken(impersonationToken, false)` writes to `sessionStorage` but `getToken()` prefers `localStorage` → impersonation token never wins. | `AuthService.setToken` now clears the *opposite* storage on every write. New `isTokenRemembered()` helper. Backend defense in depth: `start()` blacklists the original super-admin JTI immediately so the stale token fails auth even if a client somehow keeps reading it. |
+| 3 | High (UX) | Token swap doesn't refresh `RoleContextService` or stored profile → super-admin nav stays visible during impersonation, in-memory state disagrees with active token. | `ImpersonationService.start` decodes the new JWT and re-hydrates `RoleContextService` (roles + permittedHospitalIds + activeHospitalId) + the persisted user profile. Snapshot taken before swap so `stop()` can restore bit-for-bit. |
+| 4 | **Critical (security)** | Surviving refresh cookie + global 401 interceptor → impersonation TTL elapses → silent refresh into super-admin token, no `IMPERSONATION_ENDED` audit. Privilege escalation. | New `ImpersonationSessionTracker` (in-memory, lock-free, lazy expiry) records active sessions. `AuthController.refreshToken` returns **403 — Active support-impersonation session** when the cookie's subject has an active session. Frontend `errorInterceptor` checks `ImpersonationService.isActive()` and `forceStops` instead of triggering refresh. |
+| 5 | High (UX/security) | `restoreOriginalToken` always passes `remember=true` → exiting impersonation silently promotes a session-only login into `localStorage`. | Original `remember` flag persisted under `auth_remember_pre_impersonation` in sessionStorage; `stop()` restores with the saved flag. |
+| 6 | **Critical (security)** | `stop()` only emits the audit + tells frontend to discard the token. The impersonation JWT is **not blacklisted** → a copied token (curl, devtools, browser plugin) keeps authenticating until 30-min natural expiry. | `SupportImpersonationServiceImpl.stop` now blacklists the impersonation JWT's JTI via the existing `TokenBlacklistService`. Blacklist failures are swallowed with a warn so the boundary action still succeeds. |
+
+**SonarCloud:** coverage on `SupportImpersonationServiceImpl` lifted
+from 79.3 % to clear the 80 % gate by adding 4 new service tests
+(tracker-rejects-existing-session / null-bearer-tolerated /
+blacklist-failure-swallowed / stop-without-context-rejects) plus the
+new `ImpersonationSessionTrackerTest` class (5 tests).
+
+---
+
+## MVP 3: Partner-Connector / Integration Health Console (MERGED into develop `b280a0bd` via PR #223)
+
+**Goal:** Give a super admin a single read-only console answering *which
+integrations are wired up for which tenants, are they healthy, when did
+they last succeed, and what's failing*.
+
+**Scope — Backend:**
+
+- New entity `IntegrationHealthSnapshot` in `clinical` schema (V78,
+  additive only) keyed on `(integration_id, organization_id NULL)` with
+  `last_status` enum (`HEALTHY` / `DEGRADED` / `FAILING` / `NO_HISTORY`),
+  `last_success_at`, `last_failure_at`, `last_error_message`,
+  `success_count_24h`, `failure_count_24h`, `counts_window_started_at`.
+- `IntegrationHealthRecorder` (`@Component`) with `recordSuccess` /
+  `recordFailure` upsert helpers. Runs in its own `REQUIRES_NEW`
+  transaction and swallows exceptions so a recorder failure never
+  unrolls the caller's primary unit of work. Status derivation:
+  `FAILING` when most recent call failed or failures ≥ 50 % of the
+  window; `DEGRADED` when both successes and failures present with
+  failures < 50 %; `HEALTHY` when last call succeeded and no failures
+  in the window.
+- `EligibilityServiceImpl` wired to call the recorder after every
+  provider invocation with `integration_id = "eligibility"` and the
+  caller's organisation id (derived from `Hospital.getOrganization`).
+  `EligibilityStatus.ERROR` and `UNKNOWN` map to `recordFailure`,
+  everything else to `recordSuccess`.
+- `SuperAdminIntegrationHealthService` aggregates the live inventory
+  (every `PlatformIntegrationAdapter` bean + a synthetic `eligibility`
+  row when at least one `EligibilityProvider` bean is registered) with
+  the persisted snapshots. Worst-case status is rolled up across orgs
+  per integration.
+- New controller `SuperAdminIntegrationHealthController` exposes:
+  - `GET /super-admin/integrations` — full inventory grid.
+  - `GET /super-admin/integrations/{integrationId}` — per-integration
+    drill-down with all org snapshot rows. Throws `ResourceNotFoundException`
+    (HTTP 404) for unknown ids.
+- Both endpoints gated to `ROLE_SUPER_ADMIN`.
+- i18n string `integration.health.notfound` added to EN / FR / default
+  bundles.
+
+**Scope — Frontend:**
+
+- New route `/super-admin/integrations` (SUPER_ADMIN only).
+- `IntegrationHealthComponent` renders four status chips
+  (HEALTHY / DEGRADED / FAILING / NO_HISTORY) and an integration list
+  where each row expands to a per-org table showing last success,
+  last failure (with error message tooltip), and 24 h counts. Loading,
+  error, and empty states are explicit.
+- `IntegrationHealthService` calls the two REST endpoints.
+- `super-admin` Control Tower gets a new "Integration health" quick-link
+  card; sidebar gets an "Integration Health" entry behind
+  `RoleContextService.isSuperAdmin()`.
+- EN / FR / ES i18n bundles extended with the
+  `INTEGRATION_HEALTH.*` namespace.
+
+**Out of scope (this MVP):**
+
+- "Test connection" / "Re-sync now" actions — deferred to MVP-3b once
+  adapter call paths exist.
+- Per-integration time-series history endpoint — `EligibilityCheck`
+  already records every call, but Billing / EHR / Inventory adapters
+  have no call sites yet, so a generic event log waits until MVP-3b.
+- Actual NHIS / NHIA / CNAMGS / mutuelle connectors (separate
+  partner-API track).
+
+**Priority:** P2 (after MVP-1 + MVP-2 shipped on `006384fc`).
+
+**Complexity:** Low–Medium (additive backend + new console UI; no
+existing call paths refactored, only EligibilityServiceImpl wired).
+
+**Effort:** ~5 story points.
+
+**Acceptance Criteria — met:**
+
+- V78 ships additively; no destructive changes; rollback note included.
+- `EligibilityServiceImpl` records success / failure on every
+  `submit()` call (verified by unit tests on the success and error
+  paths).
+- `IntegrationHealthRecorder` upserts the snapshot, rolls the 24 h
+  window, and swallows DB failures (5 unit tests cover create / update
+  / window-rollover / DEGRADED-after-failure / DB-down swallowed).
+- `SuperAdminIntegrationHealthServiceImpl` lists every adapter even
+  when no snapshot exists, rolls FAILING / DEGRADED / HEALTHY worst-case
+  per integration, and throws 404 for unknown ids (3 service tests).
+- Controller passes through to service and propagates 404 (3 controller
+  tests).
+- Frontend renders the inventory, errors gracefully on API failure, and
+  toggles per-integration drill-down (4 Karma specs).
+- EN / FR / ES i18n strings present for all new keys.
+- `npm run lint` and `./gradlew :hospital-core:compileJava
+  :hospital-core:compileTestJava` clean.
+
+**Developer Tasks — done:**
+
+1. Liquibase V78 migration (additive).
+2. `IntegrationHealthStatus` enum + `IntegrationHealthSnapshot` entity.
+3. `IntegrationHealthSnapshotRepository`.
+4. `IntegrationHealthRecorder` (REQUIRES_NEW, swallowing).
+5. `IntegrationHealthSnapshotMapper` (`toDto`).
+6. `SuperAdminIntegrationHealthService` interface +
+   `SuperAdminIntegrationHealthServiceImpl`.
+7. `SuperAdminIntegrationHealthController` (2 endpoints, ROLE_SUPER_ADMIN).
+8. Wire `EligibilityServiceImpl` to call the recorder after each
+   provider invocation.
+9. JUnit + MockMvc tests at every layer (recorder, service, controller).
+10. Update existing `EligibilityServiceImplTest` for the new
+    constructor arg and verify the recorder is called on success
+    and failure.
+11. Frontend `integration-health` component triplet + service + model,
+    plus Karma spec.
+12. Add quick-link card on `/super-admin` + sidebar entry behind
+    `isSuperAdmin()`.
+13. EN / FR / ES i18n strings.
+14. Update this doc.
+
+---
+
+## MVP 5: Super-Admin Surface Consolidation (IN PROGRESS — branch `feature/super-admin-gaps-mvp5-surface-consolidation`)
+
+**Closure notes (this branch):**
+
+- New `SuperAdminRedirectGuard` (`hospital-portal/src/app/auth/super-admin-redirect.guard.ts`)
+  redirects an active `ROLE_SUPER_ADMIN` from `/dashboard` and `/admin` to
+  `/super-admin`. Other roles fall through. Wired into both routes in
+  `app.routes.ts`; `/admin` keeps `RoleGuard` chained behind it so
+  `ROLE_ADMIN` still gates the hospital-admin landing.
+- Dashboard cleanup: deleted the `'superadmin'` branch from
+  `activeView`, `heroGradientClass`, and `loadDashboardData`; deleted the
+  `adminSummary` + `recentAuditEvents` signals, the `adminNavTiles`
+  computed, the `SuperAdminSummary` / `RecentAuditEvent` imports, the
+  hero stat strip, and the rendered Super-Admin section in
+  `dashboard.html`. Removed the `.hero-gradient-superadmin` selector
+  from `dashboard.scss`. The `isSuperAdmin` signal stays — it still
+  guards the hospital-admin loader (`!this.isSuperAdmin()`) and the
+  defensive role-label branch.
+- Side-nav: when `roleContext.activeRole === 'ROLE_SUPER_ADMIN'`,
+  `shell.ts` `baseNavItems()` skips the **Dashboard** entry (Control
+  Tower is the landing page) and the **Administration** entry (super
+  admins are redirected there, so a duplicate side-nav slot was just
+  noise). `appendSuperAdminEntry` already adds **Super Admin** +
+  **Integration Health** for super-admin actives.
+- Parity sweep: the deleted dashboard super-admin block rendered a
+  stat strip (8 tiles) + nav-tile grid (13 tiles) + Recent Audit
+  table. The Control Tower (`super-admin.html`) already renders the
+  equivalent stats grid, the Quick Links grid (9 cards including
+  Integration Health from MVP-3), and the Recent Audit list — no
+  user-visible content was lost.
+- Tests: 4 new `SuperAdminRedirectGuard` specs (super-admin redirect /
+  fallback / hospital-admin pass-through / multi-role active picker)
+  plus 3 new `ShellComponent` specs (super-admin nav drops Dashboard
+  and Administration / admin keeps both / doctor keeps Dashboard
+  only). Removed the `adminNavTiles returns 13 tiles for super-admin`
+  and the `roleLabel resolves DASHBOARD.ROLE.SUPER_ADMIN` cases from
+  `dashboard.spec.ts` along with the `'superadmin'` view branch they
+  exercised. `npm run lint` clean; `format:check` clean; full Karma
+  sweep 801 specs green (up from 796).
+- Out of scope (deferred to MVP-5b): folding `/feature-flags`,
+  `/analytics`, `/audit-logs`, `/platform` under a `/super-admin/*`
+  hierarchy.
+
+**Goal:** Make `/super-admin` the **single** mission-control for super
+admins. Today three landing surfaces co-exist and a super admin can
+arrive at any of them, each rendering a slightly different overview of
+the same data — confusing for operators, embarrassing in demos, and
+expensive to maintain in lock-step. MVP-1 introduced `/super-admin`
+without retiring the duplicates; this MVP closes that loop.
+
+**The current duplication:**
+
+| Surface | What it renders for super admin | Status |
+| --- | --- | --- |
+| `/super-admin` ([super-admin.ts](../hospital-portal/src/app/super-admin/super-admin.ts)) | Control Tower: stats grid + platform integrations strip + quick-links grid (org / users / roles / feature-flags / analytics / platform / audit-logs / hospitals / **integration health** from MVP-3). Now the explicit `LoginRedirectGuard` target for super admins. | **Keep — single home.** |
+| `/dashboard` super-admin branch ([dashboard.html:207-383](../hospital-portal/src/app/dashboard/dashboard.html#L207-L383), guarded by `activeView() === 'superadmin'`) | Stat strip (patients / active users / active hospitals / active orgs / departments) + clinical alerts + quick actions + recent audit. Reachable from the Dashboard side-nav entry. | **Retire.** |
+| `/admin` ([admin/admin.ts](../hospital-portal/src/app/admin/admin.ts), gated to ADMIN + SUPER_ADMIN, calls `/super-admin/summary`) | Hospital-admin-shaped dashboard. Super admin can navigate to it from the side-nav and see overlapping summary tiles. | **Hide from super-admin nav** (keep for ADMIN). |
+
+**Scope — Frontend only (no backend changes):**
+
+- Delete the `'superadmin'` view branch from `dashboard.ts` /
+  `dashboard.html` — the file's role-aware switch keeps the
+  HOSPITAL_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, etc.
+  branches untouched.
+- Make `/dashboard` redirect to `/super-admin` when the active role is
+  SUPER_ADMIN (`RoleGuard`-style). This handles bookmarks + the side-nav
+  click path.
+- Make `/admin` redirect the same way for super admins (hospital-admin
+  callers continue to land on `/admin`).
+- Update [shell.ts](../hospital-portal/src/app/shell/shell.ts) — when
+  `roleContext.activeRole === 'ROLE_SUPER_ADMIN'`, the side-nav drops
+  the **Dashboard** + **Admin** entries and keeps only the **Super
+  Admin** + **Integration Health** entries (already added by MVP-1 +
+  MVP-3) plus the cross-cutting routes super admins genuinely need
+  (Organizations, Hospitals, Users, etc.).
+- Parity sweep: anything unique to the deleted `dashboard` super-admin
+  branch (e.g. **Recent Audit** strip) gets folded into the Control
+  Tower if not already there. The MVP-1 spec listed "pending
+  security-policy approvals, expired-credential count, MFA non-enrolment
+  rate" as Control Tower content; verify those tiles are present and
+  add the Recent Audit strip if missing.
+- Existing Karma specs covering the dashboard super-admin branch get
+  deleted; new specs cover the redirect + the side-nav entries shown /
+  hidden by active role.
+
+**Out of scope (deferred to MVP-5b):**
+
+- Folding scattered super-admin-only routes (`/feature-flags`,
+  `/analytics`, `/audit-logs`, `/platform`) under a `/super-admin/*`
+  hierarchy. Doable but introduces redirect debt and changes URL
+  bookmarks across the team — keep out of MVP-5 to ship the
+  consolidation cleanly first.
+- Hospital-admin dashboard restructuring. ADMIN + HOSPITAL_ADMIN
+  landings unchanged.
+
+**Priority:** P3 (cosmetic UX correctness; not blocking customer
+adoption but a credibility issue once a prospect starts clicking around
+the super-admin surface in a demo).
+
+**Complexity:** Low (Angular only — net deletion + small route
+guard + side-nav filter).
+
+**Effort:** ~3–5 story points.
+
+**Acceptance Criteria:**
+
+- A super admin who navigates to `/dashboard` is redirected to
+  `/super-admin`. Same for `/admin`.
+- Side-nav for `activeRole === 'ROLE_SUPER_ADMIN'` does not include
+  `Dashboard` or `Admin` entries. Hospital-admin nav unchanged.
+- Control Tower (`/super-admin`) renders all content the deleted
+  `dashboard` super-admin branch rendered (parity check covers the
+  Recent Audit strip).
+- Visual regression sweep on `/dashboard` for the **non-super-admin**
+  roles confirms nothing else moved.
+- Karma specs deleted: any test covering `activeView() === 'superadmin'`.
+  Karma specs added: redirect tests, side-nav role-filter test.
+- `npm run lint`, `format:check`, full Karma sweep clean.
+
+**Developer Tasks:**
+
+1. Delete the `'superadmin'` block from `dashboard.html` and the
+   matching `if (this.isSuperAdmin())` branches from `dashboard.ts`
+   (`activeView`, `setupSuperAdminLoaders`, etc.). Trace via `grep -n
+   'isSuperAdmin' hospital-portal/src/app/dashboard/dashboard.ts`.
+2. Add a `SuperAdminRedirectGuard` (or extend the existing
+   `LoginRedirectGuard` logic) that redirects `/dashboard` and `/admin`
+   to `/super-admin` when `activeRole === 'ROLE_SUPER_ADMIN'`.
+3. In [shell.ts](../hospital-portal/src/app/shell/shell.ts)
+   `baseNavItems()`, exclude the Dashboard and Admin items when
+   `activeRole === 'ROLE_SUPER_ADMIN'` (mirrors the existing pattern
+   that builds the patient-portal nav).
+4. Parity sweep: list every signal / API call backing the deleted
+   `dashboard` super-admin branch; confirm Control Tower covers each
+   or fold it in.
+5. Delete dashboard.spec.ts cases that cover the super-admin branch.
+6. Add `dashboard.spec.ts` test: super-admin user navigating to
+   `/dashboard` is redirected.
+7. Add `shell.spec.ts` test: nav for `ROLE_SUPER_ADMIN` excludes
+   Dashboard and Admin.
+8. Update [docs/super-admin-gaps.md](../docs/super-admin-gaps.md) with
+   closure notes.
+
+---
+
+## MVPs 6–9: Forward Queue
 
 | # | MVP | Trigger |
 | --- | --- | --- |
-| 3 | Partner-Connector / Integration Health Console | Pair with the unblocked partner-API item — when first NHIS/NHIA/CNAMGS/mutuelle decision lands. |
-| 4 | Support Impersonation with Audit | When first paying tenant onboards and support load is real. |
-| 5 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
-| 6 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
-| 7 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
-| 8 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
+| 6 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
+| 7 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
+| 8 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
+| 9 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
 
 ## Risks & Open Questions
 
 - **Suspend semantics for super admin:** when an org is suspended, super admins (cross-tenant) must remain able to log in *and* see the org. JWT filter must distinguish.
 - **Purge irreversibility:** the 30-day grace + scheduled-job pattern is the safety net. Confirm with stakeholders that 30d is the right default.
 - **Hospital-level lifecycle:** this MVP lifts state to `Organization`. Decide if `Hospital` also needs an independent lifecycle (likely yes — defer to a follow-up so this MVP stays scoped).
-- **Side-nav restructuring:** introducing `/super-admin` may surface UX questions about whether to retire some of the scattered top-level routes (e.g. fold `/feature-flags` and `/analytics` under `/super-admin/*`). Hold this decision pending MVP 1 review.
+- ~~**Side-nav restructuring:**~~ *superseded by MVP-5 (Super-Admin Surface Consolidation), which retires `/dashboard` super-admin branch + `/admin` reachability for super admin and is the next scoped piece of work. Folding `/feature-flags`, `/analytics`, `/audit-logs`, `/platform` under `/super-admin/*` URLs remains deferred to MVP-5b — see MVP-5 "Out of scope".*
 
 ## References
 

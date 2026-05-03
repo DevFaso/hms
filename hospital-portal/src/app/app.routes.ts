@@ -3,6 +3,7 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -53,6 +54,7 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
+        canActivate: [SuperAdminRedirectGuard],
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
@@ -526,8 +528,13 @@ export const routes: Routes = [
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
 
-      // Settings → redirect to profile (edit tab)
-      { path: 'settings', redirectTo: 'profile', pathMatch: 'full' },
+      // Settings hub — preferences, language, shortcuts to security/notification
+      // pages. Replaced the old /settings → /profile redirect because both
+      // header menu items pointed at the same screen, which surprised users.
+      {
+        path: 'settings',
+        loadComponent: () => import('./settings/settings').then((m) => m.SettingsComponent),
+      },
 
       // Notifications
       {
@@ -1010,10 +1017,12 @@ export const routes: Routes = [
           import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
       },
 
-      // Administration
+      // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
+      // role gate but is redirected to /super-admin by SuperAdminRedirectGuard
+      // (MVP-5) so the Control Tower stays the single mission-control.
       {
         path: 'admin',
-        canActivate: [RoleGuard],
+        canActivate: [SuperAdminRedirectGuard, RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
@@ -1024,6 +1033,17 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
+      },
+
+      // Super-Admin Integration Health Console (MVP-3 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/integrations',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/integration-health/integration-health').then(
+            (m) => m.IntegrationHealthComponent,
+          ),
       },
 
       // Refill approval queue (provider-facing — pairs with patient portal refills)

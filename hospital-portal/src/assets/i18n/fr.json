@@ -100,8 +100,56 @@
       "AUDIT_TITLE": "Journaux d'audit",
       "AUDIT_DESC": "Piste d'audit système et conformité",
       "HOSPITALS_TITLE": "Hôpitaux",
-      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues"
+      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues",
+      "INTEGRATIONS_TITLE": "Santé des intégrations",
+      "INTEGRATIONS_DESC": "Inventaire des connecteurs et santé des appels par tenant"
     }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Console de santé des intégrations",
+    "SUBTITLE": "Inventaire et santé des appels par tenant pour les connecteurs partenaires et les intégrations plateforme",
+    "LOADING": "Chargement de l'inventaire…",
+    "LOAD_ERROR": "Impossible de charger l'inventaire des intégrations. Réessayez.",
+    "RETRY": "Réessayer",
+    "EMPTY": "Aucune intégration enregistrée.",
+    "ENABLED": "Activée",
+    "DISABLED": "Désactivée",
+    "NO_ORG_HISTORY": "Aucun historique d'appel enregistré pour cette intégration.",
+    "PLATFORM_WIDE": "Plateforme entière",
+    "ORG": "Organisation",
+    "STATUS_HEAD": "Statut",
+    "LAST_SUCCESS": "Dernier succès",
+    "LAST_FAILURE": "Dernier échec",
+    "SUCCESSES_24H": "Succès (24 h)",
+    "FAILURES_24H": "Échecs (24 h)",
+    "STATUS": {
+      "HEALTHY": "Sain",
+      "DEGRADED": "Dégradé",
+      "FAILING": "En échec",
+      "NO_HISTORY": "Aucun historique"
+    },
+    "CHIP": {
+      "HEALTHY": "Sain",
+      "DEGRADED": "Dégradé",
+      "FAILING": "En échec",
+      "NO_HISTORY": "Aucun historique"
+    }
+  },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "Vous agissez en tant que",
+    "BANNER_SUFFIX": "via l'usurpation support.",
+    "AS": "par",
+    "EXIT": "Quitter l'usurpation",
+    "IMPERSONATE_USER": "Usurper cet utilisateur",
+    "MODAL_TITLE": "Démarrer une session d'usurpation support",
+    "MODAL_PREFIX": "Vous êtes sur le point d'agir en tant que",
+    "MODAL_WARNING": "Toutes vos actions seront étiquetées avec votre identité réelle. La session expire automatiquement au bout de 30 minutes.",
+    "REASON_LABEL": "Motif (requis, conservé dans l'audit)",
+    "REASON_PLACEHOLDER": "ex. Validation d'un bug de renouvellement signalé par le patient",
+    "MFA_LABEL": "Code MFA (requis si MFA activée)",
+    "MFA_PLACEHOLDER": "Code à 6 chiffres",
+    "START_BUTTON": "Démarrer l'usurpation",
+    "STARTING": "Démarrage…"
   },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
@@ -1898,7 +1946,8 @@
     "STOCK_ADJUSTMENT": "Ajustement de Stock",
     "DISPENSING": "Dispensation",
     "STOCK_ROUTING": "Routage de Stock",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Santé des intégrations"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -3565,6 +3614,30 @@
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3-30 characters, letters, numbers, underscores",
     "USERNAME_UPDATED": "Username updated to {{username}}"
+  },
+  "SETTINGS_HUB": {
+    "ACCOUNT_DESC": "Mettez à jour votre nom, vos coordonnées, votre photo et vos autres informations personnelles.",
+    "ACCOUNT_TITLE": "Compte et Profil",
+    "ACTIVITY_DESC": "Consultez les connexions récentes et les événements de sécurité de votre compte.",
+    "ACTIVITY_TITLE": "Activité du Compte",
+    "LANGUAGE_DESC": "Choisissez la langue utilisée dans le portail.",
+    "LANGUAGE_TITLE": "Langue",
+    "LANG_EN": "English",
+    "LANG_ES": "Español",
+    "LANG_FR": "Français",
+    "NOTIFICATIONS_DESC": "Choisissez les alertes que vous recevez et leur canal — in-app, e-mail, SMS ou push.",
+    "NOTIFICATIONS_TITLE": "Préférences de Notification",
+    "OPEN_ACTIVITY": "Voir l'activité",
+    "OPEN_NOTIFICATIONS": "Configurer",
+    "OPEN_PRIVACY": "Lire la politique",
+    "OPEN_PROFILE": "Modifier le profil",
+    "OPEN_SECURITY": "Gérer la sécurité",
+    "PAGE_SUBTITLE": "Gérez le comportement du portail. Pour modifier vos informations personnelles, ouvrez Compte et Profil.",
+    "PAGE_TITLE": "Paramètres",
+    "PRIVACY_DESC": "Consultez la manière dont vos données sont collectées, utilisées et protégées.",
+    "PRIVACY_TITLE": "Confidentialité",
+    "SECURITY_DESC": "Modifiez votre mot de passe, gérez la MFA et vérifiez vos contacts de récupération.",
+    "SECURITY_TITLE": "Sécurité et Connexion"
   },
   "SHELL": {
     "DRAG_REORDER": "Glisser pour réorganiser",

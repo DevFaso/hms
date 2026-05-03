@@ -14,6 +14,8 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.ImpersonationContext;
+import com.example.hms.security.context.ImpersonationContextHolder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -144,6 +146,22 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             resourceName = resolvePatientResourceName(resourceName, resourceId);
         }
 
+        // MVP-4: caller may have explicitly set impersonator fields on the
+        // request (boundary events from SupportImpersonationService); for
+        // every other event we read the request-scoped ImpersonationContext
+        // so any action taken under a support-impersonation token carries
+        // the real super-admin's identity even though `user` points at the
+        // impersonated target.
+        UUID impersonatorUserId = requestDTO.getImpersonatorUserId();
+        String impersonatorUsername = requestDTO.getImpersonatorUsername();
+        if (impersonatorUserId == null || impersonatorUsername == null) {
+            ImpersonationContext ctx = ImpersonationContextHolder.get().orElse(null);
+            if (ctx != null) {
+                if (impersonatorUserId == null) impersonatorUserId = ctx.impersonatorUserId();
+                if (impersonatorUsername == null) impersonatorUsername = ctx.impersonatorUsername();
+            }
+        }
+
         AuditEventLog event = AuditEventLog.builder()
                 .user(user)          // nullable — SYSTEM / bootstrap flows have no actor user
                 .assignment(assignment)
@@ -161,6 +179,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .roleName(roleName)
                 .resourceName(resourceName != null && !resourceName.isBlank() ? resourceName : "Unknown Resource")
                 .eventTimestamp(java.time.LocalDateTime.now())
+                .impersonatorUserId(impersonatorUserId)
+                .impersonatorUsername(impersonatorUsername)
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
