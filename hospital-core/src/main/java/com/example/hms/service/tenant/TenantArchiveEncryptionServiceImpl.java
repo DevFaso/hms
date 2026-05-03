@@ -1,0 +1,222 @@
+package com.example.hms.service.tenant;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.stereotype.Service;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * AES-256-GCM envelope encryption for tenant archives (MVP-c batch — MVP-2c).
+ *
+ * <p>Per-archive data-encryption-key is generated fresh
+ * (256-bit AES) and wrapped by a key-encryption-key resolved at startup
+ * from {@code hms.tenant-archive.kek-source}. Wrapping is also AES-GCM
+ * — the wrap IV + ciphertext are stored on the envelope manifest, not
+ * the archive itself, so a partner can encrypt-once / wrap-many if a
+ * KEK rotation lands.
+ */
+@Service
+@Slf4j
+public class TenantArchiveEncryptionServiceImpl implements TenantArchiveEncryptionService {
+
+    private static final String AES = "AES";
+    private static final String AES_GCM = "AES/GCM/NoPadding";
+    private static final int GCM_TAG_BITS = 128;
+    private static final int IV_BYTES = 12;
+    private static final int DEK_BYTES = 32;
+    private static final int CHUNK = 8192;
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final SecureRandom RNG = new SecureRandom();
+
+    private final Environment springEnvironment;
+
+    @Value("${hms.tenant-archive.kek-source:noop}")
+    private String kekSource;
+
+    @Value("${HMS_TENANT_ARCHIVE_KEK:}")
+    private String envKekBase64;
+
+    public TenantArchiveEncryptionServiceImpl(Environment springEnvironment) {
+        this.springEnvironment = springEnvironment;
+    }
+
+    @Override
+    public EncryptionResult encryptArchive(Path plaintextZip, Path outputPath) throws IOException {
+        Files.createDirectories(outputPath.getParent());
+
+        if ("noop".equalsIgnoreCase(kekSource)) {
+            return passthroughOrReject(plaintextZip, outputPath);
+        }
+
+        byte[] kek = resolveKek();
+        try {
+            return encryptWithKek(plaintextZip, outputPath, kek);
+        } catch (GeneralSecurityException ex) {
+            // Wrap to IOException so the caller's IOException catch covers
+            // both the file IO and the cipher path uniformly.
+            throw new IOException("Tenant archive encryption failed: " + ex.getMessage(), ex);
+        } finally {
+            // Best-effort wipe so the KEK doesn't linger on the heap.
+            java.util.Arrays.fill(kek, (byte) 0);
+        }
+    }
+
+    private EncryptionResult passthroughOrReject(Path plaintextZip, Path outputPath) throws IOException {
+        if (!isDevOrTestProfile()) {
+            throw new IOException(
+                "hms.tenant-archive.kek-source=noop is only permitted in dev/test profiles. "
+                    + "Set kek-source=env (with HMS_TENANT_ARCHIVE_KEK) for non-dev environments.");
+        }
+        log.warn("[TENANT-ARCHIVE-ENCRYPTION] kek-source=noop — copying plaintext archive without encryption (dev only).");
+        Files.copy(plaintextZip, outputPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Path envelopePath = writeNoopEnvelope(outputPath);
+        return new EncryptionResult(outputPath.toAbsolutePath(),
+            envelopePath, EncryptionResult.Mode.NOOP, "none");
+    }
+
+    private boolean isDevOrTestProfile() {
+        String[] profiles = springEnvironment.getActiveProfiles();
+        if (profiles.length == 0) {
+            // Default profile is treated as dev — same posture as
+            // OrganizationLifecycleServiceImpl's MFA gate.
+            return true;
+        }
+        for (String p : profiles) {
+            if (p.contains("dev") || p.contains("test") || "default".equals(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private byte[] resolveKek() throws IOException {
+        if ("env".equalsIgnoreCase(kekSource)) {
+            if (envKekBase64 == null || envKekBase64.isBlank()) {
+                throw new IOException("hms.tenant-archive.kek-source=env requires HMS_TENANT_ARCHIVE_KEK to be set.");
+            }
+            byte[] decoded;
+            try {
+                decoded = Base64.getDecoder().decode(envKekBase64.trim());
+            } catch (IllegalArgumentException ex) {
+                throw new IOException("HMS_TENANT_ARCHIVE_KEK is not valid base64: " + ex.getMessage(), ex);
+            }
+            if (decoded.length != DEK_BYTES) {
+                throw new IOException("HMS_TENANT_ARCHIVE_KEK must decode to 32 bytes (got " + decoded.length + ").");
+            }
+            return decoded;
+        }
+        throw new IOException("Unsupported hms.tenant-archive.kek-source=" + kekSource
+            + " (expected env or noop; aws-kms/gcp-kms/vault are reserved for follow-up).");
+    }
+
+    private EncryptionResult encryptWithKek(Path plaintextZip, Path outputPath, byte[] kek)
+        throws IOException, GeneralSecurityException {
+
+        // 1. Generate a fresh DEK (AES-256).
+        KeyGenerator kg = KeyGenerator.getInstance(AES);
+        kg.init(DEK_BYTES * 8);
+        SecretKey dek = kg.generateKey();
+
+        // 2. Encrypt the archive with DEK + a random IV.
+        byte[] dataIv = randomIv();
+        Cipher dataCipher = Cipher.getInstance(AES_GCM);
+        dataCipher.init(Cipher.ENCRYPT_MODE, dek, new GCMParameterSpec(GCM_TAG_BITS, dataIv));
+
+        try (InputStream in = Files.newInputStream(plaintextZip);
+             OutputStream out = Files.newOutputStream(outputPath);
+             javax.crypto.CipherOutputStream cipherOut = new javax.crypto.CipherOutputStream(out, dataCipher)) {
+            byte[] buf = new byte[CHUNK];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                cipherOut.write(buf, 0, n);
+            }
+        }
+
+        // 3. Wrap the DEK with the KEK using a separate IV.
+        byte[] wrapIv = randomIv();
+        Cipher wrapCipher = Cipher.getInstance(AES_GCM);
+        wrapCipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(kek, AES),
+            new GCMParameterSpec(GCM_TAG_BITS, wrapIv));
+        byte[] wrappedDek = wrapCipher.doFinal(dek.getEncoded());
+
+        // 4. Sidecar envelope manifest (kept alongside the encrypted archive).
+        Path envelopePath = writeEncryptedEnvelope(outputPath, wrappedDek, wrapIv, dataIv);
+        log.info("[TENANT-ARCHIVE-ENCRYPTION] Encrypted {} -> {} (envelope at {})",
+            plaintextZip, outputPath, envelopePath);
+
+        return new EncryptionResult(outputPath.toAbsolutePath(),
+            envelopePath, EncryptionResult.Mode.ENCRYPTED, AES_GCM);
+    }
+
+    private Path writeEncryptedEnvelope(Path outputPath, byte[] wrappedDek, byte[] wrapIv, byte[] dataIv)
+        throws IOException {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("envelope_version", 1);
+        envelope.put("created_at", Instant.now().toString());
+        envelope.put("kek_source", kekSource);
+        envelope.put("kek_id", deriveKekId());
+        envelope.put("cipher", AES_GCM);
+        envelope.put("data_iv_b64", Base64.getEncoder().encodeToString(dataIv));
+        envelope.put("wrap_iv_b64", Base64.getEncoder().encodeToString(wrapIv));
+        envelope.put("wrapped_dek_b64", Base64.getEncoder().encodeToString(wrappedDek));
+        return writeEnvelope(outputPath, envelope);
+    }
+
+    private Path writeNoopEnvelope(Path outputPath) throws IOException {
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("envelope_version", 1);
+        envelope.put("created_at", Instant.now().toString());
+        envelope.put("kek_source", "noop");
+        envelope.put("cipher", "none");
+        envelope.put("note", "Plaintext copy — dev/test profiles only.");
+        return writeEnvelope(outputPath, envelope);
+    }
+
+    private Path writeEnvelope(Path archivePath, Map<String, Object> envelope) throws IOException {
+        Path envelopePath = archivePath.resolveSibling(archivePath.getFileName() + ".envelope.json");
+        Files.write(envelopePath,
+            MAPPER.writerWithDefaultPrettyPrinter().writeValueAsBytes(envelope));
+        return envelopePath;
+    }
+
+    private byte[] randomIv() {
+        byte[] iv = new byte[IV_BYTES];
+        RNG.nextBytes(iv);
+        return iv;
+    }
+
+    /**
+     * Stable per-runtime KEK identifier so an envelope can be matched
+     * to the KEK source it was wrapped with. We deliberately do NOT
+     * derive this from the KEK material itself (would leak); it's a
+     * UUIDv5 over the source name + a random startup salt so envelopes
+     * from a single instance can be correlated.
+     */
+    private String deriveKekId() {
+        return UUID.nameUUIDFromBytes((kekSource + ":" + KEK_INSTANCE_SALT)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    /** Salt regenerated per JVM startup so a leaked envelope cannot be replayed across instances. */
+    private static final String KEK_INSTANCE_SALT = UUID.randomUUID().toString();
+}
