@@ -183,46 +183,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (tokenProvider.validateToken(jwt)) {
-            // Reject tokens that have been explicitly revoked (logout / refresh rotation)
-            String jti = tokenProvider.getJtiFromToken(jwt);
-            if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
-                log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
-                respondUnauthorized(response, extractedSubject);
-                return false;
-            }
-
-            // ── Global session revocation gate (MVP-7) ─────────────────────
-            // Force-logout-all bumps `globalMinTokenIat` to "now"; any token
-            // issued before that instant is rejected. Cached + refreshed every
-            // 30 s by GlobalSessionRevocationService so this stays a hot path.
-            if (isRevokedByGlobalIat(jwt)) {
-                log.warn("[JWT] Token rejected by global session revocation on path={}", path);
-                respondUnauthorized(response, extractedSubject);
-                return false;
-            }
-
-            if (log.isTraceEnabled()) {
-                log.trace("[JWT] Token present and valid (len={})", jwt.length());
-            }
-            boolean authenticated = applyAuthentication(jwt, request, extractedSubject);
-            if (!authenticated) {
-                respondUnauthorized(response, extractedSubject);
-                return false;
-            }
-
-            // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
-            // After authentication has populated the HospitalContext, refuse
-            // requests whose user is attached to an org in a non-active state
-            // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
-            // bypass — they need cross-tenant access to manage these orgs.
-            if (isBlockedByTenantLifecycle(HospitalContextHolder.getContextOrEmpty())) {
-                log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
-                SecurityContextHolder.clearContext();
-                HospitalContextHolder.clear();
-                ImpersonationContextHolder.clear();
-                respondTenantBlocked(response);
-                return false;
-            }
+            return handleValidatedToken(request, response, path, jwt, extractedSubject);
         } else {
             // Do NOT log the raw Authorization header — even an invalid/expired token
             // still embeds the user's subject claim and could be a partial credential
@@ -235,6 +196,60 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             int tokenLen = prefixOk ? rawHeader.length() - TOKEN_PREFIX.length() : 0;
             log.warn("[JWT] Token provided but invalid for path={} headerPresent={} headerPrefixOk={} tokenLen={}",
                 path, rawHeader != null, prefixOk, tokenLen);
+        }
+        return true;
+    }
+
+    /**
+     * Extracted from {@link #handleJwtAuthentication} (PR #228 SonarCloud
+     * review — was driving cognitive complexity past the 15 threshold).
+     * Runs the four post-validation gates in order: blacklist, global
+     * revocation (MVP-7), authentication, and tenant lifecycle (MVP-2).
+     * Each gate that rejects writes the unauthorized response and returns
+     * false; on success the filter chain continues.
+     */
+    private boolean handleValidatedToken(
+        HttpServletRequest request, HttpServletResponse response,
+        String path, String jwt, String extractedSubject
+    ) {
+        // Reject tokens that have been explicitly revoked (logout / refresh rotation)
+        String jti = tokenProvider.getJtiFromToken(jwt);
+        if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
+            log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
+            respondUnauthorized(response, extractedSubject);
+            return false;
+        }
+
+        // ── Global session revocation gate (MVP-7) ─────────────────────
+        // Force-logout-all bumps `globalMinTokenIat` to "now"; any token
+        // issued before that instant is rejected. Cached + refreshed every
+        // 30 s by GlobalSessionRevocationService so this stays a hot path.
+        if (isRevokedByGlobalIat(jwt)) {
+            log.warn("[JWT] Token rejected by global session revocation on path={}", path);
+            respondUnauthorized(response, extractedSubject);
+            return false;
+        }
+
+        if (log.isTraceEnabled()) {
+            log.trace("[JWT] Token present and valid (len={})", jwt.length());
+        }
+        if (!applyAuthentication(jwt, request, extractedSubject)) {
+            respondUnauthorized(response, extractedSubject);
+            return false;
+        }
+
+        // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
+        // After authentication has populated the HospitalContext, refuse
+        // requests whose user is attached to an org in a non-active state
+        // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
+        // bypass — they need cross-tenant access to manage these orgs.
+        if (isBlockedByTenantLifecycle(HospitalContextHolder.getContextOrEmpty())) {
+            log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            respondTenantBlocked(response);
+            return false;
         }
         return true;
     }

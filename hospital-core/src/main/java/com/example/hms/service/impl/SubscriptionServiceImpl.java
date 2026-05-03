@@ -26,6 +26,7 @@ import java.util.UUID;
 public class SubscriptionServiceImpl implements SubscriptionService {
 
     private static final String DEFAULT_CURRENCY = "USD";
+    private static final String ERROR_PLAN_NOT_FOUND = "SubscriptionPlan not found: ";
 
     private final SubscriptionPlanRepository planRepository;
     private final OrganizationSubscriptionRepository subscriptionRepository;
@@ -61,7 +62,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public SubscriptionPlanResponseDTO updatePlan(UUID planId, SubscriptionPlanRequestDTO request) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException("SubscriptionPlan not found: " + planId));
+            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + planId));
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
         plan.setDescription(request.getDescription());
@@ -83,7 +84,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     public void deactivatePlan(UUID planId) {
         SubscriptionPlan plan = planRepository.findById(planId)
-            .orElseThrow(() -> new ResourceNotFoundException("SubscriptionPlan not found: " + planId));
+            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + planId));
         plan.setActive(false);
         planRepository.save(plan);
     }
@@ -96,7 +97,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         Organization organization = organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException("Organization not found: " + organizationId));
         SubscriptionPlan plan = planRepository.findById(request.getPlanId())
-            .orElseThrow(() -> new ResourceNotFoundException("SubscriptionPlan not found: " + request.getPlanId()));
+            .orElseThrow(() -> new ResourceNotFoundException(ERROR_PLAN_NOT_FOUND + request.getPlanId()));
 
         // PR #228 review — refuse to assign a deactivated plan. The
         // controller summary advertises that deactivated plans "reject new

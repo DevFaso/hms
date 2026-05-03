@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.PatientRepository;
@@ -79,9 +80,7 @@ class SuperAdminAuditSearchServiceImplTest {
             PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "eventTimestamp")), 2L);
         when(repository.findAll(any(Specification.class), any(PageRequest.class))).thenReturn(page);
 
-        AuditSearchPageDTO out = service.search(
-            null, null, null, null, null, null, null, null, null, null, null,
-            PageRequest.of(0, 10));
+        AuditSearchPageDTO out = service.search(AuditSearchFilter.empty(), PageRequest.of(0, 10));
 
         assertThat(out.getContent()).hasSize(2);
         assertThat(out.getTotalElements()).isEqualTo(2);
@@ -93,13 +92,23 @@ class SuperAdminAuditSearchServiceImplTest {
     }
 
     @Test
+    @DisplayName("null filter is treated as empty filter (defensive)")
+    void nullFilterTreatedAsEmpty() {
+        when(repository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(Page.empty());
+
+        AuditSearchPageDTO out = service.search(null, PageRequest.of(0, 10));
+
+        assertThat(out.getContent()).isEmpty();
+    }
+
+    @Test
     @DisplayName("default sort = eventTimestamp DESC when caller passes unsorted Pageable")
     void defaultsSortDesc() {
         when(repository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(Page.empty());
 
-        service.search(null, null, null, null, null, null, null, null, null, null, null,
-            PageRequest.of(0, 5));
+        service.search(AuditSearchFilter.empty(), PageRequest.of(0, 5));
 
         ArgumentCaptor<PageRequest> captor = ArgumentCaptor.forClass(PageRequest.class);
         org.mockito.Mockito.verify(repository).findAll(any(Specification.class), captor.capture());
@@ -115,7 +124,7 @@ class SuperAdminAuditSearchServiceImplTest {
             .thenReturn(Page.empty());
 
         PageRequest pr = PageRequest.of(0, 5, Sort.by(Sort.Direction.ASC, "eventDescription"));
-        service.search(null, null, null, null, null, null, null, null, null, null, null, pr);
+        service.search(AuditSearchFilter.empty(), pr);
 
         ArgumentCaptor<PageRequest> captor = ArgumentCaptor.forClass(PageRequest.class);
         org.mockito.Mockito.verify(repository).findAll(any(Specification.class), captor.capture());
@@ -130,26 +139,20 @@ class SuperAdminAuditSearchServiceImplTest {
         when(repository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(Page.empty());
 
-        UUID userId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        UUID organizationId = UUID.randomUUID();
-        UUID impersonatorUserId = UUID.randomUUID();
-        LocalDateTime from = LocalDateTime.now().minusDays(1);
-        LocalDateTime to = LocalDateTime.now();
-
-        service.search(
-            userId,
+        AuditSearchFilter filter = new AuditSearchFilter(
+            UUID.randomUUID(),
             "alice",
             List.of(AuditEventType.SECURITY_ALERT_TRIGGERED, AuditEventType.LOGIN),
             AuditStatus.SUCCESS,
-            hospitalId,
-            organizationId,
-            impersonatorUserId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
             "USER",
             "res-1",
-            from,
-            to,
-            PageRequest.of(0, 10));
+            LocalDateTime.now().minusDays(1),
+            LocalDateTime.now());
+
+        service.search(filter, PageRequest.of(0, 10));
 
         // Specification was created and passed to the repo. Predicates are
         // evaluated lazily by the JPA provider, so the unit test verifies
@@ -164,9 +167,10 @@ class SuperAdminAuditSearchServiceImplTest {
         when(repository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(Page.empty());
 
-        AuditSearchPageDTO out = service.search(
-            null, "  ", List.of(), null, null, null, null, "  ", "  ", null, null,
-            PageRequest.of(0, 10));
+        AuditSearchFilter filter = new AuditSearchFilter(
+            null, "  ", List.of(), null, null, null, null, "  ", "  ", null, null);
+
+        AuditSearchPageDTO out = service.search(filter, PageRequest.of(0, 10));
 
         assertThat(out.getContent()).isEmpty();
     }
@@ -185,26 +189,20 @@ class SuperAdminAuditSearchServiceImplTest {
         when(repository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(Page.empty());
 
-        UUID userId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        UUID organizationId = UUID.randomUUID();
-        UUID impersonatorUserId = UUID.randomUUID();
-        LocalDateTime from = LocalDateTime.now().minusDays(1);
-        LocalDateTime to = LocalDateTime.now();
-
-        service.search(
-            userId,
+        AuditSearchFilter filter = new AuditSearchFilter(
+            UUID.randomUUID(),
             "alice",
             List.of(AuditEventType.SECURITY_ALERT_TRIGGERED),
             AuditStatus.SUCCESS,
-            hospitalId,
-            organizationId,
-            impersonatorUserId,
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            UUID.randomUUID(),
             "USER",
             "res-1",
-            from,
-            to,
-            PageRequest.of(0, 10));
+            LocalDateTime.now().minusDays(1),
+            LocalDateTime.now());
+
+        service.search(filter, PageRequest.of(0, 10));
 
         Specification<AuditEventLog> spec = captureSpec();
         invokeSpec(spec, true);
@@ -221,9 +219,10 @@ class SuperAdminAuditSearchServiceImplTest {
         when(repository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(Page.empty());
 
-        service.search(
-            UUID.randomUUID(), null, null, null, null, null, null, null, null, null, null,
-            PageRequest.of(0, 10));
+        AuditSearchFilter filter = new AuditSearchFilter(
+            UUID.randomUUID(), null, null, null, null, null, null, null, null, null, null);
+
+        service.search(filter, PageRequest.of(0, 10));
 
         Specification<AuditEventLog> spec = captureSpec();
         invokeSpec(spec, false);

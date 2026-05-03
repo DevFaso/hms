@@ -112,7 +112,7 @@ class EmergencyControlServiceImplTest {
 
         EmergencyActionResponseDTO out = service.forceLogoutAll(req, "123456");
 
-        verify(revocationService).revokeAll(eq(actorId), eq("super.alice"), eq("incident X"));
+        verify(revocationService).revokeAll(actorId, "super.alice", "incident X");
         assertThat(out.getAction()).isEqualTo("FORCE_LOGOUT_ALL");
         assertThat(out.getActorUsername()).isEqualTo("super.alice");
         assertThat(out.getMessage()).contains("All sessions revoked");
@@ -324,8 +324,9 @@ class EmergencyControlServiceImplTest {
         verify(messagingTemplate).convertAndSend(eq("/topic/emergency-broadcast"), payloadCaptor.capture());
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) payloadCaptor.getValue();
-        assertThat(payload.get("severity")).isEqualTo("INFO");
-        assertThat(payload.get("type")).isEqualTo("EMERGENCY_BROADCAST");
+        assertThat(payload)
+            .containsEntry("severity", "INFO")
+            .containsEntry("type", "EMERGENCY_BROADCAST");
     }
 
     @Test

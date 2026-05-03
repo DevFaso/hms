@@ -157,9 +157,10 @@ class SubscriptionServiceImplTest {
     @DisplayName("updatePlan throws ResourceNotFound for unknown id")
     void updatePlanMissing() {
         UUID id = UUID.randomUUID();
+        SubscriptionPlanRequestDTO req = new SubscriptionPlanRequestDTO();
         when(planRepository.findById(id)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.updatePlan(id, new SubscriptionPlanRequestDTO()))
+        assertThatThrownBy(() -> service.updatePlan(id, req))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -240,8 +241,9 @@ class SubscriptionServiceImplTest {
             .planId(p.getId())
             .seatLimit(5)
             .build();
+        UUID orgId = o.getId();
 
-        assertThatThrownBy(() -> service.assignPlan(o.getId(), req))
+        assertThatThrownBy(() -> service.assignPlan(orgId, req))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("deactivated subscription plan");
     }
@@ -347,8 +349,9 @@ class SubscriptionServiceImplTest {
 
         OrganizationSubscriptionRequestDTO req = OrganizationSubscriptionRequestDTO.builder()
             .planId(UUID.randomUUID()).seatLimit(1).build();
+        UUID orgId = o.getId();
 
-        assertThatThrownBy(() -> service.assignPlan(o.getId(), req))
+        assertThatThrownBy(() -> service.assignPlan(orgId, req))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("SubscriptionPlan not found");
     }
@@ -384,8 +387,10 @@ class SubscriptionServiceImplTest {
             .build();
         sub.setId(UUID.randomUUID());
         when(subscriptionRepository.findById(sub.getId())).thenReturn(Optional.of(sub));
+        UUID strangerOrgId = stranger.getId();
+        UUID subId = sub.getId();
 
-        assertThatThrownBy(() -> service.cancel(stranger.getId(), sub.getId()))
+        assertThatThrownBy(() -> service.cancel(strangerOrgId, subId))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("does not belong");
     }
@@ -394,9 +399,10 @@ class SubscriptionServiceImplTest {
     @DisplayName("cancel throws ResourceNotFound for unknown subscription id")
     void cancelMissing() {
         UUID subId = UUID.randomUUID();
+        UUID orgId = UUID.randomUUID();
         when(subscriptionRepository.findById(subId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.cancel(UUID.randomUUID(), subId))
+        assertThatThrownBy(() -> service.cancel(orgId, subId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

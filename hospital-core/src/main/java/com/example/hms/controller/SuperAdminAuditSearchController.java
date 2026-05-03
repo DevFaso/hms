@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
 import com.example.hms.service.SuperAdminAuditSearchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,8 +53,9 @@ public class SuperAdminAuditSearchController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
         Pageable pageable
     ) {
-        return ResponseEntity.ok(service.search(
+        AuditSearchFilter filter = new AuditSearchFilter(
             userId, userName, eventTypes, status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate, pageable));
+            impersonatorUserId, entityType, resourceId, fromDate, toDate);
+        return ResponseEntity.ok(service.search(filter, pageable));
     }
 }

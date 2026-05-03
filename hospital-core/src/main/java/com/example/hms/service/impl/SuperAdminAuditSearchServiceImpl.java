@@ -1,56 +1,44 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
+import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.service.SuperAdminAuditSearchService;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchService {
 
+    private static final String FIELD_EVENT_TIMESTAMP = "eventTimestamp";
+
     private final AuditEventLogRepository auditEventLogRepository;
     private final AuditEventLogMapper mapper;
 
     @Override
-    public AuditSearchPageDTO search(
-        UUID userId,
-        String userNameLike,
-        List<AuditEventType> eventTypes,
-        AuditStatus status,
-        UUID hospitalId,
-        UUID organizationId,
-        UUID impersonatorUserId,
-        String entityType,
-        String resourceId,
-        LocalDateTime fromDate,
-        LocalDateTime toDate,
-        Pageable pageable
-    ) {
-        Specification<AuditEventLog> spec = buildSpec(
-            userId, userNameLike, eventTypes, status, hospitalId, organizationId,
-            impersonatorUserId, entityType, resourceId, fromDate, toDate);
+    public AuditSearchPageDTO search(AuditSearchFilter filter, Pageable pageable) {
+        AuditSearchFilter effective = filter == null ? AuditSearchFilter.empty() : filter;
+        Specification<AuditEventLog> spec = buildSpec(effective);
 
-        Pageable effective = ensureSorted(pageable);
-        Page<AuditEventLog> page = auditEventLogRepository.findAll(spec, effective);
+        Pageable sorted = ensureSorted(pageable);
+        Page<AuditEventLog> page = auditEventLogRepository.findAll(spec, sorted);
 
         // PR #228 review — use the lite mapper variant: it skips the
         // per-row PatientRepository.findById lookup that the standard toDto
@@ -74,82 +62,102 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             return PageRequest.of(
                 pageable.getPageNumber(),
                 pageable.getPageSize(),
-                Sort.by(Sort.Direction.DESC, "eventTimestamp"));
+                Sort.by(Sort.Direction.DESC, FIELD_EVENT_TIMESTAMP));
         }
         return pageable;
     }
 
-    private Specification<AuditEventLog> buildSpec(
-        UUID userId,
-        String userNameLike,
-        List<AuditEventType> eventTypes,
-        AuditStatus status,
-        UUID hospitalId,
-        UUID organizationId,
-        UUID impersonatorUserId,
-        String entityType,
-        String resourceId,
-        LocalDateTime fromDate,
-        LocalDateTime toDate
-    ) {
+    /**
+     * PR #228 SonarCloud review — the lambda body now delegates to small
+     * per-filter helpers so the cognitive complexity of the spec builder
+     * itself stays under the 15-branch ceiling.
+     */
+    private Specification<AuditEventLog> buildSpec(AuditSearchFilter f) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
-            if (userId != null) {
-                predicates.add(cb.equal(root.get("user").get("id"), userId));
-            }
-            if (userNameLike != null && !userNameLike.isBlank()) {
-                predicates.add(cb.like(
-                    cb.lower(root.get("userName")),
-                    "%" + userNameLike.toLowerCase() + "%"));
-            }
-            if (eventTypes != null && !eventTypes.isEmpty()) {
-                predicates.add(root.get("eventType").in(eventTypes));
-            }
-            if (status != null) {
-                predicates.add(cb.equal(root.get("status"), status));
-            }
-            // PR #228 review — share a single assignment+hospital join
-            // chain across the hospital and organization filters instead of
-            // creating two redundant join paths in the generated SQL.
-            jakarta.persistence.criteria.Join<?, ?> assignmentJoin = null;
-            jakarta.persistence.criteria.Join<?, ?> hospitalJoin = null;
-            if (hospitalId != null || organizationId != null) {
-                assignmentJoin = root.join("assignment", JoinType.LEFT);
-                hospitalJoin = assignmentJoin.join("hospital", JoinType.LEFT);
-            }
-            if (hospitalId != null) {
-                predicates.add(cb.equal(hospitalJoin.get("id"), hospitalId));
-            }
-            if (organizationId != null) {
-                predicates.add(cb.equal(
-                    hospitalJoin.join("organization", JoinType.LEFT).get("id"),
-                    organizationId));
-            }
-            if (impersonatorUserId != null) {
-                predicates.add(cb.equal(root.get("impersonatorUserId"), impersonatorUserId));
-            }
-            if (entityType != null && !entityType.isBlank()) {
-                predicates.add(cb.equal(
-                    cb.lower(root.get("entityType")),
-                    entityType.toLowerCase()));
-            }
-            if (resourceId != null && !resourceId.isBlank()) {
-                predicates.add(cb.equal(root.get("resourceId"), resourceId));
-            }
-            if (fromDate != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("eventTimestamp"), fromDate));
-            }
-            if (toDate != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("eventTimestamp"), toDate));
-            }
-
-            // PR #228 review — distinct(true) was applied unconditionally
-            // even when no multi-valued joins are used. All joins above are
-            // many-to-one (assignment → hospital → organization), so an
-            // AuditEventLog row cannot duplicate. Removed to keep count
-            // queries fast and let the planner pick the obvious path.
+            addUserPredicates(predicates, root, cb, f);
+            addEventPredicates(predicates, root, cb, f);
+            addHospitalAndOrgPredicates(predicates, root, cb, f);
+            addTargetPredicates(predicates, root, cb, f);
+            addDatePredicates(predicates, root, cb, f);
+            // distinct() was applied unconditionally before — every join here
+            // is many-to-one so AuditEventLog rows can't duplicate. Removed
+            // (PR #228 review).
             return cb.and(predicates.toArray(new Predicate[0]));
         };
+    }
+
+    private void addUserPredicates(
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+    ) {
+        if (f.userId() != null) {
+            predicates.add(cb.equal(root.get("user").get("id"), f.userId()));
+        }
+        if (f.userNameLike() != null && !f.userNameLike().isBlank()) {
+            predicates.add(cb.like(
+                cb.lower(root.get("userName")),
+                "%" + f.userNameLike().toLowerCase() + "%"));
+        }
+        if (f.impersonatorUserId() != null) {
+            predicates.add(cb.equal(root.get("impersonatorUserId"), f.impersonatorUserId()));
+        }
+    }
+
+    private void addEventPredicates(
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+    ) {
+        if (f.eventTypes() != null && !f.eventTypes().isEmpty()) {
+            predicates.add(root.get("eventType").in(f.eventTypes()));
+        }
+        if (f.status() != null) {
+            predicates.add(cb.equal(root.get("status"), f.status()));
+        }
+    }
+
+    /**
+     * Single assignment+hospital join chain shared across the hospital and
+     * organization filters (PR #228 review — was creating two redundant
+     * join paths).
+     */
+    private void addHospitalAndOrgPredicates(
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+    ) {
+        if (!f.needsHospitalOrOrgJoin()) {
+            return;
+        }
+        Join<?, ?> hospitalJoin = root.join("assignment", JoinType.LEFT)
+            .join("hospital", JoinType.LEFT);
+        if (f.hospitalId() != null) {
+            predicates.add(cb.equal(hospitalJoin.get("id"), f.hospitalId()));
+        }
+        if (f.organizationId() != null) {
+            predicates.add(cb.equal(
+                hospitalJoin.join("organization", JoinType.LEFT).get("id"),
+                f.organizationId()));
+        }
+    }
+
+    private void addTargetPredicates(
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+    ) {
+        if (f.entityType() != null && !f.entityType().isBlank()) {
+            predicates.add(cb.equal(
+                cb.lower(root.get("entityType")),
+                f.entityType().toLowerCase()));
+        }
+        if (f.resourceId() != null && !f.resourceId().isBlank()) {
+            predicates.add(cb.equal(root.get("resourceId"), f.resourceId()));
+        }
+    }
+
+    private void addDatePredicates(
+        List<Predicate> predicates, Root<AuditEventLog> root, CriteriaBuilder cb, AuditSearchFilter f
+    ) {
+        if (f.fromDate() != null) {
+            predicates.add(cb.greaterThanOrEqualTo(root.get(FIELD_EVENT_TIMESTAMP), f.fromDate()));
+        }
+        if (f.toDate() != null) {
+            predicates.add(cb.lessThanOrEqualTo(root.get(FIELD_EVENT_TIMESTAMP), f.toDate()));
+        }
     }
 }
