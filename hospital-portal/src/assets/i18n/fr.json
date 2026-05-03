@@ -103,6 +103,22 @@
       "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues"
     }
   },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "Vous agissez en tant que",
+    "BANNER_SUFFIX": "via l'usurpation support.",
+    "AS": "par",
+    "EXIT": "Quitter l'usurpation",
+    "IMPERSONATE_USER": "Usurper cet utilisateur",
+    "MODAL_TITLE": "Démarrer une session d'usurpation support",
+    "MODAL_PREFIX": "Vous êtes sur le point d'agir en tant que",
+    "MODAL_WARNING": "Toutes vos actions seront étiquetées avec votre identité réelle. La session expire automatiquement au bout de 30 minutes.",
+    "REASON_LABEL": "Motif (requis, conservé dans l'audit)",
+    "REASON_PLACEHOLDER": "ex. Validation d'un bug de renouvellement signalé par le patient",
+    "MFA_LABEL": "Code MFA (requis si MFA activée)",
+    "MFA_PLACEHOLDER": "Code à 6 chiffres",
+    "START_BUTTON": "Démarrer l'usurpation",
+    "STARTING": "Démarrage…"
+  },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",

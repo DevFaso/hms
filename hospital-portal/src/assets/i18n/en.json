@@ -103,6 +103,22 @@
       "HOSPITALS_DESC": "All hospitals across organizations"
     }
   },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "You are acting as",
+    "BANNER_SUFFIX": "via support impersonation.",
+    "AS": "as",
+    "EXIT": "Exit impersonation",
+    "IMPERSONATE_USER": "Impersonate this user",
+    "MODAL_TITLE": "Start support impersonation",
+    "MODAL_PREFIX": "You are about to act as",
+    "MODAL_WARNING": "Every action you take will be tagged with your real identity. The session expires automatically after 30 minutes.",
+    "REASON_LABEL": "Reason (required, persisted in audit)",
+    "REASON_PLACEHOLDER": "e.g. Validating refill bug reported by patient",
+    "MFA_LABEL": "MFA code (required when MFA is enrolled)",
+    "MFA_PLACEHOLDER": "6-digit code",
+    "START_BUTTON": "Start impersonation",
+    "STARTING": "Starting…"
+  },
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
     "FORCE_OVERRIDE": "Override critical advisory after clinical review",

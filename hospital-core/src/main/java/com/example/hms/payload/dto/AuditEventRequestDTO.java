@@ -57,4 +57,10 @@ public class AuditEventRequestDTO {
     @Schema(description = "Entity type of the target resource (e.g., PATIENT, APPOINTMENT).", example = "PATIENT")
     private String entityType;
 
+    @Schema(description = "Real super-admin user id when this event was performed under a support-impersonation token (MVP-4). Null for normal sessions.")
+    private UUID impersonatorUserId;
+
+    @Schema(description = "Real super-admin username at the time the action was taken under impersonation.")
+    private String impersonatorUsername;
+
 }

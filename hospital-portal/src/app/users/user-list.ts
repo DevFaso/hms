@@ -8,6 +8,8 @@ import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ImpersonationService } from '../services/impersonation.service';
+import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 const MEDICAL_ROLE_CODES = new Set([
@@ -81,6 +83,8 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly impersonation = inject(ImpersonationService);
+  private readonly router = inject(Router);
 
   private readonly searchSubject = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
@@ -110,6 +114,13 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Restore
   restoring = signal(false);
+
+  // MVP-4: support impersonation modal state
+  impersonateTarget = signal<UserSummary | null>(null);
+  impersonateReason = '';
+  impersonateMfaCode = '';
+  impersonating = signal(false);
+  impersonateError = signal<string | null>(null);
 
   /** Per-field validation error messages (from 400/409 backend responses). */
   fieldErrors = signal<Record<string, string>>({});
@@ -458,6 +469,56 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.restoring.set(false);
       },
     });
+  }
+
+  // ── MVP-4: support impersonation ────────────────────────────────────
+  /** True when the current user is a super admin and the row is impersonable. */
+  canImpersonate(user: UserSummary): boolean {
+    if (!this.roleContext.isSuperAdmin()) return false;
+    if (user.deleted || !user.active) return false;
+    const role = (user.roleName ?? '').toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ROLE_SUPER_ADMIN') return false;
+    if (this.impersonation.active()?.impersonating) return false;
+    return true;
+  }
+
+  openImpersonate(user: UserSummary): void {
+    this.impersonateTarget.set(user);
+    this.impersonateReason = '';
+    this.impersonateMfaCode = '';
+    this.impersonateError.set(null);
+  }
+
+  closeImpersonate(): void {
+    this.impersonateTarget.set(null);
+    this.impersonateReason = '';
+    this.impersonateMfaCode = '';
+    this.impersonateError.set(null);
+  }
+
+  submitImpersonate(): void {
+    const target = this.impersonateTarget();
+    const reason = this.impersonateReason.trim();
+    if (!target || reason.length < 5) {
+      this.impersonateError.set('Reason must be at least 5 characters.');
+      return;
+    }
+    this.impersonating.set(true);
+    this.impersonateError.set(null);
+    this.impersonation
+      .start({ targetUserId: target.id, reason }, this.impersonateMfaCode.trim() || undefined)
+      .subscribe({
+        next: () => {
+          this.impersonating.set(false);
+          this.closeImpersonate();
+          this.toast.success(`Now acting as ${target.username}.`);
+          this.router.navigateByUrl('/dashboard');
+        },
+        error: (err) => {
+          this.impersonating.set(false);
+          this.impersonateError.set(err?.error?.message ?? 'Failed to start impersonation');
+        },
+      });
   }
 
   goToPage(page: number): void {

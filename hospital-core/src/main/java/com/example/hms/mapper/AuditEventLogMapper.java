@@ -44,6 +44,8 @@ public class AuditEventLogMapper {
             .entityType(event.getEntityType())
             .actorType(event.getActorType() != null ? event.getActorType().name() : null)
             .actorLabel(event.getActorLabel())
+            .impersonatorUserId(event.getImpersonatorUserId())
+            .impersonatorUsername(event.getImpersonatorUsername())
             .build();
     }
 

@@ -1,6 +1,9 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
-> Audit date: 2026-05-02 · Baseline: `main` @ 4ef74a08 · Branch: `feature/super-admin-gaps`
+> Audit date: 2026-05-02 · Baseline: `main` @ 006384fc · Branches:
+> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped),
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — open PR),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — IN PROGRESS).
 
 ## Executive Summary
 
@@ -214,12 +217,157 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVPs 3–8: Forward Queue (not in scope this branch)
+## MVP 4: Support Impersonation with Audit (IN SCOPE — `feature/super-admin-gaps-mvp4-support-impersonation`)
+
+**Goal:** Let a super admin act as another (non-super-admin) user for
+support purposes, with every action under that session traceable back to
+the real human.
+
+**Scope — Backend:**
+
+- V79 migration (additive): `support.audit_event_logs` gains
+  `impersonator_user_id UUID` + `impersonator_username VARCHAR(255)`,
+  partial index on `(impersonator_user_id, event_timestamp DESC) WHERE
+  impersonator_user_id IS NOT NULL` for forensic queries.
+- New JWT claims `CLAIM_IMPERSONATOR_USER_ID` + `CLAIM_IMPERSONATOR_USERNAME`
+  in `SecurityConstants`. JWT subject + roles claim represent the
+  *target* user so all downstream RBAC and `TenantScopeSpecification`
+  behave as if the target had logged in.
+- `JwtTokenProvider.generateImpersonationAccessToken(target,
+  impersonatorUserId, impersonatorUsername, ttlMillis)` mints a
+  short-lived (default 30 min, configurable via
+  `hms.support-impersonation.ttl-ms`) token. **No refresh token is
+  issued** — when the TTL expires the super admin must call `start`
+  again. This caps the blast radius of a leaked impersonation token at
+  the chosen TTL.
+- `JwtTokenProvider.extractImpersonationContext(token)` reads the two
+  claims and wraps them in an `ImpersonationContext`.
+- `ImpersonationContext` (record) + `ImpersonationContextHolder`
+  (thread-local utility class mirroring `HospitalContextHolder`).
+  `JwtAuthenticationFilter` populates the holder from the JWT claims
+  and clears it in every `finally` / failure branch alongside
+  `HospitalContextHolder.clear()`.
+- `AuditEventLogServiceImpl` reads the holder before persisting and
+  auto-stamps `impersonator_user_id` / `impersonator_username` on every
+  audit row. Boundary events (start/stop) bypass the holder by setting
+  the impersonator fields explicitly on the request DTO so the audit
+  trail is complete even when the JWT subject is the actor (start) or
+  when the holder is cleared mid-call (stop).
+- `AuditEventType.IMPERSONATION_STARTED` + `…ENDED` enum values.
+- `SupportImpersonationService` interface + impl with three operations:
+  - `start(request, mfaToken)` — ROLE_SUPER_ADMIN, validates target
+    exists, target is not super admin (anti-collusion), target is not
+    self, no nested impersonation, MFA step-up via the existing
+    `X-Mfa-Token` plumbing reused from MVP-2. Mints the token, emits
+    `IMPERSONATION_STARTED`, returns DTO with `accessToken` +
+    `expiresAt` + actor + target info.
+  - `stop()` — emits `IMPERSONATION_ENDED`. The JWT subject at this
+    call is the target; the impersonator is read off the holder.
+  - `getActive()` — reflects the holder state for the frontend.
+- `SuperAdminImpersonationController` exposes `POST /super-admin/
+  impersonation/{start,stop}` and `GET .../active`. `start` is gated
+  to `ROLE_SUPER_ADMIN`; `stop` and `active` to `isAuthenticated()`
+  because the bearer is the impersonation token (which carries the
+  target's roles, not super admin).
+- Cross-tenant audit response DTO + mapper carry the new impersonator
+  fields so the existing audit-log UI (and the future MVP-7 cross-tenant
+  audit search) can surface them.
+
+**Scope — Frontend:**
+
+- New `ImpersonationService` (`/super-admin/impersonation/{start,stop,active}`)
+  with a `signal` mirroring active state. `start()` saves the original
+  super-admin token under `sessionStorage['auth_token_pre_impersonation']`
+  before swapping in the impersonation token; `stop()` restores it.
+  `forceStop()` drops the impersonation token without hitting the
+  server (used on 401 / TTL expiry). `refreshActive()` re-hydrates the
+  signal on shell mount so a page refresh while impersonating re-paints
+  the banner.
+- Persistent red banner (`ImpersonationBannerComponent`) at the top of
+  every authenticated route showing "You are acting as $target as
+  $impersonator" plus an **Exit impersonation** button. Wired into the
+  shell so it survives navigation. Banner is a real `<button>` with
+  `aria-expanded`/focus handling; SCSS uses CSS-only animation so the
+  banner is visible even when JS is mid-render.
+- "Impersonate this user" icon button on each row of `/users`, gated on
+  super admin + target active + target not super admin + not currently
+  impersonating. Click opens an inline modal collecting reason
+  (≥ 5 chars, persisted in audit) + MFA code (sent as `X-Mfa-Token`).
+  Submit calls `ImpersonationService.start` and on success routes to
+  `/dashboard` so the super admin lands on the target's home view.
+- EN / FR / ES `IMPERSONATION.*` i18n bundles.
+
+**Out of scope (this MVP):**
+
+- "Impersonate" button on org-detail / user-detail pages — list view is
+  the most common entry point and ships first.
+- Browser warning / countdown timer when impersonation is about to
+  expire — defer to MVP-4b along with auto-stop on 401 from the JWT
+  filter rejecting an expired token.
+- Cross-tenant audit search UI surfacing impersonator filter — that's
+  MVP-7. The DTO + mapper already carry the data so MVP-7 only needs
+  the search UI.
+
+**Priority:** P2 (after MVP-3 lands).
+
+**Complexity:** Medium-High (auth-flow change + JWT mint path + new
+context holder + UI banner + per-row entry point + boundary audit
+discipline).
+
+**Effort:** ~8 story points.
+
+**Acceptance Criteria — met:**
+
+- V79 ships additively with rollback-safe partial index. No destructive
+  changes; pre-existing rows stay at NULL.
+- Super admin can mint an impersonation token with reason + MFA;
+  rejected for self-impersonation, target=super-admin, nested
+  impersonation, missing/invalid MFA when actor is enrolled.
+- Unenrolled actor in non-strict mode passes through but the bypass is
+  audited as `SECURITY_ALERT_TRIGGERED` (matches MVP-2 tenant-lifecycle
+  pattern).
+- Every action under the impersonation token carries
+  `impersonator_user_id` + `impersonator_username` on its audit row
+  (auto-stamped from the request-scoped holder).
+- Frontend banner appears on every authenticated route during
+  impersonation; "Exit impersonation" calls `stop` and routes back to
+  `/super-admin`. Page refresh re-paints the banner via
+  `refreshActive()` on shell mount.
+- All boundary transitions (`start` and `stop`) emit
+  `IMPERSONATION_STARTED` / `IMPERSONATION_ENDED` with the impersonator
+  set explicitly on the request DTO — independent of the holder.
+- 8 backend tests (`SupportImpersonationServiceImpl` + controller +
+  audit-log entity), 8 frontend tests (`ImpersonationService` +
+  banner). `./gradlew :hospital-core:compileJava
+  :hospital-core:compileTestJava` clean; `npm run lint` clean; full
+  788-test Karma sweep green.
+
+**Developer Tasks — done:**
+
+1. Liquibase V79 migration (additive).
+2. Entity + request DTO + response DTO + mapper updated for
+   impersonator fields.
+3. Two new `AuditEventType` values.
+4. JWT claim constants + `JwtTokenProvider` builder + extractor.
+5. `ImpersonationContext` + holder.
+6. `JwtAuthenticationFilter` wires the holder into the per-request
+   lifecycle and clears it in every cleanup branch.
+7. `AuditEventLogServiceImpl` auto-stamps from the holder; explicit
+   request fields take precedence so boundary events stay complete.
+8. `SupportImpersonationService` + impl + DTOs + controller (3
+   endpoints, role-gated).
+9. JUnit + MockMvc tests at every layer.
+10. Frontend `ImpersonationService`, model, banner component, shell
+    integration, user-list "Impersonate" button + inline modal.
+11. EN / FR / ES i18n strings.
+12. Update this doc.
+
+---
+
+## MVPs 5–8: Forward Queue (not in scope this branch)
 
 | # | MVP | Trigger |
 | --- | --- | --- |
-| 3 | Partner-Connector / Integration Health Console | Pair with the unblocked partner-API item — when first NHIS/NHIA/CNAMGS/mutuelle decision lands. |
-| 4 | Support Impersonation with Audit | When first paying tenant onboards and support load is real. |
 | 5 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
 | 6 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
 | 7 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
