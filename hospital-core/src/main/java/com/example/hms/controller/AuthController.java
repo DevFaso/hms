@@ -89,6 +89,7 @@ public class AuthController {
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     private final LoginAttemptService loginAttemptService;
     private final AuditEventLogService auditEventLogService;
     private final PasswordHistoryService passwordHistoryService;
@@ -117,6 +118,7 @@ public class AuthController {
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
             TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
             LoginAttemptService loginAttemptService,
             AuditEventLogService auditEventLogService,
             PasswordHistoryService passwordHistoryService,
@@ -135,6 +137,7 @@ public class AuthController {
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.impersonationSessionTracker = impersonationSessionTracker;
         this.loginAttemptService = loginAttemptService;
         this.auditEventLogService = auditEventLogService;
         this.passwordHistoryService = passwordHistoryService;
@@ -580,6 +583,19 @@ public class AuthController {
             log.warn("🔄 [REFRESH] User '{}' not found or inactive", username);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("User account not found or inactive."));
+        }
+
+        // Closes Copilot review #4 on PR #224 — refuse to mint a new
+        // super-admin access token from the surviving refresh cookie while
+        // an impersonation session is active for this user. Without this
+        // check, a 401 on the impersonation token would auto-trigger this
+        // refresh path and silently elevate the caller back to super-admin
+        // without ever emitting an IMPERSONATION_ENDED audit event.
+        if (impersonationSessionTracker.hasActive(user.getId())) {
+            log.warn("🔄 [REFRESH] Refused — user '{}' has an active impersonation session", username);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MessageResponse(
+                        "Active support-impersonation session — call /super-admin/impersonation/stop before refreshing."));
         }
 
         // Resolve current roles from tenant assignments (authoritative source)

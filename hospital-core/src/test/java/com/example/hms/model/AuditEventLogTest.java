@@ -129,7 +129,9 @@ class AuditEventLogTest {
                 "Patient",                     // entityType
                 "Resource X",                  // resourceName
                 ActorType.USER,                // actorType
-                "John Doe"                     // actorLabel
+                "John Doe",                    // actorLabel
+                null,                          // impersonatorUserId (MVP-4)
+                null                           // impersonatorUsername (MVP-4)
             );
 
             assertAll(

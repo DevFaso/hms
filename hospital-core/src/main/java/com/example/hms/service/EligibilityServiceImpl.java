@@ -24,6 +24,7 @@ import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.integration.eligibility.EligibilityProvider;
 import com.example.hms.service.integration.eligibility.EligibilityProviderRequest;
 import com.example.hms.service.integration.eligibility.EligibilityProviderResult;
+import com.example.hms.service.integration.health.IntegrationHealthRecorder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -58,6 +59,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     private final AuditEventLogService auditService;
     private final List<EligibilityProvider> providers;
     private final Clock clock;
+    private final IntegrationHealthRecorder healthRecorder;
 
     public EligibilityServiceImpl(EligibilityCheckRepository checkRepository,
                                   PatientRepository patientRepository,
@@ -66,7 +68,8 @@ public class EligibilityServiceImpl implements EligibilityService {
                                   UserRepository userRepository,
                                   AuditEventLogService auditService,
                                   List<EligibilityProvider> providers,
-                                  Clock clock) {
+                                  Clock clock,
+                                  IntegrationHealthRecorder healthRecorder) {
         this.checkRepository = checkRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -75,6 +78,7 @@ public class EligibilityServiceImpl implements EligibilityService {
         this.auditService = auditService;
         this.providers = providers;
         this.clock = clock;
+        this.healthRecorder = healthRecorder;
     }
 
     @Override
@@ -149,8 +153,32 @@ public class EligibilityServiceImpl implements EligibilityService {
         check.setCompletedAt(LocalDateTime.now(clock));
         EligibilityCheck saved = checkRepository.save(check);
 
+        recordIntegrationHealth(hospital, saved.getStatus(), result);
         emitAudit(caller, hospital, patient, saved);
         return toDto(saved);
+    }
+
+    private void recordIntegrationHealth(Hospital hospital,
+                                         EligibilityStatus status,
+                                         EligibilityProviderResult result) {
+        UUID organizationId = hospital != null && hospital.getOrganization() != null
+            ? hospital.getOrganization().getId()
+            : null;
+        boolean failed = status == EligibilityStatus.ERROR
+            || status == EligibilityStatus.UNKNOWN;
+        if (failed) {
+            String message = result != null && result.getErrorMessage() != null
+                ? result.getErrorMessage()
+                : "Eligibility provider returned " + status;
+            healthRecorder.recordFailure(
+                SuperAdminIntegrationHealthService.INTEGRATION_ID_ELIGIBILITY,
+                organizationId,
+                message);
+        } else {
+            healthRecorder.recordSuccess(
+                SuperAdminIntegrationHealthService.INTEGRATION_ID_ELIGIBILITY,
+                organizationId);
+        }
     }
 
     @Override

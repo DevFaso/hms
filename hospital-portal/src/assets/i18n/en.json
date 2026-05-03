@@ -100,8 +100,56 @@
       "AUDIT_TITLE": "Audit logs",
       "AUDIT_DESC": "System-wide audit trail and compliance",
       "HOSPITALS_TITLE": "Hospitals",
-      "HOSPITALS_DESC": "All hospitals across organizations"
+      "HOSPITALS_DESC": "All hospitals across organizations",
+      "INTEGRATIONS_TITLE": "Integration health",
+      "INTEGRATIONS_DESC": "Per-tenant connector inventory and call health"
     }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Integration Health Console",
+    "SUBTITLE": "Per-tenant inventory and call health for partner connectors and platform integrations",
+    "LOADING": "Loading integration inventory…",
+    "LOAD_ERROR": "Could not load the integration inventory. Try again.",
+    "RETRY": "Retry",
+    "EMPTY": "No integrations are registered.",
+    "ENABLED": "Enabled",
+    "DISABLED": "Disabled",
+    "NO_ORG_HISTORY": "No call history recorded for this integration yet.",
+    "PLATFORM_WIDE": "Platform-wide",
+    "ORG": "Organization",
+    "STATUS_HEAD": "Status",
+    "LAST_SUCCESS": "Last success",
+    "LAST_FAILURE": "Last failure",
+    "SUCCESSES_24H": "Successes (24h)",
+    "FAILURES_24H": "Failures (24h)",
+    "STATUS": {
+      "HEALTHY": "Healthy",
+      "DEGRADED": "Degraded",
+      "FAILING": "Failing",
+      "NO_HISTORY": "No history"
+    },
+    "CHIP": {
+      "HEALTHY": "Healthy",
+      "DEGRADED": "Degraded",
+      "FAILING": "Failing",
+      "NO_HISTORY": "No history"
+    }
+  },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "You are acting as",
+    "BANNER_SUFFIX": "via support impersonation.",
+    "AS": "as",
+    "EXIT": "Exit impersonation",
+    "IMPERSONATE_USER": "Impersonate this user",
+    "MODAL_TITLE": "Start support impersonation",
+    "MODAL_PREFIX": "You are about to act as",
+    "MODAL_WARNING": "Every action you take will be tagged with your real identity. The session expires automatically after 30 minutes.",
+    "REASON_LABEL": "Reason (required, persisted in audit)",
+    "REASON_PLACEHOLDER": "e.g. Validating refill bug reported by patient",
+    "MFA_LABEL": "MFA code (required when MFA is enrolled)",
+    "MFA_PLACEHOLDER": "6-digit code",
+    "START_BUTTON": "Start impersonation",
+    "STARTING": "Starting…"
   },
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
@@ -1899,7 +1947,8 @@
     "STOCK_ADJUSTMENT": "Stock Adjustment",
     "DISPENSING": "Dispensing",
     "STOCK_ROUTING": "Stock Routing",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Integration Health"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -3624,6 +3673,30 @@
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3-30 characters, letters, numbers, underscores",
     "USERNAME_UPDATED": "Username updated to {{username}}"
+  },
+  "SETTINGS_HUB": {
+    "ACCOUNT_DESC": "Update your name, contact details, photo, and other personal information.",
+    "ACCOUNT_TITLE": "Account & Profile",
+    "ACTIVITY_DESC": "Review recent sign-ins and security events on your account.",
+    "ACTIVITY_TITLE": "Account Activity",
+    "LANGUAGE_DESC": "Choose the language used across the portal.",
+    "LANGUAGE_TITLE": "Language",
+    "LANG_EN": "English",
+    "LANG_ES": "Español",
+    "LANG_FR": "Français",
+    "NOTIFICATIONS_DESC": "Pick which alerts you receive and how — in-app, email, SMS, or push.",
+    "NOTIFICATIONS_TITLE": "Notification Preferences",
+    "OPEN_ACTIVITY": "View activity",
+    "OPEN_NOTIFICATIONS": "Configure",
+    "OPEN_PRIVACY": "Read policy",
+    "OPEN_PROFILE": "Edit profile",
+    "OPEN_SECURITY": "Manage security",
+    "PAGE_SUBTITLE": "Manage how the portal works for you. For changes to your personal information, open Account & Profile.",
+    "PAGE_TITLE": "Settings",
+    "PRIVACY_DESC": "Read how your data is collected, used, and protected.",
+    "PRIVACY_TITLE": "Privacy",
+    "SECURITY_DESC": "Change your password, manage MFA, and review recovery contacts.",
+    "SECURITY_TITLE": "Security & Sign-in"
   },
   "SHELL": {
     "DRAG_REORDER": "Drag to reorder",

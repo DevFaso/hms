@@ -15,8 +15,6 @@ import { AppointmentService, AppointmentResponse } from '../services/appointment
 import { PatientService, PatientResponse } from '../services/patient.service';
 import {
   DashboardService,
-  SuperAdminSummary,
-  RecentAuditEvent,
   DashboardKPI,
   ClinicalAlert,
   InboxCounts,
@@ -185,10 +183,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     () => !this.isClinician() && this.permissions.hasPermission('View Appointments'),
   );
 
-  // ── Super-Admin data ─────────────────────────────────────────
-  adminSummary = signal<SuperAdminSummary | null>(null);
-  recentAuditEvents = signal<RecentAuditEvent[]>([]);
-
   // ── Hospital-Admin data ────────────────────────────────────
   hospitalAdminSummary = signal<HospitalAdminSummary | null>(null);
 
@@ -344,7 +338,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Hero gradient class (role-specific) ─────────────────────
   heroGradientClass = computed(() => {
     if (this.isPatient()) return 'hero-gradient-patient';
-    if (this.isSuperAdmin()) return 'hero-gradient-superadmin';
     if (this.isHospitalAdmin()) return 'hero-gradient-hospital-admin';
     if (this.isDoctor()) return 'hero-gradient-doctor';
     if (this.isNurse() || this.isMidwife()) return 'hero-gradient-nurse';
@@ -363,7 +356,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Priority matches heroGradientClass / roleLabel ordering.
    */
   activeView = computed<
-    | 'superadmin'
     | 'hospitaladmin'
     | 'doctor'
     | 'nurse'
@@ -377,7 +369,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'fallback'
   >(() => {
     if (this.isPatient()) return 'patient';
-    if (this.isSuperAdmin()) return 'superadmin';
     if (this.isHospitalAdmin()) return 'hospitaladmin';
     if (this.isDoctor()) return 'doctor';
     if (this.isNurse() || this.isMidwife()) return 'nurse';
@@ -753,104 +744,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     return undefined;
   }
-
-  // ── Super-Admin navigation tiles ─────────────────────────────
-  adminNavTiles = computed<NavTile[]>(() => {
-    this.langTick();
-    return [
-      {
-        icon: 'corporate_fare',
-        label: this.t('DASHBOARD.ORGANIZATIONS'),
-        route: '/organizations',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'local_hospital',
-        label: this.t('DASHBOARD.HOSPITALS'),
-        route: '/hospitals',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'domain',
-        label: this.t('DASHBOARD.DEPARTMENTS'),
-        route: '/departments',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'shield',
-        label: this.t('DASHBOARD.ROLES'),
-        route: '/roles',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'group',
-        label: this.t('DASHBOARD.USERS'),
-        route: '/users',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'people',
-        label: this.t('PATIENTS.TITLE'),
-        route: '/patients',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'calendar_month',
-        label: this.t('DASHBOARD.TILE.APPOINTMENTS'),
-        route: '/appointments',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'history',
-        label: this.t('DASHBOARD.TILE.AUDIT_LOGS'),
-        route: '/audit-logs',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'tune',
-        label: this.t('DASHBOARD.TILE.PLATFORM_CONFIG'),
-        route: '/platform',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'flag',
-        label: this.t('DASHBOARD.TILE.FEATURE_FLAGS'),
-        route: '/feature-flags',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'analytics',
-        label: this.t('DASHBOARD.TILE.ANALYTICS'),
-        route: '/analytics',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'notifications',
-        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
-        route: '/notifications',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-      {
-        icon: 'verified',
-        label: this.t('DASHBOARD.TILE.DIGITAL_SIGNATURES'),
-        route: '/digital-signatures',
-        color: '#2563eb',
-        bg: '#eff6ff',
-      },
-    ];
-  });
 
   // ── Hospital Admin navigation tiles ──────────────────────────
   hospitalAdminNavTiles = computed<NavTile[]>(() => {
@@ -1298,6 +1191,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   // ── Receptionist workflow tiles (Epic-style Front Desk) ──────
+  // Tiles ordered by daily front-desk workflow:
+  //   patient lifecycle → schedule → billing → comms.
+  // Two routes were previously duplicated (REGISTER + Patients both went to
+  // /patients); REGISTER now points at /patients/new so each tile leads
+  // somewhere distinct. Color palette is constrained to the same blue/teal
+  // family as the hero banner so the dashboard reads as one product
+  // surface rather than a rainbow of unrelated apps.
   receptionistWorkflowTiles = computed<NavTile[]>(() => {
     this.langTick();
     return [
@@ -1305,8 +1205,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
         icon: 'how_to_reg',
         label: this.t('DASHBOARD.TILE.CHECK_IN'),
         route: '/reception',
-        color: '#059669',
-        bg: '#d1fae5',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'person_add',
+        label: this.t('DASHBOARD.TILE.REGISTER'),
+        route: '/patients/new',
+        color: '#0e7490',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0369a1',
+        bg: '#e0f2fe',
       },
       {
         icon: 'calendar_add_on',
@@ -1316,46 +1230,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
         bg: '#dbeafe',
       },
       {
-        icon: 'person_add',
-        label: this.t('DASHBOARD.TILE.REGISTER'),
-        route: '/patients',
-        color: '#0891b2',
-        bg: '#cffafe',
-      },
-      {
-        icon: 'people',
-        label: this.t('PATIENTS.TITLE'),
-        route: '/patients',
-        color: '#7c3aed',
-        bg: '#ede9fe',
+        icon: 'event_note',
+        label: this.t('DASHBOARD.TILE.SCHEDULING'),
+        route: '/scheduling',
+        color: '#1e40af',
+        bg: '#dbeafe',
       },
       {
         icon: 'receipt_long',
         label: this.t('DASHBOARD.BILLING'),
         route: '/billing',
-        color: '#d97706',
-        bg: '#fef3c7',
-      },
-      {
-        icon: 'notifications',
-        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
-        route: '/notifications',
-        color: '#dc2626',
-        bg: '#fee2e2',
+        color: '#0891b2',
+        bg: '#cffafe',
       },
       {
         icon: 'chat',
         label: this.t('DASHBOARD.MESSAGES'),
         route: '/chat',
-        color: '#4f46e5',
-        bg: '#eef2ff',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
       },
       {
-        icon: 'event_note',
-        label: this.t('DASHBOARD.TILE.SCHEDULING'),
-        route: '/scheduling',
-        color: '#ea580c',
-        bg: '#fff7ed',
+        icon: 'notifications',
+        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
+        route: '/notifications',
+        color: '#0369a1',
+        bg: '#e0f2fe',
       },
     ];
   });
@@ -2023,43 +1923,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const done = () => {
       if (--pending <= 0) this.loading.set(false);
     };
-
-    // Super-admin summary
-    if (this.isSuperAdmin()) {
-      pending++;
-      this.dashboardService.getSummary().subscribe({
-        next: (s) => {
-          this.adminSummary.set(s);
-          this.recentAuditEvents.set(s.recentAuditEvents ?? []);
-          done();
-        },
-        error: () => {
-          // Set an empty fallback so the dashboard renders with zeros instead of blank
-          this.adminSummary.set({
-            totalPatients: 0,
-            totalUsers: 0,
-            activeUsers: 0,
-            inactiveUsers: 0,
-            totalHospitals: 0,
-            activeHospitals: 0,
-            inactiveHospitals: 0,
-            totalOrganizations: 0,
-            activeOrganizations: 0,
-            totalDepartments: 0,
-            totalRoles: 0,
-            totalAssignments: 0,
-            activeAssignments: 0,
-            inactiveAssignments: 0,
-            globalAssignments: 0,
-            activeGlobalAssignments: 0,
-            todayAppointmentsCount: 0,
-            generatedAt: new Date().toISOString(),
-            recentAuditEvents: [],
-          });
-          done();
-        },
-      });
-    }
 
     // Hospital-admin summary
     if (this.isHospitalAdmin() && !this.isSuperAdmin()) {

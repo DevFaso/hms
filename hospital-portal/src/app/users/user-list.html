@@ -193,6 +193,17 @@
                       <span class="material-symbols-outlined">delete</span>
                     </button>
                   }
+                  @if (canImpersonate(user)) {
+                    <button
+                      type="button"
+                      class="action-link impersonate"
+                      [title]="'IMPERSONATION.IMPERSONATE_USER' | translate"
+                      [attr.data-test]="'impersonate-' + user.username"
+                      (click)="openImpersonate(user)"
+                    >
+                      <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -538,6 +549,95 @@
             (click)="executeDelete()"
           >
             {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+          </button>
+        </div>
+      </dialog>
+    </div>
+  }
+
+  <!-- ── MVP-4: support impersonation modal ─────────────────────────── -->
+  @if (impersonateTarget(); as target) {
+    <div
+      class="modal-overlay"
+      role="presentation"
+      tabindex="-1"
+      (click)="closeImpersonate()"
+      (keydown.escape)="closeImpersonate()"
+      data-test="impersonate-modal"
+    >
+      <dialog
+        class="modal-content modal-md"
+        open
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeImpersonate()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>{{ 'IMPERSONATION.MODAL_TITLE' | translate }}</h2>
+          <button class="modal-close" (click)="closeImpersonate()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="material-symbols-outlined warning-icon">visibility</span>
+            <p>
+              {{ 'IMPERSONATION.MODAL_PREFIX' | translate }}
+              <strong>{{ target.firstName }} {{ target.lastName }}</strong>
+              ({{ target.username }}).
+            </p>
+            <p class="delete-detail">
+              {{ 'IMPERSONATION.MODAL_WARNING' | translate }}
+            </p>
+          </div>
+
+          <label class="modal-label" for="impersonate-reason">
+            {{ 'IMPERSONATION.REASON_LABEL' | translate }}
+          </label>
+          <textarea
+            id="impersonate-reason"
+            name="impersonate-reason"
+            class="modal-input"
+            rows="3"
+            maxlength="500"
+            [(ngModel)]="impersonateReason"
+            [placeholder]="'IMPERSONATION.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+
+          <label class="modal-label" for="impersonate-mfa">
+            {{ 'IMPERSONATION.MFA_LABEL' | translate }}
+          </label>
+          <input
+            id="impersonate-mfa"
+            name="impersonate-mfa"
+            class="modal-input"
+            type="text"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="8"
+            [(ngModel)]="impersonateMfaCode"
+            [placeholder]="'IMPERSONATION.MFA_PLACEHOLDER' | translate"
+          />
+
+          @if (impersonateError(); as err) {
+            <p class="modal-error">{{ err }}</p>
+          }
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeImpersonate()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="impersonating()"
+            (click)="submitImpersonate()"
+          >
+            {{
+              impersonating()
+                ? ('IMPERSONATION.STARTING' | translate)
+                : ('IMPERSONATION.START_BUTTON' | translate)
+            }}
           </button>
         </div>
       </dialog>

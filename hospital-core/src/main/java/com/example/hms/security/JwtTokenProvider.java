@@ -45,6 +45,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USERNAME;
+import static com.example.hms.config.SecurityConstants.CLAIM_IMPERSONATOR_USER_ID;
 import static com.example.hms.config.SecurityConstants.CLAIM_IS_HOSPITAL_ADMIN;
 import static com.example.hms.config.SecurityConstants.CLAIM_IS_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.CLAIM_PERMITTED_DEPARTMENT_IDS;
@@ -295,6 +297,61 @@ public class JwtTokenProvider {
             .compact();
     }
 
+    /**
+     * Mint a short-lived support-impersonation access token (MVP-4).
+     *
+     * <p>Subject + tenant claims represent the {@code target} user so the JWT
+     * authentication filter, RBAC, and TenantScopeSpecification all behave
+     * exactly as if the target had logged in. The two impersonator claims
+     * ({@link com.example.hms.config.SecurityConstants#CLAIM_IMPERSONATOR_USER_ID}
+     * + {@link com.example.hms.config.SecurityConstants#CLAIM_IMPERSONATOR_USERNAME})
+     * are the only forensic trail back to the real super admin — the
+     * AuditEventLogServiceImpl reads them off the request-scoped
+     * ImpersonationContext and stamps every action.
+     *
+     * <p>No refresh token is issued; when the {@code ttlMillis} expire the
+     * super admin must call {@code start} again. This caps the blast radius
+     * of a leaked impersonation token at the chosen TTL (30 min default).
+     */
+    public String generateImpersonationAccessToken(TokenUserDescriptor target,
+                                                    UUID impersonatorUserId,
+                                                    String impersonatorUsername,
+                                                    long ttlMillis) {
+        Objects.requireNonNull(target, "target descriptor is required");
+        Objects.requireNonNull(target.username(), "target username is required");
+        Objects.requireNonNull(impersonatorUserId, "impersonatorUserId is required");
+        Objects.requireNonNull(impersonatorUsername, "impersonatorUsername is required");
+
+        UUID userId = target.userId();
+        List<String> roles = Optional.ofNullable(target.roles())
+            .filter(r -> !r.isEmpty())
+            .map(this::normalizeRoleCollection)
+            .orElseGet(() -> tenantRoleAssignmentAccessor.findAssignmentsForUser(userId).stream()
+                .map(this::normalizeRoleLabel)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .toList());
+
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + ttlMillis);
+        Map<String, Object> claims = buildTenantClaims(userId, roles);
+        claims.put(ROLES_CLAIM, roles);
+        if (userId != null) {
+            claims.put("uid", userId.toString());
+        }
+        claims.put(CLAIM_IMPERSONATOR_USER_ID, impersonatorUserId.toString());
+        claims.put(CLAIM_IMPERSONATOR_USERNAME, impersonatorUsername);
+
+        return Jwts.builder()
+            .id(UUID.randomUUID().toString())
+            .subject(target.username())
+            .claims(claims)
+            .issuedAt(now)
+            .expiration(expiryDate)
+            .signWith(signingKey)
+            .compact();
+    }
+
     public String generateRefreshToken(Authentication authentication) {
         HospitalUserDetails userDetails = (HospitalUserDetails) authentication.getPrincipal();
 
@@ -369,6 +426,27 @@ public class JwtTokenProvider {
             return "mfa_challenge".equals(claims.get("purpose", String.class));
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /**
+     * Extract the impersonator identity from a token, if present (MVP-4).
+     * Returns {@code Optional.empty()} for normal tokens. Safe to call on any
+     * already-validated token; callers must validate first.
+     */
+    public Optional<com.example.hms.security.context.ImpersonationContext> extractImpersonationContext(String token) {
+        try {
+            Claims claims = parseClaimsWithRotation(token);
+            String idStr = claims.get(CLAIM_IMPERSONATOR_USER_ID, String.class);
+            String username = claims.get(CLAIM_IMPERSONATOR_USERNAME, String.class);
+            if (!StringUtils.hasText(idStr) || !StringUtils.hasText(username)) {
+                return Optional.empty();
+            }
+            return Optional.of(com.example.hms.security.context.ImpersonationContext.of(
+                UUID.fromString(idStr), username));
+        } catch (RuntimeException ex) {
+            log.debug("[JWT] Could not extract impersonation context: {}", ex.getMessage());
+            return Optional.empty();
         }
     }
 
