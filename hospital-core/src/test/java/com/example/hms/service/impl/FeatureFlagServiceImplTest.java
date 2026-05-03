@@ -8,11 +8,13 @@ import static org.mockito.Mockito.when;
 import com.example.hms.config.FeatureFlagProperties;
 import com.example.hms.model.platform.FeatureFlagOverride;
 import com.example.hms.repository.platform.FeatureFlagOverrideRepository;
+import com.example.hms.service.SubscriptionFeatureGateService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +32,9 @@ class FeatureFlagServiceImplTest {
 
     @Mock
     private Environment environment;
+
+    @Mock
+    private SubscriptionFeatureGateService subscriptionFeatureGate;
 
     @Captor
     private ArgumentCaptor<FeatureFlagOverride> overrideCaptor;
@@ -54,7 +59,15 @@ class FeatureFlagServiceImplTest {
 
         lenient().when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
 
-        service = new FeatureFlagServiceImpl(properties, environment, overrideRepository);
+        service = new FeatureFlagServiceImpl(
+            properties, environment, overrideRepository, subscriptionFeatureGate);
+
+        // Default: no tenant context → gate is a no-op (matches the
+        // legacy behaviour the existing tests expect). Individual
+        // MVP-6b tests that exercise gating set up their own stubs.
+        lenient().when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.any(UUID.class), org.mockito.ArgumentMatchers.anyString()))
+            .thenReturn(true);
     }
 
     @Test

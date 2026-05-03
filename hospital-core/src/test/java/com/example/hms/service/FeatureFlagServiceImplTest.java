@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ class FeatureFlagServiceImplTest {
     private FeatureFlagProperties properties;
     private MockEnvironment environment;
     private FeatureFlagOverrideRepository overrideRepository;
+    private SubscriptionFeatureGateService subscriptionFeatureGate;
     private FeatureFlagServiceImpl service;
 
     @BeforeEach
@@ -35,7 +37,13 @@ class FeatureFlagServiceImplTest {
         environment = new MockEnvironment();
         overrideRepository = mock(FeatureFlagOverrideRepository.class);
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
-        service = new FeatureFlagServiceImpl(properties, environment, overrideRepository);
+        subscriptionFeatureGate = mock(SubscriptionFeatureGateService.class);
+        // Default-permissive MVP-6b gate keeps the legacy assertions green.
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.any(UUID.class), org.mockito.ArgumentMatchers.anyString()))
+            .thenReturn(true);
+        service = new FeatureFlagServiceImpl(
+            properties, environment, overrideRepository, subscriptionFeatureGate);
     }
 
     @Test
