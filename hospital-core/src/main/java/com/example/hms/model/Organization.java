@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.OrganizationLifecycleState;
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
@@ -127,6 +128,15 @@ public class Organization extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "lifecycle_state", nullable = false, length = 32)
     private OrganizationLifecycleState lifecycleState = OrganizationLifecycleState.ACTIVE;
+
+    // ── Data residency / region tagging (MVP-9 — gap #9) ────────────────
+    // Records the regulatory jurisdiction whose data-protection rules
+    // apply to this tenant's data. Default 'BF' (Burkina Faso) matches
+    // the V82 backfill so legacy rows have a deterministic value.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "region", nullable = false, length = 32)
+    private OrganizationRegion region = OrganizationRegion.BF;
 
     @Column(name = "suspended_at")
     private Instant suspendedAt;
