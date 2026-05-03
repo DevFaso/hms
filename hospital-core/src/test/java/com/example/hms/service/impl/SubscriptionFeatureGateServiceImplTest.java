@@ -151,4 +151,70 @@ class SubscriptionFeatureGateServiceImplTest {
 
         assertThat(gate.isFeatureAllowedForOrg(orgId, "any.key")).isTrue();
     }
+
+    // ── MVP-6c: jsonb feature_keys ────────────────────────────────────
+
+    private OrganizationSubscription subscriptionWithJsonbKeys(String legacyKeys, String jsonbKeys) {
+        SubscriptionPlan plan = SubscriptionPlan.builder()
+            .name("Pro")
+            .tierCode("PRO")
+            .monthlyPriceCents(1000)
+            .currency("USD")
+            .includedSeats(10)
+            .featureKeys(legacyKeys)
+            .featureKeysJson(jsonbKeys)
+            .active(true)
+            .build();
+        plan.setId(UUID.randomUUID());
+        OrganizationSubscription sub = OrganizationSubscription.builder()
+            .plan(plan)
+            .status(OrganizationSubscription.Status.ACTIVE)
+            .build();
+        sub.setId(UUID.randomUUID());
+        return sub;
+    }
+
+    @Test
+    @DisplayName("MVP-6c: jsonb feature_keys wins over legacy TEXT when both are populated")
+    void jsonbPrecedenceOverLegacyText() {
+        UUID orgId = UUID.randomUUID();
+        // Legacy says billing only; jsonb says reports only — the jsonb form wins.
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            orgId, OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
+                "billing.advanced",
+                "[\"reports.export\"]")));
+
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isTrue();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isFalse();
+    }
+
+    @Test
+    @DisplayName("MVP-6c: empty jsonb falls back to legacy TEXT column")
+    void emptyJsonbFallsBackToLegacy() {
+        UUID orgId = UUID.randomUUID();
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            orgId, OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
+                "billing.advanced",
+                "[]")));
+
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isTrue();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isFalse();
+    }
+
+    @Test
+    @DisplayName("MVP-6c: malformed jsonb falls back to legacy TEXT and does not block resolution")
+    void malformedJsonbDoesNotBlockResolution() {
+        UUID orgId = UUID.randomUUID();
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            orgId, OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
+                "billing.advanced",
+                "{not-valid-json")));
+
+        // Falls back to legacy text — billing.advanced allowed, others denied.
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isTrue();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isFalse();
+    }
 }
