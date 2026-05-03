@@ -38,6 +38,10 @@ export class SubscriptionsComponent implements OnInit {
   readonly form = signal<SubscriptionPlanRequest>({ ...FRESH_REQUEST });
   readonly formError = signal<string | null>(null);
   readonly formBusy = signal(false);
+  // Explicit visibility flag — the form reset on "New plan" leaves every
+  // field empty, so a derived "is form populated?" predicate would hide
+  // the panel exactly when the user just asked to open it.
+  readonly formOpen = signal(false);
 
   readonly hasPlans = computed(() => this.plans().length > 0);
 
@@ -71,6 +75,7 @@ export class SubscriptionsComponent implements OnInit {
     this.editing.set(null);
     this.form.set({ ...FRESH_REQUEST });
     this.formError.set(null);
+    this.formOpen.set(true);
   }
 
   startEdit(plan: SubscriptionPlan): void {
@@ -86,18 +91,20 @@ export class SubscriptionsComponent implements OnInit {
       active: plan.active,
     });
     this.formError.set(null);
+    this.formOpen.set(true);
   }
 
   cancelEdit(): void {
     this.editing.set(null);
     this.form.set({ ...FRESH_REQUEST });
     this.formError.set(null);
+    this.formOpen.set(false);
   }
 
   submit(): void {
     const body = this.form();
     if (!body.name?.trim() || !body.tierCode?.trim()) {
-      this.formError.set('Name and tier code are required.');
+      this.formError.set('SUBSCRIPTIONS.ERROR.REQUIRED_FIELDS');
       return;
     }
     this.formBusy.set(true);
@@ -106,7 +113,7 @@ export class SubscriptionsComponent implements OnInit {
     obs
       .pipe(
         catchError(() => {
-          this.formError.set('Save failed.');
+          this.formError.set('SUBSCRIPTIONS.ERROR.SAVE_FAILED');
           return of(null);
         }),
       )
@@ -123,7 +130,7 @@ export class SubscriptionsComponent implements OnInit {
     if (!plan.active) return;
     this.service.deactivatePlan(plan.id).subscribe({
       next: () => this.refresh(),
-      error: () => this.formError.set('Deactivation failed.'),
+      error: () => this.formError.set('SUBSCRIPTIONS.ERROR.DEACTIVATE_FAILED'),
     });
   }
 

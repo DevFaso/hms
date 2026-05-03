@@ -102,7 +102,148 @@
       "HOSPITALS_TITLE": "Hospitales",
       "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones",
       "INTEGRATIONS_TITLE": "Salud de integraciones",
-      "INTEGRATIONS_DESC": "Inventario de conectores y salud de llamadas por inquilino"
+      "INTEGRATIONS_DESC": "Inventario de conectores y salud de llamadas por inquilino",
+      "AUDIT_SEARCH_TITLE": "Búsqueda de auditoría",
+      "AUDIT_SEARCH_DESC": "Búsqueda de auditoría multi-inquilino con filtro de suplantación",
+      "EMERGENCY_TITLE": "Controles de emergencia",
+      "EMERGENCY_DESC": "Cierre de sesión global, desactivar feature, re-enrolamiento MFA, difusión",
+      "SUBSCRIPTIONS_TITLE": "Suscripciones",
+      "SUBSCRIPTIONS_DESC": "Catálogo de planes y asignación por organización",
+      "REGIONS_TITLE": "Residencia de datos",
+      "REGIONS_DESC": "Etiquetado de región por organización para cumplimiento transfronterizo"
+    }
+  },
+  "AUDIT_SEARCH": {
+    "TITLE": "Búsqueda de auditoría multi-inquilino",
+    "SUBTITLE": "Busque cualquier evento de auditoría en organizaciones y hospitales.",
+    "LOADING": "Buscando en el registro de auditoría…",
+    "LOAD_ERROR": "La búsqueda de auditoría falló. Inténtelo de nuevo.",
+    "NO_RESULTS": "Ningún evento de auditoría coincide con los filtros actuales.",
+    "APPLY": "Aplicar filtros",
+    "RESET": "Restablecer",
+    "PREV": "Anterior",
+    "NEXT": "Siguiente",
+    "PAGE_OF": "Página {{current}} de {{total}}",
+    "RESULTS_COUNT": "{{shown}} mostrados de {{total}} en total",
+    "FILTER": {
+      "USER_NAME": "Nombre de usuario",
+      "USER_NAME_PLACEHOLDER": "coincidencia parcial sobre el actor",
+      "IMPERSONATOR_USER_ID": "ID del suplantador",
+      "ENTITY_TYPE": "Tipo de entidad objetivo",
+      "RESOURCE_ID": "ID del recurso objetivo",
+      "STATUS": "Estado",
+      "FROM_DATE": "Desde",
+      "TO_DATE": "Hasta",
+      "ANY": "Cualquiera"
+    },
+    "COL": {
+      "TIME": "Hora",
+      "EVENT": "Evento",
+      "USER": "Usuario",
+      "HOSPITAL": "Hospital",
+      "RESOURCE": "Recurso",
+      "STATUS": "Estado",
+      "IMPERSONATOR": "Suplantador"
+    }
+  },
+  "EMERGENCY": {
+    "TITLE": "Controles globales de emergencia",
+    "SUBTITLE": "Use sólo durante un incidente de seguridad. Cada acción se audita de manera permanente.",
+    "WARNING": "Estos controles surten efecto inmediato en toda la plataforma. Verifique su MFA antes de cada clic.",
+    "REASON": "Motivo (auditado, ≥ 5 caracteres)",
+    "MFA_TOKEN": "Código MFA",
+    "CONFIRM_TYPED": "Escriba FORCE LOGOUT ALL para confirmar",
+    "FORCE_LOGOUT": {
+      "TITLE": "Cerrar todas las sesiones",
+      "DESC": "Avanza el min-iat global; cada JWT activo queda invalidado.",
+      "ACTION": "Cerrar todas las sesiones"
+    },
+    "KILL_FEATURE": {
+      "TITLE": "Desactivar un feature flag",
+      "DESC": "Establece la sobrescritura global de FeatureFlag para esta clave en desactivado.",
+      "FLAG_KEY": "Clave del flag",
+      "ACTION": "Desactivar feature"
+    },
+    "FORCE_MFA": {
+      "TITLE": "Forzar re-enrolamiento MFA",
+      "DESC": "Elimina el enrolamiento MFA + códigos de respaldo para los usuarios listados (o todos si está vacío).",
+      "USER_IDS": "IDs de usuario (separados por coma, opcional)",
+      "ACTION": "Forzar re-enrolamiento"
+    },
+    "BROADCAST": {
+      "TITLE": "Banner de difusión",
+      "DESC": "Publica un mensaje banner en /topic/emergency-broadcast.",
+      "MESSAGE": "Mensaje",
+      "SEVERITY": "Gravedad",
+      "ACTION": "Enviar difusión"
+    }
+  },
+  "SUBSCRIPTIONS": {
+    "TITLE": "Planes de suscripción",
+    "SUBTITLE": "Catálogo de planes y asignaciones por organización.",
+    "ACTIVE_ONLY": "Sólo planes activos",
+    "NEW_PLAN": "Nuevo plan",
+    "EDIT_PLAN": "Editar plan",
+    "EDIT": "Editar",
+    "DEACTIVATE": "Desactivar",
+    "SAVE": "Guardar",
+    "CANCEL": "Cancelar",
+    "PER_MONTH": "/ mes",
+    "SEATS": "asientos incluidos",
+    "NO_FEATURES": "Sin claves de funcionalidad",
+    "NO_PLANS": "Aún no hay planes — cree el primero.",
+    "LOAD_ERROR": "No se pudieron cargar los planes. Inténtelo de nuevo.",
+    "FORM": {
+      "NAME": "Nombre",
+      "TIER_CODE": "Código de nivel (único)",
+      "DESCRIPTION": "Descripción",
+      "PRICE_CENTS": "Precio mensual (centavos)",
+      "CURRENCY": "Moneda",
+      "INCLUDED_SEATS": "Asientos incluidos",
+      "FEATURE_KEYS": "Claves de funcionalidad"
+    },
+    "ERROR": {
+      "REQUIRED_FIELDS": "El nombre y el código de nivel son obligatorios.",
+      "SAVE_FAILED": "Error al guardar.",
+      "DEACTIVATE_FAILED": "Error al desactivar."
+    }
+  },
+  "ORG_REGION": {
+    "TITLE": "Residencia de datos",
+    "SUBTITLE": "Etiquetado de región por organización para cumplimiento transfronterizo.",
+    "LOADING": "Cargando inventario de regiones…",
+    "LOAD_ERROR": "No se pudo cargar el inventario de regiones. Inténtelo de nuevo.",
+    "EMPTY": "Ninguna organización coincide con el filtro actual.",
+    "DISTRIBUTION": "Distribución",
+    "RETAG": "Reetiquetar",
+    "EDIT_TITLE": "Actualizar región",
+    "FIELD": {
+      "REGION": "Región",
+      "REASON": "Motivo (auditado, opcional)",
+      "REASON_PLACEHOLDER": "p. ej. Inquilino reubicado a la jurisdicción senegalesa"
+    },
+    "COL": {
+      "ORG": "Organización",
+      "CODE": "Código",
+      "REGION": "Región"
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "La actualización de la región falló. Inténtelo de nuevo."
+    },
+    "CODE": {
+      "BF": "Burkina Faso (BF)",
+      "CI": "Costa de Marfil (CI)",
+      "SN": "Senegal (SN)",
+      "GA": "Gabón (GA)",
+      "CM": "Camerún (CM)",
+      "BJ": "Benín (BJ)",
+      "TG": "Togo (TG)",
+      "ML": "Malí (ML)",
+      "NE": "Níger (NE)",
+      "ML_OAPI": "UEMOA / OAPI (multi-Estado)",
+      "EU": "Unión Europea (UE / RGPD)",
+      "US": "Estados Unidos (US / HIPAA)",
+      "OTHER": "Otro"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -684,6 +825,7 @@
     "ALL": "Todos",
     "ALL_HOSPITALS": "Hospitales",
     "BACK": "Volver",
+    "BACK_TO_CONTROL_TOWER": "Volver a la torre de control",
     "CANCEL": "Cancelar",
     "CANCELLING": "Cancelling...",
     "CANNOT_UNDO": "Esta acción no se puede deshacer.",
@@ -1941,7 +2083,11 @@
     "PATIENT_TRACKER": "Seguimiento de Pacientes",
     "IN_BASKET": "Bandeja de Entrada",
     "SUPER_ADMIN": "Super Admin",
-    "INTEGRATIONS_HEALTH": "Salud de integraciones"
+    "INTEGRATIONS_HEALTH": "Salud de integraciones",
+    "AUDIT_SEARCH": "Búsqueda de auditoría",
+    "EMERGENCY_CONTROLS": "Controles de emergencia",
+    "SUBSCRIPTIONS": "Suscripciones",
+    "DATA_RESIDENCY": "Residencia de datos"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

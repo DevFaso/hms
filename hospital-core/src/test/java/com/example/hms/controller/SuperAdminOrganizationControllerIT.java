@@ -3,9 +3,12 @@ package com.example.hms.controller;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -126,5 +129,59 @@ class SuperAdminOrganizationControllerIT extends com.example.hms.BaseIT {
 
         Hospital updated = hospitalRepository.findById(hospital.getId()).orElseThrow();
         assertThat(updated.getOrganization()).isNull();
+    }
+
+    // ── MVP-9: Data residency / region tagging ─────────────────────────
+
+    @Test
+    @WithMockUser(username = "superadmin", roles = {"SUPER_ADMIN"})
+    void listAvailableRegions_returnsCatalogue() throws Exception {
+        mockMvc.perform(get("/api/super-admin/organizations/regions")
+                .contextPath("/api"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$[0]").value("BF"));
+    }
+
+    @Test
+    @WithMockUser(username = "superadmin", roles = {"SUPER_ADMIN"})
+    void getRegion_returnsCurrent() throws Exception {
+        Organization organization = organizationRepository.save(Organization.builder()
+            .name("Region IT Org")
+            .code("REGION-IT")
+            .type(OrganizationType.PRIVATE_PRACTICE)
+            .build());
+
+        mockMvc.perform(get("/api/super-admin/organizations/{id}/region", organization.getId())
+                .contextPath("/api"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.region").value("BF"))
+            .andExpect(jsonPath("$.organizationCode").value("REGION-IT"));
+    }
+
+    @Test
+    @WithMockUser(username = "superadmin", roles = {"SUPER_ADMIN"})
+    void updateRegion_persistsAndReturnsNewRegion() throws Exception {
+        Organization organization = organizationRepository.save(Organization.builder()
+            .name("Region Update Org")
+            .code("REGION-UPDATE")
+            .type(OrganizationType.PRIVATE_PRACTICE)
+            .build());
+
+        Map<String, Object> body = Map.of(
+            "region", "SN",
+            "reason", "Tenant relocated to Senegal jurisdiction"
+        );
+
+        mockMvc.perform(post("/api/super-admin/organizations/{id}/region", organization.getId())
+                .with(csrf())
+                .contextPath("/api")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.region").value("SN"));
+
+        Organization reloaded = organizationRepository.findById(organization.getId()).orElseThrow();
+        assertThat(reloaded.getRegion()).isEqualTo(OrganizationRegion.SN);
     }
 }

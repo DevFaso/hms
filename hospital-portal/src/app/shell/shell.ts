@@ -632,6 +632,12 @@ export class ShellComponent implements OnInit, OnDestroy {
       translationKey: 'NAV.SUBSCRIPTIONS',
       route: '/super-admin/subscriptions',
     });
+    items.push({
+      icon: 'public',
+      label: 'Data Residency',
+      translationKey: 'NAV.DATA_RESIDENCY',
+      route: '/super-admin/data-residency',
+    });
   }
 
   /**
