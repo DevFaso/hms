@@ -1151,3 +1151,109 @@ Turns MVP-6's plan catalogue from a label into actual feature gating.
   edits it as a string). Plan-tier audit emission when a flag is
   blocked (operator visibility into "which org saw which flag flip").
   Self-service org-side upgrade UI to request more keys.
+
+### MVP-7b: Per-tenant feature-flag override + MFA per-hospital + STOMP banner consumer (SHIPPED on `feature/super-admin-gaps-mvp-7b-8b-9b`)
+
+- **Per-tenant feature-flag override.** V83 migration adds an
+  `organization_id` UUID column to `platform.platform_feature_flag_overrides`
+  (additive only) and replaces the single-column `UNIQUE(flag_key)`
+  with a composite `UNIQUE(flag_key, organization_id)`. Postgres
+  treats NULL as distinct in uniqueness, so the global row coexists
+  with any number of per-tenant rows for the same key.
+  `FeatureFlagOverride.organizationId` (nullable) added; new
+  repository finders `findGlobalByFlagKey` / `findByFlagKeyAndOrganizationId`
+  / `findByOrganizationIdOrderByFlagKeyAsc`.
+  `FeatureFlagServiceImpl` resolver now layers per-tenant rows on top
+  of the global merge for the caller's organization, then runs the
+  MVP-6b plan gate. `FeatureFlagController.{overrideFeatureFlag,
+  deleteFeatureFlagOverride}` accept an optional
+  `organizationId` query param so a super admin can write a
+  per-tenant override directly from the existing UI without a
+  separate endpoint.
+- **MFA re-enrol scoped by hospital.** `EmergencyForceMfaRequestDTO`
+  gains an optional `hospitalId`. When set, the reset intersects the
+  resolved target user list with the active assignments at that
+  hospital (new repo query `findActiveUserIdsByHospitalId`), so a
+  platform-wide reset can be narrowed to "every staff member at one
+  site" without touching unrelated users. Audit description and the
+  response message both surface the hospital scope so the operator
+  can confirm what was actually reset.
+- **STOMP broadcast banner consumer.** New
+  `EmergencyBroadcastService` subscribes to the
+  `/topic/emergency-broadcast` STOMP frame the MVP-7 backend already
+  publishes; same `/auth/ws-ticket` short-lived ticket flow as
+  `PatientTrackerWsService`. New `EmergencyBroadcastBannerComponent`
+  renders the latest frame in the shell across every authenticated
+  route, with severity-driven gradient (info / warn / critical) and a
+  dismiss button. Mounted in `shell.html` next to the impersonation
+  banner; connect/disconnect tied into the shell's lifecycle hooks.
+- **Tests.** New `perTenantUpsertWritesOrgScopedRow` spec on
+  `FeatureFlagServiceImplTest`; existing tests updated for the
+  new `findByFlagKeyAndOrganizationId` finder. New
+  `EmergencyBroadcastBannerComponent` spec (5 cases — hidden /
+  visible / severity branches / default-info / dismiss delegates).
+
+### MVP-8b: CSV export + saved searches (SHIPPED on `feature/super-admin-gaps-mvp-7b-8b-9b`)
+
+- **CSV export.** New
+  `SuperAdminAuditSearchService.exportCsv(filter, maxRows)` method
+  + `GET /super-admin/audit-search/csv` endpoint. Reuses the same
+  `AuditSearchFilter` parameter object as the JSON endpoint so a
+  super admin can download exactly what they're viewing without a
+  separate query layer. Server-side `Math.clamp(maxRows, 1, 50_000)`
+  caps the result so a wide-open filter cannot OOM the JVM. Output
+  is RFC 4180-style CSV (quote/comma/CR/LF escaped). Frontend
+  `AuditSearchService.exportCsv` returns a `Blob`; the audit-search
+  component triggers a browser download via a temporary object URL.
+- **Saved searches.** Per-operator localStorage-backed
+  `AuditSavedSearchService` (server-side persistence + cross-device
+  sync deferred to MVP-8c). Save / load / delete UI rendered as a
+  chip strip above the filter card; pagination is stripped from the
+  saved snapshot so re-applying always starts at page 0. Same-name
+  saves overwrite in place; FIFO eviction past 25 entries. Tolerant
+  of corrupt JSON / non-array values in localStorage so a stale
+  bookmark from an older format never breaks the page.
+- **Tests.** Two new spec methods on
+  `SuperAdminAuditSearchServiceImplTest` (`exportCsvProducesHeaderAndRows`,
+  `exportCsvClampsMaxRows`). New `audit-saved-search.service.spec.ts`
+  with 8 specs (empty list / blank-name reject / save strips
+  pagination / overwrite-by-name / unshift order / delete by id /
+  corrupt-JSON tolerance / non-array tolerance).
+- **Out of scope (MVP-8c).** Cross-source aggregation spanning
+  `FrontendAuditEvent` and `PermissionMatrixAuditEvent`. Server-side
+  saved-search persistence + sharing with other super admins.
+
+### MVP-9b: Region-aware audit-search filter (SHIPPED on `feature/super-admin-gaps-mvp-7b-8b-9b`)
+
+- **Backend.** `AuditSearchFilter` gains a 12th optional record
+  component `tenantRegion: OrganizationRegion`. Specification builder
+  reuses the existing assignment→hospital join chain and walks one
+  extra hop into `hospital.organization.region`; sharing the join
+  with `organizationId` keeps the SQL plan unchanged when only one
+  of the two filters is set. New
+  `tenantRegionFilterJoinsThroughHospitalAndOrganization` test on
+  `SuperAdminAuditSearchServiceImplTest` verifies the join is
+  attempted when the region is the only filter.
+- **Controller.** `GET /super-admin/audit-search` (and the new CSV
+  endpoint) accept `tenantRegion` as an OrganizationRegion enum
+  query param; both pass it through to the service.
+- **Frontend.** `AuditSearchFilter` model + `AuditSearchService` carry
+  `tenantRegion`. The audit-search filter form gains a region
+  dropdown sourced from `DataResidencyService.listAvailableRegions()`
+  so a new code added to `OrganizationRegion` is one backend change,
+  not a parallel UI change. Labels reuse the existing
+  `ORG_REGION.CODE.*` translations.
+- **Out of scope (MVP-9c).** Per-region retention overrides,
+  per-region export-format defaults, per-region routing of new
+  tenants to a region-specific deployment.
+
+### Combined verification gates (`feature/super-admin-gaps-mvp-7b-8b-9b`)
+
+- `npm run lint` clean
+- `npm run format:check` clean
+- Karma sweep **836/836 SUCCESS** (up from 823: +8 saved-search
+  specs, +5 emergency-broadcast banner specs, audit-search
+  service-spec extended for region + CSV cases)
+- `./gradlew :hospital-core:test :jacocoTestReport
+  :jacocoTestCoverageVerification` BUILD SUCCESSFUL — 80% INSTRUCTION
+  coverage gate passed

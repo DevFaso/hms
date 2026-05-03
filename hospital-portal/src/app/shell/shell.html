@@ -234,6 +234,10 @@
     <!-- Page Content -->
     <main class="content">
       <app-impersonation-banner />
+      <!-- MVP-7b — surfaces the latest /topic/emergency-broadcast frame
+           on every authenticated route. Mounted in the shell so a
+           super-admin broadcast reaches users mid-task without a refresh. -->
+      <app-emergency-broadcast-banner />
       <router-outlet />
     </main>
   </div>

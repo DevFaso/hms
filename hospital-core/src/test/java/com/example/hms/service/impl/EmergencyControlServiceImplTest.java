@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.superadmin.EmergencyKillFeatureRequestDTO;
 import com.example.hms.repository.MfaBackupCodeRepository;
 import com.example.hms.repository.UserMfaEnrollmentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.GlobalSessionRevocationService;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FeatureFlagService;
@@ -56,6 +57,7 @@ class EmergencyControlServiceImplTest {
     private AuditEventLogService auditEventLogService;
     private SimpMessagingTemplate messagingTemplate;
     private MfaService mfaService;
+    private UserRoleHospitalAssignmentRepository assignmentRepository;
     private EmergencyControlServiceImpl service;
 
     private UUID actorId;
@@ -70,11 +72,12 @@ class EmergencyControlServiceImplTest {
         auditEventLogService = mock(AuditEventLogService.class);
         messagingTemplate = mock(SimpMessagingTemplate.class);
         mfaService = mock(MfaService.class);
+        assignmentRepository = mock(UserRoleHospitalAssignmentRepository.class);
 
         service = new EmergencyControlServiceImpl(
             revocationService, featureFlagService, mfaEnrollmentRepository,
             mfaBackupCodeRepository, userRepository, auditEventLogService,
-            messagingTemplate, mfaService);
+            messagingTemplate, mfaService, assignmentRepository);
         // Default: non-strict MFA mode (matches application.yml default).
         ReflectionTestUtils.setField(service, "requireMfaStrict", false);
 

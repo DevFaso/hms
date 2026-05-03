@@ -44,19 +44,56 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
         String environmentOverride,
         Locale locale
     ) {
+        // Legacy global-only entry point (kept for EmergencyControlService.killFeature
+        // and any other call-site that pre-dates MVP-7b). Delegates to the
+        // shared private helper to avoid a self-call that would bypass the
+        // @Transactional proxy (Sonar S6809).
+        return doUpsert(flagKey, enabled, description, updatedBy,
+            environmentOverride, /* organizationId */ null, locale);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Boolean> upsertOverride(
+        String flagKey,
+        boolean enabled,
+        String description,
+        String updatedBy,
+        String environmentOverride,
+        UUID organizationId,
+        Locale locale
+    ) {
+        return doUpsert(flagKey, enabled, description, updatedBy,
+            environmentOverride, organizationId, locale);
+    }
+
+    private Map<String, Boolean> doUpsert(
+        String flagKey,
+        boolean enabled,
+        String description,
+        String updatedBy,
+        String environmentOverride,
+        UUID organizationId,
+        Locale locale
+    ) {
         String normalizedKey = normalizeKey(flagKey);
-        FeatureFlagOverride override = overrideRepository.findByFlagKeyIgnoreCase(normalizedKey)
-            .orElseGet(() -> FeatureFlagOverride.builder().flagKey(normalizedKey).build());
+        FeatureFlagOverride override = overrideRepository
+            .findByFlagKeyAndOrganizationId(normalizedKey, organizationId)
+            .orElseGet(() -> FeatureFlagOverride.builder()
+                .flagKey(normalizedKey)
+                .organizationId(organizationId)
+                .build());
         override.setEnabled(enabled);
         override.setDescription(sanitizeDescription(description));
         override.setUpdatedBy(updatedBy);
         overrideRepository.save(override);
         log.info(
-            "Feature flag override saved key={} enabled={} updatedBy={} env={}",
+            "Feature flag override saved key={} enabled={} updatedBy={} env={} org={}",
             normalizedKey,
             enabled,
             updatedBy,
-            environmentOverride
+            environmentOverride,
+            organizationId
         );
         return resolveEffectiveFlags(environmentOverride, locale);
     }
@@ -69,24 +106,57 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
         String environmentOverride,
         Locale locale
     ) {
+        // Legacy global-only entry point.
+        return doDelete(flagKey, updatedBy, environmentOverride,
+            /* organizationId */ null, locale);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Boolean> deleteOverride(
+        String flagKey,
+        String updatedBy,
+        String environmentOverride,
+        UUID organizationId,
+        Locale locale
+    ) {
+        return doDelete(flagKey, updatedBy, environmentOverride, organizationId, locale);
+    }
+
+    private Map<String, Boolean> doDelete(
+        String flagKey,
+        String updatedBy,
+        String environmentOverride,
+        UUID organizationId,
+        Locale locale
+    ) {
         String normalizedKey = normalizeKey(flagKey);
-        overrideRepository.findByFlagKeyIgnoreCase(normalizedKey)
+        overrideRepository.findByFlagKeyAndOrganizationId(normalizedKey, organizationId)
             .ifPresent(entity -> {
                 overrideRepository.delete(entity);
-                log.info("Feature flag override removed key={} updatedBy={} env={} id={}", normalizedKey, updatedBy, environmentOverride, entity.getId());
+                log.info("Feature flag override removed key={} updatedBy={} env={} org={} id={}",
+                    normalizedKey, updatedBy, environmentOverride, organizationId, entity.getId());
             });
         return resolveEffectiveFlags(environmentOverride, locale);
     }
 
     private Map<String, Boolean> resolveEffectiveFlags(String environmentOverride, Locale locale) {
         String resolvedEnvironment = resolveEnvironment(environmentOverride);
+        UUID callerOrganizationId = currentOrganizationId();
         Map<String, Boolean> flags = new LinkedHashMap<>();
         merge(flags, properties.getDefaultsOrEmpty());
         merge(flags, properties.getOverridesOrEmpty());
         merge(flags, properties.getEnvironmentOverrides(resolvedEnvironment));
-        mergeDatabaseOverrides(flags);
-        applySubscriptionPlanGate(flags);
-        log.debug("Resolved feature flags for env='{}' locale='{}' -> {}", resolvedEnvironment, locale, flags);
+        mergeGlobalDatabaseOverrides(flags);
+        // MVP-7b — per-tenant overrides win over the global override for
+        // the caller's organization only. Skipped for system / super-admin
+        // contexts (currentOrganizationId() returns null in both cases).
+        if (callerOrganizationId != null) {
+            mergeTenantDatabaseOverrides(flags, callerOrganizationId);
+        }
+        applySubscriptionPlanGate(flags, callerOrganizationId);
+        log.debug("Resolved feature flags for env='{}' org='{}' locale='{}' -> {}",
+            resolvedEnvironment, callerOrganizationId, locale, flags);
         return flags;
     }
 
@@ -98,12 +168,8 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
      * and callers without a tenant context (system / super-admin
      * cross-tenant) — are ungated, matching the legacy behaviour.
      */
-    private void applySubscriptionPlanGate(Map<String, Boolean> flags) {
-        if (flags.isEmpty()) {
-            return;
-        }
-        UUID organizationId = currentOrganizationId();
-        if (organizationId == null) {
+    private void applySubscriptionPlanGate(Map<String, Boolean> flags, UUID organizationId) {
+        if (flags.isEmpty() || organizationId == null) {
             return;
         }
         flags.replaceAll((key, value) -> {
@@ -146,14 +212,43 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
         });
     }
 
-    private void mergeDatabaseOverrides(Map<String, Boolean> target) {
+    /**
+     * MVP-7b: layer the *global* DB overrides (rows with
+     * {@code organization_id} NULL) on top of the property-driven map.
+     * Per-tenant rows are applied separately by
+     * {@link #mergeTenantDatabaseOverrides} so a tenant override wins
+     * for that tenant only.
+     */
+    private void mergeGlobalDatabaseOverrides(Map<String, Boolean> target) {
         overrideRepository.findAllByOrderByFlagKeyAsc().forEach(override -> {
+            if (override.getOrganizationId() != null) {
+                // Per-tenant row — handled by the next merge step when the
+                // caller belongs to that organization.
+                return;
+            }
             String key = override.getFlagKey();
             if (!StringUtils.hasText(key)) {
                 return;
             }
             target.put(key.trim(), override.isEnabled());
         });
+    }
+
+    /**
+     * MVP-7b: layer the per-tenant DB overrides for the caller's
+     * organization on top of the global merge. Skipped entirely for
+     * system / super-admin callers ({@link #resolveEffectiveFlags}
+     * passes {@code null} and short-circuits before calling this).
+     */
+    private void mergeTenantDatabaseOverrides(Map<String, Boolean> target, UUID organizationId) {
+        overrideRepository.findByOrganizationIdOrderByFlagKeyAsc(organizationId)
+            .forEach(override -> {
+                String key = override.getFlagKey();
+                if (!StringUtils.hasText(key)) {
+                    return;
+                }
+                target.put(key.trim(), override.isEnabled());
+            });
     }
 
     private String resolveEnvironment(String requestedEnvironment) {

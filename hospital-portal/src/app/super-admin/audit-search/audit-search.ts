@@ -11,6 +11,12 @@ import {
   AuditSearchPage,
   AuditSearchRow,
 } from '../../services/audit-search.model';
+import { DataResidencyService } from '../../services/data-residency.service';
+import { OrganizationRegion } from '../../services/data-residency.model';
+import {
+  AuditSavedSearchService,
+  SavedAuditSearch,
+} from '../../services/audit-saved-search.service';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -23,6 +29,12 @@ const DEFAULT_PAGE_SIZE = 25;
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
+  // MVP-9b — drives the tenant-region filter dropdown without hardcoding
+  // the enum. Same source as the Data Residency console so a new code
+  // is one backend addition, not a parallel frontend change.
+  private readonly residencyService = inject(DataResidencyService);
+  // MVP-8b — localStorage-backed saved searches per operator.
+  private readonly savedSearchService = inject(AuditSavedSearchService);
 
   readonly loading = signal(false);
   readonly errored = signal(false);
@@ -35,6 +47,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   readonly status = signal('');
   readonly fromDate = signal('');
   readonly toDate = signal('');
+  readonly tenantRegion = signal<OrganizationRegion | ''>('');
+  readonly availableRegions = signal<OrganizationRegion[]>([]);
   readonly pageNumber = signal(0);
 
   readonly rows = computed<AuditSearchRow[]>(() => this.page()?.content ?? []);
@@ -45,8 +59,23 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   readonly hasNext = computed(() => this.pageNumber() < this.totalPages() - 1);
 
   readonly statusOptions = ['SUCCESS', 'FAILURE', 'PENDING'];
+  // MVP-8b — CSV export busy/error state distinct from the JSON search.
+  readonly exporting = signal(false);
+  readonly exportError = signal<string | null>(null);
+  // MVP-8b — saved searches surfaced as a dropdown above the filter form.
+  readonly savedSearches = signal<SavedAuditSearch[]>([]);
+  readonly newSavedSearchName = signal('');
+  readonly saveError = signal<string | null>(null);
 
   ngOnInit(): void {
+    // MVP-9b — load the region catalogue once on mount; failure leaves
+    // the dropdown empty (the search still works without the filter).
+    this.residencyService
+      .listAvailableRegions()
+      .pipe(catchError(() => of([] as OrganizationRegion[])))
+      .subscribe((regions) => this.availableRegions.set(regions));
+    // MVP-8b — hydrate saved searches from localStorage.
+    this.savedSearches.set(this.savedSearchService.list());
     this.runSearch();
   }
 
@@ -63,6 +92,7 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     this.status.set('');
     this.fromDate.set('');
     this.toDate.set('');
+    this.tenantRegion.set('');
     this.pageNumber.set(0);
     this.runSearch();
   }
@@ -93,6 +123,7 @@ export class SuperAdminAuditSearchComponent implements OnInit {
       status: this.trimOrUndefined(this.status()),
       fromDate: this.toIsoDateTime(this.fromDate()),
       toDate: this.toIsoDateTime(this.toDate()),
+      tenantRegion: this.tenantRegion() === '' ? undefined : this.tenantRegion(),
       page: this.pageNumber(),
       size: DEFAULT_PAGE_SIZE,
     };
@@ -122,6 +153,112 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     const v = this.trimOrUndefined(value);
     if (!v) return undefined;
     return v.length === 16 ? `${v}:00` : v;
+  }
+
+  /**
+   * MVP-8b — fetch the same filter as a CSV blob and trigger a browser
+   * download via a temporary object URL. Reuses the live filter signals
+   * so the export matches whatever the user is currently viewing.
+   */
+  exportCsv(): void {
+    if (this.exporting()) return;
+    this.exporting.set(true);
+    this.exportError.set(null);
+    const filter: AuditSearchFilter = {
+      userName: this.trimOrUndefined(this.userName()),
+      impersonatorUserId: this.trimOrUndefined(this.impersonatorUserId()),
+      entityType: this.trimOrUndefined(this.entityType()),
+      resourceId: this.trimOrUndefined(this.resourceId()),
+      status: this.trimOrUndefined(this.status()),
+      fromDate: this.toIsoDateTime(this.fromDate()),
+      toDate: this.toIsoDateTime(this.toDate()),
+      tenantRegion: this.tenantRegion() === '' ? undefined : this.tenantRegion(),
+    };
+    this.service
+      .exportCsv(filter)
+      .pipe(
+        catchError(() => {
+          this.exportError.set('AUDIT_SEARCH.EXPORT.FAILED');
+          return of(null);
+        }),
+      )
+      .subscribe((blob) => {
+        this.exporting.set(false);
+        if (!blob) return;
+        this.triggerBrowserDownload(blob, 'audit-search.csv');
+      });
+  }
+
+  /**
+   * MVP-8b — snapshot the *current* filter signals into a persistable
+   * AuditSearchFilter (no pagination — the saved-search service strips
+   * page/size anyway, but generating without them keeps the snapshot
+   * clean for a future server-side persistence).
+   */
+  private currentFilterSnapshot(): AuditSearchFilter {
+    return {
+      userName: this.trimOrUndefined(this.userName()),
+      impersonatorUserId: this.trimOrUndefined(this.impersonatorUserId()),
+      entityType: this.trimOrUndefined(this.entityType()),
+      resourceId: this.trimOrUndefined(this.resourceId()),
+      status: this.trimOrUndefined(this.status()),
+      fromDate: this.toIsoDateTime(this.fromDate()),
+      toDate: this.toIsoDateTime(this.toDate()),
+      tenantRegion: this.tenantRegion() === '' ? undefined : this.tenantRegion(),
+    };
+  }
+
+  saveCurrent(): void {
+    const name = this.newSavedSearchName().trim();
+    if (!name) {
+      this.saveError.set('AUDIT_SEARCH.SAVED.NAME_REQUIRED');
+      return;
+    }
+    try {
+      this.savedSearchService.save(name, this.currentFilterSnapshot());
+      this.savedSearches.set(this.savedSearchService.list());
+      this.newSavedSearchName.set('');
+      this.saveError.set(null);
+    } catch {
+      this.saveError.set('AUDIT_SEARCH.SAVED.SAVE_FAILED');
+    }
+  }
+
+  applySaved(saved: SavedAuditSearch): void {
+    const f = saved.filter;
+    this.userName.set(f.userName ?? '');
+    this.impersonatorUserId.set(f.impersonatorUserId ?? '');
+    this.entityType.set(f.entityType ?? '');
+    this.resourceId.set(f.resourceId ?? '');
+    this.status.set(f.status ?? '');
+    this.fromDate.set(this.fromIsoForInput(f.fromDate));
+    this.toDate.set(this.fromIsoForInput(f.toDate));
+    this.tenantRegion.set((f.tenantRegion as OrganizationRegion | undefined) ?? '');
+    this.pageNumber.set(0);
+    this.runSearch();
+  }
+
+  deleteSaved(saved: SavedAuditSearch): void {
+    this.savedSearchService.delete(saved.id);
+    this.savedSearches.set(this.savedSearchService.list());
+  }
+
+  /** Strip the trailing `:00` we add in toIsoDateTime so the input
+   *  re-renders cleanly when a saved search is re-applied. */
+  private fromIsoForInput(value: string | undefined): string {
+    if (!value) return '';
+    return value.length === 19 && value.endsWith(':00') ? value.substring(0, 16) : value;
+  }
+
+  private triggerBrowserDownload(blob: Blob, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   /**

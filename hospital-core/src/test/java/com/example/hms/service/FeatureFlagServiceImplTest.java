@@ -94,7 +94,7 @@ class FeatureFlagServiceImplTest {
     @Test
     void upsertOverrideTrimsKeyAndSanitizesDescription() {
         AtomicReference<FeatureFlagOverride> saved = new AtomicReference<>();
-        when(overrideRepository.findByFlagKeyIgnoreCase("new-feature"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("new-feature", null))
             .thenReturn(Optional.empty());
         when(overrideRepository.save(any())).thenAnswer(invocation -> {
             FeatureFlagOverride entity = invocation.getArgument(0);
@@ -133,7 +133,9 @@ class FeatureFlagServiceImplTest {
             .description("Old")
             .build();
 
-        when(overrideRepository.findByFlagKeyIgnoreCase("existing-flag"))
+        // MVP-7b — impl now resolves via the org-scoped finder
+        // (organizationId null = the legacy global row).
+        when(overrideRepository.findByFlagKeyAndOrganizationId("existing-flag", null))
             .thenReturn(Optional.of(existing));
         when(overrideRepository.save(existing)).thenReturn(existing);
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(existing));
@@ -174,7 +176,7 @@ class FeatureFlagServiceImplTest {
             .enabled(true)
             .build();
 
-        when(overrideRepository.findByFlagKeyIgnoreCase("beta-feature"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("beta-feature", null))
             .thenReturn(Optional.of(existing));
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
 

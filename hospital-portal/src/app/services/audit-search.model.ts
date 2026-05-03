@@ -42,6 +42,13 @@ export interface AuditSearchFilter {
   resourceId?: string;
   fromDate?: string;
   toDate?: string;
+  /**
+   * MVP-9b: optional regulatory region scope. Joins through
+   * assignment.hospital.organization.region on the backend so the
+   * search is narrowed to events whose tenant carries the given
+   * `OrganizationRegion` enum value (e.g. "EU", "BF", "ML_OAPI").
+   */
+  tenantRegion?: string;
   page?: number;
   size?: number;
 }
