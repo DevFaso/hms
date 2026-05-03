@@ -404,7 +404,15 @@ export class ShellComponent implements OnInit, OnDestroy {
         },
         { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
-        { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
+        // MVP-5b: super-admin lands on the namespaced /super-admin/platform alias
+        // so the active-link highlight matches the address bar after the rewrite
+        // guard runs. ADMIN keeps the legacy /platform path.
+        {
+          icon: 'hub',
+          label: 'Platform',
+          translationKey: 'NAV.PLATFORM',
+          route: isActiveSuperAdmin ? '/super-admin/platform' : '/platform',
+        },
       );
       // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
       // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
@@ -423,7 +431,10 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'policy',
         label: 'Audit Logs',
         translationKey: 'NAV.AUDIT_LOGS',
-        route: '/audit-logs',
+        // MVP-5b: same rationale as Platform — super admins use the
+        // /super-admin/audit-logs alias; HOSPITAL_ADMIN/ADMIN keep the
+        // legacy /audit-logs path.
+        route: isActiveSuperAdmin ? '/super-admin/audit-logs' : '/audit-logs',
       });
     }
     // Pharmacy Module

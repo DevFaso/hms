@@ -1,5 +1,5 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
 import { AuthService, JwtPayload, LoginUserProfile } from '../auth/auth.service';
@@ -33,13 +33,53 @@ const ORIGINAL_TOKEN_KEY = 'auth_token_pre_impersonation';
 const ORIGINAL_REMEMBER_KEY = 'auth_remember_pre_impersonation';
 const ORIGINAL_PROFILE_KEY = 'auth_profile_pre_impersonation';
 
+/**
+ * MVP-4b — surface a countdown to the active impersonation TTL so the
+ * banner can warn the operator before the token silently expires.
+ *
+ * Tick frequency is 1 s — cheap, drives a smooth visible countdown, and
+ * means the auto-stop fires within a second of the actual expiry rather
+ * than waiting for the next user request to surface a 401.
+ */
+const COUNTDOWN_TICK_MS = 1_000;
+/** Threshold (ms) below which the banner switches to "warning" styling. */
+const COUNTDOWN_WARN_MS = 2 * 60 * 1000;
+
 @Injectable({ providedIn: 'root' })
 export class ImpersonationService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly active = signal<ImpersonationActiveResponse | null>(null);
+
+  /**
+   * Wall-clock expiry of the active impersonation token, mirrored from
+   * the start response (or persisted across page reloads via
+   * sessionStorage). Null when no impersonation is active.
+   */
+  readonly expiresAt = signal<Date | null>(null);
+
+  /**
+   * Tick signal (ms remaining until expiry). Updated by the 1 s
+   * countdown interval; computed views read this for live UI.
+   */
+  readonly remainingMs = signal<number | null>(null);
+
+  /** Convenience computed view: ≤ 2 min and impersonation is active. */
+  readonly nearingExpiry = computed(() => {
+    const remaining = this.remainingMs();
+    return this.isActive() && remaining !== null && remaining <= COUNTDOWN_WARN_MS && remaining > 0;
+  });
+
+  private countdownHandle: ReturnType<typeof setInterval> | null = null;
+
+  constructor() {
+    // Clean up the interval on destroy (e.g. test teardown). The service
+    // is `providedIn: 'root'` so DestroyRef fires on root-injector shutdown.
+    this.destroyRef.onDestroy(() => this.stopCountdown());
+  }
 
   /** True while an impersonation token is active. The 401 interceptor checks
    *  this before letting itself trigger a refresh — see Copilot review #4. */
@@ -80,7 +120,14 @@ export class ImpersonationService {
             impersonatorUsername: response.impersonatorUsername,
             targetUserId: response.targetUserId,
             targetUsername: response.targetUsername,
+            expiresAt: response.expiresAt,
           });
+
+          // MVP-4b: arm the countdown from the server-issued expiry so
+          // the banner can show "expires in 4:59" and auto-stop when the
+          // token actually expires (rather than waiting for the next
+          // request to surface a 401).
+          this.startCountdown(response.expiresAt);
         }),
       );
   }
@@ -97,9 +144,73 @@ export class ImpersonationService {
   }
 
   refreshActive(): Observable<ImpersonationActiveResponse> {
-    return this.http
-      .get<ImpersonationActiveResponse>('/super-admin/impersonation/active')
-      .pipe(tap((response) => this.active.set(response)));
+    return this.http.get<ImpersonationActiveResponse>('/super-admin/impersonation/active').pipe(
+      tap((response) => {
+        this.active.set(response);
+        // MVP-4b: re-arm countdown after a page refresh so the banner
+        // shows the right remaining time even if the user reloaded
+        // mid-impersonation. Tolerant when expiresAt is missing
+        // (legacy backend) — countdown stays at null and the banner
+        // hides the badge.
+        if (response.impersonating && response.expiresAt) {
+          this.startCountdown(response.expiresAt);
+        } else if (!response.impersonating) {
+          this.stopCountdown();
+        }
+      }),
+    );
+  }
+
+  // ── MVP-4b: countdown helpers ─────────────────────────────────────
+
+  private startCountdown(expiresAtIso: string | null | undefined): void {
+    this.stopCountdown();
+    if (!expiresAtIso) {
+      this.expiresAt.set(null);
+      this.remainingMs.set(null);
+      return;
+    }
+    const expiry = new Date(expiresAtIso);
+    if (Number.isNaN(expiry.getTime())) {
+      // Bad timestamp — fail safe and don't auto-stop. The user can
+      // exit manually; the next 401 will catch any stuck session.
+      this.expiresAt.set(null);
+      this.remainingMs.set(null);
+      return;
+    }
+    this.expiresAt.set(expiry);
+    this.tickCountdown();
+    this.countdownHandle = setInterval(() => this.tickCountdown(), COUNTDOWN_TICK_MS);
+  }
+
+  private tickCountdown(): void {
+    const expiry = this.expiresAt();
+    if (!expiry) {
+      this.remainingMs.set(null);
+      return;
+    }
+    const remaining = expiry.getTime() - Date.now();
+    this.remainingMs.set(Math.max(0, remaining));
+    if (remaining <= 0) {
+      // TTL elapsed — drop the token client-side without waiting for
+      // the next server hit. Restores the pre-impersonation session
+      // so the operator lands back on their super-admin context.
+      this.stopCountdown();
+      this.forceStop();
+    }
+  }
+
+  private stopCountdown(): void {
+    if (this.countdownHandle !== null) {
+      clearInterval(this.countdownHandle);
+      this.countdownHandle = null;
+    }
+    // Reset the published signals so a refreshActive() that finds the
+    // session ended server-side leaves no stale countdown showing in
+    // the banner. restoreOriginalSession() also resets them up-front
+    // so the second clear here is a no-op in the boundary path.
+    this.expiresAt.set(null);
+    this.remainingMs.set(null);
   }
 
   // ─── private helpers ──────────────────────────────────────────────
@@ -117,6 +228,12 @@ export class ImpersonationService {
   }
 
   private restoreOriginalSession(response: ImpersonationActiveResponse): void {
+    // MVP-4b: tear down the countdown first so a stale tick can't
+    // re-trigger forceStop() while we're already restoring.
+    this.stopCountdown();
+    this.expiresAt.set(null);
+    this.remainingMs.set(null);
+
     const original = sessionStorage.getItem(ORIGINAL_TOKEN_KEY);
     const rememberFlag = sessionStorage.getItem(ORIGINAL_REMEMBER_KEY);
     const remember = rememberFlag !== '0'; // default true when flag missing/legacy

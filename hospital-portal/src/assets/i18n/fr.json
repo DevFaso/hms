@@ -290,7 +290,8 @@
     "MFA_LABEL": "Code MFA (requis si MFA activée)",
     "MFA_PLACEHOLDER": "Code à 6 chiffres",
     "START_BUTTON": "Démarrer l'usurpation",
-    "STARTING": "Démarrage…"
+    "STARTING": "Démarrage…",
+    "COUNTDOWN_LABEL": "Expiration de l'usurpation dans"
   },
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",

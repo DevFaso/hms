@@ -11,6 +11,9 @@ import { ImpersonationService } from '../services/impersonation.service';
 
 interface MockImpersonationService {
   active: ReturnType<typeof signal>;
+  // MVP-4b — banner reads these computed signals via the service.
+  remainingMs: ReturnType<typeof signal>;
+  nearingExpiry: ReturnType<typeof signal>;
   stop: jasmine.Spy;
   forceStop: jasmine.Spy;
   refreshActive: jasmine.Spy;
@@ -47,6 +50,8 @@ describe('ImpersonationBannerComponent', () => {
   beforeEach(() => {
     service = {
       active: signal(null),
+      remainingMs: signal(null),
+      nearingExpiry: signal(false),
       stop: jasmine.createSpy('stop').and.returnValue(of({ impersonating: false })),
       forceStop: jasmine.createSpy('forceStop'),
       refreshActive: jasmine

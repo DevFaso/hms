@@ -1,8 +1,8 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> `6530997f` (MVPs 1–8 all in production) · `uat` @ `188fd9e4` ·
-> `develop` @ `9c06ef22`. Branches:
+> `5ac9fbd2` (**MVPs 1–9 all in production — roadmap closed**) · `uat` @
+> `28e39145` · `develop` @ `6da6ea5b`. Branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped to main `006384fc`),
 > `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — PR #223 →
 > develop `b280a0bd` → main `34cd0c56`),
@@ -16,13 +16,20 @@
 > PR #228 → develop `9c06ef22` → main `6530997f`; six fixup commits
 > covering CI build break, 12 Copilot review findings including 2
 > critical security, 19 cascading test-context failures, SonarCloud
-> coverage 0.3% → 94.3%, and 16 SonarCloud code-smell findings).
+> coverage 0.3% → 94.3%, and 16 SonarCloud code-smell findings),
+> `feature/super-admin-gaps-doc-refresh` (MVP-9 + MVP-{6,7,8} batch
+> follow-ups — PR #231 → develop `6da6ea5b`, PR #232 → uat `28e39145`,
+> PR #233 → main `5ac9fbd2`; bundles MVP-9 Data-Residency with the
+> Subscriptions "New plan" defect fix and the FR/ES i18n backfill the
+> MVP-{6,7,8} batch shipped without; +12 Karma specs (802 → 814), +5
+> backend service tests + 3 controller IT specs, all 13 CI checks green
+> including the JaCoCo 80% INSTRUCTION gate).
 
 ## Executive Summary
 
 The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVPs 1–9 are all in production on `main`.** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) shipped on `006384fc` (2026-05-02). MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) + MVP-5 (Super-Admin Surface Consolidation) shipped on `34cd0c56` (2026-05-03 batch1). MVP-6 (Subscription / Plan / Quotas) + MVP-7 (Emergency Global Controls) + MVP-8 (Cross-Tenant Audit Search UI) shipped on `6530997f` (2026-05-03 batch2). **MVP-9 (Data-Residency / Region Tagging) shipped on the same day as a follow-up branch** alongside two pre-existing UX defects from the batch2 release: the Subscriptions "New plan" button was inert (form-card visibility was gated on populated form fields, hidden right after the reset) and the EN-only i18n bundles meant the Subscriptions / Emergency / Audit-Search pages rendered raw `KEY.NAME` strings under FR/ES locales.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–9 are all in production on `main` (`5ac9fbd2`) — the super-admin gap roadmap is closed.** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) shipped on `006384fc` (2026-05-02). MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) + MVP-5 (Super-Admin Surface Consolidation) shipped on `34cd0c56` (2026-05-03 batch1). MVP-6 (Subscription / Plan / Quotas) + MVP-7 (Emergency Global Controls) + MVP-8 (Cross-Tenant Audit Search UI) shipped on `6530997f` (2026-05-03 batch2). MVP-9 (Data-Residency / Region Tagging) shipped on `5ac9fbd2` (2026-05-03 batch3 — PR #231 → develop `6da6ea5b` → PR #232 → uat `28e39145` → PR #233 → main `5ac9fbd2`) alongside two pre-existing UX defects from the batch2 release: the Subscriptions "New plan" button was inert (form-card visibility was gated on populated form fields, hidden right after the reset) and the FR/ES i18n bundles were missing every super-admin MVP block, so a French/Spanish super admin saw raw `KEY.NAME` placeholders on the Subscriptions / Emergency / Audit-Search pages.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -93,7 +100,7 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 6. **Subscription / Plan / Quotas** · *PR #228 → develop `9c06ef22` → main `6530997f`*
 7. **Emergency Global Controls** · *PR #228 → develop `9c06ef22` → main `6530997f`*
 8. **Cross-Tenant Audit Search UI** · *PR #228 → develop `9c06ef22` → main `6530997f`*
-9. **Data-Residency / Region Tagging** · *shipped on `feature/super-admin-gaps-doc-refresh` — V82 migration + region picker + audit*
+9. **Data-Residency / Region Tagging** · *PR #231 → develop `6da6ea5b` → PR #232 → uat `28e39145` → PR #233 → main `5ac9fbd2`*
 
 ---
 
@@ -835,7 +842,7 @@ clean. Frontend: `npm run lint` clean, `npm run format:check` clean,
 full Karma sweep **802 specs green** (super-admin Control Tower spec
 updated for the +3 quick-link cards: 9 → 12).
 
-## MVP 9: Data-Residency / Region Tagging (SHIPPED on `feature/super-admin-gaps-doc-refresh`)
+## MVP 9: Data-Residency / Region Tagging (SHIPPED to main `5ac9fbd2` via promote chain)
 
 **Goal:** Give every organization a first-class data-residency label so the
 Control Tower can show which compliance posture applies to each tenant
@@ -843,7 +850,14 @@ and so a compliance officer can re-tag a tenant (e.g. an org migrating
 from a CNAMGS-managed BF deployment to an EU/GDPR-managed one) with full
 audit, without a schema migration each time.
 
-**Closure notes (this branch):**
+**Promote chain:** `feature/super-admin-gaps-doc-refresh` → PR #231 →
+develop `6da6ea5b` → PR #232 → uat `28e39145` → PR #233 → main
+`5ac9fbd2`. All 13 CI checks green on PR #231 (Backend JUnit + JaCoCo,
+Frontend, SonarCloud, CodeQL ×3, Agent Lint & Prompt Tests, Lint
+Dockerfiles & YAML, Require All Jobs Pass); admin-merged on each
+promote step.
+
+**Closure notes:**
 
 - Two pre-existing UX defects from the MVP-{6,7,8} batch were fixed
   alongside MVP-9 in the same branch:
@@ -957,11 +971,17 @@ audit, without a schema migration each time.
   the catalogue / snapshot ordering / unknown-id 404 / change vs.
   noop save / audit-failure swallow / frontend filter / edit submit /
   failure path / cancel.
-- `./gradlew :hospital-core:compileJava :hospital-core:compileTestJava`
-  clean. `npm run lint` clean, `npm run format:check` clean,
-  `ng build` clean, full Karma sweep **814 specs green** (up from 802;
-  +8 data-residency, +4 subscriptions, super-admin Control Tower spec
+- Local QA: `./gradlew :hospital-core:test :jacocoTestReport
+  :jacocoTestCoverageVerification` BUILD SUCCESSFUL in 8m 4s — the
+  80% INSTRUCTION coverage gate passed without any new exclusions.
+  `npm run lint` clean, `npm run format:check` clean, `ng build`
+  clean, full Karma sweep **814 specs green** (up from 802; +8
+  data-residency, +4 subscriptions, super-admin Control Tower spec
   bumped 12 → 13 quick-links).
+- CI on PR #231 (the develop merge): all 13 checks green — Backend
+  (JUnit, Jacoco), Frontend (Jest, Playwright), SonarCloud, CodeQL
+  (java-kotlin / javascript-typescript / actions), Agent Lint &
+  Prompt Tests, Lint Dockerfiles & YAML, Require All Jobs Pass.
 
 **Developer Tasks — done:**
 
@@ -993,6 +1013,14 @@ audit, without a schema migration each time.
 - **Purge irreversibility:** the 30-day grace + scheduled-job pattern is the safety net. Confirm with stakeholders that 30d is the right default.
 - **Hospital-level lifecycle:** this MVP lifts state to `Organization`. Decide if `Hospital` also needs an independent lifecycle (likely yes — defer to a follow-up so this MVP stays scoped).
 - ~~**Side-nav restructuring:**~~ *superseded by MVP-5 (Super-Admin Surface Consolidation), which retires `/dashboard` super-admin branch + `/admin` reachability for super admin and is the next scoped piece of work. Folding `/feature-flags`, `/analytics`, `/audit-logs`, `/platform` under `/super-admin/*` URLs remains deferred to MVP-5b — see MVP-5 "Out of scope".*
+- **Region-driven enforcement (MVP-9b):** today MVP-9 is *labelling
+  only* — `Organization.region` is recorded and audited but no part of
+  the platform reads it to gate behaviour (no per-region retention, no
+  per-region export-format default, no per-region routing of new
+  tenants to a region-specific deployment, no region filter on the
+  cross-tenant audit search). Each is a small, focused MVP-9b slice;
+  pull when the first compliance use-case lands (likely a GDPR-tagged
+  tenant requesting region-specific export).
 
 ## References
 
@@ -1001,3 +1029,125 @@ audit, without a schema migration each time.
 - `hospital-portal/src/app/app.routes.ts` — route + role guard map.
 - `hospital-portal/src/app/core/role-context.service.ts` — `isSuperAdmin` signal.
 - `docs/gap.md` — Lab Director gap analysis (prior precedent for this document's structure).
+
+---
+
+## Sub-MVP closure notes
+
+### MVP-4b: Impersonation TTL countdown + auto-stop on expiry (SHIPPED on `feature/super-admin-gaps-mvp-4b-5b-6b`)
+
+Folds the original MVP-4 follow-up into the same branch as MVP-5b + MVP-6b.
+
+- **Backend.** `ImpersonationActiveResponseDTO.expiresAt` (Instant) added
+  alongside the existing impersonator/target fields.
+  `SupportImpersonationServiceImpl.getActive()` now reads the active
+  session's expiry from `ImpersonationSessionTracker.get(...)` so a
+  page-refresh can re-arm the frontend countdown without having to
+  decode the JWT exp claim. Tracker was already populated at start
+  time; only the read-side surface changed.
+- **Frontend.** `ImpersonationService` exposes three new signals:
+  `expiresAt: Date | null`, `remainingMs: number | null`, and the
+  computed `nearingExpiry` (true once remaining drops ≤ 2 min while
+  active). A 1-second `setInterval` updates `remainingMs` and triggers
+  `forceStop()` the moment remaining hits zero — the operator no longer
+  has to wait for the next user action to surface a 401, the banner
+  disappears in real time and the pre-impersonation session is
+  restored. `stopCountdown()` resets both signals so a refresh that
+  finds the session ended server-side leaves no stale countdown.
+- `ImpersonationBannerComponent` renders an `mm:ss` countdown badge
+  (`data-test="impersonation-countdown"`) inside the banner. The badge
+  flips to a high-contrast amber pill (no animation — kept the SCSS
+  paint-cycle-light per the IDE's perf hint) and the banner gradient
+  blends amber when `nearingExpiry` is true. ARIA label combines the
+  `IMPERSONATION.COUNTDOWN_LABEL` string with the live countdown so
+  screen readers announce the warning.
+- **i18n.** `IMPERSONATION.COUNTDOWN_LABEL` added to EN / FR / ES.
+- **Tests.** 5 new specs in `impersonation.service.spec.ts`
+  (countdown arms from server expiry / nearingExpiry flips at 90 s /
+  past-expiry triggers immediate forceStop / refreshActive re-arms
+  countdown / refreshActive(false) tears countdown down). Existing
+  spec updated to use a far-future expiry literal so the new countdown
+  doesn't auto-stop mid-test, plus an `afterEach` countdown-cleanup so
+  no interval leaks across specs. `ImpersonationBannerComponent` spec
+  mock extended with `remainingMs` + `nearingExpiry` signals.
+
+### MVP-5b: Super-admin URL namespace consolidation (SHIPPED on `feature/super-admin-gaps-mvp-4b-5b-6b`)
+
+Closes the URL-bookmark drift the original MVP-5 punted on.
+
+- **New `superAdminPathRewriteGuard(targetPath)` factory** in
+  `auth/super-admin-path-rewrite.guard.ts`. Distinct from the existing
+  `SuperAdminRedirectGuard` (which always sends to the Control Tower);
+  this one *preserves* the path semantics — only the prefix changes.
+  When the active role is SUPER_ADMIN, returns a `UrlTree` for
+  `targetPath`; other roles fall through unchanged. Falls back to
+  `AuthService.hasAnyRole(['ROLE_SUPER_ADMIN'])` when no active role
+  is set, mirroring the existing `SuperAdminRedirectGuard` pattern.
+- **Legacy paths gated** with the rewrite guard ahead of `RoleGuard`:
+  `/feature-flags` → `/super-admin/feature-flags`,
+  `/analytics` → `/super-admin/analytics`,
+  `/audit-logs` → `/super-admin/audit-logs`,
+  `/platform` → `/super-admin/platform`. Other roles
+  (HOSPITAL_ADMIN / ADMIN) keep the legacy paths.
+- **Four new alias routes** under `/super-admin/*` that load the same
+  components as the top-level routes (no component duplication).
+- **Control Tower quick-link cards** retargeted to the new canonical
+  paths so the address bar matches the link the user clicked.
+- **Side-nav**: the `Platform` and `Audit Logs` entries now resolve
+  to `/super-admin/X` when `activeRole === 'ROLE_SUPER_ADMIN'`,
+  preserving the active-link highlight after the rewrite. ADMIN /
+  HOSPITAL_ADMIN keep the legacy URLs unchanged.
+- **Tests.** 4 new `superAdminPathRewriteGuard` specs (super-admin
+  rewrite / fallback when no active role / hospital-admin pass-through
+  / multi-role super-admin who picked a non-super active role passes
+  through). `super-admin.spec.ts` updated for the new
+  `/super-admin/{feature-flags,analytics,platform,audit-logs}`
+  Quick-Link routes.
+- **Out of scope (MVP-5c if needed).** Server-side 301 redirects for
+  bookmarked legacy URLs — today's solution rewrites client-side at
+  navigation time, which preserves bookmarks but doesn't update them.
+
+### MVP-6b: Plan-tier feature enforcement (SHIPPED on `feature/super-admin-gaps-mvp-4b-5b-6b`)
+
+Turns MVP-6's plan catalogue from a label into actual feature gating.
+
+- **New `SubscriptionFeatureGateService` interface** + `Impl` resolves
+  the caller's organization to its active subscription plan, parses
+  the comma-separated `featureKeys` (case-insensitive, whitespace-
+  tolerant), and exposes both single-key
+  (`isFeatureAllowedForOrg`) and bulk (`filterAllowedKeys`)
+  predicates.
+- **Backwards-compatible posture**: orgs without an active subscription,
+  callers without tenant context (system / super-admin cross-tenant),
+  and active plans with empty `featureKeys` are all left **ungated**
+  so legacy tenants and dev/test deployments keep working.
+  Plan-with-empty-keys vs. no-plan are handled identically — both fall
+  through to "no plan-tier features advertised → don't accidentally
+  disable everything".
+- **Wired into `FeatureFlagServiceImpl.listFlags()`** as a final
+  `applySubscriptionPlanGate(flags)` step after the existing
+  defaults / overrides / env-overrides / DB-overrides merge. Only
+  flips `true → false` (a flag already disabled stays disabled — no
+  point asking the gate). The gate reads the caller's
+  `activeOrganizationId` from `HospitalContextHolder`; super-admin
+  contexts (`ctx.isSuperAdmin()`) are bypassed so platform operators
+  always see the unfiltered flag set. Holder lookup failures degrade
+  to ungated (logged at DEBUG) so a context-resolution hiccup never
+  breaks flag resolution.
+- `FeatureFlagServiceImpl` constructor gains a fourth dependency
+  (`SubscriptionFeatureGateService`); both existing tests
+  (`com.example.hms.service.FeatureFlagServiceImplTest` +
+  `com.example.hms.service.impl.FeatureFlagServiceImplTest`) updated
+  to inject a default-permissive mock so legacy assertions stay green.
+- **Tests.** New `SubscriptionFeatureGateServiceImplTest` with 9 specs
+  (system caller ungated / blank key short-circuits / no subscription
+  ungated / empty featureKeys ungated / case-insensitive enforcement
+  / filterAllowedKeys passes through without subscription / narrows
+  with plan and preserves order / handles null+empty input / null
+  plan attached to active subscription falls back to ungated).
+- **Out of scope (MVP-6c).** jsonb migration for `feature_keys`
+  (TEXT comma-separated remains for now — the gate parses it
+  correctly, and the existing super-admin Subscriptions UI already
+  edits it as a string). Plan-tier audit emission when a flag is
+  blocked (operator visibility into "which org saw which flag flip").
+  Self-service org-side upgrade UI to request more keys.
