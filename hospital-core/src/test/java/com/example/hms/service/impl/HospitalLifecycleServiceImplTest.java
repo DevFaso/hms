@@ -19,6 +19,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.HospitalLifecycleStatusService;
 import com.example.hms.service.MfaService;
 import java.time.Instant;
 import java.util.Optional;
@@ -39,6 +40,7 @@ class HospitalLifecycleServiceImplTest {
 
     @Mock private HospitalRepository hospitalRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private HospitalLifecycleStatusService lifecycleStatusService;
     @Mock private MfaService mfaService;
 
     @InjectMocks private HospitalLifecycleServiceImpl service;

@@ -4,6 +4,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
 import com.example.hms.security.context.ImpersonationContextHolder;
+import com.example.hms.service.HospitalLifecycleStatusService;
 import com.example.hms.service.OrganizationLifecycleStatusService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,6 +44,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final WsTicketService wsTicketService;
     private final HospitalUserDetailsService hospitalUserDetailsService;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
+    private final HospitalLifecycleStatusService hospitalLifecycleStatusService;
     private final GlobalSessionRevocationService globalSessionRevocationService;
 
     private static final Set<String> EXACT_SKIP_PATHS = Set.of(
@@ -404,28 +406,47 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Returns {@code true} when the authenticated user is attached to an
-     * organization in a non-active lifecycle state and is not a super admin.
-     * Super admins always pass — they need to manage the blocked tenant.
+     * Returns {@code true} when the authenticated user is attached to a
+     * blocked organization OR a blocked hospital and is not a super admin.
+     * Super admins always pass — they need cross-tenant access to manage
+     * blocked tenants.
+     *
+     * <p>Hospital-level lifecycle (MVP-c batch) layers on top of the org
+     * gate so a single hospital can be suspended without taking down the
+     * whole organization, and the JWT filter enforces it at login time.
      */
     private boolean isBlockedByTenantLifecycle(HospitalContext context) {
         if (context.isSuperAdmin()) {
             return false;
         }
+        return isBlockedByOrgLifecycle(context) || isBlockedByHospitalLifecycle(context);
+    }
+
+    private boolean isBlockedByOrgLifecycle(HospitalContext context) {
         Set<UUID> permitted = context.getPermittedOrganizationIds();
         UUID active = context.getActiveOrganizationId();
         if (permitted.isEmpty() && active == null) {
             return false;
         }
         Set<UUID> blocked = lifecycleStatusService.getBlockedOrganizationIds();
-        if (blocked.isEmpty()) {
+        return !blocked.isEmpty()
+            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
+    }
+
+    private boolean isBlockedByHospitalLifecycle(HospitalContext context) {
+        Set<UUID> permitted = context.getPermittedHospitalIds();
+        UUID active = context.getActiveHospitalId();
+        if (permitted.isEmpty() && active == null) {
             return false;
         }
-        if (active != null && blocked.contains(active)) {
-            return true;
-        }
-        for (UUID orgId : permitted) {
-            if (blocked.contains(orgId)) {
+        Set<UUID> blocked = hospitalLifecycleStatusService.getBlockedHospitalIds();
+        return !blocked.isEmpty()
+            && (containsAny(blocked, permitted) || (active != null && blocked.contains(active)));
+    }
+
+    private static boolean containsAny(Set<UUID> haystack, Set<UUID> needles) {
+        for (UUID id : needles) {
+            if (haystack.contains(id)) {
                 return true;
             }
         }

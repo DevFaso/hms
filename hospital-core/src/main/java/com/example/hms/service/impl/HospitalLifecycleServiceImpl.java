@@ -15,6 +15,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.HospitalLifecycleService;
+import com.example.hms.service.HospitalLifecycleStatusService;
 import com.example.hms.service.MfaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -69,6 +70,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     private final HospitalRepository hospitalRepository;
     private final AuditEventLogService auditEventLogService;
+    private final HospitalLifecycleStatusService lifecycleStatusService;
     private final MfaService mfaService;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
@@ -98,6 +100,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setSuspendedBy(currentActorId());
         hospital.setSuspensionReason(reason);
         hospitalRepository.save(hospital);
+        invalidateStatusCache();
 
         recordAudit(hospital, AuditEventType.HOSPITAL_SUSPENDED, "Hospital suspended: " + reason);
         return toResponse(hospital);
@@ -112,6 +115,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setLifecycleState(HospitalLifecycleState.ACTIVE);
         hospital.setActive(true);
         hospitalRepository.save(hospital);
+        invalidateStatusCache();
 
         String description = "Hospital restored from " + previous
             + (request != null && request.getReason() != null ? ": " + request.getReason() : "");
@@ -132,6 +136,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setArchivedBy(currentActorId());
         hospital.setArchiveReason(reason);
         hospitalRepository.save(hospital);
+        invalidateStatusCache();
 
         recordAudit(hospital, AuditEventType.HOSPITAL_ARCHIVED, "Hospital archived: " + reason);
         return toResponse(hospital);
@@ -157,6 +162,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setPurgeScheduledBy(currentActorId());
         hospital.setPurgeReason(reason);
         hospitalRepository.save(hospital);
+        invalidateStatusCache();
 
         recordAudit(hospital, AuditEventType.HOSPITAL_PURGE_SCHEDULED,
             "Purge scheduled for " + scheduledFor + ": " + reason);
@@ -173,6 +179,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setPurgeScheduledBy(null);
         hospital.setPurgeReason(null);
         hospitalRepository.save(hospital);
+        invalidateStatusCache();
 
         String description = "Purge cancelled"
             + (request != null && request.getReason() != null ? ": " + request.getReason() : "");
@@ -246,6 +253,17 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private UUID currentActorId() {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         return context.getPrincipalUserId();
+    }
+
+    private void invalidateStatusCache() {
+        try {
+            lifecycleStatusService.invalidate();
+        } catch (RuntimeException ex) {
+            // Cache invalidation is best-effort — a stale cache only delays
+            // the new state taking effect by the cache TTL (30s).
+            log.warn("[HOSPITAL-LIFECYCLE] Failed to invalidate hospital-lifecycle-status cache: {}",
+                ex.getMessage());
+        }
     }
 
     private String currentActorUsername() {
