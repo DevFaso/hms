@@ -2,10 +2,13 @@ package com.example.hms.service.integration.health;
 
 import com.example.hms.enums.integration.IntegrationHealthStatus;
 import com.example.hms.model.Organization;
+import com.example.hms.model.integration.IntegrationHealthEvent;
 import com.example.hms.model.integration.IntegrationHealthSnapshot;
 import com.example.hms.repository.IntegrationHealthSnapshotRepository;
 import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.integration.IntegrationHealthEventRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,16 +43,35 @@ public class IntegrationHealthRecorder {
     private final OrganizationRepository organizationRepository;
     private final Clock clock;
 
+    /**
+     * MVP-3b: optional time-series log. When wired, every recordSuccess /
+     * recordFailure also inserts an event row so the Integration Health
+     * Console can render a 24h sparkline. Optional (Spring will inject
+     * null in tests / dev profiles that don't load the bean) so the
+     * legacy snapshot-only behaviour stays available.
+     */
+    private final IntegrationHealthEventRepository eventRepository;
+
+    @Autowired
     public IntegrationHealthRecorder(IntegrationHealthSnapshotRepository repository,
                                      OrganizationRepository organizationRepository,
-                                     Clock clock) {
+                                     Clock clock,
+                                     org.springframework.beans.factory.ObjectProvider<IntegrationHealthEventRepository>
+                                         eventRepositoryProvider) {
         this.repository = repository;
         this.organizationRepository = organizationRepository;
         this.clock = clock;
+        this.eventRepository = eventRepositoryProvider == null
+            ? null : eventRepositoryProvider.getIfAvailable();
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuccess(String integrationId, UUID organizationId) {
+        recordSuccess(integrationId, organizationId, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSuccess(String integrationId, UUID organizationId, Long latencyMs) {
         try {
             IntegrationHealthSnapshot snapshot = upsert(integrationId, organizationId);
             LocalDateTime now = LocalDateTime.now(clock);
@@ -58,6 +80,7 @@ public class IntegrationHealthRecorder {
             snapshot.setSuccessCount24h(snapshot.getSuccessCount24h() + 1);
             snapshot.setLastStatus(deriveStatus(snapshot, /* lastWasSuccess */ true));
             repository.save(snapshot);
+            persistEvent(integrationId, organizationId, IntegrationHealthStatus.HEALTHY, latencyMs, null, now);
         } catch (RuntimeException ex) {
             log.warn("IntegrationHealthRecorder.recordSuccess failed for integration={} org={}: {}",
                 integrationId, organizationId, ex.getMessage());
@@ -66,6 +89,11 @@ public class IntegrationHealthRecorder {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFailure(String integrationId, UUID organizationId, String errorMessage) {
+        recordFailure(integrationId, organizationId, errorMessage, null);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordFailure(String integrationId, UUID organizationId, String errorMessage, Long latencyMs) {
         try {
             IntegrationHealthSnapshot snapshot = upsert(integrationId, organizationId);
             LocalDateTime now = LocalDateTime.now(clock);
@@ -75,8 +103,33 @@ public class IntegrationHealthRecorder {
             snapshot.setLastErrorMessage(truncate(errorMessage));
             snapshot.setLastStatus(deriveStatus(snapshot, /* lastWasSuccess */ false));
             repository.save(snapshot);
+            persistEvent(integrationId, organizationId, IntegrationHealthStatus.FAILING,
+                latencyMs, truncate(errorMessage), now);
         } catch (RuntimeException ex) {
             log.warn("IntegrationHealthRecorder.recordFailure failed for integration={} org={}: {}",
+                integrationId, organizationId, ex.getMessage());
+        }
+    }
+
+    private void persistEvent(String integrationId, UUID organizationId,
+                              IntegrationHealthStatus status, Long latencyMs,
+                              String errorMessage, LocalDateTime recordedAt) {
+        if (eventRepository == null) {
+            return; // legacy snapshot-only mode
+        }
+        try {
+            eventRepository.save(IntegrationHealthEvent.builder()
+                .integrationId(integrationId)
+                .organizationId(organizationId)
+                .status(status)
+                .latencyMs(latencyMs)
+                .errorMessage(errorMessage)
+                .recordedAt(recordedAt)
+                .build());
+        } catch (RuntimeException ex) {
+            // Time-series persistence is best-effort — don't break the
+            // snapshot upsert because the history insert hit a constraint.
+            log.warn("IntegrationHealthRecorder time-series persist failed for integration={} org={}: {}",
                 integrationId, organizationId, ex.getMessage());
         }
     }

@@ -1206,4 +1206,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V88 — Integration health time-series (MVP-c batch / MVP-3b)
+         Adds clinical.integration_health_event so the Integration Health
+         Console can render per-integration 24h sparklines. The existing
+         IntegrationHealthSnapshot powers the inventory view; the event
+         table powers the history drawer. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V88-integration-health-event" author="hms-team" runOnChange="false">
+        <sqlFile path="V88__integration_health_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

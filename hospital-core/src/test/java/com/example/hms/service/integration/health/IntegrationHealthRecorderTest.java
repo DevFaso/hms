@@ -46,7 +46,16 @@ class IntegrationHealthRecorderTest {
         when(repository.save(any(IntegrationHealthSnapshot.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         Clock clock = Clock.fixed(Instant.parse("2026-05-02T08:00:00Z"), ZoneOffset.UTC);
-        recorder = new IntegrationHealthRecorder(repository, organizationRepository, clock);
+        // MVP-3b: ObjectProvider for the optional time-series repository.
+        // Tests skip the event-log persistence path by providing null.
+        org.springframework.beans.factory.ObjectProvider<com.example.hms.repository.integration.IntegrationHealthEventRepository>
+            eventProvider = new org.springframework.beans.factory.ObjectProvider<>() {
+                @Override public com.example.hms.repository.integration.IntegrationHealthEventRepository getObject() { return null; }
+                @Override public com.example.hms.repository.integration.IntegrationHealthEventRepository getObject(Object... args) { return null; }
+                @Override public com.example.hms.repository.integration.IntegrationHealthEventRepository getIfAvailable() { return null; }
+                @Override public com.example.hms.repository.integration.IntegrationHealthEventRepository getIfUnique() { return null; }
+            };
+        recorder = new IntegrationHealthRecorder(repository, organizationRepository, clock, eventProvider);
     }
 
     @Test
