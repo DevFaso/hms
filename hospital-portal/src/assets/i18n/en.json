@@ -290,7 +290,8 @@
     "MFA_LABEL": "MFA code (required when MFA is enrolled)",
     "MFA_PLACEHOLDER": "6-digit code",
     "START_BUTTON": "Start impersonation",
-    "STARTING": "Starting…"
+    "STARTING": "Starting…",
+    "COUNTDOWN_LABEL": "Impersonation expires in"
   },
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",

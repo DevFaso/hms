@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Data
@@ -21,4 +22,11 @@ public class ImpersonationActiveResponseDTO {
     private String impersonatorUsername;
     private UUID targetUserId;
     private String targetUsername;
+
+    /**
+     * MVP-4b: ISO-8601 expiry of the active impersonation token (null
+     * when not impersonating). Lets the frontend re-arm its countdown
+     * on a page refresh without having to decode the JWT itself.
+     */
+    private Instant expiresAt;
 }

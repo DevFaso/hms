@@ -21,6 +21,20 @@ export class ImpersonationBannerComponent {
   readonly active = computed(() => this.impersonation.active());
   readonly visible = computed(() => this.active()?.impersonating === true);
 
+  // MVP-4b — countdown bridge from the service.
+  readonly remainingMs = computed(() => this.impersonation.remainingMs());
+  readonly nearingExpiry = computed(() => this.impersonation.nearingExpiry());
+
+  /** mm:ss formatted countdown for the banner badge. Empty when null. */
+  readonly remainingLabel = computed(() => {
+    const ms = this.remainingMs();
+    if (ms === null) return '';
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  });
+
   exit(): void {
     if (this.busy()) return;
     this.busy.set(true);

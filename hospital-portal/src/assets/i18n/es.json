@@ -290,7 +290,8 @@
     "MFA_LABEL": "Código MFA (obligatorio si MFA activado)",
     "MFA_PLACEHOLDER": "Código de 6 dígitos",
     "START_BUTTON": "Iniciar suplantación",
-    "STARTING": "Iniciando…"
+    "STARTING": "Iniciando…",
+    "COUNTDOWN_LABEL": "La suplantación expira en"
   },
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",

@@ -3,11 +3,15 @@ package com.example.hms.service.impl;
 import com.example.hms.config.FeatureFlagProperties;
 import com.example.hms.model.platform.FeatureFlagOverride;
 import com.example.hms.repository.platform.FeatureFlagOverrideRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.FeatureFlagService;
+import com.example.hms.service.SubscriptionFeatureGateService;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.env.Environment;
@@ -23,6 +27,7 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
     private final FeatureFlagProperties properties;
     private final Environment environment;
     private final FeatureFlagOverrideRepository overrideRepository;
+    private final SubscriptionFeatureGateService subscriptionFeatureGate;
 
     @Override
     public Map<String, Boolean> listFlags(String environmentOverride, Locale locale) {
@@ -80,8 +85,52 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
         merge(flags, properties.getOverridesOrEmpty());
         merge(flags, properties.getEnvironmentOverrides(resolvedEnvironment));
         mergeDatabaseOverrides(flags);
+        applySubscriptionPlanGate(flags);
         log.debug("Resolved feature flags for env='{}' locale='{}' -> {}", resolvedEnvironment, locale, flags);
         return flags;
+    }
+
+    /**
+     * MVP-6b: enforce the active subscription plan's {@code featureKeys}
+     * for the caller's organization. Flags whose key is not in the
+     * plan's allowed list get forced to {@code false}; everything else
+     * passes through unchanged. Orgs without an active subscription —
+     * and callers without a tenant context (system / super-admin
+     * cross-tenant) — are ungated, matching the legacy behaviour.
+     */
+    private void applySubscriptionPlanGate(Map<String, Boolean> flags) {
+        if (flags.isEmpty()) {
+            return;
+        }
+        UUID organizationId = currentOrganizationId();
+        if (organizationId == null) {
+            return;
+        }
+        flags.replaceAll((key, value) -> {
+            if (!Boolean.TRUE.equals(value)) {
+                // Already off — no need to ask the gate (and a "false"
+                // doesn't need plan permission to stay false).
+                return value;
+            }
+            return subscriptionFeatureGate.isFeatureAllowedForOrg(organizationId, key);
+        });
+    }
+
+    private UUID currentOrganizationId() {
+        try {
+            HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+            // Super-admin requests carry no tenant context (they operate
+            // cross-tenant by design) — leave them ungated.
+            if (ctx == null || ctx.isSuperAdmin()) {
+                return null;
+            }
+            return ctx.getActiveOrganizationId();
+        } catch (RuntimeException ex) {
+            // Holder lookup must never break flag resolution. Stay
+            // ungated if anything goes wrong.
+            log.debug("[FEATURE-FLAGS] currentOrganizationId() lookup failed: {}", ex.getMessage());
+            return null;
+        }
     }
 
     private void merge(Map<String, Boolean> target, Map<String, Boolean> source) {

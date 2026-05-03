@@ -4,6 +4,7 @@ import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
+import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -613,9 +614,11 @@ export const routes: Routes = [
       },
 
       // Platform (Admin)
+      // MVP-5b: SUPER_ADMIN is rewritten to /super-admin/platform for
+      // namespace consistency; ADMIN keeps the legacy /platform path.
       {
         path: 'platform',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/platform'), RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
@@ -808,9 +811,11 @@ export const routes: Routes = [
       },
 
       // Audit Logs
+      // MVP-5b: SUPER_ADMIN is rewritten to /super-admin/audit-logs;
+      // HOSPITAL_ADMIN + ADMIN keep the legacy /audit-logs path.
       {
         path: 'audit-logs',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/audit-logs'), RoleGuard],
         data: {
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
@@ -1086,6 +1091,37 @@ export const routes: Routes = [
           ),
       },
 
+      // MVP-5b — namespaced aliases for the four legacy super-admin
+      // surfaces. Loads the same components as the top-level routes;
+      // the legacy paths (/feature-flags, /analytics, /audit-logs,
+      // /platform) carry a superAdminPathRewriteGuard that bounces a
+      // SUPER_ADMIN here while leaving other roles on the legacy URL.
+      {
+        path: 'super-admin/feature-flags',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
+      },
+      {
+        path: 'super-admin/analytics',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
+      },
+      {
+        path: 'super-admin/audit-logs',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
+      },
+      {
+        path: 'super-admin/platform',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
@@ -1129,18 +1165,23 @@ export const routes: Routes = [
       },
 
       // Feature Flags Management
+      // MVP-5b: legacy /feature-flags is superseded by /super-admin/feature-flags.
+      // SUPER_ADMIN gets a transparent rewrite (so bookmarks still work) and
+      // the alias below loads the same component.
       {
         path: 'feature-flags',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/feature-flags'), RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () =>
           import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
       },
 
       // Platform Analytics
+      // MVP-5b: legacy /analytics is superseded by /super-admin/analytics
+      // for SUPER_ADMIN. Same rewrite + alias pattern as /feature-flags.
       {
         path: 'analytics',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/analytics'), RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
       },
