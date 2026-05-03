@@ -1,23 +1,28 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> 34cd0c56 (MVP-3 + MVP-4 + MVP-5 promoted) · `develop` @ `f7fbfc9d` ·
-> MVP-6 + MVP-7 + MVP-8 trio in progress on
-> `feature/super-admin-gaps-mvp6-7-8-trio`. Earlier branches:
-> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
-> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
-> into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
-> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — merged
-> into develop in `bbf09844` via PR #224 with all six Copilot review
-> findings folded in; awaits next promote-to-main),
-> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — in
-> progress on this branch; targets the next develop merge).
+> `6530997f` (MVPs 1–8 all in production) · `uat` @ `188fd9e4` ·
+> `develop` @ `9c06ef22`. Branches:
+> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped to main `006384fc`),
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — PR #223 →
+> develop `b280a0bd` → main `34cd0c56`),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — PR #224
+> → develop `bbf09844` → main `34cd0c56`; six Copilot security findings
+> folded in `db49e73e`),
+> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — PR #225
+> → develop `f7fbfc9d` → main `34cd0c56`; two Copilot review findings
+> folded in `c03bd80a`),
+> `feature/super-admin-gaps-mvp6-7-8-trio` (MVP-6 + MVP-7 + MVP-8 —
+> PR #228 → develop `9c06ef22` → main `6530997f`; six fixup commits
+> covering CI build break, 12 Copilot review findings including 2
+> critical security, 19 cascading test-context failures, SonarCloud
+> coverage 0.3% → 94.3%, and 16 SonarCloud code-smell findings).
 
 ## Executive Summary
 
 The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is in progress** on `feature/super-admin-gaps-mvp5-surface-consolidation` — frontend-only redirect guard + dashboard cleanup + side-nav role filter to retire the duplicate `/dashboard` superadmin branch and the duplicate `/admin` reachability so `/super-admin` is the single mission-control. MVPs 6–9 remain in the forward queue.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–8 are all in production on `main` (`6530997f`).** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) shipped on `006384fc` (2026-05-02). MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) + MVP-5 (Super-Admin Surface Consolidation) shipped on `34cd0c56` (2026-05-03 batch1). MVP-6 (Subscription / Plan / Quotas) + MVP-7 (Emergency Global Controls) + MVP-8 (Cross-Tenant Audit Search UI) shipped on `6530997f` (2026-05-03 batch2). **Only MVP-9 (Data-Residency / Region Tagging) remains in the forward queue**, and the doc itself notes it can wait until a multi-region deployment is on the calendar.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -82,13 +87,13 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 1. **Super-Admin Control Tower** — landing page · *shipped to main `006384fc`*
 2. **Tenant Lifecycle** — suspend / archive / restore / purge · *shipped to main `006384fc`*
-3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
-4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
-5. **Super-Admin Surface Consolidation** · *in progress on `feature/super-admin-gaps-mvp5-surface-consolidation` — retires `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
-6. **Subscription / Plan / Quotas** · *in progress on `feature/super-admin-gaps-mvp6-7-8-trio` — MVP scope: schema + plan CRUD + per-org assign/cancel; plan-tier feature enforcement deferred to MVP-6b*
-7. **Emergency Global Controls** · *in progress on the same branch — force-logout-all (global min-iat), kill-feature, force-MFA-reenrol, broadcast banner; all MFA-stepped-up + audited as `SECURITY_ALERT_TRIGGERED`*
-8. **Cross-Tenant Audit Search UI** · *in progress on the same branch — JPA Specification search across `AuditEventLog` with impersonator filter from MVP-4*
-9. Data-Residency / Region Tagging
+3. **Partner-Connector / Integration Health Console** · *PR #223 → develop `b280a0bd` → main `34cd0c56`*
+4. **Support Impersonation with Audit** · *PR #224 → develop `bbf09844` → main `34cd0c56` (six Copilot security findings folded in `db49e73e`)*
+5. **Super-Admin Surface Consolidation** · *PR #225 → develop `f7fbfc9d` → main `34cd0c56` (two Copilot review findings folded in `c03bd80a`)*
+6. **Subscription / Plan / Quotas** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+7. **Emergency Global Controls** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+8. **Cross-Tenant Audit Search UI** · *PR #228 → develop `9c06ef22` → main `6530997f`*
+9. Data-Residency / Region Tagging — *forward queue; trigger is multi-region deployment*
 
 ---
 
@@ -516,7 +521,7 @@ existing call paths refactored, only EligibilityServiceImpl wired).
 
 ---
 
-## MVP 5: Super-Admin Surface Consolidation (IN PROGRESS — branch `feature/super-admin-gaps-mvp5-surface-consolidation`)
+## MVP 5: Super-Admin Surface Consolidation (SHIPPED to main `34cd0c56` via PR #225 → promote chain)
 
 **Closure notes (this branch):**
 
@@ -661,12 +666,66 @@ guard + side-nav filter).
 
 ---
 
-## MVP 6 + MVP 7 + MVP 8 — bundled trio (IN PROGRESS — branch `feature/super-admin-gaps-mvp6-7-8-trio`)
+## MVP 6 + MVP 7 + MVP 8 — bundled trio (SHIPPED to main `6530997f` via PR #228 → promote chain)
 
 Three MVPs delivered as one PR per the user's "all in one" instruction
 on 2026-05-03. Order of implementation within the branch: MVP-8 (smallest,
 mostly frontend) → MVP-7 (backend + UI, touches the JWT filter) → MVP-6
 (largest schema work).
+
+**Promote chain:** develop `9c06ef22` (merge of feature branch) →
+uat `188fd9e4` via PR #229 (batch2) → main `6530997f` via PR #230
+(batch2). Carries the feature commit + 6 fixup commits:
+
+1. **CI build break** — `audit-search.html` `@for` track expression
+   used nullable string fields (TS2531); surfaced `AuditEventLog.id`
+   on the response DTO + new `toDtoLite` mapper variant; track is now
+   `row.id`. Dropped unused `DatePipe` import from
+   `SubscriptionsComponent` (NG8113).
+2. **PR #228 Copilot review (10 findings)** — most critical: V80 + V81
+   were not referenced from `db/migration/changelog.xml` (Liquibase
+   would never apply them in any environment using the changelog),
+   and the emergency endpoints advertised `X-Mfa-Token` enforcement
+   but the controller never read the header (super admin could
+   trigger force-logout / kill-feature / MFA reset / broadcast on a
+   plain bearer token). Both fixed; service-layer `verifyMfaStepUp`
+   now mirrors the MVP-4 impersonation pattern (enrolled → verify;
+   unenrolled non-strict → audit bypass; unenrolled strict → reject).
+   Also: `assignPlan` rejects deactivated plans, `billingPeriod` is a
+   typed enum on the DTO (Spring 400s on unknown values), `cancel`
+   verifies subscription belongs to the org on the URL,
+   `SuperAdminAuditSearchServiceImpl` collapses redundant joins / drops
+   unconditional `distinct(true)` / uses `toDtoLite` to avoid N+1
+   `PatientRepository` lookups, `GlobalSessionRevocationService.refresh`
+   resets cache to `EPOCH` on missing singleton row, audit-search
+   frontend status pill distinguishes SUCCESS / FAILURE / PENDING /
+   unknown.
+3. **Test-context fixup** — `JwtAuthenticationFilterTest` +
+   `UserRoleHospitalAssignmentControllerTest` +
+   `PlatformRegistryControllerTest` were missing `@Mock` /
+   `@MockitoBean GlobalSessionRevocationService`, so slice contexts
+   could not autowire `JwtAuthenticationFilter` and 19 specs cascaded
+   from a single context-load failure.
+4. **SonarCloud coverage gate** — coverage on new code was 0.3%; lifted
+   to **94.3% lines / 86.8% branches** by adding 5 new test classes
+   (+56 specs). Notable trick: invoking `Specification.toPredicate(...)`
+   directly with mocked `Root` / `CriteriaBuilder` / `CriteriaQuery`
+   to exercise every filter branch in the audit-search lambda
+   (otherwise the spec is captured-but-not-invoked and branch
+   coverage floors at 5.6%).
+5. **SonarCloud code smells (16 findings)** — 6 production: new
+   `AuditSearchFilter` parameter object record kills the 12-param +
+   11-param + cognitive-complexity-29 findings on
+   `SuperAdminAuditSearchService(Impl)`; `FIELD_EVENT_TIMESTAMP` and
+   `ERROR_PLAN_NOT_FOUND` constants close 3-duplications findings;
+   `JwtAuthenticationFilter.handleValidatedToken` extracted to drop
+   cognitive complexity 17 → ≤15. 10 test cleanups: unused import,
+   useless `eq(...)` wrappers, `containsEntry` chain, multi-throw
+   lambda hoists.
+
+**Final QA gate:** all 13 CI checks green; backend 4783 specs pass;
+full Karma sweep 802 specs green; `npm run lint` + `format:check` +
+`ng build` clean; SonarCloud quality gate green.
 
 ### MVP 8: Cross-Tenant Audit Search UI
 
