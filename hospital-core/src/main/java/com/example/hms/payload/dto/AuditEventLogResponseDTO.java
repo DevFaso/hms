@@ -16,6 +16,11 @@ import java.util.UUID;
 @Builder
 public class AuditEventLogResponseDTO {
 
+    /** AuditEventLog primary key. Exposed so the cross-tenant audit search
+     * UI (MVP-8) can track table rows by a guaranteed-unique value rather
+     * than a fingerprint composed of nullable fields (PR #228 review). */
+    private UUID id;
+
     private String userName;
     private String hospitalName;
     private String roleName;

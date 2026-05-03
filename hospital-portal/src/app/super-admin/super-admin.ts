@@ -201,6 +201,27 @@ export class SuperAdminComponent implements OnInit {
       route: '/super-admin/integrations',
       color: '#0d9488',
     },
+    {
+      titleKey: 'SUPER_ADMIN.LINK.AUDIT_SEARCH_TITLE',
+      descKey: 'SUPER_ADMIN.LINK.AUDIT_SEARCH_DESC',
+      icon: 'policy',
+      route: '/super-admin/audit-search',
+      color: '#0284c7',
+    },
+    {
+      titleKey: 'SUPER_ADMIN.LINK.EMERGENCY_TITLE',
+      descKey: 'SUPER_ADMIN.LINK.EMERGENCY_DESC',
+      icon: 'emergency',
+      route: '/super-admin/emergency',
+      color: '#dc2626',
+    },
+    {
+      titleKey: 'SUPER_ADMIN.LINK.SUBSCRIPTIONS_TITLE',
+      descKey: 'SUPER_ADMIN.LINK.SUBSCRIPTIONS_DESC',
+      icon: 'subscriptions',
+      route: '/super-admin/subscriptions',
+      color: '#16a34a',
+    },
   ];
 
   ngOnInit(): void {

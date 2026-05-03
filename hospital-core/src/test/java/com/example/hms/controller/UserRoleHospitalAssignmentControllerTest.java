@@ -57,6 +57,12 @@ class UserRoleHospitalAssignmentControllerTest {
     @MockitoBean
     private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
 
+    /** PR #228 review fixup — JwtAuthenticationFilter now depends on
+     *  GlobalSessionRevocationService (MVP-7). The slice context needs a
+     *  mock or autowiring fails. */
+    @MockitoBean
+    private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
+
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {
         UUID userId = UUID.randomUUID();
