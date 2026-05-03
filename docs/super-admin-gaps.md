@@ -1,9 +1,13 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
-> Audit date: 2026-05-02 · Baseline: `main` @ 006384fc · Branches:
-> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped),
-> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged to develop in `b280a0bd`),
-> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — IN PROGRESS, PR #224).
+> Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
+> 006384fc · `develop` @ `bbf09844` · Branches:
+> `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
+> `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
+> into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
+> `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — merged
+> into develop in `bbf09844` via PR #224 with all six Copilot review
+> findings folded in; awaits next promote-to-main).
 
 ## Executive Summary
 
@@ -217,7 +221,7 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVP 4: Support Impersonation with Audit (IN SCOPE — `feature/super-admin-gaps-mvp4-support-impersonation`)
+## MVP 4: Support Impersonation with Audit (MERGED into develop `bbf09844` via PR #224)
 
 **Goal:** Let a super admin act as another (non-super-admin) user for
 support purposes, with every action under that session traceable back to
@@ -362,9 +366,27 @@ discipline).
 11. EN / FR / ES i18n strings.
 12. Update this doc.
 
+**Copilot review on PR #224 — six findings, all addressed in fixup
+commit `db49e73e`:**
+
+| # | Severity | Finding | Fix |
+| --- | --- | --- | --- |
+| 1 | High (UX) | After stop, `RoleContextService` and stored profile stay on the impersonated target → `RoleGuard` bounces operator to `/error/403`. | `ImpersonationService.restoreOriginalSession` now restores from a sessionStorage profile snapshot taken at start, falling back to a JWT-claim decode of the restored token. |
+| 2 | **Critical (security)** | Remember-me login leaves the original token in `localStorage`; `setToken(impersonationToken, false)` writes to `sessionStorage` but `getToken()` prefers `localStorage` → impersonation token never wins. | `AuthService.setToken` now clears the *opposite* storage on every write. New `isTokenRemembered()` helper. Backend defense in depth: `start()` blacklists the original super-admin JTI immediately so the stale token fails auth even if a client somehow keeps reading it. |
+| 3 | High (UX) | Token swap doesn't refresh `RoleContextService` or stored profile → super-admin nav stays visible during impersonation, in-memory state disagrees with active token. | `ImpersonationService.start` decodes the new JWT and re-hydrates `RoleContextService` (roles + permittedHospitalIds + activeHospitalId) + the persisted user profile. Snapshot taken before swap so `stop()` can restore bit-for-bit. |
+| 4 | **Critical (security)** | Surviving refresh cookie + global 401 interceptor → impersonation TTL elapses → silent refresh into super-admin token, no `IMPERSONATION_ENDED` audit. Privilege escalation. | New `ImpersonationSessionTracker` (in-memory, lock-free, lazy expiry) records active sessions. `AuthController.refreshToken` returns **403 — Active support-impersonation session** when the cookie's subject has an active session. Frontend `errorInterceptor` checks `ImpersonationService.isActive()` and `forceStops` instead of triggering refresh. |
+| 5 | High (UX/security) | `restoreOriginalToken` always passes `remember=true` → exiting impersonation silently promotes a session-only login into `localStorage`. | Original `remember` flag persisted under `auth_remember_pre_impersonation` in sessionStorage; `stop()` restores with the saved flag. |
+| 6 | **Critical (security)** | `stop()` only emits the audit + tells frontend to discard the token. The impersonation JWT is **not blacklisted** → a copied token (curl, devtools, browser plugin) keeps authenticating until 30-min natural expiry. | `SupportImpersonationServiceImpl.stop` now blacklists the impersonation JWT's JTI via the existing `TokenBlacklistService`. Blacklist failures are swallowed with a warn so the boundary action still succeeds. |
+
+**SonarCloud:** coverage on `SupportImpersonationServiceImpl` lifted
+from 79.3 % to clear the 80 % gate by adding 4 new service tests
+(tracker-rejects-existing-session / null-bearer-tolerated /
+blacklist-failure-swallowed / stop-without-context-rejects) plus the
+new `ImpersonationSessionTrackerTest` class (5 tests).
+
 ---
 
-## MVP 3: Partner-Connector / Integration Health Console (IN SCOPE — `feature/super-admin-gaps-mvp3-integration-health`)
+## MVP 3: Partner-Connector / Integration Health Console (MERGED into develop `b280a0bd` via PR #223)
 
 **Goal:** Give a super admin a single read-only console answering *which
 integrations are wired up for which tenants, are they healthy, when did
