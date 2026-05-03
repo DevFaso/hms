@@ -11,9 +11,9 @@
 
 ## Executive Summary
 
-The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry). The frontend exposes super-admin functions via ~10 separate top-level routes but lacks a **unified super-admin landing page** and several SaaS-grade capabilities (tenant lifecycle, support impersonation, partner-connector status, subscription/quotas).
+The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVP-1 (Control Tower) and MVP-2 (Tenant Lifecycle) are scoped to land on this feature branch.** The remaining MVPs are tracked here as the forward queue.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is the next scoped piece of work** — it cleans up the now-unnecessary duplicate landing surfaces that MVP-1 created (`/dashboard` still renders a super-admin branch, `/admin` is still reachable from the side-nav). MVPs 6–9 remain in the forward queue.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -72,21 +72,30 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 | 6 | **Emergency global controls** | None | Force-logout-all, kill-switch a feature globally, force MFA re-enrolment, broadcast banner. |
 | 7 | **Cross-tenant audit search UI** | Backend present, no UI | `AuditEventLog`, `FrontendAuditEvent`, `PermissionMatrixAuditEvent` exist; super admin has no unified search/filter UI spanning them. |
 | 8 | **Data-residency / region tagging on Organization** | None | Cross-border (BF / SN / CI) compliance — schema-level decision worth flagging early. |
+| 9 | **Super-admin surface duplication** | Three landing pages live side-by-side: `/dashboard` still renders a `'superadmin'` view branch (stat strip + quick actions + recent audit), `/admin` is still in the side-nav for ADMIN+SUPER_ADMIN, and `/super-admin` (the Control Tower from MVP-1) is the intended single home. *Identified after MVP-4 review* — MVP-1 added the Control Tower without retiring the duplicates. |
 
 ## MVP List (Priority Order)
 
-1. **Super-Admin Control Tower** — landing page · *in scope for this branch*
-2. **Tenant Lifecycle** — suspend / archive / restore / purge · *in scope for this branch*
-3. Partner-Connector / Integration Health Console
-4. Support Impersonation with Audit
-5. Subscription / Plan / Quotas
-6. Emergency Global Controls
-7. Cross-Tenant Audit Search UI
-8. Data-Residency / Region Tagging
+1. **Super-Admin Control Tower** — landing page · *shipped to main `006384fc`*
+2. **Tenant Lifecycle** — suspend / archive / restore / purge · *shipped to main `006384fc`*
+3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
+4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
+5. **Super-Admin Surface Consolidation** · *next — retire `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
+6. Subscription / Plan / Quotas
+7. Emergency Global Controls
+8. Cross-Tenant Audit Search UI
+9. Data-Residency / Region Tagging
 
 ---
 
-## MVP 1: Super-Admin Control Tower (IN SCOPE)
+## MVP 1: Super-Admin Control Tower (SHIPPED to main `006384fc` via promote chain — historical)
+
+> Retrospective note: this MVP introduced `/super-admin` as the
+> intended single landing page, but did **not** retire the existing
+> super-admin views on `/dashboard` and `/admin`. Both remain
+> reachable, creating the duplication that MVP-5 now closes out.
+> The original "Side-nav restructuring" risk-and-open-question
+> below pre-empted exactly this — it has been folded into MVP-5.
 
 **Goal:** Give a logged-in super admin a single landing page that surfaces every cross-tenant capability they govern.
 
@@ -142,7 +151,7 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVP 2: Tenant Lifecycle (IN SCOPE)
+## MVP 2: Tenant Lifecycle (SHIPPED to main `006384fc` via promote chain — historical)
 
 **Goal:** Allow a super admin to suspend, archive, restore, and purge an Organization (tenant) and its hospitals, with full audit and a safe two-step confirmation.
 
@@ -503,21 +512,125 @@ existing call paths refactored, only EligibilityServiceImpl wired).
 
 ---
 
-## MVPs 5–8: Forward Queue (not in scope this branch)
+## MVP 5: Super-Admin Surface Consolidation (NEXT — branch TBD)
+
+**Goal:** Make `/super-admin` the **single** mission-control for super
+admins. Today three landing surfaces co-exist and a super admin can
+arrive at any of them, each rendering a slightly different overview of
+the same data — confusing for operators, embarrassing in demos, and
+expensive to maintain in lock-step. MVP-1 introduced `/super-admin`
+without retiring the duplicates; this MVP closes that loop.
+
+**The current duplication:**
+
+| Surface | What it renders for super admin | Status |
+| --- | --- | --- |
+| `/super-admin` ([super-admin.ts](../hospital-portal/src/app/super-admin/super-admin.ts)) | Control Tower: stats grid + platform integrations strip + quick-links grid (org / users / roles / feature-flags / analytics / platform / audit-logs / hospitals / **integration health** from MVP-3). Now the explicit `LoginRedirectGuard` target for super admins. | **Keep — single home.** |
+| `/dashboard` super-admin branch ([dashboard.html:207-383](../hospital-portal/src/app/dashboard/dashboard.html#L207-L383), guarded by `activeView() === 'superadmin'`) | Stat strip (patients / active users / active hospitals / active orgs / departments) + clinical alerts + quick actions + recent audit. Reachable from the Dashboard side-nav entry. | **Retire.** |
+| `/admin` ([admin/admin.ts](../hospital-portal/src/app/admin/admin.ts), gated to ADMIN + SUPER_ADMIN, calls `/super-admin/summary`) | Hospital-admin-shaped dashboard. Super admin can navigate to it from the side-nav and see overlapping summary tiles. | **Hide from super-admin nav** (keep for ADMIN). |
+
+**Scope — Frontend only (no backend changes):**
+
+- Delete the `'superadmin'` view branch from `dashboard.ts` /
+  `dashboard.html` — the file's role-aware switch keeps the
+  HOSPITAL_ADMIN, DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, etc.
+  branches untouched.
+- Make `/dashboard` redirect to `/super-admin` when the active role is
+  SUPER_ADMIN (`RoleGuard`-style). This handles bookmarks + the side-nav
+  click path.
+- Make `/admin` redirect the same way for super admins (hospital-admin
+  callers continue to land on `/admin`).
+- Update [shell.ts](../hospital-portal/src/app/shell/shell.ts) — when
+  `roleContext.activeRole === 'ROLE_SUPER_ADMIN'`, the side-nav drops
+  the **Dashboard** + **Admin** entries and keeps only the **Super
+  Admin** + **Integration Health** entries (already added by MVP-1 +
+  MVP-3) plus the cross-cutting routes super admins genuinely need
+  (Organizations, Hospitals, Users, etc.).
+- Parity sweep: anything unique to the deleted `dashboard` super-admin
+  branch (e.g. **Recent Audit** strip) gets folded into the Control
+  Tower if not already there. The MVP-1 spec listed "pending
+  security-policy approvals, expired-credential count, MFA non-enrolment
+  rate" as Control Tower content; verify those tiles are present and
+  add the Recent Audit strip if missing.
+- Existing Karma specs covering the dashboard super-admin branch get
+  deleted; new specs cover the redirect + the side-nav entries shown /
+  hidden by active role.
+
+**Out of scope (deferred to MVP-5b):**
+
+- Folding scattered super-admin-only routes (`/feature-flags`,
+  `/analytics`, `/audit-logs`, `/platform`) under a `/super-admin/*`
+  hierarchy. Doable but introduces redirect debt and changes URL
+  bookmarks across the team — keep out of MVP-5 to ship the
+  consolidation cleanly first.
+- Hospital-admin dashboard restructuring. ADMIN + HOSPITAL_ADMIN
+  landings unchanged.
+
+**Priority:** P3 (cosmetic UX correctness; not blocking customer
+adoption but a credibility issue once a prospect starts clicking around
+the super-admin surface in a demo).
+
+**Complexity:** Low (Angular only — net deletion + small route
+guard + side-nav filter).
+
+**Effort:** ~3–5 story points.
+
+**Acceptance Criteria:**
+
+- A super admin who navigates to `/dashboard` is redirected to
+  `/super-admin`. Same for `/admin`.
+- Side-nav for `activeRole === 'ROLE_SUPER_ADMIN'` does not include
+  `Dashboard` or `Admin` entries. Hospital-admin nav unchanged.
+- Control Tower (`/super-admin`) renders all content the deleted
+  `dashboard` super-admin branch rendered (parity check covers the
+  Recent Audit strip).
+- Visual regression sweep on `/dashboard` for the **non-super-admin**
+  roles confirms nothing else moved.
+- Karma specs deleted: any test covering `activeView() === 'superadmin'`.
+  Karma specs added: redirect tests, side-nav role-filter test.
+- `npm run lint`, `format:check`, full Karma sweep clean.
+
+**Developer Tasks:**
+
+1. Delete the `'superadmin'` block from `dashboard.html` and the
+   matching `if (this.isSuperAdmin())` branches from `dashboard.ts`
+   (`activeView`, `setupSuperAdminLoaders`, etc.). Trace via `grep -n
+   'isSuperAdmin' hospital-portal/src/app/dashboard/dashboard.ts`.
+2. Add a `SuperAdminRedirectGuard` (or extend the existing
+   `LoginRedirectGuard` logic) that redirects `/dashboard` and `/admin`
+   to `/super-admin` when `activeRole === 'ROLE_SUPER_ADMIN'`.
+3. In [shell.ts](../hospital-portal/src/app/shell/shell.ts)
+   `baseNavItems()`, exclude the Dashboard and Admin items when
+   `activeRole === 'ROLE_SUPER_ADMIN'` (mirrors the existing pattern
+   that builds the patient-portal nav).
+4. Parity sweep: list every signal / API call backing the deleted
+   `dashboard` super-admin branch; confirm Control Tower covers each
+   or fold it in.
+5. Delete dashboard.spec.ts cases that cover the super-admin branch.
+6. Add `dashboard.spec.ts` test: super-admin user navigating to
+   `/dashboard` is redirected.
+7. Add `shell.spec.ts` test: nav for `ROLE_SUPER_ADMIN` excludes
+   Dashboard and Admin.
+8. Update [docs/super-admin-gaps.md](../docs/super-admin-gaps.md) with
+   closure notes.
+
+---
+
+## MVPs 6–9: Forward Queue
 
 | # | MVP | Trigger |
 | --- | --- | --- |
-| 5 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
-| 6 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
-| 7 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
-| 8 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
+| 6 | Subscription / Plan / Quotas | First commercial customer; before that, premature. |
+| 7 | Emergency Global Controls | Once tenant count > 5 — incident response surface area. |
+| 8 | Cross-Tenant Audit Search UI | Compliance audit before SOC2 / equivalent. |
+| 9 | Data-Residency / Region Tagging on Organization | Schema decision — tackle before multi-region deployment, even if UI is later. |
 
 ## Risks & Open Questions
 
 - **Suspend semantics for super admin:** when an org is suspended, super admins (cross-tenant) must remain able to log in *and* see the org. JWT filter must distinguish.
 - **Purge irreversibility:** the 30-day grace + scheduled-job pattern is the safety net. Confirm with stakeholders that 30d is the right default.
 - **Hospital-level lifecycle:** this MVP lifts state to `Organization`. Decide if `Hospital` also needs an independent lifecycle (likely yes — defer to a follow-up so this MVP stays scoped).
-- **Side-nav restructuring:** introducing `/super-admin` may surface UX questions about whether to retire some of the scattered top-level routes (e.g. fold `/feature-flags` and `/analytics` under `/super-admin/*`). Hold this decision pending MVP 1 review.
+- ~~**Side-nav restructuring:**~~ *superseded by MVP-5 (Super-Admin Surface Consolidation), which retires `/dashboard` super-admin branch + `/admin` reachability for super admin and is the next scoped piece of work. Folding `/feature-flags`, `/analytics`, `/audit-logs`, `/platform` under `/super-admin/*` URLs remains deferred to MVP-5b — see MVP-5 "Out of scope".*
 
 ## References
 
