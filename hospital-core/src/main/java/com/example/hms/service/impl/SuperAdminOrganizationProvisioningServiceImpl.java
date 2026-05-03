@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.mapper.OrganizationMapper;
 import com.example.hms.model.Organization;
@@ -40,6 +41,7 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
         }
 
         OrganizationType type = request.getType() != null ? request.getType() : OrganizationType.HEALTHCARE_NETWORK;
+        OrganizationRegion region = request.getRegion() != null ? request.getRegion() : OrganizationRegion.BF;
 
         Organization organization = Organization.builder()
             .name(request.getName())
@@ -47,6 +49,7 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
             .description(request.getNotes())
             .type(type)
             .active(true)
+            .region(region)
             .primaryContactEmail(request.getContactEmail())
             .primaryContactPhone(trimToNull(request.getContactPhone()))
             .defaultTimezone(request.getTimezone())

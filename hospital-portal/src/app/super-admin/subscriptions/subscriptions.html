@@ -73,7 +73,7 @@
     </div>
   }
 
-  @if (editing() || form().name !== '' || form().tierCode !== '') {
+  @if (formOpen()) {
     <section class="edit-card" data-test="edit-card">
       <h2>
         {{
@@ -140,7 +140,7 @@
         </label>
       </div>
       @if (formError()) {
-        <p class="form-error">{{ formError() }}</p>
+        <p class="form-error">{{ formError()! | translate }}</p>
       }
       <div class="actions">
         <button type="button" class="btn-primary" (click)="submit()" [disabled]="formBusy()">

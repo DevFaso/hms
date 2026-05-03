@@ -1,8 +1,11 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.payload.dto.HospitalResponseDTO;
 import com.example.hms.payload.dto.OrganizationResponseDTO;
+import com.example.hms.payload.dto.superadmin.OrganizationRegionResponseDTO;
+import com.example.hms.payload.dto.superadmin.OrganizationRegionUpdateRequestDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationRequestDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationHierarchyResponseDTO;
@@ -10,6 +13,7 @@ import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationsSummaryDTO;
 import com.example.hms.payload.dto.superadmin.TenantLifecycleActionRequestDTO;
 import com.example.hms.payload.dto.superadmin.TenantLifecycleResponseDTO;
 import com.example.hms.service.OrganizationLifecycleService;
+import com.example.hms.service.OrganizationRegionService;
 import com.example.hms.service.SuperAdminOrganizationOverviewService;
 import com.example.hms.service.SuperAdminOrganizationProvisioningService;
 import com.example.hms.service.HospitalService;
@@ -45,6 +49,7 @@ public class SuperAdminOrganizationController {
     private final SuperAdminOrganizationProvisioningService provisioningService;
     private final HospitalService hospitalService;
     private final OrganizationLifecycleService lifecycleService;
+    private final OrganizationRegionService regionService;
 
     @GetMapping("/summary")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -207,5 +212,44 @@ public class SuperAdminOrganizationController {
         @Valid @RequestBody(required = false) TenantLifecycleActionRequestDTO request
     ) {
         return ResponseEntity.ok(lifecycleService.cancelPurge(organizationId, request));
+    }
+
+    // ── Data residency / region tagging (MVP-9 — gap #9) ───────────────
+
+    @GetMapping("/regions")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "List the catalogue of region codes the platform recognises",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<java.util.List<OrganizationRegion>> listAvailableRegions() {
+        return ResponseEntity.ok(regionService.listAvailableRegions());
+    }
+
+    @GetMapping("/region-snapshot")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Per-organization region snapshot for the Data Residency console",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<java.util.List<OrganizationRegionResponseDTO>> getRegionSnapshot() {
+        return ResponseEntity.ok(regionService.listOrganizationRegions());
+    }
+
+    @GetMapping("/{organizationId}/region")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Read the data-residency region for one organization",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<OrganizationRegionResponseDTO> getRegion(
+        @PathVariable UUID organizationId
+    ) {
+        return ResponseEntity.ok(regionService.getOrganizationRegion(organizationId));
+    }
+
+    @PostMapping("/{organizationId}/region")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Update the data-residency region for one organization",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<OrganizationRegionResponseDTO> updateRegion(
+        @PathVariable UUID organizationId,
+        @Valid @RequestBody OrganizationRegionUpdateRequestDTO request
+    ) {
+        return ResponseEntity.ok(regionService.updateOrganizationRegion(organizationId, request));
     }
 }

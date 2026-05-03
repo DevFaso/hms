@@ -1,0 +1,144 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'ORG_REGION.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ORG_REGION.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'COMMON.BACK_TO_CONTROL_TOWER' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      {{ 'ORG_REGION.LOADING' | translate }}
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined">error</span>
+      {{ 'ORG_REGION.LOAD_ERROR' | translate }}
+      <button type="button" class="retry-btn" (click)="refresh()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else {
+    <section class="distribution-strip" data-test="distribution">
+      <h2 class="strip-title">{{ 'ORG_REGION.DISTRIBUTION' | translate }}</h2>
+      <div class="chip-row">
+        <button
+          type="button"
+          class="region-chip"
+          [class.active]="filterRegion() === ''"
+          (click)="setFilter('')"
+        >
+          <span class="chip-label">{{ 'COMMON.ALL' | translate }}</span>
+          <span class="chip-count">{{ rows().length }}</span>
+        </button>
+        @for (entry of distributionEntries(); track entry.region) {
+          <button
+            type="button"
+            class="region-chip"
+            [class.active]="filterRegion() === entry.region"
+            (click)="setFilter(entry.region)"
+          >
+            <span class="chip-label">{{ 'ORG_REGION.CODE.' + entry.region | translate }}</span>
+            <span class="chip-count">{{ entry.count }}</span>
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (visibleRows().length === 0) {
+      <div class="state-panel empty" data-test="empty">
+        <span class="material-symbols-outlined">public_off</span>
+        {{ 'ORG_REGION.EMPTY' | translate }}
+      </div>
+    } @else {
+      <section class="results-card" data-test="results">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'ORG_REGION.COL.ORG' | translate }}</th>
+                <th>{{ 'ORG_REGION.COL.CODE' | translate }}</th>
+                <th>{{ 'ORG_REGION.COL.REGION' | translate }}</th>
+                <th class="actions-col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of visibleRows(); track row.organizationId) {
+                <tr>
+                  <td>
+                    <div class="cell-primary">{{ row.organizationName }}</div>
+                  </td>
+                  <td>
+                    <code class="org-code">{{ row.organizationCode }}</code>
+                  </td>
+                  <td>
+                    <span class="region-badge region-badge--{{ row.region.toLowerCase() }}">
+                      {{ 'ORG_REGION.CODE.' + row.region | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-col">
+                    <button type="button" class="btn-ghost" (click)="startEdit(row)">
+                      <span class="material-symbols-outlined">edit_location_alt</span>
+                      {{ 'ORG_REGION.RETAG' | translate }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @if (editing(); as state) {
+      <section class="edit-card" data-test="edit-card">
+        <h2>{{ 'ORG_REGION.EDIT_TITLE' | translate }}</h2>
+        <div class="grid">
+          <label>
+            <span>{{ 'ORG_REGION.FIELD.REGION' | translate }}</span>
+            <select
+              [ngModel]="state.region"
+              (ngModelChange)="patchEdit('region', $event)"
+              data-test="edit-region"
+            >
+              @for (code of availableRegions(); track code) {
+                <option [value]="code">{{ 'ORG_REGION.CODE.' + code | translate }}</option>
+              }
+            </select>
+          </label>
+          <label class="span-2">
+            <span>{{ 'ORG_REGION.FIELD.REASON' | translate }}</span>
+            <textarea
+              rows="2"
+              [ngModel]="state.reason"
+              (ngModelChange)="patchEdit('reason', $event)"
+              [placeholder]="'ORG_REGION.FIELD.REASON_PLACEHOLDER' | translate"
+            ></textarea>
+          </label>
+        </div>
+        @if (state.error) {
+          <p class="form-error">{{ state.error | translate }}</p>
+        }
+        <div class="actions">
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="submitEdit()"
+            [disabled]="state.busy"
+            data-test="edit-submit"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+          <button type="button" class="btn-ghost" (click)="cancelEdit()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+        </div>
+      </section>
+    }
+  }
+</div>

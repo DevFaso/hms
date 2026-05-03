@@ -1121,4 +1121,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V82 — Data-residency / region tagging on Organization (MVP-9)
+         Adds hospital.organizations.region VARCHAR(32) NOT NULL DEFAULT
+         'BF' so the super-admin Control Tower can surface the per-tenant
+         jurisdiction whose data-protection rules apply (BF / CI / SN /
+         GA / CM / EU / etc.). Indexed for the org-grid region filter.
+         Strictly additive; default backfills legacy rows in-line.
+         ================================================================= -->
+    <changeSet id="V82-organization-region" author="hms-team" runOnChange="false">
+        <sqlFile path="V82__organization_region.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

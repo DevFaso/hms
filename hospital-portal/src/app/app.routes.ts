@@ -1075,6 +1075,17 @@ export const routes: Routes = [
           import('./super-admin/subscriptions/subscriptions').then((m) => m.SubscriptionsComponent),
       },
 
+      // Super-Admin Data Residency / Region Tagging (MVP-9 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/data-residency',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/data-residency/data-residency').then(
+            (m) => m.DataResidencyComponent,
+          ),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
