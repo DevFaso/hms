@@ -1017,8 +1017,9 @@ export const routes: Routes = [
           import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
       },
 
-      // Administration — hospital-admin landing. Super admins are redirected
-      // by SuperAdminRedirectGuard to /super-admin (MVP-5).
+      // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
+      // role gate but is redirected to /super-admin by SuperAdminRedirectGuard
+      // (MVP-5) so the Control Tower stays the single mission-control.
       {
         path: 'admin',
         canActivate: [SuperAdminRedirectGuard, RoleGuard],

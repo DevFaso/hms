@@ -389,7 +389,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/hospitals',
       });
     }
-    if (this.permissions.hasPermission('*')) {
+    // PR #225 review: gate the admin-items group via the active-role-aware
+    // helper so a multi-role super admin who picked a non-super activeRole
+    // doesn't see entries that the corresponding RoleGuard would 403 on.
+    // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
+    // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
+    if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push(
         {
           icon: 'corporate_fare',
@@ -401,9 +406,9 @@ export class ShellComponent implements OnInit, OnDestroy {
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
         { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
       );
-      // MVP-5: keep the hospital-admin "Administration" entry only for ADMIN /
-      // HOSPITAL_ADMIN. Super admins are redirected from /admin to
-      // /super-admin and shouldn't see a duplicate side-nav entry.
+      // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
+      // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
+      // already have the Control Tower in their nav.
       if (!isActiveSuperAdmin) {
         items.push({
           icon: 'admin_panel_settings',

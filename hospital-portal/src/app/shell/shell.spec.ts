@@ -143,4 +143,27 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/admin');
     expect(routes).not.toContain('/super-admin');
   });
+
+  // PR #225 review (Copilot): a multi-role super admin who picked a non-super
+  // active role at login must NOT see admin-tier sidebar entries — clicking
+  // them would trigger a 403 from RoleGuard's active-role check. Before the
+  // fix, the gate used `permissions.hasPermission('*')` which reads JWT roles
+  // (always true while ROLE_SUPER_ADMIN is in the token) and bypassed the
+  // active-role choice.
+  it('hides admin-tier entries for multi-role SUPER_ADMIN+DOCTOR who picked DOCTOR active', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_DOCTOR',
+      roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+      wildcardPermission: true,
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).not.toContain('/admin');
+    expect(routes).not.toContain('/organizations');
+    expect(routes).not.toContain('/users');
+    expect(routes).not.toContain('/roles');
+    expect(routes).not.toContain('/platform');
+    expect(routes).not.toContain('/super-admin');
+    expect(routes).toContain('/dashboard');
+  });
 });
