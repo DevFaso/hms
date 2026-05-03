@@ -22,6 +22,7 @@ import com.example.hms.service.integration.eligibility.EligibilityProvider;
 import com.example.hms.service.integration.eligibility.EligibilityProviderRequest;
 import com.example.hms.service.integration.eligibility.EligibilityProviderResult;
 import com.example.hms.service.integration.eligibility.StubEligibilityProvider;
+import com.example.hms.service.integration.health.IntegrationHealthRecorder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +67,7 @@ class EligibilityServiceImplTest {
     private UserRepository userRepository;
     private AuditEventLogService auditService;
     private StubEligibilityProvider stubProvider;
+    private IntegrationHealthRecorder healthRecorder;
     private Clock fixedClock;
     private EligibilityServiceImpl service;
 
@@ -85,12 +87,13 @@ class EligibilityServiceImplTest {
         userRepository = mock(UserRepository.class);
         auditService = mock(AuditEventLogService.class);
         stubProvider = new StubEligibilityProvider();
+        healthRecorder = mock(IntegrationHealthRecorder.class);
         fixedClock = Clock.fixed(Instant.parse("2026-05-01T08:30:00Z"), ZoneOffset.UTC);
 
         service = new EligibilityServiceImpl(
             checkRepository, patientRepository, hospitalRepository,
             patientInsuranceRepository, userRepository, auditService,
-            List.of(stubProvider), fixedClock
+            List.of(stubProvider), fixedClock, healthRecorder
         );
 
         userId = UUID.randomUUID();
@@ -167,6 +170,9 @@ class EligibilityServiceImplTest {
             assertThat(saved.getCompletedAt()).isNotNull();
             assertThat(saved.getMemberId()).isEqualTo("NHIS-001");
             assertThat(saved.getRequestedBy()).isSameAs(caller);
+
+            verify(healthRecorder, times(1)).recordSuccess(eq("eligibility"), any());
+            verify(healthRecorder, never()).recordFailure(any(), any(), any());
         }
 
         @Test
@@ -184,6 +190,9 @@ class EligibilityServiceImplTest {
             assertThat(emitted.getEntityType()).isEqualTo("EligibilityCheck");
             assertThat(emitted.getEventDescription()).contains("COVERAGE")
                 .contains("NHIS_GH").contains("ERROR");
+
+            verify(healthRecorder, times(1)).recordFailure(eq("eligibility"), any(), any());
+            verify(healthRecorder, never()).recordSuccess(any(), any());
         }
 
         @Test
@@ -249,7 +258,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(specific, stubProvider), fixedClock
+                List.of(specific, stubProvider), fixedClock, healthRecorder
             );
             stubLookups();
 
@@ -368,7 +377,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(noneMatch), fixedClock
+                List.of(noneMatch), fixedClock, healthRecorder
             );
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -394,7 +403,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(throwing), fixedClock
+                List.of(throwing), fixedClock, healthRecorder
             );
             stubLookups();
 

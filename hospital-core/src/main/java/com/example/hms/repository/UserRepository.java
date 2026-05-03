@@ -81,16 +81,28 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /* ---------- Search & paging ---------- */
 
 
+    /*
+     * NOTE on the cast(... as string) wrappers:
+     * PostgreSQL cannot infer the JDBC type of an unknown bind parameter
+     * surrounded only by untyped string literals (e.g. ('%' || ? || '%')).
+     * In that situation the planner fell back to bytea and failed the call
+     * with `function lower(bytea) does not exist` (Position 824 in the
+     * generated SQL). The explicit cast(:param as string) anchors each
+     * parameter to text so PostgreSQL keeps the LOWER overload on text and
+     * the LIKE pattern is built correctly. This affects PostgreSQL only —
+     * H2 (used by tests) handles untyped binds without complaint, so this
+     * 500 surfaces only in the dev/UAT/prod profiles.
+     */
     @Query(value = """
         SELECT u FROM User u
         WHERE u.isDeleted = false
           AND ( :name IS NULL
-                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :name, '%'))
-                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', :name, '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', :name, '%'))
+                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
               )
           AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%'))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
               )
           AND ( :role IS NULL
                 OR EXISTS (
@@ -98,13 +110,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                     JOIN a.role r
                     WHERE a.user = u
                       AND a.active = true
-                      AND (LOWER(r.code) = LOWER(:role) OR LOWER(r.name) = LOWER(:role))
+                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
                 OR EXISTS (
                     SELECT 1 FROM UserRole ur
                     JOIN ur.role r2
                     WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(:role) OR LOWER(r2.name) = LOWER(:role))
+                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
                 )
               )
         """,
@@ -112,12 +124,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         SELECT COUNT(u) FROM User u
         WHERE u.isDeleted = false
           AND ( :name IS NULL
-                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :name, '%'))
-                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', :name, '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', :name, '%'))
+                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
               )
           AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%'))
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
               )
           AND ( :role IS NULL
                 OR EXISTS (
@@ -125,13 +137,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                     JOIN a.role r
                     WHERE a.user = u
                       AND a.active = true
-                      AND (LOWER(r.code) = LOWER(:role) OR LOWER(r.name) = LOWER(:role))
+                      AND (LOWER(r.code) = LOWER(cast(:role AS string)) OR LOWER(r.name) = LOWER(cast(:role AS string)))
                 )
                 OR EXISTS (
                     SELECT 1 FROM UserRole ur
                     JOIN ur.role r2
                     WHERE ur.id.userId = u.id
-                      AND (LOWER(r2.code) = LOWER(:role) OR LOWER(r2.name) = LOWER(:role))
+                      AND (LOWER(r2.code) = LOWER(cast(:role AS string)) OR LOWER(r2.name) = LOWER(cast(:role AS string)))
                 )
               )
         """)

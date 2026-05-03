@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
@@ -32,6 +32,14 @@ export class ProfileComponent implements OnInit {
   private readonly profileService = inject(ProfileService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+
+  private static readonly VALID_TABS: readonly ProfileTab[] = [
+    'overview',
+    'edit',
+    'security',
+    'activity',
+  ];
 
   /* ── State ── */
   activeTab = signal<ProfileTab>('overview');
@@ -403,6 +411,15 @@ export class ProfileComponent implements OnInit {
 
   /* ── Lifecycle ── */
   ngOnInit(): void {
+    // Honor /profile?tab=security|edit|activity from the Settings hub so
+    // the shortcuts there land on the requested tab instead of always on
+    // the Overview view.
+    this.route.queryParamMap.subscribe((params) => {
+      const requested = params.get('tab') as ProfileTab | null;
+      if (requested && ProfileComponent.VALID_TABS.includes(requested)) {
+        this.activeTab.set(requested);
+      }
+    });
     this.loadProfile();
   }
 

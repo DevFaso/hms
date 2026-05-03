@@ -110,6 +110,10 @@ public enum AuditEventType {
     TENANT_PURGE_CANCELLED,
     TENANT_PURGED,
 
+    // Support impersonation (MVP-4 — gap #4 in docs/super-admin-gaps.md)
+    IMPERSONATION_STARTED,
+    IMPERSONATION_ENDED,
+
     OTHER
 }
 

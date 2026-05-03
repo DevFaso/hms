@@ -180,3 +180,49 @@ describe('AuthService — resolveLandingPath', () => {
     expect(service.resolveLandingPath()).toBe('/dashboard');
   });
 });
+
+describe('AuthService — setToken storage swap (closes Copilot review #2 on PR #224)', () => {
+  let service: AuthService;
+  const KEY = 'auth_token';
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('setToken(token, false) clears localStorage so a remember-me original cannot shadow the new token', () => {
+    localStorage.setItem(KEY, 'original-remembered.jwt');
+
+    service.setToken('impersonation.jwt', false);
+
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(sessionStorage.getItem(KEY)).toBe('impersonation.jwt');
+    expect(service.getToken()).toBe('impersonation.jwt');
+  });
+
+  it('setToken(token, true) clears sessionStorage so a session-only token cannot leak across the swap', () => {
+    sessionStorage.setItem(KEY, 'session-only.jwt');
+
+    service.setToken('new-remembered.jwt', true);
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+    expect(localStorage.getItem(KEY)).toBe('new-remembered.jwt');
+  });
+
+  it('isTokenRemembered() reflects the storage where the token currently lives', () => {
+    service.setToken('a.jwt', true);
+    expect(service.isTokenRemembered()).toBeTrue();
+    service.setToken('b.jwt', false);
+    expect(service.isTokenRemembered()).toBeFalse();
+  });
+});

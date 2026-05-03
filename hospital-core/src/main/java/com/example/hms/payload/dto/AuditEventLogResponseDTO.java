@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -29,4 +30,6 @@ public class AuditEventLogResponseDTO {
     private String entityType;
     private String actorType;
     private String actorLabel;
+    private UUID impersonatorUserId;
+    private String impersonatorUsername;
 }

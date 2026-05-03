@@ -100,8 +100,56 @@
       "AUDIT_TITLE": "Registros de auditoría",
       "AUDIT_DESC": "Pista de auditoría del sistema y cumplimiento",
       "HOSPITALS_TITLE": "Hospitales",
-      "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones"
+      "HOSPITALS_DESC": "Todos los hospitales de todas las organizaciones",
+      "INTEGRATIONS_TITLE": "Salud de integraciones",
+      "INTEGRATIONS_DESC": "Inventario de conectores y salud de llamadas por inquilino"
     }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Consola de salud de integraciones",
+    "SUBTITLE": "Inventario y salud de llamadas por inquilino para conectores de socios e integraciones de plataforma",
+    "LOADING": "Cargando inventario…",
+    "LOAD_ERROR": "No se pudo cargar el inventario. Inténtelo de nuevo.",
+    "RETRY": "Reintentar",
+    "EMPTY": "No hay integraciones registradas.",
+    "ENABLED": "Activada",
+    "DISABLED": "Desactivada",
+    "NO_ORG_HISTORY": "Aún no hay historial de llamadas para esta integración.",
+    "PLATFORM_WIDE": "Plataforma completa",
+    "ORG": "Organización",
+    "STATUS_HEAD": "Estado",
+    "LAST_SUCCESS": "Último éxito",
+    "LAST_FAILURE": "Último fallo",
+    "SUCCESSES_24H": "Éxitos (24 h)",
+    "FAILURES_24H": "Fallos (24 h)",
+    "STATUS": {
+      "HEALTHY": "Sano",
+      "DEGRADED": "Degradado",
+      "FAILING": "Fallando",
+      "NO_HISTORY": "Sin historial"
+    },
+    "CHIP": {
+      "HEALTHY": "Sano",
+      "DEGRADED": "Degradado",
+      "FAILING": "Fallando",
+      "NO_HISTORY": "Sin historial"
+    }
+  },
+  "IMPERSONATION": {
+    "BANNER_PREFIX": "Está actuando como",
+    "BANNER_SUFFIX": "mediante suplantación de soporte.",
+    "AS": "como",
+    "EXIT": "Salir de la suplantación",
+    "IMPERSONATE_USER": "Suplantar a este usuario",
+    "MODAL_TITLE": "Iniciar suplantación de soporte",
+    "MODAL_PREFIX": "Está a punto de actuar como",
+    "MODAL_WARNING": "Cada acción se etiquetará con su identidad real. La sesión expira automáticamente a los 30 minutos.",
+    "REASON_LABEL": "Motivo (obligatorio, guardado en auditoría)",
+    "REASON_PLACEHOLDER": "p. ej. Validar un fallo de recarga reportado por el paciente",
+    "MFA_LABEL": "Código MFA (obligatorio si MFA activado)",
+    "MFA_PLACEHOLDER": "Código de 6 dígitos",
+    "START_BUTTON": "Iniciar suplantación",
+    "STARTING": "Iniciando…"
   },
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",
@@ -1892,7 +1940,8 @@
     "VITALS": "Signos Vitales",
     "PATIENT_TRACKER": "Seguimiento de Pacientes",
     "IN_BASKET": "Bandeja de Entrada",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Salud de integraciones"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",
@@ -3196,6 +3245,30 @@
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3-30 characters, letters, numbers, underscores",
     "USERNAME_UPDATED": "Username updated to {{username}}"
+  },
+  "SETTINGS_HUB": {
+    "ACCOUNT_DESC": "Actualice su nombre, datos de contacto, foto y otra información personal.",
+    "ACCOUNT_TITLE": "Cuenta y Perfil",
+    "ACTIVITY_DESC": "Revise los inicios de sesión recientes y los eventos de seguridad de su cuenta.",
+    "ACTIVITY_TITLE": "Actividad de la Cuenta",
+    "LANGUAGE_DESC": "Elija el idioma que se usa en el portal.",
+    "LANGUAGE_TITLE": "Idioma",
+    "LANG_EN": "English",
+    "LANG_ES": "Español",
+    "LANG_FR": "Français",
+    "NOTIFICATIONS_DESC": "Elija qué alertas recibe y por qué canal — in-app, correo, SMS o push.",
+    "NOTIFICATIONS_TITLE": "Preferencias de Notificación",
+    "OPEN_ACTIVITY": "Ver actividad",
+    "OPEN_NOTIFICATIONS": "Configurar",
+    "OPEN_PRIVACY": "Leer política",
+    "OPEN_PROFILE": "Editar perfil",
+    "OPEN_SECURITY": "Gestionar seguridad",
+    "PAGE_SUBTITLE": "Gestione cómo funciona el portal para usted. Para cambios en su información personal, abra Cuenta y Perfil.",
+    "PAGE_TITLE": "Configuración",
+    "PRIVACY_DESC": "Consulte cómo se recopilan, usan y protegen sus datos.",
+    "PRIVACY_TITLE": "Privacidad",
+    "SECURITY_DESC": "Cambie su contraseña, gestione MFA y revise sus contactos de recuperación.",
+    "SECURITY_TITLE": "Seguridad e Inicio de Sesión"
   },
   "SHELL": {
     "DRAG_REORDER": "Arrastrar para reordenar",

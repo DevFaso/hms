@@ -194,6 +194,13 @@ export class SuperAdminComponent implements OnInit {
       route: '/hospitals',
       color: '#ef4444',
     },
+    {
+      titleKey: 'SUPER_ADMIN.LINK.INTEGRATIONS_TITLE',
+      descKey: 'SUPER_ADMIN.LINK.INTEGRATIONS_DESC',
+      icon: 'cable',
+      route: '/super-admin/integrations',
+      color: '#0d9488',
+    },
   ];
 
   ngOnInit(): void {
