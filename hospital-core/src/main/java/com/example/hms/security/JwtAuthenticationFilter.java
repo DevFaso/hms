@@ -21,6 +21,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.util.Date;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
@@ -41,6 +43,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final WsTicketService wsTicketService;
     private final HospitalUserDetailsService hospitalUserDetailsService;
     private final OrganizationLifecycleStatusService lifecycleStatusService;
+    private final GlobalSessionRevocationService globalSessionRevocationService;
 
     private static final Set<String> EXACT_SKIP_PATHS = Set.of(
         "/", "/index.html", "/favicon.ico",
@@ -145,6 +148,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return true;
     }
 
+    /**
+     * MVP-7: returns {@code true} when the token's {@code iat} claim is
+     * older than the global revocation timestamp. Tolerates tokens without
+     * an iat claim (treats them as not-revoked) and exceptions during
+     * extraction (treats them as not-revoked, so a parser hiccup never
+     * locks every user out — the {@link #tokenProvider#validateToken}
+     * call already guarded structural validity).
+     */
+    private boolean isRevokedByGlobalIat(String jwt) {
+        Instant minIat = globalSessionRevocationService.getGlobalMinTokenIat();
+        if (minIat == null || minIat.equals(Instant.EPOCH)) {
+            return false;
+        }
+        try {
+            Date issuedAt = tokenProvider.getIssuedAt(jwt);
+            if (issuedAt == null) {
+                return false;
+            }
+            return issuedAt.toInstant().isBefore(minIat);
+        } catch (RuntimeException ex) {
+            return false;
+        }
+    }
+
     private boolean handleJwtAuthentication(HttpServletRequest request, HttpServletResponse response,
                                             String path, String jwt) {
         String extractedSubject = safeExtractSubject(jwt);
@@ -160,6 +187,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String jti = tokenProvider.getJtiFromToken(jwt);
             if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
                 log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
+                respondUnauthorized(response, extractedSubject);
+                return false;
+            }
+
+            // ── Global session revocation gate (MVP-7) ─────────────────────
+            // Force-logout-all bumps `globalMinTokenIat` to "now"; any token
+            // issued before that instant is rejected. Cached + refreshed every
+            // 30 s by GlobalSessionRevocationService so this stays a hot path.
+            if (isRevokedByGlobalIat(jwt)) {
+                log.warn("[JWT] Token rejected by global session revocation on path={}", path);
                 respondUnauthorized(response, extractedSubject);
                 return false;
             }

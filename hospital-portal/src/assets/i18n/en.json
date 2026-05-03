@@ -102,7 +102,103 @@
       "HOSPITALS_TITLE": "Hospitals",
       "HOSPITALS_DESC": "All hospitals across organizations",
       "INTEGRATIONS_TITLE": "Integration health",
-      "INTEGRATIONS_DESC": "Per-tenant connector inventory and call health"
+      "INTEGRATIONS_DESC": "Per-tenant connector inventory and call health",
+      "AUDIT_SEARCH_TITLE": "Audit search",
+      "AUDIT_SEARCH_DESC": "Cross-tenant audit search with impersonator filter",
+      "EMERGENCY_TITLE": "Emergency controls",
+      "EMERGENCY_DESC": "Force-logout-all, kill-feature, force MFA re-enrol, broadcast",
+      "SUBSCRIPTIONS_TITLE": "Subscriptions",
+      "SUBSCRIPTIONS_DESC": "Plan catalogue and per-organization assignment"
+    }
+  },
+  "AUDIT_SEARCH": {
+    "TITLE": "Cross-Tenant Audit Search",
+    "SUBTITLE": "Search every audit event across organizations and hospitals.",
+    "LOADING": "Searching audit log…",
+    "LOAD_ERROR": "Audit search failed. Try again.",
+    "NO_RESULTS": "No audit events match the current filters.",
+    "APPLY": "Apply filters",
+    "RESET": "Reset",
+    "PREV": "Previous",
+    "NEXT": "Next",
+    "PAGE_OF": "Page {{current}} of {{total}}",
+    "RESULTS_COUNT": "{{shown}} shown of {{total}} total",
+    "FILTER": {
+      "USER_NAME": "User name",
+      "USER_NAME_PLACEHOLDER": "substring match on actor",
+      "IMPERSONATOR_USER_ID": "Impersonator user id",
+      "ENTITY_TYPE": "Target entity type",
+      "RESOURCE_ID": "Target resource id",
+      "STATUS": "Status",
+      "FROM_DATE": "From",
+      "TO_DATE": "To",
+      "ANY": "Any"
+    },
+    "COL": {
+      "TIME": "Time",
+      "EVENT": "Event",
+      "USER": "User",
+      "HOSPITAL": "Hospital",
+      "RESOURCE": "Resource",
+      "STATUS": "Status",
+      "IMPERSONATOR": "Impersonator"
+    }
+  },
+  "EMERGENCY": {
+    "TITLE": "Emergency Global Controls",
+    "SUBTITLE": "Use only during a security incident. Every action is permanently audited.",
+    "WARNING": "These controls take effect immediately platform-wide. Always step up MFA before clicking.",
+    "REASON": "Reason (audited, ≥ 5 chars)",
+    "MFA_TOKEN": "MFA code",
+    "CONFIRM_TYPED": "Type FORCE LOGOUT ALL to confirm",
+    "FORCE_LOGOUT": {
+      "TITLE": "Force-logout all sessions",
+      "DESC": "Bumps the global min-iat timestamp; every active JWT is invalidated.",
+      "ACTION": "Force logout all"
+    },
+    "KILL_FEATURE": {
+      "TITLE": "Kill a feature flag",
+      "DESC": "Sets the global FeatureFlagOverride for this key to disabled.",
+      "FLAG_KEY": "Flag key",
+      "ACTION": "Kill feature"
+    },
+    "FORCE_MFA": {
+      "TITLE": "Force MFA re-enrolment",
+      "DESC": "Clears MFA enrolment + backup codes for the listed users (or all users when blank).",
+      "USER_IDS": "User ids (comma-separated, optional)",
+      "ACTION": "Force re-enrol"
+    },
+    "BROADCAST": {
+      "TITLE": "Broadcast banner",
+      "DESC": "Publishes a banner message to /topic/emergency-broadcast.",
+      "MESSAGE": "Message",
+      "SEVERITY": "Severity",
+      "ACTION": "Send broadcast"
+    }
+  },
+  "SUBSCRIPTIONS": {
+    "TITLE": "Subscription Plans",
+    "SUBTITLE": "Plan catalogue and per-organization assignments.",
+    "ACTIVE_ONLY": "Active plans only",
+    "NEW_PLAN": "New plan",
+    "EDIT_PLAN": "Edit plan",
+    "EDIT": "Edit",
+    "DEACTIVATE": "Deactivate",
+    "SAVE": "Save",
+    "CANCEL": "Cancel",
+    "PER_MONTH": "/ month",
+    "SEATS": "seats included",
+    "NO_FEATURES": "No feature keys",
+    "NO_PLANS": "No plans yet — create the first one.",
+    "LOAD_ERROR": "Could not load plans. Try again.",
+    "FORM": {
+      "NAME": "Name",
+      "TIER_CODE": "Tier code (unique)",
+      "DESCRIPTION": "Description",
+      "PRICE_CENTS": "Monthly price (cents)",
+      "CURRENCY": "Currency",
+      "INCLUDED_SEATS": "Included seats",
+      "FEATURE_KEYS": "Feature keys"
     }
   },
   "INTEGRATION_HEALTH": {
@@ -684,6 +780,7 @@
     "ALL": "All",
     "ALL_HOSPITALS": "Hospitals",
     "BACK": "Back",
+    "BACK_TO_CONTROL_TOWER": "Back to Control Tower",
     "CANCEL": "Cancel",
     "CANCELLING": "Cancelling...",
     "CANNOT_UNDO": "This action cannot be undone.",
@@ -1900,6 +1997,9 @@
     "ANNOUNCEMENTS": "Announcements",
     "APPOINTMENTS": "Appointments",
     "AUDIT_LOGS": "Audit Logs",
+    "AUDIT_SEARCH": "Audit Search",
+    "EMERGENCY_CONTROLS": "Emergency Controls",
+    "SUBSCRIPTIONS": "Subscriptions",
     "AVAILABILITY": "Availability",
     "BILLING": "Billing",
     "CONSENT_MANAGEMENT": "Consent Management",

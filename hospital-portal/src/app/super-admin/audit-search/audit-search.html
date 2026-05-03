@@ -1,0 +1,175 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'AUDIT_SEARCH.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'AUDIT_SEARCH.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'COMMON.BACK_TO_CONTROL_TOWER' | translate }}
+    </a>
+  </div>
+
+  <section class="filter-card">
+    <div class="filter-grid">
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.USER_NAME' | translate }}</span>
+        <input
+          type="text"
+          [ngModel]="userName()"
+          (ngModelChange)="userName.set($event)"
+          placeholder="{{ 'AUDIT_SEARCH.FILTER.USER_NAME_PLACEHOLDER' | translate }}"
+        />
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.IMPERSONATOR_USER_ID' | translate }}</span>
+        <input
+          type="text"
+          [ngModel]="impersonatorUserId()"
+          (ngModelChange)="impersonatorUserId.set($event)"
+          placeholder="UUID"
+        />
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.ENTITY_TYPE' | translate }}</span>
+        <input
+          type="text"
+          [ngModel]="entityType()"
+          (ngModelChange)="entityType.set($event)"
+          placeholder="PATIENT / USER / …"
+        />
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.RESOURCE_ID' | translate }}</span>
+        <input type="text" [ngModel]="resourceId()" (ngModelChange)="resourceId.set($event)" />
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.STATUS' | translate }}</span>
+        <select [ngModel]="status()" (ngModelChange)="status.set($event)">
+          <option value="">{{ 'AUDIT_SEARCH.FILTER.ANY' | translate }}</option>
+          @for (s of statusOptions; track s) {
+            <option [value]="s">{{ s }}</option>
+          }
+        </select>
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
+        <input
+          type="datetime-local"
+          [ngModel]="fromDate()"
+          (ngModelChange)="fromDate.set($event)"
+        />
+      </label>
+      <label class="filter-field">
+        <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
+        <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+      </label>
+    </div>
+    <div class="filter-actions">
+      <button type="button" class="btn-primary" (click)="applyFilters()">
+        {{ 'AUDIT_SEARCH.APPLY' | translate }}
+      </button>
+      <button type="button" class="btn-secondary" (click)="resetFilters()">
+        {{ 'AUDIT_SEARCH.RESET' | translate }}
+      </button>
+    </div>
+  </section>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <span>{{ 'AUDIT_SEARCH.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined">error</span>
+      <span>{{ 'AUDIT_SEARCH.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="runSearch()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="state-panel empty" data-test="empty">
+      <span class="material-symbols-outlined">search_off</span>
+      <span>{{ 'AUDIT_SEARCH.NO_RESULTS' | translate }}</span>
+    </div>
+  } @else {
+    <section class="results-card" data-test="results">
+      <div class="results-header">
+        <span>
+          {{
+            'AUDIT_SEARCH.RESULTS_COUNT'
+              | translate: { total: totalElements(), shown: rows().length }
+          }}
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'AUDIT_SEARCH.COL.TIME' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.EVENT' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.USER' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.HOSPITAL' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.RESOURCE' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.STATUS' | translate }}</th>
+              <th>{{ 'AUDIT_SEARCH.COL.IMPERSONATOR' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rows(); track row.eventTimestamp + row.eventType + row.resourceId) {
+              <tr [class.row-impersonated]="row.impersonatorUserId">
+                <td class="cell-time">{{ row.eventTimestamp | date: 'short' }}</td>
+                <td>
+                  <span class="event-type-badge">{{ row.eventType }}</span>
+                </td>
+                <td>
+                  <div class="cell-primary">{{ row.userName || '—' }}</div>
+                  <div class="cell-secondary">{{ row.roleName || '' }}</div>
+                </td>
+                <td>{{ row.hospitalName || '—' }}</td>
+                <td>
+                  <div class="cell-primary">{{ row.resourceName || row.resourceId || '—' }}</div>
+                  <div class="cell-secondary">{{ row.entityType || '' }}</div>
+                </td>
+                <td>
+                  <span
+                    [class]="
+                      row.status === 'SUCCESS'
+                        ? 'status-pill pill-success'
+                        : 'status-pill pill-fail'
+                    "
+                  >
+                    {{ row.status || '—' }}
+                  </span>
+                </td>
+                <td class="cell-impersonator">
+                  @if (row.impersonatorUsername) {
+                    <span class="material-symbols-outlined">supervisor_account</span>
+                    {{ row.impersonatorUsername }}
+                  } @else {
+                    —
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button type="button" class="btn-secondary" (click)="goToPrev()" [disabled]="!hasPrev()">
+          {{ 'AUDIT_SEARCH.PREV' | translate }}
+        </button>
+        <span class="pager-info">
+          {{
+            'AUDIT_SEARCH.PAGE_OF'
+              | translate: { current: pageNumber() + 1, total: totalPages() || 1 }
+          }}
+        </span>
+        <button type="button" class="btn-secondary" (click)="goToNext()" [disabled]="!hasNext()">
+          {{ 'AUDIT_SEARCH.NEXT' | translate }}
+        </button>
+      </div>
+    </section>
+  }
+</div>

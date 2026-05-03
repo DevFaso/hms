@@ -1,0 +1,258 @@
+.page-container {
+  padding: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+
+  .page-title {
+    margin: 0 0 4px;
+    font-size: 28px;
+    font-weight: 600;
+  }
+  .page-subtitle {
+    color: #64748b;
+    margin: 0;
+  }
+  .back-link {
+    color: #6366f1;
+    text-decoration: none;
+    display: inline-flex;
+    gap: 6px;
+    font-size: 14px;
+    align-items: center;
+  }
+}
+
+.toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+
+  .toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #475569;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .btn-primary {
+    margin-left: auto;
+    background: #16a34a;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.state-panel {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  padding: 32px;
+  border-radius: 12px;
+  text-align: center;
+  color: #475569;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  &.error {
+    border-color: #fca5a5;
+    color: #b91c1c;
+  }
+
+  .spin {
+    animation: rot 1s linear infinite;
+  }
+  .retry-btn {
+    margin-left: 8px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+  }
+}
+
+@keyframes rot {
+  from {
+    transform: rotate(0);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.plan-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+    }
+  }
+
+  &.inactive {
+    opacity: 0.55;
+  }
+
+  .tier-pill {
+    background: #eef2ff;
+    color: #4338ca;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .desc {
+    color: #475569;
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .meta {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    color: #475569;
+    font-size: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+
+    .features {
+      color: #64748b;
+      font-size: 12px;
+      word-break: break-word;
+    }
+  }
+
+  footer {
+    display: flex;
+    gap: 8px;
+    margin-top: auto;
+
+    .btn-ghost {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn-ghost.danger {
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+  }
+}
+
+.edit-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 24px;
+
+  h2 {
+    margin: 0 0 16px;
+    font-size: 18px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+
+      span {
+        font-size: 12px;
+        font-weight: 500;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      input,
+      textarea {
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+    }
+
+    .span-2 {
+      grid-column: span 2;
+    }
+  }
+
+  .form-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin: 12px 0 0;
+    font-size: 13px;
+  }
+
+  .actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+
+    .btn-primary {
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-ghost {
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+  }
+}
