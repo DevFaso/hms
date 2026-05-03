@@ -57,9 +57,11 @@
                   <span class="provider">{{ row.provider }}</span>
                 }
                 <span class="enabled" [class.off]="!row.enabled">
-                  {{ row.enabled
-                    ? ('INTEGRATION_HEALTH.ENABLED' | translate)
-                    : ('INTEGRATION_HEALTH.DISABLED' | translate) }}
+                  {{
+                    row.enabled
+                      ? ('INTEGRATION_HEALTH.ENABLED' | translate)
+                      : ('INTEGRATION_HEALTH.DISABLED' | translate)
+                  }}
                 </span>
               </p>
             </div>
@@ -69,7 +71,7 @@
                 [style.backgroundColor]="statusColor(row.rolledUpStatus) + '22'"
                 [style.color]="statusColor(row.rolledUpStatus)"
               >
-                {{ ('INTEGRATION_HEALTH.STATUS.' + row.rolledUpStatus) | translate }}
+                {{ 'INTEGRATION_HEALTH.STATUS.' + row.rolledUpStatus | translate }}
               </span>
               <span class="material-symbols-outlined chevron" aria-hidden="true">
                 {{ expandedIntegrationId() === row.integrationId ? 'expand_less' : 'expand_more' }}
@@ -103,14 +105,18 @@
                   <tbody>
                     @for (org of row.organizations; track org.organizationId ?? '') {
                       <tr>
-                        <td>{{ org.organizationName ?? ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate) }}</td>
+                        <td>
+                          {{
+                            org.organizationName ?? ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate)
+                          }}
+                        </td>
                         <td>
                           <span
                             class="status-pill small"
                             [style.backgroundColor]="statusColor(org.status) + '22'"
                             [style.color]="statusColor(org.status)"
                           >
-                            {{ ('INTEGRATION_HEALTH.STATUS.' + org.status) | translate }}
+                            {{ 'INTEGRATION_HEALTH.STATUS.' + org.status | translate }}
                           </span>
                         </td>
                         <td>{{ org.lastSuccessAt ? (org.lastSuccessAt | date: 'short') : '—' }}</td>

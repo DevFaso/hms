@@ -59,8 +59,12 @@
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .retry-btn {
@@ -228,7 +232,8 @@
   border-collapse: collapse;
   font-size: 0.85rem;
 
-  th, td {
+  th,
+  td {
     padding: 0.5rem 0.75rem;
     text-align: left;
     border-bottom: 1px solid #e2e8f0;
