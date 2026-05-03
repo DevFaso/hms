@@ -1046,6 +1046,35 @@ export const routes: Routes = [
           ),
       },
 
+      // Super-Admin Cross-Tenant Audit Search (MVP-8 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/audit-search',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/audit-search/audit-search').then(
+            (m) => m.SuperAdminAuditSearchComponent,
+          ),
+      },
+
+      // Super-Admin Emergency Global Controls (MVP-7 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/emergency',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/emergency/emergency').then((m) => m.EmergencyComponent),
+      },
+
+      // Super-Admin Subscription / Plan Management (MVP-6 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/subscriptions',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/subscriptions/subscriptions').then((m) => m.SubscriptionsComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
