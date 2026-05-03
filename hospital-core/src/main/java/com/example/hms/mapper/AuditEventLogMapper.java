@@ -18,6 +18,24 @@ public class AuditEventLogMapper {
     private final PatientRepository patientRepository;
 
     public AuditEventLogResponseDTO toDto(AuditEventLog event) {
+        return toDtoInternal(event, true);
+    }
+
+    /**
+     * MVP-8: per-row mapping for cross-tenant audit search.
+     * <p>Skips the {@link PatientRepository#findById} lookup that
+     * {@link #resolveResourceName} performs for {@code PATIENT} events,
+     * eliminating the N+1 query on a multi-page result set. Falls back
+     * to the {@code resourceName} column already denormalised on the
+     * entity (or {@code resourceId} when blank) — sufficient for the
+     * search-results table where each row links into the patient detail
+     * page anyway. (PR #228 review).
+     */
+    public AuditEventLogResponseDTO toDtoLite(AuditEventLog event) {
+        return toDtoInternal(event, false);
+    }
+
+    private AuditEventLogResponseDTO toDtoInternal(AuditEventLog event, boolean resolvePatientName) {
         if (event == null) {
             return null;
         }
@@ -25,11 +43,14 @@ public class AuditEventLogMapper {
         User user = event.getUser();
         UserRoleHospitalAssignment assignment = event.getAssignment();
 
-        String resourceName = resolveResourceName(event);
+        String resourceName = resolvePatientName
+            ? resolveResourceName(event)
+            : resolveResourceNameFromColumns(event);
         String hospitalName = resolveHospitalName(event, assignment);
         String roleName = resolveRoleName(event, assignment, user);
 
         return AuditEventLogResponseDTO.builder()
+            .id(event.getId())
             .userName(getUserFullName(user))
             .hospitalName(hospitalName)
             .roleName(roleName)
@@ -60,6 +81,15 @@ public class AuditEventLogMapper {
             } catch (RuntimeException e) {
                 return event.getResourceId();
             }
+        }
+        return event.getResourceId();
+    }
+
+    /** MVP-8 fast path — same fallback chain as {@link #resolveResourceName}
+     *  but never hits PatientRepository. */
+    private String resolveResourceNameFromColumns(AuditEventLog event) {
+        if (event.getResourceName() != null && !event.getResourceName().isBlank()) {
+            return event.getResourceName();
         }
         return event.getResourceId();
     }

@@ -74,6 +74,11 @@ class PlatformRegistryControllerTest {
     @MockitoBean
     private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
 
+    /** PR #228 review fixup — JwtAuthenticationFilter now depends on
+     *  GlobalSessionRevocationService (MVP-7). */
+    @MockitoBean
+    private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
+
     @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;
 

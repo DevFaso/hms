@@ -1088,4 +1088,37 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V80 — Emergency global controls (MVP-7)
+         Singleton security.security_revocations table. Holds the
+         `global_min_token_iat` timestamp that JwtAuthenticationFilter
+         compares the JWT `iat` claim against. Bumping this value to
+         "now" force-logs-out every active session.
+         Strictly additive; default `epoch` so pre-MVP-7 deployments
+         behave identically.
+         ================================================================= -->
+    <changeSet id="V80-emergency-global-controls" author="hms-team" runOnChange="false">
+        <sqlFile path="V80__emergency_global_controls.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V81 — Subscription plans + organization subscriptions (MVP-6)
+         Two new tables in the platform schema: subscription_plans
+         (catalogue) and organization_subscriptions (per-org assignment).
+         Partial unique index uq_orgsub_active_per_org keeps one ACTIVE
+         subscription per organization while letting CANCELLED / EXPIRED
+         rows accumulate for billing audits. FK back to
+         hospital.organizations(id).
+         Strictly additive; pure DDL.
+         ================================================================= -->
+    <changeSet id="V81-subscription-plans" author="hms-team" runOnChange="false">
+        <sqlFile path="V81__subscription_plans.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
