@@ -1061,4 +1061,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V78 — Integration health snapshots (MVP-3)
+         Adds clinical.integration_health_snapshots so the super-admin
+         Integration Health Console can show last-success / last-failure /
+         24h counts per (integration, organization). Strictly additive.
+         ================================================================= -->
+    <changeSet id="V78-integration-health-snapshots" author="hms-team" runOnChange="false">
+        <sqlFile path="V78__integration_health_snapshots.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

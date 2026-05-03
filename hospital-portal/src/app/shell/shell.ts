@@ -585,6 +585,12 @@ export class ShellComponent implements OnInit, OnDestroy {
       translationKey: 'NAV.SUPER_ADMIN',
       route: '/super-admin',
     });
+    items.push({
+      icon: 'cable',
+      label: 'Integrations Health',
+      translationKey: 'NAV.INTEGRATIONS_HEALTH',
+      route: '/super-admin/integrations',
+    });
   }
 
   /**

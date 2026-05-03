@@ -100,7 +100,39 @@
       "AUDIT_TITLE": "Journaux d'audit",
       "AUDIT_DESC": "Piste d'audit système et conformité",
       "HOSPITALS_TITLE": "Hôpitaux",
-      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues"
+      "HOSPITALS_DESC": "Tous les hôpitaux toutes organisations confondues",
+      "INTEGRATIONS_TITLE": "Santé des intégrations",
+      "INTEGRATIONS_DESC": "Inventaire des connecteurs et santé des appels par tenant"
+    }
+  },
+  "INTEGRATION_HEALTH": {
+    "TITLE": "Console de santé des intégrations",
+    "SUBTITLE": "Inventaire et santé des appels par tenant pour les connecteurs partenaires et les intégrations plateforme",
+    "LOADING": "Chargement de l'inventaire…",
+    "LOAD_ERROR": "Impossible de charger l'inventaire des intégrations. Réessayez.",
+    "RETRY": "Réessayer",
+    "EMPTY": "Aucune intégration enregistrée.",
+    "ENABLED": "Activée",
+    "DISABLED": "Désactivée",
+    "NO_ORG_HISTORY": "Aucun historique d'appel enregistré pour cette intégration.",
+    "PLATFORM_WIDE": "Plateforme entière",
+    "ORG": "Organisation",
+    "STATUS_HEAD": "Statut",
+    "LAST_SUCCESS": "Dernier succès",
+    "LAST_FAILURE": "Dernier échec",
+    "SUCCESSES_24H": "Succès (24 h)",
+    "FAILURES_24H": "Échecs (24 h)",
+    "STATUS": {
+      "HEALTHY": "Sain",
+      "DEGRADED": "Dégradé",
+      "FAILING": "En échec",
+      "NO_HISTORY": "Aucun historique"
+    },
+    "CHIP": {
+      "HEALTHY": "Sain",
+      "DEGRADED": "Dégradé",
+      "FAILING": "En échec",
+      "NO_HISTORY": "Aucun historique"
     }
   },
   "CDS": {
@@ -1898,7 +1930,8 @@
     "STOCK_ADJUSTMENT": "Ajustement de Stock",
     "DISPENSING": "Dispensation",
     "STOCK_ROUTING": "Routage de Stock",
-    "SUPER_ADMIN": "Super Admin"
+    "SUPER_ADMIN": "Super Admin",
+    "INTEGRATIONS_HEALTH": "Santé des intégrations"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
