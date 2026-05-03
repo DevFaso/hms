@@ -30,6 +30,89 @@
   }
 }
 
+// MVP-8b — saved-search strip above the filter card.
+.saved-strip {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .saved-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .saved-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }
+
+  .saved-empty {
+    font-size: 13px;
+    color: #94a3b8;
+  }
+
+  .saved-chip {
+    display: inline-flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding-left: 12px;
+  }
+
+  .saved-chip-load {
+    background: transparent;
+    border: none;
+    color: #1e293b;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 6px;
+
+    &:hover {
+      color: #4338ca;
+    }
+  }
+
+  .saved-chip-delete {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 4px 8px 4px 4px;
+
+    &:hover {
+      color: #dc2626;
+    }
+  }
+
+  .saved-name-input {
+    flex: 1 1 220px;
+    min-width: 200px;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+  }
+}
+
+// MVP-8b — inline export / save error label inside the filter actions row.
+.export-error {
+  color: #b91c1c;
+  font-size: 13px;
+  align-self: center;
+}
+
 .filter-card {
   background: #fff;
   border: 1px solid #e2e8f0;

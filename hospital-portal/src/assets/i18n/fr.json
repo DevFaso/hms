@@ -134,7 +134,21 @@
       "STATUS": "Statut",
       "FROM_DATE": "Du",
       "TO_DATE": "Au",
-      "ANY": "Tout"
+      "ANY": "Tout",
+      "TENANT_REGION": "Région du tenant"
+    },
+    "EXPORT": {
+      "CSV": "Exporter en CSV",
+      "FAILED": "L'export CSV a échoué. Réessayez."
+    },
+    "SAVED": {
+      "LABEL": "Recherches enregistrées",
+      "EMPTY": "Aucune recherche enregistrée — nommez les filtres actuels et enregistrez.",
+      "NAME_PLACEHOLDER": "Nommez ce jeu de filtres",
+      "SAVE_CURRENT": "Enregistrer",
+      "DELETE": "Supprimer la recherche enregistrée",
+      "NAME_REQUIRED": "Le nom est requis.",
+      "SAVE_FAILED": "Impossible d'enregistrer la recherche."
     },
     "COL": {
       "TIME": "Heure",
@@ -177,6 +191,10 @@
       "SEVERITY": "Gravité",
       "ACTION": "Envoyer la diffusion"
     }
+  },
+  "EMERGENCY_BANNER": {
+    "ISSUED_BY": "Émis par",
+    "DISMISS": "Ignorer la diffusion"
   },
   "SUBSCRIPTIONS": {
     "TITLE": "Plans d'abonnement",

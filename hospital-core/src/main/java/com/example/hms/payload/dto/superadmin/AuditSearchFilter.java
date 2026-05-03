@@ -2,6 +2,7 @@ package com.example.hms.payload.dto.superadmin;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.enums.OrganizationRegion;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -31,14 +32,22 @@ public record AuditSearchFilter(
     String entityType,
     String resourceId,
     LocalDateTime fromDate,
-    LocalDateTime toDate
+    LocalDateTime toDate,
+    /** MVP-9b: optional region scope. Joins through assignment.hospital.organization.region. */
+    OrganizationRegion tenantRegion
 ) {
     /** All-null filter — useful default when the caller wants every event. */
     public static AuditSearchFilter empty() {
-        return new AuditSearchFilter(null, null, null, null, null, null, null, null, null, null, null);
+        return new AuditSearchFilter(
+            null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
+    /**
+     * Hospital join is now needed by hospitalId / organizationId
+     * (existing) and tenantRegion (MVP-9b — region lives on
+     * assignment.hospital.organization).
+     */
     public boolean needsHospitalOrOrgJoin() {
-        return hospitalId != null || organizationId != null;
+        return hospitalId != null || organizationId != null || tenantRegion != null;
     }
 }
