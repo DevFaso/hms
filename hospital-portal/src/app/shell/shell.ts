@@ -174,13 +174,22 @@ export class ShellComponent implements OnInit, OnDestroy {
       ];
     }
 
+    // MVP-5: when the active role is super admin, the side-nav drops the
+    // generic Dashboard entry — the Control Tower (/super-admin, appended by
+    // appendSuperAdminEntry) is their landing page. Other roles still see it.
+    const isActiveSuperAdmin = activeRole === 'ROLE_SUPER_ADMIN';
+
     const items: NavItem[] = [
-      {
-        icon: 'dashboard',
-        label: 'Dashboard',
-        translationKey: 'NAV.DASHBOARD',
-        route: '/dashboard',
-      },
+      ...(isActiveSuperAdmin
+        ? []
+        : [
+            {
+              icon: 'dashboard',
+              label: 'Dashboard',
+              translationKey: 'NAV.DASHBOARD',
+              route: '/dashboard',
+            },
+          ]),
       {
         icon: 'people',
         label: 'Patients',
@@ -380,7 +389,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/hospitals',
       });
     }
-    if (this.permissions.hasPermission('*')) {
+    // PR #225 review: gate the admin-items group via the active-role-aware
+    // helper so a multi-role super admin who picked a non-super activeRole
+    // doesn't see entries that the corresponding RoleGuard would 403 on.
+    // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
+    // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
+    if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push(
         {
           icon: 'corporate_fare',
@@ -391,13 +405,18 @@ export class ShellComponent implements OnInit, OnDestroy {
         { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
         { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
-        {
+      );
+      // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
+      // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
+      // already have the Control Tower in their nav.
+      if (!isActiveSuperAdmin) {
+        items.push({
           icon: 'admin_panel_settings',
           label: 'Administration',
           translationKey: 'NAV.ADMINISTRATION',
           route: '/admin',
-        },
-      );
+        });
+      }
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({

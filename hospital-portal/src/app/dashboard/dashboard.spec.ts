@@ -557,9 +557,10 @@ describe('Dashboard i18n refactor coverage', () => {
   // Each role should resolve a distinct DASHBOARD.ROLE.* key. The harness has
   // no translation loader so the key itself comes back, which is enough to
   // prove the right computed branch fired.
+  // MVP-5: SUPER_ADMIN no longer has a dashboard view branch — they land on
+  // /super-admin (Control Tower) via SuperAdminRedirectGuard.
   const roleLabelCases: [string, string][] = [
     ['ROLE_PATIENT', 'DASHBOARD.ROLE.PATIENT'],
-    ['ROLE_SUPER_ADMIN', 'DASHBOARD.ROLE.SUPER_ADMIN'],
     ['ROLE_HOSPITAL_ADMIN', 'DASHBOARD.ROLE.HOSPITAL_ADMIN'],
     ['ROLE_DOCTOR', 'DASHBOARD.ROLE.DOCTOR'],
     ['ROLE_MIDWIFE', 'DASHBOARD.ROLE.MIDWIFE'],
@@ -585,11 +586,6 @@ describe('Dashboard i18n refactor coverage', () => {
   });
 
   // ── Per-role tile arrays — one assertion each, exercises every label ──
-
-  it('adminNavTiles returns 13 tiles for super-admin', () => {
-    const c = createComponent(['ROLE_SUPER_ADMIN']);
-    expect(c.adminNavTiles().length).toBe(13);
-  });
 
   it('hospitalAdminNavTiles returns 6 tiles', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);

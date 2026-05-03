@@ -1,19 +1,21 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> 006384fc · `develop` @ `bbf09844` · Branches:
+> 006384fc · `develop` @ `6d3c9d15` · Branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped, on `main`),
 > `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — merged
 > into develop in `b280a0bd` via PR #223; awaits next promote-to-main),
 > `feature/super-admin-gaps-mvp4-support-impersonation` (MVP-4 — merged
 > into develop in `bbf09844` via PR #224 with all six Copilot review
-> findings folded in; awaits next promote-to-main).
+> findings folded in; awaits next promote-to-main),
+> `feature/super-admin-gaps-mvp5-surface-consolidation` (MVP-5 — in
+> progress on this branch; targets the next develop merge).
 
 ## Executive Summary
 
 The super admin is the highest-privilege role in HMS — operating across organizations and hospitals to manage tenants, security policy, feature flags, user governance, and platform health. The current implementation has a **strong backend surface** (8 dedicated `SuperAdmin*` controllers, multi-tenant scoping via `Organization → Hospital`, feature-flag overrides per tenant, security-policy baselines, credential lifecycle, platform registry).
 
-This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is the next scoped piece of work** — it cleans up the now-unnecessary duplicate landing surfaces that MVP-1 created (`/dashboard` still renders a super-admin branch, `/admin` is still reachable from the side-nav). MVPs 6–9 remain in the forward queue.
+This document captures all identified gaps and prioritises them by leverage. **MVPs 1–4 have shipped:** MVP-1 (Control Tower) + MVP-2 (Tenant Lifecycle) on `main` since promote `006384fc`; MVP-3 (Integration Health Console) + MVP-4 (Support Impersonation with Audit) on `develop` awaiting the next promote-to-main. **MVP-5 (Super-Admin Surface Consolidation) is in progress** on `feature/super-admin-gaps-mvp5-surface-consolidation` — frontend-only redirect guard + dashboard cleanup + side-nav role filter to retire the duplicate `/dashboard` superadmin branch and the duplicate `/admin` reachability so `/super-admin` is the single mission-control. MVPs 6–9 remain in the forward queue.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -80,7 +82,7 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 2. **Tenant Lifecycle** — suspend / archive / restore / purge · *shipped to main `006384fc`*
 3. **Partner-Connector / Integration Health Console** · *merged to develop `b280a0bd` via PR #223*
 4. **Support Impersonation with Audit** · *merged to develop `bbf09844` via PR #224*
-5. **Super-Admin Surface Consolidation** · *next — retire `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
+5. **Super-Admin Surface Consolidation** · *in progress on `feature/super-admin-gaps-mvp5-surface-consolidation` — retires `/dashboard` superadmin branch + `/admin` reachability for super admin so `/super-admin` is the single mission-control*
 6. Subscription / Plan / Quotas
 7. Emergency Global Controls
 8. Cross-Tenant Audit Search UI
@@ -512,7 +514,48 @@ existing call paths refactored, only EligibilityServiceImpl wired).
 
 ---
 
-## MVP 5: Super-Admin Surface Consolidation (NEXT — branch TBD)
+## MVP 5: Super-Admin Surface Consolidation (IN PROGRESS — branch `feature/super-admin-gaps-mvp5-surface-consolidation`)
+
+**Closure notes (this branch):**
+
+- New `SuperAdminRedirectGuard` (`hospital-portal/src/app/auth/super-admin-redirect.guard.ts`)
+  redirects an active `ROLE_SUPER_ADMIN` from `/dashboard` and `/admin` to
+  `/super-admin`. Other roles fall through. Wired into both routes in
+  `app.routes.ts`; `/admin` keeps `RoleGuard` chained behind it so
+  `ROLE_ADMIN` still gates the hospital-admin landing.
+- Dashboard cleanup: deleted the `'superadmin'` branch from
+  `activeView`, `heroGradientClass`, and `loadDashboardData`; deleted the
+  `adminSummary` + `recentAuditEvents` signals, the `adminNavTiles`
+  computed, the `SuperAdminSummary` / `RecentAuditEvent` imports, the
+  hero stat strip, and the rendered Super-Admin section in
+  `dashboard.html`. Removed the `.hero-gradient-superadmin` selector
+  from `dashboard.scss`. The `isSuperAdmin` signal stays — it still
+  guards the hospital-admin loader (`!this.isSuperAdmin()`) and the
+  defensive role-label branch.
+- Side-nav: when `roleContext.activeRole === 'ROLE_SUPER_ADMIN'`,
+  `shell.ts` `baseNavItems()` skips the **Dashboard** entry (Control
+  Tower is the landing page) and the **Administration** entry (super
+  admins are redirected there, so a duplicate side-nav slot was just
+  noise). `appendSuperAdminEntry` already adds **Super Admin** +
+  **Integration Health** for super-admin actives.
+- Parity sweep: the deleted dashboard super-admin block rendered a
+  stat strip (8 tiles) + nav-tile grid (13 tiles) + Recent Audit
+  table. The Control Tower (`super-admin.html`) already renders the
+  equivalent stats grid, the Quick Links grid (9 cards including
+  Integration Health from MVP-3), and the Recent Audit list — no
+  user-visible content was lost.
+- Tests: 4 new `SuperAdminRedirectGuard` specs (super-admin redirect /
+  fallback / hospital-admin pass-through / multi-role active picker)
+  plus 3 new `ShellComponent` specs (super-admin nav drops Dashboard
+  and Administration / admin keeps both / doctor keeps Dashboard
+  only). Removed the `adminNavTiles returns 13 tiles for super-admin`
+  and the `roleLabel resolves DASHBOARD.ROLE.SUPER_ADMIN` cases from
+  `dashboard.spec.ts` along with the `'superadmin'` view branch they
+  exercised. `npm run lint` clean; `format:check` clean; full Karma
+  sweep 801 specs green (up from 796).
+- Out of scope (deferred to MVP-5b): folding `/feature-flags`,
+  `/analytics`, `/audit-logs`, `/platform` under a `/super-admin/*`
+  hierarchy.
 
 **Goal:** Make `/super-admin` the **single** mission-control for super
 admins. Today three landing surfaces co-exist and a super admin can
