@@ -116,9 +116,17 @@ export class AuthService {
   setToken(token: string, remember = true): void {
     if (!this.isBrowser) return;
     try {
+      // Always clear the OTHER storage before writing — a token must live in
+      // exactly one place. Without this, a remember-me login leaves the
+      // original JWT in localStorage; a subsequent setToken(impersonationToken,
+      // false) writes to sessionStorage but getToken() prefers localStorage,
+      // so every API call keeps using the original token (Copilot review #2
+      // on PR #224 — impersonation never takes effect for remembered sessions).
       if (remember) {
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.setItem(ACCESS_TOKEN_KEY, token);
       } else {
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
         sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       }
       // Clear any stale idle-lock flag from a prior session so the new
@@ -127,6 +135,22 @@ export class AuthService {
       sessionStorage.removeItem('hms_lock_ts');
     } catch {
       // Storage not available
+    }
+  }
+
+  /**
+   * MVP-4 — return whether the current access token is in localStorage
+   * (remember-me) or sessionStorage. The {@code ImpersonationService} uses
+   * this to remember the original `remember` preference so that, on
+   * stop(), the original token is restored to its original storage rather
+   * than being silently promoted to localStorage (Copilot review #5).
+   */
+  isTokenRemembered(): boolean {
+    if (!this.isBrowser) return false;
+    try {
+      return localStorage.getItem(ACCESS_TOKEN_KEY) != null;
+    } catch {
+      return false;
     }
   }
 
