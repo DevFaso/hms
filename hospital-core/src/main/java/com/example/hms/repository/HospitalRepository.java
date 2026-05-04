@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.model.Hospital;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +18,10 @@ import java.util.UUID;
 public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier) OR LOWER(h.email) = LOWER(:identifier)")
     java.util.Optional<Hospital> findByNameOrCodeOrEmail(@Param("identifier") String identifier);
+
+    /** All hospital IDs whose lifecycle state matches one of the given states (MVP-c batch). */
+    @Query("SELECT h.id FROM Hospital h WHERE h.lifecycleState IN :states")
+    List<UUID> findIdsByLifecycleStateIn(@Param("states") Collection<HospitalLifecycleState> states);
 
     boolean existsByNameIgnoreCaseAndZipCode(String name, String zipCode);
 

@@ -1152,4 +1152,72 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V84 — Hospital-level lifecycle (MVP-c batch)
+         Mirrors V77's Organization lifecycle columns onto Hospital so a
+         super admin can suspend / archive / restore / schedule-purge an
+         individual hospital independently of its parent organization.
+         Strictly additive.
+         ================================================================= -->
+    <changeSet id="V84-hospital-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V84__hospital_lifecycle.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V85 — jsonb feature_keys on subscription_plans (MVP-c batch / MVP-6c)
+         Adds feature_keys_jsonb JSONB and backfills from the legacy
+         comma-separated TEXT column. Legacy column kept one release for
+         rollback safety. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V85-subscription-plan-feature-keys-jsonb" author="hms-team" runOnChange="false">
+        <sqlFile path="V85__subscription_plan_feature_keys_jsonb.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V86 — Per-region policy table (MVP-c batch / MVP-9c)
+         Adds platform.region_policy keyed on OrganizationRegion code
+         with optional retention / export-format / target deployment
+         overrides. Seed row per current region; EU defaults to
+         GDPR_PORTABILITY export. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V86-region-policy" author="hms-team" runOnChange="false">
+        <sqlFile path="V86__region_policy.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V87 — Server-side persisted audit saved searches (MVP-c batch / MVP-8c)
+         Promotes MVP-8b's per-operator localStorage saved searches to a
+         server-side table with cross-device sync + cross-operator
+         sharing via a `shared` flag. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V87-audit-saved-search" author="hms-team" runOnChange="false">
+        <sqlFile path="V87__audit_saved_search.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V88 — Integration health time-series (MVP-c batch / MVP-3b)
+         Adds clinical.integration_health_event so the Integration Health
+         Console can render per-integration 24h sparklines. The existing
+         IntegrationHealthSnapshot powers the inventory view; the event
+         table powers the history drawer. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V88-integration-health-event" author="hms-team" runOnChange="false">
+        <sqlFile path="V88__integration_health_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

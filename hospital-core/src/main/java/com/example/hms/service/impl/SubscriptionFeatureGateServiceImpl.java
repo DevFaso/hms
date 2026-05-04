@@ -4,6 +4,8 @@ import com.example.hms.model.platform.OrganizationSubscription;
 import com.example.hms.model.platform.SubscriptionPlan;
 import com.example.hms.repository.OrganizationSubscriptionRepository;
 import com.example.hms.service.SubscriptionFeatureGateService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -21,6 +24,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional(readOnly = true)
 public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGateService {
+
+    private static final ObjectMapper FEATURE_KEYS_MAPPER = new ObjectMapper();
+    private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() {};
 
     private final OrganizationSubscriptionRepository subscriptionRepository;
 
@@ -77,6 +83,14 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
             log.warn("[FEATURE-GATE] Active subscription for org {} has no plan attached", organizationId);
             return null;
         }
+        // MVP-6c: prefer the jsonb mirror when populated. Fall back to the
+        // legacy comma-separated TEXT column so older plan rows that were
+        // written before the V85 backfill (or rows partial-rolled-back to
+        // the prior schema) keep working.
+        Set<String> fromJsonb = parseJsonbKeys(plan.getFeatureKeysJson());
+        if (!fromJsonb.isEmpty()) {
+            return fromJsonb;
+        }
         String featureKeys = plan.getFeatureKeys();
         if (featureKeys == null || featureKeys.isBlank()) {
             return null;
@@ -85,6 +99,28 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
             .map(this::normalize)
             .filter(s -> !s.isEmpty())
             .collect(Collectors.toUnmodifiableSet());
+    }
+
+    private Set<String> parseJsonbKeys(String json) {
+        if (json == null || json.isBlank()) {
+            return Set.of();
+        }
+        try {
+            List<String> raw = FEATURE_KEYS_MAPPER.readValue(json, STRING_LIST);
+            if (raw == null || raw.isEmpty()) {
+                return Set.of();
+            }
+            return raw.stream()
+                .map(this::normalize)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toUnmodifiableSet());
+        } catch (RuntimeException | java.io.IOException ex) {
+            // Malformed jsonb cell — degrade to ungated rather than block
+            // every flag for the org. Logged so the operator can retag the
+            // plan; the legacy TEXT column is still consulted on next call.
+            log.warn("[FEATURE-GATE] feature_keys_jsonb parse failed: {}", ex.getMessage());
+            return Set.of();
+        }
     }
 
     private String normalize(String value) {

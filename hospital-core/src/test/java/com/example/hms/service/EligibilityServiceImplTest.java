@@ -171,8 +171,10 @@ class EligibilityServiceImplTest {
             assertThat(saved.getMemberId()).isEqualTo("NHIS-001");
             assertThat(saved.getRequestedBy()).isSameAs(caller);
 
-            verify(healthRecorder, times(1)).recordSuccess(eq("eligibility"), any());
-            verify(healthRecorder, never()).recordFailure(any(), any(), any());
+            verify(healthRecorder, times(1))
+                .recordSuccess(eq("eligibility"), any(), org.mockito.ArgumentMatchers.isNull());
+            verify(healthRecorder, never())
+                .recordFailure(any(), any(), any(), any());
         }
 
         @Test
@@ -191,8 +193,10 @@ class EligibilityServiceImplTest {
             assertThat(emitted.getEventDescription()).contains("COVERAGE")
                 .contains("NHIS_GH").contains("ERROR");
 
-            verify(healthRecorder, times(1)).recordFailure(eq("eligibility"), any(), any());
-            verify(healthRecorder, never()).recordSuccess(any(), any());
+            verify(healthRecorder, times(1))
+                .recordFailure(eq("eligibility"), any(), any(), org.mockito.ArgumentMatchers.isNull());
+            verify(healthRecorder, never())
+                .recordSuccess(any(), any(), any());
         }
 
         @Test

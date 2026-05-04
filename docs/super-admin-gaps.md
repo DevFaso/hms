@@ -1,8 +1,10 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
 > Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> `5ac9fbd2` (**MVPs 1–9 all in production — roadmap closed**) · `uat` @
-> `28e39145` · `develop` @ `6da6ea5b`. Branches:
+> `67406bd3` (**MVPs 1–9 + sub-MVPs 4b/5b/6b/7b/8b/9b all in
+> production**; MVP-c batch in flight on
+> `feature/super-admin-gaps-mvp-c-batch` from `develop` `c4c9feb9`) ·
+> `uat` @ `ce18498e` · `develop` @ `c4c9feb9`. Branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped to main `006384fc`),
 > `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — PR #223 →
 > develop `b280a0bd` → main `34cd0c56`),
@@ -23,7 +25,31 @@
 > Subscriptions "New plan" defect fix and the FR/ES i18n backfill the
 > MVP-{6,7,8} batch shipped without; +12 Karma specs (802 → 814), +5
 > backend service tests + 3 controller IT specs, all 13 CI checks green
-> including the JaCoCo 80% INSTRUCTION gate).
+> including the JaCoCo 80% INSTRUCTION gate),
+> `feature/super-admin-gaps-mvp-4b-5b-6b` (MVP-4b impersonation TTL
+> countdown + auto-stop + MVP-5b super-admin URL namespace consolidation
+> + MVP-6b plan-tier feature enforcement — PR #234 → develop `85b4bc43`,
+> PR #235 → uat `86e6696f`, PR #236 → main `661ac59a`; +9 Karma specs
+> (814 → 823), +9 backend service-layer specs, JaCoCo 80% gate green),
+> `feature/super-admin-gaps-mvp-7b-8b-9b` (MVP-7b per-tenant
+> feature-flag overrides + MFA per-hospital filter + STOMP broadcast
+> banner consumer + MVP-8b audit-search CSV export + per-operator
+> saved-search localStorage + MVP-9b region-aware audit-search filter —
+> PR #237 → develop `c4c9feb9`, PR #238 → uat `ce18498e`, PR #239 →
+> main `67406bd3`; V83 migration adds `organization_id` to
+> `platform_feature_flag_overrides` with composite UNIQUE; +13 Karma
+> specs (823 → 836), +12 backend service specs, JaCoCo 80% gate green
+> in 7m 56s),
+> `feature/super-admin-gaps-mvp-c-batch` (MVP-c roll-up — MVP-2c GDPR
+> packaging + encrypted purge archive, MVP-3b Test/Re-sync actions +
+> per-integration time-series + connector framework with stub
+> NHIS/NHIA/CNAMGS/mutuelle providers, MVP-5c server-side 301
+> redirects, MVP-6c jsonb migration for `feature_keys` + plan-tier
+> audit emission, MVP-8c cross-source audit aggregation +
+> server-side persisted/shared saved searches, MVP-9c per-region
+> retention overrides + per-region export-format defaults +
+> config-driven region routing stub, hospital-level lifecycle state
+> machine — V84 + V85 + V86 + V87 + V88 migrations, all additive).
 
 ## Executive Summary
 
@@ -1257,3 +1283,265 @@ Turns MVP-6's plan catalogue from a label into actual feature gating.
 - `./gradlew :hospital-core:test :jacocoTestReport
   :jacocoTestCoverageVerification` BUILD SUCCESSFUL — 80% INSTRUCTION
   coverage gate passed
+
+---
+
+## MVP-c batch (in flight on `feature/super-admin-gaps-mvp-c-batch`)
+
+Per the user's "all in one branch" directive on 2026-05-03, the seven
+remaining deferred items roll up into a single feature branch off
+`develop` `c4c9feb9`. Two carry hard external dependencies that ship
+as **scaffolding only** with stub providers — flagged inline so a
+follow-up can drop in real partner protocols / region deployments
+when the use-case lands.
+
+### Scope cut taken on the first commit
+
+The batch is enormous (every item spans schema + entity + service +
+controller + frontend + i18n + tests, ~70–140 files end-to-end), so
+the first commit on this branch lands the **shippable backend core
++ schema + audit-event-type catalogue + the smallest items end-to-
+end** and explicitly defers the rest to follow-up commits on the
+same branch. That keeps each push reviewable and avoids landing
+half-implemented surfaces.
+
+| Item | First-commit status | Follow-up needed |
+| --- | --- | --- |
+| MVP-5c | **Shipped** (nginx 301s for `/feature-flags`, `/analytics`) | — |
+| MVP-6c jsonb | **Shipped** backend (V85 migration + entity + jsonb-first gate parser + tests) | Plan-tier audit emission, upgrade-request UI |
+| Hospital lifecycle | **Shipped** backend (V84 + entity + service + 6 endpoints + 8 tests) | JwtFilter login-block, frontend, controller IT |
+| MVP-9c | Schema only (V86 region_policy table seeded) | Entity + service + controller + frontend |
+| MVP-8c | Schema only (V87 audit_saved_search table) | Entity + service + REST CRUD + frontend; cross-source aggregation |
+| MVP-2c | Audit event types only (TENANT_PURGE_PACKAGED, …_FAILED) | Packager + encryption envelope + TenantPurgeJob wiring |
+| MVP-3b | Audit event types only (none added — uses existing) | Connector SPI + Test/Re-sync endpoints + time-series + stubs |
+
+### MVP-2c: GDPR data-export packaging + encrypted purge archive
+
+Originally deferred from MVP-2 (line 215 of this doc). Today the
+`TenantPurgeJob` writes to a *placeholder* path before hard-deleting;
+this adds a real packaging format + at-rest encryption hook.
+
+- **Packaging.** New `TenantExportPackager` `@Component` writes a
+  deterministic ZIP to the configured object-store / filesystem
+  location with a JSON manifest (`org_id`, `org_name`, `purge_id`,
+  `generated_at`, `record_counts_by_table`, `format_version`) at the
+  root, plus per-table NDJSON files (`patients.ndjson`,
+  `staff.ndjson`, `appointments.ndjson`, `encounters.ndjson`,
+  `audit_events.ndjson`). NDJSON keeps each record on its own line so
+  a partner can stream-process the export without loading the whole
+  file in memory.
+- **Encryption.** New `TenantArchiveEncryptionService` wraps the ZIP
+  in an AES-256-GCM envelope with a freshly generated data-encryption
+  key (DEK) per archive. The DEK is itself encrypted with a key
+  resolved from `hms.tenant-archive.kek-source` (`env` reads the
+  base64 KEK from `HMS_TENANT_ARCHIVE_KEK`, `noop` produces an
+  unencrypted archive in dev profiles only and emits a WARN). The
+  envelope manifest records `kek_source`, `kek_id`, `dek_iv`,
+  `cipher`, `created_at` so a key rotation can decrypt historical
+  archives. **Real KMS wiring (AWS KMS / GCP KMS / HashiCorp Vault)
+  is a separate ops task** — the abstraction is the code-side hook.
+- **Wired into `TenantPurgeJob`** before the delete pass: package →
+  encrypt → upload (today: write to the configured filesystem path
+  via the existing `ObjectStorageService` if present, falling back
+  to `${java.io.tmpdir}/tenant-archives/`). Failure to package /
+  encrypt aborts the purge and emits a
+  `TENANT_PURGE_PACKAGING_FAILED` audit event so an operator can
+  retry without losing the grace window.
+- **Tests.** Packager tests cover deterministic ordering, manifest
+  shape, empty-table tolerance, large-row streaming.
+  `TenantArchiveEncryptionServiceImplTest` covers DEK uniqueness,
+  envelope round-trip, missing-KEK rejection in non-dev profiles.
+
+### MVP-3b: Test connection + Re-sync + per-integration time-series + connector framework
+
+Originally deferred from MVP-3 (line 485 of this doc).
+
+- **Test connection action.** New `IntegrationConnectivityProbe`
+  contract on `PlatformIntegrationAdapter` — `Probe probe()`. Each
+  adapter returns `Probe.ok(latencyMs)` / `Probe.failed(message)`.
+  `POST /super-admin/integrations/{id}/probe` calls it, records the
+  outcome through the existing `IntegrationHealthRecorder`, and
+  returns the result. ROLE_SUPER_ADMIN.
+- **Re-sync action.** `POST /super-admin/integrations/{id}/resync`
+  invokes the adapter's `Resyncable.resync(orgId)` if the adapter
+  implements it. Async via `@Async` so the UI returns immediately;
+  the recorder captures success / failure as the work completes.
+  Adapters that don't implement `Resyncable` return 422.
+- **Per-integration time-series history.** New table
+  `clinical.integration_health_event` (V84, additive) records every
+  recorder call with `(integration_id, organization_id, status,
+  latency_ms, error_message, recorded_at)`. New
+  `GET /super-admin/integrations/{id}/history?windowHours=24` returns
+  bucketed counts (`HEALTHY` / `DEGRADED` / `FAILING` per hour bucket).
+- **Connector framework.** New `PartnerConnector` SPI with stub
+  implementations under
+  `com.example.hms.integration.partner.{nhis,nhia,cnamgs,mutuelle}`.
+  Each stub returns `Probe.failed("Connector in stub mode — partner
+  protocol not yet wired")` and a no-op resync that emits a
+  `Probe.ok` after a configurable delay so the UI exercise path is
+  testable. Real partner protocols (HL7 / FHIR / proprietary REST)
+  drop into the same SPI when specs land.
+- **Frontend.** Two action buttons on each integration row of the
+  Integration Health Console (Test connection / Re-sync), plus a
+  **History** drawer that renders a 24 h sparkline of the bucketed
+  counts. `IntegrationHealthService` gains the three new endpoints.
+
+### MVP-5c: Server-side 301 redirects for SUPER_ADMIN-only legacy URLs
+
+Originally deferred from MVP-5b (line 1120 of this doc). Today's
+client-side rewrite preserves bookmarks but doesn't update the URL
+bar before the SPA boot, and bookmarks stay pinned to the legacy URL.
+
+- **Constraint discovered on implementation.** Of the four legacy
+  paths, only `/feature-flags` and `/analytics` are
+  `ROLE_SUPER_ADMIN`-only — `/audit-logs` and `/platform` are also
+  reachable by `HOSPITAL_ADMIN` / `ADMIN`, so a blanket 301 would
+  rewrite their working bookmarks. MVP-5c therefore 301s only the
+  two unambiguous super-admin paths and leaves `/audit-logs` /
+  `/platform` to the existing client-side `superAdminPathRewriteGuard`
+  for SUPER_ADMIN actives. Documented in `nginx.conf` and the
+  guard's TSDoc.
+- nginx adds two `location = /<path> { return 301 /super-admin/<path>; }`
+  blocks. Bookmarks are rewritten by browsers that update on 301,
+  and the URL bar repaints before the SPA loads — closing the drift.
+- The Angular `superAdminPathRewriteGuard` stays in place for
+  in-app navigation, the two multi-role paths, and as defense in
+  depth (e.g. preview/dev environments running Angular's dev server
+  without the production nginx).
+
+### MVP-6c: jsonb migration for `feature_keys`
+
+Originally deferred from MVP-6b (line 1162 of this doc).
+
+- **V85 migration (additive).** Adds `platform.subscription_plans
+  .feature_keys_jsonb jsonb NOT NULL DEFAULT '[]'` and backfills from
+  the existing comma-separated TEXT column. Old column kept for one
+  release for rollback safety; flagged for drop in the next MVP
+  cycle. GIN index on the new column enables `@>` containment
+  queries when needed.
+- **`SubscriptionPlan` entity** gains a `featureKeysJson` field
+  persisted as raw JSON (`@JdbcTypeCode(SqlTypes.JSON)`). The
+  legacy `featureKeys` TEXT field stays so writes from the existing
+  Subscriptions UI keep working until the column is dropped; new
+  writes should populate both.
+- **`SubscriptionFeatureGateServiceImpl`** prefers the jsonb form
+  when populated and falls back to the legacy TEXT column otherwise.
+  Malformed jsonb cells degrade to "ungated for this call" + WARN
+  log so a single bad row doesn't black-hole an entire org's flag
+  resolution.
+
+**Deferred to MVP-6c.2 follow-up** (separate small branch — keeps
+this batch reviewable):
+
+- Plan-tier audit emission via `AuditEventType.PLAN_FEATURE_GATE_BLOCKED`
+  with a 5-min in-memory dedup window keyed on `org_id+flag_key`.
+  The enum value ships in this batch so the follow-up only changes
+  `FeatureFlagServiceImpl`.
+- Self-service org-side upgrade-request UI + backend
+  `subscription_upgrade_requests` table.
+
+### MVP-8c: Cross-source audit aggregation + persisted/shared saved searches
+
+Originally deferred from MVP-8b (line 1236 of this doc).
+
+- **Cross-source aggregation.** `AggregatedAuditEvent` projection
+  unions rows from `support.audit_event_logs`,
+  `frontend_audit_event`, and `permission_matrix_audit_event` into a
+  common shape (id, source, eventType, actor, organizationId,
+  hospitalId, status, timestamp, summary). New
+  `GET /super-admin/audit-search/aggregated` accepts the existing
+  `AuditSearchFilter` plus a `sources` array (default: all three).
+  Service materialises each source query separately, merges with a
+  bounded heap-merge sort on timestamp DESC, and paginates the
+  merged stream. Backend-side guard rails: per-source LIMIT to
+  prevent runaway queries; explicit `EXPLAIN`-friendly indexes
+  on the new sources where missing.
+- **Server-side saved searches.** New `audit_saved_search` table
+  (V87, additive) stores `(id, owner_user_id, name, filter_json,
+  shared bool, created_at, updated_at)`. New
+  `/super-admin/audit-search/saved` REST CRUD + `?include=shared`
+  to list the operator's own searches plus searches another super
+  admin marked `shared=true`. Frontend `AuditSavedSearchService`
+  switches from localStorage to REST; `localStorage` legacy entries
+  are migrated on first load (one-shot upload, then cleared).
+- **Sharing.** Toggle on the saved-search row flips
+  `shared` so other super admins see it on their list. Owner's
+  username surfaced on the row so an operator can attribute the
+  shared search.
+
+### MVP-9c: Per-region retention overrides + per-region export-format defaults + region routing config
+
+Originally deferred from MVP-9b (line 1260 of this doc). The two
+*overrides* ship as real code; the *routing* piece ships as
+config-driven scaffolding (a `RegionRoutingResolver` consulted at org
+provisioning time) — physical multi-region Railway deployments stay
+an ops task.
+
+- **V88 migration (additive).** New `platform.region_policy` table
+  keyed on `(region)` with columns `retention_days INTEGER NULL`,
+  `default_export_format VARCHAR(32) NULL`,
+  `target_deployment_url VARCHAR(255) NULL`,
+  `updated_at TIMESTAMPTZ NOT NULL`,
+  `updated_by VARCHAR(255) NOT NULL`. Seed rows for every
+  `OrganizationRegion` enum value with NULL overrides.
+- **Retention.** `TenantPurgeJob` and existing retention sweeps
+  consult `RegionPolicyService.resolveRetentionDays(orgRegion)` —
+  null falls back to the global policy, non-null overrides it.
+- **Export format.** GDPR-tagged regions (EU + any region opting in
+  via the new column) get `default_export_format = 'GDPR_PORTABILITY'`
+  in the seed; the `TenantExportPackager` (MVP-2c above) reads the
+  region policy first, falling back to the global default.
+- **Routing.** `RegionRoutingResolver` reads
+  `target_deployment_url` and is called by
+  `TenantProvisioningService` at create time. When set + non-empty,
+  the new tenant is created on the remote deployment via a
+  configured tenant-provisioning REST hook (today: stubbed; the
+  hook surface is `TenantProvisioningClient` so a real impl can be
+  swapped in). When unset, provisioning runs on the local
+  deployment as today.
+- **Frontend.** New `/super-admin/data-residency/policy` view —
+  per-region table with editable retention / export-format /
+  deployment-URL columns. ROLE_SUPER_ADMIN.
+
+### Hospital-level lifecycle state machine
+
+Originally deferred from MVP-2 (line 1028 of this doc) as a Risks &
+Open Questions item.
+
+- **V84-companion migration.** `Hospital.lifecycle_status`
+  (`ACTIVE` / `SUSPENDED` / `ARCHIVED` / `PURGE_SCHEDULED` /
+  `PURGED`), `suspended_at`, `archived_at`, `purge_scheduled_for` —
+  mirrors the `Organization` columns from V77.
+- **`HospitalLifecycleService`.** Same state-machine semantics as
+  `OrganizationLifecycleService` (transition validation, audit
+  emission, purge scheduling). Suspending an *organization*
+  cascades implicit suspension to every Hospital under it for login-
+  block purposes; lifting the org back to `ACTIVE` does **not**
+  auto-resume hospitals that were suspended independently — those
+  must be restored explicitly so a partial off-boarding stays
+  partial.
+- **`JwtAuthenticationFilter`** rejects tokens whose
+  `permittedHospitalIds` contains a `SUSPENDED`/`ARCHIVED` hospital
+  (when not super admin). Super admin retains visibility.
+- **Endpoints.** Mirror the org endpoints under
+  `/super-admin/hospitals/{id}/{suspend,restore,archive,schedule-
+  purge,cancel-purge,lifecycle}`.
+- **Frontend.** Hospital detail view gains a Lifecycle panel +
+  action buttons gated on SUPER_ADMIN; hospital list shows a state
+  chip mirroring the org-list pattern.
+
+### Caveats
+
+- **MVP-3b real partner protocols** ship as *stubs* — actual
+  NHIS / NHIA / CNAMGS / mutuelle wire-protocol implementations
+  drop in via the same SPI once partner specs + sandbox credentials
+  land.
+- **MVP-9c region routing** ships as a config-driven hook + a stub
+  `TenantProvisioningClient`. Physical multi-region Railway
+  deployments + DNS + per-region secret stores are a separate ops
+  task — unblock by setting `region_policy.target_deployment_url`
+  and dropping in a real `TenantProvisioningClient` impl.
+- **MVP-2c KEK source** defaults to `noop` in dev profiles. Production
+  must export `HMS_TENANT_ARCHIVE_KEK` (base64) until the real KMS
+  integration lands; the abstraction is in place so swapping the
+  source is a one-bean change.

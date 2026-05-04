@@ -63,6 +63,12 @@ class UserRoleHospitalAssignmentControllerTest {
     @MockitoBean
     private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
 
+    /** MVP-c batch fixup — JwtAuthenticationFilter now also depends on
+     *  HospitalLifecycleStatusService for the per-hospital login block.
+     *  Same posture as the org-level mock above. */
+    @MockitoBean
+    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {
         UUID userId = UUID.randomUUID();

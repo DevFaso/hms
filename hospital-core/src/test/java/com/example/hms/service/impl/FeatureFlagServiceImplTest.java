@@ -36,6 +36,9 @@ class FeatureFlagServiceImplTest {
     @Mock
     private SubscriptionFeatureGateService subscriptionFeatureGate;
 
+    @Mock
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
     @Captor
     private ArgumentCaptor<FeatureFlagOverride> overrideCaptor;
 
@@ -60,7 +63,7 @@ class FeatureFlagServiceImplTest {
         lenient().when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
 
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
 
         // Default: no tenant context → gate is a no-op (matches the
         // legacy behaviour the existing tests expect). Individual
@@ -161,5 +164,85 @@ class FeatureFlagServiceImplTest {
             .containsEntry("feature.alpha", true)
             .containsEntry("feature.gamma", true)
             .containsEntry("feature.beta", false);
+    }
+
+    // ── MVP-6c plan-tier audit emission ───────────────────────────────
+
+    @org.junit.jupiter.api.AfterEach
+    void clearTenantContext() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    private void setTenantContext(UUID orgId, UUID hospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(UUID.randomUUID())
+                .principalUsername("ops.user")
+                .activeOrganizationId(orgId)
+                .activeHospitalId(hospitalId)
+                .superAdmin(false)
+                .permittedOrganizationIds(orgId == null ? java.util.Set.of() : java.util.Set.of(orgId))
+                .build());
+    }
+
+    @Test
+    void planGateBlockEmitsAuditEvent() {
+        UUID orgId = UUID.randomUUID();
+        setTenantContext(orgId, UUID.randomUUID());
+        // Disable feature.alpha for the org via the gate.
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.eq(orgId), org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> !"feature.alpha".equals(inv.getArgument(1)));
+
+        service.listFlags(null, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        assertThat(captor.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.PLAN_FEATURE_GATE_BLOCKED);
+        assertThat(captor.getValue().getResourceId()).isEqualTo("feature.alpha");
+    }
+
+    @Test
+    void planGateAuditDedupSuppressesRepeatEmitsWithinWindow() {
+        UUID orgId = UUID.randomUUID();
+        setTenantContext(orgId, UUID.randomUUID());
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.eq(orgId), org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> !"feature.alpha".equals(inv.getArgument(1)));
+
+        // Three back-to-back resolves — the dedup window must compress
+        // them to a single audit emit.
+        service.listFlags(null, Locale.ENGLISH);
+        service.listFlags(null, Locale.ENGLISH);
+        service.listFlags(null, Locale.ENGLISH);
+
+        verify(auditEventLogService, org.mockito.Mockito.times(1))
+            .logEvent(org.mockito.ArgumentMatchers.any(
+                com.example.hms.payload.dto.AuditEventRequestDTO.class));
+    }
+
+    @Test
+    void planGateAuditDedupEvictsEntriesOlderThanTwiceTheWindow() {
+        // Copilot review fix #5 — the dedup map used to grow without
+        // bound. evictExpiredAuditDedupEntries(now) must drop entries
+        // whose last-emit timestamp is older than 2× the dedup window.
+        UUID orgId = UUID.randomUUID();
+        setTenantContext(orgId, UUID.randomUUID());
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.eq(orgId), org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> !"feature.alpha".equals(inv.getArgument(1)));
+
+        // Populate the map by emitting once.
+        service.listFlags(null, Locale.ENGLISH);
+        assertThat(service.planGateAuditDedupSize()).isEqualTo(1);
+
+        // Sweep with a "now" 30 minutes in the future — entries older
+        // than 2× the 5-minute dedup window (>10 min) must be removed.
+        long farFuture = System.currentTimeMillis() + (30L * 60L * 1000L);
+        service.evictExpiredAuditDedupEntries(farFuture);
+
+        assertThat(service.planGateAuditDedupSize()).isZero();
     }
 }
