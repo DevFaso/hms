@@ -1,13 +1,17 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
+import com.example.hms.exception.RemoteProvisioningNotConfiguredException;
 import com.example.hms.mapper.OrganizationMapper;
 import com.example.hms.model.Organization;
 import com.example.hms.payload.dto.OrganizationResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationRequestDTO;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.service.OrganizationSecurityService;
+import com.example.hms.service.RegionRoutingResolver;
 import com.example.hms.service.platform.OrganizationPlatformBootstrapService;
+import com.example.hms.service.provisioning.TenantProvisioningClient;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +28,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +50,12 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
     @Mock
     private OrganizationMapper organizationMapper;
 
+    @Mock
+    private RegionRoutingResolver regionRoutingResolver;
+
+    @Mock
+    private TenantProvisioningClient tenantProvisioningClient;
+
     @Captor
     private ArgumentCaptor<Organization> organizationCaptor;
 
@@ -57,7 +68,9 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
             organizationRepository,
             organizationSecurityService,
             organizationPlatformBootstrapService,
-            organizationMapper
+            organizationMapper,
+            regionRoutingResolver,
+            tenantProvisioningClient
         );
     }
 
@@ -189,5 +202,65 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
         assertThat(persisted.getType()).isEqualTo(OrganizationType.PRIVATE_PRACTICE);
 
         assertThat(response.getPrimaryContactPhone()).isNull();
+    }
+
+    // ── MVP-9c routing scaffold ─────────────────────────────────────────
+
+    @Test
+    void createOrganization_whenRegionHasTargetDeploymentUrl_delegatesToProvisioningClient() {
+        SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
+            .name("EU Tenant")
+            .code("eu-tenant")
+            .timezone("Europe/Paris")
+            .contactEmail("ops@eu-tenant.example")
+            .region(OrganizationRegion.EU)
+            .build();
+
+        OrganizationResponseDTO remoteResponse = OrganizationResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .code("EU-TENANT")
+            .name("EU Tenant")
+            .build();
+
+        when(organizationRepository.existsByCode("EU-TENANT")).thenReturn(false);
+        when(regionRoutingResolver.resolveDeploymentUrl(OrganizationRegion.EU))
+            .thenReturn(Optional.of("https://eu.hms.example/api"));
+        when(tenantProvisioningClient.provisionRemote(any(), eq("https://eu.hms.example/api")))
+            .thenReturn(remoteResponse);
+
+        OrganizationResponseDTO response = service.createOrganization(request);
+
+        // Local-side state must be untouched: no save, no security policies,
+        // no platform bootstrap, no mapper invocation. The remote response
+        // is returned verbatim.
+        assertThat(response).isSameAs(remoteResponse);
+        verify(organizationRepository, never()).save(any(Organization.class));
+        verifyNoInteractions(organizationSecurityService, organizationPlatformBootstrapService, organizationMapper);
+    }
+
+    @Test
+    void createOrganization_whenStubClientRejectsRemote_propagates501() {
+        SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
+            .name("EU Tenant")
+            .code("eu-tenant")
+            .timezone("Europe/Paris")
+            .contactEmail("ops@eu-tenant.example")
+            .region(OrganizationRegion.EU)
+            .build();
+
+        when(organizationRepository.existsByCode("EU-TENANT")).thenReturn(false);
+        when(regionRoutingResolver.resolveDeploymentUrl(OrganizationRegion.EU))
+            .thenReturn(Optional.of("https://eu.hms.example/api"));
+        when(tenantProvisioningClient.provisionRemote(any(), eq("https://eu.hms.example/api")))
+            .thenThrow(new RemoteProvisioningNotConfiguredException(
+                "Region routing is configured but no remote client is wired"));
+
+        assertThatThrownBy(() -> service.createOrganization(request))
+            .isInstanceOf(RemoteProvisioningNotConfiguredException.class)
+            .hasMessageContaining("no remote client is wired");
+
+        // Local provisioning side-effects must not have run.
+        verify(organizationRepository, never()).save(any(Organization.class));
+        verifyNoInteractions(organizationSecurityService, organizationPlatformBootstrapService, organizationMapper);
     }
 }

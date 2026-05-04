@@ -9,10 +9,13 @@ import com.example.hms.payload.dto.OrganizationResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationRequestDTO;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.service.OrganizationSecurityService;
+import com.example.hms.service.RegionRoutingResolver;
 import com.example.hms.service.SuperAdminOrganizationProvisioningService;
 import com.example.hms.service.platform.OrganizationPlatformBootstrapService;
+import com.example.hms.service.provisioning.TenantProvisioningClient;
 import jakarta.validation.Valid;
 import java.util.Locale;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -32,6 +35,8 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
     private final OrganizationSecurityService organizationSecurityService;
     private final OrganizationPlatformBootstrapService organizationPlatformBootstrapService;
     private final OrganizationMapper organizationMapper;
+    private final RegionRoutingResolver regionRoutingResolver;
+    private final TenantProvisioningClient tenantProvisioningClient;
 
     @Override
     public OrganizationResponseDTO createOrganization(@Valid SuperAdminCreateOrganizationRequestDTO request) {
@@ -42,6 +47,18 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
 
         OrganizationType type = request.getType() != null ? request.getType() : OrganizationType.HEALTHCARE_NETWORK;
         OrganizationRegion region = request.getRegion() != null ? request.getRegion() : OrganizationRegion.BF;
+
+        // MVP-9c — if the region's policy declares a remote deployment,
+        // delegate to the configured TenantProvisioningClient. The stub
+        // client throws 501; a real client forwards the request and
+        // returns the remote's response. When no URL is configured we
+        // fall through to local provisioning unchanged.
+        Optional<String> targetUrl = regionRoutingResolver.resolveDeploymentUrl(region);
+        if (targetUrl.isPresent()) {
+            log.info("[REGION-ROUTING] Region {} -> remote deployment {}; delegating provisioning",
+                region, targetUrl.get());
+            return tenantProvisioningClient.provisionRemote(request, targetUrl.get());
+        }
 
         Organization organization = Organization.builder()
             .name(request.getName())
