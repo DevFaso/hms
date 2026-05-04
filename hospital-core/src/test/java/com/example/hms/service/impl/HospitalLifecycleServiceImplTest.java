@@ -181,4 +181,82 @@ class HospitalLifecycleServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Hospital not found");
     }
+
+    // ── MFA step-up branches (mirrors OrganizationLifecycleServiceImplTest) ──
+
+    @Test
+    void enrolledActorWithoutTokenIsRejected() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
+            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
+            .hasMessageContaining("mfa_required");
+        verify(hospitalRepository, never()).save(any());
+    }
+
+    @Test
+    void enrolledActorWithInvalidCodeIsRejected() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(mfaService.verifyCode(actorId, "000000")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "000000"))
+            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
+            .hasMessageContaining("invalid or missing");
+    }
+
+    @Test
+    void enrolledActorWithValidCodePassesAndPersists() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mfaService.isMfaEnabled(actorId)).thenReturn(true);
+        when(mfaService.verifyCode(actorId, "123456")).thenReturn(true);
+
+        service.suspend(hospitalId, withReason("ops"), "123456");
+        assertThat(hospital.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+    }
+
+    @Test
+    void unenrolledActorInNonStrictModeAuditsAndProceeds() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        ReflectionTestUtils.setField(service, "requireMfaStrict", false);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+
+        service.suspend(hospitalId, withReason("ops"), null);
+
+        // Two audit events — the bypass marker + the lifecycle transition.
+        verify(auditEventLogService, org.mockito.Mockito.atLeast(2))
+            .logEvent(any(AuditEventRequestDTO.class));
+        assertThat(hospital.getLifecycleState()).isEqualTo(HospitalLifecycleState.SUSPENDED);
+    }
+
+    @Test
+    void unenrolledActorInStrictModeIsRejected() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        ReflectionTestUtils.setField(service, "requireMfaStrict", true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.isMfaEnabled(actorId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), null))
+            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
+            .hasMessageContaining("must enrol MFA");
+        verify(hospitalRepository, never()).save(any());
+    }
+
+    @Test
+    void mfaEnrollmentLookupFailureFailsClosed() {
+        ReflectionTestUtils.setField(service, "requireMfa", true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mfaService.isMfaEnabled(actorId)).thenThrow(new RuntimeException("MFA service down"));
+
+        assertThatThrownBy(() -> service.suspend(hospitalId, withReason("ops"), "123456"))
+            .isInstanceOf(com.example.hms.exception.UnauthorizedException.class)
+            .hasMessageContaining("enrollment lookup unavailable");
+    }
 }
