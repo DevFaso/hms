@@ -222,4 +222,27 @@ class FeatureFlagServiceImplTest {
             .logEvent(org.mockito.ArgumentMatchers.any(
                 com.example.hms.payload.dto.AuditEventRequestDTO.class));
     }
+
+    @Test
+    void planGateAuditDedupEvictsEntriesOlderThanTwiceTheWindow() {
+        // Copilot review fix #5 — the dedup map used to grow without
+        // bound. evictExpiredAuditDedupEntries(now) must drop entries
+        // whose last-emit timestamp is older than 2× the dedup window.
+        UUID orgId = UUID.randomUUID();
+        setTenantContext(orgId, UUID.randomUUID());
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.eq(orgId), org.mockito.ArgumentMatchers.anyString()))
+            .thenAnswer(inv -> !"feature.alpha".equals(inv.getArgument(1)));
+
+        // Populate the map by emitting once.
+        service.listFlags(null, Locale.ENGLISH);
+        assertThat(service.planGateAuditDedupSize()).isEqualTo(1);
+
+        // Sweep with a "now" 30 minutes in the future — entries older
+        // than 2× the 5-minute dedup window (>10 min) must be removed.
+        long farFuture = System.currentTimeMillis() + (30L * 60L * 1000L);
+        service.evictExpiredAuditDedupEntries(farFuture);
+
+        assertThat(service.planGateAuditDedupSize()).isZero();
+    }
 }

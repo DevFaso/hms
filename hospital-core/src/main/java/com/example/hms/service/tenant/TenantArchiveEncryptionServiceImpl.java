@@ -17,12 +17,13 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * AES-256-GCM envelope encryption for tenant archives (MVP-c batch — MVP-2c).
@@ -160,21 +161,27 @@ public class TenantArchiveEncryptionServiceImpl implements TenantArchiveEncrypti
         byte[] wrappedDek = wrapCipher.doFinal(dek.getEncoded());
 
         // 4. Sidecar envelope manifest (kept alongside the encrypted archive).
-        Path envelopePath = writeEncryptedEnvelope(outputPath, wrappedDek, wrapIv, dataIv);
-        log.info("[TENANT-ARCHIVE-ENCRYPTION] Encrypted {} -> {} (envelope at {})",
-            plaintextZip, outputPath, envelopePath);
+        //    Pass the KEK material so kek_id is derived from the actual key
+        //    and stays stable across JVM restarts (Copilot review fix —
+        //    the prior JVM-startup-salt scheme made historical envelopes
+        //    operationally unmappable after every redeploy).
+        String kekId = deriveKekId(kek);
+        Path envelopePath = writeEncryptedEnvelope(outputPath, kekId, wrappedDek, wrapIv, dataIv);
+        log.info("[TENANT-ARCHIVE-ENCRYPTION] Encrypted {} -> {} (envelope at {}, kek_id={})",
+            plaintextZip, outputPath, envelopePath, kekId);
 
         return new EncryptionResult(outputPath.toAbsolutePath(),
             envelopePath, EncryptionResult.Mode.ENCRYPTED, AES_GCM);
     }
 
-    private Path writeEncryptedEnvelope(Path outputPath, byte[] wrappedDek, byte[] wrapIv, byte[] dataIv)
+    private Path writeEncryptedEnvelope(Path outputPath, String kekId,
+                                        byte[] wrappedDek, byte[] wrapIv, byte[] dataIv)
         throws IOException {
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("envelope_version", 1);
         envelope.put("created_at", Instant.now().toString());
         envelope.put("kek_source", kekSource);
-        envelope.put("kek_id", deriveKekId());
+        envelope.put("kek_id", kekId);
         envelope.put("cipher", AES_GCM);
         envelope.put("data_iv_b64", Base64.getEncoder().encodeToString(dataIv));
         envelope.put("wrap_iv_b64", Base64.getEncoder().encodeToString(wrapIv));
@@ -206,17 +213,30 @@ public class TenantArchiveEncryptionServiceImpl implements TenantArchiveEncrypti
     }
 
     /**
-     * Stable per-runtime KEK identifier so an envelope can be matched
-     * to the KEK source it was wrapped with. We deliberately do NOT
-     * derive this from the KEK material itself (would leak); it's a
-     * UUIDv5 over the source name + a random startup salt so envelopes
-     * from a single instance can be correlated.
+     * Stable KEK identifier derived from a hash of the KEK material
+     * itself (Copilot review fix — the prior JVM-startup-salt scheme
+     * regenerated kek_id on every deploy, leaving historical envelopes
+     * operationally unmappable to the key that wrapped them).
+     *
+     * <p>Format: {@code <kekSource>:<first-16-hex-chars-of-SHA256(kek)>}.
+     * SHA-256 truncation to 64 bits is collision-safe for the small set
+     * of KEKs in practice and does not leak the key material (a
+     * preimage attack on truncated SHA-256 is infeasible). Survives JVM
+     * restart, changes on key rotation — both desirable.
      */
-    private String deriveKekId() {
-        return UUID.nameUUIDFromBytes((kekSource + ":" + KEK_INSTANCE_SALT)
-            .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    private String deriveKekId(byte[] kek) {
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            byte[] digest = sha256.digest(kek);
+            StringBuilder hex = new StringBuilder(16);
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format("%02x", digest[i]));
+            }
+            return kekSource + ":" + hex;
+        } catch (NoSuchAlgorithmException ex) {
+            // SHA-256 is mandated by every JRE; the catch is bookkeeping
+            // to keep the method signature checked-exception-free.
+            throw new IllegalStateException("SHA-256 unavailable; JVM is broken", ex);
+        }
     }
-
-    /** Salt regenerated per JVM startup so a leaked envelope cannot be replayed across instances. */
-    private static final String KEK_INSTANCE_SALT = UUID.randomUUID().toString();
 }

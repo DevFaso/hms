@@ -41,8 +41,6 @@ public abstract class StubPartnerConnector implements IntegrationConnectivityPro
     public void resync(UUID organizationId) {
         log.info("[PARTNER-STUB] Re-sync invoked for {} org={} (stub: recording success after no-op)",
             integrationId(), organizationId);
-        // Stub re-sync records a synthetic success so the UI path completes;
-        // a real adapter will replace this with the partner-protocol call.
-        recorder.recordSuccess(integrationId(), organizationId);
+        recorder.recordSuccess(integrationId(), organizationId, null);
     }
 }

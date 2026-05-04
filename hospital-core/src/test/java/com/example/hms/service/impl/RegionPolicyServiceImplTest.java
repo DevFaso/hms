@@ -144,13 +144,16 @@ class RegionPolicyServiceImplTest {
     }
 
     @Test
-    void noopUpdateDoesNotEmitAudit() {
+    void noopUpdateDoesNotSaveOrEmitAudit() {
         RegionPolicy current = seedRow(OrganizationRegion.BF, 30, "STANDARD", null);
+        java.time.Instant originalUpdatedAt = current.getUpdatedAt();
+        String originalUpdatedBy = current.getUpdatedBy();
         when(regionPolicyRepository.findById(OrganizationRegion.BF))
             .thenReturn(Optional.of(current));
-        when(regionPolicyRepository.save(any(RegionPolicy.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        // Re-applying the same values must not emit an audit event.
+        // Re-applying the same values must not save (Copilot review fix —
+        // previously updatedAt/updatedBy bumped on every PUT) and must
+        // not emit an audit event.
         RegionPolicyUpdateRequestDTO same = RegionPolicyUpdateRequestDTO.builder()
             .retentionDays(30)
             .defaultExportFormat("STANDARD")
@@ -158,7 +161,11 @@ class RegionPolicyServiceImplTest {
             .build();
         service.update(OrganizationRegion.BF, same);
 
+        verify(regionPolicyRepository, never()).save(any(RegionPolicy.class));
         verify(auditEventLogService, never()).logEvent(any(AuditEventRequestDTO.class));
+        // updatedAt / updatedBy must remain at the pre-call values.
+        assertThat(current.getUpdatedAt()).isEqualTo(originalUpdatedAt);
+        assertThat(current.getUpdatedBy()).isEqualTo(originalUpdatedBy);
     }
 
     @Test

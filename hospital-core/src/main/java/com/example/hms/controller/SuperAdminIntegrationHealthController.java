@@ -84,6 +84,13 @@ public class SuperAdminIntegrationHealthController {
         @PathVariable String integrationId,
         @RequestParam(value = "windowHours", defaultValue = "24") int windowHours
     ) {
+        // Copilot review fix — /history previously returned 200 [] for
+        // an unknown integration id, while /probe and /resync 404'd on
+        // the same id. API consumers couldn't distinguish "no history
+        // yet" from "integration does not exist". Now consistent.
+        if (!actionService.isKnownIntegration(integrationId)) {
+            throw new ResourceNotFoundException("Unknown integration: " + integrationId);
+        }
         return ResponseEntity.ok(actionService.getHistory(integrationId, windowHours));
     }
 }

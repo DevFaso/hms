@@ -157,4 +157,54 @@ class TenantArchiveEncryptionServiceImplTest {
             .isInstanceOf(IOException.class)
             .hasMessageContaining("Unsupported");
     }
+
+    @Test
+    void kekIdIsStableAcrossInstancesForTheSameKek(@TempDir Path tmp) throws Exception {
+        // Copilot review fix #3 — kek_id used to be derived from a
+        // per-JVM-startup salt, which made historical envelopes
+        // operationally unmappable to the key that wrapped them.
+        // Two separate service instances using the SAME KEK must now
+        // produce the SAME kek_id so a key rotation playbook can match
+        // an envelope back to its key.
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+        String kek = randomKekB64();
+        TenantArchiveEncryptionServiceImpl serviceA = serviceWith(env, "env", kek);
+        TenantArchiveEncryptionServiceImpl serviceB = serviceWith(new MockEnvironment().withProperty("dummy","x"), "env", kek);
+        // serviceB needs an active profile too.
+        ((MockEnvironment) org.springframework.test.util.ReflectionTestUtils
+            .getField(serviceB, "springEnvironment")).setActiveProfiles("prod");
+
+        Path plain = samplePlaintext(tmp, "round-trip-a");
+        Path outA = tmp.resolve("a.zip.enc");
+        Path outB = tmp.resolve("b.zip.enc");
+
+        TenantArchiveEncryptionService.EncryptionResult resA = serviceA.encryptArchive(plain, outA);
+        TenantArchiveEncryptionService.EncryptionResult resB = serviceB.encryptArchive(plain, outB);
+
+        JsonNode envA = new ObjectMapper().readTree(Files.readAllBytes(resA.envelopePath()));
+        JsonNode envB = new ObjectMapper().readTree(Files.readAllBytes(resB.envelopePath()));
+        assertThat(envA.get("kek_id").asText()).isEqualTo(envB.get("kek_id").asText());
+        // And it must encode the source so an operator can grep for it.
+        assertThat(envA.get("kek_id").asText()).startsWith("env:");
+    }
+
+    @Test
+    void kekIdDiffersAcrossDifferentKeks(@TempDir Path tmp) throws Exception {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+        TenantArchiveEncryptionServiceImpl serviceA = serviceWith(env, "env", randomKekB64());
+        TenantArchiveEncryptionServiceImpl serviceB = serviceWith(env, "env", randomKekB64());
+
+        Path plain = samplePlaintext(tmp, "round-trip-b");
+        Path outA = tmp.resolve("rotA.zip.enc");
+        Path outB = tmp.resolve("rotB.zip.enc");
+
+        TenantArchiveEncryptionService.EncryptionResult resA = serviceA.encryptArchive(plain, outA);
+        TenantArchiveEncryptionService.EncryptionResult resB = serviceB.encryptArchive(plain, outB);
+
+        JsonNode envA = new ObjectMapper().readTree(Files.readAllBytes(resA.envelopePath()));
+        JsonNode envB = new ObjectMapper().readTree(Files.readAllBytes(resB.envelopePath()));
+        assertThat(envA.get("kek_id").asText()).isNotEqualTo(envB.get("kek_id").asText());
+    }
 }

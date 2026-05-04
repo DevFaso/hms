@@ -132,4 +132,58 @@ class TenantExportPackagerTest {
         assertThat(Files.size(out)).isPositive();
         assertThat(result.recordCountsByTable().get("hospitals.ndjson")).isZero();
     }
+
+    @Test
+    void manifestRecordCountsByTableIsPopulatedInsideArchive(@TempDir Path tmp) throws IOException {
+        // Copilot review fix #1 — manifest used to be written before the
+        // counts were computed, so the persisted manifest's
+        // record_counts_by_table was always empty. After the fix it
+        // reflects what was actually written.
+        Organization org = sampleOrg();
+        Path out = tmp.resolve("counts.zip");
+
+        packager.packageOrganization(org, out);
+
+        try (ZipFile zf = new ZipFile(out.toFile())) {
+            byte[] body = zf.getInputStream(zf.getEntry("manifest.json")).readAllBytes();
+            JsonNode manifest = new ObjectMapper().readTree(body);
+            JsonNode counts = manifest.get("record_counts_by_table");
+            assertThat(counts.isObject()).isTrue();
+            assertThat(counts.get("organization.ndjson").asLong()).isEqualTo(1L);
+            assertThat(counts.get("hospitals.ndjson").asLong()).isEqualTo(1L);
+            assertThat(counts.get("patients.ndjson").asLong()).isZero();
+        }
+    }
+
+    @Test
+    void hospitalsNdjsonIsSortedByCodeForReproducibleArchives(@TempDir Path tmp) throws IOException {
+        // Copilot review fix #2 — Set iteration was non-deterministic.
+        // After the fix, hospitals.ndjson is ordered by code regardless
+        // of the input set ordering.
+        Organization org = sampleOrg();
+        // Three hospitals in deliberately reverse-alphabetical order.
+        Hospital z = new Hospital(); z.setId(UUID.randomUUID()); z.setName("Zeta"); z.setCode("ZED");
+        Hospital m = new Hospital(); m.setId(UUID.randomUUID()); m.setName("Mid"); m.setCode("MID");
+        Hospital a = new Hospital(); a.setId(UUID.randomUUID()); a.setName("Alpha"); a.setCode("ALP");
+        Set<Hospital> hospitals = new HashSet<>();
+        hospitals.add(z);
+        hospitals.add(m);
+        hospitals.add(a);
+        org.setHospitals(hospitals);
+        Path out = tmp.resolve("ordered.zip");
+
+        packager.packageOrganization(org, out);
+
+        try (ZipFile zf = new ZipFile(out.toFile())) {
+            String body = new String(
+                zf.getInputStream(zf.getEntry("hospitals.ndjson")).readAllBytes());
+            // Each line is one record; codes appear in order ALP, MID, ZED.
+            int alpIdx = body.indexOf("\"ALP\"");
+            int midIdx = body.indexOf("\"MID\"");
+            int zedIdx = body.indexOf("\"ZED\"");
+            assertThat(alpIdx).isPositive();
+            assertThat(alpIdx).isLessThan(midIdx);
+            assertThat(midIdx).isLessThan(zedIdx);
+        }
+    }
 }

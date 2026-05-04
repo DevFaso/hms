@@ -31,7 +31,7 @@ public class HospitalLifecycleStatusServiceImpl implements HospitalLifecycleStat
         HospitalLifecycleState.PURGED
     );
 
-    private final long cacheTtlMillis = 30_000L;
+    private static final long CACHE_TTL_MILLIS = 30_000L;
 
     private final HospitalRepository hospitalRepository;
 
@@ -42,7 +42,7 @@ public class HospitalLifecycleStatusServiceImpl implements HospitalLifecycleStat
     public Set<UUID> getBlockedHospitalIds() {
         Snapshot current = snapshot.get();
         long now = System.currentTimeMillis();
-        if (current == null || now - current.loadedAtMillis > cacheTtlMillis) {
+        if (current == null || now - current.loadedAtMillis > CACHE_TTL_MILLIS) {
             current = reload();
         }
         return current.ids;

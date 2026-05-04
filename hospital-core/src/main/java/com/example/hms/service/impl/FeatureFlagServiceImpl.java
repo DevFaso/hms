@@ -43,8 +43,17 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
      * a tight loop from flooding the audit log; cross-instance dedup is
      * out of scope (different instances seeing different cache windows
      * is acceptable and self-correcting).
+     *
+     * <p>Bounded so a long-lived node with many tenants × flag keys
+     * cannot leak memory (Copilot review fix — the prior
+     * ConcurrentHashMap had no eviction). On every successful emit we
+     * sweep entries older than 2× the window; if the map exceeds the
+     * hard cap, drop the oldest entries down to half the cap. Both
+     * paths run inside the rate-limited emit branch so the per-call
+     * cost is bounded.
      */
     private static final long PLAN_GATE_AUDIT_DEDUP_MILLIS = 5L * 60L * 1000L;
+    private static final int PLAN_GATE_AUDIT_DEDUP_MAX_SIZE = 10_000;
     private final ConcurrentMap<String, Long> planGateAuditDedup = new ConcurrentHashMap<>();
 
     @Override
@@ -229,6 +238,12 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
         if (!shouldEmit) {
             return;
         }
+        // Bounded eviction (Copilot review fix) — every emission sweeps
+        // expired entries; if the map is still above the hard cap, drop
+        // the oldest half. Cost is amortised across emissions, which are
+        // themselves rate-limited, so this never runs on every flag
+        // resolution.
+        evictExpiredAuditDedupEntries(now);
         try {
             HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -247,6 +262,38 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
             log.warn("[FEATURE-FLAGS] Plan-gate audit emit failed for org={} flag={}: {}",
                 organizationId, flagKey, ex.getMessage());
         }
+    }
+
+    /**
+     * Drop entries whose last-emit timestamp is older than 2× the dedup
+     * window (no longer participates in dedup decisions); if the map is
+     * still over the hard cap after that, evict the oldest entries until
+     * we're at half capacity. Visible for testing.
+     */
+    void evictExpiredAuditDedupEntries(long now) {
+        long staleCutoff = now - (2L * PLAN_GATE_AUDIT_DEDUP_MILLIS);
+        planGateAuditDedup.entrySet().removeIf(e -> e.getValue() < staleCutoff);
+
+        int size = planGateAuditDedup.size();
+        if (size <= PLAN_GATE_AUDIT_DEDUP_MAX_SIZE) {
+            return;
+        }
+        // Fall back to oldest-first eviction. Sorting a 10k-entry map
+        // is acceptable here because this branch only runs when an emit
+        // was about to be made AND the map exceeded the cap — i.e.,
+        // very rarely on a healthy node.
+        int target = PLAN_GATE_AUDIT_DEDUP_MAX_SIZE / 2;
+        planGateAuditDedup.entrySet().stream()
+            .sorted(java.util.Map.Entry.comparingByValue())
+            .limit((long) size - target)
+            .map(java.util.Map.Entry::getKey)
+            .toList()
+            .forEach(planGateAuditDedup::remove);
+    }
+
+    /** Visible for testing — exposes the live dedup map size. */
+    int planGateAuditDedupSize() {
+        return planGateAuditDedup.size();
     }
 
     private UUID currentOrganizationId() {

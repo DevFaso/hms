@@ -62,20 +62,29 @@ public class RegionPolicyServiceImpl implements RegionPolicyService {
         // Both branches are explicit so the caller's intent is unambiguous —
         // we deliberately do NOT treat null as "leave unchanged" here, because
         // that would mean every update needs a full echo of the current state.
-        policy.setRetentionDays(request != null ? request.getRetentionDays() : null);
-        policy.setDefaultExportFormat(request != null ? trimToNull(request.getDefaultExportFormat()) : null);
-        policy.setTargetDeploymentUrl(request != null ? trimToNull(request.getTargetDeploymentUrl()) : null);
-        policy.setUpdatedAt(Instant.now());
-        policy.setUpdatedBy(currentActorUsername());
+        Integer newRetention = request != null ? request.getRetentionDays() : null;
+        String newExport = request != null ? trimToNull(request.getDefaultExportFormat()) : null;
+        String newTarget = request != null ? trimToNull(request.getTargetDeploymentUrl()) : null;
 
-        regionPolicyRepository.save(policy);
-
-        if (!Objects.equals(prevRetention, policy.getRetentionDays())
-            || !Objects.equals(prevExport, policy.getDefaultExportFormat())
-            || !Objects.equals(prevTarget, policy.getTargetDeploymentUrl())) {
-            recordAudit(policy, prevRetention, prevExport, prevTarget);
+        // Copilot review fix — compare BEFORE mutating. The previous
+        // implementation set updatedAt/updatedBy unconditionally and
+        // saved unconditionally, so a no-op PUT still bumped the row's
+        // "last modified" stamp. Compute the no-op early and short-circuit.
+        boolean unchanged = Objects.equals(prevRetention, newRetention)
+            && Objects.equals(prevExport, newExport)
+            && Objects.equals(prevTarget, newTarget);
+        if (unchanged) {
+            return toResponse(policy);
         }
 
+        policy.setRetentionDays(newRetention);
+        policy.setDefaultExportFormat(newExport);
+        policy.setTargetDeploymentUrl(newTarget);
+        policy.setUpdatedAt(Instant.now());
+        policy.setUpdatedBy(currentActorUsername());
+        regionPolicyRepository.save(policy);
+
+        recordAudit(policy, prevRetention, prevExport, prevTarget);
         return toResponse(policy);
     }
 

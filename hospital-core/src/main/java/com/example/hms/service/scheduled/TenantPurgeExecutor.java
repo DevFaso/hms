@@ -35,6 +35,9 @@ import java.time.Instant;
 @Slf4j
 public class TenantPurgeExecutor {
 
+    private static final String SYSTEM_ACTOR = "system:tenant-purge-job";
+    private static final String ENTITY_TYPE_ORGANIZATION = "ORGANIZATION";
+
     private final OrganizationRepository organizationRepository;
     private final AuditEventLogService auditEventLogService;
     private final TenantExportPackager exportPackager;
@@ -117,14 +120,14 @@ public class TenantPurgeExecutor {
                                      TenantArchiveEncryptionService.EncryptionResult result) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userName("system:tenant-purge-job")
+                .userName(SYSTEM_ACTOR)
                 .eventType(AuditEventType.TENANT_PURGE_PACKAGED)
                 .eventDescription("Tenant archive packaged + encrypted for organization "
                     + org.getCode() + " at " + result.outputPath()
                     + " (mode=" + result.mode() + ", cipher=" + result.cipher() + ")")
                 .resourceId(org.getId().toString())
                 .resourceName(org.getName())
-                .entityType("ORGANIZATION")
+                .entityType(ENTITY_TYPE_ORGANIZATION)
                 .status(AuditStatus.SUCCESS)
                 .build());
         } catch (RuntimeException ex) {
@@ -136,13 +139,13 @@ public class TenantPurgeExecutor {
                                    TenantArchiveEncryptionService.EncryptionResult result) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userName("system:tenant-purge-job")
+                .userName(SYSTEM_ACTOR)
                 .eventType(AuditEventType.TENANT_PURGED)
                 .eventDescription("Scheduled purge executed for organization " + org.getCode()
                     + "; archive at " + result.outputPath())
                 .resourceId(org.getId().toString())
                 .resourceName(org.getName())
-                .entityType("ORGANIZATION")
+                .entityType(ENTITY_TYPE_ORGANIZATION)
                 .status(AuditStatus.SUCCESS)
                 .build());
         } catch (RuntimeException ex) {
@@ -153,13 +156,13 @@ public class TenantPurgeExecutor {
     private void recordPackagingFailure(Organization org, IOException ex) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userName("system:tenant-purge-job")
+                .userName(SYSTEM_ACTOR)
                 .eventType(AuditEventType.TENANT_PURGE_PACKAGING_FAILED)
                 .eventDescription("Packaging failed for organization " + org.getCode()
                     + ": " + ex.getMessage())
                 .resourceId(org.getId().toString())
                 .resourceName(org.getName())
-                .entityType("ORGANIZATION")
+                .entityType(ENTITY_TYPE_ORGANIZATION)
                 .status(AuditStatus.FAILURE)
                 .build());
         } catch (RuntimeException auditEx) {

@@ -99,7 +99,8 @@ class IntegrationHealthActionServiceTest {
 
     @Test
     void testConnectionThrowsResourceNotFoundForUnknownIntegration() {
-        assertThatThrownBy(() -> service.testConnection("not.registered", UUID.randomUUID()))
+        UUID orgId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.testConnection("not.registered", orgId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("not.registered");
     }
@@ -153,7 +154,7 @@ class IntegrationHealthActionServiceTest {
     void resyncOnUnknownIntegrationLogsWarningAndDoesNothing() {
         // Bean missing — service must not blow up; recorder gets no calls.
         service.resync("not.registered", UUID.randomUUID());
-        verify(recorder, times(0)).recordSuccess(anyString(), any());
+        verify(recorder, times(0)).recordSuccess(anyString(), any(), any());
     }
 
     private IntegrationHealthEvent event(String integrationId,

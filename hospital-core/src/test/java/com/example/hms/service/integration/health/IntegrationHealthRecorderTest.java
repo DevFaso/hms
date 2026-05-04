@@ -63,7 +63,7 @@ class IntegrationHealthRecorderTest {
     void freshSuccessCreatesHealthy() {
         when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.empty());
 
-        recorder.recordSuccess(INTEGRATION, orgId);
+        recorder.recordSuccess(INTEGRATION, orgId, null);
 
         ArgumentCaptor<IntegrationHealthSnapshot> captor =
             ArgumentCaptor.forClass(IntegrationHealthSnapshot.class);
@@ -91,7 +91,7 @@ class IntegrationHealthRecorderTest {
             .build();
         when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.of(existing));
 
-        recorder.recordFailure(INTEGRATION, orgId, "Payer timeout");
+        recorder.recordFailure(INTEGRATION, orgId, "Payer timeout", null);
 
         ArgumentCaptor<IntegrationHealthSnapshot> captor =
             ArgumentCaptor.forClass(IntegrationHealthSnapshot.class);
@@ -116,7 +116,7 @@ class IntegrationHealthRecorderTest {
             .build();
         when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.of(existing));
 
-        recorder.recordSuccess(INTEGRATION, orgId);
+        recorder.recordSuccess(INTEGRATION, orgId, null);
 
         ArgumentCaptor<IntegrationHealthSnapshot> captor =
             ArgumentCaptor.forClass(IntegrationHealthSnapshot.class);
@@ -141,7 +141,7 @@ class IntegrationHealthRecorderTest {
             .build();
         when(repository.findOneFor(INTEGRATION, orgId)).thenReturn(Optional.of(existing));
 
-        recorder.recordSuccess(INTEGRATION, orgId);
+        recorder.recordSuccess(INTEGRATION, orgId, null);
 
         ArgumentCaptor<IntegrationHealthSnapshot> captor =
             ArgumentCaptor.forClass(IntegrationHealthSnapshot.class);
@@ -157,7 +157,7 @@ class IntegrationHealthRecorderTest {
         when(repository.findOneFor(INTEGRATION, orgId))
             .thenThrow(new RuntimeException("DB down"));
 
-        recorder.recordSuccess(INTEGRATION, orgId);
+        recorder.recordSuccess(INTEGRATION, orgId, null);
 
         verify(repository, never()).save(any());
     }

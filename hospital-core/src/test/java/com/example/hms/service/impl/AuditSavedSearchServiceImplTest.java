@@ -103,8 +103,9 @@ class AuditSavedSearchServiceImplTest {
     void createRejectsDuplicateNameForSameOwner() {
         when(repository.findByOwnerUsernameAndName(OWNER, "dup"))
             .thenReturn(Optional.of(row(OWNER, "dup", false)));
+        AuditSavedSearchRequestDTO dup = request("dup", "{}", false);
 
-        assertThatThrownBy(() -> service.create(request("dup", "{}", false)))
+        assertThatThrownBy(() -> service.create(dup))
             .isInstanceOf(BusinessRuleException.class)
             .hasMessageContaining("already exists");
         verify(repository, never()).save(any());
@@ -129,10 +130,11 @@ class AuditSavedSearchServiceImplTest {
     @Test
     void updateRejectsNonOwnerEvenForSharedRow() {
         AuditSavedSearch foreign = row(OTHER, "shared-search", true);
-        when(repository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        UUID id = foreign.getId();
+        AuditSavedSearchRequestDTO renamed = request("renamed", "{}", true);
+        when(repository.findById(id)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() ->
-            service.update(foreign.getId(), request("renamed", "{}", true)))
+        assertThatThrownBy(() -> service.update(id, renamed))
             .isInstanceOf(UnauthorizedException.class)
             .hasMessageContaining("Only the owner");
         verify(repository, never()).save(any());
@@ -157,12 +159,12 @@ class AuditSavedSearchServiceImplTest {
         AuditSavedSearch mine = row(OWNER, "current", false);
         mine.setId(rowId);
         AuditSavedSearch other = row(OWNER, "taken", false);
+        AuditSavedSearchRequestDTO taken = request("taken", "{}", false);
 
         when(repository.findById(rowId)).thenReturn(Optional.of(mine));
         when(repository.findByOwnerUsernameAndName(OWNER, "taken")).thenReturn(Optional.of(other));
 
-        assertThatThrownBy(() ->
-            service.update(rowId, request("taken", "{}", false)))
+        assertThatThrownBy(() -> service.update(rowId, taken))
             .isInstanceOf(BusinessRuleException.class)
             .hasMessageContaining("already exists");
     }
@@ -170,9 +172,10 @@ class AuditSavedSearchServiceImplTest {
     @Test
     void deleteRequiresOwnership() {
         AuditSavedSearch foreign = row(OTHER, "shared", true);
-        when(repository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        UUID id = foreign.getId();
+        when(repository.findById(id)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.delete(foreign.getId()))
+        assertThatThrownBy(() -> service.delete(id))
             .isInstanceOf(UnauthorizedException.class);
         verify(repository, never()).delete(any(AuditSavedSearch.class));
     }

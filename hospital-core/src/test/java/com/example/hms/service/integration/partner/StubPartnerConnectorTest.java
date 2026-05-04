@@ -63,7 +63,7 @@ class StubPartnerConnectorTest {
         UUID orgId = UUID.randomUUID();
         new CnamgsConnector(recorder).resync(orgId);
 
-        verify(recorder).recordSuccess("partner.cnamgs", orgId);
+        verify(recorder).recordSuccess("partner.cnamgs", orgId, null);
     }
 
     @Test
@@ -73,6 +73,6 @@ class StubPartnerConnectorTest {
         // specific tenant.
         new MutuelleConnector(recorder).resync(null);
 
-        verify(recorder).recordSuccess("partner.mutuelle", null);
+        verify(recorder).recordSuccess("partner.mutuelle", null, null);
     }
 }

@@ -14,7 +14,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.zip.ZipEntry;
@@ -51,6 +54,8 @@ public class TenantExportPackager {
     /** Manifest schema version — bump when the file shape changes. */
     public static final int FORMAT_VERSION = 1;
 
+    private static final String FIELD_LIFECYCLE_STATE = "lifecycle_state";
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final RegionPolicyService regionPolicyService;
@@ -68,23 +73,20 @@ public class TenantExportPackager {
         try (OutputStream out = Files.newOutputStream(outputPath);
              ZipOutputStream zip = new ZipOutputStream(out)) {
 
-            // 1. Manifest first so partial failures still include the metadata.
-            writeManifest(zip, org, counts);
-
-            // 2. Org-level NDJSON (single record).
+            // 1. Org-level NDJSON (single record).
             counts.put("organization.ndjson", writeOrganizationNdjson(zip, org));
 
-            // 3. Hospitals NDJSON (one record per hospital).
+            // 2. Hospitals NDJSON (one record per hospital).
             counts.put("hospitals.ndjson", writeHospitalsNdjson(zip, org));
 
-            // 4. Region-specific extras (GDPR portability metadata).
+            // 3. Region-specific extras (GDPR portability metadata).
             String exportFormat = regionPolicyService.resolveDefaultExportFormat(org.getRegion());
             if ("GDPR_PORTABILITY".equalsIgnoreCase(exportFormat)) {
                 writeGdprPortabilityMetadata(zip, org);
                 counts.put("gdpr_portability_metadata.json", 1L);
             }
 
-            // 5. Empty placeholders for the per-table dumps that need
+            // 4. Empty placeholders for the per-table dumps that need
             //    repository iterators. Keeps the ZIP shape stable so a
             //    consumer doesn't need to handle "missing entries".
             for (String name : new String[] {
@@ -94,6 +96,12 @@ public class TenantExportPackager {
                 writeEmptyEntry(zip, name);
                 counts.putIfAbsent(name, 0L);
             }
+
+            // 5. Manifest LAST so record_counts_by_table reflects what's
+            //    actually in the archive (Copilot review fix — earlier
+            //    write-first approach left this field empty in every
+            //    archive, defeating the manifest's purpose).
+            writeManifest(zip, org, counts);
         }
         log.info("[TENANT-EXPORT] Packaged org {} -> {} ({} entries)",
             org.getId(), outputPath, counts.size());
@@ -109,7 +117,7 @@ public class TenantExportPackager {
         manifest.put("org_name", org.getName());
         manifest.put("org_code", org.getCode());
         manifest.put("region", org.getRegion() != null ? org.getRegion().name() : null);
-        manifest.put("lifecycle_state", org.getLifecycleState() != null ? org.getLifecycleState().name() : null);
+        manifest.put(FIELD_LIFECYCLE_STATE, org.getLifecycleState() != null ? org.getLifecycleState().name() : null);
         manifest.put("record_counts_by_table", counts);
 
         zip.putNextEntry(new ZipEntry("manifest.json"));
@@ -123,7 +131,7 @@ public class TenantExportPackager {
         row.put("name", org.getName());
         row.put("code", org.getCode());
         row.put("region", org.getRegion() != null ? org.getRegion().name() : null);
-        row.put("lifecycle_state", org.getLifecycleState() != null ? org.getLifecycleState().name() : null);
+        row.put(FIELD_LIFECYCLE_STATE, org.getLifecycleState() != null ? org.getLifecycleState().name() : null);
         row.put("primary_contact_email", org.getPrimaryContactEmail());
 
         zip.putNextEntry(new ZipEntry("organization.ndjson"));
@@ -136,20 +144,30 @@ public class TenantExportPackager {
     private long writeHospitalsNdjson(ZipOutputStream zip, Organization org) throws IOException {
         zip.putNextEntry(new ZipEntry("hospitals.ndjson"));
         long count = 0L;
+        // Copilot review fix — Organization.hospitals is a Set with no
+        // defined iteration order (HashSet under Hibernate), so iterating
+        // it directly made hospitals.ndjson row order vary across runs.
+        // Sort by code (stable, business-meaningful) so the archive is
+        // byte-reproducible and downstream hashing / signing holds.
+        List<Hospital> ordered = new ArrayList<>();
         if (org.getHospitals() != null) {
-            for (Hospital hospital : org.getHospitals()) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("id", hospital.getId() != null ? hospital.getId().toString() : null);
-                row.put("name", hospital.getName());
-                row.put("code", hospital.getCode());
-                row.put("city", hospital.getCity());
-                row.put("country", hospital.getCountry());
-                row.put("lifecycle_state", hospital.getLifecycleState() != null
-                    ? hospital.getLifecycleState().name() : null);
-                zip.write(MAPPER.writeValueAsBytes(row));
-                zip.write('\n');
-                count++;
-            }
+            ordered.addAll(org.getHospitals());
+            ordered.sort(Comparator.comparing(
+                Hospital::getCode,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        }
+        for (Hospital hospital : ordered) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", hospital.getId() != null ? hospital.getId().toString() : null);
+            row.put("name", hospital.getName());
+            row.put("code", hospital.getCode());
+            row.put("city", hospital.getCity());
+            row.put("country", hospital.getCountry());
+            row.put(FIELD_LIFECYCLE_STATE, hospital.getLifecycleState() != null
+                ? hospital.getLifecycleState().name() : null);
+            zip.write(MAPPER.writeValueAsBytes(row));
+            zip.write('\n');
+            count++;
         }
         zip.closeEntry();
         return count;

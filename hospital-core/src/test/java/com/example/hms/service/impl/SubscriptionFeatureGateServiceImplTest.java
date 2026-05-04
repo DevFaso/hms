@@ -174,47 +174,46 @@ class SubscriptionFeatureGateServiceImplTest {
         return sub;
     }
 
-    @Test
-    @DisplayName("MVP-6c: jsonb feature_keys wins over legacy TEXT when both are populated")
-    void jsonbPrecedenceOverLegacyText() {
+    /**
+     * MVP-6c jsonb-vs-legacy resolution table — three scenarios collapse
+     * to one parameterised test per Sonar S5976 (replace these N tests
+     * with a single parameterized one).
+     *
+     * <p>Each row says: given a (legacy TEXT, jsonb) pair, the gate must
+     * allow {@code expectedAllowedKey} and deny {@code expectedDeniedKey}.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "MVP-6c: {0}")
+    @org.junit.jupiter.params.provider.MethodSource("jsonbResolutionScenarios")
+    void resolvesFeatureKeysAcrossLegacyAndJsonb(
+        String description,
+        String legacyKeys,
+        String jsonbKeys,
+        String expectedAllowedKey,
+        String expectedDeniedKey
+    ) {
         UUID orgId = UUID.randomUUID();
-        // Legacy says billing only; jsonb says reports only — the jsonb form wins.
         when(subscriptionRepository.findByOrganizationIdAndStatus(
             orgId, OrganizationSubscription.Status.ACTIVE))
-            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
-                "billing.advanced",
-                "[\"reports.export\"]")));
+            .thenReturn(Optional.of(subscriptionWithJsonbKeys(legacyKeys, jsonbKeys)));
 
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isTrue();
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isFalse();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, expectedAllowedKey)).isTrue();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, expectedDeniedKey)).isFalse();
     }
 
-    @Test
-    @DisplayName("MVP-6c: empty jsonb falls back to legacy TEXT column")
-    void emptyJsonbFallsBackToLegacy() {
-        UUID orgId = UUID.randomUUID();
-        when(subscriptionRepository.findByOrganizationIdAndStatus(
-            orgId, OrganizationSubscription.Status.ACTIVE))
-            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
-                "billing.advanced",
-                "[]")));
-
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isTrue();
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isFalse();
-    }
-
-    @Test
-    @DisplayName("MVP-6c: malformed jsonb falls back to legacy TEXT and does not block resolution")
-    void malformedJsonbDoesNotBlockResolution() {
-        UUID orgId = UUID.randomUUID();
-        when(subscriptionRepository.findByOrganizationIdAndStatus(
-            orgId, OrganizationSubscription.Status.ACTIVE))
-            .thenReturn(Optional.of(subscriptionWithJsonbKeys(
-                "billing.advanced",
-                "{not-valid-json")));
-
-        // Falls back to legacy text — billing.advanced allowed, others denied.
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "billing.advanced")).isTrue();
-        assertThat(gate.isFeatureAllowedForOrg(orgId, "reports.export")).isFalse();
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> jsonbResolutionScenarios() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of(
+                "jsonb wins over legacy TEXT when both populated",
+                "billing.advanced", "[\"reports.export\"]",
+                "reports.export", "billing.advanced"),
+            org.junit.jupiter.params.provider.Arguments.of(
+                "empty jsonb falls back to legacy TEXT",
+                "billing.advanced", "[]",
+                "billing.advanced", "reports.export"),
+            org.junit.jupiter.params.provider.Arguments.of(
+                "malformed jsonb falls back to legacy TEXT (does not block resolution)",
+                "billing.advanced", "{not-valid-json",
+                "billing.advanced", "reports.export")
+        );
     }
 }

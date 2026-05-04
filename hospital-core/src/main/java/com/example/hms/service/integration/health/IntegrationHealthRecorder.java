@@ -66,11 +66,6 @@ public class IntegrationHealthRecorder {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordSuccess(String integrationId, UUID organizationId) {
-        recordSuccess(integrationId, organizationId, null);
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuccess(String integrationId, UUID organizationId, Long latencyMs) {
         try {
             IntegrationHealthSnapshot snapshot = upsert(integrationId, organizationId);
@@ -85,11 +80,6 @@ public class IntegrationHealthRecorder {
             log.warn("IntegrationHealthRecorder.recordSuccess failed for integration={} org={}: {}",
                 integrationId, organizationId, ex.getMessage());
         }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordFailure(String integrationId, UUID organizationId, String errorMessage) {
-        recordFailure(integrationId, organizationId, errorMessage, null);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)

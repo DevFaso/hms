@@ -118,7 +118,7 @@ public class IntegrationHealthActionService {
         } catch (RuntimeException ex) {
             log.warn("[INTEGRATION-RESYNC] {} threw: {}", integrationId, ex.getMessage());
             recorder.recordFailure(integrationId, organizationId,
-                "Re-sync failed: " + ex.getMessage());
+                "Re-sync failed: " + ex.getMessage(), null);
         }
     }
 
