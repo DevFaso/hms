@@ -173,11 +173,13 @@ public class EligibilityServiceImpl implements EligibilityService {
             healthRecorder.recordFailure(
                 SuperAdminIntegrationHealthService.INTEGRATION_ID_ELIGIBILITY,
                 organizationId,
-                message);
+                message,
+                null);
         } else {
             healthRecorder.recordSuccess(
                 SuperAdminIntegrationHealthService.INTEGRATION_ID_ELIGIBILITY,
-                organizationId);
+                organizationId,
+                null);
         }
     }
 

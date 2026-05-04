@@ -117,6 +117,24 @@ public enum AuditEventType {
     // Data residency (MVP-9 — gap #9 in docs/super-admin-gaps.md)
     ORGANIZATION_REGION_UPDATED,
 
+    // Hospital-level lifecycle (MVP-c batch — Hospital lifecycle item)
+    HOSPITAL_SUSPENDED,
+    HOSPITAL_RESTORED,
+    HOSPITAL_ARCHIVED,
+    HOSPITAL_PURGE_SCHEDULED,
+    HOSPITAL_PURGE_CANCELLED,
+    HOSPITAL_PURGED,
+
+    // Plan-tier feature gating (MVP-c batch — MVP-6c plan-tier audit emission)
+    PLAN_FEATURE_GATE_BLOCKED,
+
+    // Per-region policy updates (MVP-c batch — MVP-9c)
+    REGION_POLICY_UPDATED,
+
+    // Tenant data export packaging (MVP-c batch — MVP-2c follow-up)
+    TENANT_PURGE_PACKAGED,
+    TENANT_PURGE_PACKAGING_FAILED,
+
     OTHER
 }
 

@@ -52,6 +52,12 @@ class JwtAuthenticationFilterTest {
     @Mock
     private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
 
+    /** MVP-c batch — JwtAuthenticationFilter now also depends on the
+     *  hospital-level lifecycle status service for the per-hospital
+     *  login block. Same posture as the org-level mock above. */
+    @Mock
+    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
     @Mock
     private GlobalSessionRevocationService globalSessionRevocationService;
 

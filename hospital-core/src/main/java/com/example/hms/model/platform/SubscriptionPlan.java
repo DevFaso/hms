@@ -62,6 +62,22 @@ public class SubscriptionPlan extends BaseEntity {
     @Builder.Default
     private String featureKeys = "";
 
+    /**
+     * jsonb mirror of {@link #featureKeys} (MVP-c batch — MVP-6c).
+     * Stored as a JSON array of lowercased strings; backfilled from the
+     * legacy comma-separated TEXT column by V85. New writes from
+     * SubscriptionService should populate both fields until the legacy
+     * column is dropped in a follow-up cycle.
+     *
+     * <p>Hibernate persists this through a JdbcTypeCode hint on
+     * org.hibernate.type.SqlTypes.JSON so the field round-trips as a
+     * raw JSON string the application parses with Jackson.
+     */
+    @Column(name = "feature_keys_jsonb", nullable = false, columnDefinition = "jsonb")
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Builder.Default
+    private String featureKeysJson = "[]";
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;

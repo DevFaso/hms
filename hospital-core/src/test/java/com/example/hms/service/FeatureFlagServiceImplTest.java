@@ -29,6 +29,7 @@ class FeatureFlagServiceImplTest {
     private MockEnvironment environment;
     private FeatureFlagOverrideRepository overrideRepository;
     private SubscriptionFeatureGateService subscriptionFeatureGate;
+    private AuditEventLogService auditEventLogService;
     private FeatureFlagServiceImpl service;
 
     @BeforeEach
@@ -42,8 +43,9 @@ class FeatureFlagServiceImplTest {
         when(subscriptionFeatureGate.isFeatureAllowedForOrg(
             org.mockito.ArgumentMatchers.any(UUID.class), org.mockito.ArgumentMatchers.anyString()))
             .thenReturn(true);
+        auditEventLogService = mock(AuditEventLogService.class);
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
     }
 
     @Test

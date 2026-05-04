@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.HospitalPlatformServiceLink;
@@ -8,6 +9,8 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
@@ -25,9 +28,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.EqualsAndHashCode;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -117,6 +122,47 @@ public class Hospital extends BaseEntity {
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
+
+    // ── Hospital lifecycle (MVP-c batch) ─────────────────────────────
+    // Mirrors Organization.lifecycleState. `active` continues to gate
+    // UI / list filters; `lifecycleState` drives login-time blocking
+    // and is the source of truth for purge scheduling at the hospital
+    // level. Suspending a hospital narrows the org-wide block to a
+    // single facility.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_state", nullable = false, length = 32)
+    private HospitalLifecycleState lifecycleState = HospitalLifecycleState.ACTIVE;
+
+    @Column(name = "suspended_at")
+    private Instant suspendedAt;
+
+    @Column(name = "suspended_by")
+    private UUID suspendedBy;
+
+    @Column(name = "suspension_reason", length = 1000)
+    private String suspensionReason;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
+    @Column(name = "archive_reason", length = 1000)
+    private String archiveReason;
+
+    @Column(name = "purge_scheduled_for")
+    private Instant purgeScheduledFor;
+
+    @Column(name = "purge_scheduled_by")
+    private UUID purgeScheduledBy;
+
+    @Column(name = "purge_reason", length = 1000)
+    private String purgeReason;
+
+    @Column(name = "purged_at")
+    private Instant purgedAt;
 
     @Builder.Default
     @OneToMany(mappedBy = "hospital", fetch = FetchType.LAZY,
