@@ -239,6 +239,49 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
     }
 
     @Test
+    void createOrganization_remotePathReceivesNormalizedRequest() {
+        // Copilot review fix — the remote client must receive the same
+        // normalized values local provisioning would persist: code
+        // trimmed + uppercased, type defaulted to HEALTHCARE_NETWORK,
+        // region defaulted (here EU since the caller specified it),
+        // contactPhone trimmed-to-null.
+        SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
+            .name("EU Tenant")
+            .code("  eu-tenant  ")
+            .timezone("Europe/Paris")
+            .contactEmail("ops@eu-tenant.example")
+            .contactPhone("   ") // blank — should normalize to null
+            .region(OrganizationRegion.EU)
+            // type omitted — should default to HEALTHCARE_NETWORK
+            .build();
+
+        OrganizationResponseDTO remoteResponse = OrganizationResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .code("EU-TENANT")
+            .build();
+
+        when(organizationRepository.existsByCode("EU-TENANT")).thenReturn(false);
+        when(regionRoutingResolver.resolveDeploymentUrl(OrganizationRegion.EU))
+            .thenReturn(Optional.of("https://eu.hms.example/api"));
+
+        ArgumentCaptor<SuperAdminCreateOrganizationRequestDTO> sentRequest =
+            ArgumentCaptor.forClass(SuperAdminCreateOrganizationRequestDTO.class);
+        when(tenantProvisioningClient.provisionRemote(sentRequest.capture(), eq("https://eu.hms.example/api")))
+            .thenReturn(remoteResponse);
+
+        service.createOrganization(request);
+
+        SuperAdminCreateOrganizationRequestDTO sent = sentRequest.getValue();
+        assertThat(sent.getCode()).isEqualTo("EU-TENANT");
+        assertThat(sent.getContactPhone()).isNull();
+        assertThat(sent.getType()).isEqualTo(OrganizationType.HEALTHCARE_NETWORK);
+        assertThat(sent.getRegion()).isEqualTo(OrganizationRegion.EU);
+        // Untouched fields pass through.
+        assertThat(sent.getName()).isEqualTo("EU Tenant");
+        assertThat(sent.getTimezone()).isEqualTo("Europe/Paris");
+    }
+
+    @Test
     void createOrganization_whenStubClientRejectsRemote_propagates501() {
         SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
             .name("EU Tenant")

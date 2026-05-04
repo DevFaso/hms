@@ -12,10 +12,13 @@ import java.util.UUID;
  * {@code permission_matrix_audit_events}). Lets the super-admin
  * audit-search UI render a single merged feed.
  *
- * <p>Every field is optional except {@code source}, {@code id},
- * {@code timestamp}, and {@code summary}; the others map best-effort
- * from the underlying entity (e.g. {@code FrontendAuditEvent} has no
- * status, {@code PermissionMatrixAuditEvent} has no hospital).
+ * <p>Only {@code source} and {@code id} are guaranteed non-null. All
+ * other fields — including {@code timestamp} and {@code summary} — are
+ * mapped best-effort from the underlying entity and may be {@code null}
+ * depending on the source row (e.g. {@code FrontendAuditEvent} has no
+ * status, {@code PermissionMatrixAuditEvent} has no hospital, and a
+ * partially-populated row may have a null {@code createdAt} /
+ * description).
  */
 @Builder
 public record AggregatedAuditEventDTO(

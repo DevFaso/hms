@@ -206,6 +206,43 @@ class SuperAdminAuditAggregationServiceImplTest {
     }
 
     @Test
+    void searchAggregated_capsTotalElementsAtPerSourceHardCap() {
+        // Copilot review fix — when an underlying source reports 100 000
+        // matching rows but the service can only fetch 5 000, the page
+        // metadata must reflect what's actually retrievable, not the
+        // raw COUNT(*). Otherwise pagination promises pages the service
+        // can't deliver.
+        when(frontendAuditEventRepository.findInDateRangeOrdered(any(), any(), any(Pageable.class)))
+            .thenReturn(List.of());
+        when(frontendAuditEventRepository.countInDateRange(any(), any())).thenReturn(100_000L);
+
+        AggregatedAuditPageDTO page = service.searchAggregated(
+            EnumSet.of(AuditSource.FRONTEND), null, null, PageRequest.of(0, 20));
+
+        // PER_SOURCE_HARD_CAP is 5 000; totalElements should be capped.
+        assertThat(page.totalElements()).isEqualTo(5_000L);
+        assertThat(page.totalPages()).isEqualTo(250); // 5000 / 20
+    }
+
+    @Test
+    void searchAggregated_pageSizeOverMaxIsClamped() {
+        // Copilot review fix — pageSize is user-controlled; clamp before
+        // any arithmetic so offset + pageSize cannot overflow int.
+        when(frontendAuditEventRepository.findInDateRangeOrdered(any(), any(), any(Pageable.class)))
+            .thenReturn(List.of());
+        when(frontendAuditEventRepository.countInDateRange(any(), any())).thenReturn(0L);
+
+        // Request pageSize = Integer.MAX_VALUE; service must clamp to
+        // MAX_PAGE_SIZE (= PER_SOURCE_HARD_CAP = 5 000) before computing
+        // offset / perSourceLimit.
+        AggregatedAuditPageDTO page = service.searchAggregated(
+            EnumSet.of(AuditSource.FRONTEND), null, null,
+            PageRequest.of(0, Integer.MAX_VALUE));
+
+        assertThat(page.pageSize()).isEqualTo(5_000);
+    }
+
+    @Test
     void searchAggregated_offsetBeyondResults_returnsEmptyPage() {
         // Exercises the Math.min(offset, merged.size()) and
         // Math.min(offset + size, merged.size()) bounds when the requested

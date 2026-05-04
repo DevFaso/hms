@@ -49,6 +49,14 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
     /** Hard cap per source so a wide-open page request can't materialise millions of rows. */
     private static final int PER_SOURCE_HARD_CAP = 5_000;
 
+    /**
+     * Page-size ceiling — clamps user-supplied {@code pageable.pageSize}
+     * before any arithmetic. Aligned with {@link #PER_SOURCE_HARD_CAP}
+     * so {@code offset + pageSize} for a deep page (pageNumber = cap-1)
+     * stays representable as an int. Copilot review fix.
+     */
+    private static final int MAX_PAGE_SIZE = PER_SOURCE_HARD_CAP;
+
     private final AuditEventLogRepository auditEventLogRepository;
     private final FrontendAuditEventRepository frontendAuditEventRepository;
     private final PermissionMatrixAuditEventRepository permissionMatrixAuditEventRepository;
@@ -65,13 +73,24 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
             : EnumSet.copyOf(sources);
 
         int pageNumber = Math.max(0, pageable.getPageNumber());
-        int pageSize = Math.max(1, pageable.getPageSize());
-        int offset = pageNumber * pageSize;
+        // Copilot review fix — clamp pageSize before any arithmetic so
+        // user-controlled values cannot drive an int overflow on offset
+        // or perSourceLimit.
+        int pageSize = Math.max(1, Math.min(pageable.getPageSize(), MAX_PAGE_SIZE));
+        // long arithmetic for offset; offset can theoretically be
+        // pageNumber * MAX_PAGE_SIZE which still fits int, but using
+        // long keeps the intermediate safe even if the constants change.
+        long offset = (long) pageNumber * pageSize;
         // Top (offset + size) from each source — worst case all from one.
         // Hard-capped so a deep-page request can't stampede the DB.
-        int perSourceLimit = Math.min(offset + pageSize, PER_SOURCE_HARD_CAP);
+        int perSourceLimit = (int) Math.min(offset + pageSize, (long) PER_SOURCE_HARD_CAP);
 
         List<AggregatedAuditEventDTO> merged = new ArrayList<>();
+        // Copilot review fix — cap each source's count at PER_SOURCE_HARD_CAP
+        // so totalElements / totalPages reflect the *retrievable* row count,
+        // not the database-level COUNT(*). Otherwise a client paginating
+        // past the cap would see "page 12 of 50" but get an empty body
+        // because the service can't fetch deep enough.
         long totalElements = 0L;
 
         if (effectiveSources.contains(AuditSource.SUPPORT)) {
@@ -81,7 +100,7 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
             for (AuditEventLog row : page.getContent()) {
                 merged.add(toDto(row));
             }
-            totalElements += page.getTotalElements();
+            totalElements += Math.min(page.getTotalElements(), (long) PER_SOURCE_HARD_CAP);
         }
 
         if (effectiveSources.contains(AuditSource.FRONTEND)) {
@@ -91,7 +110,8 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
             for (FrontendAuditEvent row : rows) {
                 merged.add(toDto(row));
             }
-            totalElements += frontendAuditEventRepository.countInDateRange(fromDate, toDate);
+            long sourceCount = frontendAuditEventRepository.countInDateRange(fromDate, toDate);
+            totalElements += Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
         }
 
         if (effectiveSources.contains(AuditSource.PERMISSION_MATRIX)) {
@@ -105,7 +125,8 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
             for (PermissionMatrixAuditEvent row : rows) {
                 merged.add(toDto(row));
             }
-            totalElements += permissionMatrixAuditEventRepository.countInDateRange(fromInstant, toInstant);
+            long sourceCount = permissionMatrixAuditEventRepository.countInDateRange(fromInstant, toInstant);
+            totalElements += Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
         }
 
         // Merge sort by timestamp DESC, nulls last so a row with a
@@ -113,12 +134,13 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
         merged.sort(Comparator.comparing(AggregatedAuditEventDTO::timestamp,
             Comparator.nullsLast(Comparator.reverseOrder())));
 
-        // Slice the requested page out of the merged stream.
-        int fromIdx = Math.min(offset, merged.size());
-        int toIdx = Math.min(offset + pageSize, merged.size());
+        // Slice the requested page out of the merged stream. Cast to int
+        // is safe because offset is bounded by pageNumber * MAX_PAGE_SIZE.
+        int fromIdx = (int) Math.min(offset, (long) merged.size());
+        int toIdx = (int) Math.min(offset + pageSize, (long) merged.size());
         List<AggregatedAuditEventDTO> pageContent = merged.subList(fromIdx, toIdx);
 
-        int totalPages = pageSize == 0 ? 0 : (int) Math.ceil((double) totalElements / pageSize);
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
 
         return AggregatedAuditPageDTO.builder()
             .content(List.copyOf(pageContent))
