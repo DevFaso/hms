@@ -1,12 +1,11 @@
 # Super-Admin Role: Capabilities, Gaps & MVP Roadmap
 
-> Audit date: 2026-05-02 (last updated 2026-05-03) · Baseline: `main` @
-> `b9f3fe0b` (**MVPs 1–9 + sub-MVPs 4b/5b/6b/7b/8b/9b + MVP-c batch
-> backend all in production**; MVP-c frontend surfaces — integration
-> probe/resync/history, hospital lifecycle, region-policy editor,
-> cross-source audit aggregation — and two backend gaps — MVP-8c
-> aggregation projection, MVP-9c routing resolver — deferred to a
-> follow-up branch) · `uat` @ `ec2d4a5e` · `develop` @ `273244a3`.
+> Audit date: 2026-05-02 (last updated 2026-05-04) · Baseline: `main`
+> @ `b9f3fe0b` (**MVPs 1–9 + sub-MVPs 4b/5b/6b/7b/8b/9b + MVP-c batch
+> backend all in production**) · `uat` @ `ec2d4a5e` · `develop` @
+> `050d4d94` (MVP-c2 backend + MVP-c2 frontend merged — closes the
+> two MVP-c2 backend gaps and ships the four MVP-c frontend surfaces;
+> awaiting `develop → uat → main` promote chain).
 > Branches:
 > `feature/super-admin-gaps` (MVP-1 + MVP-2 — shipped to main `006384fc`),
 > `feature/super-admin-gaps-mvp3-integration-health` (MVP-3 — PR #223 →
@@ -57,16 +56,36 @@
 > JWT login-block + MFA step-up. Migrations on disk: **V84**
 > hospital_lifecycle, **V85** subscription_plan_feature_keys_jsonb,
 > **V86** region_policy, **V87** audit_saved_search, **V88**
-> integration_health_event — all additive. **NOT shipped (deferred
-> to a follow-up branch):** MVP-3b frontend (Test/Re-sync row
-> buttons + 24h history sparkline drawer), hospital-lifecycle
-> frontend (detail-page Lifecycle panel + state chip on hospital
-> list), MVP-9c policy-editor frontend
-> (`/super-admin/data-residency/policy`), MVP-8c cross-source
-> aggregation backend (`AggregatedAuditEvent` projection +
-> `/audit-search/aggregated` heap-merge endpoint), MVP-9c
-> `RegionRoutingResolver` + `TenantProvisioningClient` provisioning
-> hook).
+> integration_health_event — all additive. The two backend gaps
+> from the original scope and the four frontend surfaces are
+> handled by the two MVP-c2 follow-up branches below.),
+> `feature/super-admin-mvp-c2-backend` (closes the two MVP-c batch
+> backend gaps — direct-merged into develop `b2089a8a`, PR #241
+> closed as superseded. 2 commits + Copilot review fixup.
+> **Shipped:** MVP-8c cross-source audit aggregation
+> (`AuditSource` enum, `AggregatedAuditEventDTO`,
+> `SuperAdminAuditAggregationServiceImpl` unioning all three audit
+> sources, `GET /super-admin/audit-search/aggregated`); MVP-9c
+> region-routing scaffold (`RegionRoutingResolver`,
+> `TenantProvisioningClient` interface, `StubTenantProvisioningClient`
+> with HTTP 501 strict mode, wired into
+> `SuperAdminOrganizationProvisioningServiceImpl`). 17 new backend
+> tests; coverage on every new class ≥91.7% branch / ≥96.9%
+> instruction.),
+> `feature/super-admin-mvp-c2-frontend` (wires the four MVP-c
+> frontend surfaces — direct-merged into develop `050d4d94`,
+> PR #242 closed as superseded. 2 commits + Copilot review fixup.
+> **Shipped:** MVP-3b probe / resync row buttons + 24h history
+> sparkline drawer; new `/hospitals/:id` detail page with Lifecycle
+> panel (state chip, history meta, state-aware action buttons +
+> dialogs); `/super-admin/data-residency/policy` editor for
+> per-region retention / export-format / deployment URL;
+> audit-search aggregation tab + source-toggle checkboxes (last
+> selection locked) + saved-search localStorage → REST migration
+> shim. Small additive backend change exposed
+> `HospitalResponseDTO.lifecycleState` so the list chip renders
+> without an N+1 lookup. Karma 865/865 specs green; full
+> `:hospital-core:test` + 80% INSTRUCTION gate green.).
 
 ## Executive Summary
 
@@ -74,11 +93,13 @@ The super admin is the highest-privilege role in HMS — operating across organi
 
 This document originally captured 9 numbered gaps (MVP-1 through
 MVP-9) plus a sub-MVP series (MVP-4b through MVP-9b) plus an MVP-c
-roll-up batch. **All headline MVPs and sub-MVPs shipped to `main`;
-the MVP-c batch shipped backend-only with frontend gaps for four
-surfaces.** This doc has been pruned to the live work — completed
-sections are removed, see git history for the historical record.
-Current gaps and the planned MVP-c2 follow-up branch are below.
+roll-up batch plus an MVP-c2 follow-up. **All headline MVPs and
+sub-MVPs are in production on `main`. The MVP-c batch backend is
+on `main`; the MVP-c2 backend (two gaps) and MVP-c2 frontend (four
+surfaces) are merged into `develop` and awaiting the
+`develop → uat → main` promote chain.** This doc is pruned to the
+live work — completed sections are removed, see git history for the
+historical record.
 
 ## Current Capabilities (what super admin can already do today)
 
@@ -155,20 +176,29 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ## Risks & Open Questions
 
-- **Hospital lifecycle UI:** backend shipped in MVP-c (V84 migration
-  + service + JWT login-block + 6 endpoints + MFA step-up) but the
-  Angular surface — hospital-detail page with Lifecycle panel, action
-  buttons, state chip on the list — is unwritten. An operator can
-  suspend a hospital today only via direct REST. Tracked as MVP-c2
-  item #2.
-- **Region-driven enforcement scope creep:** MVP-9c shipped retention
-  + export-format overrides as real code, but the `target_deployment_url`
-  column on `region_policy` is stored and never read. Provisioning is
-  still single-deployment. Adding the `RegionRoutingResolver` +
-  `TenantProvisioningClient` hook is small (config-driven; physical
-  multi-region deployment stays an ops task), tracked as MVP-c2
-  item #5. Pull when the first GDPR-tagged tenant requesting
-  region-specific provisioning lands.
+No live risks remain on `main` itself — the items previously listed
+here (hospital-lifecycle UI; region-routing scope creep) shipped on
+`develop` `050d4d94` via the MVP-c2 branches and are awaiting the
+promote chain. The remaining caveats are about *runtime behaviour*
+of shipped code (still listed in [Caveats](#caveats) below):
+
+- **MVP-3b partner protocols ship as stubs.** `CnamgsConnector` /
+  `MutuelleConnector` / `NhiaConnector` / `NhisConnector` extend
+  `StubPartnerConnector` and return synthetic success on probe /
+  resync. Real wire protocols (HL7 / FHIR / proprietary REST) drop
+  into the same SPI once partner specs + sandbox credentials land.
+- **MVP-9c remote provisioning is strict-mode by default.** Setting
+  `region_policy.target_deployment_url` while the only registered
+  `TenantProvisioningClient` is `StubTenantProvisioningClient`
+  causes tenant creation to throw HTTP 501. This is intentional
+  (silent local fallback is a data-residency violation for a
+  GDPR-tagged region) but operators must be told before they wire
+  the column.
+- **MVP-2c KEK source defaults to `noop` in dev.** Production must
+  export `HMS_TENANT_ARCHIVE_KEK` (base64) until a real KMS
+  integration replaces the env-source. The abstraction
+  (`hms.tenant-archive.kek-source`) is in place so swapping the
+  source is a one-bean change.
 
 ## References
 
@@ -180,81 +210,49 @@ Role check primitive: `RoleContextService.isSuperAdmin` computed signal.
 
 ---
 
-## MVP-c batch (SHIPPED to main `b9f3fe0b` — backend only; frontend deferred)
+## MVP-c batch + MVP-c2 follow-ups (status by environment)
 
-Per the user's "all in one branch" directive on 2026-05-03, the seven
-remaining deferred items rolled up into a single feature branch off
-`develop` `c4c9feb9` and shipped on 2026-05-03 via direct merge —
-develop `273244a3` → uat `ec2d4a5e` → main `b9f3fe0b`, 10 commits.
-The branch closed under a "ship the backend, defer the UI" cut: every
-item has a working backend + schema + tests on `main`, but four of
-the seven new surfaces have **no frontend** yet, and two backend
-pieces from the original scope did not land. The follow-up branch
-should bundle those five gaps so the MVP-c surfaces become
-operator-reachable.
+Per the "all in one branch" directive on 2026-05-03, the seven
+deferred items from MVP-1 through MVP-9 rolled up into the
+`feature/super-admin-gaps-mvp-c-batch` branch (10 commits) and
+shipped on 2026-05-03 — backend only — through develop `273244a3`
+→ uat `ec2d4a5e` → main `b9f3fe0b`. The deep-verification of that
+batch found two backend gaps (MVP-8c cross-source aggregation,
+MVP-9c routing scaffold) and four frontend gaps (MVP-3b
+probe/resync/history UI, hospital-lifecycle UI, MVP-9c policy
+editor UI, MVP-8c aggregation tab). Those six gaps were closed via
+two follow-up branches:
 
-### Closure status — what shipped vs. what didn't
+- **`feature/super-admin-mvp-c2-backend`** — direct-merged into
+  develop `b2089a8a` on 2026-05-03 (PR #241 closed as superseded).
+- **`feature/super-admin-mvp-c2-frontend`** — direct-merged into
+  develop `050d4d94` on 2026-05-04 (PR #242 closed as superseded).
 
-**Migration-number correction.** Earlier drafts of this doc cited
-V84 for the integration health-event log and V88 for the region
-policy. The actual on-disk state on `main` is V84
+Both branches are on `develop` only — `uat` and `main` still hold
+the MVP-c-batch state. The next promote step is `develop → uat`,
+then `uat → main`, on the same direct-merge pattern as the prior
+batches.
+
+### Closure status by environment
+
+**Migration-number correction (informational).** V84
 hospital_lifecycle, V85 subscription_plan_feature_keys_jsonb, V86
 region_policy, V87 audit_saved_search, V88 integration_health_event.
-The closure rows below cite the correct numbers.
 
-Only items with at least one ❌ side are listed; rows for fully-done
-MVP-c items (MVP-2c packager, MVP-5c nginx 301s, MVP-6c jsonb +
-plan-tier audit) are removed.
-
-| Item | Backend on main | Frontend on main |
+| Item | On `main` `b9f3fe0b` | On `develop` `050d4d94` |
 | --- | --- | --- |
-| MVP-3b probe / resync / per-integration time-series | ✅ `POST /super-admin/integrations/{id}/probe` + `/resync` + `GET /history`; `IntegrationConnectivityProbe` + `Resyncable` SPI + `Probe` record; `CnamgsConnector`, `MutuelleConnector`, `NhiaConnector`, `NhisConnector` stubs via `StubPartnerConnector`; `IntegrationHealthEvent` (V88) records every recorder call for the time-series | ❌ **Missing.** `IntegrationHealthService` exposes only `getInventory()` + `getIntegration()`. The Integration Health Console renders the same MVP-3 surface — chips + list + per-org expand — with no Test/Re-sync action buttons and no history sparkline drawer. |
-| MVP-8c saved-search server-side persistence + sharing | ✅ V87 `audit_saved_search` table, `AuditSavedSearch` entity, repository, `SuperAdminAuditSavedSearchController` (REST CRUD), `AuditSavedSearchServiceImpl`. | ❌ Frontend still on the localStorage `AuditSavedSearchService` from MVP-8b — no migration shim, no `?include=shared` toggle, no shared-by attribution. |
-| MVP-8c cross-source audit aggregation | ✅ Shipped on `feature/super-admin-mvp-c2-backend`: `AuditSource` enum + `AggregatedAuditEventDTO` + `AggregatedAuditPageDTO`; `SuperAdminAuditAggregationServiceImpl` unions `audit_event_logs` / `frontend_audit_events` / `permission_matrix_audit_events` with timestamp-DESC merge + per-source row cap (5 000); `GET /super-admin/audit-search/aggregated` with optional `sources` array + `fromDate` / `toDate` query params, gated `ROLE_SUPER_ADMIN`. | ❌ Frontend tab/drawer surfacing the merged feed in the audit-search page — pending. |
-| MVP-9c per-region retention + export-format policy | ✅ V86 `region_policy` table, `RegionPolicy` entity, `RegionPolicyServiceImpl`, `SuperAdminRegionPolicyController` (`GET /` + `GET /{region}` + `PUT /{region}`). `TenantPurgeExecutor.resolveRetentionDays(region)` and `TenantExportPackager.resolveDefaultExportFormat(region)` consult the policy with global-retention fallback when the per-region override is null. | ❌ **Missing.** `/super-admin/data-residency/policy` view (per-region table with editable retention / export-format / deployment-URL columns) does not exist. The existing `data-residency` component still ships only the MVP-9 region-tag editor. |
-| MVP-9c region-routing scaffold | ✅ Shipped on `feature/super-admin-mvp-c2-backend`: `RegionRoutingResolver` (interface + impl) reads `region_policy.target_deployment_url` via `RegionPolicyService`; `TenantProvisioningClient` interface + `StubTenantProvisioningClient` (`@ConditionalOnMissingBean`) that throws `RemoteProvisioningNotConfiguredException` (HTTP 501); wired into `SuperAdminOrganizationProvisioningServiceImpl.createOrganization` so a region with a configured target URL fails loud until a real client is registered. **Strict-mode default** — silent local fallback was rejected as a data-residency risk for GDPR-tagged regions. | n/a — backend-only (provisioning side-effect) |
-| Hospital-level lifecycle state machine | ✅ V84 migration, `HospitalLifecycleState` enum, `Hospital.lifecycle_status` + `suspended_at` + `archived_at` + `purge_scheduled_for`, `HospitalLifecycleServiceImpl`, `SuperAdminHospitalLifecycleController` (`GET /lifecycle`, `POST suspend/restore/archive/schedule-purge/cancel-purge`), `HospitalLifecycleStatusServiceImpl` cache (30s TTL, static final), `JwtAuthenticationFilter` login-block, MFA step-up coverage | ❌ **Missing.** No hospital-detail page exists; `hospitals/` ships only `hospital-list.{ts,html,scss}`. No Lifecycle panel, no action buttons, no state chip on the hospital list. |
+| MVP-3b probe / resync / history endpoints | ✅ backend | ✅ backend |
+| MVP-3b probe/resync/history UI | ❌ | ✅ row buttons + lazy-loaded 24h sparkline drawer |
+| MVP-8c saved-search REST CRUD | ✅ backend | ✅ backend |
+| MVP-8c saved-search FE migration | ❌ (localStorage only) | ✅ REST + idempotent localStorage→REST shim with per-upload `catchError` |
+| MVP-8c cross-source aggregation | ❌ | ✅ `AuditSource` + `AggregatedAuditEventDTO` + `SuperAdminAuditAggregationServiceImpl` + `GET /audit-search/aggregated`; aggregation tab on the audit-search page with source toggles (last selection locked) |
+| MVP-9c per-region retention + export-format policy | ✅ backend | ✅ backend + `/super-admin/data-residency/policy` editor |
+| MVP-9c region-routing scaffold | ❌ | ✅ `RegionRoutingResolver` + `TenantProvisioningClient` + `StubTenantProvisioningClient` (HTTP 501 strict mode) wired into provisioning |
+| Hospital-level lifecycle state machine | ✅ backend (V84 + service + JWT login-block + MFA step-up) | ✅ backend + `/hospitals/:id` detail page with Lifecycle panel + state chip on hospital list (gated to `ROLE_SUPER_ADMIN`) |
 
-### Outstanding follow-up branches
-
-**MVP-c2-backend** (this branch — `feature/super-admin-mvp-c2-backend`,
-unmerged): closes the two remaining backend gaps.
-
-+ ✅ **MVP-8c cross-source aggregation backend** —
-  `AuditSource` enum, `AggregatedAuditEventDTO`, `AggregatedAuditPageDTO`,
-  `SuperAdminAuditAggregationService(Impl)` unioning all three audit
-  sources, `GET /super-admin/audit-search/aggregated`. Per-source row
-  cap (5 000) prevents runaway queries; `LocalDateTime` bounds are
-  converted to UTC `Instant` for the permission-matrix entity which
-  uses `Instant`.
-+ ✅ **MVP-9c routing scaffold** — `RegionRoutingResolver`,
-  `TenantProvisioningClient` interface, `StubTenantProvisioningClient`
-  (`@ConditionalOnMissingBean`, HTTP 501 strict mode),
-  `RemoteProvisioningNotConfiguredException`, wired into
-  `SuperAdminOrganizationProvisioningServiceImpl`.
-+ 17 new tests (4 resolver + 2 stub client + 5 aggregation service +
-  2 provisioning routing-path); full `:hospital-core:test` green.
-
-**MVP-c2-frontend** (next branch): the four UI surfaces.
-
-1. **MVP-3b frontend** — `IntegrationHealthService.probe(id)` +
-   `resync(id)` + `getHistory(id, windowHours)`, two action buttons
-   on each integration row, expandable history drawer with a
-   24-hour sparkline of the bucketed counts.
-2. **Hospital-lifecycle frontend** — new `hospitals/hospital-detail`
-   page with a Lifecycle panel mirroring the org-detail pattern
-   from MVP-2; add a state chip on `hospital-list.html`. New
-   `HospitalLifecycleService` calling the six existing endpoints.
-3. **MVP-9c policy-editor frontend** — `/super-admin/data-residency/
-   policy` route with a per-region table editing retention /
-   export-format / deployment-URL.
-4. **MVP-8c aggregation UI** — tab or drawer surfacing the merged
-   feed in the existing audit-search page; `localStorage` → REST
-   migration shim for the saved-search service.
-
-The historical per-item descriptions below remain valid as the
-*intended* scope; treat the closure table above as authoritative for
-what is actually on `main` `b9f3fe0b`.
+The detailed per-item scope descriptions below remain valid as the
+*intended* contract; the table above is authoritative for what is
+actually on each environment.
 
 ### MVP-3b: Test connection + Re-sync + per-integration time-series + connector framework
 
@@ -380,6 +378,8 @@ Open Questions item.
   action buttons gated on SUPER_ADMIN; hospital list shows a state
   chip mirroring the org-list pattern.
 
+<a id="caveats"></a>
+
 ### Caveats
 
 - **MVP-3b partner protocols are stubs.** `CnamgsConnector`,
@@ -387,6 +387,13 @@ Open Questions item.
   `StubPartnerConnector` and return synthetic success on probe /
   resync. Real wire protocols drop in via the same SPI once partner
   specs + sandbox credentials land.
+- **MVP-9c remote provisioning is strict-mode by default.** Setting
+  `region_policy.target_deployment_url` while the only registered
+  `TenantProvisioningClient` is `StubTenantProvisioningClient`
+  causes tenant creation to throw HTTP 501. Intentional — silent
+  local fallback is a data-residency violation for a GDPR-tagged
+  region — but operators must register a real client before turning
+  the column on.
 - **MVP-2c KEK source** defaults to `noop` in dev profiles.
   Production must export `HMS_TENANT_ARCHIVE_KEK` (base64) until a
   real KMS integration replaces the env-source. The abstraction
