@@ -166,6 +166,7 @@
     "AGGREGATED": {
       "TITLE": "Agregación multi-fuente",
       "SUBTITLE": "Fusiona eventos de soporte, frontend y matriz de permisos en una sola línea de tiempo. Límite de 5 000 filas por fuente — ajuste el rango de fechas para una ventana ocupada.",
+      "LAST_SOURCE_LOCKED": "Al menos una fuente debe permanecer seleccionada.",
       "SOURCE": {
         "SUPPORT": "Auditoría backend",
         "FRONTEND": "Telemetría frontend",
@@ -339,6 +340,13 @@
     "EDIT": "Editar",
     "EDIT_TITLE": "Editar política para {{ region }}",
     "SAVING": "Guardando…",
+    "COL": {
+      "REGION": "Región",
+      "RETENTION": "Retención (días)",
+      "EXPORT": "Formato de exportación por defecto",
+      "DEPLOYMENT": "Despliegue objetivo",
+      "UPDATED": "Última actualización"
+    },
     "FIELD": {
       "RETENTION": "Retención (días)",
       "RETENTION_PLACEHOLDER": "ej. 365",
@@ -393,6 +401,9 @@
     },
     "PROBE": {
       "ERROR": "Error en la prueba."
+    },
+    "RESYNC": {
+      "ERROR": "Error en la resincronización."
     },
     "HISTORY": {
       "TITLE": "Últimas 24 horas",

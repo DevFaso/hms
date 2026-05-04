@@ -385,6 +385,11 @@
   gap: 0.4rem;
   font-size: 0.9rem;
   cursor: pointer;
+
+  &.disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 }
 
 .source-badge {

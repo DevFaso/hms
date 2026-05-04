@@ -149,7 +149,7 @@ export class IntegrationHealthComponent implements OnInit {
     this.service
       .probe(integrationId)
       .pipe(catchError(() => of(null)))
-      .subscribe((result) => this.finishAction(integrationId, result));
+      .subscribe((result) => this.finishAction(integrationId, 'probe', result));
   }
 
   resync(event: Event, integrationId: string): void {
@@ -158,7 +158,7 @@ export class IntegrationHealthComponent implements OnInit {
     this.service
       .resync(integrationId)
       .pipe(catchError(() => of(null)))
-      .subscribe((result) => this.finishAction(integrationId, result));
+      .subscribe((result) => this.finishAction(integrationId, 'resync', result));
   }
 
   private beginAction(integrationId: string): void {
@@ -168,14 +168,22 @@ export class IntegrationHealthComponent implements OnInit {
     }));
   }
 
-  private finishAction(integrationId: string, result: IntegrationProbeResult | null): void {
+  private finishAction(
+    integrationId: string,
+    kind: 'probe' | 'resync',
+    result: IntegrationProbeResult | null,
+  ): void {
+    // Copilot review fix — surface a kind-specific error key so a
+    // resync failure doesn't claim "Probe failed".
+    const errorKey =
+      result === null
+        ? kind === 'probe'
+          ? 'INTEGRATION_HEALTH.PROBE.ERROR'
+          : 'INTEGRATION_HEALTH.RESYNC.ERROR'
+        : null;
     this.rowActions.update((current) => ({
       ...current,
-      [integrationId]: {
-        busy: false,
-        result,
-        errorKey: result === null ? 'INTEGRATION_HEALTH.PROBE.ERROR' : null,
-      },
+      [integrationId]: { busy: false, result, errorKey },
     }));
     // After a probe / resync the inventory may have moved; re-fetch
     // the recorder snapshot in the background so the chips and per-row

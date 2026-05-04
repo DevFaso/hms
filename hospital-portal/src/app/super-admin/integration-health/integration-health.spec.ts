@@ -197,6 +197,19 @@ describe('IntegrationHealthComponent', () => {
     expect(cmp.rowAction('eligibility').result?.errorMessage).toBe('partner down');
   });
 
+  it('resync() failure surfaces the RESYNC error key, not PROBE', () => {
+    // Copilot review fix — finishAction now takes the action kind so
+    // a re-sync HTTP failure shows the resync-specific i18n key.
+    service.getInventory.and.returnValue(of(fakeSummary()));
+    service.resync.and.returnValue(throwError(() => new Error('network')));
+
+    const cmp = setup();
+    cmp.resync(new Event('click'), 'eligibility');
+
+    expect(cmp.rowAction('eligibility').result).toBeNull();
+    expect(cmp.rowAction('eligibility').errorKey).toBe('INTEGRATION_HEALTH.RESYNC.ERROR');
+  });
+
   // ── MVP-3b history drawer ───────────────────────────────────────────
 
   it('toggle() lazily loads history on first expand', () => {

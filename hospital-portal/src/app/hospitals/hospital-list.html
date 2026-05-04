@@ -86,14 +86,19 @@
               </td>
               <td>
                 <div class="action-group">
-                  <a
-                    class="action-link"
-                    [title]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
-                    [routerLink]="['/hospitals', h.id]"
-                    [attr.data-test]="'hospital-detail-' + h.id"
-                  >
-                    <span class="material-symbols-outlined">open_in_new</span>
-                  </a>
+                  <!-- MVP-c2-frontend — Lifecycle detail is SUPER_ADMIN-only,
+                       so the link is hidden for other roles to avoid a
+                       click that would always 403. -->
+                  @if (isSuperAdmin()) {
+                    <a
+                      class="action-link"
+                      [title]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
+                      [routerLink]="['/hospitals', h.id]"
+                      [attr.data-test]="'hospital-detail-' + h.id"
+                    >
+                      <span class="material-symbols-outlined">open_in_new</span>
+                    </a>
+                  }
                   <button
                     class="action-link"
                     [title]="'COMMON.EDIT' | translate"

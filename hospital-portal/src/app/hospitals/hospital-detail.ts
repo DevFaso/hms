@@ -3,7 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { catchError, of } from 'rxjs';
+import { catchError, forkJoin, of } from 'rxjs';
 
 import {
   HospitalLifecycleResponse,
@@ -64,28 +64,25 @@ export class HospitalDetailComponent implements OnInit {
     this.loading.set(true);
     this.errored.set(false);
 
-    this.hospitalService
-      .getById(this.hospitalId())
-      .pipe(catchError(() => of(null)))
-      .subscribe((hospital) => {
-        if (hospital === null) {
-          this.errored.set(true);
-        } else {
-          this.hospital.set(hospital);
-        }
-      });
-
-    this.lifecycleService
-      .get(this.hospitalId())
-      .pipe(catchError(() => of(null)))
-      .subscribe((response) => {
-        if (response === null) {
-          this.errored.set(true);
-        } else {
-          this.lifecycle.set(response);
-        }
-        this.loading.set(false);
-      });
+    // Copilot review fix — coordinate both fetches with forkJoin so
+    // loading flips off only after BOTH calls complete; the prior
+    // staggered subscribe could clear loading before the hospital
+    // request had returned.
+    forkJoin({
+      hospital: this.hospitalService.getById(this.hospitalId()).pipe(catchError(() => of(null))),
+      lifecycle: this.lifecycleService.get(this.hospitalId()).pipe(catchError(() => of(null))),
+    }).subscribe(({ hospital, lifecycle }) => {
+      if (hospital === null || lifecycle === null) {
+        this.errored.set(true);
+      }
+      if (hospital !== null) {
+        this.hospital.set(hospital);
+      }
+      if (lifecycle !== null) {
+        this.lifecycle.set(lifecycle);
+      }
+      this.loading.set(false);
+    });
   }
 
   // ── Action dialog ────────────────────────────────────────────────────
@@ -113,22 +110,7 @@ export class HospitalDetailComponent implements OnInit {
     if (!state) return;
     this.dialog.set({ ...state, busy: true, errorKey: null });
 
-    const id = this.hospitalId();
-    const obs$ =
-      state.kind === 'suspend'
-        ? this.lifecycleService.suspend(id, { reason: state.reason.trim() })
-        : state.kind === 'restore'
-          ? this.lifecycleService.restore(id)
-          : state.kind === 'archive'
-            ? this.lifecycleService.archive(id, { reason: state.reason.trim() })
-            : state.kind === 'schedule-purge'
-              ? this.lifecycleService.schedulePurge(id, {
-                  reason: state.reason.trim(),
-                  scheduledFor: state.scheduledFor,
-                })
-              : this.lifecycleService.cancelPurge(id);
-
-    obs$
+    this.dispatchLifecycleAction(state)
       .pipe(
         catchError(() => {
           this.dialog.update((current) =>
@@ -144,6 +126,31 @@ export class HospitalDetailComponent implements OnInit {
         this.lifecycle.set(updated);
         this.dialog.set(null);
       });
+  }
+
+  /**
+   * Dispatch the lifecycle service call matching {@code state.kind}.
+   * Extracted from {@link submitDialog} so the ternary chain doesn't
+   * trip Sonar's nested-ternary rule (S3358).
+   */
+  private dispatchLifecycleAction(state: ActionDialog) {
+    const id = this.hospitalId();
+    const reason = state.reason.trim();
+    switch (state.kind) {
+      case 'suspend':
+        return this.lifecycleService.suspend(id, { reason });
+      case 'restore':
+        return this.lifecycleService.restore(id);
+      case 'archive':
+        return this.lifecycleService.archive(id, { reason });
+      case 'schedule-purge':
+        return this.lifecycleService.schedulePurge(id, {
+          reason,
+          scheduledFor: state.scheduledFor,
+        });
+      case 'cancel-purge':
+        return this.lifecycleService.cancelPurge(id);
+    }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────

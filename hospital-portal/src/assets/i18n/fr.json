@@ -166,6 +166,7 @@
     "AGGREGATED": {
       "TITLE": "Agrégation multi-source",
       "SUBTITLE": "Fusionne les événements support, frontend et matrice de permissions dans une seule chronologie. Plafond de 5 000 lignes par source — affinez la plage de dates pour un créneau chargé.",
+      "LAST_SOURCE_LOCKED": "Au moins une source doit rester sélectionnée.",
       "SOURCE": {
         "SUPPORT": "Audit backend",
         "FRONTEND": "Télémétrie frontend",
@@ -339,6 +340,13 @@
     "EDIT": "Modifier",
     "EDIT_TITLE": "Modifier la politique pour {{ region }}",
     "SAVING": "Enregistrement…",
+    "COL": {
+      "REGION": "Région",
+      "RETENTION": "Rétention (jours)",
+      "EXPORT": "Format d'export par défaut",
+      "DEPLOYMENT": "Déploiement cible",
+      "UPDATED": "Dernière mise à jour"
+    },
     "FIELD": {
       "RETENTION": "Rétention (jours)",
       "RETENTION_PLACEHOLDER": "ex. 365",
@@ -393,6 +401,9 @@
     },
     "PROBE": {
       "ERROR": "Échec du test."
+    },
+    "RESYNC": {
+      "ERROR": "Échec de la resynchronisation."
     },
     "HISTORY": {
       "TITLE": "Dernières 24 heures",

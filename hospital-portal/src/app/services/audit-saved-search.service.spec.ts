@@ -175,6 +175,65 @@ describe('AuditSavedSearchService (MVP-8c REST)', () => {
     expect(localStorage.getItem(MIGRATION_FLAG_KEY)).toBe('true');
   });
 
+  it('migrateLegacyEntries() partial failure: keeps the legacy key when ALL uploads fail', () => {
+    // Copilot review fix — each upload is wrapped in catchError so a
+    // single bad row doesn't error the whole batch. When *every*
+    // upload fails the legacy key stays intact for a retry.
+    localStorage.setItem(
+      LEGACY_STORAGE_KEY,
+      JSON.stringify([
+        { id: 'legacy-1', name: 'one', filter: { userName: 'a' } },
+        { id: 'legacy-2', name: 'two', filter: { userName: 'b' } },
+      ]),
+    );
+
+    let received: unknown;
+    service.migrateLegacyEntries().subscribe((r) => (received = r));
+
+    const reqs = httpMock.match(BASE);
+    expect(reqs.length).toBe(2);
+    reqs.forEach((req) => req.flush('boom', { status: 500, statusText: 'Server Error' }));
+
+    expect(Array.isArray(received)).toBeTrue();
+    expect((received as unknown[]).length).toBe(0);
+    // Legacy key preserved + flag NOT set so the next mount retries.
+    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(MIGRATION_FLAG_KEY)).toBeNull();
+  });
+
+  it('migrateLegacyEntries() partial failure: clears the legacy key when at least one upload succeeded', () => {
+    localStorage.setItem(
+      LEGACY_STORAGE_KEY,
+      JSON.stringify([
+        { id: 'legacy-1', name: 'one', filter: { userName: 'a' } },
+        { id: 'legacy-2', name: 'two', filter: { userName: 'b' } },
+      ]),
+    );
+
+    let received: unknown;
+    service.migrateLegacyEntries().subscribe((r) => (received = r));
+
+    const reqs = httpMock.match(BASE);
+    expect(reqs.length).toBe(2);
+    // First upload fails, second succeeds.
+    reqs[0].flush('boom', { status: 500, statusText: 'Server Error' });
+    reqs[1].flush({
+      id: 'srv-1',
+      ownerUsername: 'alice@example.com',
+      name: reqs[1].request.body.name,
+      filterJson: reqs[1].request.body.filterJson,
+      shared: false,
+      createdAt: '2026-05-01T00:00:00Z',
+      updatedAt: '2026-05-01T00:00:00Z',
+    });
+
+    // Only the successful row in the result; legacy key cleared so a
+    // re-run doesn't duplicate the surviving server row.
+    expect((received as unknown[]).length).toBe(1);
+    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(MIGRATION_FLAG_KEY)).toBe('true');
+  });
+
   it('migrateLegacyEntries() tolerates corrupt legacy JSON', () => {
     localStorage.setItem(LEGACY_STORAGE_KEY, '{broken');
     let received: unknown;

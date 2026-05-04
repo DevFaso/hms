@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable, forkJoin, map, of } from 'rxjs';
+import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
 import { AuditSearchFilter } from './audit-search.model';
 
@@ -69,22 +69,35 @@ export class AuditSavedSearchService {
       this.markMigrated();
       return of([]);
     }
-    const uploads = legacy.map((entry) =>
-      this.create(entry.name, entry.filter).pipe(
-        // Swallow per-entry failures so one bad row doesn't block the
-        // rest. The legacy localStorage stays intact for a retry on
-        // the next instantiation.
-        map((created) => ({ ok: true, value: created }) as const),
-      ),
-    );
+    type UploadResult = { ok: true; value: SavedAuditSearch } | { ok: false };
+    // Each upload is wrapped in catchError so a single bad row cannot
+    // error the forkJoin and roll back the whole batch (Copilot review
+    // fix). Failed entries fall through as { ok: false } and are
+    // dropped from the result; the legacy key stays intact for a
+    // retry on the next instantiation when *every* upload fails.
+    const uploads: Observable<UploadResult>[] = legacy.map((entry) => {
+      try {
+        return this.create(entry.name, entry.filter).pipe(
+          map<SavedAuditSearch, UploadResult>((created) => ({ ok: true, value: created })),
+          catchError(() => of<UploadResult>({ ok: false })),
+        );
+      } catch {
+        // create() throws synchronously on a blank name — treat the
+        // same as a failed upload so the batch still proceeds.
+        return of<UploadResult>({ ok: false });
+      }
+    });
     return forkJoin(uploads).pipe(
       map((results) => {
         const created = results
           .filter((r): r is { ok: true; value: SavedAuditSearch } => r.ok)
           .map((r) => r.value);
-        // Only clear the legacy key when at least one upload succeeded;
-        // total failure leaves the entries for a retry.
-        if (created.length > 0) {
+        const allFailed = legacy.length > 0 && created.length === 0;
+        // Clear the legacy key when at least one upload succeeded so a
+        // re-run doesn't duplicate server rows. When every upload
+        // failed, leave the legacy entries for a retry on the next
+        // instantiation.
+        if (!allFailed) {
           try {
             localStorage.removeItem(LEGACY_STORAGE_KEY);
             this.markMigrated();

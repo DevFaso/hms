@@ -1,106 +1,107 @@
 # Copilot review archive
 
-## 2026-05-03 — `feature/super-admin-mvp-c2-backend` (MVP-c2 backend)
+## 2026-05-04 — `feature/super-admin-mvp-c2-frontend`
 
-Four Copilot findings on the MVP-c2 backend PR (closing MVP-8c
-cross-source aggregation + MVP-9c routing scaffold). All addressed
+Six Copilot findings on the MVP-c2 frontend PR (the four UI surfaces:
+MVP-3b probe/resync/history, hospital-lifecycle, MVP-9c policy editor,
+MVP-8c aggregation tab + saved-search REST migration). All addressed
 in a follow-up commit on the same branch before merging.
 
-### 1. Remote provisioning sent the unnormalized request — **High**
+### 1. Missing `REGION_POLICY.COL.*` i18n keys — **High**
 
-> `SuperAdminOrganizationProvisioningServiceImpl` lines 56-61 —
-> Remote provisioning delegates the original request DTO, but local
-> provisioning normalizes the org code (trim + uppercase) and applies
-> default type/region before proceeding. This can lead to the remote
-> deployment receiving an unnormalized code (e.g. "eu-tenant") that
-> differs from the uniqueness check ("EU-TENANT") and from what local
-> provisioning would persist, creating inconsistent behavior across
-> deployments. Consider delegating a normalized copy of the request
-> (at least code, and any other defaults you apply locally) so both
-> paths apply identical normalization rules.
+> The template references translation keys like
+> `REGION_POLICY.COL.REGION/RETENTION/EXPORT/DEPLOYMENT/UPDATED`,
+> but no `REGION_POLICY.COL` entries exist in the i18n JSON files.
+> This will render raw keys in the UI.
 
-**Fix.** Extracted `normalizeRequest(request)` that builds a copy of
-the DTO with the code trimmed + uppercased, type defaulted to
-`HEALTHCARE_NETWORK`, region defaulted to `BF`, and contactPhone
-trimmed-to-null. The normalized request is computed before the
-routing decision, the uniqueness check uses its code, and both the
-local builder and `tenantProvisioningClient.provisionRemote(...)`
-consume the same normalized DTO. Local-side fields previously read
-off `request` (`name`, `notes`, `timezone`, `contactEmail`) now read
-off `normalizedRequest` so a future change to normalization
-automatically applies to both branches.
+**Fix.** Added a complete `REGION_POLICY.COL.{REGION,RETENTION,
+EXPORT,DEPLOYMENT,UPDATED}` block in en/fr/es so the policy table
+column headers translate.
 
-**Test.** `createOrganization_remotePathReceivesNormalizedRequest`
-captures the DTO sent to the client and asserts code uppercased,
-type defaulted, blank phone normalized to null.
+### 2. `migrateLegacyEntries()` lacks per-upload `catchError` — **Major**
 
-### 2. Pagination math could overflow int — **Major**
+> `migrateLegacyEntries()` claims to swallow per-entry failures, but
+> each upload only uses `map(...)` and does not `catchError`. If any
+> `create()` call errors, `forkJoin` will error the whole migration,
+> potentially causing successful uploads to be retried later
+> (duplicate server rows) and preventing the legacy key from being
+> cleared.
 
-> `SuperAdminAuditAggregationServiceImpl` lines 68-72 — Pagination
-> math uses `int offset = pageNumber * pageSize` and `offset + pageSize`
-> for `perSourceLimit`. Because page/size are user-controlled request
-> params, this can overflow int (becoming negative) and produce
-> incorrect limits/slicing. Use long for offset arithmetic and clamp
-> pageSize (and/or pageNumber) to a sane maximum consistent with
-> `PER_SOURCE_HARD_CAP`.
+**Fix.** Each upload is now wrapped in `catchError(() => of({ ok:
+false }))` so a failed row falls through as a discriminated-union
+miss instead of erroring the `forkJoin`. The synchronous-throw path
+in `create()` (blank name) is also caught with a try/catch around
+the pipe. New "all-failed → keep legacy key" branch leaves the
+entries for retry; "partial success → clear key" branch prevents
+duplicate server rows on a re-run.
 
-**Fix.** Introduced `MAX_PAGE_SIZE = PER_SOURCE_HARD_CAP` (5 000)
-and clamped pageSize through `Math.max(1, Math.min(getPageSize(),
-MAX_PAGE_SIZE))` before any arithmetic. Offset computed as
-`(long) pageNumber * pageSize`; per-source limit is
-`(int) Math.min(offset + pageSize, (long) PER_SOURCE_HARD_CAP)`;
-the slice indices use `(int) Math.min(offset, (long) merged.size())`.
-With the clamp, `offset` is bounded by `pageNumber * 5 000`, which
-fits comfortably in an int even for large pageNumber, but the
-intermediate values stay long so future constant changes don't
-silently regress.
+**Tests.** Two new specs:
+`migrateLegacyEntries() partial failure: keeps the legacy key when
+ALL uploads fail` (asserts the legacy key + flag stay untouched)
+and `… clears the legacy key when at least one upload succeeded`
+(asserts the result has only the surviving row and the legacy key
+is cleared).
 
-**Test.** `searchAggregated_pageSizeOverMaxIsClamped` requests
-`pageSize = Integer.MAX_VALUE` and asserts the response reports
-`pageSize = 5 000`.
+### 3. Probe-error key shown for re-sync failures — **Minor**
 
-### 3. Pagination metadata vs. retrievable rows mismatch — **Major**
+> `finishAction()` sets `errorKey` to `INTEGRATION_HEALTH.PROBE.ERROR`
+> for any null result, including `resync()`. This will show a
+> probe-specific error message for re-sync failures.
 
-> `SuperAdminAuditAggregationServiceImpl` lines 70-95 — The hard
-> cap (`PER_SOURCE_HARD_CAP`) can make pagination internally
-> inconsistent: for deep pages where `offset + pageSize` exceeds the
-> cap, the service will never fetch enough rows to fill that page,
-> but `totalElements`/`totalPages` are still computed from full
-> per-source `COUNT(*)`. Clients may see many pages available but
-> get empty results past the cap.
+**Fix.** `finishAction(integrationId, kind, result)` now takes the
+action kind. `errorKey` resolves to `INTEGRATION_HEALTH.PROBE.ERROR`
+for probe failures and `INTEGRATION_HEALTH.RESYNC.ERROR` for
+re-sync failures. New `RESYNC.ERROR` i18n key added in en/fr/es.
 
-**Fix.** Each per-source count contribution is now
-`Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP)` so the response
-reports only the rows the service can actually retrieve. A frontend
-paginating past page `(cap / pageSize)` will see the page count
-end there instead of advertising a phantom 12-of-50.
+**Test.** New `resync() failure surfaces the RESYNC error key, not
+PROBE` spec asserts the new behavior.
 
-**Test.** `searchAggregated_capsTotalElementsAtPerSourceHardCap`
-stubs the FRONTEND repo to return `count = 100 000` and asserts
-the response reports `totalElements = 5 000` and
-`totalPages = 250` (= 5 000 / 20).
+### 4. `refresh()` flips loading off on lifecycle alone — **Minor**
 
-### 4. DTO Javadoc claimed timestamp+summary non-optional — **Minor**
+> `refresh()` sets loading to false only when the lifecycle request
+> completes, while the hospital request runs independently. This can
+> clear the loading state before the hospital is loaded.
 
-> `AggregatedAuditEventDTO` lines 15-18 — Javadoc says timestamp
-> and summary are non-optional, but the aggregation mappers/tests
-> explicitly allow null timestamps (e.g. PermissionMatrix rows with
-> `createdAt == null`) and summaries can also be null if underlying
-> descriptions are null.
+**Fix.** Coordinated both fetches with `forkJoin`; loading flips
+off only after both observables emit. Each side is still wrapped
+in `catchError` so a single failure is recoverable. Refactored the
+nested-ternary action dispatch into a `dispatchLifecycleAction()`
+helper to satisfy SonarTS S3358.
 
-**Fix.** Updated the Javadoc to clarify only `source` and `id` are
-guaranteed non-null; every other field is best-effort from the
-underlying entity and can be null when the source row is missing
-that data.
+### 5. Open-detail link routes super-admin-only path for everyone — **Major**
+
+> The hospital list is accessible to multiple roles, but the new
+> "open detail" link routes to `/hospitals/:id`, which is guarded as
+> `ROLE_SUPER_ADMIN` only. Non-super-admin users will see the icon
+> but be blocked on navigation.
+
+**Fix.** `HospitalListComponent` now exposes
+`isSuperAdmin = roleContext.isSuperAdmin` and the link is wrapped
+in `@if (isSuperAdmin())`. Hospital-admin / receptionist / nurse /
+midwife rows show only the existing edit + delete actions.
+
+### 6. Aggregated UI allows deselecting all sources — **Major**
+
+> The UI allows deselecting all aggregated audit sources, but when
+> sources is empty the client omits the query param and the backend
+> defaults to "all sources". This can confuse users who unchecked
+> everything expecting no results.
+
+**Fix.** `toggleAggregatedSource()` is now a no-op when only one
+source remains active. Added `isLastActiveSource(source)` helper;
+the template binds `[disabled]` and a `disabled` CSS class on the
+locked checkbox plus a tooltip via `AUDIT_SEARCH.AGGREGATED.LAST_SOURCE_LOCKED`
+("At least one source must stay selected.").
+
+**Tests.** Three new specs in a new
+`super-admin/audit-search/audit-search.spec.ts`:
+toggle add/remove, last-source lock no-op, `isLastActiveSource`
+truthiness.
 
 ### Verification
 
-- `:hospital-core:test` — full suite green
-- `:hospital-core:jacocoTestCoverageVerification` — 80% INSTRUCTION
-  gate green
-- Per-class coverage on the touched classes:
-
-  | Class | Instr | Branch |
-  | --- | --- | --- |
-  | `SuperAdminAuditAggregationServiceImpl` | 100.0% | 100.0% |
-  | `SuperAdminOrganizationProvisioningServiceImpl` | 97.4% | 91.7% |
+- `npm run format`, `npm run lint` clean
+- Karma **865/865** SUCCESS (up from 859 — +6 Copilot-fix tests)
+- `:hospital-core:test` green
+- `:hospital-core:jacocoTestCoverageVerification` (80% INSTRUCTION
+  gate) green

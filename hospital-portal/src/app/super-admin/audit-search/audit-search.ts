@@ -167,10 +167,24 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   toggleAggregatedSource(source: AuditSource): void {
     this.aggregatedSources.update((current) => {
       if (current.includes(source)) {
+        // Copilot review fix — block deselecting the last source.
+        // Backend treats an empty `sources` list as "all three", so an
+        // operator who unchecks everything would silently get the
+        // opposite of what they expect; refusing the toggle keeps the
+        // checkbox state honest.
+        if (current.length === 1) {
+          return current;
+        }
         return current.filter((s) => s !== source);
       }
       return [...current, source];
     });
+  }
+
+  /** True when the source is the only remaining selection. */
+  isLastActiveSource(source: AuditSource): boolean {
+    const active = this.aggregatedSources();
+    return active.length === 1 && active[0] === source;
   }
 
   isSourceActive(source: AuditSource): boolean {

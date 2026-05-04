@@ -280,10 +280,19 @@
       </p>
       <div class="source-toggles" data-test="source-toggles">
         @for (source of allSources; track source) {
-          <label class="source-toggle">
+          <label
+            class="source-toggle"
+            [class.disabled]="isLastActiveSource(source)"
+            [title]="
+              isLastActiveSource(source)
+                ? ('AUDIT_SEARCH.AGGREGATED.LAST_SOURCE_LOCKED' | translate)
+                : ''
+            "
+          >
             <input
               type="checkbox"
               [checked]="isSourceActive(source)"
+              [disabled]="isLastActiveSource(source)"
               (change)="toggleAggregatedSource(source)"
               [attr.data-test]="'source-' + source"
             />
