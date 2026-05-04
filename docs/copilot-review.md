@@ -1,261 +1,107 @@
-hospital-core/.../com/example/hms/service/impl/HospitalLifecycleStatusServiceImpl.java
-Make this final field static too.
+# Copilot review archive
 
-Intentionality
-Maintainability
+## 2026-05-04 — `feature/super-admin-mvp-c2-frontend`
 
+Six Copilot findings on the MVP-c2 frontend PR (the four UI surfaces:
+MVP-3b probe/resync/history, hospital-lifecycle, MVP-9c policy editor,
+MVP-8c aggregation tab + saved-search REST migration). All addressed
+in a follow-up commit on the same branch before merging.
 
-3
-Low
-convention
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L34
-2min effort
-2 hours ago
-Code Smell
-Minor
-hospital-core/.../hms/service/integration/health/IntegrationHealthRecorder.java
-Call transactional methods via an injected dependency instead of directly via 'this'.
+### 1. Missing `REGION_POLICY.COL.*` i18n keys — **High**
 
-Consistency
-Maintainability
+> The template references translation keys like
+> `REGION_POLICY.COL.REGION/RETENTION/EXPORT/DEPLOYMENT/UPDATED`,
+> but no `REGION_POLICY.COL` entries exist in the i18n JSON files.
+> This will render raw keys in the UI.
 
+**Fix.** Added a complete `REGION_POLICY.COL.{REGION,RETENTION,
+EXPORT,DEPLOYMENT,UPDATED}` block in en/fr/es so the policy table
+column headers translate.
 
-4
-High
-No tags
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L70
-5min effort
-1 hour ago
-Code Smell
-Critical
-Call transactional methods via an injected dependency instead of directly via 'this'.
+### 2. `migrateLegacyEntries()` lacks per-upload `catchError` — **Major**
 
-Consistency
-Maintainability
+> `migrateLegacyEntries()` claims to swallow per-entry failures, but
+> each upload only uses `map(...)` and does not `catchError`. If any
+> `create()` call errors, `forkJoin` will error the whole migration,
+> potentially causing successful uploads to be retried later
+> (duplicate server rows) and preventing the legacy key from being
+> cleared.
 
+**Fix.** Each upload is now wrapped in `catchError(() => of({ ok:
+false }))` so a failed row falls through as a discriminated-union
+miss instead of erroring the `forkJoin`. The synchronous-throw path
+in `create()` (blank name) is also caught with a try/catch around
+the pipe. New "all-failed → keep legacy key" branch leaves the
+entries for retry; "partial success → clear key" branch prevents
+duplicate server rows on a re-run.
 
-4
-High
-No tags
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L92
-5min effort
-1 hour ago
-Code Smell
-Critical
-hospital-core/.../service/integration/partner/StubPartnerConnector.java
-This block of commented-out lines of code should be removed.
+**Tests.** Two new specs:
+`migrateLegacyEntries() partial failure: keeps the legacy key when
+ALL uploads fail` (asserts the legacy key + flag stay untouched)
+and `… clears the legacy key when at least one upload succeeded`
+(asserts the result has only the surviving row and the legacy key
+is cleared).
 
-Intentionality
-Maintainability
+### 3. Probe-error key shown for re-sync failures — **Minor**
 
+> `finishAction()` sets `errorKey` to `INTEGRATION_HEALTH.PROBE.ERROR`
+> for any null result, including `resync()`. This will show a
+> probe-specific error message for re-sync failures.
 
-2
-Medium
-unused
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L44
-5min effort
-1 hour ago
-Code Smell
-Major
-hospital-core/.../example/hms/service/scheduled/TenantPurgeExecutor.java
-Define a constant instead of duplicating this literal "system:tenant-purge-job" 3 times.
+**Fix.** `finishAction(integrationId, kind, result)` now takes the
+action kind. `errorKey` resolves to `INTEGRATION_HEALTH.PROBE.ERROR`
+for probe failures and `INTEGRATION_HEALTH.RESYNC.ERROR` for
+re-sync failures. New `RESYNC.ERROR` i18n key added in en/fr/es.
 
-Adaptability
-Maintainability
+**Test.** New `resync() failure surfaces the RESYNC error key, not
+PROBE` spec asserts the new behavior.
 
+### 4. `refresh()` flips loading off on lifecycle alone — **Minor**
 
-4
-High
-design
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L120
-8min effort
-1 hour ago
-Code Smell
-Critical
-Define a constant instead of duplicating this literal "ORGANIZATION" 3 times.
+> `refresh()` sets loading to false only when the lifecycle request
+> completes, while the hospital request runs independently. This can
+> clear the loading state before the hospital is loaded.
 
-Adaptability
-Maintainability
+**Fix.** Coordinated both fetches with `forkJoin`; loading flips
+off only after both observables emit. Each side is still wrapped
+in `catchError` so a single failure is recoverable. Refactored the
+nested-ternary action dispatch into a `dispatchLifecycleAction()`
+helper to satisfy SonarTS S3358.
 
+### 5. Open-detail link routes super-admin-only path for everyone — **Major**
 
-4
-High
-design
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L127
-8min effort
-1 hour ago
-Code Smell
-Critical
-hospital-core/.../com/example/hms/service/tenant/TenantExportPackager.java
-Define a constant instead of duplicating this literal "lifecycle_state" 3 times.
+> The hospital list is accessible to multiple roles, but the new
+> "open detail" link routes to `/hospitals/:id`, which is guarded as
+> `ROLE_SUPER_ADMIN` only. Non-super-admin users will see the icon
+> but be blocked on navigation.
 
-Adaptability
-Maintainability
+**Fix.** `HospitalListComponent` now exposes
+`isSuperAdmin = roleContext.isSuperAdmin` and the link is wrapped
+in `@if (isSuperAdmin())`. Hospital-admin / receptionist / nurse /
+midwife rows show only the existing edit + delete actions.
 
+### 6. Aggregated UI allows deselecting all sources — **Major**
 
-4
-High
-design
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L112
-8min effort
-1 hour ago
-Code Smell
-Critical
-hospital-core/.../com/example/hms/service/impl/AuditSavedSearchServiceImplTest.java
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
+> The UI allows deselecting all aggregated audit sources, but when
+> sources is empty the client omits the query param and the backend
+> defaults to "all sources". This can confuse users who unchecked
+> everything expecting no results.
 
-Intentionality
-Maintainability
+**Fix.** `toggleAggregatedSource()` is now a no-op when only one
+source remains active. Added `isLastActiveSource(source)` helper;
+the template binds `[disabled]` and a `disabled` CSS class on the
+locked checkbox plus a tooltip via `AUDIT_SEARCH.AGGREGATED.LAST_SOURCE_LOCKED`
+("At least one source must stay selected.").
 
+**Tests.** Three new specs in a new
+`super-admin/audit-search/audit-search.spec.ts`:
+toggle add/remove, last-source lock no-op, `isLastActiveSource`
+truthiness.
 
-2
-Medium
-junit
-tests
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L107
-5min effort
-2 hours ago
-Code Smell
-Major
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
+### Verification
 
-Intentionality
-Maintainability
-
-
-2
-Medium
-junit
-tests
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L134
-5min effort
-2 hours ago
-Code Smell
-Major
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
-
-Intentionality
-Maintainability
-
-
-2
-Medium
-junit
-tests
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L164
-5min effort
-2 hours ago
-Code Smell
-Major
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
-
-Intentionality
-Maintainability
-
-
-2
-Medium
-junit
-tests
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L175
-5min effort
-2 hours ago
-Code Smell
-Major
-hospital-core/.../com/example/hms/service/impl/SubscriptionFeatureGateServiceImplTest.java
-Replace these 3 tests with a single Parameterized one.
-
-Consistency
-Maintainability
-
-
-2
-Medium
-bad-practice
-clumsy
-...
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L179
-10min effort
-2 hours ago
-Code Smell
-Major
-hospital-core/.../hms/service/integration/health/IntegrationHealthActionServiceTest.java
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
-
-Intentionality
-Maintainability
-
-
-2
-Medium
-junit
-tests
-Open
-Tiego Ouedraogo
-Tiego Ouedraogo
-L102
-5min effort
-1 hour ago
-Code Smell
-Major
-
-
-
-
-
-Duplicated Lines (%) on New Code
-2.1%
-Duplicated Lines (%) on New Code
-Duplicated Lines on New Code
-
-hospital-core/src/main/java/com/example/hms/model/Hospital.java
-63.0%
-29
-
-hospital-core/src/main/java/com/example/hms/payload/dto/superadmin/HospitalLifecycleResponseDTO.java
-35.3%
-18
-
-hospital-core/src/main/java/com/example/hms/service/impl/HospitalLifecycleStatusServiceImpl.java
-20.8%
-15
-
-hospital-core/src/main/java/com/example/hms/service/impl/HospitalLifecycleServiceImpl.java
-10.7%
-34
+- `npm run format`, `npm run lint` clean
+- Karma **865/865** SUCCESS (up from 859 — +6 Copilot-fix tests)
+- `:hospital-core:test` green
+- `:hospital-core:jacocoTestCoverageVerification` (80% INSTRUCTION
+  gate) green

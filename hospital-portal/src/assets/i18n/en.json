@@ -158,6 +158,24 @@
       "RESOURCE": "Resource",
       "STATUS": "Status",
       "IMPERSONATOR": "Impersonator"
+    },
+    "TAB": {
+      "SUPPORT": "Support audit log",
+      "AGGREGATED": "All sources"
+    },
+    "AGGREGATED": {
+      "TITLE": "Cross-source aggregation",
+      "SUBTITLE": "Merges support, frontend, and permission-matrix audit events into a single timeline. Per-source row cap is 5 000 — narrow the date range to drill into a busy window.",
+      "LAST_SOURCE_LOCKED": "At least one source must stay selected.",
+      "SOURCE": {
+        "SUPPORT": "Backend audit",
+        "FRONTEND": "Frontend telemetry",
+        "PERMISSION_MATRIX": "Permission matrix"
+      },
+      "COL": {
+        "SOURCE": "Source",
+        "SUMMARY": "Summary"
+      }
     }
   },
   "EMERGENCY": {
@@ -264,6 +282,86 @@
       "OTHER": "Other"
     }
   },
+  "HOSPITAL_LIFECYCLE": {
+    "PANEL_TITLE": "Lifecycle",
+    "PANEL_SUBTITLE": "Suspend, archive, or schedule a purge for this hospital. Lifecycle changes are audited and override the active/inactive flag for login decisions.",
+    "BACK_TO_LIST": "Back to hospitals",
+    "OPEN_DETAIL": "Open lifecycle detail",
+    "LOADING": "Loading hospital lifecycle…",
+    "LOAD_ERROR": "Could not load this hospital. Try again.",
+    "RETRY": "Retry",
+    "STATE": {
+      "ACTIVE": "Active",
+      "SUSPENDED": "Suspended",
+      "ARCHIVED": "Archived",
+      "PURGE_SCHEDULED": "Purge scheduled",
+      "PURGED": "Purged"
+    },
+    "META": {
+      "SUSPENDED_AT": "Suspended at",
+      "SUSPENSION_REASON": "Suspension reason",
+      "ARCHIVED_AT": "Archived at",
+      "PURGE_SCHEDULED_FOR": "Purge scheduled for",
+      "PURGED_AT": "Purged at"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspend",
+      "RESTORE": "Restore",
+      "ARCHIVE": "Archive",
+      "SCHEDULE_PURGE": "Schedule purge",
+      "CANCEL_PURGE": "Cancel purge"
+    },
+    "DIALOG": {
+      "SUSPEND": "Suspend hospital",
+      "RESTORE": "Restore hospital",
+      "ARCHIVE": "Archive hospital",
+      "SCHEDULE-PURGE": "Schedule hospital purge",
+      "CANCEL-PURGE": "Cancel scheduled purge",
+      "CONFIRM_PREFIX": "Confirm this lifecycle change for",
+      "REASON": "Reason (audited, ≥ 5 chars)",
+      "REASON_HELP": "The reason is persisted in the audit trail and surfaced to staff who try to log in.",
+      "SCHEDULED_FOR": "Scheduled purge date",
+      "WORKING": "Working…"
+    },
+    "ERROR": {
+      "ACTION_FAILED": "Lifecycle action failed. Try again."
+    }
+  },
+  "REGION_POLICY": {
+    "TITLE": "Region Policy",
+    "SUBTITLE": "Per-region retention, default export format, and remote-deployment URL overrides.",
+    "BACK_TO_RESIDENCY": "Back to Data Residency",
+    "LOADING": "Loading region policies…",
+    "LOAD_ERROR": "Could not load region policies. Try again.",
+    "RETRY": "Retry",
+    "EMPTY": "No region policies seeded yet.",
+    "GLOBAL_FALLBACK": "Global default",
+    "LOCAL_DEPLOYMENT": "Local deployment",
+    "EDIT": "Edit",
+    "EDIT_TITLE": "Edit policy for {{ region }}",
+    "SAVING": "Saving…",
+    "COL": {
+      "REGION": "Region",
+      "RETENTION": "Retention (days)",
+      "EXPORT": "Default export format",
+      "DEPLOYMENT": "Target deployment",
+      "UPDATED": "Last updated"
+    },
+    "FIELD": {
+      "RETENTION": "Retention (days)",
+      "RETENTION_PLACEHOLDER": "e.g. 365",
+      "RETENTION_HELP": "Leave empty to fall back to the global retention policy.",
+      "EXPORT": "Default export format",
+      "EXPORT_PLACEHOLDER": "e.g. GDPR_PORTABILITY",
+      "EXPORT_HELP": "Leave empty to fall back to the global export-format default.",
+      "DEPLOYMENT": "Target deployment URL",
+      "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
+      "DEPLOYMENT_HELP": "When set, new tenants in this region must be provisioned remotely via TenantProvisioningClient. Leave empty to provision locally."
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "Region policy update failed. Try again."
+    }
+  },
   "INTEGRATION_HEALTH": {
     "TITLE": "Integration Health Console",
     "SUBTITLE": "Per-tenant inventory and call health for partner connectors and platform integrations",
@@ -292,6 +390,28 @@
       "DEGRADED": "Degraded",
       "FAILING": "Failing",
       "NO_HISTORY": "No history"
+    },
+    "ACTION": {
+      "TEST": "Test connection",
+      "RESYNC": "Re-sync",
+      "BUSY": "Working…",
+      "OK": "OK",
+      "FAIL": "Failed",
+      "ERROR": "The action could not be completed."
+    },
+    "PROBE": {
+      "ERROR": "Probe failed."
+    },
+    "RESYNC": {
+      "ERROR": "Re-sync failed."
+    },
+    "HISTORY": {
+      "TITLE": "Last 24 hours",
+      "LOADING": "Loading history…",
+      "ERROR": "Could not load history.",
+      "EMPTY": "No history recorded for this integration yet.",
+      "SPARKLINE_LABEL": "24-hour failure ratio per bucket",
+      "LEGEND": "{{ count }} hourly buckets — line height shows the failure ratio per window."
     }
   },
   "IMPERSONATION": {

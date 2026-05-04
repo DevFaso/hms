@@ -1,10 +1,13 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditSource;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.OrganizationRegion;
+import com.example.hms.payload.dto.superadmin.AggregatedAuditPageDTO;
 import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
+import com.example.hms.service.SuperAdminAuditAggregationService;
 import com.example.hms.service.SuperAdminAuditSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -22,7 +25,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -38,6 +43,7 @@ import java.util.UUID;
 public class SuperAdminAuditSearchController {
 
     private final SuperAdminAuditSearchService service;
+    private final SuperAdminAuditAggregationService aggregationService;
 
     @GetMapping
     @PreAuthorize("hasRole('SUPER_ADMIN')")
@@ -98,5 +104,30 @@ public class SuperAdminAuditSearchController {
             .header(HttpHeaders.CONTENT_DISPOSITION,
                 "attachment; filename=\"audit-search.csv\"")
             .body(csv);
+    }
+
+    /**
+     * MVP-8c — cross-source audit aggregation. Unions
+     * {@code support.audit_event_logs}, {@code frontend_audit_events},
+     * and {@code permission_matrix_audit_events} into one merged feed
+     * sorted by event timestamp DESC. {@code sources} is optional —
+     * empty/missing means "all three". Date bounds are optional but
+     * recommended; the service caps per-source rows to keep deep-page
+     * requests bounded.
+     */
+    @GetMapping("/aggregated")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Cross-source audit aggregation across SUPPORT / FRONTEND / PERMISSION_MATRIX")
+    public ResponseEntity<AggregatedAuditPageDTO> searchAggregated(
+        @RequestParam(required = false) List<AuditSource> sources,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
+        Pageable pageable
+    ) {
+        Set<AuditSource> sourceSet = (sources == null || sources.isEmpty())
+            ? EnumSet.allOf(AuditSource.class)
+            : EnumSet.copyOf(sources);
+        return ResponseEntity.ok(
+            aggregationService.searchAggregated(sourceSet, fromDate, toDate, pageable));
     }
 }

@@ -79,6 +79,58 @@
             </div>
           </button>
 
+          <!-- MVP-3b — row-level Test connection / Re-sync controls. -->
+          <div class="row-actions" [attr.data-test]="'row-actions-' + row.integrationId">
+            <button
+              type="button"
+              class="action-btn"
+              [disabled]="rowAction(row.integrationId).busy"
+              (click)="probe($event, row.integrationId)"
+              [attr.data-test]="'probe-' + row.integrationId"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">network_check</span>
+              {{ 'INTEGRATION_HEALTH.ACTION.TEST' | translate }}
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [disabled]="rowAction(row.integrationId).busy"
+              (click)="resync($event, row.integrationId)"
+              [attr.data-test]="'resync-' + row.integrationId"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+              {{ 'INTEGRATION_HEALTH.ACTION.RESYNC' | translate }}
+            </button>
+
+            @if (rowAction(row.integrationId).busy) {
+              <span class="action-status busy">
+                <span class="material-symbols-outlined spin" aria-hidden="true"
+                  >progress_activity</span
+                >
+                {{ 'INTEGRATION_HEALTH.ACTION.BUSY' | translate }}
+              </span>
+            } @else if (rowAction(row.integrationId).result; as result) {
+              <span class="action-status" [class.ok]="result.ok" [class.fail]="!result.ok">
+                <span class="material-symbols-outlined" aria-hidden="true">
+                  {{ result.ok ? 'check_circle' : 'error' }}
+                </span>
+                @if (result.ok) {
+                  {{ 'INTEGRATION_HEALTH.ACTION.OK' | translate }}
+                  @if (result.latencyMs !== null) {
+                    ({{ result.latencyMs }} ms)
+                  }
+                } @else {
+                  {{ result.errorMessage || ('INTEGRATION_HEALTH.ACTION.FAIL' | translate) }}
+                }
+              </span>
+            } @else if (rowAction(row.integrationId).errorKey; as errorKey) {
+              <span class="action-status fail">
+                <span class="material-symbols-outlined" aria-hidden="true">error</span>
+                {{ errorKey | translate }}
+              </span>
+            }
+          </div>
+
           @if (expandedIntegrationId() === row.integrationId) {
             <div class="integration-body">
               @if (row.capabilities && row.capabilities.length) {
@@ -135,6 +187,48 @@
                   </tbody>
                 </table>
               }
+
+              <!-- MVP-3b — 24h history drawer with a sparkline of bucketed counts. -->
+              <section class="history-drawer" [attr.data-test]="'history-' + row.integrationId">
+                <h3 class="history-title">
+                  {{ 'INTEGRATION_HEALTH.HISTORY.TITLE' | translate }}
+                </h3>
+                @if (history(row.integrationId).loading) {
+                  <p class="history-state">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.LOADING' | translate }}
+                  </p>
+                } @else if (history(row.integrationId).error) {
+                  <p class="history-state error">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.ERROR' | translate }}
+                  </p>
+                } @else if (history(row.integrationId).buckets.length === 0) {
+                  <p class="history-state">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.EMPTY' | translate }}
+                  </p>
+                } @else {
+                  <svg
+                    class="sparkline"
+                    viewBox="0 0 100 30"
+                    preserveAspectRatio="none"
+                    role="img"
+                    [attr.aria-label]="'INTEGRATION_HEALTH.HISTORY.SPARKLINE_LABEL' | translate"
+                  >
+                    <polyline
+                      [attr.points]="history(row.integrationId).sparklinePath"
+                      fill="none"
+                      stroke="#ef4444"
+                      stroke-width="0.8"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  </svg>
+                  <p class="history-legend">
+                    {{
+                      'INTEGRATION_HEALTH.HISTORY.LEGEND'
+                        | translate: { count: history(row.integrationId).buckets.length }
+                    }}
+                  </p>
+                }
+              </section>
             </div>
           }
         </section>

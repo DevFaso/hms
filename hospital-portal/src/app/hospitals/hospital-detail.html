@@ -1,0 +1,204 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">
+        @if (hospital(); as h) {
+          {{ h.name }}
+        } @else {
+          {{ 'HOSPITAL_LIFECYCLE.LOADING' | translate }}
+        }
+      </h1>
+      @if (hospital(); as h) {
+        <p class="page-subtitle">{{ h.code }} · {{ h.organizationName }}</p>
+      }
+    </div>
+    <a class="back-link" routerLink="/hospitals">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'HOSPITAL_LIFECYCLE.BACK_TO_LIST' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+      <span>{{ 'HOSPITAL_LIFECYCLE.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{{ 'HOSPITAL_LIFECYCLE.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="refresh()">
+        {{ 'HOSPITAL_LIFECYCLE.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (lifecycle(); as lc) {
+    <section class="lifecycle-panel" data-test="lifecycle-panel">
+      <header class="lifecycle-header">
+        <div>
+          <h2>{{ 'HOSPITAL_LIFECYCLE.PANEL_TITLE' | translate }}</h2>
+          <p class="lifecycle-subtitle">
+            {{ 'HOSPITAL_LIFECYCLE.PANEL_SUBTITLE' | translate }}
+          </p>
+        </div>
+        <span
+          class="state-chip"
+          data-test="state-chip"
+          [style.background]="stateColor(state()) + '14'"
+          [style.color]="stateColor(state())"
+        >
+          {{ 'HOSPITAL_LIFECYCLE.STATE.' + lc.state | translate }}
+        </span>
+      </header>
+
+      <dl class="lifecycle-meta">
+        @if (lc.suspendedAt) {
+          <div>
+            <dt>{{ 'HOSPITAL_LIFECYCLE.META.SUSPENDED_AT' | translate }}</dt>
+            <dd>{{ lc.suspendedAt | date: 'medium' }} — {{ lc.suspendedBy }}</dd>
+          </div>
+          @if (lc.suspensionReason) {
+            <div>
+              <dt>{{ 'HOSPITAL_LIFECYCLE.META.SUSPENSION_REASON' | translate }}</dt>
+              <dd>{{ lc.suspensionReason }}</dd>
+            </div>
+          }
+        }
+        @if (lc.archivedAt) {
+          <div>
+            <dt>{{ 'HOSPITAL_LIFECYCLE.META.ARCHIVED_AT' | translate }}</dt>
+            <dd>{{ lc.archivedAt | date: 'medium' }} — {{ lc.archivedBy }}</dd>
+          </div>
+        }
+        @if (lc.purgeScheduledFor) {
+          <div>
+            <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGE_SCHEDULED_FOR' | translate }}</dt>
+            <dd>{{ lc.purgeScheduledFor | date: 'medium' }}</dd>
+          </div>
+        }
+        @if (lc.purgedAt) {
+          <div>
+            <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGED_AT' | translate }}</dt>
+            <dd>{{ lc.purgedAt | date: 'medium' }}</dd>
+          </div>
+        }
+      </dl>
+
+      <div class="action-row">
+        @if (canSuspend()) {
+          <button
+            type="button"
+            class="action-btn warn"
+            data-test="action-suspend"
+            (click)="openDialog('suspend')"
+          >
+            {{ 'HOSPITAL_LIFECYCLE.ACTION.SUSPEND' | translate }}
+          </button>
+        }
+        @if (canRestore()) {
+          <button
+            type="button"
+            class="action-btn ok"
+            data-test="action-restore"
+            (click)="openDialog('restore')"
+          >
+            {{ 'HOSPITAL_LIFECYCLE.ACTION.RESTORE' | translate }}
+          </button>
+        }
+        @if (canArchive()) {
+          <button
+            type="button"
+            class="action-btn"
+            data-test="action-archive"
+            (click)="openDialog('archive')"
+          >
+            {{ 'HOSPITAL_LIFECYCLE.ACTION.ARCHIVE' | translate }}
+          </button>
+        }
+        @if (canSchedulePurge()) {
+          <button
+            type="button"
+            class="action-btn danger"
+            data-test="action-schedule-purge"
+            (click)="openDialog('schedule-purge')"
+          >
+            {{ 'HOSPITAL_LIFECYCLE.ACTION.SCHEDULE_PURGE' | translate }}
+          </button>
+        }
+        @if (canCancelPurge()) {
+          <button
+            type="button"
+            class="action-btn"
+            data-test="action-cancel-purge"
+            (click)="openDialog('cancel-purge')"
+          >
+            {{ 'HOSPITAL_LIFECYCLE.ACTION.CANCEL_PURGE' | translate }}
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (dialog(); as state) {
+      <div class="dialog-backdrop" data-test="dialog-backdrop">
+        <div class="dialog">
+          <h2>{{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}</h2>
+          <p class="dialog-confirm">
+            {{ 'HOSPITAL_LIFECYCLE.DIALOG.CONFIRM_PREFIX' | translate }}
+            <strong>{{ hospital()?.name }}</strong
+            >?
+          </p>
+
+          @if (needsReason(state.kind)) {
+            <label class="field">
+              <span>{{ 'HOSPITAL_LIFECYCLE.DIALOG.REASON' | translate }}</span>
+              <textarea
+                rows="3"
+                [ngModel]="state.reason"
+                (ngModelChange)="patchDialog('reason', $event)"
+              ></textarea>
+              <small>{{ 'HOSPITAL_LIFECYCLE.DIALOG.REASON_HELP' | translate }}</small>
+            </label>
+          }
+
+          @if (needsScheduledFor(state.kind)) {
+            <label class="field">
+              <span>{{ 'HOSPITAL_LIFECYCLE.DIALOG.SCHEDULED_FOR' | translate }}</span>
+              <input
+                type="date"
+                [ngModel]="state.scheduledFor"
+                (ngModelChange)="patchDialog('scheduledFor', $event)"
+              />
+            </label>
+          }
+
+          @if (state.errorKey) {
+            <p class="form-error">{{ state.errorKey | translate }}</p>
+          }
+
+          <div class="dialog-actions">
+            <button
+              type="button"
+              class="cancel-btn"
+              [disabled]="state.busy"
+              (click)="closeDialog()"
+            >
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="confirm-btn"
+              data-test="dialog-confirm"
+              [disabled]="state.busy || !isReasonValid(state)"
+              (click)="submitDialog()"
+            >
+              @if (state.busy) {
+                {{ 'HOSPITAL_LIFECYCLE.DIALOG.WORKING' | translate }}
+              } @else {
+                {{ 'COMMON.CONFIRM' | translate }}
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+  }
+</div>

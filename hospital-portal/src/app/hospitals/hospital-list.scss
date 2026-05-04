@@ -294,3 +294,17 @@
     gap: 6px;
   }
 }
+
+/* MVP-c2-frontend — lifecycle chip on each row. Sits next to the
+   active/inactive status-badge; renders only when the hospital is in
+   a non-ACTIVE lifecycle state. */
+.lifecycle-chip {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
