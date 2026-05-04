@@ -336,3 +336,83 @@
     }
   }
 }
+
+/* MVP-8c — tab strip + aggregation styles */
+
+.tab-strip {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  padding: 0.6rem 1.1rem;
+  font-size: 0.9rem;
+  border: 0;
+  background: transparent;
+  border-bottom: 2px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+
+  &.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+  }
+}
+
+.aggregated-title {
+  margin: 0 0 0.3rem;
+  font-size: 1.05rem;
+}
+
+.aggregated-subtitle {
+  margin: 0 0 1rem;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.source-toggles {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.source-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.source-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #1e293b;
+
+  &[data-source='SUPPORT'] {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  &[data-source='FRONTEND'] {
+    background: #dcfce7;
+    color: #166534;
+  }
+  &[data-source='PERMISSION_MATRIX'] {
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+}
+
+.cell-summary {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

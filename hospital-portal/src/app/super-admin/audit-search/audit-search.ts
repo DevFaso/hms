@@ -7,9 +7,12 @@ import { catchError, of } from 'rxjs';
 
 import { AuditSearchService } from '../../services/audit-search.service';
 import {
+  AggregatedAuditEvent,
+  AggregatedAuditPage,
   AuditSearchFilter,
   AuditSearchPage,
   AuditSearchRow,
+  AuditSource,
 } from '../../services/audit-search.model';
 import { DataResidencyService } from '../../services/data-residency.service';
 import { OrganizationRegion } from '../../services/data-residency.model';
@@ -19,6 +22,9 @@ import {
 } from '../../services/audit-saved-search.service';
 
 const DEFAULT_PAGE_SIZE = 25;
+const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX'];
+
+type ActiveTab = 'support' | 'aggregated';
 
 @Component({
   selector: 'app-super-admin-audit-search',
@@ -29,11 +35,7 @@ const DEFAULT_PAGE_SIZE = 25;
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
-  // MVP-9b — drives the tenant-region filter dropdown without hardcoding
-  // the enum. Same source as the Data Residency console so a new code
-  // is one backend addition, not a parallel frontend change.
   private readonly residencyService = inject(DataResidencyService);
-  // MVP-8b — localStorage-backed saved searches per operator.
   private readonly savedSearchService = inject(AuditSavedSearchService);
 
   readonly loading = signal(false);
@@ -59,23 +61,47 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   readonly hasNext = computed(() => this.pageNumber() < this.totalPages() - 1);
 
   readonly statusOptions = ['SUCCESS', 'FAILURE', 'PENDING'];
-  // MVP-8b — CSV export busy/error state distinct from the JSON search.
   readonly exporting = signal(false);
   readonly exportError = signal<string | null>(null);
-  // MVP-8b — saved searches surfaced as a dropdown above the filter form.
+
+  // ── MVP-8c — server-backed saved searches ──────────────────────────
   readonly savedSearches = signal<SavedAuditSearch[]>([]);
   readonly newSavedSearchName = signal('');
+  readonly newSavedSearchShared = signal(false);
   readonly saveError = signal<string | null>(null);
 
+  // ── MVP-8c — aggregation tab ───────────────────────────────────────
+  /** Exposed for the template's @for over source toggles. */
+  readonly allSources: readonly AuditSource[] = ALL_SOURCES;
+  readonly activeTab = signal<ActiveTab>('support');
+  readonly aggregatedSources = signal<AuditSource[]>([...ALL_SOURCES]);
+  readonly aggregatedPage = signal<AggregatedAuditPage | null>(null);
+  readonly aggregatedPageNumber = signal(0);
+  readonly aggregatedLoading = signal(false);
+  readonly aggregatedError = signal(false);
+
+  readonly aggregatedRows = computed<AggregatedAuditEvent[]>(
+    () => this.aggregatedPage()?.content ?? [],
+  );
+  readonly aggregatedTotalPages = computed(() => this.aggregatedPage()?.totalPages ?? 0);
+  readonly aggregatedHasPrev = computed(() => this.aggregatedPageNumber() > 0);
+  readonly aggregatedHasNext = computed(
+    () => this.aggregatedPageNumber() < this.aggregatedTotalPages() - 1,
+  );
+
   ngOnInit(): void {
-    // MVP-9b — load the region catalogue once on mount; failure leaves
-    // the dropdown empty (the search still works without the filter).
     this.residencyService
       .listAvailableRegions()
       .pipe(catchError(() => of([] as OrganizationRegion[])))
       .subscribe((regions) => this.availableRegions.set(regions));
-    // MVP-8b — hydrate saved searches from localStorage.
-    this.savedSearches.set(this.savedSearchService.list());
+
+    // MVP-8c — upload any pre-existing localStorage saved searches to
+    // the server (one-shot, idempotent), then load the merged list.
+    this.savedSearchService
+      .migrateLegacyEntries()
+      .pipe(catchError(() => of([] as SavedAuditSearch[])))
+      .subscribe(() => this.refreshSavedSearches());
+
     this.runSearch();
   }
 
@@ -115,21 +141,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     this.loading.set(true);
     this.errored.set(false);
 
-    const filter: AuditSearchFilter = {
-      userName: this.trimOrUndefined(this.userName()),
-      impersonatorUserId: this.trimOrUndefined(this.impersonatorUserId()),
-      entityType: this.trimOrUndefined(this.entityType()),
-      resourceId: this.trimOrUndefined(this.resourceId()),
-      status: this.trimOrUndefined(this.status()),
-      fromDate: this.toIsoDateTime(this.fromDate()),
-      toDate: this.toIsoDateTime(this.toDate()),
-      tenantRegion: this.tenantRegion() === '' ? undefined : this.tenantRegion(),
-      page: this.pageNumber(),
-      size: DEFAULT_PAGE_SIZE,
-    };
-
     this.service
-      .search(filter)
+      .search({ ...this.currentFilterSnapshot(), page: this.pageNumber(), size: DEFAULT_PAGE_SIZE })
       .pipe(
         catchError(() => {
           this.errored.set(true);
@@ -142,40 +155,89 @@ export class SuperAdminAuditSearchComponent implements OnInit {
       });
   }
 
+  // ── MVP-8c aggregation tab ──────────────────────────────────────────
+
+  selectTab(tab: ActiveTab): void {
+    this.activeTab.set(tab);
+    if (tab === 'aggregated' && this.aggregatedPage() === null) {
+      this.runAggregatedSearch();
+    }
+  }
+
+  toggleAggregatedSource(source: AuditSource): void {
+    this.aggregatedSources.update((current) => {
+      if (current.includes(source)) {
+        return current.filter((s) => s !== source);
+      }
+      return [...current, source];
+    });
+  }
+
+  isSourceActive(source: AuditSource): boolean {
+    return this.aggregatedSources().includes(source);
+  }
+
+  applyAggregatedFilters(): void {
+    this.aggregatedPageNumber.set(0);
+    this.runAggregatedSearch();
+  }
+
+  goToAggregatedPrev(): void {
+    if (this.aggregatedHasPrev()) {
+      this.aggregatedPageNumber.update((n) => n - 1);
+      this.runAggregatedSearch();
+    }
+  }
+
+  goToAggregatedNext(): void {
+    if (this.aggregatedHasNext()) {
+      this.aggregatedPageNumber.update((n) => n + 1);
+      this.runAggregatedSearch();
+    }
+  }
+
+  runAggregatedSearch(): void {
+    this.aggregatedLoading.set(true);
+    this.aggregatedError.set(false);
+    this.service
+      .searchAggregated({
+        sources: this.aggregatedSources(),
+        fromDate: this.toIsoDateTime(this.fromDate()),
+        toDate: this.toIsoDateTime(this.toDate()),
+        page: this.aggregatedPageNumber(),
+        size: DEFAULT_PAGE_SIZE,
+      })
+      .pipe(
+        catchError(() => {
+          this.aggregatedError.set(true);
+          return of(null);
+        }),
+      )
+      .subscribe((page) => {
+        this.aggregatedPage.set(page);
+        this.aggregatedLoading.set(false);
+      });
+  }
+
+  // ── helpers ─────────────────────────────────────────────────────────
+
   private trimOrUndefined(value: string): string | undefined {
     const v = value?.trim();
     return v && v.length > 0 ? v : undefined;
   }
 
-  // Datetime-local inputs return "YYYY-MM-DDTHH:mm"; backend wants ISO_DATE_TIME
-  // (which accepts that shape, but normalising to seconds keeps it predictable).
   private toIsoDateTime(value: string): string | undefined {
     const v = this.trimOrUndefined(value);
     if (!v) return undefined;
     return v.length === 16 ? `${v}:00` : v;
   }
 
-  /**
-   * MVP-8b — fetch the same filter as a CSV blob and trigger a browser
-   * download via a temporary object URL. Reuses the live filter signals
-   * so the export matches whatever the user is currently viewing.
-   */
   exportCsv(): void {
     if (this.exporting()) return;
     this.exporting.set(true);
     this.exportError.set(null);
-    const filter: AuditSearchFilter = {
-      userName: this.trimOrUndefined(this.userName()),
-      impersonatorUserId: this.trimOrUndefined(this.impersonatorUserId()),
-      entityType: this.trimOrUndefined(this.entityType()),
-      resourceId: this.trimOrUndefined(this.resourceId()),
-      status: this.trimOrUndefined(this.status()),
-      fromDate: this.toIsoDateTime(this.fromDate()),
-      toDate: this.toIsoDateTime(this.toDate()),
-      tenantRegion: this.tenantRegion() === '' ? undefined : this.tenantRegion(),
-    };
     this.service
-      .exportCsv(filter)
+      .exportCsv(this.currentFilterSnapshot())
       .pipe(
         catchError(() => {
           this.exportError.set('AUDIT_SEARCH.EXPORT.FAILED');
@@ -189,12 +251,6 @@ export class SuperAdminAuditSearchComponent implements OnInit {
       });
   }
 
-  /**
-   * MVP-8b — snapshot the *current* filter signals into a persistable
-   * AuditSearchFilter (no pagination — the saved-search service strips
-   * page/size anyway, but generating without them keeps the snapshot
-   * clean for a future server-side persistence).
-   */
   private currentFilterSnapshot(): AuditSearchFilter {
     return {
       userName: this.trimOrUndefined(this.userName()),
@@ -208,20 +264,36 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     };
   }
 
+  // ── MVP-8c saved searches (REST) ───────────────────────────────────
+
+  refreshSavedSearches(): void {
+    this.savedSearchService
+      .list()
+      .pipe(catchError(() => of([] as SavedAuditSearch[])))
+      .subscribe((list) => this.savedSearches.set(list));
+  }
+
   saveCurrent(): void {
     const name = this.newSavedSearchName().trim();
     if (!name) {
       this.saveError.set('AUDIT_SEARCH.SAVED.NAME_REQUIRED');
       return;
     }
-    try {
-      this.savedSearchService.save(name, this.currentFilterSnapshot());
-      this.savedSearches.set(this.savedSearchService.list());
-      this.newSavedSearchName.set('');
-      this.saveError.set(null);
-    } catch {
-      this.saveError.set('AUDIT_SEARCH.SAVED.SAVE_FAILED');
-    }
+    this.savedSearchService
+      .create(name, this.currentFilterSnapshot(), this.newSavedSearchShared())
+      .pipe(
+        catchError(() => {
+          this.saveError.set('AUDIT_SEARCH.SAVED.SAVE_FAILED');
+          return of(null);
+        }),
+      )
+      .subscribe((created) => {
+        if (!created) return;
+        this.savedSearches.update((current) => [created, ...current]);
+        this.newSavedSearchName.set('');
+        this.newSavedSearchShared.set(false);
+        this.saveError.set(null);
+      });
   }
 
   applySaved(saved: SavedAuditSearch): void {
@@ -239,12 +311,14 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   }
 
   deleteSaved(saved: SavedAuditSearch): void {
-    this.savedSearchService.delete(saved.id);
-    this.savedSearches.set(this.savedSearchService.list());
+    this.savedSearchService
+      .delete(saved.id)
+      .pipe(catchError(() => of(null)))
+      .subscribe(() =>
+        this.savedSearches.update((current) => current.filter((s) => s.id !== saved.id)),
+      );
   }
 
-  /** Strip the trailing `:00` we add in toIsoDateTime so the input
-   *  re-renders cleanly when a saved search is re-applied. */
   private fromIsoForInput(value: string | undefined): string {
     if (!value) return '';
     return value.length === 19 && value.endsWith(':00') ? value.substring(0, 16) : value;
@@ -261,11 +335,6 @@ export class SuperAdminAuditSearchComponent implements OnInit {
     URL.revokeObjectURL(url);
   }
 
-  /**
-   * PR #228 review — status pill colour now distinguishes SUCCESS,
-   * FAILURE/ERROR, PENDING/IN_PROGRESS, and unknown values instead of
-   * collapsing every non-SUCCESS into the failure style.
-   */
   statusPillClass(status: string | null): string {
     const normalised = (status ?? '').toUpperCase();
     if (normalised === 'SUCCESS' || normalised === 'COMPLETED') {

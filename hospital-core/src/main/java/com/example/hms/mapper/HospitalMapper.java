@@ -40,6 +40,7 @@ public class HospitalMapper {
         .organizationName(organization != null ? trim(organization.getName()) : null)
         .organizationCode(organization != null ? trim(organization.getCode()) : null)
             .active(hospital.isActive())
+            .lifecycleState(hospital.getLifecycleState())
             .createdAt(hospital.getCreatedAt())
             .updatedAt(hospital.getUpdatedAt())
             .build();

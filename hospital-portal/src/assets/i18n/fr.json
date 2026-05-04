@@ -158,6 +158,23 @@
       "RESOURCE": "Ressource",
       "STATUS": "Statut",
       "IMPERSONATOR": "Usurpateur"
+    },
+    "TAB": {
+      "SUPPORT": "Journal d'audit support",
+      "AGGREGATED": "Toutes les sources"
+    },
+    "AGGREGATED": {
+      "TITLE": "Agrégation multi-source",
+      "SUBTITLE": "Fusionne les événements support, frontend et matrice de permissions dans une seule chronologie. Plafond de 5 000 lignes par source — affinez la plage de dates pour un créneau chargé.",
+      "SOURCE": {
+        "SUPPORT": "Audit backend",
+        "FRONTEND": "Télémétrie frontend",
+        "PERMISSION_MATRIX": "Matrice de permissions"
+      },
+      "COL": {
+        "SOURCE": "Source",
+        "SUMMARY": "Résumé"
+      }
     }
   },
   "EMERGENCY": {
@@ -264,6 +281,79 @@
       "OTHER": "Autre"
     }
   },
+  "HOSPITAL_LIFECYCLE": {
+    "PANEL_TITLE": "Cycle de vie",
+    "PANEL_SUBTITLE": "Suspendre, archiver ou planifier une purge pour cet établissement. Les changements sont audités et priment sur l'indicateur actif/inactif pour les décisions de connexion.",
+    "BACK_TO_LIST": "Retour aux établissements",
+    "OPEN_DETAIL": "Ouvrir le détail du cycle de vie",
+    "LOADING": "Chargement du cycle de vie…",
+    "LOAD_ERROR": "Impossible de charger cet établissement. Réessayez.",
+    "RETRY": "Réessayer",
+    "STATE": {
+      "ACTIVE": "Actif",
+      "SUSPENDED": "Suspendu",
+      "ARCHIVED": "Archivé",
+      "PURGE_SCHEDULED": "Purge planifiée",
+      "PURGED": "Purgé"
+    },
+    "META": {
+      "SUSPENDED_AT": "Suspendu le",
+      "SUSPENSION_REASON": "Motif de suspension",
+      "ARCHIVED_AT": "Archivé le",
+      "PURGE_SCHEDULED_FOR": "Purge prévue pour",
+      "PURGED_AT": "Purgé le"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspendre",
+      "RESTORE": "Restaurer",
+      "ARCHIVE": "Archiver",
+      "SCHEDULE_PURGE": "Planifier une purge",
+      "CANCEL_PURGE": "Annuler la purge"
+    },
+    "DIALOG": {
+      "SUSPEND": "Suspendre l'établissement",
+      "RESTORE": "Restaurer l'établissement",
+      "ARCHIVE": "Archiver l'établissement",
+      "SCHEDULE-PURGE": "Planifier la purge",
+      "CANCEL-PURGE": "Annuler la purge planifiée",
+      "CONFIRM_PREFIX": "Confirmer ce changement de cycle de vie pour",
+      "REASON": "Motif (audité, ≥ 5 caractères)",
+      "REASON_HELP": "Le motif est conservé dans l'audit et présenté au personnel qui tente de se connecter.",
+      "SCHEDULED_FOR": "Date de purge planifiée",
+      "WORKING": "Traitement en cours…"
+    },
+    "ERROR": {
+      "ACTION_FAILED": "Échec de l'action sur le cycle de vie. Réessayez."
+    }
+  },
+  "REGION_POLICY": {
+    "TITLE": "Politique régionale",
+    "SUBTITLE": "Surcharges par région : rétention, format d'export par défaut et URL de déploiement distant.",
+    "BACK_TO_RESIDENCY": "Retour à la Résidence des données",
+    "LOADING": "Chargement des politiques régionales…",
+    "LOAD_ERROR": "Impossible de charger les politiques régionales. Réessayez.",
+    "RETRY": "Réessayer",
+    "EMPTY": "Aucune politique régionale enregistrée.",
+    "GLOBAL_FALLBACK": "Valeur globale par défaut",
+    "LOCAL_DEPLOYMENT": "Déploiement local",
+    "EDIT": "Modifier",
+    "EDIT_TITLE": "Modifier la politique pour {{ region }}",
+    "SAVING": "Enregistrement…",
+    "FIELD": {
+      "RETENTION": "Rétention (jours)",
+      "RETENTION_PLACEHOLDER": "ex. 365",
+      "RETENTION_HELP": "Laisser vide pour utiliser la politique de rétention globale.",
+      "EXPORT": "Format d'export par défaut",
+      "EXPORT_PLACEHOLDER": "ex. GDPR_PORTABILITY",
+      "EXPORT_HELP": "Laisser vide pour utiliser le format d'export par défaut global.",
+      "DEPLOYMENT": "URL de déploiement cible",
+      "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
+      "DEPLOYMENT_HELP": "Si renseigné, les nouveaux locataires de cette région doivent être provisionnés à distance. Laisser vide pour un provisionnement local."
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "Échec de la mise à jour de la politique régionale. Réessayez."
+    }
+  },
   "INTEGRATION_HEALTH": {
     "TITLE": "Console de santé des intégrations",
     "SUBTITLE": "Inventaire et santé des appels par tenant pour les connecteurs partenaires et les intégrations plateforme",
@@ -292,6 +382,25 @@
       "DEGRADED": "Dégradé",
       "FAILING": "En échec",
       "NO_HISTORY": "Aucun historique"
+    },
+    "ACTION": {
+      "TEST": "Tester la connexion",
+      "RESYNC": "Resynchroniser",
+      "BUSY": "Traitement en cours…",
+      "OK": "OK",
+      "FAIL": "Échec",
+      "ERROR": "L'action n'a pas pu être effectuée."
+    },
+    "PROBE": {
+      "ERROR": "Échec du test."
+    },
+    "HISTORY": {
+      "TITLE": "Dernières 24 heures",
+      "LOADING": "Chargement de l'historique…",
+      "ERROR": "Impossible de charger l'historique.",
+      "EMPTY": "Aucun historique enregistré pour cette intégration.",
+      "SPARKLINE_LABEL": "Taux d'échec par tranche horaire sur 24 h",
+      "LEGEND": "{{ count }} tranches horaires — la hauteur de la courbe indique le taux d'échec par fenêtre."
     }
   },
   "IMPERSONATION": {

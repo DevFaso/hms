@@ -30,6 +30,44 @@ export interface AuditSearchPage {
   totalPages: number;
 }
 
+/**
+ * MVP-8c — discriminator for cross-source aggregation. Mirrors the
+ * backend `AuditSource` enum.
+ */
+export type AuditSource = 'SUPPORT' | 'FRONTEND' | 'PERMISSION_MATRIX';
+
+/**
+ * MVP-8c — common shape across the three audit sources. Mirrors
+ * `AggregatedAuditEventDTO` on the backend.
+ */
+export interface AggregatedAuditEvent {
+  source: AuditSource;
+  id: string;
+  eventType: string | null;
+  actor: string | null;
+  hospitalId: string | null;
+  organizationId: string | null;
+  status: string | null;
+  timestamp: string | null;
+  summary: string | null;
+}
+
+export interface AggregatedAuditPage {
+  content: AggregatedAuditEvent[];
+  pageNumber: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface AggregatedAuditFilter {
+  sources?: AuditSource[];
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface AuditSearchFilter {
   userId?: string;
   userName?: string;

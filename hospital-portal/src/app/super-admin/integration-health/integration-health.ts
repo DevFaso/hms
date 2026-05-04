@@ -9,12 +9,28 @@ import {
   IntegrationHealthRow,
   IntegrationHealthStatus,
   IntegrationHealthSummary,
+  IntegrationHistoryBucket,
+  IntegrationProbeResult,
 } from '../../services/integration-health.model';
 
 interface StatusChip {
   status: IntegrationHealthStatus;
   labelKey: string;
   color: string;
+}
+
+interface RowAction {
+  busy: boolean;
+  result: IntegrationProbeResult | null;
+  errorKey: string | null;
+}
+
+interface HistoryState {
+  loading: boolean;
+  error: boolean;
+  buckets: IntegrationHistoryBucket[];
+  /** SVG path data for the sparkline polyline. */
+  sparklinePath: string;
 }
 
 @Component({
@@ -31,6 +47,12 @@ export class IntegrationHealthComponent implements OnInit {
   readonly errored = signal(false);
   readonly summary = signal<IntegrationHealthSummary | null>(null);
   readonly expandedIntegrationId = signal<string | null>(null);
+
+  /** MVP-3b — per-row probe / resync state keyed by integrationId. */
+  readonly rowActions = signal<Record<string, RowAction>>({});
+
+  /** MVP-3b — history-drawer state keyed by integrationId. */
+  readonly historyState = signal<Record<string, HistoryState>>({});
 
   readonly integrations = computed<IntegrationHealthRow[]>(
     () => this.summary()?.integrations ?? [],
@@ -80,6 +102,13 @@ export class IntegrationHealthComponent implements OnInit {
     this.expandedIntegrationId.update((current) =>
       current === integrationId ? null : integrationId,
     );
+    // Lazy-load history the first time the row is expanded.
+    if (this.expandedIntegrationId() === integrationId) {
+      const history = this.historyState()[integrationId];
+      if (!history) {
+        this.loadHistory(integrationId);
+      }
+    }
   }
 
   ngOnInit(): void {
@@ -100,5 +129,142 @@ export class IntegrationHealthComponent implements OnInit {
         }
         this.loading.set(false);
       });
+  }
+
+  // ── MVP-3b row actions ──────────────────────────────────────────────
+
+  rowAction(integrationId: string): RowAction {
+    return (
+      this.rowActions()[integrationId] ?? {
+        busy: false,
+        result: null,
+        errorKey: null,
+      }
+    );
+  }
+
+  probe(event: Event, integrationId: string): void {
+    event.stopPropagation();
+    this.beginAction(integrationId);
+    this.service
+      .probe(integrationId)
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => this.finishAction(integrationId, result));
+  }
+
+  resync(event: Event, integrationId: string): void {
+    event.stopPropagation();
+    this.beginAction(integrationId);
+    this.service
+      .resync(integrationId)
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => this.finishAction(integrationId, result));
+  }
+
+  private beginAction(integrationId: string): void {
+    this.rowActions.update((current) => ({
+      ...current,
+      [integrationId]: { busy: true, result: null, errorKey: null },
+    }));
+  }
+
+  private finishAction(integrationId: string, result: IntegrationProbeResult | null): void {
+    this.rowActions.update((current) => ({
+      ...current,
+      [integrationId]: {
+        busy: false,
+        result,
+        errorKey: result === null ? 'INTEGRATION_HEALTH.PROBE.ERROR' : null,
+      },
+    }));
+    // After a probe / resync the inventory may have moved; re-fetch
+    // the recorder snapshot in the background so the chips and per-row
+    // status pill stay in sync.
+    if (result !== null) {
+      this.silentRefresh();
+      // Refresh history if the drawer is open for this row.
+      if (this.expandedIntegrationId() === integrationId) {
+        this.loadHistory(integrationId);
+      }
+    }
+  }
+
+  private silentRefresh(): void {
+    this.service
+      .getInventory()
+      .pipe(catchError(() => of(null)))
+      .subscribe((result) => {
+        if (result !== null) {
+          this.summary.set(result);
+        }
+      });
+  }
+
+  // ── MVP-3b history drawer ───────────────────────────────────────────
+
+  history(integrationId: string): HistoryState {
+    return (
+      this.historyState()[integrationId] ?? {
+        loading: false,
+        error: false,
+        buckets: [],
+        sparklinePath: '',
+      }
+    );
+  }
+
+  loadHistory(integrationId: string): void {
+    this.historyState.update((current) => ({
+      ...current,
+      [integrationId]: { loading: true, error: false, buckets: [], sparklinePath: '' },
+    }));
+    this.service
+      .getHistory(integrationId, 24)
+      .pipe(catchError(() => of(null)))
+      .subscribe((buckets) => {
+        if (buckets === null) {
+          this.historyState.update((current) => ({
+            ...current,
+            [integrationId]: { loading: false, error: true, buckets: [], sparklinePath: '' },
+          }));
+          return;
+        }
+        this.historyState.update((current) => ({
+          ...current,
+          [integrationId]: {
+            loading: false,
+            error: false,
+            buckets,
+            sparklinePath: this.toSparklinePath(buckets),
+          },
+        }));
+      });
+  }
+
+  /**
+   * Build an SVG `<polyline points="…">` value from the bucket counts.
+   * Coordinate space is 0..100 wide, 0..30 tall (matches the inline
+   * SVG viewBox in the template). Each bucket plots its failure-ratio:
+   *   ratio = failing / max(1, healthy + degraded + failing)
+   * which maps 0 → bottom (good), 1 → top (bad). NO_HISTORY buckets
+   * (zero on every counter) are plotted at the bottom so a quiet
+   * window doesn't look like a spike.
+   */
+  private toSparklinePath(buckets: IntegrationHistoryBucket[]): string {
+    if (buckets.length === 0) {
+      return '';
+    }
+    const w = 100;
+    const h = 30;
+    const stepX = buckets.length === 1 ? 0 : w / (buckets.length - 1);
+    return buckets
+      .map((b, i) => {
+        const total = b.healthyCount + b.degradedCount + b.failingCount;
+        const ratio = total === 0 ? 0 : b.failingCount / total;
+        const x = i * stepX;
+        const y = h - ratio * h;
+        return `${x.toFixed(2)},${y.toFixed(2)}`;
+      })
+      .join(' ');
   }
 }

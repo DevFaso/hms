@@ -46,6 +46,12 @@ export interface HospitalResponse {
   organizationName: string;
   organizationCode: string;
   active: boolean;
+  /**
+   * MVP-c2-frontend — backend now exposes the lifecycle state on the
+   * Hospital DTO so the list view can render a state chip per row
+   * without an N+1 lookup. Optional for backwards compatibility.
+   */
+  lifecycleState?: 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PURGE_SCHEDULED' | 'PURGED';
   createdAt: string;
   updatedAt: string;
 }
