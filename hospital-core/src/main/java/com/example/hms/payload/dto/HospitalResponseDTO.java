@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.enums.HospitalLifecycleState;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,6 +39,14 @@ public class HospitalResponseDTO {
     private String organizationCode;
 
     private boolean active;
+
+    /**
+     * MVP-c2-frontend — current lifecycle state so the hospital list
+     * can render a state chip per row without an N+1 lookup. Mirrors
+     * the {@code lifecycle_status} column added in V84.
+     */
+    private HospitalLifecycleState lifecycleState;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

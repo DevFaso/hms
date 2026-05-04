@@ -1,0 +1,257 @@
+.page-container {
+  padding: 1.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+
+.page-subtitle {
+  margin: 0.35rem 0 0;
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #475569;
+  text-decoration: none;
+  font-size: 0.9rem;
+
+  &:hover {
+    color: #1e293b;
+  }
+}
+
+.state-panel {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  color: #475569;
+
+  &.error {
+    border-color: #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+  }
+}
+
+.retry-btn {
+  margin-left: auto;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid #94a3b8;
+  border-radius: 0.4rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.lifecycle-panel {
+  padding: 1.25rem 1.5rem 1.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.lifecycle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+}
+
+.lifecycle-subtitle {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.state-chip {
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.lifecycle-meta {
+  margin: 1rem 0 1.25rem;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem 1.25rem;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  dt {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #1e293b;
+  }
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.4rem;
+  background: #fff;
+  cursor: pointer;
+
+  &:hover {
+    background: #f1f5f9;
+  }
+
+  &.warn {
+    color: #92400e;
+    border-color: #fcd34d;
+    background: #fffbeb;
+  }
+
+  &.ok {
+    color: #047857;
+    border-color: #86efac;
+    background: #ecfdf5;
+  }
+
+  &.danger {
+    color: #b91c1c;
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.dialog {
+  width: 100%;
+  max-width: 480px;
+  background: #fff;
+  border-radius: 0.6rem;
+  padding: 1.5rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.2);
+
+  h2 {
+    margin: 0 0 0.75rem;
+    font-size: 1.1rem;
+  }
+}
+
+.dialog-confirm {
+  margin: 0 0 1rem;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+
+  span {
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  textarea,
+  input {
+    padding: 0.45rem 0.7rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.4rem;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+
+  small {
+    color: #64748b;
+    font-size: 0.75rem;
+  }
+}
+
+.form-error {
+  margin: 0.5rem 0 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 0.4rem;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cancel-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.confirm-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: #fff;
+  border-radius: 0.4rem;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}

@@ -158,6 +158,24 @@
       "RESOURCE": "Recurso",
       "STATUS": "Estado",
       "IMPERSONATOR": "Suplantador"
+    },
+    "TAB": {
+      "SUPPORT": "Auditoría de soporte",
+      "AGGREGATED": "Todas las fuentes"
+    },
+    "AGGREGATED": {
+      "TITLE": "Agregación multi-fuente",
+      "SUBTITLE": "Fusiona eventos de soporte, frontend y matriz de permisos en una sola línea de tiempo. Límite de 5 000 filas por fuente — ajuste el rango de fechas para una ventana ocupada.",
+      "LAST_SOURCE_LOCKED": "Al menos una fuente debe permanecer seleccionada.",
+      "SOURCE": {
+        "SUPPORT": "Auditoría backend",
+        "FRONTEND": "Telemetría frontend",
+        "PERMISSION_MATRIX": "Matriz de permisos"
+      },
+      "COL": {
+        "SOURCE": "Fuente",
+        "SUMMARY": "Resumen"
+      }
     }
   },
   "EMERGENCY": {
@@ -264,6 +282,86 @@
       "OTHER": "Otro"
     }
   },
+  "HOSPITAL_LIFECYCLE": {
+    "PANEL_TITLE": "Ciclo de vida",
+    "PANEL_SUBTITLE": "Suspender, archivar o programar una purga para este hospital. Los cambios se auditan y priman sobre la marca activo/inactivo para las decisiones de inicio de sesión.",
+    "BACK_TO_LIST": "Volver a hospitales",
+    "OPEN_DETAIL": "Abrir detalle del ciclo de vida",
+    "LOADING": "Cargando ciclo de vida…",
+    "LOAD_ERROR": "No se pudo cargar este hospital. Reintente.",
+    "RETRY": "Reintentar",
+    "STATE": {
+      "ACTIVE": "Activo",
+      "SUSPENDED": "Suspendido",
+      "ARCHIVED": "Archivado",
+      "PURGE_SCHEDULED": "Purga programada",
+      "PURGED": "Purgado"
+    },
+    "META": {
+      "SUSPENDED_AT": "Suspendido el",
+      "SUSPENSION_REASON": "Motivo de suspensión",
+      "ARCHIVED_AT": "Archivado el",
+      "PURGE_SCHEDULED_FOR": "Purga programada para",
+      "PURGED_AT": "Purgado el"
+    },
+    "ACTION": {
+      "SUSPEND": "Suspender",
+      "RESTORE": "Restaurar",
+      "ARCHIVE": "Archivar",
+      "SCHEDULE_PURGE": "Programar purga",
+      "CANCEL_PURGE": "Cancelar purga"
+    },
+    "DIALOG": {
+      "SUSPEND": "Suspender hospital",
+      "RESTORE": "Restaurar hospital",
+      "ARCHIVE": "Archivar hospital",
+      "SCHEDULE-PURGE": "Programar purga",
+      "CANCEL-PURGE": "Cancelar purga programada",
+      "CONFIRM_PREFIX": "Confirme este cambio de ciclo de vida para",
+      "REASON": "Motivo (auditado, ≥ 5 caracteres)",
+      "REASON_HELP": "El motivo se guarda en la auditoría y se muestra al personal que intente iniciar sesión.",
+      "SCHEDULED_FOR": "Fecha programada de purga",
+      "WORKING": "Procesando…"
+    },
+    "ERROR": {
+      "ACTION_FAILED": "La acción del ciclo de vida falló. Reintente."
+    }
+  },
+  "REGION_POLICY": {
+    "TITLE": "Política regional",
+    "SUBTITLE": "Reglas por región: retención, formato de exportación por defecto y URL de despliegue remoto.",
+    "BACK_TO_RESIDENCY": "Volver a Residencia de datos",
+    "LOADING": "Cargando políticas regionales…",
+    "LOAD_ERROR": "No se pudieron cargar las políticas regionales. Reintente.",
+    "RETRY": "Reintentar",
+    "EMPTY": "No hay políticas regionales registradas.",
+    "GLOBAL_FALLBACK": "Valor global por defecto",
+    "LOCAL_DEPLOYMENT": "Despliegue local",
+    "EDIT": "Editar",
+    "EDIT_TITLE": "Editar política para {{ region }}",
+    "SAVING": "Guardando…",
+    "COL": {
+      "REGION": "Región",
+      "RETENTION": "Retención (días)",
+      "EXPORT": "Formato de exportación por defecto",
+      "DEPLOYMENT": "Despliegue objetivo",
+      "UPDATED": "Última actualización"
+    },
+    "FIELD": {
+      "RETENTION": "Retención (días)",
+      "RETENTION_PLACEHOLDER": "ej. 365",
+      "RETENTION_HELP": "Dejar vacío para usar la política de retención global.",
+      "EXPORT": "Formato de exportación por defecto",
+      "EXPORT_PLACEHOLDER": "ej. GDPR_PORTABILITY",
+      "EXPORT_HELP": "Dejar vacío para usar el formato de exportación global.",
+      "DEPLOYMENT": "URL de despliegue objetivo",
+      "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
+      "DEPLOYMENT_HELP": "Cuando se establece, los nuevos inquilinos de esta región deben aprovisionarse de forma remota. Dejar vacío para aprovisionar localmente."
+    },
+    "ERROR": {
+      "UPDATE_FAILED": "Error al actualizar la política regional. Reintente."
+    }
+  },
   "INTEGRATION_HEALTH": {
     "TITLE": "Consola de salud de integraciones",
     "SUBTITLE": "Inventario y salud de llamadas por inquilino para conectores de socios e integraciones de plataforma",
@@ -292,6 +390,28 @@
       "DEGRADED": "Degradado",
       "FAILING": "Fallando",
       "NO_HISTORY": "Sin historial"
+    },
+    "ACTION": {
+      "TEST": "Probar conexión",
+      "RESYNC": "Resincronizar",
+      "BUSY": "Procesando…",
+      "OK": "OK",
+      "FAIL": "Falló",
+      "ERROR": "No se pudo completar la acción."
+    },
+    "PROBE": {
+      "ERROR": "Error en la prueba."
+    },
+    "RESYNC": {
+      "ERROR": "Error en la resincronización."
+    },
+    "HISTORY": {
+      "TITLE": "Últimas 24 horas",
+      "LOADING": "Cargando historial…",
+      "ERROR": "No se pudo cargar el historial.",
+      "EMPTY": "No hay historial registrado para esta integración.",
+      "SPARKLINE_LABEL": "Tasa de fallos por intervalo en 24 h",
+      "LEGEND": "{{ count }} intervalos horarios — la altura indica la tasa de fallos por ventana."
     }
   },
   "IMPERSONATION": {

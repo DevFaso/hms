@@ -581,6 +581,17 @@ export const routes: Routes = [
           import('./hospitals/hospital-list').then((m) => m.HospitalListComponent),
       },
 
+      // Hospital detail with Lifecycle panel (MVP-c2-frontend — see
+      // docs/super-admin-gaps.md). Super-admin-only because the
+      // panel can suspend / archive / schedule purge.
+      {
+        path: 'hospitals/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./hospitals/hospital-detail').then((m) => m.HospitalDetailComponent),
+      },
+
       // Organizations (Admin)
       {
         path: 'organizations',
@@ -1088,6 +1099,17 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./super-admin/data-residency/data-residency').then(
             (m) => m.DataResidencyComponent,
+          ),
+      },
+
+      // Super-Admin Data Residency Policy editor (MVP-9c — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/data-residency/policy',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/data-residency-policy/data-residency-policy').then(
+            (m) => m.DataResidencyPolicyComponent,
           ),
       },
 
