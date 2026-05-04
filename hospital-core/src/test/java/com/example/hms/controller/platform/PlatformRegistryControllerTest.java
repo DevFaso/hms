@@ -79,6 +79,11 @@ class PlatformRegistryControllerTest {
     @MockitoBean
     private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
 
+    /** MVP-c batch fixup — JwtAuthenticationFilter now also depends on
+     *  HospitalLifecycleStatusService for the per-hospital login block. */
+    @MockitoBean
+    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
     @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;
 

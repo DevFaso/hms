@@ -151,4 +151,69 @@ class SubscriptionFeatureGateServiceImplTest {
 
         assertThat(gate.isFeatureAllowedForOrg(orgId, "any.key")).isTrue();
     }
+
+    // ── MVP-6c: jsonb feature_keys ────────────────────────────────────
+
+    private OrganizationSubscription subscriptionWithJsonbKeys(String legacyKeys, String jsonbKeys) {
+        SubscriptionPlan plan = SubscriptionPlan.builder()
+            .name("Pro")
+            .tierCode("PRO")
+            .monthlyPriceCents(1000)
+            .currency("USD")
+            .includedSeats(10)
+            .featureKeys(legacyKeys)
+            .featureKeysJson(jsonbKeys)
+            .active(true)
+            .build();
+        plan.setId(UUID.randomUUID());
+        OrganizationSubscription sub = OrganizationSubscription.builder()
+            .plan(plan)
+            .status(OrganizationSubscription.Status.ACTIVE)
+            .build();
+        sub.setId(UUID.randomUUID());
+        return sub;
+    }
+
+    /**
+     * MVP-6c jsonb-vs-legacy resolution table — three scenarios collapse
+     * to one parameterised test per Sonar S5976 (replace these N tests
+     * with a single parameterized one).
+     *
+     * <p>Each row says: given a (legacy TEXT, jsonb) pair, the gate must
+     * allow {@code expectedAllowedKey} and deny {@code expectedDeniedKey}.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "MVP-6c: {0}")
+    @org.junit.jupiter.params.provider.MethodSource("jsonbResolutionScenarios")
+    void resolvesFeatureKeysAcrossLegacyAndJsonb(
+        String description,
+        String legacyKeys,
+        String jsonbKeys,
+        String expectedAllowedKey,
+        String expectedDeniedKey
+    ) {
+        UUID orgId = UUID.randomUUID();
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            orgId, OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(Optional.of(subscriptionWithJsonbKeys(legacyKeys, jsonbKeys)));
+
+        assertThat(gate.isFeatureAllowedForOrg(orgId, expectedAllowedKey)).isTrue();
+        assertThat(gate.isFeatureAllowedForOrg(orgId, expectedDeniedKey)).isFalse();
+    }
+
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> jsonbResolutionScenarios() {
+        return java.util.stream.Stream.of(
+            org.junit.jupiter.params.provider.Arguments.of(
+                "jsonb wins over legacy TEXT when both populated",
+                "billing.advanced", "[\"reports.export\"]",
+                "reports.export", "billing.advanced"),
+            org.junit.jupiter.params.provider.Arguments.of(
+                "empty jsonb falls back to legacy TEXT",
+                "billing.advanced", "[]",
+                "billing.advanced", "reports.export"),
+            org.junit.jupiter.params.provider.Arguments.of(
+                "malformed jsonb falls back to legacy TEXT (does not block resolution)",
+                "billing.advanced", "{not-valid-json",
+                "billing.advanced", "reports.export")
+        );
+    }
 }
