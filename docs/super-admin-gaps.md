@@ -237,7 +237,9 @@ batches.
 
 **Migration-number correction (informational).** V84
 hospital_lifecycle, V85 subscription_plan_feature_keys_jsonb, V86
-region_policy, V87 audit_saved_search, V88 integration_health_event.
+region_policy, V87 audit_saved_search, V88 integration_health_event,
+V89 integration_message_event (MVP-c3 — Bridges-style per-message log
++ DLQ; strictly additive).
 
 | Item | On `main` `b9f3fe0b` | On `develop` `050d4d94` |
 | --- | --- | --- |
@@ -393,9 +395,18 @@ Open Questions item.
   causes tenant creation to throw HTTP 501. Intentional — silent
   local fallback is a data-residency violation for a GDPR-tagged
   region — but operators must register a real client before turning
-  the column on.
+  the column on. **MVP-c3 closes the operator foot-gun:** the policy
+  editor now reads `GET /super-admin/data-residency/policies/capabilities`,
+  disables the deployment-URL column when only the stub is wired,
+  and the backend `RegionPolicyService.update()` rejects writes that
+  attempt to set a non-empty URL with HTTP 400. Clearing the value
+  is always allowed so legacy rows can be recovered.
 - **MVP-2c KEK source** defaults to `noop` in dev profiles.
   Production must export `HMS_TENANT_ARCHIVE_KEK` (base64) until a
   real KMS integration replaces the env-source. The abstraction
   (`hms.tenant-archive.kek-source`) is in place so swapping the
-  source is a one-bean change.
+  source is a one-bean change. **MVP-c3 closes the silent-misconfig
+  gap:** `TenantArchiveEncryptionServiceImpl.@PostConstruct` aborts
+  startup with `IllegalStateException` if `kek-source=noop` is
+  observed outside dev / test profiles, so a misconfigured prod
+  deploy can no longer boot.

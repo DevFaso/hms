@@ -41,4 +41,14 @@ public interface RegionPolicyService {
 
     /** Convenience for callers that need the deployment-routing URL only. */
     String resolveTargetDeploymentUrl(OrganizationRegion region);
+
+    /**
+     * Whether a real {@link com.example.hms.service.provisioning.TenantProvisioningClient}
+     * is wired into the running deployment. Surfaces the same flag the
+     * write path uses to reject {@code targetDeploymentUrl} writes — the
+     * UI consults this to disable the column when only the stub is
+     * registered, so an operator never types a URL the deployment
+     * cannot honour.
+     */
+    boolean isRemoteProvisioningCapable();
 }

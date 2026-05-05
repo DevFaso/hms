@@ -22,7 +22,10 @@ import {
 } from '../../services/audit-saved-search.service';
 
 const DEFAULT_PAGE_SIZE = 25;
-const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX'];
+// MVP-c3 added PLATFORM_CONFIG so platform-administration writes
+// surface under their own toggle. The order here drives the toggle
+// row in the aggregation tab.
+const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 'PLATFORM_CONFIG'];
 
 type ActiveTab = 'support' | 'aggregated';
 

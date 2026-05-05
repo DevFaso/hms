@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.OrganizationRegion;
+import com.example.hms.exception.BusinessValidationException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.platform.RegionPolicy;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -11,6 +12,7 @@ import com.example.hms.repository.platform.RegionPolicyRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.provisioning.TenantProvisioningClient;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,7 @@ class RegionPolicyServiceImplTest {
 
     @Mock private RegionPolicyRepository regionPolicyRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private TenantProvisioningClient tenantProvisioningClient;
 
     @InjectMocks private RegionPolicyServiceImpl service;
 
@@ -108,6 +111,7 @@ class RegionPolicyServiceImplTest {
         when(regionPolicyRepository.findById(OrganizationRegion.BF))
             .thenReturn(Optional.of(current));
         when(regionPolicyRepository.save(any(RegionPolicy.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(tenantProvisioningClient.isRemoteCapable()).thenReturn(true);
 
         RegionPolicyUpdateRequestDTO request = RegionPolicyUpdateRequestDTO.builder()
             .retentionDays(365)
@@ -126,6 +130,73 @@ class RegionPolicyServiceImplTest {
         verify(auditEventLogService).logEvent(cap.capture());
         assertThat(cap.getValue().getEventType()).isEqualTo(AuditEventType.REGION_POLICY_UPDATED);
         assertThat(cap.getValue().getResourceId()).isEqualTo("BF");
+    }
+
+    @Test
+    void updateRejectsNewTargetUrlWhenOnlyStubClientIsWired() {
+        RegionPolicy current = seedRow(OrganizationRegion.BF, null, null, null);
+        when(regionPolicyRepository.findById(OrganizationRegion.BF))
+            .thenReturn(Optional.of(current));
+        when(tenantProvisioningClient.isRemoteCapable()).thenReturn(false);
+
+        RegionPolicyUpdateRequestDTO request = RegionPolicyUpdateRequestDTO.builder()
+            .targetDeploymentUrl("https://hms-eu.railway.app")
+            .build();
+
+        assertThatThrownBy(() -> service.update(OrganizationRegion.BF, request))
+            .isInstanceOf(BusinessValidationException.class)
+            .hasMessageContaining("target_deployment_url")
+            .hasMessageContaining("no remote");
+
+        verify(regionPolicyRepository, never()).save(any(RegionPolicy.class));
+        verify(auditEventLogService, never()).logEvent(any(AuditEventRequestDTO.class));
+    }
+
+    @Test
+    void updateAllowsClearingLegacyTargetUrlEvenWhenOnlyStubClientIsWired() {
+        // Recovery path: a URL was saved before the guard existed (or while
+        // a real client was wired and was later replaced by the stub). The
+        // operator must be able to clear the value to unblock provisioning.
+        RegionPolicy current = seedRow(OrganizationRegion.BF, null, null, "https://stale.example");
+        when(regionPolicyRepository.findById(OrganizationRegion.BF))
+            .thenReturn(Optional.of(current));
+        when(regionPolicyRepository.save(any(RegionPolicy.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        RegionPolicyUpdateRequestDTO clear = RegionPolicyUpdateRequestDTO.builder()
+            .targetDeploymentUrl(null)
+            .build();
+
+        RegionPolicyResponseDTO result = service.update(OrganizationRegion.BF, clear);
+
+        assertThat(result.getTargetDeploymentUrl()).isNull();
+        verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+    }
+
+    @Test
+    void updateAllowsNoOpWriteOnLegacyTargetUrlEvenWhenOnlyStubClientIsWired() {
+        // No-op (same URL submitted) on a legacy row must not be rejected;
+        // the guard only fires when the value actually changes to a non-
+        // empty string.
+        RegionPolicy current = seedRow(OrganizationRegion.BF, null, null, "https://stale.example");
+        when(regionPolicyRepository.findById(OrganizationRegion.BF))
+            .thenReturn(Optional.of(current));
+
+        RegionPolicyUpdateRequestDTO noop = RegionPolicyUpdateRequestDTO.builder()
+            .targetDeploymentUrl("https://stale.example")
+            .build();
+
+        service.update(OrganizationRegion.BF, noop);
+
+        verify(regionPolicyRepository, never()).save(any(RegionPolicy.class));
+        verify(auditEventLogService, never()).logEvent(any(AuditEventRequestDTO.class));
+    }
+
+    @Test
+    void isRemoteProvisioningCapableMirrorsClientFlag() {
+        when(tenantProvisioningClient.isRemoteCapable()).thenReturn(true, false);
+
+        assertThat(service.isRemoteProvisioningCapable()).isTrue();
+        assertThat(service.isRemoteProvisioningCapable()).isFalse();
     }
 
     @Test

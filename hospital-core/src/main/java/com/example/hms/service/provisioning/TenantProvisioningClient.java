@@ -29,4 +29,17 @@ public interface TenantProvisioningClient {
     OrganizationResponseDTO provisionRemote(
         SuperAdminCreateOrganizationRequestDTO request,
         String targetDeploymentUrl);
+
+    /**
+     * Whether this implementation can actually forward provisioning to a
+     * remote deployment. Real implementations return {@code true} (the
+     * default); the stub overrides to {@code false}. The region-policy
+     * write path consults this so an operator can't store a
+     * {@code target_deployment_url} that the running deployment cannot
+     * honour — saving it would let a later tenant-create silently fail
+     * with HTTP 501. The UI uses the same signal to disable the column.
+     */
+    default boolean isRemoteCapable() {
+        return true;
+    }
 }

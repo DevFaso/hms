@@ -63,7 +63,10 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
 
   it('toggleAggregatedSource adds and removes a source from the active set', () => {
     const cmp = setup();
-    expect(cmp.aggregatedSources().length).toBe(3);
+    // MVP-c3 — PLATFORM_CONFIG joined the default-on set, so the
+    // initial selection is now four sources (SUPPORT, FRONTEND,
+    // PERMISSION_MATRIX, PLATFORM_CONFIG).
+    expect(cmp.aggregatedSources().length).toBe(4);
 
     cmp.toggleAggregatedSource('FRONTEND');
     expect(cmp.aggregatedSources()).not.toContain('FRONTEND');
@@ -74,12 +77,13 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
 
   it('toggleAggregatedSource refuses to deselect the LAST active source', () => {
     // Copilot review fix — backend treats empty `sources` as "all
-    // three", so an operator who unchecks everything would see the
+    // sources", so an operator who unchecks everything would see the
     // opposite of what they expect. The toggle is a no-op when only
     // one source remains.
     const cmp = setup();
     cmp.toggleAggregatedSource('FRONTEND');
     cmp.toggleAggregatedSource('PERMISSION_MATRIX');
+    cmp.toggleAggregatedSource('PLATFORM_CONFIG');
     expect(cmp.aggregatedSources()).toEqual(['SUPPORT']);
 
     cmp.toggleAggregatedSource('SUPPORT');
@@ -90,5 +94,16 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
   it('isLastActiveSource is false when more than one source is selected', () => {
     const cmp = setup();
     expect(cmp.isLastActiveSource('SUPPORT')).toBeFalse();
+  });
+
+  it('PLATFORM_CONFIG is in the default-on source set', () => {
+    // MVP-c3 — PLATFORM_CONFIG is a logical view over audit_event_logs
+    // filtered to platform-administration writes. It appears in the
+    // toggle row alongside the other three sources and is on by
+    // default so an operator opening the aggregation tab sees a full
+    // unified timeline.
+    const cmp = setup();
+    expect(cmp.aggregatedSources()).toContain('PLATFORM_CONFIG');
+    expect(cmp.allSources).toContain('PLATFORM_CONFIG');
   });
 });

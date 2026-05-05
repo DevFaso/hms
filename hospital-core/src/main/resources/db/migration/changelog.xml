@@ -1220,4 +1220,21 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V89 — Bridges-style per-message log + DLQ (MVP-c3 / Tier 2 #5)
+         Adds clinical.integration_message_event for the operator's
+         message-trace + dead-letter-queue + replay surface. Sibling of
+         V88: V88 records probe outcomes ("is this integration healthy
+         right now?"); V89 records the actual partner-protocol payloads
+         that crossed the wire (HL7, FHIR, X12, proprietary REST).
+         The recorder is best-effort and tolerates the table being
+         absent, so the migration is strictly additive and rollback-safe.
+         ================================================================= -->
+    <changeSet id="V89-integration-message-event" author="hms-team" runOnChange="false">
+        <sqlFile path="V89__integration_message_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditSource;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.FrontendAuditEvent;
@@ -57,6 +58,25 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
      */
     private static final int MAX_PAGE_SIZE = PER_SOURCE_HARD_CAP;
 
+    /**
+     * MVP-c3 — event types that count as platform configuration. The
+     * aggregation service splits each {@code AuditEventLog} row to
+     * either {@link AuditSource#PLATFORM_CONFIG} (in this set) or
+     * {@link AuditSource#SUPPORT} (everything else). Adding an event
+     * type here makes it appear under the platform-config tab; the
+     * row itself is still persisted exactly once in the support
+     * audit_event_logs table.
+     */
+    static final Set<AuditEventType> PLATFORM_CONFIG_EVENT_TYPES = EnumSet.of(
+        AuditEventType.SECURITY_POLICY_UPDATED,
+        AuditEventType.CONFIGURATION_CHANGED,
+        AuditEventType.API_KEY_CREATED,
+        AuditEventType.API_KEY_REVOKED,
+        AuditEventType.INTEGRATION_CONFIGURED,
+        AuditEventType.PLATFORM_REGISTRY_UPDATED,
+        AuditEventType.REGION_POLICY_UPDATED
+    );
+
     private final AuditEventLogRepository auditEventLogRepository;
     private final FrontendAuditEventRepository frontendAuditEventRepository;
     private final PermissionMatrixAuditEventRepository permissionMatrixAuditEventRepository;
@@ -93,10 +113,27 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
         // because the service can't fetch deep enough.
         long totalElements = 0L;
 
-        if (effectiveSources.contains(AuditSource.SUPPORT)) {
+        // SUPPORT and PLATFORM_CONFIG share the audit_event_logs table —
+        // the split is by eventType so a single row never appears under
+        // both. Three cases:
+        //   - both selected: query everything in date range
+        //   - SUPPORT only: query everything NOT in the platform-config set
+        //   - PLATFORM_CONFIG only: query everything IN the platform-config set
+        boolean wantSupport = effectiveSources.contains(AuditSource.SUPPORT);
+        boolean wantPlatformConfig = effectiveSources.contains(AuditSource.PLATFORM_CONFIG);
+        if (wantSupport || wantPlatformConfig) {
             Pageable supportPage = PageRequest.of(0, perSourceLimit,
                 Sort.by(Sort.Direction.DESC, "eventTimestamp"));
-            Page<AuditEventLog> page = auditEventLogRepository.findByDateRange(fromDate, toDate, supportPage);
+            Page<AuditEventLog> page;
+            if (wantSupport && wantPlatformConfig) {
+                page = auditEventLogRepository.findByDateRange(fromDate, toDate, supportPage);
+            } else if (wantPlatformConfig) {
+                page = auditEventLogRepository.findByDateRangeAndEventTypeIn(
+                    fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
+            } else {
+                page = auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+                    fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
+            }
             for (AuditEventLog row : page.getContent()) {
                 merged.add(toDto(row));
             }
@@ -162,8 +199,15 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
                 && row.getAssignment().getHospital().getOrganization() != null
             ? row.getAssignment().getHospital().getOrganization().getId()
             : null;
+        // MVP-c3 — split rows by eventType so platform-config writes
+        // surface under their own source rather than drowning in the
+        // generic SUPPORT stream.
+        AuditSource source = row.getEventType() != null
+            && PLATFORM_CONFIG_EVENT_TYPES.contains(row.getEventType())
+                ? AuditSource.PLATFORM_CONFIG
+                : AuditSource.SUPPORT;
         return AggregatedAuditEventDTO.builder()
-            .source(AuditSource.SUPPORT)
+            .source(source)
             .id(row.getId())
             .eventType(row.getEventType() == null ? null : row.getEventType().name())
             .actor(row.getUserName())
