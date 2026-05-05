@@ -1,6 +1,7 @@
 package com.example.hms.service.integration.partner;
 
 import com.example.hms.service.integration.health.IntegrationHealthRecorder;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,8 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class CnamgsConnector extends StubPartnerConnector {
 
-    public CnamgsConnector(IntegrationHealthRecorder recorder) {
-        super(recorder);
+    public CnamgsConnector(IntegrationHealthRecorder recorder,
+                           IntegrationMessageRecorder messageRecorder) {
+        super(recorder, messageRecorder);
     }
 
     @Override

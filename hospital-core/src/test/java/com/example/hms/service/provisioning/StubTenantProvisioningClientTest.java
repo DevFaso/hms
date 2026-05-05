@@ -4,6 +4,7 @@ import com.example.hms.exception.RemoteProvisioningNotConfiguredException;
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationRequestDTO;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StubTenantProvisioningClientTest {
@@ -29,5 +30,10 @@ class StubTenantProvisioningClientTest {
         assertThatThrownBy(() ->
             client.provisionRemote(null, "https://eu.hms.example/api"))
             .isInstanceOf(RemoteProvisioningNotConfiguredException.class);
+    }
+
+    @Test
+    void isRemoteCapable_returnsFalseSoTheRegionPolicyEditorCanBlockWrites() {
+        assertThat(client.isRemoteCapable()).isFalse();
     }
 }

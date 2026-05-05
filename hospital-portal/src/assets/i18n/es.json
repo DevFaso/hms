@@ -165,12 +165,13 @@
     },
     "AGGREGATED": {
       "TITLE": "Agregación multi-fuente",
-      "SUBTITLE": "Fusiona eventos de soporte, frontend y matriz de permisos en una sola línea de tiempo. Límite de 5 000 filas por fuente — ajuste el rango de fechas para una ventana ocupada.",
+      "SUBTITLE": "Fusiona eventos de soporte, frontend, matriz de permisos y configuración de plataforma en una sola línea de tiempo. Límite de 5 000 filas por fuente — ajuste el rango de fechas para una ventana ocupada.",
       "LAST_SOURCE_LOCKED": "Al menos una fuente debe permanecer seleccionada.",
       "SOURCE": {
         "SUPPORT": "Auditoría backend",
         "FRONTEND": "Telemetría frontend",
-        "PERMISSION_MATRIX": "Matriz de permisos"
+        "PERMISSION_MATRIX": "Matriz de permisos",
+        "PLATFORM_CONFIG": "Configuración de plataforma"
       },
       "COL": {
         "SOURCE": "Fuente",
@@ -356,10 +357,55 @@
       "EXPORT_HELP": "Dejar vacío para usar el formato de exportación global.",
       "DEPLOYMENT": "URL de despliegue objetivo",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "Cuando se establece, los nuevos inquilinos de esta región deben aprovisionarse de forma remota. Dejar vacío para aprovisionar localmente."
+      "DEPLOYMENT_HELP": "Cuando se establece, los nuevos inquilinos de esta región deben aprovisionarse de forma remota. Dejar vacío para aprovisionar localmente.",
+      "DEPLOYMENT_DISABLED_HELP": "Deshabilitado — ningún TenantProvisioningClient remoto está conectado a este despliegue.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "Registre un bean TenantProvisioningClient real antes de establecer esta URL — el cliente de reemplazo no puede atender el aprovisionamiento remoto."
     },
+    "REMOTE_STUB_BANNER": "Aprovisionamiento remoto deshabilitado: solo el TenantProvisioningClient de reemplazo está conectado, las URL de despliegue objetivo no se pueden guardar.",
     "ERROR": {
       "UPDATE_FAILED": "Error al actualizar la política regional. Reintente."
+    }
+  },
+  "INTEGRATION_MESSAGES": {
+    "TITLE": "Registro de mensajes de integración",
+    "SUBTITLE": "Búsqueda de mensajes estilo Bridges, cola de letra muerta y reenvío para el tráfico de protocolos de socios.",
+    "DLQ_BADGE": "{{ count }} mensajes fallidos esperando reenvío",
+    "SHOW_DLQ_ONLY": "Mostrar solo DLQ",
+    "SEARCH": "Buscar",
+    "SEARCHING": "Buscando…",
+    "RESET": "Restablecer",
+    "RETRY": "Reintentar",
+    "LOAD_ERROR": "No se pudo cargar el registro de mensajes. Reintente.",
+    "EMPTY": "Ningún mensaje coincide con los filtros actuales.",
+    "REPLAY": "Reenviar",
+    "REPLAYING": "Reenviando…",
+    "PAGER": "Página {{ current }} de {{ total }}",
+    "FILTER": {
+      "INTEGRATION_ID": "Integración",
+      "INTEGRATION_ID_PLACEHOLDER": "ej. partner.nhis",
+      "ORG_ID": "Identificador de organización",
+      "STATUS": "Estado",
+      "STATUS_ANY": "Cualquiera",
+      "FROM": "Desde",
+      "TO": "Hasta"
+    },
+    "STATUS": {
+      "SENT": "Enviado",
+      "RECEIVED": "Recibido",
+      "FAILED": "Fallido",
+      "REPLAYED": "Reenviado"
+    },
+    "COL": {
+      "RECEIVED_AT": "Recibido",
+      "INTEGRATION": "Integración",
+      "DIRECTION": "Dirección",
+      "TYPE": "Tipo",
+      "STATUS": "Estado",
+      "ATTEMPTS": "Intentos",
+      "ERROR": "Error"
+    },
+    "ERROR": {
+      "REPLAY_FAILED": "Error al reenviar. Reintente."
     }
   },
   "INTEGRATION_HEALTH": {

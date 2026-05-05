@@ -15,5 +15,18 @@ public enum AuditSource {
     FRONTEND,
 
     /** {@code permission_matrix_audit_events} — permission-matrix promotions/diffs. */
-    PERMISSION_MATRIX
+    PERMISSION_MATRIX,
+
+    /**
+     * MVP-c3 — platform-configuration writes (feature flags, region
+     * policies, release windows, integration credentials). Physically
+     * lives in {@code support.audit_event_logs} alongside the other
+     * SUPPORT events, but is split out as its own logical source so
+     * operators can answer "who changed platform config?" without
+     * wading through clinical / billing / security activity. The
+     * aggregation service splits each {@code AuditEventLog} row to
+     * exactly one of {@code SUPPORT} or {@code PLATFORM_CONFIG} based
+     * on its {@code eventType} — no row appears under both.
+     */
+    PLATFORM_CONFIG
 }

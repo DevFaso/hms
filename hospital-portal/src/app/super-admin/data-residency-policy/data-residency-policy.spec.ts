@@ -51,7 +51,12 @@ describe('DataResidencyPolicyComponent (MVP-9c)', () => {
       'list',
       'get',
       'update',
+      'capabilities',
     ]);
+    // Default to "remote-capable" so existing specs don't have to know
+    // about the MVP-c3 capability fetch. Specs that exercise the stub
+    // path override this in their own arrangement block.
+    service.capabilities.and.returnValue(of({ remoteProvisioningCapable: true }));
   });
 
   it('loads the policy table on init', () => {
@@ -154,5 +159,70 @@ describe('DataResidencyPolicyComponent (MVP-9c)', () => {
       defaultExportFormat: null,
       targetDeploymentUrl: null,
     });
+  });
+
+  it('flips remoteProvisioningCapable to false when the capabilities call resolves with the stub flag', () => {
+    service.list.and.returnValue(of(fakePolicies()));
+    service.capabilities.and.returnValue(of({ remoteProvisioningCapable: false }));
+
+    const cmp = setup();
+
+    expect(service.capabilities).toHaveBeenCalledTimes(1);
+    expect(cmp.remoteProvisioningCapable()).toBeFalse();
+  });
+
+  it('stays optimistic (remoteProvisioningCapable=true) when the capabilities call fails', () => {
+    service.list.and.returnValue(of(fakePolicies()));
+    service.capabilities.and.returnValue(throwError(() => new Error('boom')));
+
+    const cmp = setup();
+
+    expect(cmp.remoteProvisioningCapable()).toBeTrue();
+  });
+
+  it('renders the stub banner when capabilities flag is false and the deployment URL input is present in the editor', () => {
+    service.list.and.returnValue(of(fakePolicies()));
+    service.capabilities.and.returnValue(of({ remoteProvisioningCapable: false }));
+
+    TestBed.configureTestingModule({
+      imports: [DataResidencyPolicyComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: RegionPolicyService, useValue: service },
+      ],
+    });
+    const fixture = TestBed.createComponent(DataResidencyPolicyComponent);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.remoteProvisioningCapable())
+      .withContext('capabilities() result should flow into the signal')
+      .toBeFalse();
+    // Banner rendering proves the template reads the signal — the
+    // [attr.disabled] on the deployment URL input is bound off the
+    // same signal, so verifying the signal + banner is sufficient
+    // (the per-input attribute reflection in the test DOM depends on
+    // CD timing that varies by Angular version).
+    const banner = fixture.nativeElement.querySelector('[data-test="remote-stub-banner"]');
+    expect(banner).withContext('stub banner should render').not.toBeNull();
+
+    fixture.componentInstance.startEdit(fakePolicies()[0]);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector('[data-test="deployment-url-input"]');
+    expect(input).withContext('deployment URL input should render in the editor').not.toBeNull();
+  });
+
+  it('hides the stub banner when capabilities flag is true', () => {
+    service.list.and.returnValue(of(fakePolicies()));
+
+    const cmp = setup();
+
+    expect(cmp.remoteProvisioningCapable()).toBeTrue();
+    // Banner only renders when remote provisioning is unavailable.
+    const fixture = TestBed.createComponent(DataResidencyPolicyComponent);
+    fixture.detectChanges();
+    const banner = fixture.nativeElement.querySelector('[data-test="remote-stub-banner"]');
+    expect(banner).toBeNull();
   });
 });

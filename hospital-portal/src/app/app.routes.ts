@@ -1062,6 +1062,18 @@ export const routes: Routes = [
           ),
       },
 
+      // Super-Admin Integration Message Log + DLQ + Replay
+      // (MVP-c3 — Tier 2 #5 in docs/platform-management-gaps-vs-epic.md)
+      {
+        path: 'super-admin/integration-messages',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/integration-messages/integration-messages').then(
+            (m) => m.IntegrationMessagesComponent,
+          ),
+      },
+
       // Super-Admin Cross-Tenant Audit Search (MVP-8 — see docs/super-admin-gaps.md)
       {
         path: 'super-admin/audit-search',

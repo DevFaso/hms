@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.OrganizationRegion;
+import com.example.hms.payload.dto.superadmin.RegionPolicyCapabilitiesDTO;
 import com.example.hms.payload.dto.superadmin.RegionPolicyResponseDTO;
 import com.example.hms.payload.dto.superadmin.RegionPolicyUpdateRequestDTO;
 import com.example.hms.service.RegionPolicyService;
@@ -39,6 +40,16 @@ public class SuperAdminRegionPolicyController {
         security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<List<RegionPolicyResponseDTO>> listAll() {
         return ResponseEntity.ok(regionPolicyService.listAll());
+    }
+
+    @GetMapping("/capabilities")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Capability flags driving editor field gating",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<RegionPolicyCapabilitiesDTO> capabilities() {
+        return ResponseEntity.ok(RegionPolicyCapabilitiesDTO.builder()
+            .remoteProvisioningCapable(regionPolicyService.isRemoteProvisioningCapable())
+            .build());
     }
 
     @GetMapping("/{region}")

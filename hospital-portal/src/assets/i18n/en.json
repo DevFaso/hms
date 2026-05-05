@@ -165,12 +165,13 @@
     },
     "AGGREGATED": {
       "TITLE": "Cross-source aggregation",
-      "SUBTITLE": "Merges support, frontend, and permission-matrix audit events into a single timeline. Per-source row cap is 5 000 — narrow the date range to drill into a busy window.",
+      "SUBTITLE": "Merges support, frontend, permission-matrix, and platform-config audit events into a single timeline. Per-source row cap is 5 000 — narrow the date range to drill into a busy window.",
       "LAST_SOURCE_LOCKED": "At least one source must stay selected.",
       "SOURCE": {
         "SUPPORT": "Backend audit",
         "FRONTEND": "Frontend telemetry",
-        "PERMISSION_MATRIX": "Permission matrix"
+        "PERMISSION_MATRIX": "Permission matrix",
+        "PLATFORM_CONFIG": "Platform config"
       },
       "COL": {
         "SOURCE": "Source",
@@ -356,10 +357,55 @@
       "EXPORT_HELP": "Leave empty to fall back to the global export-format default.",
       "DEPLOYMENT": "Target deployment URL",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "When set, new tenants in this region must be provisioned remotely via TenantProvisioningClient. Leave empty to provision locally."
+      "DEPLOYMENT_HELP": "When set, new tenants in this region must be provisioned remotely via TenantProvisioningClient. Leave empty to provision locally.",
+      "DEPLOYMENT_DISABLED_HELP": "Disabled — no remote TenantProvisioningClient is wired into this deployment.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "Register a real TenantProvisioningClient bean before setting this URL — the stub client cannot honour remote provisioning."
     },
+    "REMOTE_STUB_BANNER": "Remote provisioning is disabled: only the stub TenantProvisioningClient is wired into this deployment, so target deployment URLs cannot be saved.",
     "ERROR": {
       "UPDATE_FAILED": "Region policy update failed. Try again."
+    }
+  },
+  "INTEGRATION_MESSAGES": {
+    "TITLE": "Integration message log",
+    "SUBTITLE": "Bridges-style per-message search, dead-letter queue, and replay for partner-protocol traffic.",
+    "DLQ_BADGE": "{{ count }} failed messages awaiting replay",
+    "SHOW_DLQ_ONLY": "Show DLQ only",
+    "SEARCH": "Search",
+    "SEARCHING": "Searching…",
+    "RESET": "Reset",
+    "RETRY": "Retry",
+    "LOAD_ERROR": "Could not load the message log. Try again.",
+    "EMPTY": "No messages match the current filters.",
+    "REPLAY": "Replay",
+    "REPLAYING": "Replaying…",
+    "PAGER": "Page {{ current }} of {{ total }}",
+    "FILTER": {
+      "INTEGRATION_ID": "Integration",
+      "INTEGRATION_ID_PLACEHOLDER": "e.g. partner.nhis",
+      "ORG_ID": "Organization id",
+      "STATUS": "Status",
+      "STATUS_ANY": "Any",
+      "FROM": "From",
+      "TO": "To"
+    },
+    "STATUS": {
+      "SENT": "Sent",
+      "RECEIVED": "Received",
+      "FAILED": "Failed",
+      "REPLAYED": "Replayed"
+    },
+    "COL": {
+      "RECEIVED_AT": "Received",
+      "INTEGRATION": "Integration",
+      "DIRECTION": "Direction",
+      "TYPE": "Type",
+      "STATUS": "Status",
+      "ATTEMPTS": "Attempts",
+      "ERROR": "Error"
+    },
+    "ERROR": {
+      "REPLAY_FAILED": "Replay failed. Try again."
     }
   },
   "INTEGRATION_HEALTH": {

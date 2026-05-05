@@ -1,0 +1,187 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INTEGRATION_MESSAGES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INTEGRATION_MESSAGES.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="dlq-badge" data-test="dlq-badge">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>
+        {{ 'INTEGRATION_MESSAGES.DLQ_BADGE' | translate: { count: deadLetterCount() } }}
+      </span>
+      <button
+        type="button"
+        class="dlq-shortcut"
+        data-test="dlq-shortcut"
+        (click)="showOnlyDeadLetters()"
+      >
+        {{ 'INTEGRATION_MESSAGES.SHOW_DLQ_ONLY' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <form class="filters" (ngSubmit)="search()">
+    <label class="field">
+      <span>{{ 'INTEGRATION_MESSAGES.FILTER.INTEGRATION_ID' | translate }}</span>
+      <input
+        type="text"
+        data-test="filter-integration-id"
+        [ngModel]="integrationId()"
+        (ngModelChange)="integrationId.set($event)"
+        name="integrationId"
+        [placeholder]="'INTEGRATION_MESSAGES.FILTER.INTEGRATION_ID_PLACEHOLDER' | translate"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'INTEGRATION_MESSAGES.FILTER.ORG_ID' | translate }}</span>
+      <input
+        type="text"
+        data-test="filter-org-id"
+        [ngModel]="organizationId()"
+        (ngModelChange)="organizationId.set($event)"
+        name="organizationId"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'INTEGRATION_MESSAGES.FILTER.STATUS' | translate }}</span>
+      <select
+        data-test="filter-status"
+        [ngModel]="status()"
+        (ngModelChange)="status.set($event)"
+        name="status"
+      >
+        <option value="">{{ 'INTEGRATION_MESSAGES.FILTER.STATUS_ANY' | translate }}</option>
+        @for (option of statusOptions; track option) {
+          <option [value]="option">
+            {{ 'INTEGRATION_MESSAGES.STATUS.' + option | translate }}
+          </option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      <span>{{ 'INTEGRATION_MESSAGES.FILTER.FROM' | translate }}</span>
+      <input
+        type="datetime-local"
+        [ngModel]="fromDate()"
+        (ngModelChange)="fromDate.set($event)"
+        name="fromDate"
+      />
+    </label>
+
+    <label class="field">
+      <span>{{ 'INTEGRATION_MESSAGES.FILTER.TO' | translate }}</span>
+      <input
+        type="datetime-local"
+        [ngModel]="toDate()"
+        (ngModelChange)="toDate.set($event)"
+        name="toDate"
+      />
+    </label>
+
+    <div class="filter-actions">
+      <button type="submit" class="search-btn" data-test="search-btn" [disabled]="loading()">
+        @if (loading()) {
+          {{ 'INTEGRATION_MESSAGES.SEARCHING' | translate }}
+        } @else {
+          {{ 'INTEGRATION_MESSAGES.SEARCH' | translate }}
+        }
+      </button>
+      <button type="button" class="reset-btn" (click)="resetFilters()" [disabled]="loading()">
+        {{ 'INTEGRATION_MESSAGES.RESET' | translate }}
+      </button>
+    </div>
+  </form>
+
+  @if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{{ 'INTEGRATION_MESSAGES.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="search()">
+        {{ 'INTEGRATION_MESSAGES.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (rows().length === 0 && !loading()) {
+    <div class="state-panel" data-test="empty">
+      <span class="material-symbols-outlined" aria-hidden="true">search_off</span>
+      <span>{{ 'INTEGRATION_MESSAGES.EMPTY' | translate }}</span>
+    </div>
+  } @else if (rows().length > 0) {
+    <table class="message-table" data-test="message-table">
+      <thead>
+        <tr>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.RECEIVED_AT' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.INTEGRATION' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.DIRECTION' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.TYPE' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.STATUS' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.ATTEMPTS' | translate }}</th>
+          <th>{{ 'INTEGRATION_MESSAGES.COL.ERROR' | translate }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.id) {
+          <tr [attr.data-test-row]="row.id">
+            <td>{{ row.receivedAt | date: 'short' }}</td>
+            <td>
+              <code>{{ row.integrationId }}</code>
+            </td>
+            <td>
+              <span class="direction-badge" [attr.data-direction]="row.direction">{{
+                row.direction
+              }}</span>
+            </td>
+            <td>{{ row.messageType ?? '—' }}</td>
+            <td>
+              <span class="status-badge" [attr.data-status]="row.status">
+                {{ 'INTEGRATION_MESSAGES.STATUS.' + row.status | translate }}
+              </span>
+            </td>
+            <td>{{ row.attemptCount }}</td>
+            <td class="cell-error">{{ row.errorMessage ?? '—' }}</td>
+            <td class="cell-actions">
+              @if (row.status === 'FAILED') {
+                <button
+                  type="button"
+                  class="replay-btn"
+                  [attr.data-test-replay]="row.id"
+                  [disabled]="replayBusyFor(row.id)"
+                  (click)="replay(row.id)"
+                >
+                  @if (replayBusyFor(row.id)) {
+                    {{ 'INTEGRATION_MESSAGES.REPLAYING' | translate }}
+                  } @else {
+                    {{ 'INTEGRATION_MESSAGES.REPLAY' | translate }}
+                  }
+                </button>
+                @if (replayErrorKeyFor(row.id); as errorKey) {
+                  <small class="row-error">{{ errorKey | translate }}</small>
+                }
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (totalPages() > 1) {
+      <nav class="pager">
+        <button type="button" [disabled]="!hasPrev()" (click)="goToPage(pageNumber() - 1)">
+          {{ 'COMMON.PREV' | translate }}
+        </button>
+        <span data-test="pager-status">
+          {{
+            'INTEGRATION_MESSAGES.PAGER'
+              | translate: { current: pageNumber() + 1, total: totalPages() }
+          }}
+        </span>
+        <button type="button" [disabled]="!hasNext()" (click)="goToPage(pageNumber() + 1)">
+          {{ 'COMMON.NEXT' | translate }}
+        </button>
+      </nav>
+    }
+  }
+</div>

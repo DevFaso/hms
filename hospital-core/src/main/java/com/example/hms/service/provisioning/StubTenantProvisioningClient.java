@@ -26,6 +26,11 @@ import org.springframework.stereotype.Component;
 public class StubTenantProvisioningClient implements TenantProvisioningClient {
 
     @Override
+    public boolean isRemoteCapable() {
+        return false;
+    }
+
+    @Override
     public OrganizationResponseDTO provisionRemote(
         SuperAdminCreateOrganizationRequestDTO request,
         String targetDeploymentUrl

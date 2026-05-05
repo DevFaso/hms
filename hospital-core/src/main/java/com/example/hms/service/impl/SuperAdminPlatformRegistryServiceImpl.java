@@ -1,10 +1,13 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.platform.PlatformReleaseStatus;
 import com.example.hms.enums.platform.PlatformServiceStatus;
 import com.example.hms.enums.platform.PlatformServiceType;
 import com.example.hms.model.platform.OrganizationPlatformService;
 import com.example.hms.model.platform.PlatformReleaseWindow;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.superadmin.PlatformRegistrySnapshotDTO;
 import com.example.hms.payload.dto.superadmin.PlatformReleaseWindowRequestDTO;
 import com.example.hms.payload.dto.superadmin.PlatformReleaseWindowResponseDTO;
@@ -18,9 +21,13 @@ import com.example.hms.repository.platform.DepartmentPlatformServiceLinkReposito
 import com.example.hms.repository.platform.HospitalPlatformServiceLinkRepository;
 import com.example.hms.repository.platform.OrganizationPlatformServiceRepository;
 import com.example.hms.repository.platform.PlatformReleaseWindowRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SuperAdminPlatformRegistryService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -34,16 +41,19 @@ import java.util.function.Predicate;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 @Transactional
 public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatformRegistryService {
 
     private static final DateTimeFormatter DISPLAY_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final String SYSTEM_ACTOR = "system";
 
     private final OrganizationPlatformServiceRepository organizationPlatformServiceRepository;
     private final HospitalPlatformServiceLinkRepository hospitalPlatformServiceLinkRepository;
     private final DepartmentPlatformServiceLinkRepository departmentPlatformServiceLinkRepository;
     private final NotificationRepository notificationRepository;
     private final PlatformReleaseWindowRepository platformReleaseWindowRepository;
+    private final AuditEventLogService auditEventLogService;
 
     @Override
     @Transactional(Transactional.TxType.SUPPORTS)
@@ -173,7 +183,40 @@ public class SuperAdminPlatformRegistryServiceImpl implements SuperAdminPlatform
             .build();
 
         PlatformReleaseWindow saved = platformReleaseWindowRepository.save(releaseWindow);
+        recordReleaseWindowAudit(saved);
         return mapReleaseWindow(saved);
+    }
+
+    /**
+     * MVP-c3 — emit a {@link AuditEventType#PLATFORM_REGISTRY_UPDATED}
+     * row so the platform-config audit-search tab picks up release-
+     * window scheduling. Audit failures must not roll back the
+     * release-window write — same posture as
+     * {@link com.example.hms.service.impl.RegionPolicyServiceImpl#recordAudit}.
+     */
+    private void recordReleaseWindowAudit(PlatformReleaseWindow saved) {
+        try {
+            HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+            String actor = ctx.getPrincipalUsername();
+            String description = String.format(
+                "Release window scheduled name=%s env=%s starts=%s ends=%s freeze=%s owner=%s",
+                saved.getName(), saved.getEnvironment(),
+                saved.getStartsAt(), saved.getEndsAt(),
+                saved.isFreezeChanges(), saved.getOwnerTeam());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(ctx.getPrincipalUserId())
+                .userName(actor != null && !actor.isBlank() ? actor : SYSTEM_ACTOR)
+                .eventType(AuditEventType.PLATFORM_REGISTRY_UPDATED)
+                .eventDescription(description)
+                .resourceId(saved.getId() == null ? null : saved.getId().toString())
+                .resourceName(saved.getName())
+                .entityType("PLATFORM_RELEASE_WINDOW")
+                .status(AuditStatus.SUCCESS)
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("[PLATFORM-REGISTRY] Failed to record audit for release window {}",
+                saved.getName(), ex);
+        }
     }
 
     @Override
