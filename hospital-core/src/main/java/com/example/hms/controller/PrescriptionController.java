@@ -66,8 +66,8 @@ public class PrescriptionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Search/List Prescriptions", description = "List prescriptions with optional filters + pagination.")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Search/List Prescriptions", description = "List prescriptions with optional filters + pagination. SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<Page<PrescriptionResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID staffId,

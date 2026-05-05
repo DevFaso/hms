@@ -9,6 +9,7 @@ import { SuperAdminComponent } from './super-admin';
 import {
   DashboardService,
   RecentAuditEvent,
+  SuperAdminRecentItem,
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
@@ -31,6 +32,15 @@ const fakeSummary = (overrides: Partial<SuperAdminSummary> = {}): SuperAdminSumm
   globalAssignments: 5,
   activeGlobalAssignments: 5,
   todayAppointmentsCount: 42,
+  totalEncounters: 11,
+  totalConsultations: 22,
+  totalLabOrders: 33,
+  totalLabResults: 44,
+  totalLabTestDefinitions: 55,
+  totalAdmissions: 66,
+  totalPrescriptions: 77,
+  totalTreatmentPlans: 88,
+  totalReferrals: 99,
   generatedAt: '2026-05-02T12:00:00Z',
   recentAuditEvents: [],
   ...overrides,
@@ -65,6 +75,17 @@ describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
   let platform: jasmine.SpyObj<PlatformService>;
 
+  function stubAllRecent(empty: SuperAdminRecentItem[] = []): void {
+    dashboard.getRecentConsultations.and.returnValue(of(empty));
+    dashboard.getRecentLabOrders.and.returnValue(of(empty));
+    dashboard.getRecentLabResults.and.returnValue(of(empty));
+    dashboard.getRecentLabTestDefinitions.and.returnValue(of(empty));
+    dashboard.getRecentAdmissions.and.returnValue(of(empty));
+    dashboard.getRecentPrescriptions.and.returnValue(of(empty));
+    dashboard.getRecentTreatmentPlans.and.returnValue(of(empty));
+    dashboard.getRecentReferrals.and.returnValue(of(empty));
+  }
+
   function setup(): SuperAdminComponent {
     TestBed.configureTestingModule({
       imports: [SuperAdminComponent, TranslateModule.forRoot()],
@@ -82,8 +103,19 @@ describe('SuperAdminComponent', () => {
   }
 
   beforeEach(() => {
-    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', ['getSummary']);
+    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', [
+      'getSummary',
+      'getRecentConsultations',
+      'getRecentLabOrders',
+      'getRecentLabResults',
+      'getRecentLabTestDefinitions',
+      'getRecentAdmissions',
+      'getRecentPrescriptions',
+      'getRecentTreatmentPlans',
+      'getRecentReferrals',
+    ]);
     platform = jasmine.createSpyObj<PlatformService>('PlatformService', ['getSummary']);
+    stubAllRecent();
   });
 
   afterEach(() => TestBed.resetTestingModule());
@@ -168,5 +200,82 @@ describe('SuperAdminComponent', () => {
         '/hospitals',
       ]),
     );
+  });
+
+  it('builds 9 clinical stat tiles from the summary', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    const c = setup();
+
+    const clinical = c.clinicalStats();
+    expect(clinical.length).toBe(9);
+    expect(clinical.find((s) => s.key === 'encounters')?.value).toBe(11);
+    expect(clinical.find((s) => s.key === 'consultations')?.value).toBe(22);
+    expect(clinical.find((s) => s.key === 'lab_results')?.value).toBe(44);
+    expect(clinical.find((s) => s.key === 'referrals')?.value).toBe(99);
+  });
+
+  it('fetches all 8 recent activity endpoints on init', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    setup();
+
+    expect(dashboard.getRecentConsultations).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentLabOrders).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentLabResults).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentLabTestDefinitions).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentAdmissions).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentPrescriptions).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentTreatmentPlans).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentReferrals).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders selected activity tab rows from the response', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentPrescriptions.and.returnValue(
+      of([
+        {
+          id: 'aaaa1111-2222-3333-4444-555555555555',
+          medicationName: 'Amoxicillin',
+          patientName: 'Ada',
+          createdAt: '2026-05-02T10:00:00Z',
+        },
+      ] as SuperAdminRecentItem[]),
+    );
+
+    const c = setup();
+    c.selectActivityTab('prescriptions');
+
+    const rows = c.selectedActivityRows();
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe('aaaa1111');
+    expect(rows[0].summary).toContain('Amoxicillin');
+    expect(rows[0].timestamp).toBe('2026-05-02T10:00:00Z');
+  });
+
+  it('reflects empty activity collections gracefully', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    // All recent endpoints already stubbed to of([])
+
+    const c = setup();
+    c.selectActivityTab('referrals');
+
+    expect(c.selectedActivityRows()).toEqual([]);
+  });
+
+  it('reports the correct count for each activity tab', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    const c = setup();
+    const consultationTab = c.activityTabs.find((t) => t.key === 'consultations')!;
+    const referralTab = c.activityTabs.find((t) => t.key === 'referrals')!;
+
+    expect(c.countForTab(consultationTab)).toBe(22);
+    expect(c.countForTab(referralTab)).toBe(99);
   });
 });

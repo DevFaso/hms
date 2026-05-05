@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.UUID;
@@ -41,6 +42,12 @@ public interface GeneralReferralService {
     List<GeneralReferralResponseDTO> getReferralsByHospital(UUID hospitalId, String status);
     
     List<GeneralReferralResponseDTO> getAllReferrals(String status);
+
+    /**
+     * Cross-tenant paged fetch for super-admin dashboards.
+     * Caller is responsible for enforcing the SUPER_ADMIN role at the boundary.
+     */
+    List<GeneralReferralResponseDTO> getRecentForSuperAdmin(Pageable pageable);
     
     List<GeneralReferralResponseDTO> getOverdueReferrals();
 
