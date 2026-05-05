@@ -47,6 +47,70 @@
       }
     </div>
 
+    <!-- Clinical stats grid -->
+    @if (clinicalStats().length > 0) {
+      <h2 class="section-heading">{{ 'SUPER_ADMIN.CLINICAL_OVERVIEW' | translate }}</h2>
+      <div class="stats-grid" data-test="clinical-stats-grid">
+        @for (stat of clinicalStats(); track stat.key) {
+          <a class="stat-card" [routerLink]="stat.route">
+            <div
+              class="stat-icon"
+              [style.background]="stat.color + '14'"
+              [style.color]="stat.color"
+            >
+              <span class="material-symbols-outlined">{{ stat.icon }}</span>
+            </div>
+            <div class="stat-info">
+              <span class="stat-value">{{ stat.value }}</span>
+              <span class="stat-label">{{ stat.labelKey | translate }}</span>
+            </div>
+          </a>
+        }
+      </div>
+    }
+
+    <!-- Recent clinical activity (tabbed) -->
+    <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_CLINICAL_ACTIVITY' | translate }}</h2>
+    <div class="activity-panel" data-test="activity-panel">
+      <div class="activity-tabs" role="tablist">
+        @for (tab of activityTabs; track tab.key) {
+          <button
+            type="button"
+            role="tab"
+            class="activity-tab"
+            [class.active]="selectedActivityTab() === tab.key"
+            [attr.aria-selected]="selectedActivityTab() === tab.key"
+            (click)="selectActivityTab(tab.key)"
+          >
+            <span class="material-symbols-outlined">{{ tab.icon }}</span>
+            <span>{{ tab.labelKey | translate }}</span>
+            <span class="activity-count">{{ countForTab(tab) }}</span>
+          </button>
+        }
+      </div>
+
+      <div class="activity-list" role="tabpanel" data-test="activity-list">
+        @if (selectedActivityRows().length === 0) {
+          <div class="activity-empty">
+            <span class="material-symbols-outlined">inbox</span>
+            <span>{{ 'SUPER_ADMIN.ACTIVITY_EMPTY' | translate }}</span>
+          </div>
+        } @else {
+          @for (row of selectedActivityRows(); track row.id; let i = $index) {
+            <div class="activity-row" [attr.data-test]="'activity-row-' + i">
+              <div class="activity-id">
+                <code>{{ row.id || '—' }}</code>
+              </div>
+              <div class="activity-summary">{{ row.summary || '—' }}</div>
+              <div class="activity-timestamp">
+                {{ row.timestamp ? (row.timestamp | date: 'short') : '—' }}
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+
     <!-- Platform integrations strip -->
     @if (platformActions(); as actions) {
       <h2 class="section-heading">{{ 'SUPER_ADMIN.PLATFORM_HEALTH' | translate }}</h2>

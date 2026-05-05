@@ -30,6 +30,15 @@ public class SuperAdminSummaryDTO {
     private long globalAssignments;
     private long activeGlobalAssignments;
     private long todayAppointmentsCount;
+    private long totalEncounters;
+    private long totalConsultations;
+    private long totalLabOrders;
+    private long totalLabResults;
+    private long totalLabTestDefinitions;
+    private long totalAdmissions;
+    private long totalPrescriptions;
+    private long totalTreatmentPlans;
+    private long totalReferrals;
     private LocalDateTime generatedAt;
 
     private List<RecentAuditEventDTO> recentAuditEvents;

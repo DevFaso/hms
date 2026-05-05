@@ -67,6 +67,9 @@
     "QUICK_LINKS": "Liens rapides",
     "RECENT_AUDIT": "Événements d'audit récents",
     "VIEW_ALL_AUDIT": "Voir tous les journaux d'audit",
+    "CLINICAL_OVERVIEW": "Vue d'ensemble clinique",
+    "RECENT_CLINICAL_ACTIVITY": "Activité clinique récente",
+    "ACTIVITY_EMPTY": "Aucun élément récent dans cette catégorie.",
     "STAT": {
       "ORGANIZATIONS": "Organisations",
       "HOSPITALS": "Hôpitaux",
@@ -76,7 +79,16 @@
       "DEPARTMENTS": "Services",
       "ROLES": "Rôles",
       "ASSIGNMENTS": "Affectations de rôles",
-      "ACTIVE": "actifs"
+      "ACTIVE": "actifs",
+      "ENCOUNTERS": "Consultations cliniques",
+      "CONSULTATIONS": "Demandes de consultation",
+      "ADMISSIONS": "Admissions",
+      "PRESCRIPTIONS": "Prescriptions",
+      "LAB_ORDERS": "Demandes de labo",
+      "LAB_RESULTS": "Résultats de labo",
+      "LAB_TEST_DEFINITIONS": "Catalogue de tests",
+      "TREATMENT_PLANS": "Plans de traitement",
+      "REFERRALS": "Orientations"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Intégrations totales",

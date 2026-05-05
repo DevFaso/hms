@@ -1,12 +1,20 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.payload.dto.LabResultResponseDTO;
+import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.PatientService;
 import com.example.hms.service.PlatformAnalyticsService;
@@ -140,5 +148,69 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "trendDays", required = false, defaultValue = "14") int trendDays
     ) {
         return ResponseEntity.ok(analyticsService.getAnalytics(trendDays));
+    }
+
+    @GetMapping("/recent-consultations")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<ConsultationResponseDTO>> getRecentConsultations(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentConsultations(limit));
+    }
+
+    @GetMapping("/recent-lab-orders")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<LabOrderResponseDTO>> getRecentLabOrders(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentLabOrders(limit, Locale.getDefault()));
+    }
+
+    @GetMapping("/recent-lab-results")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<LabResultResponseDTO>> getRecentLabResults(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentLabResults(limit, Locale.getDefault()));
+    }
+
+    @GetMapping("/recent-lab-test-definitions")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<LabTestDefinitionResponseDTO>> getRecentLabTestDefinitions(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentLabTestDefinitions(limit));
+    }
+
+    @GetMapping("/recent-admissions")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<AdmissionResponseDTO>> getRecentAdmissions(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentAdmissions(limit));
+    }
+
+    @GetMapping("/recent-prescriptions")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<PrescriptionResponseDTO>> getRecentPrescriptions(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentPrescriptions(limit, Locale.getDefault()));
+    }
+
+    @GetMapping("/recent-treatment-plans")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<TreatmentPlanResponseDTO>> getRecentTreatmentPlans(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentTreatmentPlans(limit));
+    }
+
+    @GetMapping("/recent-referrals")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<GeneralReferralResponseDTO>> getRecentReferrals(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+    ) {
+        return ResponseEntity.ok(dashboardService.getRecentReferrals(limit));
     }
 }

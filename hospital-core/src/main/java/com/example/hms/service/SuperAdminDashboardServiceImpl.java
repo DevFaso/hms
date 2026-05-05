@@ -1,18 +1,35 @@
 package com.example.hms.service;
 
 import com.example.hms.mapper.StaffAvailabilityMapper;
+import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.payload.dto.LabResultResponseDTO;
+import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffAvailabilityRepository;
+import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +60,23 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final StaffAvailabilityRepository staffAvailabilityRepository;
     private final StaffAvailabilityMapper staffAvailabilityMapper;
     private final PatientConsentService patientConsentService;
+    private final EncounterRepository encounterRepository;
+    private final ConsultationRepository consultationRepository;
+    private final LabOrderRepository labOrderRepository;
+    private final LabResultRepository labResultRepository;
+    private final LabTestDefinitionRepository labTestDefinitionRepository;
+    private final AdmissionRepository admissionRepository;
+    private final PrescriptionRepository prescriptionRepository;
+    private final TreatmentPlanRepository treatmentPlanRepository;
+    private final GeneralReferralRepository generalReferralRepository;
+    private final ConsultationService consultationService;
+    private final LabOrderService labOrderService;
+    private final LabResultService labResultService;
+    private final LabTestDefinitionService labTestDefinitionService;
+    private final AdmissionService admissionService;
+    private final PrescriptionService prescriptionService;
+    private final TreatmentPlanService treatmentPlanService;
+    private final GeneralReferralService generalReferralService;
 
     @Override
     @Transactional(readOnly = true)
@@ -75,6 +109,16 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // Today's appointments count (system-wide) — DB-level COUNT, no entity loading
         long todayAppointmentsCount = appointmentRepository
                 .countByAppointmentDateBetween(LocalDate.now(), LocalDate.now());
+
+        long totalEncounters = encounterRepository.count();
+        long totalConsultations = consultationRepository.count();
+        long totalLabOrders = labOrderRepository.count();
+        long totalLabResults = labResultRepository.count();
+        long totalLabTestDefinitions = labTestDefinitionRepository.count();
+        long totalAdmissions = admissionRepository.count();
+        long totalPrescriptions = prescriptionRepository.count();
+        long totalTreatmentPlans = treatmentPlanRepository.count();
+        long totalReferrals = generalReferralRepository.count();
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));
@@ -112,6 +156,15 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             .globalAssignments(globalAssignments)
             .activeGlobalAssignments(activeGlobalAssignments)
             .todayAppointmentsCount(todayAppointmentsCount)
+            .totalEncounters(totalEncounters)
+            .totalConsultations(totalConsultations)
+            .totalLabOrders(totalLabOrders)
+            .totalLabResults(totalLabResults)
+            .totalLabTestDefinitions(totalLabTestDefinitions)
+            .totalAdmissions(totalAdmissions)
+            .totalPrescriptions(totalPrescriptions)
+            .totalTreatmentPlans(totalTreatmentPlans)
+            .totalReferrals(totalReferrals)
             .recentAuditEvents(recent)
             .generatedAt(LocalDateTime.now())
             .build();
@@ -144,6 +197,73 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         int safeLimit = sanitizeLimit(limit, 20, 100);
         var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "consentTimestamp"));
         return patientConsentService.getAllConsents(pageable).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getRecentConsultations(int limit) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        // getAllConsultations returns sorted by requestedAt desc for super-admin path
+        List<ConsultationResponseDTO> all = consultationService.getAllConsultations(null);
+        return all.stream().limit(safeLimit).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabOrderResponseDTO> getRecentLabOrders(int limit, Locale locale) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        List<LabOrderResponseDTO> all = labOrderService.getAllLabOrders(locale);
+        return all.stream().limit(safeLimit).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabResultResponseDTO> getRecentLabResults(int limit, Locale locale) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return labResultService.getLabResultsPage(pageable, locale).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabTestDefinitionResponseDTO> getRecentLabTestDefinitions(int limit) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return labTestDefinitionService
+            .search(null, null, null, null, null, pageable)
+            .getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AdmissionResponseDTO> getRecentAdmissions(int limit) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        List<AdmissionResponseDTO> all = admissionService.getAllAdmissions(null, null, null);
+        return all.stream().limit(safeLimit).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PrescriptionResponseDTO> getRecentPrescriptions(int limit, Locale locale) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return prescriptionService.list(null, null, null, pageable, locale).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TreatmentPlanResponseDTO> getRecentTreatmentPlans(int limit) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return treatmentPlanService.listAll(null, pageable).getContent();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<GeneralReferralResponseDTO> getRecentReferrals(int limit) {
+        int safeLimit = sanitizeLimit(limit, 20, 100);
+        List<GeneralReferralResponseDTO> all = generalReferralService.getAllReferrals(null);
+        return all.stream().limit(safeLimit).toList();
     }
 
     private int sanitizeLimit(int requested, int defaultValue, int maxValue) {
