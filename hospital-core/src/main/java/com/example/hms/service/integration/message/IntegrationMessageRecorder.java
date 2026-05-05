@@ -43,9 +43,13 @@ public class IntegrationMessageRecorder {
      * partner adapter) can capture the {@code correlationId} and pass
      * it through downstream logs. Returns {@code null} on persistence
      * failure — the caller does not need to special-case it.
+     *
+     * <p>Sonar review fix — renamed from {@code record} to
+     * {@code recordMessage} so it does not collide with Java 21's
+     * contextual {@code record} keyword.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public IntegrationMessageEvent record(
+    public IntegrationMessageEvent recordMessage(
         String integrationId,
         UUID organizationId,
         IntegrationMessageDirection direction,

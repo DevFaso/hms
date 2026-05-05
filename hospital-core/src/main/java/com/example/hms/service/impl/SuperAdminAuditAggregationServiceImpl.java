@@ -88,97 +88,122 @@ public class SuperAdminAuditAggregationServiceImpl implements SuperAdminAuditAgg
         LocalDateTime toDate,
         Pageable pageable
     ) {
-        Set<AuditSource> effectiveSources = (sources == null || sources.isEmpty())
-            ? EnumSet.allOf(AuditSource.class)
-            : EnumSet.copyOf(sources);
-
+        // Sonar fix — the prior single-method implementation came in at
+        // cognitive complexity 21. Per-source fetches are now extracted
+        // into helpers so the main method stays a thin orchestrator.
+        Set<AuditSource> effectiveSources = effectiveSources(sources);
         int pageNumber = Math.max(0, pageable.getPageNumber());
-        // Copilot review fix — clamp pageSize before any arithmetic so
-        // user-controlled values cannot drive an int overflow on offset
-        // or perSourceLimit.
-        int pageSize = Math.max(1, Math.min(pageable.getPageSize(), MAX_PAGE_SIZE));
-        // long arithmetic for offset; offset can theoretically be
-        // pageNumber * MAX_PAGE_SIZE which still fits int, but using
-        // long keeps the intermediate safe even if the constants change.
+        int pageSize = Math.clamp(pageable.getPageSize(), 1, MAX_PAGE_SIZE);
         long offset = (long) pageNumber * pageSize;
-        // Top (offset + size) from each source — worst case all from one.
-        // Hard-capped so a deep-page request can't stampede the DB.
         int perSourceLimit = (int) Math.min(offset + pageSize, (long) PER_SOURCE_HARD_CAP);
 
         List<AggregatedAuditEventDTO> merged = new ArrayList<>();
-        // Copilot review fix — cap each source's count at PER_SOURCE_HARD_CAP
-        // so totalElements / totalPages reflect the *retrievable* row count,
-        // not the database-level COUNT(*). Otherwise a client paginating
-        // past the cap would see "page 12 of 50" but get an empty body
-        // because the service can't fetch deep enough.
         long totalElements = 0L;
-
-        // SUPPORT and PLATFORM_CONFIG share the audit_event_logs table —
-        // the split is by eventType so a single row never appears under
-        // both. Three cases:
-        //   - both selected: query everything in date range
-        //   - SUPPORT only: query everything NOT in the platform-config set
-        //   - PLATFORM_CONFIG only: query everything IN the platform-config set
-        boolean wantSupport = effectiveSources.contains(AuditSource.SUPPORT);
-        boolean wantPlatformConfig = effectiveSources.contains(AuditSource.PLATFORM_CONFIG);
-        if (wantSupport || wantPlatformConfig) {
-            Pageable supportPage = PageRequest.of(0, perSourceLimit,
-                Sort.by(Sort.Direction.DESC, "eventTimestamp"));
-            Page<AuditEventLog> page;
-            if (wantSupport && wantPlatformConfig) {
-                page = auditEventLogRepository.findByDateRange(fromDate, toDate, supportPage);
-            } else if (wantPlatformConfig) {
-                page = auditEventLogRepository.findByDateRangeAndEventTypeIn(
-                    fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
-            } else {
-                page = auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
-                    fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
-            }
-            for (AuditEventLog row : page.getContent()) {
-                merged.add(toDto(row));
-            }
-            totalElements += Math.min(page.getTotalElements(), (long) PER_SOURCE_HARD_CAP);
-        }
-
-        if (effectiveSources.contains(AuditSource.FRONTEND)) {
-            Pageable feLimit = PageRequest.of(0, perSourceLimit);
-            List<FrontendAuditEvent> rows = frontendAuditEventRepository
-                .findInDateRangeOrdered(fromDate, toDate, feLimit);
-            for (FrontendAuditEvent row : rows) {
-                merged.add(toDto(row));
-            }
-            long sourceCount = frontendAuditEventRepository.countInDateRange(fromDate, toDate);
-            totalElements += Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
-        }
-
-        if (effectiveSources.contains(AuditSource.PERMISSION_MATRIX)) {
-            // PermissionMatrixAuditEvent.createdAt is an Instant; convert
-            // the LocalDateTime bounds to UTC for a consistent comparison.
-            Instant fromInstant = fromDate == null ? null : fromDate.toInstant(ZoneOffset.UTC);
-            Instant toInstant = toDate == null ? null : toDate.toInstant(ZoneOffset.UTC);
-            Pageable pmLimit = PageRequest.of(0, perSourceLimit);
-            List<PermissionMatrixAuditEvent> rows = permissionMatrixAuditEventRepository
-                .findInDateRangeOrdered(fromInstant, toInstant, pmLimit);
-            for (PermissionMatrixAuditEvent row : rows) {
-                merged.add(toDto(row));
-            }
-            long sourceCount = permissionMatrixAuditEventRepository.countInDateRange(fromInstant, toInstant);
-            totalElements += Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
-        }
+        totalElements += fetchAuditEventLogRows(effectiveSources, fromDate, toDate, perSourceLimit, merged);
+        totalElements += fetchFrontendRows(effectiveSources, fromDate, toDate, perSourceLimit, merged);
+        totalElements += fetchPermissionMatrixRows(effectiveSources, fromDate, toDate, perSourceLimit, merged);
 
         // Merge sort by timestamp DESC, nulls last so a row with a
         // missing timestamp doesn't poison the head of the page.
         merged.sort(Comparator.comparing(AggregatedAuditEventDTO::timestamp,
             Comparator.nullsLast(Comparator.reverseOrder())));
 
-        // Slice the requested page out of the merged stream. Cast to int
-        // is safe because offset is bounded by pageNumber * MAX_PAGE_SIZE.
+        return slice(merged, totalElements, pageNumber, pageSize, offset);
+    }
+
+    private static Set<AuditSource> effectiveSources(Set<AuditSource> sources) {
+        return (sources == null || sources.isEmpty())
+            ? EnumSet.allOf(AuditSource.class)
+            : EnumSet.copyOf(sources);
+    }
+
+    /**
+     * SUPPORT and PLATFORM_CONFIG share the audit_event_logs table —
+     * the split is by eventType so a single row never appears under
+     * both. Three cases:
+     *   - both selected: query everything in date range
+     *   - SUPPORT only: query everything NOT in the platform-config set
+     *   - PLATFORM_CONFIG only: query everything IN the platform-config set
+     */
+    private long fetchAuditEventLogRows(
+        Set<AuditSource> effectiveSources, LocalDateTime fromDate, LocalDateTime toDate,
+        int perSourceLimit, List<AggregatedAuditEventDTO> merged
+    ) {
+        boolean wantSupport = effectiveSources.contains(AuditSource.SUPPORT);
+        boolean wantPlatformConfig = effectiveSources.contains(AuditSource.PLATFORM_CONFIG);
+        if (!wantSupport && !wantPlatformConfig) {
+            return 0L;
+        }
+        Pageable supportPage = PageRequest.of(0, perSourceLimit,
+            Sort.by(Sort.Direction.DESC, "eventTimestamp"));
+        Page<AuditEventLog> page = queryAuditEventLog(
+            wantSupport, wantPlatformConfig, fromDate, toDate, supportPage);
+        for (AuditEventLog row : page.getContent()) {
+            merged.add(toDto(row));
+        }
+        return Math.min(page.getTotalElements(), (long) PER_SOURCE_HARD_CAP);
+    }
+
+    private Page<AuditEventLog> queryAuditEventLog(
+        boolean wantSupport, boolean wantPlatformConfig,
+        LocalDateTime fromDate, LocalDateTime toDate, Pageable supportPage
+    ) {
+        if (wantSupport && wantPlatformConfig) {
+            return auditEventLogRepository.findByDateRange(fromDate, toDate, supportPage);
+        }
+        if (wantPlatformConfig) {
+            return auditEventLogRepository.findByDateRangeAndEventTypeIn(
+                fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
+        }
+        return auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            fromDate, toDate, PLATFORM_CONFIG_EVENT_TYPES, supportPage);
+    }
+
+    private long fetchFrontendRows(
+        Set<AuditSource> effectiveSources, LocalDateTime fromDate, LocalDateTime toDate,
+        int perSourceLimit, List<AggregatedAuditEventDTO> merged
+    ) {
+        if (!effectiveSources.contains(AuditSource.FRONTEND)) {
+            return 0L;
+        }
+        Pageable feLimit = PageRequest.of(0, perSourceLimit);
+        for (FrontendAuditEvent row : frontendAuditEventRepository
+            .findInDateRangeOrdered(fromDate, toDate, feLimit)) {
+            merged.add(toDto(row));
+        }
+        long sourceCount = frontendAuditEventRepository.countInDateRange(fromDate, toDate);
+        return Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
+    }
+
+    private long fetchPermissionMatrixRows(
+        Set<AuditSource> effectiveSources, LocalDateTime fromDate, LocalDateTime toDate,
+        int perSourceLimit, List<AggregatedAuditEventDTO> merged
+    ) {
+        if (!effectiveSources.contains(AuditSource.PERMISSION_MATRIX)) {
+            return 0L;
+        }
+        // PermissionMatrixAuditEvent.createdAt is an Instant; convert
+        // the LocalDateTime bounds to UTC for a consistent comparison.
+        Instant fromInstant = fromDate == null ? null : fromDate.toInstant(ZoneOffset.UTC);
+        Instant toInstant = toDate == null ? null : toDate.toInstant(ZoneOffset.UTC);
+        Pageable pmLimit = PageRequest.of(0, perSourceLimit);
+        for (PermissionMatrixAuditEvent row : permissionMatrixAuditEventRepository
+            .findInDateRangeOrdered(fromInstant, toInstant, pmLimit)) {
+            merged.add(toDto(row));
+        }
+        long sourceCount = permissionMatrixAuditEventRepository.countInDateRange(fromInstant, toInstant);
+        return Math.min(sourceCount, (long) PER_SOURCE_HARD_CAP);
+    }
+
+    private static AggregatedAuditPageDTO slice(
+        List<AggregatedAuditEventDTO> merged, long totalElements,
+        int pageNumber, int pageSize, long offset
+    ) {
+        // Cast to int is safe because offset is bounded by pageNumber * MAX_PAGE_SIZE.
         int fromIdx = (int) Math.min(offset, (long) merged.size());
         int toIdx = (int) Math.min(offset + pageSize, (long) merged.size());
         List<AggregatedAuditEventDTO> pageContent = merged.subList(fromIdx, toIdx);
-
         int totalPages = (int) Math.ceil((double) totalElements / pageSize);
-
         return AggregatedAuditPageDTO.builder()
             .content(List.copyOf(pageContent))
             .pageNumber(pageNumber)

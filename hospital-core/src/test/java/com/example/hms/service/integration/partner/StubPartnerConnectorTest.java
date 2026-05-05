@@ -71,7 +71,7 @@ class StubPartnerConnectorTest {
         // search shows the gap clearly.
         new NhisConnector(recorder, messageRecorder).probe();
 
-        verify(messageRecorder).record(
+        verify(messageRecorder).recordMessage(
             eq("partner.nhis"), eq(null),
             eq(IntegrationMessageDirection.OUTBOUND),
             eq("PROBE"),
@@ -88,7 +88,7 @@ class StubPartnerConnectorTest {
         verify(recorder).recordSuccess("partner.cnamgs", orgId, null);
         // MVP-c3 — re-sync also writes an OUTBOUND/SENT row to the
         // message log so the operator can confirm a re-sync happened.
-        verify(messageRecorder).record(
+        verify(messageRecorder).recordMessage(
             eq("partner.cnamgs"), eq(orgId),
             eq(IntegrationMessageDirection.OUTBOUND),
             eq("RESYNC"),

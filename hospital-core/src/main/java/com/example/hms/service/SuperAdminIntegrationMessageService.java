@@ -20,6 +20,11 @@ public interface SuperAdminIntegrationMessageService {
      * is optional — passing null on each yields an unfiltered descending
      * timeline. The dead-letter count is included on every response so
      * the UI badge stays consistent with the search result.
+     *
+     * <p><b>Important:</b> the {@code payload} field on each row is
+     * elided from the search response so a deep page can't return
+     * hundreds of MB of envelope data. Fetch the full row (including
+     * payload) via {@link #getById(UUID)} when an operator drills in.
      */
     IntegrationMessagePageDTO search(
         String integrationId,
@@ -28,6 +33,13 @@ public interface SuperAdminIntegrationMessageService {
         LocalDateTime fromDate,
         LocalDateTime toDate,
         Pageable pageable);
+
+    /**
+     * Fetch a single message including the full payload. Used by the
+     * UI's row-detail drawer when the operator clicks into a row in
+     * the search list.
+     */
+    IntegrationMessageEventDTO getById(UUID messageId);
 
     /**
      * Replay a previously-FAILED message. The replay row reuses the

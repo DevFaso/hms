@@ -82,7 +82,7 @@ public abstract class StubPartnerConnector implements IntegrationConnectivityPro
         if (messageRecorder == null) {
             return;
         }
-        messageRecorder.record(integrationId(), organizationId, direction, messageType,
+        messageRecorder.recordMessage(integrationId(), organizationId, direction, messageType,
             "{\"stub\":true,\"integration\":\"" + integrationId() + "\"}",
             status, errorMessage);
     }

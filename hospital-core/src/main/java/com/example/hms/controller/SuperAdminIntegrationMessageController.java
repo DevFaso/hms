@@ -36,8 +36,13 @@ import java.util.UUID;
 public class SuperAdminIntegrationMessageController {
 
     private static final int DEFAULT_PAGE_SIZE = 25;
-    /** Aligned with SuperAdminAuditAggregationServiceImpl.MAX_PAGE_SIZE. */
-    private static final int MAX_PAGE_SIZE = 5_000;
+    /**
+     * Lowered from 5 000 to 200 (Copilot review). Each row may carry
+     * a 64 KB payload header; 200 × 64 KB caps a worst-case search
+     * response at ~12 MB. Operators paging deeper than that should
+     * narrow the date range or use the row-detail endpoint instead.
+     */
+    private static final int MAX_PAGE_SIZE = 200;
 
     private final SuperAdminIntegrationMessageService service;
 
@@ -53,11 +58,18 @@ public class SuperAdminIntegrationMessageController {
         @RequestParam(value = "page", defaultValue = "0") int page,
         @RequestParam(value = "size", defaultValue = "" + DEFAULT_PAGE_SIZE) int size
     ) {
-        int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(size, MAX_PAGE_SIZE));
+        int safePage = Math.clamp(page, 0, Integer.MAX_VALUE);
+        int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         return ResponseEntity.ok(service.search(
             integrationId, organizationId, status, fromDate, toDate,
             PageRequest.of(safePage, safeSize)));
+    }
+
+    @GetMapping("/{messageId}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(summary = "Fetch a single message including the full payload.")
+    public ResponseEntity<IntegrationMessageEventDTO> getById(@PathVariable UUID messageId) {
+        return ResponseEntity.ok(service.getById(messageId));
     }
 
     @PostMapping("/{messageId}/replay")

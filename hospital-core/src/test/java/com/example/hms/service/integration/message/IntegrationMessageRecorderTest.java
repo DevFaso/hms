@@ -33,7 +33,7 @@ class IntegrationMessageRecorderTest {
     void recordSavesAnEventWithFreshCorrelationIdAndAttemptOne() {
         when(repository.save(any(IntegrationMessageEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        IntegrationMessageEvent saved = recorder.record(
+        IntegrationMessageEvent saved = recorder.recordMessage(
             "partner.nhis", UUID.randomUUID(),
             IntegrationMessageDirection.OUTBOUND, "PROBE",
             "{\"stub\":true}",
@@ -54,7 +54,7 @@ class IntegrationMessageRecorderTest {
         // 80 KB payload — must come back truncated to MAX_PAYLOAD_CHARS
         // so the audit table can never be a memory hazard.
         String huge = "x".repeat(80 * 1024);
-        recorder.record("partner.nhis", null,
+        recorder.recordMessage("partner.nhis", null,
             IntegrationMessageDirection.INBOUND, "FHIR/Bundle",
             huge, IntegrationMessageStatus.RECEIVED, null);
 
@@ -68,7 +68,7 @@ class IntegrationMessageRecorderTest {
         when(repository.save(any(IntegrationMessageEvent.class)))
             .thenThrow(new RuntimeException("DB down"));
 
-        IntegrationMessageEvent result = recorder.record(
+        IntegrationMessageEvent result = recorder.recordMessage(
             "partner.nhis", null,
             IntegrationMessageDirection.OUTBOUND, "PROBE",
             "{}", IntegrationMessageStatus.FAILED, "stub");

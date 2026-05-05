@@ -45,6 +45,15 @@ export class IntegrationMessagesService {
     return this.http.get<IntegrationMessagePage>(BASE, { params });
   }
 
+  /**
+   * Fetch a single message including the full payload. Pairs with
+   * the search() response which elides the payload to keep list
+   * pages small.
+   */
+  getById(messageId: string): Observable<IntegrationMessageEvent> {
+    return this.http.get<IntegrationMessageEvent>(`${BASE}/${messageId}`);
+  }
+
   replay(messageId: string): Observable<IntegrationMessageEvent> {
     return this.http.post<IntegrationMessageEvent>(`${BASE}/${messageId}/replay`, {});
   }

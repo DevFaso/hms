@@ -174,9 +174,9 @@ class RegionPolicyServiceImplTest {
 
     @Test
     void updateAllowsNoOpWriteOnLegacyTargetUrlEvenWhenOnlyStubClientIsWired() {
-        // No-op (same URL submitted) on a legacy row must not be rejected;
-        // the guard only fires when the value actually changes to a non-
-        // empty string.
+        // Re-applying the existing URL on a legacy row must still be
+        // accepted, because the guard only fires when the value
+        // actually changes to a new non-empty string.
         RegionPolicy current = seedRow(OrganizationRegion.BF, null, null, "https://stale.example");
         when(regionPolicyRepository.findById(OrganizationRegion.BF))
             .thenReturn(Optional.of(current));

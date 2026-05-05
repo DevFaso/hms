@@ -54,15 +54,16 @@ class SuperAdminIntegrationMessageControllerTest {
 
         assertThat(response.getBody()).isSameAs(page);
 
-        // Negative page clamps to 0; oversized pageSize clamps to the
-        // controller's MAX_PAGE_SIZE (5 000) so a careless request can't
-        // drive an OOM in the service.
+        // Negative page clamps to 0. Oversized pageSize clamps to the
+        // controller's MAX_PAGE_SIZE (lowered to 200 in the Copilot
+        // review fix — 200 rows × 64 KB payload ceiling caps a worst-
+        // case search response at ~12 MB).
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
         verify(service).search(eq("partner.nhis"), isNull(),
             eq(IntegrationMessageStatus.FAILED), isNull(), isNull(),
             pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
-        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5_000);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(200);
     }
 
     @Test
@@ -95,6 +96,27 @@ class SuperAdminIntegrationMessageControllerTest {
         ArgumentCaptor<Pageable> cap = ArgumentCaptor.forClass(Pageable.class);
         verify(service).search(isNull(), isNull(), isNull(), isNull(), isNull(), cap.capture());
         assertThat(cap.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
+    void getByIdDelegatesToServiceAndReturnsTheRowWithPayload() {
+        UUID id = UUID.randomUUID();
+        IntegrationMessageEventDTO dto = IntegrationMessageEventDTO.builder()
+            .id(id)
+            .integrationId("partner.nhis")
+            .direction(IntegrationMessageDirection.INBOUND)
+            .payload("{\"full\":\"payload\"}")
+            .status(IntegrationMessageStatus.RECEIVED)
+            .attemptCount(1)
+            .receivedAt(LocalDateTime.now())
+            .lastAttemptedAt(LocalDateTime.now())
+            .build();
+        when(service.getById(id)).thenReturn(dto);
+
+        ResponseEntity<IntegrationMessageEventDTO> response = controller.getById(id);
+
+        assertThat(response.getBody()).isSameAs(dto);
+        verify(service).getById(id);
     }
 
     @Test
