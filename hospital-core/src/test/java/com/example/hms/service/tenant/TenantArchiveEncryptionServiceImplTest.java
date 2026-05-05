@@ -190,6 +190,38 @@ class TenantArchiveEncryptionServiceImplTest {
     }
 
     @Test
+    void validateConfigurationAbortsStartupForNoopInProd() {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+        TenantArchiveEncryptionServiceImpl service = serviceWith(env, "noop", null);
+
+        assertThatThrownBy(service::validateConfiguration)
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Refusing to start")
+            .hasMessageContaining("kek-source=noop")
+            .hasMessageContaining("HMS_TENANT_ARCHIVE_KEK");
+    }
+
+    @Test
+    void validateConfigurationAcceptsNoopInDev() {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("dev");
+        TenantArchiveEncryptionServiceImpl service = serviceWith(env, "noop", null);
+
+        // No throw — dev/test profiles are the only place noop is allowed.
+        service.validateConfiguration();
+    }
+
+    @Test
+    void validateConfigurationAcceptsEnvSourceInProd() {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("prod");
+        TenantArchiveEncryptionServiceImpl service = serviceWith(env, "env", randomKekB64());
+
+        service.validateConfiguration();
+    }
+
+    @Test
     void kekIdDiffersAcrossDifferentKeks(@TempDir Path tmp) throws Exception {
         MockEnvironment env = new MockEnvironment();
         env.setActiveProfiles("prod");

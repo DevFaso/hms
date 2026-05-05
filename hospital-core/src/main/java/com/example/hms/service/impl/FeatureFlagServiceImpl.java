@@ -110,6 +110,7 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
                 .flagKey(normalizedKey)
                 .organizationId(organizationId)
                 .build());
+        Boolean previousEnabled = override.getId() == null ? null : override.isEnabled();
         override.setEnabled(enabled);
         override.setDescription(sanitizeDescription(description));
         override.setUpdatedBy(updatedBy);
@@ -122,6 +123,17 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
             environmentOverride,
             organizationId
         );
+        emitConfigurationChangedAudit(
+            "FEATURE_FLAG_OVERRIDE_" + (previousEnabled == null ? "CREATED" : "UPDATED"),
+            String.format(
+                "Feature flag override %s key=%s enabled=%s%s%s previousEnabled=%s",
+                previousEnabled == null ? "created" : "updated",
+                normalizedKey, enabled,
+                organizationId == null ? "" : " org=" + organizationId,
+                environmentOverride == null ? "" : " env=" + environmentOverride,
+                previousEnabled),
+            normalizedKey,
+            updatedBy);
         return resolveEffectiveFlags(environmentOverride, locale);
     }
 
@@ -163,8 +175,53 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
                 overrideRepository.delete(entity);
                 log.info("Feature flag override removed key={} updatedBy={} env={} org={} id={}",
                     normalizedKey, updatedBy, environmentOverride, organizationId, entity.getId());
+                emitConfigurationChangedAudit(
+                    "FEATURE_FLAG_OVERRIDE_DELETED",
+                    String.format(
+                        "Feature flag override deleted key=%s%s%s previousEnabled=%s",
+                        normalizedKey,
+                        organizationId == null ? "" : " org=" + organizationId,
+                        environmentOverride == null ? "" : " env=" + environmentOverride,
+                        entity.isEnabled()),
+                    normalizedKey,
+                    updatedBy);
             });
         return resolveEffectiveFlags(environmentOverride, locale);
+    }
+
+    /**
+     * MVP-c3 — emit a {@link AuditEventType#CONFIGURATION_CHANGED}
+     * row so the platform-config audit-search tab picks up
+     * feature-flag writes. Audit failures are swallowed: the operator's
+     * write must succeed even if the audit pipeline is unhealthy
+     * (same posture as
+     * {@link com.example.hms.service.impl.RegionPolicyServiceImpl#recordAudit}).
+     */
+    private void emitConfigurationChangedAudit(
+        String resourceName,
+        String description,
+        String resourceId,
+        String updatedBy
+    ) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(currentActorId())
+                .userName(updatedBy != null && !updatedBy.isBlank() ? updatedBy : "system")
+                .eventType(AuditEventType.CONFIGURATION_CHANGED)
+                .eventDescription(description)
+                .resourceId(resourceId)
+                .resourceName(resourceName)
+                .entityType("FEATURE_FLAG_OVERRIDE")
+                .status(AuditStatus.SUCCESS)
+                .build());
+        } catch (RuntimeException ex) {
+            log.error("[FEATURE-FLAG] Failed to record audit for {}", resourceId, ex);
+        }
+    }
+
+    private UUID currentActorId() {
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        return ctx.getPrincipalUserId();
     }
 
     private Map<String, Boolean> resolveEffectiveFlags(String environmentOverride, Locale locale) {
