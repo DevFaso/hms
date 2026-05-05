@@ -165,12 +165,13 @@
     },
     "AGGREGATED": {
       "TITLE": "Agrégation multi-source",
-      "SUBTITLE": "Fusionne les événements support, frontend et matrice de permissions dans une seule chronologie. Plafond de 5 000 lignes par source — affinez la plage de dates pour un créneau chargé.",
+      "SUBTITLE": "Fusionne les événements support, frontend, matrice de permissions et configuration plateforme dans une seule chronologie. Plafond de 5 000 lignes par source — affinez la plage de dates pour un créneau chargé.",
       "LAST_SOURCE_LOCKED": "Au moins une source doit rester sélectionnée.",
       "SOURCE": {
         "SUPPORT": "Audit backend",
         "FRONTEND": "Télémétrie frontend",
-        "PERMISSION_MATRIX": "Matrice de permissions"
+        "PERMISSION_MATRIX": "Matrice de permissions",
+        "PLATFORM_CONFIG": "Configuration plateforme"
       },
       "COL": {
         "SOURCE": "Source",
@@ -356,10 +357,55 @@
       "EXPORT_HELP": "Laisser vide pour utiliser le format d'export par défaut global.",
       "DEPLOYMENT": "URL de déploiement cible",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "Si renseigné, les nouveaux locataires de cette région doivent être provisionnés à distance. Laisser vide pour un provisionnement local."
+      "DEPLOYMENT_HELP": "Si renseigné, les nouveaux locataires de cette région doivent être provisionnés à distance. Laisser vide pour un provisionnement local.",
+      "DEPLOYMENT_DISABLED_HELP": "Désactivé — aucun TenantProvisioningClient distant n'est branché sur ce déploiement.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "Enregistrez un bean TenantProvisioningClient réel avant de définir cette URL — le client de remplacement ne peut pas honorer le provisionnement distant."
     },
+    "REMOTE_STUB_BANNER": "Provisionnement distant désactivé : seul le TenantProvisioningClient de remplacement est branché, les URL de déploiement cible ne peuvent pas être enregistrées.",
     "ERROR": {
       "UPDATE_FAILED": "Échec de la mise à jour de la politique régionale. Réessayez."
+    }
+  },
+  "INTEGRATION_MESSAGES": {
+    "TITLE": "Journal des messages d'intégration",
+    "SUBTITLE": "Recherche de messages de style Bridges, file d'attente de lettres mortes et rejeu pour le trafic des protocoles partenaires.",
+    "DLQ_BADGE": "{{ count }} messages en échec en attente de rejeu",
+    "SHOW_DLQ_ONLY": "Afficher uniquement la DLQ",
+    "SEARCH": "Rechercher",
+    "SEARCHING": "Recherche…",
+    "RESET": "Réinitialiser",
+    "RETRY": "Réessayer",
+    "LOAD_ERROR": "Impossible de charger le journal des messages. Réessayez.",
+    "EMPTY": "Aucun message ne correspond aux filtres actuels.",
+    "REPLAY": "Rejouer",
+    "REPLAYING": "Rejeu…",
+    "PAGER": "Page {{ current }} sur {{ total }}",
+    "FILTER": {
+      "INTEGRATION_ID": "Intégration",
+      "INTEGRATION_ID_PLACEHOLDER": "ex. partner.nhis",
+      "ORG_ID": "Identifiant d'organisation",
+      "STATUS": "Statut",
+      "STATUS_ANY": "Tous",
+      "FROM": "De",
+      "TO": "À"
+    },
+    "STATUS": {
+      "SENT": "Envoyé",
+      "RECEIVED": "Reçu",
+      "FAILED": "Échoué",
+      "REPLAYED": "Rejoué"
+    },
+    "COL": {
+      "RECEIVED_AT": "Reçu",
+      "INTEGRATION": "Intégration",
+      "DIRECTION": "Direction",
+      "TYPE": "Type",
+      "STATUS": "Statut",
+      "ATTEMPTS": "Tentatives",
+      "ERROR": "Erreur"
+    },
+    "ERROR": {
+      "REPLAY_FAILED": "Échec du rejeu. Réessayez."
     }
   },
   "INTEGRATION_HEALTH": {

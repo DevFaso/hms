@@ -1,6 +1,7 @@
 package com.example.hms.service.tenant;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -59,6 +60,30 @@ public class TenantArchiveEncryptionServiceImpl implements TenantArchiveEncrypti
 
     public TenantArchiveEncryptionServiceImpl(Environment springEnvironment) {
         this.springEnvironment = springEnvironment;
+    }
+
+    /**
+     * Fail-fast at startup if the KEK configuration is not safe for the
+     * active profile. Today the only unsafe combination is
+     * {@code kek-source=noop} outside dev / test — silent plaintext
+     * archives in production are a Tier-1 data-protection violation and
+     * must abort boot before any tenant data flows. The runtime check in
+     * {@link #passthroughOrReject} stays as a defensive backstop for
+     * non-Spring-managed instantiation (tests).
+     */
+    @PostConstruct
+    void validateConfiguration() {
+        if ("noop".equalsIgnoreCase(kekSource) && !isDevOrTestProfile()) {
+            String activeProfiles = String.join(",", springEnvironment.getActiveProfiles());
+            String message = "Refusing to start: hms.tenant-archive.kek-source=noop is only "
+                + "permitted in dev/test profiles (active profiles=[" + activeProfiles + "]). "
+                + "Set hms.tenant-archive.kek-source=env and export HMS_TENANT_ARCHIVE_KEK "
+                + "(base64-encoded 32 bytes) before deploying.";
+            log.error("[TENANT-ARCHIVE-ENCRYPTION] {}", message);
+            throw new IllegalStateException(message);
+        }
+        log.info("[TENANT-ARCHIVE-ENCRYPTION] kek-source={} validated for profiles=[{}]",
+            kekSource, String.join(",", springEnvironment.getActiveProfiles()));
     }
 
     @Override

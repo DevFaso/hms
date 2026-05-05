@@ -33,8 +33,14 @@ export interface AuditSearchPage {
 /**
  * MVP-8c — discriminator for cross-source aggregation. Mirrors the
  * backend `AuditSource` enum.
+ *
+ * <p>MVP-c3 added {@code PLATFORM_CONFIG} — a logical view over
+ * audit_event_logs filtered to platform-administration writes
+ * (feature flags, region policies, release windows). Each row from
+ * audit_event_logs is tagged as exactly one of {@code SUPPORT} or
+ * {@code PLATFORM_CONFIG} so toggling sources never double-counts.
  */
-export type AuditSource = 'SUPPORT' | 'FRONTEND' | 'PERMISSION_MATRIX';
+export type AuditSource = 'SUPPORT' | 'FRONTEND' | 'PERMISSION_MATRIX' | 'PLATFORM_CONFIG';
 
 /**
  * MVP-8c — common shape across the three audit sources. Mirrors

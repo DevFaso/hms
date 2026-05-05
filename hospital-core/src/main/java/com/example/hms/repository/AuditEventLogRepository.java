@@ -14,6 +14,7 @@ import com.example.hms.enums.AuditStatus;
 
 import jakarta.persistence.QueryHint;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -81,4 +82,34 @@ public interface AuditEventLogRepository
     Page<AuditEventLog> findByDateRange(@Param("fromDate") LocalDateTime fromDate,
                                         @Param("toDate") LocalDateTime toDate,
                                         Pageable pageable);
+
+    /**
+     * MVP-c3 — date-range query restricted to a set of event types. Used
+     * by the audit-aggregation service to split SUPPORT vs.
+     * PLATFORM_CONFIG without double-counting: PLATFORM_CONFIG passes
+     * the platform-config event-type set; SUPPORT passes the same set
+     * to {@link #findByDateRangeAndEventTypeNotIn}.
+     */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
+           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
+           "a.eventType IN :eventTypes " +
+           "ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
+    Page<AuditEventLog> findByDateRangeAndEventTypeIn(@Param("fromDate") LocalDateTime fromDate,
+                                                     @Param("toDate") LocalDateTime toDate,
+                                                     @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                     Pageable pageable);
+
+    /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
+           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) AND " +
+           "a.eventType NOT IN :eventTypes " +
+           "ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
+    Page<AuditEventLog> findByDateRangeAndEventTypeNotIn(@Param("fromDate") LocalDateTime fromDate,
+                                                        @Param("toDate") LocalDateTime toDate,
+                                                        @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                        Pageable pageable);
 }

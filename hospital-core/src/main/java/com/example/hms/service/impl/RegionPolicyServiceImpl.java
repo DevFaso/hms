@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.OrganizationRegion;
+import com.example.hms.exception.BusinessValidationException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.platform.RegionPolicy;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -13,6 +14,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.RegionPolicyService;
+import com.example.hms.service.provisioning.TenantProvisioningClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class RegionPolicyServiceImpl implements RegionPolicyService {
 
     private final RegionPolicyRepository regionPolicyRepository;
     private final AuditEventLogService auditEventLogService;
+    private final TenantProvisioningClient tenantProvisioningClient;
 
     @Override
     @Transactional(readOnly = true)
@@ -77,6 +80,19 @@ public class RegionPolicyServiceImpl implements RegionPolicyService {
             return toResponse(policy);
         }
 
+        // Block setting (or changing) target_deployment_url to a non-empty
+        // value while only the stub TenantProvisioningClient is wired —
+        // saving it would let a later tenant-create silently fail with
+        // HTTP 501. Clearing or leaving the value untouched is always
+        // allowed so an operator can recover from a legacy row.
+        boolean targetChanged = !Objects.equals(prevTarget, newTarget);
+        if (targetChanged && newTarget != null && !tenantProvisioningClient.isRemoteCapable()) {
+            throw new BusinessValidationException(
+                "Cannot set target_deployment_url for region " + region + ": no remote "
+                    + "TenantProvisioningClient is wired into this deployment. Register a "
+                    + "real client bean or leave the field blank for local provisioning.");
+        }
+
         policy.setRetentionDays(newRetention);
         policy.setDefaultExportFormat(newExport);
         policy.setTargetDeploymentUrl(newTarget);
@@ -107,6 +123,12 @@ public class RegionPolicyServiceImpl implements RegionPolicyService {
     public String resolveTargetDeploymentUrl(OrganizationRegion region) {
         return region == null ? null : regionPolicyRepository.findById(region)
             .map(RegionPolicy::getTargetDeploymentUrl).orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isRemoteProvisioningCapable() {
+        return tenantProvisioningClient.isRemoteCapable();
     }
 
     // ── helpers ───────────────────────────────────────────────────────

@@ -33,8 +33,18 @@ export class DataResidencyPolicyComponent implements OnInit {
   readonly rows = signal<RegionPolicyRow[]>([]);
   readonly editing = signal<EditState | null>(null);
 
+  // MVP-c3 foot-guns — when the running deployment has only the stub
+  // TenantProvisioningClient, writing target_deployment_url would be
+  // rejected by the backend with a 400. The UI mirrors that signal:
+  // the column becomes read-only with a tooltip explaining why. The
+  // signal stays optimistic (true) until /capabilities resolves so a
+  // slow capabilities call doesn't lock the deployment column on
+  // first paint.
+  readonly remoteProvisioningCapable = signal(true);
+
   ngOnInit(): void {
     this.refresh();
+    this.loadCapabilities();
   }
 
   refresh(): void {
@@ -52,6 +62,19 @@ export class DataResidencyPolicyComponent implements OnInit {
         this.rows.set(rows);
         this.loading.set(false);
       });
+  }
+
+  private loadCapabilities(): void {
+    this.service
+      .capabilities()
+      .pipe(
+        catchError(() => {
+          // Capability fetch failure → stay optimistic (column editable);
+          // the backend write guard remains the source of truth.
+          return of({ remoteProvisioningCapable: true });
+        }),
+      )
+      .subscribe((caps) => this.remoteProvisioningCapable.set(caps.remoteProvisioningCapable));
   }
 
   startEdit(row: RegionPolicyRow): void {

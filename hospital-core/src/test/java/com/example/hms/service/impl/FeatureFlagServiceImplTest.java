@@ -118,6 +118,73 @@ class FeatureFlagServiceImplTest {
     }
 
     @Test
+    void upsertOverrideEmitsConfigurationChangedAudit() {
+        // MVP-c3 — feature-flag writes must surface under the
+        // PLATFORM_CONFIG source on the audit-search aggregation tab.
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.delta", null))
+            .thenReturn(Optional.empty());
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
+
+        service.upsertOverride(
+            "feature.delta",
+            true,
+            "enable for canary",
+            "operator",
+            "staging",
+            Locale.ENGLISH
+        );
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> cap =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(cap.capture());
+        assertThat(cap.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED);
+        assertThat(cap.getValue().getEntityType()).isEqualTo("FEATURE_FLAG_OVERRIDE");
+        assertThat(cap.getValue().getResourceId()).isEqualTo("feature.delta");
+        assertThat(cap.getValue().getUserName()).isEqualTo("operator");
+    }
+
+    @Test
+    void deleteOverrideEmitsConfigurationChangedAudit() {
+        FeatureFlagOverride stored = FeatureFlagOverride.builder()
+            .flagKey("feature.beta")
+            .enabled(true)
+            .build();
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.beta", null))
+            .thenReturn(Optional.of(stored));
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
+
+        service.deleteOverride(
+            "feature.beta",
+            "operator",
+            null,
+            Locale.ENGLISH
+        );
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> cap =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(cap.capture());
+        assertThat(cap.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED);
+        assertThat(cap.getValue().getResourceName()).isEqualTo("FEATURE_FLAG_OVERRIDE_DELETED");
+    }
+
+    @Test
+    void upsertOverrideSucceedsEvenWhenAuditEmissionThrows() {
+        when(overrideRepository.findByFlagKeyAndOrganizationId("feature.delta", null))
+            .thenReturn(Optional.empty());
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
+        org.mockito.Mockito.doThrow(new RuntimeException("audit pipeline down"))
+            .when(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.any());
+
+        // Audit failure must not roll back the operator's intended write.
+        Map<String, Boolean> flags = service.upsertOverride(
+            "feature.delta", true, "ok", "operator", "staging", Locale.ENGLISH);
+        assertThat(flags).isNotNull();
+        verify(overrideRepository).save(overrideCaptor.capture());
+    }
+
+    @Test
     void perTenantUpsertWritesOrgScopedRow() {
         UUID orgId = UUID.randomUUID();
         when(overrideRepository.findByFlagKeyAndOrganizationId("feature.beta", orgId))

@@ -3,9 +3,17 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { OrganizationRegion } from './data-residency.model';
-import { RegionPolicyRow, RegionPolicyUpdate } from './region-policy.model';
+import {
+  RegionPolicyCapabilities,
+  RegionPolicyRow,
+  RegionPolicyUpdate,
+} from './region-policy.model';
 
-const BASE = '/super-admin/region-policies';
+// Mirrors SuperAdminRegionPolicyController @RequestMapping; the prior
+// base path /super-admin/region-policies was a pre-existing typo that
+// would 404 in production (Karma specs use SpyObj so the mismatch
+// never surfaced in CI).
+const BASE = '/super-admin/data-residency/policies';
 
 /**
  * MVP-9c — per-region policy CRUD for the data-residency policy
@@ -25,5 +33,9 @@ export class RegionPolicyService {
 
   update(region: OrganizationRegion, body: RegionPolicyUpdate): Observable<RegionPolicyRow> {
     return this.http.put<RegionPolicyRow>(`${BASE}/${region}`, body);
+  }
+
+  capabilities(): Observable<RegionPolicyCapabilities> {
+    return this.http.get<RegionPolicyCapabilities>(`${BASE}/capabilities`);
   }
 }

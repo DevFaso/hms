@@ -18,6 +18,7 @@ import com.example.hms.repository.PermissionMatrixAuditEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -185,7 +186,11 @@ class SuperAdminAuditAggregationServiceImplTest {
 
     @Test
     void searchAggregated_supportOnly_skipsOtherRepositories() {
-        when(auditEventLogRepository.findByDateRange(any(), any(), any(Pageable.class)))
+        // MVP-c3 — SUPPORT-only routes through findByDateRangeAndEventTypeNotIn
+        // (excludes the platform-config event-type set so PLATFORM_CONFIG
+        // rows don't leak into the SUPPORT bucket).
+        when(auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            any(), any(), ArgumentMatchers.<java.util.Collection<AuditEventType>>any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0L));
 
         AggregatedAuditPageDTO page = service.searchAggregated(
@@ -194,6 +199,7 @@ class SuperAdminAuditAggregationServiceImplTest {
         assertThat(page.totalElements()).isZero();
         verify(frontendAuditEventRepository, never()).findInDateRangeOrdered(any(), any(), any(Pageable.class));
         verify(permissionMatrixAuditEventRepository, never()).findInDateRangeOrdered(any(), any(), any(Pageable.class));
+        verify(auditEventLogRepository, never()).findByDateRange(any(), any(), any(Pageable.class));
     }
 
     private FrontendAuditEvent frontendAt(String eventType, LocalDateTime when) {
@@ -277,7 +283,10 @@ class SuperAdminAuditAggregationServiceImplTest {
         row.setId(UUID.randomUUID());
         row.setEventTimestamp(t1);
 
-        when(auditEventLogRepository.findByDateRange(isNull(), isNull(), any(Pageable.class)))
+        when(auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            isNull(), isNull(),
+            ArgumentMatchers.<java.util.Collection<AuditEventType>>any(),
+            any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1L));
 
         AggregatedAuditPageDTO page = service.searchAggregated(
@@ -309,7 +318,10 @@ class SuperAdminAuditAggregationServiceImplTest {
         row.setId(UUID.randomUUID());
         row.setEventTimestamp(t1);
 
-        when(auditEventLogRepository.findByDateRange(isNull(), isNull(), any(Pageable.class)))
+        when(auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            isNull(), isNull(),
+            ArgumentMatchers.<java.util.Collection<AuditEventType>>any(),
+            any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1L));
 
         AggregatedAuditPageDTO page = service.searchAggregated(
@@ -341,7 +353,10 @@ class SuperAdminAuditAggregationServiceImplTest {
         row.setId(UUID.randomUUID());
         row.setEventTimestamp(t1);
 
-        when(auditEventLogRepository.findByDateRange(isNull(), isNull(), any(Pageable.class)))
+        when(auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            isNull(), isNull(),
+            ArgumentMatchers.<java.util.Collection<AuditEventType>>any(),
+            any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1L));
 
         AggregatedAuditPageDTO page = service.searchAggregated(
@@ -365,7 +380,10 @@ class SuperAdminAuditAggregationServiceImplTest {
         row.setId(UUID.randomUUID());
         row.setEventTimestamp(t1);
 
-        when(auditEventLogRepository.findByDateRange(isNull(), isNull(), any(Pageable.class)))
+        when(auditEventLogRepository.findByDateRangeAndEventTypeNotIn(
+            isNull(), isNull(),
+            ArgumentMatchers.<java.util.Collection<AuditEventType>>any(),
+            any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1L));
 
         AggregatedAuditPageDTO page = service.searchAggregated(
@@ -403,6 +421,92 @@ class SuperAdminAuditAggregationServiceImplTest {
         assertThat(dto.source()).isEqualTo(AuditSource.PERMISSION_MATRIX);
         assertThat(dto.eventType()).isNull();
         assertThat(dto.timestamp()).isNull();
+    }
+
+    @Test
+    void searchAggregated_platformConfigOnly_routesThroughEventTypeIn() {
+        // MVP-c3 — PLATFORM_CONFIG-only routes through
+        // findByDateRangeAndEventTypeIn so only platform-config rows
+        // are fetched. The DTO source must come back as PLATFORM_CONFIG.
+        AuditEventLog row = AuditEventLog.builder()
+            .eventType(AuditEventType.REGION_POLICY_UPDATED)
+            .eventDescription("Region BF policy updated")
+            .userName("super.admin")
+            .status(AuditStatus.SUCCESS)
+            .build();
+        row.setId(UUID.randomUUID());
+        row.setEventTimestamp(t1);
+
+        when(auditEventLogRepository.findByDateRangeAndEventTypeIn(
+            isNull(), isNull(),
+            ArgumentMatchers.<java.util.Collection<AuditEventType>>any(),
+            any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(row), PageRequest.of(0, 20), 1L));
+
+        AggregatedAuditPageDTO page = service.searchAggregated(
+            EnumSet.of(AuditSource.PLATFORM_CONFIG), null, null, PageRequest.of(0, 20));
+
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().get(0).source()).isEqualTo(AuditSource.PLATFORM_CONFIG);
+        verify(auditEventLogRepository, never()).findByDateRangeAndEventTypeNotIn(
+            any(), any(), ArgumentMatchers.<java.util.Collection<AuditEventType>>any(), any(Pageable.class));
+        verify(auditEventLogRepository, never()).findByDateRange(any(), any(), any(Pageable.class));
+    }
+
+    @Test
+    void searchAggregated_supportPlusPlatformConfig_usesUnfilteredQueryAndSplitsRowsByEventType() {
+        // When BOTH SUPPORT and PLATFORM_CONFIG are selected the service
+        // pulls everything in one query (findByDateRange) and tags each
+        // row by its eventType — keeps the round-trip count to one.
+        AuditEventLog supportRow = AuditEventLog.builder()
+            .eventType(AuditEventType.LOGIN)
+            .eventDescription("user logged in")
+            .userName("alice")
+            .status(AuditStatus.SUCCESS)
+            .build();
+        supportRow.setId(UUID.randomUUID());
+        supportRow.setEventTimestamp(t2);
+
+        AuditEventLog platformRow = AuditEventLog.builder()
+            .eventType(AuditEventType.REGION_POLICY_UPDATED)
+            .eventDescription("Region EU policy updated")
+            .userName("super.admin")
+            .status(AuditStatus.SUCCESS)
+            .build();
+        platformRow.setId(UUID.randomUUID());
+        platformRow.setEventTimestamp(t1);
+
+        when(auditEventLogRepository.findByDateRange(isNull(), isNull(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(supportRow, platformRow), PageRequest.of(0, 20), 2L));
+
+        AggregatedAuditPageDTO page = service.searchAggregated(
+            EnumSet.of(AuditSource.SUPPORT, AuditSource.PLATFORM_CONFIG),
+            null, null, PageRequest.of(0, 20));
+
+        assertThat(page.content()).hasSize(2);
+        assertThat(page.content().get(0).source()).isEqualTo(AuditSource.SUPPORT);          // LOGIN @ t2
+        assertThat(page.content().get(1).source()).isEqualTo(AuditSource.PLATFORM_CONFIG);  // REGION_POLICY_UPDATED @ t1
+        verify(auditEventLogRepository, never()).findByDateRangeAndEventTypeIn(
+            any(), any(), ArgumentMatchers.<java.util.Collection<AuditEventType>>any(), any(Pageable.class));
+        verify(auditEventLogRepository, never()).findByDateRangeAndEventTypeNotIn(
+            any(), any(), ArgumentMatchers.<java.util.Collection<AuditEventType>>any(), any(Pageable.class));
+    }
+
+    @Test
+    void platformConfigEventTypeSet_includesAllPlatformAdministrationEventTypes() {
+        // Guards against accidental drops — adding a new platform-admin
+        // event type must update the splitter set, otherwise the row
+        // would silently surface under SUPPORT instead of
+        // PLATFORM_CONFIG.
+        assertThat(SuperAdminAuditAggregationServiceImpl.PLATFORM_CONFIG_EVENT_TYPES)
+            .contains(
+                AuditEventType.REGION_POLICY_UPDATED,
+                AuditEventType.PLATFORM_REGISTRY_UPDATED,
+                AuditEventType.SECURITY_POLICY_UPDATED,
+                AuditEventType.CONFIGURATION_CHANGED,
+                AuditEventType.INTEGRATION_CONFIGURED,
+                AuditEventType.API_KEY_CREATED,
+                AuditEventType.API_KEY_REVOKED);
     }
 
     @Test

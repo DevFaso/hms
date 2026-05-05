@@ -29,6 +29,13 @@
       <span>{{ 'REGION_POLICY.EMPTY' | translate }}</span>
     </div>
   } @else {
+    @if (!remoteProvisioningCapable()) {
+      <output class="state-panel warn" data-test="remote-stub-banner">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        <span>{{ 'REGION_POLICY.REMOTE_STUB_BANNER' | translate }}</span>
+      </output>
+    }
+
     <table class="policy-table" data-test="policy-table">
       <thead>
         <tr>
@@ -114,11 +121,25 @@
           <span>{{ 'REGION_POLICY.FIELD.DEPLOYMENT' | translate }}</span>
           <input
             type="text"
+            data-test="deployment-url-input"
             [ngModel]="edit.targetDeploymentUrl"
             (ngModelChange)="patchEdit('targetDeploymentUrl', $event)"
+            [attr.disabled]="!remoteProvisioningCapable() ? '' : null"
+            [attr.aria-disabled]="!remoteProvisioningCapable()"
+            [attr.title]="
+              !remoteProvisioningCapable()
+                ? ('REGION_POLICY.FIELD.DEPLOYMENT_DISABLED_TOOLTIP' | translate)
+                : null
+            "
             [placeholder]="'REGION_POLICY.FIELD.DEPLOYMENT_PLACEHOLDER' | translate"
           />
-          <small>{{ 'REGION_POLICY.FIELD.DEPLOYMENT_HELP' | translate }}</small>
+          <small>
+            @if (!remoteProvisioningCapable()) {
+              {{ 'REGION_POLICY.FIELD.DEPLOYMENT_DISABLED_HELP' | translate }}
+            } @else {
+              {{ 'REGION_POLICY.FIELD.DEPLOYMENT_HELP' | translate }}
+            }
+          </small>
         </label>
 
         @if (edit.errorKey) {

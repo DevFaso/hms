@@ -46,6 +46,8 @@ class SuperAdminPlatformRegistryServiceImplTest {
     private NotificationRepository notificationRepository;
     @Mock
     private PlatformReleaseWindowRepository platformReleaseWindowRepository;
+    @Mock
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
 
     @InjectMocks
     private SuperAdminPlatformRegistryServiceImpl service;
@@ -178,5 +180,64 @@ class SuperAdminPlatformRegistryServiceImplTest {
         assertThatThrownBy(() -> service.scheduleReleaseWindow(request))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("end time must be after the start time");
+    }
+
+    @Test
+    void scheduleReleaseWindowEmitsPlatformRegistryUpdatedAudit() {
+        PlatformReleaseWindowRequestDTO request = new PlatformReleaseWindowRequestDTO();
+        request.setName("Q2 Cutover");
+        request.setEnvironment("production");
+        request.setStartsAt(LocalDateTime.now().plusDays(2));
+        request.setEndsAt(LocalDateTime.now().plusDays(3));
+        request.setFreezeChanges(true);
+        request.setOwnerTeam("Platform");
+
+        PlatformReleaseWindow persisted = PlatformReleaseWindow.builder()
+            .name(request.getName())
+            .environment(request.getEnvironment())
+            .startsAt(request.getStartsAt())
+            .endsAt(request.getEndsAt())
+            .status(PlatformReleaseStatus.SCHEDULED)
+            .freezeChanges(true)
+            .ownerTeam("Platform")
+            .build();
+        persisted.setId(UUID.randomUUID());
+        when(platformReleaseWindowRepository.save(any(PlatformReleaseWindow.class))).thenReturn(persisted);
+
+        service.scheduleReleaseWindow(request);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> cap =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        org.mockito.Mockito.verify(auditEventLogService).logEvent(cap.capture());
+        assertThat(cap.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.PLATFORM_REGISTRY_UPDATED);
+        assertThat(cap.getValue().getEntityType()).isEqualTo("PLATFORM_RELEASE_WINDOW");
+        assertThat(cap.getValue().getResourceName()).isEqualTo("Q2 Cutover");
+    }
+
+    @Test
+    void scheduleReleaseWindowSucceedsEvenWhenAuditEmissionThrows() {
+        PlatformReleaseWindowRequestDTO request = new PlatformReleaseWindowRequestDTO();
+        request.setName("Q3 Cutover");
+        request.setEnvironment("production");
+        request.setStartsAt(LocalDateTime.now().plusDays(2));
+        request.setEndsAt(LocalDateTime.now().plusDays(3));
+
+        PlatformReleaseWindow persisted = PlatformReleaseWindow.builder()
+            .name(request.getName())
+            .environment(request.getEnvironment())
+            .startsAt(request.getStartsAt())
+            .endsAt(request.getEndsAt())
+            .status(PlatformReleaseStatus.SCHEDULED)
+            .build();
+        persisted.setId(UUID.randomUUID());
+        when(platformReleaseWindowRepository.save(any(PlatformReleaseWindow.class))).thenReturn(persisted);
+        org.mockito.Mockito.doThrow(new RuntimeException("audit pipeline down"))
+            .when(auditEventLogService).logEvent(any());
+
+        // Audit failure must not roll back the release-window write —
+        // operator action is the source of truth, audit is best-effort.
+        PlatformReleaseWindowResponseDTO response = service.scheduleReleaseWindow(request);
+        assertThat(response.getId()).isEqualTo(persisted.getId());
     }
 }
