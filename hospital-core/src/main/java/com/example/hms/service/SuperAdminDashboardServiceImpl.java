@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.mapper.AdmissionMapper;
+import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -70,13 +72,13 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final TreatmentPlanRepository treatmentPlanRepository;
     private final GeneralReferralRepository generalReferralRepository;
     private final ConsultationService consultationService;
-    private final LabOrderService labOrderService;
     private final LabResultService labResultService;
     private final LabTestDefinitionService labTestDefinitionService;
-    private final AdmissionService admissionService;
     private final PrescriptionService prescriptionService;
     private final TreatmentPlanService treatmentPlanService;
     private final GeneralReferralService generalReferralService;
+    private final LabOrderMapper labOrderMapper;
+    private final AdmissionMapper admissionMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -203,17 +205,18 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getRecentConsultations(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        // getAllConsultations returns sorted by requestedAt desc for super-admin path
-        List<ConsultationResponseDTO> all = consultationService.getAllConsultations(null);
-        return all.stream().limit(safeLimit).toList();
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "requestedAt"));
+        return consultationService.getRecentForSuperAdmin(pageable);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<LabOrderResponseDTO> getRecentLabOrders(int limit, Locale locale) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        List<LabOrderResponseDTO> all = labOrderService.getAllLabOrders(locale);
-        return all.stream().limit(safeLimit).toList();
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return labOrderRepository.findAll(pageable)
+            .map(labOrderMapper::toLabOrderResponseDTO)
+            .getContent();
     }
 
     @Override
@@ -238,8 +241,10 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getRecentAdmissions(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        List<AdmissionResponseDTO> all = admissionService.getAllAdmissions(null, null, null);
-        return all.stream().limit(safeLimit).toList();
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return admissionRepository.findAll(pageable)
+            .map(admissionMapper::toResponseDTO)
+            .getContent();
     }
 
     @Override
@@ -262,8 +267,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<GeneralReferralResponseDTO> getRecentReferrals(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        List<GeneralReferralResponseDTO> all = generalReferralService.getAllReferrals(null);
-        return all.stream().limit(safeLimit).toList();
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return generalReferralService.getRecentForSuperAdmin(pageable);
     }
 
     private int sanitizeLimit(int requested, int defaultValue, int maxValue) {

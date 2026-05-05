@@ -6,6 +6,7 @@ import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationStatsDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
+import org.springframework.data.domain.Pageable;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +22,12 @@ public interface ConsultationService {
     List<ConsultationResponseDTO> getConsultationsForHospital(UUID hospitalId, ConsultationStatus status);
 
     List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status);
+
+    /**
+     * Cross-tenant paged fetch for super-admin dashboards.
+     * Caller is responsible for enforcing the SUPER_ADMIN role at the boundary.
+     */
+    List<ConsultationResponseDTO> getRecentForSuperAdmin(Pageable pageable);
 
     List<ConsultationResponseDTO> getConsultationsRequestedBy(UUID providerId);
 

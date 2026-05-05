@@ -2,8 +2,12 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.mapper.AdmissionMapper;
+import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
+import com.example.hms.model.Admission;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.LabOrder;
 import com.example.hms.model.StaffAvailability;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -82,13 +86,13 @@ class SuperAdminDashboardServiceImplTest {
     @Mock private TreatmentPlanRepository treatmentPlanRepository;
     @Mock private GeneralReferralRepository generalReferralRepository;
     @Mock private ConsultationService consultationService;
-    @Mock private LabOrderService labOrderService;
     @Mock private LabResultService labResultService;
     @Mock private LabTestDefinitionService labTestDefinitionService;
-    @Mock private AdmissionService admissionService;
     @Mock private PrescriptionService prescriptionService;
     @Mock private TreatmentPlanService treatmentPlanService;
     @Mock private GeneralReferralService generalReferralService;
+    @Mock private LabOrderMapper labOrderMapper;
+    @Mock private AdmissionMapper admissionMapper;
 
     @InjectMocks private SuperAdminDashboardServiceImpl service;
 
@@ -213,12 +217,9 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentConsultations_appliesLimit() {
-        List<ConsultationResponseDTO> all = List.of(
-            new ConsultationResponseDTO(),
-            new ConsultationResponseDTO(),
-            new ConsultationResponseDTO());
-        when(consultationService.getAllConsultations(null)).thenReturn(all);
+    void getRecentConsultations_delegatesToPagedSuperAdminQuery() {
+        when(consultationService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(List.of(new ConsultationResponseDTO(), new ConsultationResponseDTO()));
 
         List<ConsultationResponseDTO> result = service.getRecentConsultations(2);
         assertThat(result).hasSize(2);
@@ -235,11 +236,9 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentReferrals_appliesLimit() {
-        List<GeneralReferralResponseDTO> all = List.of(
-            new GeneralReferralResponseDTO(),
-            new GeneralReferralResponseDTO());
-        when(generalReferralService.getAllReferrals(null)).thenReturn(all);
+    void getRecentReferrals_delegatesToPagedSuperAdminQuery() {
+        when(generalReferralService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(List.of(new GeneralReferralResponseDTO()));
 
         List<GeneralReferralResponseDTO> result = service.getRecentReferrals(1);
         assertThat(result).hasSize(1);
@@ -255,15 +254,13 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentLabOrders_appliesLimit() {
-        List<LabOrderResponseDTO> all = List.of(
-            new LabOrderResponseDTO(),
-            new LabOrderResponseDTO(),
-            new LabOrderResponseDTO());
-        when(labOrderService.getAllLabOrders(any(Locale.class))).thenReturn(all);
+    void getRecentLabOrders_queriesRepositoryDirectlySorted() {
+        LabOrder lo = new LabOrder();
+        when(labOrderRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(lo)));
+        when(labOrderMapper.toLabOrderResponseDTO(lo)).thenReturn(new LabOrderResponseDTO());
 
         List<LabOrderResponseDTO> result = service.getRecentLabOrders(2, Locale.ENGLISH);
-        assertThat(result).hasSize(2);
+        assertThat(result).hasSize(1);
     }
 
     @Test
@@ -277,9 +274,10 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentAdmissions_appliesLimit() {
-        List<AdmissionResponseDTO> all = List.of(new AdmissionResponseDTO(), new AdmissionResponseDTO());
-        when(admissionService.getAllAdmissions(any(), any(), any())).thenReturn(all);
+    void getRecentAdmissions_queriesRepositoryDirectlySorted() {
+        Admission ad = new Admission();
+        when(admissionRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(ad)));
+        when(admissionMapper.toResponseDTO(ad)).thenReturn(new AdmissionResponseDTO());
 
         List<AdmissionResponseDTO> result = service.getRecentAdmissions(1);
         assertThat(result).hasSize(1);

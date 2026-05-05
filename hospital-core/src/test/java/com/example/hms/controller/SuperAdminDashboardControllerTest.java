@@ -22,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -48,11 +49,11 @@ class SuperAdminDashboardControllerTest {
     @Test
     void allRecentEndpoints_requireSuperAdmin() throws Exception {
         assertThat(preAuthorizeOf("getRecentConsultations", int.class)).contains("SUPER_ADMIN");
-        assertThat(preAuthorizeOf("getRecentLabOrders", int.class)).contains("SUPER_ADMIN");
-        assertThat(preAuthorizeOf("getRecentLabResults", int.class)).contains("SUPER_ADMIN");
+        assertThat(preAuthorizeOf("getRecentLabOrders", int.class, Locale.class)).contains("SUPER_ADMIN");
+        assertThat(preAuthorizeOf("getRecentLabResults", int.class, Locale.class)).contains("SUPER_ADMIN");
         assertThat(preAuthorizeOf("getRecentLabTestDefinitions", int.class)).contains("SUPER_ADMIN");
         assertThat(preAuthorizeOf("getRecentAdmissions", int.class)).contains("SUPER_ADMIN");
-        assertThat(preAuthorizeOf("getRecentPrescriptions", int.class)).contains("SUPER_ADMIN");
+        assertThat(preAuthorizeOf("getRecentPrescriptions", int.class, Locale.class)).contains("SUPER_ADMIN");
         assertThat(preAuthorizeOf("getRecentTreatmentPlans", int.class)).contains("SUPER_ADMIN");
         assertThat(preAuthorizeOf("getRecentReferrals", int.class)).contains("SUPER_ADMIN");
     }
@@ -71,14 +72,21 @@ class SuperAdminDashboardControllerTest {
     @Test
     void getRecentLabOrders_returnsBodyFromService() {
         when(dashboardService.getRecentLabOrders(anyInt(), any())).thenReturn(List.of(new LabOrderResponseDTO()));
-        assertThat(controller.getRecentLabOrders(20).getBody()).hasSize(1);
+        assertThat(controller.getRecentLabOrders(20, Locale.ENGLISH).getBody()).hasSize(1);
+    }
+
+    @Test
+    void getRecentLabOrders_passesCallerLocale() {
+        when(dashboardService.getRecentLabOrders(anyInt(), any())).thenReturn(List.of(new LabOrderResponseDTO()));
+        controller.getRecentLabOrders(20, Locale.FRENCH);
+        org.mockito.Mockito.verify(dashboardService).getRecentLabOrders(20, Locale.FRENCH);
     }
 
     @Test
     void getRecentLabResults_returnsBodyFromService() {
         when(dashboardService.getRecentLabResults(anyInt(), any()))
             .thenReturn(List.of(LabResultResponseDTO.builder().build()));
-        assertThat(controller.getRecentLabResults(20).getBody()).hasSize(1);
+        assertThat(controller.getRecentLabResults(20, Locale.ENGLISH).getBody()).hasSize(1);
     }
 
     @Test
@@ -98,7 +106,14 @@ class SuperAdminDashboardControllerTest {
     void getRecentPrescriptions_returnsBodyFromService() {
         when(dashboardService.getRecentPrescriptions(anyInt(), any()))
             .thenReturn(List.of(new PrescriptionResponseDTO()));
-        assertThat(controller.getRecentPrescriptions(20).getBody()).hasSize(1);
+        assertThat(controller.getRecentPrescriptions(20, Locale.ENGLISH).getBody()).hasSize(1);
+    }
+
+    @Test
+    void getRecentPrescriptions_passesCallerLocale() {
+        when(dashboardService.getRecentPrescriptions(anyInt(), any())).thenReturn(List.of(new PrescriptionResponseDTO()));
+        controller.getRecentPrescriptions(20, Locale.GERMAN);
+        org.mockito.Mockito.verify(dashboardService).getRecentPrescriptions(20, Locale.GERMAN);
     }
 
     @Test

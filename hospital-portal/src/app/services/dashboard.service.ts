@@ -502,9 +502,14 @@ export class DashboardService {
 
   private getSuperAdminRecent(slug: string, limit = 10): Observable<SuperAdminRecentItem[]> {
     const params = new HttpParams().set('limit', limit);
-    return this.http
-      .get<SuperAdminRecentItem[]>(`/api/super-admin/${slug}`, { params })
-      .pipe(catchError(() => of([])));
+    return this.http.get<SuperAdminRecentItem[]>(`/api/super-admin/${slug}`, { params }).pipe(
+      catchError((err) => {
+        // Surface the failure in dev tools so 403/500/network errors don't
+        // silently degrade to "no recent items" on the super-admin dashboard.
+        console.error(`[super-admin] /${slug} failed`, err);
+        return of([]);
+      }),
+    );
   }
 
   getRecentConsultations(limit = 10): Observable<SuperAdminRecentItem[]> {

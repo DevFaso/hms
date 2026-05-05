@@ -161,17 +161,19 @@ public class SuperAdminDashboardController {
     @GetMapping("/recent-lab-orders")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<LabOrderResponseDTO>> getRecentLabOrders(
-        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentLabOrders(limit, Locale.getDefault()));
+        return ResponseEntity.ok(dashboardService.getRecentLabOrders(limit, locale));
     }
 
     @GetMapping("/recent-lab-results")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<LabResultResponseDTO>> getRecentLabResults(
-        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentLabResults(limit, Locale.getDefault()));
+        return ResponseEntity.ok(dashboardService.getRecentLabResults(limit, locale));
     }
 
     @GetMapping("/recent-lab-test-definitions")
@@ -193,9 +195,10 @@ public class SuperAdminDashboardController {
     @GetMapping("/recent-prescriptions")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<PrescriptionResponseDTO>> getRecentPrescriptions(
-        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentPrescriptions(limit, Locale.getDefault()));
+        return ResponseEntity.ok(dashboardService.getRecentPrescriptions(limit, locale));
     }
 
     @GetMapping("/recent-treatment-plans")

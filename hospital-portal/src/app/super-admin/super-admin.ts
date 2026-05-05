@@ -223,7 +223,7 @@ export class SuperAdminComponent implements OnInit {
         value: s.totalLabTestDefinitions ?? 0,
         icon: 'list_alt',
         color: '#64748b',
-        route: '/lab-test-definitions',
+        route: '/lab-test-config',
       },
       {
         key: 'treatment_plans',
