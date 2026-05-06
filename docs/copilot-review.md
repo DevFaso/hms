@@ -524,3 +524,137 @@ short-circuit).
 - Frontend Karma — **914/914 SUCCESS**.
 - `npm run format` clean. `npm run lint` clean (0 errors / 0
   warnings).
+
+---
+
+## 2026-05-06 (c) — Copilot + Sonar second-pass review on the F1–F5 PR
+
+Seven new findings on PR #245 after the (b) fixup landed: four from
+Copilot, three from Sonar. Some Sonar findings (S6809 self-invocation
+× 9, missing assertion in CrossTenantReadAuditTest, dead
+`nullSafePrincipal()`) were stale — already fixed in 0b3c0e7e but
+the analysis hadn't re-run; ignored here.
+
+### C1 — `requireActiveHospitalId()` ignored explicit X-Hospital-Id for super-admin — **High (regression)**
+
+> requireActiveHospitalId() now returns null for any request where
+> HospitalContext.isSuperAdmin() is true, even when the request
+> explicitly provides X-Hospital-Id (which
+> HospitalContextRequestOverrides would have validated and applied).
+> This effectively ignores scoped super-admin requests and can
+> cause super-admin list endpoints to run unscoped even when the UI
+> is trying to pin to a specific hospital.
+
+The (b) fixup over-corrected: my F1 short-circuit returned `null`
+for any super-admin, dropping the JWT-derived primary
+(intentional — fixes the click-card bug) AND the
+header-overridden scoped value (regression — the explicit
+X-Hospital-Id path was getting ignored too).
+
+**Fix.** Added a `boolean headerOverridden` field to `HospitalContext`
+(defaults to `false`). `HospitalContextRequestOverrides.applyRequestOverrides`
+sets it to `true` whenever it successfully validates and applies an
+`X-Hospital-Id` header. `RoleValidator.requireActiveHospitalId()` now:
+
+```java
+if (ctx.isSuperAdmin()) {
+    if (ctx.isHeaderOverridden() && ctx.getActiveHospitalId() != null) {
+        return ctx.getActiveHospitalId();   // explicit chip-scope wins
+    }
+    return null;                            // global view (JWT-only primary dropped)
+}
+```
+
+This honours both the click-card fix (no header → null → unscoped
+fallback) AND the explicit scoping path (header → scoped value).
+
+**Tests.**
+- New `RoleValidatorTest.requireActiveHospitalId_returnsScopedHospital_forSuperAdminWithExplicitHeaderOverride`
+  asserts header-override is honoured for super-admin.
+- New `HospitalContextRequestOverridesTest.inScopeHeaderSwitchesActiveHospital`
+  extension asserts `headerOverridden = true` after a successful
+  header override.
+- New `HospitalContextRequestOverridesTest.noHeaderLeavesHeaderOverriddenFalse`
+  locks the no-header path stays at `false` so the JWT-primary
+  drop in `RoleValidator` keeps working.
+
+### C2 — Nested interactive elements in hospital-scope-chip.component.html — **Major (a11y)**
+
+> The template nests `<button class="hospital-scope-chip__clear">`
+> inside another `<button class="hospital-scope-chip__button">`.
+> Nested interactive elements are invalid HTML and break
+> click/keyboard behavior and screen-reader semantics.
+
+**Fix.** Restructured the chip template so the main "open overlay"
+button and the (conditional) clear button are SIBLINGS within the
+`.hospital-scope-chip` flex container, not nested. The chip's
+existing flex SCSS already supports the sibling layout (no style
+changes needed). Also added `[attr.title]` on the clear button
+alongside `[attr.aria-label]` to satisfy the `discernible-text`
+a11y lint rule on icon-only buttons.
+
+The chip Karma spec uses `[data-testid="hospital-scope-chip-clear"]`
+as the selector — unchanged by the un-nesting — so no test edits
+were needed.
+
+### C3 — `disableUrlSync` JSDoc claims it's configurable but it's hard-coded — **Minor**
+
+> Documented as something callers can turn on (“Use this on pages…”)
+> but it's `readonly disableUrlSync = false` with no `@Input` /
+> `input()` to actually configure it.
+
+**Fix.** Promoted `disableUrlSync` to an `@Input()` so callers can
+opt out:
+```html
+<app-hospital-scope-chip [disableUrlSync]="true" />
+```
+Added `Input` to the existing `@angular/core` import block.
+
+### C4 — Spanish translations missing for HOSPITAL_SCOPE.* + CONSULTATIONS.NO_DATA_GLOBAL — **Major (i18n)**
+
+> es.json is missing the new keys introduced by this PR. Spanish
+> users will see raw translation keys.
+
+**Fix.** Added a complete `HOSPITAL_SCOPE` block to es.json (placed
+alphabetically between `FEATURE_FLAGS` and `HOSPITALS`) with all
+seven top-level keys + the six `EMPTY_GLOBAL.*` entity-specific
+empty-state strings. Also added the missing
+`CONSULTATIONS.NO_DATA_GLOBAL` key. fr.json already had both —
+verified via grep. Spanish translations follow standard medical
+Spanish conventions (e.g. "encuentros" / "ingresos" / "derivaciones").
+
+### Sonar — Math.clamp instead of Math.max/min — **Major**
+
+**Fix.** `int safeLimit = Math.max(1, Math.min(limit, MAX))` →
+`int safeLimit = Math.clamp(limit, 1, HOSPITAL_SEARCH_MAX_LIMIT)`.
+Java 21+ idiom, single function call, no nesting.
+
+### Sonar — "createdAt" duplicated 8 times — **Critical**
+
+**Fix.** Extracted
+`private static final String CREATED_AT = "createdAt";` on
+`SuperAdminDashboardServiceImpl`. All 8 sort-spec usages now
+reference the constant. Comment notes the rationale (single update
+site if the BaseEntity audit-time mapping ever changes).
+
+### Sonar — `sanitizeLimit_clampsAtMax` had `assertThat(true).isTrue()` — **Major**
+
+> Replace this literal with the actual expression you want to assert.
+
+**Fix.** Rewrote the test to capture the `Pageable` flowing into
+`treatmentPlanService.listAll(...)` via `ArgumentCaptor` and assert
+`getPageSize() == 100` (the max-cap configured in `sanitizeLimit`).
+Replaces the previous "no-throw is enough" filler with a real
+behavioural assertion.
+
+### Verification
+
+- `./gradlew :hospital-core:test` — green (full suite + 2 new
+  RoleValidatorTest cases + 1 new HospitalContextRequestOverridesTest
+  case + assertion-bearing sanitizeLimit_clampsAtMax).
+- `./gradlew :hospital-core:build` — **BUILD SUCCESSFUL**.
+- `./gradlew :hospital-core:jacocoTestCoverageVerification` — green.
+  Filtered INSTRUCTION coverage **89.46%** (+9.46 above gate;
+  77,623 / 86,768 across the included classes).
+- Frontend Karma — **914/914 SUCCESS**.
+- `npm run format` clean. `npm run lint` clean.

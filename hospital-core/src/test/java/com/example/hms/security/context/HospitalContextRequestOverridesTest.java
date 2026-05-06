@@ -63,6 +63,28 @@ class HospitalContextRequestOverridesTest {
         assertThat(result.getPermittedHospitalIds())
             .as("permitted scope is unchanged by the override")
             .containsExactlyInAnyOrder(hospitalA, hospitalB);
+        assertThat(result.isHeaderOverridden())
+            .as("a successful X-Hospital-Id override must flip the marker so "
+                + "RoleValidator can distinguish it from the JWT-derived primary")
+            .isTrue();
+    }
+
+    @Test
+    void noHeaderLeavesHeaderOverriddenFalse() {
+        // Companion to the test above: when no X-Hospital-Id header is
+        // present, the context comes back unchanged AND headerOverridden
+        // stays false. RoleValidator depends on this distinction to drop
+        // the JWT-derived primary hospital for super-admins.
+        HospitalContext context = HospitalContext.builder()
+            .activeHospitalId(hospitalA)
+            .permittedHospitalIds(Set.of(hospitalA, hospitalB))
+            .build();
+
+        HospitalContext result = HospitalContextRequestOverrides
+            .applyRequestOverrides(context, new MockHttpServletRequest());
+
+        assertThat(result.getActiveHospitalId()).isEqualTo(hospitalA);
+        assertThat(result.isHeaderOverridden()).isFalse();
     }
 
     @Test

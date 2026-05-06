@@ -84,6 +84,14 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final AdmissionMapper admissionMapper;
 
     /**
+     * BaseEntity-mapped property name reused as the tiebreaker / null-safety
+     * fallback in every {@code getRecent*} sort spec. Extracted so a
+     * future rename (or migration to a different audit-time field) only
+     * needs to update one constant. Sonar S1192 (literal duplicated 8×).
+     */
+    private static final String CREATED_AT = "createdAt";
+
+    /**
      * Self-reference for the Spring AOP proxy. Used by
      * {@link #getRecentActivity(int, Locale)} to call the nine per-feed
      * {@code getRecent*} methods <i>through</i> the proxy so each one's
@@ -213,7 +221,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // `createdAt` breaks ties (and covers rows where encounterDate is
         // null, which can happen for very early drafts).
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc(CREATED_AT)));
         return encounterService
             .list(null, null, null, null, null, null, pageable, locale)
             .getContent();
@@ -254,7 +262,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // existing lab-order list path. Falls back to `createdAt` for
         // null-safety and stable ordering across same-second orders.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc(CREATED_AT)));
         return labOrderRepository.findAll(pageable)
             .map(labOrderMapper::toLabOrderResponseDTO)
             .getContent();
@@ -269,7 +277,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // `createdAt` breaks ties and covers rows where the lab system
         // never populated resultDate.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("resultDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("resultDate"), Sort.Order.desc(CREATED_AT)));
         return labResultService.getLabResultsPage(pageable, locale).getContent();
     }
 
@@ -277,7 +285,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<LabTestDefinitionResponseDTO> getRecentLabTestDefinitions(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
         return labTestDefinitionService
             .search(null, null, null, null, null, pageable)
             .getContent();
@@ -292,7 +300,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // late-entered or migrated admissions would otherwise show as
         // the newest. `createdAt` breaks ties.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc(CREATED_AT)));
         return admissionRepository.findAll(pageable)
             .map(admissionMapper::toResponseDTO)
             .getContent();
@@ -307,7 +315,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // provider authored the prescription. Other timestamps on the
         // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
         // workflow-stage events that are null for most rows.
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
         return prescriptionService.list(null, null, null, pageable, locale).getContent();
     }
 
@@ -319,7 +327,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // or migrated plans would otherwise show as the newest. Plans
         // without a start date yet (drafts) fall back to `createdAt`.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc(CREATED_AT)));
         return treatmentPlanService.listAll(null, pageable).getContent();
     }
 
@@ -332,7 +340,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // the right behaviour: a draft only counts as "activity" once it
         // is submitted.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc(CREATED_AT)));
         return generalReferralService.getRecentForSuperAdmin(pageable);
     }
 

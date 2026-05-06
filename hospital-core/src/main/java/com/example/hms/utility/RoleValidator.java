@@ -146,9 +146,10 @@ public class RoleValidator {
      *
      * <p><b>Order of resolution (matters):</b>
      * <ol>
-     *   <li><b>Real super-admin (JWT claim) ⇒ {@code null}</b>. Closes
-     *       both (a) the F1 impersonation correctness gap from design
-     *       call #1 — authorities can be inflated, the JWT
+     *   <li><b>Real super-admin (JWT claim) without an explicit
+     *       {@code X-Hospital-Id} override ⇒ {@code null}.</b> Closes
+     *       (a) the F1 impersonation correctness gap from design call
+     *       #1 — authorities can be inflated, the JWT
      *       {@code isSuperAdmin} claim cannot — and (b) the
      *       "click-card → no data" cross-tenant bug: when no
      *       {@code X-Hospital-Id} header is sent (super-admin in global
@@ -156,12 +157,15 @@ public class RoleValidator {
      *       still populates {@code HospitalContext.activeHospitalId}
      *       from the {@code primaryHospitalId} JWT claim. Without this
      *       early-out we'd silently re-scope every list endpoint to
-     *       the super-admin's home hospital, returning 0 rows while
-     *       the dashboard counters (which call
-     *       {@code repository.count()} directly) continue to show
-     *       correct cross-tenant totals. Super-admin scoped via the
-     *       chip passes {@code ?hospitalId=…} on the controller, so
-     *       the service never reaches this fallback.</li>
+     *       the super-admin's home hospital. <b>However</b>, when the
+     *       super-admin <i>did</i> send an {@code X-Hospital-Id} header
+     *       (chip-scoped view), {@link
+     *       com.example.hms.security.context.HospitalContextRequestOverrides}
+     *       sets {@code headerOverridden=true} on the context — in
+     *       that case we honour the explicit scope. Super-admin via
+     *       {@code ?hospitalId=…} query param doesn't reach this
+     *       fallback because the controller passes the param straight
+     *       to the service.</li>
      *   <li>HospitalContext (populated by JwtAuthenticationFilter from
      *       the X-Hospital-Id header).</li>
      *   <li>Single active assignment (DB lookup).</li>
@@ -175,8 +179,13 @@ public class RoleValidator {
         com.example.hms.security.context.HospitalContext ctx =
             com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
 
-        // 1. Real super-admin (per JWT claim, not authorities) — see Javadoc above.
+        // 1. Real super-admin (per JWT claim, not authorities). Honour an
+        //    explicit X-Hospital-Id header override (chip-scoped view);
+        //    drop the JWT-derived primary (global view).
         if (ctx.isSuperAdmin()) {
+            if (ctx.isHeaderOverridden() && ctx.getActiveHospitalId() != null) {
+                return ctx.getActiveHospitalId();
+            }
             return null;
         }
         // 2. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)

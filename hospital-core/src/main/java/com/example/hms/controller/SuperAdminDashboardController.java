@@ -380,7 +380,8 @@ public class SuperAdminDashboardController {
             return ResponseEntity.ok(Collections.emptyList());
         }
 
-        int safeLimit = Math.max(1, Math.min(limit, HOSPITAL_SEARCH_MAX_LIMIT));
+        // Java 21+ Math.clamp(value, min, max) replaces Math.max(min, Math.min(max, value)).
+        int safeLimit = Math.clamp(limit, 1, HOSPITAL_SEARCH_MAX_LIMIT);
         // active=true: typeahead never offers archived/suspended tenants as a scope.
         List<HospitalResponseDTO> results = hospitalService.searchHospitals(
             trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);

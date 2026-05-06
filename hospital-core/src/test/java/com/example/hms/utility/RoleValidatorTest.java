@@ -162,20 +162,49 @@ class RoleValidatorTest {
      * correct global totals while the per-resource list pages returned
      * 0 rows because they were filtered to the super-admin's home
      * hospital. After the fix, super-admin (per JWT claim) short-circuits
-     * to {@code null} regardless of any JWT-derived activeHospitalId.
+     * to {@code null} when {@code headerOverridden} is false (no
+     * explicit scope) regardless of any JWT-derived activeHospitalId.
      */
     @Test
     void requireActiveHospitalId_returnsNullForSuperAdmin_evenWhenJwtPopulatesActiveHospitalId() {
         // Real super-admin: JWT claim says so, AND JwtTokenProvider
         // pre-populated activeHospitalId from CLAIM_PRIMARY_HOSPITAL_ID.
+        // headerOverridden=false because no X-Hospital-Id header was sent.
         HospitalContextHolder.setContext(
             HospitalContext.builder()
                 .superAdmin(true)
                 .activeHospitalId(UUID.randomUUID()) // primary hospital from JWT
+                .headerOverridden(false)
                 .build());
 
         assertThat(roleValidator.requireActiveHospitalId()).isNull();
         // Resolved entirely from HospitalContext — no DB lookup needed.
+        Mockito.verifyNoInteractions(assignmentRepository);
+    }
+
+    /**
+     * Companion to the test above (Copilot review on the F1 fixup,
+     * 2026-05-06): when a super-admin <i>did</i> send an explicit
+     * {@code X-Hospital-Id} header — chip-scoped view —
+     * {@code HospitalContextRequestOverrides} flips
+     * {@code headerOverridden=true}. The fallback must honour that
+     * scope and return the header-derived hospital id, otherwise
+     * scoped super-admin endpoints (LookupController, the
+     * cross-tenant validators in EncounterTreatmentServiceImpl /
+     * TreatmentPlanServiceImpl) silently run unscoped — which is
+     * exactly the regression Copilot flagged.
+     */
+    @Test
+    void requireActiveHospitalId_returnsScopedHospital_forSuperAdminWithExplicitHeaderOverride() {
+        UUID scopedHospital = UUID.randomUUID();
+        HospitalContextHolder.setContext(
+            HospitalContext.builder()
+                .superAdmin(true)
+                .activeHospitalId(scopedHospital)
+                .headerOverridden(true) // X-Hospital-Id header was sent
+                .build());
+
+        assertThat(roleValidator.requireActiveHospitalId()).isEqualTo(scopedHospital);
         Mockito.verifyNoInteractions(assignmentRepository);
     }
 

@@ -312,16 +312,23 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void sanitizeLimit_clampsAtMax() {
+        // The max-cap branch in sanitizeLimit(requested, default=20, max=100)
+        // must return 100 for any value above that. Prove it by capturing the
+        // Pageable that flows into treatmentPlanService and asserting its
+        // page size — Sonar S2701 / S2699 (literal-as-assertion / no
+        // assertion) guard against the previous `assertThat(true).isTrue()`
+        // shape.
         when(treatmentPlanService.listAll(any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
         service.getRecentTreatmentPlans(10_000);
 
-        // Verifying the path that exercises the max-cap branch in sanitizeLimit;
-        // a successful invocation is sufficient (no exception, defaults applied).
-        // The bounded behaviour is asserted by the absence of failure here and by
-        // the limit-applied tests above.
-        assertThat(true).isTrue();
+        org.mockito.ArgumentCaptor<Pageable> captor =
+            org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(treatmentPlanService).listAll(any(), captor.capture());
+        assertThat(captor.getValue().getPageSize())
+            .as("requested limit 10_000 must be clamped to the max cap (100)")
+            .isEqualTo(100);
     }
 
     /* ────────────────────────────────────────────────────────────────────
