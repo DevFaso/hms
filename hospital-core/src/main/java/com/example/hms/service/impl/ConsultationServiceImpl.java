@@ -24,6 +24,7 @@ import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -165,6 +166,14 @@ public class ConsultationServiceImpl implements ConsultationService {
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
+        return consultationRepository.findAll(pageable)
+            .map(this::toResponseDTO)
+            .getContent();
     }
 
     @Override

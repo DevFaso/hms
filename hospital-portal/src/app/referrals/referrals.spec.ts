@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
@@ -40,9 +41,21 @@ describe('ReferralsComponent', () => {
   };
 
   beforeEach(async () => {
-    roleContextStub = jasmine.createSpyObj('RoleContextService', [], {
-      isSuperAdmin: signal(false),
-    });
+    // Cross-tenant chip injects RoleContextService and reads three
+    // signals (isSuperAdmin / globalView / selectedHospitalId) plus two
+    // mutators (scopeToHospital / enableGlobalView). The chip itself
+    // also calls `effectiveHospitalIdForRequest()` indirectly via the
+    // auth interceptor, but in unit tests `provideHttpClientTesting()`
+    // bypasses interceptors entirely so we don't need to stub it.
+    roleContextStub = jasmine.createSpyObj(
+      'RoleContextService',
+      ['scopeToHospital', 'enableGlobalView'],
+      {
+        isSuperAdmin: signal(false),
+        globalView: signal(false),
+        selectedHospitalId: signal<string | null>(null),
+      },
+    );
     authStub = jasmine.createSpyObj('AuthService', ['getUserProfile']);
     authStub.getUserProfile.and.returnValue({ staffId: 'staff-1' } as any);
 
@@ -51,6 +64,7 @@ describe('ReferralsComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: RoleContextService, useValue: roleContextStub },
         { provide: AuthService, useValue: authStub },
       ],

@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -16,12 +17,14 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 @Component({
   selector: 'app-consultations',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './consultations.html',
   styleUrl: './consultations.scss',
 })
@@ -32,6 +35,17 @@ export class ConsultationsComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /**
+   * Cross-tenant: expose super-admin global-view state to the template
+   * so the "Hospital" column can be conditionally rendered. We expose
+   * the signals (not the booleans) so OnPush change detection picks
+   * them up automatically. See docs/super-admin-cross-tenant-design.md.
+   */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
@@ -116,9 +130,27 @@ export class ConsultationsComponent implements OnInit {
   };
 
   ngOnInit(): void {
+    // Cross-tenant: apply the URL scope BEFORE the first list fetch so
+    // the auth interceptor reads the right X-Hospital-Id on initial
+    // load (otherwise child-component lifecycle order would let the
+    // host fire its first request under the default global-view scope
+    // and immediately re-fetch after the chip's ngOnInit). The chip
+    // additionally fetches the hospital name for its label.
+    // See docs/super-admin-cross-tenant-design.md "URL state".
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.load();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.loadStats();
+  }
+
+  /**
+   * Fired by the chip after the super-admin picks a hospital (or "All").
+   * The chip handles the URL round-trip itself; we only need to re-fetch
+   * the list and the summary stats under the new scope.
+   */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
     this.loadStats();
   }
 

@@ -128,7 +128,20 @@ public class TenantArchiveEncryptionServiceImpl implements TenantArchiveEncrypti
             return true;
         }
         for (String p : profiles) {
-            if (p.contains("dev") || p.contains("test") || "default".equals(p)) {
+            // Substring-match on the dev/test/local family so variants
+            // like `local-h2`, `dev-uat`, `unit-test` all light up the
+            // same gate without having to be enumerated. Production
+            // profiles (`prod`, `staging`) intentionally don't contain
+            // any of these tokens and so fall through to the strict
+            // KEK-required path. The seeders elsewhere in the project
+            // (RoleSeeder, OrganizationSecuritySeeder,
+            // DevSyntheticDataSeeder, HospitalOrganizationAlignmentRunner)
+            // treat `local` and `local-h2` as dev-equivalent — keeping
+            // this gate consistent with that convention.
+            if (p.contains("dev")
+                || p.contains("test")
+                || p.contains("local")
+                || "default".equals(p)) {
                 return true;
             }
         }

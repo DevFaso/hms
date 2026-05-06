@@ -9,6 +9,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -130,6 +131,15 @@ class LabResultControllerTest {
         List<String> roles = extractRolesFromMethod("getPendingReview",
                 UUID.class, Locale.class);
         assertThat(roles).contains("DOCTOR", "LAB_SCIENTIST", "NURSE", "MIDWIFE");
+    }
+
+    // ── getAllLabResults must include SUPER_ADMIN for cross-tenant browsing ──
+
+    @Test
+    void getAllLabResults_preAuthorize_includesSuperAdmin() throws Exception {
+        List<String> roles = extractRolesFromMethod("getAllLabResults",
+                Pageable.class, Locale.class);
+        assertThat(roles).contains("SUPER_ADMIN");
     }
 
     // ── releaseLabResult should NOT include LAB_TECHNICIAN (Gap 11 — intentional) ──

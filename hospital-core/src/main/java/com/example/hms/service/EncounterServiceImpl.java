@@ -1101,13 +1101,16 @@ public class EncounterServiceImpl implements EncounterService {
                                            EncounterStatus status,
                                            Pageable pageable,
                                            Locale locale) {
-        // SECURITY: Non-superadmin must always have hospital scope
-        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
-            // Try to resolve from context
+        // ── Tenant isolation ──────────────────────────────────────────
+        // Match the ConsultationServiceImpl.getAllConsultations pattern
+        // (docs/super-admin-cross-tenant-design.md): when no hospitalId
+        // is supplied, fall back to the X-Hospital-Id header. If that
+        // resolution returns null we are guaranteed to be a super-admin
+        // in cross-tenant ("global view") mode — RoleValidator throws
+        // for non-super-admins with no scope — so we leave hospitalId
+        // null and the spec below issues an unscoped findAll.
+        if (hospitalId == null) {
             hospitalId = roleValidator.requireActiveHospitalId();
-            if (hospitalId == null) {
-                throw new BusinessException("Hospital context required to list encounters.");
-            }
         }
 
         Specification<Encounter> spec = alwaysTrue();

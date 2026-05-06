@@ -84,6 +84,12 @@ public final class HospitalContextRequestOverrides {
 
         return effective.toBuilder()
             .activeHospitalId(requestedHospital)
+            // Mark the context so RoleValidator can distinguish a
+            // header-overridden hospital from a JWT-derived primary.
+            // Super-admins specifically need this: their JWT carries a
+            // primary hospital, but the design treats them as global by
+            // default — only an explicit header scope should pin them.
+            .headerOverridden(true)
             .build();
     }
 }

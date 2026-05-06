@@ -5,6 +5,11 @@
       <p class="page-subtitle">{{ 'REFERRALS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Cross-tenant scope chip — super-admin only
+           (docs/super-admin-cross-tenant-design.md). For referrals,
+           the "Hospital" column shows the *referring* hospital — not the
+           receiving one (which is already a column on the table). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span> {{ 'REFERRALS.NEW' | translate }}
       </button>
@@ -94,7 +99,11 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">send</span>
-      <h3>{{ 'REFERRALS.NO_REFERRALS' | translate }}</h3>
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.REFERRALS' | translate }}</h3>
+      } @else {
+        <h3>{{ 'REFERRALS.NO_REFERRALS' | translate }}</h3>
+      }
       <p>{{ 'REFERRALS.WILL_APPEAR' | translate }}</p>
     </div>
   }
@@ -103,6 +112,9 @@
       <table>
         <thead>
           <tr>
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
             <th scope="col">{{ 'REFERRALS.SPECIALTY' | translate }}</th>
             <th scope="col">{{ 'REFERRALS.REFERRING' | translate }}</th>
@@ -115,6 +127,11 @@
         <tbody>
           @for (r of filtered(); track r.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ r.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">{{ r.patientName || 'Unknown' }}</div>
                 <div class="cell-secondary">{{ r.patientMrn }}</div>

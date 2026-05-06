@@ -72,6 +72,46 @@ class TenantArchiveEncryptionServiceImplTest {
             .hasMessageContaining("only permitted in dev/test");
     }
 
+    /**
+     * Regression: the dev/test gate originally substring-matched only
+     * `dev` / `test` / `default`, which caused the app to refuse to
+     * boot under `local-h2` (the project's standard local profile —
+     * see RoleSeeder, OrganizationSecuritySeeder, DevSyntheticDataSeeder
+     * which all use {@code @Profile({"local", "local-h2"})}). The gate
+     * now also matches the `local` substring family so `local`,
+     * `local-h2`, and similar variants are treated as dev-equivalent.
+     */
+    @Test
+    void noopModeIsAllowedUnderLocalH2Profile(@TempDir Path tmp) throws IOException {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("local-h2");
+        TenantArchiveEncryptionServiceImpl service = serviceWith(env, "noop", null);
+
+        Path plain = samplePlaintext(tmp, "local-h2-roundtrip");
+        Path out = tmp.resolve("local-h2.zip.enc");
+
+        TenantArchiveEncryptionService.EncryptionResult result = service.encryptArchive(plain, out);
+
+        assertThat(result.mode())
+            .isEqualTo(TenantArchiveEncryptionService.EncryptionResult.Mode.NOOP);
+        assertThat(Files.readString(out)).isEqualTo("local-h2-roundtrip");
+    }
+
+    @Test
+    void noopModeIsAllowedUnderPlainLocalProfile(@TempDir Path tmp) throws IOException {
+        MockEnvironment env = new MockEnvironment();
+        env.setActiveProfiles("local");
+        TenantArchiveEncryptionServiceImpl service = serviceWith(env, "noop", null);
+
+        Path plain = samplePlaintext(tmp, "local-roundtrip");
+        Path out = tmp.resolve("local.zip.enc");
+
+        TenantArchiveEncryptionService.EncryptionResult result = service.encryptArchive(plain, out);
+
+        assertThat(result.mode())
+            .isEqualTo(TenantArchiveEncryptionService.EncryptionResult.Mode.NOOP);
+    }
+
     @Test
     void envModeRoundTripsCiphertext(@TempDir Path tmp) throws Exception {
         MockEnvironment env = new MockEnvironment();

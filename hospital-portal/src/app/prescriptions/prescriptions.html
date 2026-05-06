@@ -5,6 +5,9 @@
       <p class="page-subtitle">{{ 'PRESCRIPTIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Cross-tenant scope chip — super-admin only
+           (docs/super-admin-cross-tenant-design.md). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span> {{ 'PRESCRIPTIONS.NEW' | translate }}
       </button>
@@ -94,7 +97,11 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medication</span>
-      <h3>{{ 'PRESCRIPTIONS.NO_RESULTS' | translate }}</h3>
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.PRESCRIPTIONS' | translate }}</h3>
+      } @else {
+        <h3>{{ 'PRESCRIPTIONS.NO_RESULTS' | translate }}</h3>
+      }
       <p>{{ 'PRESCRIPTIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
   }
@@ -103,6 +110,9 @@
       <table>
         <thead>
           <tr>
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
             <th scope="col">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</th>
             <th scope="col">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</th>
@@ -116,6 +126,11 @@
         <tbody>
           @for (p of filtered(); track p.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ p.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">
                   {{ p.patientFullName ? p.patientFullName : ('COMMON.UNKNOWN' | translate) }}

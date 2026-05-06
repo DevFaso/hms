@@ -27,6 +27,13 @@ public class PrescriptionResponseDTO {
 
     private UUID encounterId;
     private UUID hospitalId;
+    /**
+     * Display name of the prescription's hospital.
+     * Required by the super-admin cross-tenant list view
+     * (docs/super-admin-cross-tenant-design.md) so the global "Hospital"
+     * column can render without an N+1 lookup.
+     */
+    private String hospitalName;
 
     private String medicationName;
     private String medicationDisplayName;

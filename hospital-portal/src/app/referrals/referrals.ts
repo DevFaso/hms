@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -13,13 +14,15 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './referrals.html',
   styleUrl: './referrals.scss',
 })
@@ -30,6 +33,12 @@ export class ReferralsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
@@ -145,10 +154,20 @@ export class ReferralsComponent implements OnInit {
   ];
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.load();
     this.loadAssignedHospitals();
     this.loadAllHospitals();
     this.initPatientSearch();
+  }
+
+  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
   }
 
   emptyForm(): ReferralRequest {

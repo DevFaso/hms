@@ -93,4 +93,81 @@ describe('RoleContextService', () => {
     expect(svc.hasRole('ROLE_DOCTOR')).toBeTrue();
     expect(svc.hasRole('ROLE_NURSE')).toBeFalse();
   });
+
+  // ── Cross-tenant scope (super-admin global view) ────────────
+  //   docs/super-admin-cross-tenant-design.md
+
+  it('starts with globalView=false and selectedHospitalId=null by default', () => {
+    expect(svc.globalView()).toBeFalse();
+    expect(svc.selectedHospitalId()).toBeNull();
+  });
+
+  it('markSuperAdminGlobalDefaults flips globalView for SUPER_ADMIN only', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.markSuperAdminGlobalDefaults();
+    expect(svc.globalView()).toBeTrue();
+    expect(svc.selectedHospitalId()).toBeNull();
+  });
+
+  it('markSuperAdminGlobalDefaults is a no-op for non-super-admin roles', () => {
+    svc.setRoles(['ROLE_DOCTOR']);
+    svc.markSuperAdminGlobalDefaults();
+    expect(svc.globalView()).toBeFalse();
+  });
+
+  it('scopeToHospital pins the user to a hospital and clears globalView', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.markSuperAdminGlobalDefaults();
+    svc.scopeToHospital('hosp-42');
+    expect(svc.globalView()).toBeFalse();
+    expect(svc.selectedHospitalId()).toBe('hosp-42');
+  });
+
+  it('scopeToHospital ignores empty hospital IDs', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.scopeToHospital('hosp-42');
+    svc.scopeToHospital('');
+    expect(svc.selectedHospitalId()).toBe('hosp-42');
+  });
+
+  it('enableGlobalView clears the selected hospital', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.scopeToHospital('hosp-42');
+    svc.enableGlobalView();
+    expect(svc.globalView()).toBeTrue();
+    expect(svc.selectedHospitalId()).toBeNull();
+  });
+
+  // ── effectiveHospitalIdForRequest (auth interceptor contract) ──
+  //   The interceptor uses this signal as the X-Hospital-Id header
+  //   value. A null result means "omit the header entirely".
+
+  it('effectiveHospitalIdForRequest is null for super-admin in global view', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.markSuperAdminGlobalDefaults();
+    expect(svc.effectiveHospitalIdForRequest()).toBeNull();
+  });
+
+  it('effectiveHospitalIdForRequest returns the selected hospital for scoped super-admin', () => {
+    svc.setRoles(['ROLE_SUPER_ADMIN']);
+    svc.scopeToHospital('hosp-42');
+    expect(svc.effectiveHospitalIdForRequest()).toBe('hosp-42');
+  });
+
+  it('effectiveHospitalIdForRequest returns activeHospitalId for non-super-admin', () => {
+    svc.setRoles(['ROLE_DOCTOR']);
+    svc.activeHospitalId = 'hosp-7';
+    expect(svc.effectiveHospitalIdForRequest()).toBe('hosp-7');
+  });
+
+  it('effectiveHospitalIdForRequest never leaks selectedHospitalId for non-super-admin', () => {
+    // Defensive: even if selectedHospitalId somehow got set on a non-super-admin
+    // (it shouldn't — `scopeToHospital` is gated by the chip, which only renders
+    // for super-admins — but the signal's mutator doesn't itself check the role),
+    // the computed must still return the user's regular activeHospitalId.
+    svc.setRoles(['ROLE_NURSE']);
+    svc.activeHospitalId = 'hosp-7';
+    svc.scopeToHospital('hosp-99');
+    expect(svc.effectiveHospitalIdForRequest()).toBe('hosp-7');
+  });
 });

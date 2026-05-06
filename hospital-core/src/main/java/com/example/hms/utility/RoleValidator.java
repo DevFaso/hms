@@ -52,6 +52,32 @@ public class RoleValidator {
     }
 
     public boolean isSuperAdminFromAuth() { return hasAuthority("SUPER_ADMIN"); }
+
+    /**
+     * Authoritative super-admin check based on the discrete
+     * {@code isSuperAdmin} JWT claim (mirrored into
+     * {@link com.example.hms.security.context.HospitalContext#isSuperAdmin()}
+     * by {@link com.example.hms.security.JwtTokenProvider#buildHospitalContext}),
+     * <b>not</b> on the inflated authorities collection.
+     *
+     * <p>Why this matters: {@code JwtTokenProvider.getAuthenticationFromJwt}
+     * inflates a real super-admin's {@code ROLE_SUPER_ADMIN} authority to
+     * also carry {@code ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, …}
+     * so per-hospital staff checks "just work". An impersonation context
+     * (or any future code path that copies authorities verbatim) could
+     * therefore present {@code ROLE_SUPER_ADMIN} in {@code authorities}
+     * without the principal actually being a super-admin. The discrete
+     * {@code isSuperAdmin} claim is set only when the token was minted
+     * for a real super-admin, so it's the only safe signal for
+     * cross-tenant authorisation decisions. See design call #1 in
+     * {@code docs/super-admin-cross-tenant-design.md}.</p>
+     */
+    public boolean isSuperAdminFromJwtClaim() {
+        return com.example.hms.security.context.HospitalContextHolder
+            .getContextOrEmpty()
+            .isSuperAdmin();
+    }
+
     public boolean isHospitalAdminFromAuthGlobalOnly() { return hasAuthority(HOSPITAL_ADMIN_ROLE); }
     public boolean isPatientFromAuth() { return hasAuthority("PATIENT"); }
 
@@ -87,32 +113,94 @@ public class RoleValidator {
         return null;
     }
 
-    /** Resolve a single current hospital if there's exactly one active assignment */
+    /**
+     * Resolve a single current hospital if there's exactly one active
+     * assignment that has a hospital attached.
+     *
+     * <p>Important nuance: {@link UserRoleHospitalAssignment#getHospital()}
+     * is legally nullable (no {@code optional=false} on the JPA mapping).
+     * A {@code null} hospital represents a <b>global</b> assignment —
+     * the typical shape for a SUPER_ADMIN role granted without a tenant
+     * scope. Before the cross-tenant list-pages slice this method was
+     * rarely reached for super-admins (the {@code X-Hospital-Id} header
+     * was always set), but the new "global view" deliberately omits the
+     * header, so this method runs and used to NPE on
+     * {@code .getHospital().getId()} when the single assignment was
+     * global. Now we treat that case the same as "no resolvable single
+     * hospital" and return {@code null}, letting the caller's super-admin
+     * branch in {@link #requireActiveHospitalId()} take over.
+     */
     public UUID getCurrentHospitalId() {
         UUID uid = getCurrentUserId();
         if (uid == null) return null;
         List<UserRoleHospitalAssignment> active = assignmentRepository.findByUser_IdAndActiveTrue(uid);
-        return (active.size() == 1) ? active.get(0).getHospital().getId() : null;
+        if (active.size() != 1) return null;
+        var hospital = active.get(0).getHospital();
+        return hospital != null ? hospital.getId() : null;
     }
 
     /**
      * Returns the active hospital ID from HospitalContext (set via X-Hospital-Id header + JWT validation).
      * Falls back to single-assignment detection. Throws if no hospital can be determined and user is not super-admin.
      * This is the <b>mandatory</b> method for all hospital-scoped operations.
+     *
+     * <p><b>Order of resolution (matters):</b>
+     * <ol>
+     *   <li><b>Real super-admin (JWT claim) without an explicit
+     *       {@code X-Hospital-Id} override ⇒ {@code null}.</b> Closes
+     *       (a) the F1 impersonation correctness gap from design call
+     *       #1 — authorities can be inflated, the JWT
+     *       {@code isSuperAdmin} claim cannot — and (b) the
+     *       "click-card → no data" cross-tenant bug: when no
+     *       {@code X-Hospital-Id} header is sent (super-admin in global
+     *       view), {@link com.example.hms.security.JwtTokenProvider}
+     *       still populates {@code HospitalContext.activeHospitalId}
+     *       from the {@code primaryHospitalId} JWT claim. Without this
+     *       early-out we'd silently re-scope every list endpoint to
+     *       the super-admin's home hospital. <b>However</b>, when the
+     *       super-admin <i>did</i> send an {@code X-Hospital-Id} header
+     *       (chip-scoped view), {@link
+     *       com.example.hms.security.context.HospitalContextRequestOverrides}
+     *       sets {@code headerOverridden=true} on the context — in
+     *       that case we honour the explicit scope. Super-admin via
+     *       {@code ?hospitalId=…} query param doesn't reach this
+     *       fallback because the controller passes the param straight
+     *       to the service.</li>
+     *   <li>HospitalContext (populated by JwtAuthenticationFilter from
+     *       the X-Hospital-Id header).</li>
+     *   <li>Single active assignment (DB lookup).</li>
+     *   <li>Authorities-based super-admin safety net — left in place so
+     *       paths where {@code HospitalContext} isn't populated (legacy
+     *       tests, edge entrypoints) still get the unscoped
+     *       short-circuit instead of throwing.</li>
+     * </ol>
      */
     public UUID requireActiveHospitalId() {
-        // 1. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)
         com.example.hms.security.context.HospitalContext ctx =
             com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
+
+        // 1. Real super-admin (per JWT claim, not authorities). Honour an
+        //    explicit X-Hospital-Id header override (chip-scoped view);
+        //    drop the JWT-derived primary (global view).
+        if (ctx.isSuperAdmin()) {
+            if (ctx.isHeaderOverridden() && ctx.getActiveHospitalId() != null) {
+                return ctx.getActiveHospitalId();
+            }
+            return null;
+        }
+        // 2. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)
         if (ctx.getActiveHospitalId() != null) {
             return ctx.getActiveHospitalId();
         }
-        // 2. Fallback: single active assignment
+        // 3. Fallback: single active assignment
         UUID singleHospital = getCurrentHospitalId();
         if (singleHospital != null) {
             return singleHospital;
         }
-        // 3. Super-admin may operate without hospital scope
+        // 4. Super-admin safety net for paths without populated HospitalContext.
+        //    The primary check is step 1; this only fires when ctx.isSuperAdmin()
+        //    is false (e.g. unit tests bypassing the filter chain) but the
+        //    authorities still mark the principal as super-admin.
         if (isSuperAdminFromAuth()) {
             return null; // super-admin can see cross-hospital
         }

@@ -1,6 +1,7 @@
 package com.example.hms.mapper;
 
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
@@ -32,7 +33,8 @@ public class PrescriptionMapper {
             .staffFullName(resolveStaffFullName(staff))
 
             .encounterId(enc != null ? enc.getId() : null)
-            .hospitalId(resolveHospitalId(enc))
+            .hospitalId(resolveHospitalId(p, enc))
+            .hospitalName(resolveHospitalName(p, enc))
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
@@ -135,8 +137,26 @@ public class PrescriptionMapper {
         return buildFullName(patient.getFirstName(), patient.getLastName());
     }
 
-    private java.util.UUID resolveHospitalId(Encounter enc) {
-        return enc != null && enc.getHospital() != null ? enc.getHospital().getId() : null;
+    /**
+     * Resolve the prescription's hospital, preferring the prescription's own
+     * `hospital` field (set by `toEntity`) and falling back to the encounter
+     * for older rows written before that field was always populated.
+     */
+    private Hospital resolveHospital(Prescription p, Encounter enc) {
+        if (p != null && p.getHospital() != null) {
+            return p.getHospital();
+        }
+        return enc != null ? enc.getHospital() : null;
+    }
+
+    private java.util.UUID resolveHospitalId(Prescription p, Encounter enc) {
+        Hospital h = resolveHospital(p, enc);
+        return h != null ? h.getId() : null;
+    }
+
+    private String resolveHospitalName(Prescription p, Encounter enc) {
+        Hospital h = resolveHospital(p, enc);
+        return h != null ? h.getName() : null;
     }
 
     private String buildFullName(String first, String last) {

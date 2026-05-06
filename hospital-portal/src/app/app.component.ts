@@ -81,6 +81,13 @@ export class AppComponent implements OnInit {
           this.roleContext.activeHospitalId = profile.primaryHospitalId;
         }
       }
+
+      // Cross-tenant: super-admins land on every list page in "all
+      // hospitals" mode by default (design call #5 in
+      // docs/super-admin-cross-tenant-design.md). Defaulting to their
+      // primary hospital here would silently re-introduce the bug we
+      // are fixing. No-op for non-super-admin roles.
+      this.roleContext.markSuperAdminGlobalDefaults();
     }
   }
 }

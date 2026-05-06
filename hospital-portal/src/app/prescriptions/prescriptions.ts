@@ -15,14 +15,22 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CdsCardListComponent,
+    HospitalScopeChipComponent,
+  ],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',
 })
@@ -34,6 +42,11 @@ export class PrescriptionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly communityPharmacyService = inject(CommunityPharmacyService);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   prescriptions = signal<PrescriptionResponse[]>([]);
   filtered = signal<PrescriptionResponse[]>([]);
@@ -72,6 +85,11 @@ export class PrescriptionsComponent implements OnInit {
   cdsCriticalBlocked = signal(false);
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.load();
     this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
     this.initPatientSearch();
@@ -288,6 +306,11 @@ export class PrescriptionsComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
   }
 
   load(): void {

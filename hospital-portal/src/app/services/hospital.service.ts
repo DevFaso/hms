@@ -108,4 +108,19 @@ export class HospitalService {
   getMyHospitalAsResponse(): Observable<HospitalResponse> {
     return this.getMyHospital().pipe(map((h) => ({ id: h.id, name: h.name }) as HospitalResponse));
   }
+
+  /**
+   * Server-side typeahead used by the super-admin hospital-scope chip
+   * (docs/super-admin-cross-tenant-design.md). Backed by
+   * `GET /super-admin/hospitals/search?q=&limit=`, which is gated on
+   * the dedicated `isSuperAdmin` JWT claim and capped at 20 results
+   * server-side.
+   *
+   * Caller is expected to debounce keystrokes (300 ms) and to have
+   * already filtered out queries shorter than 2 characters.
+   */
+  searchHospitals(q: string, limit = 20): Observable<HospitalResponse[]> {
+    const params = new HttpParams().set('q', q).set('limit', String(limit));
+    return this.http.get<HospitalResponse[]>('/super-admin/hospitals/search', { params });
+  }
 }

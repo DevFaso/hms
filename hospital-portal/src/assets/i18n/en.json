@@ -67,6 +67,9 @@
     "QUICK_LINKS": "Quick links",
     "RECENT_AUDIT": "Recent audit events",
     "VIEW_ALL_AUDIT": "View all audit logs",
+    "CLINICAL_OVERVIEW": "Clinical overview",
+    "RECENT_CLINICAL_ACTIVITY": "Recent clinical activity",
+    "ACTIVITY_EMPTY": "No recent items in this category yet.",
     "STAT": {
       "ORGANIZATIONS": "Organizations",
       "HOSPITALS": "Hospitals",
@@ -76,7 +79,16 @@
       "DEPARTMENTS": "Departments",
       "ROLES": "Roles",
       "ASSIGNMENTS": "Role assignments",
-      "ACTIVE": "active"
+      "ACTIVE": "active",
+      "ENCOUNTERS": "Encounters",
+      "CONSULTATIONS": "Consultations",
+      "ADMISSIONS": "Admissions",
+      "PRESCRIPTIONS": "Prescriptions",
+      "LAB_ORDERS": "Lab orders",
+      "LAB_RESULTS": "Lab results",
+      "LAB_TEST_DEFINITIONS": "Lab test catalogue",
+      "TREATMENT_PLANS": "Treatment plans",
+      "REFERRALS": "Referrals"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Total integrations",
@@ -1266,6 +1278,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGED": "Acknowledged",
+    "NO_DATA_GLOBAL": "No consultations across any of your hospitals.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Additional notes...",
     "ASSIGN": "Assign",
     "ASSIGNED": "Assigned",
@@ -1801,6 +1814,23 @@
     "SUBTITLE": "Manage feature toggles",
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle"
+  },
+  "HOSPITAL_SCOPE": {
+    "ALL_HOSPITALS": "All hospitals",
+    "CLEAR": "Clear hospital scope",
+    "FILTER_BY_HOSPITAL": "Filter by hospital",
+    "HOSPITAL_COLUMN": "Hospital",
+    "NO_MATCHES": "No hospitals match your search.",
+    "SCOPED": "Hospital",
+    "SEARCH_ERROR": "Couldn’t load hospitals. Please try again.",
+    "EMPTY_GLOBAL": {
+      "ENCOUNTERS": "No encounters across any of your hospitals.",
+      "LAB_RESULTS": "No lab results across any of your hospitals.",
+      "ADMISSIONS": "No admissions across any of your hospitals.",
+      "PRESCRIPTIONS": "No prescriptions across any of your hospitals.",
+      "TREATMENT_PLANS": "No treatment plans across any of your hospitals.",
+      "REFERRALS": "No referrals across any of your hospitals."
+    }
   },
   "HOSPITALS": {
     "ADDRESS": "Address / Street",
