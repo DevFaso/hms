@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
@@ -11,11 +12,14 @@ import {
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
+import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 @Component({
   selector: 'app-lab-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
   templateUrl: './lab-results.html',
   styleUrl: './lab-results.scss',
 })
@@ -24,6 +28,13 @@ export class LabResultsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly profileService = inject(ProfileService);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   loading = signal(true);
   results = signal<LabResultResponse[]>([]);
@@ -51,6 +62,11 @@ export class LabResultsComponent implements OnInit {
   selectedResult = signal<LabResultResponse | null>(null);
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.loadResults();
     this.labService.listOrders({ size: 500 }).subscribe((list) => this.orders.set(list));
     this.profileService.getAssignments().subscribe({
@@ -59,6 +75,11 @@ export class LabResultsComponent implements OnInit {
         if (active) this.activeAssignmentId = active.id;
       },
     });
+  }
+
+  /** Re-fetch under the new scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.loadResults();
   }
 
   /** Format a Date as YYYY-MM-DDTHH:mm in the user's local timezone (for datetime-local inputs). */

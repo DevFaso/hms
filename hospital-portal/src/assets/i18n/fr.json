@@ -1278,6 +1278,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
     "ACKNOWLEDGED": "Reçue",
+    "NO_DATA_GLOBAL": "Aucune consultation dans aucun de vos hôpitaux.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Notes supplémentaires…",
     "ASSIGN": "Assigner",
     "ASSIGNED": "Assignée",
@@ -1813,6 +1814,23 @@
     "SUBTITLE": "Gérer les bascules de fonctionnalité",
     "TITLE": "Drapeaux de Fonctionnalité",
     "TOGGLE": "Basculer"
+  },
+  "HOSPITAL_SCOPE": {
+    "ALL_HOSPITALS": "Tous les hôpitaux",
+    "CLEAR": "Effacer la portée hôpital",
+    "FILTER_BY_HOSPITAL": "Filtrer par hôpital",
+    "HOSPITAL_COLUMN": "Hôpital",
+    "NO_MATCHES": "Aucun hôpital ne correspond à votre recherche.",
+    "SCOPED": "Hôpital",
+    "SEARCH_ERROR": "Échec du chargement des hôpitaux. Veuillez réessayer.",
+    "EMPTY_GLOBAL": {
+      "ENCOUNTERS": "Aucune consultation dans aucun de vos hôpitaux.",
+      "LAB_RESULTS": "Aucun résultat de laboratoire dans aucun de vos hôpitaux.",
+      "ADMISSIONS": "Aucune admission dans aucun de vos hôpitaux.",
+      "PRESCRIPTIONS": "Aucune prescription dans aucun de vos hôpitaux.",
+      "TREATMENT_PLANS": "Aucun plan de traitement dans aucun de vos hôpitaux.",
+      "REFERRALS": "Aucune référence dans aucun de vos hôpitaux."
+    }
   },
   "HOSPITALS": {
     "ADDRESS": "Adresse / Rue",

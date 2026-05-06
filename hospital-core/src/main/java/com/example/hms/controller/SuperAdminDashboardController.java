@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.payload.dto.HospitalResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
@@ -15,18 +16,23 @@ import com.example.hms.payload.dto.SuperAdminSummaryDTO;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AppointmentService;
+import com.example.hms.service.HospitalService;
 import com.example.hms.service.PatientService;
 import com.example.hms.service.PlatformAnalyticsService;
 import com.example.hms.service.SuperAdminDashboardService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -39,6 +45,14 @@ public class SuperAdminDashboardController {
     private final AppointmentService appointmentService;
     private final PatientService patientService;
     private final PlatformAnalyticsService analyticsService;
+    private final HospitalService hospitalService;
+
+    /** Hard cap on the typeahead page size to keep payloads small and predictable. */
+    private static final int HOSPITAL_SEARCH_MAX_LIMIT = 20;
+    /** Default page size for the hospital typeahead when no {@code limit} param is supplied. */
+    private static final int HOSPITAL_SEARCH_DEFAULT_LIMIT = 20;
+    /** Minimum query length before we hit the database (avoids a full table scan from a stray keystroke). */
+    private static final int HOSPITAL_SEARCH_MIN_QUERY_LENGTH = 2;
 
     /**
      * Aggregated metrics + a slice of recent audit events for dashboard widgets.
@@ -106,14 +120,31 @@ public class SuperAdminDashboardController {
     }
 
     /**
-     * Get recent encounters across all hospitals for super admin dashboard.
+     * Get recent encounters across all hospitals for the super-admin
+     * dashboard (docs/super-admin-cross-tenant-design.md, rollout step 3).
+     *
+     * <p>Both URL forms resolve to this method:
+     *
+     * <ul>
+     *   <li>{@code /super-admin/recent-encounters} — canonical, matching
+     *       the {@code /recent-*} naming convention shared by the eight
+     *       sister endpoints introduced in commit {@code 2678681f}.</li>
+     *   <li>{@code /super-admin/encounters} — kept as a deprecated alias
+     *       so existing frontend callers don't break. New callers should
+     *       use the canonical path.</li>
+     * </ul>
+     *
+     * <p>Accepts {@link Locale} so message-source-driven fields (e.g.
+     * status labels) honour the request's {@code Accept-Language}, in
+     * line with {@code getRecentLabOrders} / {@code getRecentLabResults}
+     * / {@code getRecentPrescriptions}.
      */
-    @GetMapping("/encounters")
+    @GetMapping({"/recent-encounters", "/encounters"})
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<List<EncounterResponseDTO>> getRecentEncounters(
-        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        Locale locale
     ) {
-        Locale locale = Locale.getDefault();
         return ResponseEntity.ok(dashboardService.getRecentEncounters(limit, locale));
     }
 
@@ -215,5 +246,47 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
         return ResponseEntity.ok(dashboardService.getRecentReferrals(limit));
+    }
+
+    /**
+     * Server-side typeahead for the super-admin hospital-scope chip
+     * (see {@code docs/super-admin-cross-tenant-design.md}). Returns up to
+     * {@value #HOSPITAL_SEARCH_MAX_LIMIT} hospitals whose name matches the
+     * caller-supplied prefix/substring.
+     *
+     * <p>Belt-and-braces gating: {@link PreAuthorize} blocks anyone without
+     * {@code ROLE_SUPER_ADMIN}, and we additionally re-check the dedicated
+     * {@code isSuperAdmin} JWT claim via {@link HospitalContextHolder} so
+     * impersonation contexts (where a real super-admin has briefly inflated
+     * their authorities to debug as another role) cannot reach cross-tenant
+     * data through this endpoint. See design-call #1 in the doc.
+     */
+    @GetMapping("/hospitals/search")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<List<HospitalResponseDTO>> searchHospitalsForScopeChip(
+        @RequestParam(name = "q", required = false) String q,
+        @RequestParam(name = "limit", required = false,
+            defaultValue = "" + HOSPITAL_SEARCH_DEFAULT_LIMIT) int limit,
+        Locale locale
+    ) {
+        if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
+            // The PreAuthorize check above can succeed for impersonation contexts
+            // where authorities were inflated; the JWT claim is the only signal
+            // that the caller is *really* a super-admin right now.
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Cross-tenant hospital search is restricted to super-admins.");
+        }
+
+        String trimmed = q == null ? "" : q.trim();
+        if (trimmed.length() < HOSPITAL_SEARCH_MIN_QUERY_LENGTH) {
+            // Empty / too-short query → empty result (do not return all 10k+).
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+
+        int safeLimit = Math.max(1, Math.min(limit, HOSPITAL_SEARCH_MAX_LIMIT));
+        // active=true: typeahead never offers archived/suspended tenants as a scope.
+        List<HospitalResponseDTO> results = hospitalService.searchHospitals(
+            trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);
+        return ResponseEntity.ok(results);
     }
 }

@@ -190,5 +190,10 @@ export class OidcAuthService {
     } else if (permittedIds.length > 1 && primaryHospitalId) {
       this.roleContext.activeHospitalId = primaryHospitalId;
     }
+
+    // Cross-tenant: super-admins land on every list page in "all
+    // hospitals" mode by default — see AppComponent for the rationale
+    // and docs/super-admin-cross-tenant-design.md design call #5.
+    this.roleContext.markSuperAdminGlobalDefaults();
   }
 }

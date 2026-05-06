@@ -12,6 +12,13 @@ export interface PrescriptionResponse {
   staffFullName: string;
   encounterId: string;
   hospitalId: string;
+  /**
+   * Display name for the prescription's hospital, populated by the
+   * backend mapper. Used by the super-admin cross-tenant list view
+   * (docs/super-admin-cross-tenant-design.md). Optional for backwards
+   * compatibility with older snapshots that may lack the field.
+   */
+  hospitalName?: string;
   medicationName: string;
   medicationDisplayName: string;
   dosage: string;
