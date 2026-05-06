@@ -25,8 +25,23 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
 
     boolean existsByNameIgnoreCaseAndZipCode(String name, String zipCode);
 
+    /**
+     * Hospital search backing the super-admin scope-chip typeahead and the
+     * legacy "search hospitals" admin pages. The {@code name} clause uses
+     * <b>prefix</b> match ({@code LOWER(name) LIKE 'memo%'}) so the
+     * functional B-tree index from
+     * {@code V90__hospital_name_search_index.sql} (on {@code LOWER(name)})
+     * is load-bearing rather than decorative — substring match would
+     * force a sequential scan on every keystroke at 10k+ tenants. See
+     * design call #3 / F2 in {@code docs/super-admin-cross-tenant-design.md}.
+     *
+     * <p>{@code city} / {@code state} stay on substring match: the
+     * typeahead doesn't surface those fields, the legacy admin search
+     * exercises them rarely, and there's no equivalent index to make
+     * load-bearing.</p>
+     */
     @Query("SELECT h FROM Hospital h WHERE " +
-            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
+            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(:name, '%'))) AND " +
             "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', :city, '%'))) AND " +
             "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', :state, '%'))) AND " +
             "(:active IS NULL OR h.active = :active)")

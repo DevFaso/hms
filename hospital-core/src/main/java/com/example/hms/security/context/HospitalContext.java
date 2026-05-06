@@ -41,6 +41,28 @@ public class HospitalContext {
     /** Indicates caller has ROLE_HOSPITAL_ADMIN privileges. */
     private final boolean hospitalAdmin;
 
+    /**
+     * True when {@link #activeHospitalId} was set from an explicit
+     * {@code X-Hospital-Id} request header (validated against the
+     * principal's permitted scope by
+     * {@link HospitalContextRequestOverrides}), false when it was
+     * derived from a JWT claim ({@code primaryHospitalId}) or left
+     * unset.
+     *
+     * <p>Why this matters: for a real super-admin, {@code activeHospitalId}
+     * is populated from the JWT primary-hospital claim by default, but
+     * the design treats super-admins as <b>global</b> by default — that
+     * JWT-derived value must be ignored unless the request explicitly
+     * scopes via {@code X-Hospital-Id}. Without this flag,
+     * {@code RoleValidator.requireActiveHospitalId()} cannot tell the
+     * two apart and either silently re-scopes super-admin reads to
+     * their home hospital (the F1 click-card bug) or unconditionally
+     * runs them unscoped (which breaks the explicit-header scoping
+     * path Copilot flagged on the F1 fixup). This flag lets us honour
+     * both: explicit scope wins, JWT-only is dropped.</p>
+     */
+    private final boolean headerOverridden;
+
     public static HospitalContext empty() {
         return HospitalContext.builder()
             .principalUserId(null)
@@ -52,6 +74,7 @@ public class HospitalContext {
             .permittedDepartmentIds(Collections.emptySet())
             .superAdmin(false)
             .hospitalAdmin(false)
+            .headerOverridden(false)
             .build();
     }
 }

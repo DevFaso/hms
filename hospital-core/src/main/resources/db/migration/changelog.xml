@@ -1237,4 +1237,48 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V90 — Hospital-name search index (super-admin scope-chip typeahead)
+         Adds a functional B-tree index on LOWER(hospital.hospitals.name)
+         to back the GET /api/super-admin/hospitals/search endpoint
+         introduced in docs/super-admin-cross-tenant-design.md.
+         Originally added decoratively for substring queries; F2
+         (2026-05-06) flipped HospitalRepository.searchHospitals to
+         prefix match (LIKE 'memo%'), making this index load-bearing
+         (true B-tree range scan instead of a sequential scan).
+         Strictly additive; CREATE INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V90-hospital-name-search-index" author="hms-team" runOnChange="false">
+        <sqlFile path="V90__hospital_name_search_index.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V91 — (created_at DESC) indexes on the seven clinical parent tables
+         Closes F4 from docs/super-admin-cross-tenant-design.md. Adds
+         dedicated (created_at DESC) B-tree indexes on:
+           - clinical.consultations
+           - clinical.encounters
+           - clinical.prescriptions
+           - clinical.treatment_plans
+           - lab.lab_orders
+           - admissions
+           - general_referrals
+         Lays the groundwork for the cursor/keyset pagination follow-up
+         from design call #2 and gives the cross-tenant `recent-*`
+         endpoints a covering index on their secondary sort key
+         (each entity's clinical-time field is the primary sort, with
+         created_at DESC as the tiebreaker / null-safety fallback —
+         see SuperAdminDashboardServiceImpl.getRecent*).
+         Strictly additive; all CREATE INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V91-clinical-created-at-desc-indexes" author="hms-team" runOnChange="false">
+        <sqlFile path="V91__clinical_created_at_desc_indexes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

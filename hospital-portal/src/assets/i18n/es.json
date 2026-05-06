@@ -1279,6 +1279,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGED": "Acknowledged",
+    "NO_DATA_GLOBAL": "No hay consultas en ninguno de sus hospitales.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Additional notes...",
     "ASSIGN": "Assign",
     "ASSIGNED": "Assigned",
@@ -1814,6 +1815,23 @@
     "SUBTITLE": "Manage feature toggles",
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle"
+  },
+  "HOSPITAL_SCOPE": {
+    "ALL_HOSPITALS": "Todos los hospitales",
+    "CLEAR": "Quitar el filtro de hospital",
+    "FILTER_BY_HOSPITAL": "Filtrar por hospital",
+    "HOSPITAL_COLUMN": "Hospital",
+    "NO_MATCHES": "Ningún hospital coincide con su búsqueda.",
+    "SCOPED": "Hospital",
+    "SEARCH_ERROR": "No se pudieron cargar los hospitales. Inténtelo de nuevo.",
+    "EMPTY_GLOBAL": {
+      "ENCOUNTERS": "No hay encuentros en ninguno de sus hospitales.",
+      "LAB_RESULTS": "No hay resultados de laboratorio en ninguno de sus hospitales.",
+      "ADMISSIONS": "No hay ingresos en ninguno de sus hospitales.",
+      "PRESCRIPTIONS": "No hay prescripciones en ninguno de sus hospitales.",
+      "TREATMENT_PLANS": "No hay planes de tratamiento en ninguno de sus hospitales.",
+      "REFERRALS": "No hay derivaciones en ninguno de sus hospitales."
+    }
   },
   "HOSPITALS": {
     "ADDRESS": "Dirección / Calle",

@@ -11,6 +11,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.RecentActivityDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
@@ -35,6 +36,8 @@ import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -79,6 +82,42 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final GeneralReferralService generalReferralService;
     private final LabOrderMapper labOrderMapper;
     private final AdmissionMapper admissionMapper;
+
+    /**
+     * BaseEntity-mapped property name reused as the tiebreaker / null-safety
+     * fallback in every {@code getRecent*} sort spec. Extracted so a
+     * future rename (or migration to a different audit-time field) only
+     * needs to update one constant. Sonar S1192 (literal duplicated 8×).
+     */
+    private static final String CREATED_AT = "createdAt";
+
+    /**
+     * Self-reference for the Spring AOP proxy. Used by
+     * {@link #getRecentActivity(int, Locale)} to call the nine per-feed
+     * {@code getRecent*} methods <i>through</i> the proxy so each one's
+     * {@code @Transactional(readOnly = true)} actually applies.
+     *
+     * <p>Why this is needed: Spring's transaction management is
+     * proxy-based — calling {@code this.getRecentEncounters(...)} bypasses
+     * the proxy and silently drops the inner method's transactional
+     * configuration. Sonar S6809 / S6809-fr flags this exact pattern.
+     * In our case the outer method is also {@code @Transactional} so the
+     * functional behaviour is correct (REQUIRED propagation joins the
+     * outer tx anyway), but the inner annotations would become
+     * load-bearing the day someone removes the outer one — better to
+     * keep them honest now.</p>
+     *
+     * <p>{@code @Lazy} breaks the otherwise-circular constructor
+     * dependency Spring would detect (this bean depending on itself).
+     * Setter injection (rather than adding to {@code @RequiredArgsConstructor})
+     * keeps the existing 30-arg constructor untouched.</p>
+     */
+    private SuperAdminDashboardService self;
+
+    @Autowired
+    public void setSelf(@Lazy SuperAdminDashboardService self) {
+        this.self = self;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -182,7 +221,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // `createdAt` breaks ties (and covers rows where encounterDate is
         // null, which can happen for very early drafts).
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc(CREATED_AT)));
         return encounterService
             .list(null, null, null, null, null, null, pageable, locale)
             .getContent();
@@ -223,7 +262,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // existing lab-order list path. Falls back to `createdAt` for
         // null-safety and stable ordering across same-second orders.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc(CREATED_AT)));
         return labOrderRepository.findAll(pageable)
             .map(labOrderMapper::toLabOrderResponseDTO)
             .getContent();
@@ -238,7 +277,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // `createdAt` breaks ties and covers rows where the lab system
         // never populated resultDate.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("resultDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("resultDate"), Sort.Order.desc(CREATED_AT)));
         return labResultService.getLabResultsPage(pageable, locale).getContent();
     }
 
@@ -246,7 +285,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<LabTestDefinitionResponseDTO> getRecentLabTestDefinitions(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
         return labTestDefinitionService
             .search(null, null, null, null, null, pageable)
             .getContent();
@@ -261,7 +300,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // late-entered or migrated admissions would otherwise show as
         // the newest. `createdAt` breaks ties.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc(CREATED_AT)));
         return admissionRepository.findAll(pageable)
             .map(admissionMapper::toResponseDTO)
             .getContent();
@@ -276,7 +315,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // provider authored the prescription. Other timestamps on the
         // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
         // workflow-stage events that are null for most rows.
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
         return prescriptionService.list(null, null, null, pageable, locale).getContent();
     }
 
@@ -288,7 +327,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // or migrated plans would otherwise show as the newest. Plans
         // without a start date yet (drafts) fall back to `createdAt`.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc(CREATED_AT)));
         return treatmentPlanService.listAll(null, pageable).getContent();
     }
 
@@ -301,8 +340,45 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // the right behaviour: a draft only counts as "activity" once it
         // is submitted.
         var pageable = PageRequest.of(0, safeLimit,
-            Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc("createdAt")));
+            Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc(CREATED_AT)));
         return generalReferralService.getRecentForSuperAdmin(pageable);
+    }
+
+    /**
+     * Compose all nine per-resource recent feeds into a single payload —
+     * F5 from {@code docs/super-admin-cross-tenant-design.md}. Delegates
+     * to the existing {@code getRecent*} methods so each feed's sort
+     * field, locale handling, and authorisation behaviour stays in
+     * exactly one place; this method is just a coordinator.
+     *
+     * <p>One outer {@code @Transactional(readOnly = true)} wraps all
+     * nine reads so they observe a single consistent snapshot. Without
+     * this, the nine feeds could each open their own transaction and a
+     * concurrent write between them would surface partial state in the
+     * dashboard (e.g. "5 encounters" in the counter but only 3 in the
+     * recent-encounters tab because a delete landed mid-fan-out).</p>
+     *
+     * <p>Each per-feed call goes through {@link #self} (the AOP proxy)
+     * rather than {@code this} so the inner methods' own
+     * {@code @Transactional} annotations stay load-bearing — see the
+     * Javadoc on {@code self} above. With REQUIRED propagation each
+     * inner call joins the outer transaction, preserving the
+     * single-snapshot guarantee.</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public RecentActivityDTO getRecentActivity(int limit, Locale locale) {
+        return RecentActivityDTO.builder()
+            .encounters(self.getRecentEncounters(limit, locale))
+            .consultations(self.getRecentConsultations(limit))
+            .labOrders(self.getRecentLabOrders(limit, locale))
+            .labResults(self.getRecentLabResults(limit, locale))
+            .labTestDefinitions(self.getRecentLabTestDefinitions(limit))
+            .admissions(self.getRecentAdmissions(limit))
+            .prescriptions(self.getRecentPrescriptions(limit, locale))
+            .treatmentPlans(self.getRecentTreatmentPlans(limit))
+            .referrals(self.getRecentReferrals(limit))
+            .build();
     }
 
     private int sanitizeLimit(int requested, int defaultValue, int maxValue) {

@@ -41,6 +41,41 @@ export interface SuperAdminRecentItem {
   [key: string]: unknown;
 }
 
+/**
+ * Aggregate response for `GET /api/super-admin/recent-activity?limit=N`,
+ * the F5 follow-up from `docs/super-admin-cross-tenant-design.md`.
+ *
+ * Mirrors the backend `RecentActivityDTO` exactly. Each list carries the
+ * same DTO shape the per-feed endpoint returns, so consumers (the
+ * super-admin dashboard's `loadAll()`) can drop the eight individual
+ * subscriptions and unpack one object instead.
+ */
+export interface SuperAdminRecentActivityBundle {
+  encounters: SuperAdminRecentItem[];
+  consultations: SuperAdminRecentItem[];
+  labOrders: SuperAdminRecentItem[];
+  labResults: SuperAdminRecentItem[];
+  labTestDefinitions: SuperAdminRecentItem[];
+  admissions: SuperAdminRecentItem[];
+  prescriptions: SuperAdminRecentItem[];
+  treatmentPlans: SuperAdminRecentItem[];
+  referrals: SuperAdminRecentItem[];
+}
+
+export function emptyRecentActivityBundle(): SuperAdminRecentActivityBundle {
+  return {
+    encounters: [],
+    consultations: [],
+    labOrders: [],
+    labResults: [],
+    labTestDefinitions: [],
+    admissions: [],
+    prescriptions: [],
+    treatmentPlans: [],
+    referrals: [],
+  };
+}
+
 export interface RecentAuditEvent {
   id: string;
   eventType: string;
@@ -542,6 +577,32 @@ export class DashboardService {
 
   getRecentReferrals(limit = 10): Observable<SuperAdminRecentItem[]> {
     return this.getSuperAdminRecent('recent-referrals', limit);
+  }
+
+  /**
+   * Aggregate recent-activity feed (F5 in
+   * docs/super-admin-cross-tenant-design.md). Replaces the eight
+   * individual `getRecent*` calls in `super-admin.ts`'s `loadAll()`
+   * with a single round-trip. Keys mirror the per-feed slugs:
+   *
+   *   consultations / labOrders / labResults / labTestDefinitions /
+   *   admissions / prescriptions / treatmentPlans / referrals / encounters
+   *
+   * On failure the whole bundle resolves to empty arrays for every
+   * key so the dashboard's per-tab "No recent items" empty-state
+   * still renders correctly — same UX semantics as the per-feed
+   * `catchError(of([]))` branches.
+   */
+  getRecentActivity(limit = 10): Observable<SuperAdminRecentActivityBundle> {
+    const params = new HttpParams().set('limit', limit);
+    return this.http
+      .get<SuperAdminRecentActivityBundle>('/api/super-admin/recent-activity', { params })
+      .pipe(
+        catchError((err) => {
+          console.error('[super-admin] /recent-activity failed', err);
+          return of(emptyRecentActivityBundle());
+        }),
+      );
   }
 
   /* ── Clinical Dashboard (doctor / physician / surgeon) ── */

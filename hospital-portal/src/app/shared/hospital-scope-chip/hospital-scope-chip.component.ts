@@ -5,6 +5,7 @@ import {
   ElementRef,
   EventEmitter,
   HostListener,
+  Input,
   OnInit,
   Output,
   computed,
@@ -71,8 +72,11 @@ export class HospitalScopeChipComponent implements OnInit {
    * `?hospitalId=` query-param appearing alongside it. Default `false`
    * (the design-doc'd behaviour: every list page round-trips scope via
    * the URL so back/forward/share-link work).
+   *
+   * Bound as an {@link Input} so callers can opt out from the template:
+   * {@code <app-hospital-scope-chip [disableUrlSync]="true" />}.
    */
-  readonly disableUrlSync = false;
+  @Input() disableUrlSync = false;
 
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;

@@ -96,6 +96,24 @@ class SuperAdminDashboardServiceImplTest {
 
     @InjectMocks private SuperAdminDashboardServiceImpl service;
 
+    /**
+     * In production Spring's container injects a proxy of the bean into
+     * {@code self} via {@code setSelf(@Lazy ...)} so
+     * {@link SuperAdminDashboardServiceImpl#getRecentActivity} can call
+     * the per-feed {@code getRecent*} methods through the AOP proxy
+     * (Sonar S6809). In Mockito-only unit tests there is no container
+     * and {@code @InjectMocks} doesn't call public setters, so we wire
+     * {@code self} to the same instance manually. Calling the real
+     * methods (rather than mocking them on a separate
+     * {@code SuperAdminDashboardService} mock) keeps the F5 composition
+     * test honest: it must verify each stubbed feed actually flows
+     * through the real {@code getRecent*} bodies.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void wireSelf() {
+        service.setSelf(service);
+    }
+
     @Test
     void getSummary_success() {
         when(userRepository.countByIsDeletedFalse()).thenReturn(100L);
@@ -294,16 +312,23 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void sanitizeLimit_clampsAtMax() {
+        // The max-cap branch in sanitizeLimit(requested, default=20, max=100)
+        // must return 100 for any value above that. Prove it by capturing the
+        // Pageable that flows into treatmentPlanService and asserting its
+        // page size — Sonar S2701 / S2699 (literal-as-assertion / no
+        // assertion) guard against the previous `assertThat(true).isTrue()`
+        // shape.
         when(treatmentPlanService.listAll(any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 
         service.getRecentTreatmentPlans(10_000);
 
-        // Verifying the path that exercises the max-cap branch in sanitizeLimit;
-        // a successful invocation is sufficient (no exception, defaults applied).
-        // The bounded behaviour is asserted by the absence of failure here and by
-        // the limit-applied tests above.
-        assertThat(true).isTrue();
+        org.mockito.ArgumentCaptor<Pageable> captor =
+            org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(treatmentPlanService).listAll(any(), captor.capture());
+        assertThat(captor.getValue().getPageSize())
+            .as("requested limit 10_000 must be clamped to the max cap (100)")
+            .isEqualTo(100);
     }
 
     /* ────────────────────────────────────────────────────────────────────
@@ -425,5 +450,69 @@ class SuperAdminDashboardServiceImplTest {
         org.mockito.Mockito.verify(prescriptionService)
             .list(any(), any(), any(), captor.capture(), any());
         assertSortOrdersStartWith(captor.getValue(), "createdAt");
+    }
+
+    /**
+     * F5 — getRecentActivity must compose all 9 per-feed methods and
+     * return a {@link com.example.hms.payload.dto.RecentActivityDTO}
+     * whose lists are exactly the per-feed results (no reordering, no
+     * silent dedup, no cross-talk between feeds). We use distinct
+     * single-row stubs so a wrong assignment shows up immediately.
+     */
+    @Test
+    void getRecentActivity_composesAllNineFeedsIntoOneBundle() {
+        // Encounters
+        EncounterResponseDTO enc = new EncounterResponseDTO();
+        when(encounterService.list(any(), any(), any(), any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(enc)));
+        // Consultations
+        ConsultationResponseDTO con = new ConsultationResponseDTO();
+        when(consultationService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(java.util.List.of(con));
+        // Lab orders
+        LabOrder labOrder = new LabOrder();
+        when(labOrderRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(labOrder)));
+        LabOrderResponseDTO labOrderDto = new LabOrderResponseDTO();
+        when(labOrderMapper.toLabOrderResponseDTO(labOrder)).thenReturn(labOrderDto);
+        // Lab results
+        LabResultResponseDTO labResult = LabResultResponseDTO.builder().build();
+        when(labResultService.getLabResultsPage(any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(labResult)));
+        // Lab test definitions
+        LabTestDefinitionResponseDTO testDef = new LabTestDefinitionResponseDTO();
+        when(labTestDefinitionService.search(any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(testDef)));
+        // Admissions
+        Admission adm = new Admission();
+        when(admissionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(adm)));
+        AdmissionResponseDTO admDto = new AdmissionResponseDTO();
+        when(admissionMapper.toResponseDTO(adm)).thenReturn(admDto);
+        // Prescriptions
+        PrescriptionResponseDTO presDto = new PrescriptionResponseDTO();
+        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(presDto)));
+        // Treatment plans
+        TreatmentPlanResponseDTO planDto = new TreatmentPlanResponseDTO();
+        when(treatmentPlanService.listAll(any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(planDto)));
+        // Referrals
+        GeneralReferralResponseDTO refDto = new GeneralReferralResponseDTO();
+        when(generalReferralService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(java.util.List.of(refDto));
+
+        var bundle = service.getRecentActivity(20, Locale.ENGLISH);
+
+        // Each feed contributes exactly its stubbed row; no cross-talk.
+        assertThat(bundle.getEncounters()).containsExactly(enc);
+        assertThat(bundle.getConsultations()).containsExactly(con);
+        assertThat(bundle.getLabOrders()).containsExactly(labOrderDto);
+        assertThat(bundle.getLabResults()).containsExactly(labResult);
+        assertThat(bundle.getLabTestDefinitions()).containsExactly(testDef);
+        assertThat(bundle.getAdmissions()).containsExactly(admDto);
+        assertThat(bundle.getPrescriptions()).containsExactly(presDto);
+        assertThat(bundle.getTreatmentPlans()).containsExactly(planDto);
+        assertThat(bundle.getReferrals()).containsExactly(refDto);
     }
 }

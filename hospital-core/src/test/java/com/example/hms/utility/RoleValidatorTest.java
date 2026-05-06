@@ -149,15 +149,128 @@ class RoleValidatorTest {
         assertThat(roleValidator.requireActiveHospitalId()).isNull();
     }
 
+    /**
+     * Reproducer for the "click card → no data" cross-tenant bug
+     * (commit f7e5a973's runtime symptom): JwtTokenProvider populates
+     * {@code HospitalContext.activeHospitalId} from the
+     * {@code primaryHospitalId} JWT claim — the super-admin's home
+     * hospital — even when no {@code X-Hospital-Id} header is sent.
+     * Before this fix, {@code requireActiveHospitalId()} returned that
+     * primary hospital from step 1, silently re-scoping the unscoped
+     * fallback path; the dashboard counters (which bypass RoleValidator
+     * by calling {@code repository.count()} directly) showed the
+     * correct global totals while the per-resource list pages returned
+     * 0 rows because they were filtered to the super-admin's home
+     * hospital. After the fix, super-admin (per JWT claim) short-circuits
+     * to {@code null} when {@code headerOverridden} is false (no
+     * explicit scope) regardless of any JWT-derived activeHospitalId.
+     */
+    @Test
+    void requireActiveHospitalId_returnsNullForSuperAdmin_evenWhenJwtPopulatesActiveHospitalId() {
+        // Real super-admin: JWT claim says so, AND JwtTokenProvider
+        // pre-populated activeHospitalId from CLAIM_PRIMARY_HOSPITAL_ID.
+        // headerOverridden=false because no X-Hospital-Id header was sent.
+        HospitalContextHolder.setContext(
+            HospitalContext.builder()
+                .superAdmin(true)
+                .activeHospitalId(UUID.randomUUID()) // primary hospital from JWT
+                .headerOverridden(false)
+                .build());
+
+        assertThat(roleValidator.requireActiveHospitalId()).isNull();
+        // Resolved entirely from HospitalContext — no DB lookup needed.
+        Mockito.verifyNoInteractions(assignmentRepository);
+    }
+
+    /**
+     * Companion to the test above (Copilot review on the F1 fixup,
+     * 2026-05-06): when a super-admin <i>did</i> send an explicit
+     * {@code X-Hospital-Id} header — chip-scoped view —
+     * {@code HospitalContextRequestOverrides} flips
+     * {@code headerOverridden=true}. The fallback must honour that
+     * scope and return the header-derived hospital id, otherwise
+     * scoped super-admin endpoints (LookupController, the
+     * cross-tenant validators in EncounterTreatmentServiceImpl /
+     * TreatmentPlanServiceImpl) silently run unscoped — which is
+     * exactly the regression Copilot flagged.
+     */
+    @Test
+    void requireActiveHospitalId_returnsScopedHospital_forSuperAdminWithExplicitHeaderOverride() {
+        UUID scopedHospital = UUID.randomUUID();
+        HospitalContextHolder.setContext(
+            HospitalContext.builder()
+                .superAdmin(true)
+                .activeHospitalId(scopedHospital)
+                .headerOverridden(true) // X-Hospital-Id header was sent
+                .build());
+
+        assertThat(roleValidator.requireActiveHospitalId()).isEqualTo(scopedHospital);
+        Mockito.verifyNoInteractions(assignmentRepository);
+    }
+
+    /**
+     * F1 impersonation correctness gap (design call #1). An impersonation
+     * context (or any future code path that copies authorities verbatim)
+     * could carry an inflated {@code ROLE_SUPER_ADMIN} authority while
+     * the discrete {@code isSuperAdmin} JWT claim is {@code false}.
+     * Before this fix, the authorities-based step would have either
+     * returned {@code null} (cross-tenant data leak) or — depending on
+     * order — returned the scoped hospital. After this fix, the JWT
+     * claim is the source of truth: a non-real-super-admin with an
+     * inflated authority must scope to {@code activeHospitalId}, not
+     * fall through to the unscoped branch.
+     */
+    @Test
+    void requireActiveHospitalId_returnsScopedHospital_whenAuthoritiesInflateSuperAdminButJwtClaimDoesNot() {
+        // Authorities have ROLE_SUPER_ADMIN inflated…
+        setAuthenticatedUser(UUID.randomUUID(),
+            new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        // …but the discrete JWT claim says NOT a real super-admin, AND
+        // the request carries an explicit hospital scope (X-Hospital-Id).
+        UUID scopedHospital = UUID.randomUUID();
+        HospitalContextHolder.setContext(
+            HospitalContext.builder()
+                .superAdmin(false)               // ← the only safe signal
+                .activeHospitalId(scopedHospital)
+                .build());
+
+        assertThat(roleValidator.requireActiveHospitalId()).isEqualTo(scopedHospital);
+        // Resolved from HospitalContext, no DB fallback needed.
+        Mockito.verifyNoInteractions(assignmentRepository);
+    }
+
+    // ── isSuperAdminFromJwtClaim ─────────────────────────────────────
+
+    @Test
+    void isSuperAdminFromJwtClaim_returnsTrueOnlyWhenContextSays() {
+        // No context set → empty context → false
+        assertThat(roleValidator.isSuperAdminFromJwtClaim()).isFalse();
+
+        // Context with superAdmin=false → false (even if authorities have ROLE_SUPER_ADMIN)
+        setAuthenticatedUser(UUID.randomUUID(),
+            new SimpleGrantedAuthority("ROLE_SUPER_ADMIN"));
+        HospitalContextHolder.setContext(
+            HospitalContext.builder().superAdmin(false).build());
+        assertThat(roleValidator.isSuperAdminFromJwtClaim()).isFalse();
+        // Authorities-based check disagrees — proving the two are independent.
+        assertThat(roleValidator.isSuperAdminFromAuth()).isTrue();
+
+        // Context with superAdmin=true → true
+        HospitalContextHolder.setContext(
+            HospitalContext.builder().superAdmin(true).build());
+        assertThat(roleValidator.isSuperAdminFromJwtClaim()).isTrue();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────
 
     private UUID setAuthenticatedUser(UUID userId, GrantedAuthority... auths) {
         // CustomUserDetails uses a constructor we don't want to depend on
         // here; mock it instead so we get a stable getUserId() value.
-        // The username doesn't matter for any of the paths we exercise,
-        // so we don't bother stubbing it.
+        // Use lenient strictness because some tests (the F1 / impersonation
+        // cases) populate authorities only and never call getUserId() —
+        // strict mode would flag the stub as unnecessary.
         CustomUserDetails principal = Mockito.mock(CustomUserDetails.class);
-        when(principal.getUserId()).thenReturn(userId);
+        Mockito.lenient().when(principal.getUserId()).thenReturn(userId);
         Authentication auth = new UsernamePasswordAuthenticationToken(principal, "n/a", List.of(auths));
         SecurityContextHolder.getContext().setAuthentication(auth);
         return userId;
