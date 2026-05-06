@@ -2,7 +2,6 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable } from 'rxjs';
 import { catchError, of } from 'rxjs';
 
 import {
@@ -409,24 +408,29 @@ export class SuperAdminComponent implements OnInit {
   }
 
   loadAll(): void {
-    // Streaming load — each endpoint updates its own slice of state as
-    // it returns. Replaces the previous `forkJoin` of 10 observables,
-    // which blocked the entire dashboard until the slowest endpoint
-    // finished (Copilot review on commit 2678681f, finding #5).
+    // Single-roundtrip load (F5 from
+    // docs/super-admin-cross-tenant-design.md). Replaces the prior
+    // streaming-load of 8 individual recent-* subscriptions with one
+    // call to the aggregate `/super-admin/recent-activity` endpoint.
     //
-    // Trade-offs:
-    //   - Total round-trips unchanged (still 10). A future B1 follow-up
-    //     could collapse them into one aggregated /recent-activity
-    //     endpoint — see docs/super-admin-cross-tenant-design.md F5.
-    //   - `loading` flips false as soon as the summary card data arrives
-    //     so the header renders immediately; activity tabs populate
-    //     progressively, each showing its own empty state until its
-    //     observable emits.
-    //   - `errored` is only set when BOTH summary AND platform fail,
-    //     preserving the previous semantics for the empty-state banner.
+    // Trade-offs vs. previous streaming load:
+    //   - 1 round-trip instead of 8 → ~7× fewer HTTP / TLS / parse
+    //     overheads, and a single backend transaction sees a
+    //     consistent snapshot across all 9 feeds (no torn state where
+    //     a counter shows N but the recent tab shows N-1 because a
+    //     delete landed mid-fan-out).
+    //   - Activity tabs populate together rather than progressively.
+    //     With the new transactional bundle this is intentional: a
+    //     consistent set of 9 feeds is a better dashboard experience
+    //     than slivers arriving out-of-order.
+    //   - The summary + platform observables still run in parallel
+    //     (independent of the activity bundle); the header still
+    //     flips `loading=false` as soon as `summary` returns so the
+    //     counter cards render immediately.
+    //   - `errored` semantics unchanged: only when BOTH summary AND
+    //     platform fail.
     this.loading.set(true);
     this.errored.set(false);
-    const empty = (): Observable<SuperAdminRecentItem[]> => of([]);
     const summaryFailed = signal(false);
     const platformFailed = signal(false);
 
@@ -456,45 +460,24 @@ export class SuperAdminComponent implements OnInit {
         this.errored.set(summaryFailed() && platformFailed());
       });
 
-    // Activity tabs — each merges into its own slot in `recent` as it
-    // arrives, so a slow lab-results endpoint can't keep consultations
-    // from rendering.
-    const updateSlot = (key: ActivityKey, items: SuperAdminRecentItem[]): void => {
-      this.recent.update((prev) => ({ ...prev, [key]: items }));
-    };
-
-    this.dashboard
-      .getRecentConsultations(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('consultations', items));
-    this.dashboard
-      .getRecentLabOrders(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('labOrders', items));
-    this.dashboard
-      .getRecentLabResults(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('labResults', items));
-    this.dashboard
-      .getRecentLabTestDefinitions(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('labTestDefinitions', items));
-    this.dashboard
-      .getRecentAdmissions(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('admissions', items));
-    this.dashboard
-      .getRecentPrescriptions(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('prescriptions', items));
-    this.dashboard
-      .getRecentTreatmentPlans(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('treatmentPlans', items));
-    this.dashboard
-      .getRecentReferrals(10)
-      .pipe(catchError(empty))
-      .subscribe((items) => updateSlot('referrals', items));
+    // Aggregate recent-activity bundle — one call, 9 feeds. The service
+    // already swallows transport errors into an empty bundle so we
+    // don't need a per-tab catchError here.
+    this.dashboard.getRecentActivity(10).subscribe((bundle) => {
+      this.recent.set({
+        consultations: bundle.consultations ?? [],
+        labOrders: bundle.labOrders ?? [],
+        labResults: bundle.labResults ?? [],
+        labTestDefinitions: bundle.labTestDefinitions ?? [],
+        admissions: bundle.admissions ?? [],
+        prescriptions: bundle.prescriptions ?? [],
+        treatmentPlans: bundle.treatmentPlans ?? [],
+        referrals: bundle.referrals ?? [],
+        // bundle.encounters is fetched too; not surfaced as an activity
+        // tab today (that's a separate frontend follow-up — the tab
+        // map currently has 8 keys, encounters is on the cards row).
+      });
+    });
   }
 
   selectActivityTab(key: ActivityKey): void {

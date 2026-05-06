@@ -426,4 +426,68 @@ class SuperAdminDashboardServiceImplTest {
             .list(any(), any(), any(), captor.capture(), any());
         assertSortOrdersStartWith(captor.getValue(), "createdAt");
     }
+
+    /**
+     * F5 — getRecentActivity must compose all 9 per-feed methods and
+     * return a {@link com.example.hms.payload.dto.RecentActivityDTO}
+     * whose lists are exactly the per-feed results (no reordering, no
+     * silent dedup, no cross-talk between feeds). We use distinct
+     * single-row stubs so a wrong assignment shows up immediately.
+     */
+    @Test
+    void getRecentActivity_composesAllNineFeedsIntoOneBundle() {
+        // Encounters
+        EncounterResponseDTO enc = new EncounterResponseDTO();
+        when(encounterService.list(any(), any(), any(), any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(enc)));
+        // Consultations
+        ConsultationResponseDTO con = new ConsultationResponseDTO();
+        when(consultationService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(java.util.List.of(con));
+        // Lab orders
+        LabOrder labOrder = new LabOrder();
+        when(labOrderRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(labOrder)));
+        LabOrderResponseDTO labOrderDto = new LabOrderResponseDTO();
+        when(labOrderMapper.toLabOrderResponseDTO(labOrder)).thenReturn(labOrderDto);
+        // Lab results
+        LabResultResponseDTO labResult = LabResultResponseDTO.builder().build();
+        when(labResultService.getLabResultsPage(any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(labResult)));
+        // Lab test definitions
+        LabTestDefinitionResponseDTO testDef = new LabTestDefinitionResponseDTO();
+        when(labTestDefinitionService.search(any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(testDef)));
+        // Admissions
+        Admission adm = new Admission();
+        when(admissionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(adm)));
+        AdmissionResponseDTO admDto = new AdmissionResponseDTO();
+        when(admissionMapper.toResponseDTO(adm)).thenReturn(admDto);
+        // Prescriptions
+        PrescriptionResponseDTO presDto = new PrescriptionResponseDTO();
+        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of(presDto)));
+        // Treatment plans
+        TreatmentPlanResponseDTO planDto = new TreatmentPlanResponseDTO();
+        when(treatmentPlanService.listAll(any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(planDto)));
+        // Referrals
+        GeneralReferralResponseDTO refDto = new GeneralReferralResponseDTO();
+        when(generalReferralService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(java.util.List.of(refDto));
+
+        var bundle = service.getRecentActivity(20, Locale.ENGLISH);
+
+        // Each feed contributes exactly its stubbed row; no cross-talk.
+        assertThat(bundle.getEncounters()).containsExactly(enc);
+        assertThat(bundle.getConsultations()).containsExactly(con);
+        assertThat(bundle.getLabOrders()).containsExactly(labOrderDto);
+        assertThat(bundle.getLabResults()).containsExactly(labResult);
+        assertThat(bundle.getLabTestDefinitions()).containsExactly(testDef);
+        assertThat(bundle.getAdmissions()).containsExactly(admDto);
+        assertThat(bundle.getPrescriptions()).containsExactly(presDto);
+        assertThat(bundle.getTreatmentPlans()).containsExactly(planDto);
+        assertThat(bundle.getReferrals()).containsExactly(refDto);
+    }
 }

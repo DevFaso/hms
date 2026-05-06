@@ -273,3 +273,133 @@ that exercises the full production path.
 - 7 new `RoleValidatorTest` cases lock the global-assignment null-safety.
 - 2 new `TenantArchiveEncryptionServiceImplTest` cases lock the
   `local` / `local-h2` profile allowance.
+
+---
+
+## 2026-05-06 — F1–F5 follow-ups + click-card-shows-no-data bug fix
+
+User-reported runtime symptom: super-admin dashboard cards show
+non-zero counts (e.g. "5 Encounters", "3 Consultations") but clicking
+a card opens the list page with the global "All hospitals" chip and
+**zero rows** ("No encounters across any of your hospitals."). Same
+shape on the "Recent clinical activity" panel — the count badge shows
+N but the panel body shows "No recent items in this category yet" for
+several feeds. Also closes all five F1–F5 follow-ups tracked in
+`docs/super-admin-cross-tenant-design.md`.
+
+### Root cause (the click-card bug = F1, same fix)
+
+`JwtTokenProvider.buildHospitalContext` (line 565, 588–590) populates
+`HospitalContext.activeHospitalId` from the
+`CLAIM_PRIMARY_HOSPITAL_ID` JWT claim — the super-admin's home
+hospital — even when the SPA omits the `X-Hospital-Id` header. Then
+`RoleValidator.requireActiveHospitalId()` checked `activeHospitalId`
+**before** super-admin status, so it returned the JWT-derived primary
+hospital and the unscoped fallback path silently re-scoped the list
+endpoints to one hospital. The dashboard counters use
+`repository.count()` directly, bypassing `RoleValidator`, which is why
+they showed correct global totals while every list page returned 0.
+
+### F1 — JWT-claim gate in `RoleValidator.requireActiveHospitalId()`
+
+- Added `RoleValidator.isSuperAdminFromJwtClaim()` reading
+  `HospitalContextHolder.getContextOrEmpty().isSuperAdmin()` (the
+  discrete JWT claim, not the inflated authorities).
+- Reordered `requireActiveHospitalId()` so super-admin (per JWT
+  claim) short-circuits to `null` *before* reading `activeHospitalId`.
+  Authorities-based check kept as a final safety net for paths that
+  bypass the JWT filter chain (legacy unit tests).
+- Closes both the F1 impersonation correctness gap (authorities can
+  be inflated; the JWT claim is the source of truth) and the
+  click-card runtime bug (super-admin's JWT-derived primary hospital
+  no longer leaks into the unscoped fallback).
+- 3 new `RoleValidatorTest` cases:
+  `requireActiveHospitalId_returnsNullForSuperAdmin_evenWhenJwtPopulatesActiveHospitalId`
+  (the click-card reproducer),
+  `requireActiveHospitalId_returnsScopedHospital_whenAuthoritiesInflateSuperAdminButJwtClaimDoesNot`
+  (the F1 impersonation case), and
+  `isSuperAdminFromJwtClaim_returnsTrueOnlyWhenContextSays`.
+
+### F2 — Hospital typeahead uses prefix match
+
+- `HospitalRepository.searchHospitals` `:name` clause flipped from
+  `LIKE LOWER(CONCAT('%', :name, '%'))` (substring) to
+  `LIKE LOWER(CONCAT(:name, '%'))` (prefix). Makes the V90
+  `idx_hospitals_lower_name` btree index load-bearing instead of
+  decorative.
+- V90 migration comment updated to reflect prefix-match semantics +
+  history note.
+- `:city` / `:state` stay on substring (no equivalent index, rarely
+  queried).
+
+### F3 — Audit on cross-tenant super-admin reads
+
+- New `CrossTenantReadAudit` component (`security.audit` package).
+  Single-call-site helper that emits a `DATA_ACCESS` audit event per
+  cross-tenant read, gated on the JWT-claim super-admin signal so
+  scoped reads (already audited per-resource) aren't double-counted.
+  Exception-safe — never propagates audit failures back to the read
+  path.
+- Wired into all 9 `recent-*` endpoints + `/hospitals/search` on
+  `SuperAdminDashboardController`. The new aggregate
+  `/recent-activity` (F5) emits **one** `RECENT_ACTIVITY_BUNDLE`
+  audit entry instead of nine separate ones, keeping the audit trail
+  compact while preserving traceability via the bundle's
+  `rowsReturned` total.
+- 4 new `CrossTenantReadAuditTest` cases (real super-admin emits;
+  non-super-admin skips; empty context skips; logEvent failure
+  swallowed). 11 new `SuperAdminDashboardControllerTest` cases lock
+  the wiring per endpoint.
+
+### F4 — `(created_at DESC)` indexes on the seven clinical parents
+
+- New `V91__clinical_created_at_desc_indexes.sql` migration adding:
+  - `clinical.consultations(created_at DESC)`
+  - `clinical.encounters(created_at DESC)`
+  - `clinical.prescriptions(created_at DESC)`
+  - `clinical.treatment_plans(created_at DESC)`
+  - `lab.lab_orders(created_at DESC)`
+  - `admissions(created_at DESC)`
+  - `general_referrals(created_at DESC)`
+- All `CREATE INDEX IF NOT EXISTS` — strictly additive. Lays the
+  groundwork for the cursor-/keyset-pagination follow-up from
+  design call #2 without forcing it into the same PR.
+- Registered V90 (previously unregistered) and V91 in Liquibase
+  `changelog.xml`.
+
+### F5 — Aggregate `GET /super-admin/recent-activity` endpoint
+
+- Backend: new `RecentActivityDTO` carrying nine lists, new
+  `SuperAdminDashboardService.getRecentActivity(limit, locale)`
+  method composing the existing nine `getRecent*` calls under a
+  single `@Transactional(readOnly=true)` snapshot, new
+  `GET /super-admin/recent-activity` controller wrapper. 3 new
+  `SuperAdminDashboardControllerTest` cases + 1 new
+  `SuperAdminDashboardServiceImplTest` case
+  (`getRecentActivity_composesAllNineFeedsIntoOneBundle` — distinct
+  single-row stubs prove no cross-feed bleeding).
+- Frontend: new `getRecentActivity()` method + matching
+  `SuperAdminRecentActivityBundle` interface on
+  `dashboard.service.ts`. `super-admin.ts`'s `loadAll()` collapsed
+  from 8 individual subscriptions into a single
+  `getRecentActivity(10).subscribe(...)` that bulk-writes nine
+  signal slots from one consistent snapshot. The 8 per-feed
+  `getRecent*` helpers stay on `dashboard.service.ts` as a public
+  API for any future consumers that need a single feed.
+- Karma `super-admin.spec` rewritten to drive the new bundle path:
+  one stub returning a `SuperAdminRecentActivityBundle` per scenario
+  via a new `bundleWith({...})` helper. The "fetches 8 endpoints"
+  test became "fetches the aggregate bundle in a single call (F5)",
+  locking the new behaviour.
+
+### Verification
+
+- `./gradlew :hospital-core:test` — green, full suite (unchanged
+  test count + 22 new tests across F1/F3/F5 land green).
+- `./gradlew :hospital-core:build` — **BUILD SUCCESSFUL**.
+- `./gradlew :hospital-core:jacocoTestCoverageVerification` — green.
+  Filtered INSTRUCTION coverage **89.46%** (gate ≥80%, +9.46 pts
+  above floor; 77,609 / 86,755 covered across 392 included classes).
+- Frontend Karma — **914/914 SUCCESS**.
+- `npm run format` clean (no files reformatted).
+- `npm run lint` clean (0 errors / 0 warnings).

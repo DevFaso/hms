@@ -9,10 +9,38 @@ import { ActivityKey, SuperAdminComponent } from './super-admin';
 import {
   DashboardService,
   RecentAuditEvent,
+  SuperAdminRecentActivityBundle,
   SuperAdminRecentItem,
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+
+/**
+ * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
+ * docs/super-admin-cross-tenant-design.md collapsed the dashboard's 8
+ * `getRecent*` subscriptions into a single `getRecentActivity()` call,
+ * so test stubs build a bundle once and overlay per-feed rows where
+ * needed via {@link bundleWith}.
+ */
+function emptyBundle(): SuperAdminRecentActivityBundle {
+  return {
+    encounters: [],
+    consultations: [],
+    labOrders: [],
+    labResults: [],
+    labTestDefinitions: [],
+    admissions: [],
+    prescriptions: [],
+    treatmentPlans: [],
+    referrals: [],
+  };
+}
+
+function bundleWith(
+  overrides: Partial<SuperAdminRecentActivityBundle>,
+): SuperAdminRecentActivityBundle {
+  return { ...emptyBundle(), ...overrides };
+}
 
 const fakeSummary = (overrides: Partial<SuperAdminSummary> = {}): SuperAdminSummary => ({
   totalUsers: 120,
@@ -75,15 +103,12 @@ describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
   let platform: jasmine.SpyObj<PlatformService>;
 
-  function stubAllRecent(empty: SuperAdminRecentItem[] = []): void {
-    dashboard.getRecentConsultations.and.returnValue(of(empty));
-    dashboard.getRecentLabOrders.and.returnValue(of(empty));
-    dashboard.getRecentLabResults.and.returnValue(of(empty));
-    dashboard.getRecentLabTestDefinitions.and.returnValue(of(empty));
-    dashboard.getRecentAdmissions.and.returnValue(of(empty));
-    dashboard.getRecentPrescriptions.and.returnValue(of(empty));
-    dashboard.getRecentTreatmentPlans.and.returnValue(of(empty));
-    dashboard.getRecentReferrals.and.returnValue(of(empty));
+  function stubAllRecent(): void {
+    // F5: super-admin.ts now fetches the aggregate /recent-activity
+    // bundle in one call instead of 8 individual calls. Stub the bundle
+    // method with empty arrays for every feed by default; tests that
+    // need a specific feed populate it via `bundleWith({ key: rows })`.
+    dashboard.getRecentActivity.and.returnValue(of(emptyBundle()));
   }
 
   function setup(): SuperAdminComponent {
@@ -105,14 +130,7 @@ describe('SuperAdminComponent', () => {
   beforeEach(() => {
     dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', [
       'getSummary',
-      'getRecentConsultations',
-      'getRecentLabOrders',
-      'getRecentLabResults',
-      'getRecentLabTestDefinitions',
-      'getRecentAdmissions',
-      'getRecentPrescriptions',
-      'getRecentTreatmentPlans',
-      'getRecentReferrals',
+      'getRecentActivity',
     ]);
     platform = jasmine.createSpyObj<PlatformService>('PlatformService', ['getSummary']);
     stubAllRecent();
@@ -216,34 +234,38 @@ describe('SuperAdminComponent', () => {
     expect(clinical.find((s) => s.key === 'referrals')?.value).toBe(99);
   });
 
-  it('fetches all 8 recent activity endpoints on init', () => {
+  it('fetches the aggregate recent-activity bundle in a single call (F5)', () => {
+    // Pre-F5 the dashboard fanned out 8 individual `getRecentX` calls
+    // (`forkJoin` originally, then a streaming load). After F5 from
+    // docs/super-admin-cross-tenant-design.md the dashboard makes ONE
+    // round-trip against /super-admin/recent-activity. This test locks
+    // the new behaviour so a future "consistency" refactor doesn't
+    // silently re-introduce the 8-way fan-out.
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
 
     setup();
 
-    expect(dashboard.getRecentConsultations).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentLabOrders).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentLabResults).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentLabTestDefinitions).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentAdmissions).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentPrescriptions).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentTreatmentPlans).toHaveBeenCalledTimes(1);
-    expect(dashboard.getRecentReferrals).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentActivity).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentActivity).toHaveBeenCalledWith(10);
   });
 
   it('renders selected activity tab rows from the response', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-    dashboard.getRecentPrescriptions.and.returnValue(
-      of([
-        {
-          id: 'aaaa1111-2222-3333-4444-555555555555',
-          medicationName: 'Amoxicillin',
-          patientName: 'Ada',
-          createdAt: '2026-05-02T10:00:00Z',
-        },
-      ] as SuperAdminRecentItem[]),
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          prescriptions: [
+            {
+              id: 'aaaa1111-2222-3333-4444-555555555555',
+              medicationName: 'Amoxicillin',
+              patientName: 'Ada',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
     );
 
     const c = setup();
@@ -295,38 +317,31 @@ describe('SuperAdminComponent', () => {
   const TIMESTAMP_FIELDS_BY_TAB: {
     tab: ActivityKey;
     field: string;
-    serviceMethod:
-      | 'getRecentAdmissions'
-      | 'getRecentLabResults'
-      | 'getRecentLabOrders'
-      | 'getRecentReferrals'
-      | 'getRecentTreatmentPlans'
-      | 'getRecentPrescriptions';
+    bundleKey: keyof SuperAdminRecentActivityBundle;
   }[] = [
-    { tab: 'admissions', field: 'admissionDateTime', serviceMethod: 'getRecentAdmissions' },
-    { tab: 'labResults', field: 'resultDate', serviceMethod: 'getRecentLabResults' },
-    { tab: 'labOrders', field: 'orderDatetime', serviceMethod: 'getRecentLabOrders' },
-    { tab: 'referrals', field: 'submittedAt', serviceMethod: 'getRecentReferrals' },
-    { tab: 'treatmentPlans', field: 'timelineStartDate', serviceMethod: 'getRecentTreatmentPlans' },
-    { tab: 'prescriptions', field: 'createdAt', serviceMethod: 'getRecentPrescriptions' },
+    { tab: 'admissions', field: 'admissionDateTime', bundleKey: 'admissions' },
+    { tab: 'labResults', field: 'resultDate', bundleKey: 'labResults' },
+    { tab: 'labOrders', field: 'orderDatetime', bundleKey: 'labOrders' },
+    { tab: 'referrals', field: 'submittedAt', bundleKey: 'referrals' },
+    { tab: 'treatmentPlans', field: 'timelineStartDate', bundleKey: 'treatmentPlans' },
+    { tab: 'prescriptions', field: 'createdAt', bundleKey: 'prescriptions' },
   ];
 
-  for (const { tab, field, serviceMethod } of TIMESTAMP_FIELDS_BY_TAB) {
+  for (const { tab, field, bundleKey } of TIMESTAMP_FIELDS_BY_TAB) {
     it(`row timestamp extractor reads "${field}" for ${tab}`, () => {
       dashboard.getSummary.and.returnValue(of(fakeSummary()));
       platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-      dashboard[serviceMethod].and.returnValue(
-        of([
-          {
-            id: 'aaaa1111-2222-3333-4444-555555555555',
-            patientName: 'Ada',
-            // Set the entity's clinical-time field — but NOT createdAt
-            // (except for the prescriptions row, where `createdAt` IS
-            // the clinical-time field by design — see the comment on
-            // SuperAdminDashboardServiceImpl.getRecentPrescriptions).
-            [field]: '2026-05-04T10:00:00Z',
-          },
-        ] as unknown as SuperAdminRecentItem[]),
+      const row: SuperAdminRecentItem = {
+        id: 'aaaa1111-2222-3333-4444-555555555555',
+        patientName: 'Ada',
+        // Set the entity's clinical-time field — but NOT createdAt
+        // (except for the prescriptions row, where `createdAt` IS
+        // the clinical-time field by design — see the comment on
+        // SuperAdminDashboardServiceImpl.getRecentPrescriptions).
+        [field]: '2026-05-04T10:00:00Z',
+      };
+      dashboard.getRecentActivity.and.returnValue(
+        of(bundleWith({ [bundleKey]: [row] } as Partial<SuperAdminRecentActivityBundle>)),
       );
 
       const c = setup();
@@ -344,15 +359,19 @@ describe('SuperAdminComponent', () => {
     // that's the whole point of the Copilot finding.
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
-    dashboard.getRecentAdmissions.and.returnValue(
-      of([
-        {
-          id: 'adm-1',
-          patientName: 'Ada',
-          admissionDateTime: '2026-04-01T08:00:00Z',
-          createdAt: '2026-05-04T10:00:00Z', // late backfill
-        },
-      ] as unknown as SuperAdminRecentItem[]),
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          admissions: [
+            {
+              id: 'adm-1',
+              patientName: 'Ada',
+              admissionDateTime: '2026-04-01T08:00:00Z',
+              createdAt: '2026-05-04T10:00:00Z', // late backfill
+            },
+          ] as unknown as SuperAdminRecentItem[],
+        }),
+      ),
     );
 
     const c = setup();

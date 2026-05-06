@@ -8,8 +8,10 @@ import com.example.hms.payload.dto.LabOrderResponseDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.RecentActivityDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.security.audit.CrossTenantReadAudit;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AppointmentService;
@@ -51,6 +53,7 @@ class SuperAdminDashboardControllerTest {
     @Mock private PatientService patientService;
     @Mock private PlatformAnalyticsService analyticsService;
     @Mock private HospitalService hospitalService;
+    @Mock private CrossTenantReadAudit crossTenantReadAudit;
 
     @InjectMocks private SuperAdminDashboardController controller;
 
@@ -315,5 +318,169 @@ class SuperAdminDashboardControllerTest {
 
         verify(hospitalService).searchHospitals(
             eq("memo"), any(), any(), any(), anyInt(), anyInt(), any());
+    }
+
+    /* ────────────────────────────────────────────────────────────────────
+     * F3 — cross-tenant read audit hook.
+     * docs/super-admin-cross-tenant-design.md design call #4 / F5 follow-up:
+     * every cross-tenant read must go through the audit layer. These tests
+     * lock the wiring per endpoint so a future refactor that loses the
+     * audit call is caught immediately.
+     * ──────────────────────────────────────────────────────────────────── */
+
+    @Test
+    void getRecentEncounters_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentEncounters(anyInt(), any()))
+            .thenReturn(List.of(new EncounterResponseDTO(), new EncounterResponseDTO()));
+
+        controller.getRecentEncounters(20, Locale.ENGLISH);
+
+        verify(crossTenantReadAudit).recordCrossTenantRead("ENCOUNTER", "recent-encounters", 2);
+    }
+
+    @Test
+    void getRecentConsultations_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentConsultations(anyInt()))
+            .thenReturn(List.of(new ConsultationResponseDTO()));
+
+        controller.getRecentConsultations(20);
+
+        verify(crossTenantReadAudit).recordCrossTenantRead("CONSULTATION", "recent-consultations", 1);
+    }
+
+    @Test
+    void getRecentLabOrders_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentLabOrders(anyInt(), any()))
+            .thenReturn(List.of(new LabOrderResponseDTO()));
+        controller.getRecentLabOrders(20, Locale.ENGLISH);
+        verify(crossTenantReadAudit).recordCrossTenantRead("LAB_ORDER", "recent-lab-orders", 1);
+    }
+
+    @Test
+    void getRecentLabResults_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentLabResults(anyInt(), any()))
+            .thenReturn(List.of(LabResultResponseDTO.builder().build()));
+        controller.getRecentLabResults(20, Locale.ENGLISH);
+        verify(crossTenantReadAudit).recordCrossTenantRead("LAB_RESULT", "recent-lab-results", 1);
+    }
+
+    @Test
+    void getRecentLabTestDefinitions_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentLabTestDefinitions(anyInt()))
+            .thenReturn(List.of(new LabTestDefinitionResponseDTO()));
+        controller.getRecentLabTestDefinitions(20);
+        verify(crossTenantReadAudit).recordCrossTenantRead(
+            "LAB_TEST_DEFINITION", "recent-lab-test-definitions", 1);
+    }
+
+    @Test
+    void getRecentAdmissions_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentAdmissions(anyInt()))
+            .thenReturn(List.of(new AdmissionResponseDTO()));
+        controller.getRecentAdmissions(20);
+        verify(crossTenantReadAudit).recordCrossTenantRead("ADMISSION", "recent-admissions", 1);
+    }
+
+    @Test
+    void getRecentPrescriptions_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentPrescriptions(anyInt(), any()))
+            .thenReturn(List.of(new PrescriptionResponseDTO()));
+        controller.getRecentPrescriptions(20, Locale.ENGLISH);
+        verify(crossTenantReadAudit).recordCrossTenantRead("PRESCRIPTION", "recent-prescriptions", 1);
+    }
+
+    @Test
+    void getRecentTreatmentPlans_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentTreatmentPlans(anyInt()))
+            .thenReturn(List.of(new TreatmentPlanResponseDTO()));
+        controller.getRecentTreatmentPlans(20);
+        verify(crossTenantReadAudit).recordCrossTenantRead("TREATMENT_PLAN", "recent-treatment-plans", 1);
+    }
+
+    @Test
+    void getRecentReferrals_recordsCrossTenantReadAudit() {
+        when(dashboardService.getRecentReferrals(anyInt()))
+            .thenReturn(List.of(new GeneralReferralResponseDTO()));
+        controller.getRecentReferrals(20);
+        verify(crossTenantReadAudit).recordCrossTenantRead("REFERRAL", "recent-referrals", 1);
+    }
+
+    @Test
+    void searchHospitalsForScopeChip_recordsCrossTenantReadAudit() {
+        HospitalContextHolder.setContext(superAdminContext());
+        when(hospitalService.searchHospitals(any(), any(), any(), any(), anyInt(), anyInt(), any()))
+            .thenReturn(List.of(new HospitalResponseDTO()));
+
+        controller.searchHospitalsForScopeChip("memo", 20, Locale.ENGLISH);
+
+        verify(crossTenantReadAudit).recordCrossTenantRead(
+            "HOSPITAL", "hospitals/search?q=memo", 1);
+    }
+
+    @Test
+    void searchHospitalsForScopeChip_doesNotAuditWhenJwtClaimAbsent() {
+        // Belt-and-braces gate trips first → no audit emission.
+        HospitalContextHolder.setContext(nonSuperAdminContext());
+
+        assertThatThrownBy(() ->
+            controller.searchHospitalsForScopeChip("memo", 20, Locale.ENGLISH))
+            .isInstanceOf(ResponseStatusException.class);
+
+        verify(crossTenantReadAudit, never()).recordCrossTenantRead(any(), any(), anyInt());
+    }
+
+    /* ────────────────────────────────────────────────────────────────────
+     * F5 — aggregate GET /super-admin/recent-activity.
+     * Replaces the dashboard's 8 fan-out calls with a single round-trip.
+     * docs/super-admin-cross-tenant-design.md F5.
+     * ──────────────────────────────────────────────────────────────────── */
+
+    @Test
+    void getRecentActivity_requiresSuperAdmin() throws Exception {
+        assertThat(preAuthorizeOf("getRecentActivity", int.class, Locale.class))
+            .contains("SUPER_ADMIN");
+    }
+
+    @Test
+    void getRecentActivity_returnsBundleAndAuditsTotalRowCount() {
+        // Each per-feed contributes a different number of rows so the
+        // aggregate `rowsReturned` (passed to the audit hook) can only
+        // be correct if the controller summed across all 9 feeds.
+        RecentActivityDTO bundle = RecentActivityDTO.builder()
+            .encounters(List.of(new EncounterResponseDTO(), new EncounterResponseDTO()))     // 2
+            .consultations(List.of(new ConsultationResponseDTO()))                            // 1
+            .labOrders(List.of())                                                             // 0
+            .labResults(List.of(LabResultResponseDTO.builder().build()))                      // 1
+            .labTestDefinitions(List.of(new LabTestDefinitionResponseDTO()))                  // 1
+            .admissions(List.of(new AdmissionResponseDTO()))                                  // 1
+            .prescriptions(List.of(new PrescriptionResponseDTO(), new PrescriptionResponseDTO()))// 2
+            .treatmentPlans(List.of())                                                        // 0
+            .referrals(List.of(new GeneralReferralResponseDTO()))                             // 1
+            .build();
+        when(dashboardService.getRecentActivity(anyInt(), any())).thenReturn(bundle);
+
+        ResponseEntity<RecentActivityDTO> result =
+            controller.getRecentActivity(20, Locale.ENGLISH);
+
+        assertThat(result.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(result.getBody()).isSameAs(bundle);
+        // F3 + F5: a single audit entry for the bundle, with the sum of
+        // all 9 per-feed row counts (2+1+0+1+1+1+2+0+1 = 9).
+        verify(crossTenantReadAudit).recordCrossTenantRead(
+            "RECENT_ACTIVITY_BUNDLE", "recent-activity", 9);
+    }
+
+    @Test
+    void getRecentActivity_propagatesCallerLocale() {
+        when(dashboardService.getRecentActivity(anyInt(), any()))
+            .thenReturn(RecentActivityDTO.builder()
+                .encounters(List.of()).consultations(List.of()).labOrders(List.of())
+                .labResults(List.of()).labTestDefinitions(List.of()).admissions(List.of())
+                .prescriptions(List.of()).treatmentPlans(List.of()).referrals(List.of())
+                .build());
+
+        controller.getRecentActivity(15, Locale.FRENCH);
+
+        verify(dashboardService).getRecentActivity(15, Locale.FRENCH);
     }
 }

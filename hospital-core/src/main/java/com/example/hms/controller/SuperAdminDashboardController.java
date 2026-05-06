@@ -11,11 +11,13 @@ import com.example.hms.payload.dto.HospitalResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.RecentActivityDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.security.audit.CrossTenantReadAudit;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.HospitalService;
@@ -46,6 +48,7 @@ public class SuperAdminDashboardController {
     private final PatientService patientService;
     private final PlatformAnalyticsService analyticsService;
     private final HospitalService hospitalService;
+    private final CrossTenantReadAudit crossTenantReadAudit;
 
     /** Hard cap on the typeahead page size to keep payloads small and predictable. */
     private static final int HOSPITAL_SEARCH_MAX_LIMIT = 20;
@@ -145,7 +148,9 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentEncounters(limit, locale));
+        List<EncounterResponseDTO> rows = dashboardService.getRecentEncounters(limit, locale);
+        crossTenantReadAudit.recordCrossTenantRead("ENCOUNTER", "recent-encounters", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     /**
@@ -186,7 +191,9 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<ConsultationResponseDTO>> getRecentConsultations(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentConsultations(limit));
+        List<ConsultationResponseDTO> rows = dashboardService.getRecentConsultations(limit);
+        crossTenantReadAudit.recordCrossTenantRead("CONSULTATION", "recent-consultations", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-lab-orders")
@@ -195,7 +202,9 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentLabOrders(limit, locale));
+        List<LabOrderResponseDTO> rows = dashboardService.getRecentLabOrders(limit, locale);
+        crossTenantReadAudit.recordCrossTenantRead("LAB_ORDER", "recent-lab-orders", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-lab-results")
@@ -204,7 +213,9 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentLabResults(limit, locale));
+        List<LabResultResponseDTO> rows = dashboardService.getRecentLabResults(limit, locale);
+        crossTenantReadAudit.recordCrossTenantRead("LAB_RESULT", "recent-lab-results", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-lab-test-definitions")
@@ -212,7 +223,9 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<LabTestDefinitionResponseDTO>> getRecentLabTestDefinitions(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentLabTestDefinitions(limit));
+        List<LabTestDefinitionResponseDTO> rows = dashboardService.getRecentLabTestDefinitions(limit);
+        crossTenantReadAudit.recordCrossTenantRead("LAB_TEST_DEFINITION", "recent-lab-test-definitions", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-admissions")
@@ -220,7 +233,9 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<AdmissionResponseDTO>> getRecentAdmissions(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentAdmissions(limit));
+        List<AdmissionResponseDTO> rows = dashboardService.getRecentAdmissions(limit);
+        crossTenantReadAudit.recordCrossTenantRead("ADMISSION", "recent-admissions", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-prescriptions")
@@ -229,7 +244,9 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentPrescriptions(limit, locale));
+        List<PrescriptionResponseDTO> rows = dashboardService.getRecentPrescriptions(limit, locale);
+        crossTenantReadAudit.recordCrossTenantRead("PRESCRIPTION", "recent-prescriptions", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-treatment-plans")
@@ -237,7 +254,9 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<TreatmentPlanResponseDTO>> getRecentTreatmentPlans(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentTreatmentPlans(limit));
+        List<TreatmentPlanResponseDTO> rows = dashboardService.getRecentTreatmentPlans(limit);
+        crossTenantReadAudit.recordCrossTenantRead("TREATMENT_PLAN", "recent-treatment-plans", rows.size());
+        return ResponseEntity.ok(rows);
     }
 
     @GetMapping("/recent-referrals")
@@ -245,7 +264,45 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<GeneralReferralResponseDTO>> getRecentReferrals(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
-        return ResponseEntity.ok(dashboardService.getRecentReferrals(limit));
+        List<GeneralReferralResponseDTO> rows = dashboardService.getRecentReferrals(limit);
+        crossTenantReadAudit.recordCrossTenantRead("REFERRAL", "recent-referrals", rows.size());
+        return ResponseEntity.ok(rows);
+    }
+
+    /**
+     * Aggregate recent-activity feed — F5 from
+     * {@code docs/super-admin-cross-tenant-design.md}. Returns the same
+     * nine lists the per-feed endpoints above produce, but in a single
+     * round-trip so the dashboard's "Recent clinical activity" panel
+     * doesn't fan out 8 HTTP calls per page load.
+     *
+     * <p>Audit: a single {@code DATA_ACCESS} entry per call, classified
+     * as {@code RECENT_ACTIVITY_BUNDLE}, instead of nine separate
+     * entries — keeps the audit trail compact while preserving
+     * traceability (the bundle's {@code rowsReturned} carries the
+     * total row count across all nine feeds, and any analyst can drill
+     * into the per-feed sort fields from the design doc).</p>
+     */
+    @GetMapping("/recent-activity")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<RecentActivityDTO> getRecentActivity(
+        @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
+        Locale locale
+    ) {
+        RecentActivityDTO bundle = dashboardService.getRecentActivity(limit, locale);
+        int totalRows =
+            bundle.getEncounters().size()
+                + bundle.getConsultations().size()
+                + bundle.getLabOrders().size()
+                + bundle.getLabResults().size()
+                + bundle.getLabTestDefinitions().size()
+                + bundle.getAdmissions().size()
+                + bundle.getPrescriptions().size()
+                + bundle.getTreatmentPlans().size()
+                + bundle.getReferrals().size();
+        crossTenantReadAudit.recordCrossTenantRead(
+            "RECENT_ACTIVITY_BUNDLE", "recent-activity", totalRows);
+        return ResponseEntity.ok(bundle);
     }
 
     /**
@@ -287,6 +344,8 @@ public class SuperAdminDashboardController {
         // active=true: typeahead never offers archived/suspended tenants as a scope.
         List<HospitalResponseDTO> results = hospitalService.searchHospitals(
             trimmed, null, null, Boolean.TRUE, 0, safeLimit, locale);
+        crossTenantReadAudit.recordCrossTenantRead(
+            "HOSPITAL", "hospitals/search?q=" + trimmed, results.size());
         return ResponseEntity.ok(results);
     }
 }

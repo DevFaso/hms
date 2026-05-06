@@ -11,6 +11,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.RecentActivityDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
@@ -303,6 +304,36 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         var pageable = PageRequest.of(0, safeLimit,
             Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc("createdAt")));
         return generalReferralService.getRecentForSuperAdmin(pageable);
+    }
+
+    /**
+     * Compose all nine per-resource recent feeds into a single payload —
+     * F5 from {@code docs/super-admin-cross-tenant-design.md}. Delegates
+     * to the existing {@code getRecent*} methods so each feed's sort
+     * field, locale handling, and authorisation behaviour stays in
+     * exactly one place; this method is just a coordinator.
+     *
+     * <p>One outer {@code @Transactional(readOnly = true)} wraps all
+     * nine reads so they observe a single consistent snapshot. Without
+     * this, the nine feeds could each open their own transaction and a
+     * concurrent write between them would surface partial state in the
+     * dashboard (e.g. "5 encounters" in the counter but only 3 in the
+     * recent-encounters tab because a delete landed mid-fan-out).</p>
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public RecentActivityDTO getRecentActivity(int limit, Locale locale) {
+        return RecentActivityDTO.builder()
+            .encounters(getRecentEncounters(limit, locale))
+            .consultations(getRecentConsultations(limit))
+            .labOrders(getRecentLabOrders(limit, locale))
+            .labResults(getRecentLabResults(limit, locale))
+            .labTestDefinitions(getRecentLabTestDefinitions(limit))
+            .admissions(getRecentAdmissions(limit))
+            .prescriptions(getRecentPrescriptions(limit, locale))
+            .treatmentPlans(getRecentTreatmentPlans(limit))
+            .referrals(getRecentReferrals(limit))
+            .build();
     }
 
     private int sanitizeLimit(int requested, int defaultValue, int maxValue) {
