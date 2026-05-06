@@ -87,12 +87,30 @@ public class RoleValidator {
         return null;
     }
 
-    /** Resolve a single current hospital if there's exactly one active assignment */
+    /**
+     * Resolve a single current hospital if there's exactly one active
+     * assignment that has a hospital attached.
+     *
+     * <p>Important nuance: {@link UserRoleHospitalAssignment#getHospital()}
+     * is legally nullable (no {@code optional=false} on the JPA mapping).
+     * A {@code null} hospital represents a <b>global</b> assignment —
+     * the typical shape for a SUPER_ADMIN role granted without a tenant
+     * scope. Before the cross-tenant list-pages slice this method was
+     * rarely reached for super-admins (the {@code X-Hospital-Id} header
+     * was always set), but the new "global view" deliberately omits the
+     * header, so this method runs and used to NPE on
+     * {@code .getHospital().getId()} when the single assignment was
+     * global. Now we treat that case the same as "no resolvable single
+     * hospital" and return {@code null}, letting the caller's super-admin
+     * branch in {@link #requireActiveHospitalId()} take over.
+     */
     public UUID getCurrentHospitalId() {
         UUID uid = getCurrentUserId();
         if (uid == null) return null;
         List<UserRoleHospitalAssignment> active = assignmentRepository.findByUser_IdAndActiveTrue(uid);
-        return (active.size() == 1) ? active.get(0).getHospital().getId() : null;
+        if (active.size() != 1) return null;
+        var hospital = active.get(0).getHospital();
+        return hospital != null ? hospital.getId() : null;
     }
 
     /**

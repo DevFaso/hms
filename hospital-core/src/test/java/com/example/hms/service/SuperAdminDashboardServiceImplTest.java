@@ -305,4 +305,125 @@ class SuperAdminDashboardServiceImplTest {
         // the limit-applied tests above.
         assertThat(true).isTrue();
     }
+
+    /* ────────────────────────────────────────────────────────────────────
+     * Sort-field regression suite (Copilot review on commit 2678681f).
+     *
+     * Every getRecent* method must sort by a CLINICAL timestamp (when
+     * the event happened to the patient), not the row's `createdAt`
+     * (when the database row was inserted). Backfilled / migrated /
+     * late-edited rows would otherwise masquerade as the newest
+     * activity. `createdAt` is retained as the secondary tiebreaker so
+     * rows missing the primary timestamp still land in a stable order.
+     *
+     * These tests capture the `Pageable` argument the service hands to
+     * its downstream collaborator and assert the sort orders by name.
+     * If a future refactor silently flips the sort back to `createdAt`
+     * the assertion fails loudly.
+     * ──────────────────────────────────────────────────────────────────── */
+
+    private static void assertSortOrdersStartWith(
+        org.springframework.data.domain.Pageable pageable,
+        String... expectedFieldsInOrder
+    ) {
+        org.springframework.data.domain.Sort sort = pageable.getSort();
+        assertThat(sort.isSorted()).as("Pageable.sort").isTrue();
+        java.util.List<String> actual = sort.stream()
+            .map(o -> o.getProperty() + ":" + o.getDirection())
+            .toList();
+        java.util.List<String> expected = java.util.Arrays.stream(expectedFieldsInOrder)
+            .map(f -> f + ":DESC")
+            .toList();
+        assertThat(actual).as("sort orders").containsExactly(expected.toArray(new String[0]));
+    }
+
+    @Test
+    void getRecentEncounters_sortsByEncounterDateThenCreatedAt() {
+        when(encounterService.list(any(), any(), any(), any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentEncounters(5, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(encounterService)
+            .list(any(), any(), any(), any(), any(), any(), captor.capture(), any());
+        assertSortOrdersStartWith(captor.getValue(), "encounterDate", "createdAt");
+    }
+
+    @Test
+    void getRecentLabOrders_sortsByOrderDatetimeThenCreatedAt() {
+        when(labOrderRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentLabOrders(5, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(labOrderRepository).findAll(captor.capture());
+        assertSortOrdersStartWith(captor.getValue(), "orderDatetime", "createdAt");
+    }
+
+    @Test
+    void getRecentLabResults_sortsByResultDateThenCreatedAt() {
+        when(labResultService.getLabResultsPage(any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentLabResults(5, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(labResultService).getLabResultsPage(captor.capture(), any());
+        assertSortOrdersStartWith(captor.getValue(), "resultDate", "createdAt");
+    }
+
+    @Test
+    void getRecentAdmissions_sortsByAdmissionDateTimeThenCreatedAt() {
+        when(admissionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentAdmissions(5);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(admissionRepository).findAll(captor.capture());
+        assertSortOrdersStartWith(captor.getValue(), "admissionDateTime", "createdAt");
+    }
+
+    @Test
+    void getRecentTreatmentPlans_sortsByTimelineStartDateThenCreatedAt() {
+        when(treatmentPlanService.listAll(any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentTreatmentPlans(5);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(treatmentPlanService).listAll(any(), captor.capture());
+        assertSortOrdersStartWith(captor.getValue(), "timelineStartDate", "createdAt");
+    }
+
+    @Test
+    void getRecentReferrals_sortsBySubmittedAtThenCreatedAt() {
+        when(generalReferralService.getRecentForSuperAdmin(any(Pageable.class)))
+            .thenReturn(java.util.List.of());
+
+        service.getRecentReferrals(5);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(generalReferralService).getRecentForSuperAdmin(captor.capture());
+        assertSortOrdersStartWith(captor.getValue(), "submittedAt", "createdAt");
+    }
+
+    @Test
+    void getRecentPrescriptions_sortsByCreatedAtIntentionally() {
+        // Prescriptions stay on `createdAt` because that IS the clinical
+        // write event for this entity (no separate clinical-time field
+        // is universally populated). Lock the choice with a test so a
+        // future "consistency" refactor doesn't silently change it.
+        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
+            .thenReturn(new PageImpl<>(java.util.List.of()));
+
+        service.getRecentPrescriptions(5, Locale.ENGLISH);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        org.mockito.Mockito.verify(prescriptionService)
+            .list(any(), any(), any(), captor.capture(), any());
+        assertSortOrdersStartWith(captor.getValue(), "createdAt");
+    }
 }

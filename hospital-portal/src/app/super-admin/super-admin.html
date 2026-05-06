@@ -69,7 +69,14 @@
       </div>
     }
 
-    <!-- Recent clinical activity (tabbed) -->
+    <!-- Recent clinical activity (tabbed)
+         A11y: every role="tab" carries a unique id and aria-controls
+         pointing at the role="tabpanel"'s id (which itself sets
+         aria-labelledby back at the active tab). This is the linkage
+         screen-readers need to announce "{Tab label} tab, controls
+         {Panel label}". The panel id is static (one panel for all
+         tabs); aria-labelledby flips dynamically to whichever tab is
+         currently selected. -->
     <h2 class="section-heading">{{ 'SUPER_ADMIN.RECENT_CLINICAL_ACTIVITY' | translate }}</h2>
     <div class="activity-panel" data-test="activity-panel">
       <div class="activity-tabs" role="tablist">
@@ -78,8 +85,11 @@
             type="button"
             role="tab"
             class="activity-tab"
+            [id]="'activity-tab-' + tab.key"
+            [attr.aria-controls]="'activity-tabpanel'"
             [class.active]="selectedActivityTab() === tab.key"
             [attr.aria-selected]="selectedActivityTab() === tab.key"
+            [attr.tabindex]="selectedActivityTab() === tab.key ? 0 : -1"
             (click)="selectActivityTab(tab.key)"
           >
             <span class="material-symbols-outlined">{{ tab.icon }}</span>
@@ -89,7 +99,14 @@
         }
       </div>
 
-      <div class="activity-list" role="tabpanel" data-test="activity-list">
+      <div
+        class="activity-list"
+        role="tabpanel"
+        id="activity-tabpanel"
+        [attr.aria-labelledby]="'activity-tab-' + selectedActivityTab()"
+        tabindex="0"
+        data-test="activity-list"
+      >
         @if (selectedActivityRows().length === 0) {
           <div class="activity-empty">
             <span class="material-symbols-outlined">inbox</span>

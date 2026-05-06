@@ -5,7 +5,7 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { SuperAdminComponent } from './super-admin';
+import { ActivityKey, SuperAdminComponent } from './super-admin';
 import {
   DashboardService,
   RecentAuditEvent,
@@ -277,5 +277,124 @@ describe('SuperAdminComponent', () => {
 
     expect(c.countForTab(consultationTab)).toBe(22);
     expect(c.countForTab(referralTab)).toBe(99);
+  });
+
+  /* ────────────────────────────────────────────────────────────────────
+   * Copilot review on commit 2678681f.
+   * ──────────────────────────────────────────────────────────────────── */
+
+  // Finding #3: row-timestamp extractor must read the entity-specific
+  // clinical-time field, not just `createdAt` / a small allowlist. If
+  // the extractor falls back to null the activity panel renders rows
+  // with a blank timestamp.
+  //
+  // (The Angular DashboardService doesn't yet surface
+  // `getRecentEncounters` to the super-admin activity panel — that's
+  // a separate gap. Until the encounters tab is added here, we
+  // exercise the 7 tabs that DO exist plus their clinical-time field.)
+  const TIMESTAMP_FIELDS_BY_TAB: {
+    tab: ActivityKey;
+    field: string;
+    serviceMethod:
+      | 'getRecentAdmissions'
+      | 'getRecentLabResults'
+      | 'getRecentLabOrders'
+      | 'getRecentReferrals'
+      | 'getRecentTreatmentPlans'
+      | 'getRecentPrescriptions';
+  }[] = [
+    { tab: 'admissions', field: 'admissionDateTime', serviceMethod: 'getRecentAdmissions' },
+    { tab: 'labResults', field: 'resultDate', serviceMethod: 'getRecentLabResults' },
+    { tab: 'labOrders', field: 'orderDatetime', serviceMethod: 'getRecentLabOrders' },
+    { tab: 'referrals', field: 'submittedAt', serviceMethod: 'getRecentReferrals' },
+    { tab: 'treatmentPlans', field: 'timelineStartDate', serviceMethod: 'getRecentTreatmentPlans' },
+    { tab: 'prescriptions', field: 'createdAt', serviceMethod: 'getRecentPrescriptions' },
+  ];
+
+  for (const { tab, field, serviceMethod } of TIMESTAMP_FIELDS_BY_TAB) {
+    it(`row timestamp extractor reads "${field}" for ${tab}`, () => {
+      dashboard.getSummary.and.returnValue(of(fakeSummary()));
+      platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+      dashboard[serviceMethod].and.returnValue(
+        of([
+          {
+            id: 'aaaa1111-2222-3333-4444-555555555555',
+            patientName: 'Ada',
+            // Set the entity's clinical-time field — but NOT createdAt
+            // (except for the prescriptions row, where `createdAt` IS
+            // the clinical-time field by design — see the comment on
+            // SuperAdminDashboardServiceImpl.getRecentPrescriptions).
+            [field]: '2026-05-04T10:00:00Z',
+          },
+        ] as unknown as SuperAdminRecentItem[]),
+      );
+
+      const c = setup();
+      c.selectActivityTab(tab);
+
+      const rows = c.selectedActivityRows();
+      expect(rows.length).toBe(1);
+      expect(rows[0].timestamp).toBe('2026-05-04T10:00:00Z');
+    });
+  }
+
+  it('row timestamp prefers the clinical-time field over createdAt', () => {
+    // When both `admissionDateTime` (clinical) and `createdAt` (row
+    // insert) are present, the extractor must pick the clinical one —
+    // that's the whole point of the Copilot finding.
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentAdmissions.and.returnValue(
+      of([
+        {
+          id: 'adm-1',
+          patientName: 'Ada',
+          admissionDateTime: '2026-04-01T08:00:00Z',
+          createdAt: '2026-05-04T10:00:00Z', // late backfill
+        },
+      ] as unknown as SuperAdminRecentItem[]),
+    );
+
+    const c = setup();
+    c.selectActivityTab('admissions');
+
+    expect(c.selectedActivityRows()[0].timestamp).toBe('2026-04-01T08:00:00Z');
+  });
+
+  // Finding #4: tabs need id + aria-controls; the panel needs a matching
+  // id + aria-labelledby pointing back at the active tab. Without these
+  // a screen-reader user can't tell which panel each tab opens.
+  it('activity tabs and panel are wired together for screen readers', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    TestBed.configureTestingModule({
+      imports: [SuperAdminComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: DashboardService, useValue: dashboard },
+        { provide: PlatformService, useValue: platform },
+      ],
+    });
+    const fix = TestBed.createComponent(SuperAdminComponent);
+    fix.detectChanges();
+    const dom: HTMLElement = fix.nativeElement;
+
+    const tabs = dom.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    expect(tabs.length).toBeGreaterThan(0);
+    tabs.forEach((tab) => {
+      expect(tab.id).toMatch(/^activity-tab-/);
+      expect(tab.getAttribute('aria-controls')).toBe('activity-tabpanel');
+    });
+
+    const panel = dom.querySelector<HTMLElement>('[role="tabpanel"]');
+    expect(panel).toBeTruthy();
+    expect(panel!.id).toBe('activity-tabpanel');
+    // aria-labelledby points at the currently-selected tab's id
+    expect(panel!.getAttribute('aria-labelledby')).toBe(
+      `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
+    );
   });
 });

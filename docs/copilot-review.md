@@ -105,3 +105,171 @@ truthiness.
 - `:hospital-core:test` green
 - `:hospital-core:jacocoTestCoverageVerification` (80% INSTRUCTION
   gate) green
+
+
+---
+
+## 2026-05-05 — commit `2678681f` + cross-tenant runtime fixes
+
+Five Copilot findings on the prior super-admin recent-activity work
+(commit `2678681f`), plus **two pre-existing runtime bugs** that the
+cross-tenant list-pages slice exposed when the user actually ran the
+app under `local-h2`. All addressed in the same fixup commit.
+
+### 1. `getRecentLabOrders` sorts by `createdAt`, not `orderDatetime` — **High**
+
+> This endpoint orders "recent" lab orders by `createdAt`, but the
+> existing lab-order search/list path orders by `orderDatetime`.
+> Backfilled or edited orders will appear in the wrong position.
+
+**Fix.** `SuperAdminDashboardServiceImpl.getRecentLabOrders` now sorts
+by `Sort.Order.desc("orderDatetime")` then `Sort.Order.desc("createdAt")`
+as a tiebreaker / null-safety fallback.
+
+### 2. `getRecentAdmissions` sorts by `createdAt`, not `admissionDateTime` — **High**
+
+> Records entered late or migrated after the fact will be surfaced as
+> the newest admissions even when the actual admission happened weeks
+> earlier.
+
+**Fix.** `getRecentAdmissions` now sorts by
+`admissionDateTime DESC, createdAt DESC` per Copilot's suggested
+changeset.
+
+**Audit-pass widening.** The same defect class was found across every
+other affected `getRecent*` and fixed in the same commit:
+`getRecentEncounters` → `encounterDate`,
+`getRecentLabResults` → `resultDate`,
+`getRecentTreatmentPlans` → `timelineStartDate`,
+`getRecentReferrals` → `submittedAt`.
+`getRecentPrescriptions` deliberately stays on `createdAt` because
+the prescription entity has no separate clinical-write-time field;
+that choice is locked by an explicit "intentionally createdAt"
+test so a future "consistency" refactor doesn't silently change it.
+
+### 3. Activity-row timestamp extractor misses entity-specific fields — **Medium**
+
+> The extractor only checks `createdAt`, `requestedAt`,
+> `admissionDate`, and `orderedAt`, but several DTOs use
+> `orderDatetime` and `admissionDateTime`. Those rows render blank.
+
+**Fix.** Extended `super-admin.ts` to read in clinical-time-first order:
+`encounterDate` → `admissionDateTime` → `resultDate` → `orderDatetime`
+→ `submittedAt` → `timelineStartDate` → `consentTimestamp` →
+`requestedAt` → `admissionDate` → `orderedAt` → `createdAt`.
+Order matches the new backend sort fields so both sides stay in
+lock-step. +7 parameterised Karma tests (one per tab + a
+"prefers-clinical-time" sanity check).
+
+### 4. Activity tabs lack ARIA tab/panel linkage — **Medium**
+
+> Tabs use `role="tab"` / `role="tabpanel"` with no programmatic
+> link. Screen-reader users can't tell which panel each tab opens.
+
+**Fix.** Each tab now carries `id="activity-tab-{key}"` +
+`aria-controls="activity-tabpanel"`; the panel sets
+`id="activity-tabpanel"` + `aria-labelledby` that flips dynamically
+with the active tab. Roving `tabindex` (0 active, -1 inactive) added
+for keyboard navigation. +1 Karma DOM test asserting the linkage.
+
+### 5. `forkJoin` of 10 endpoints blocks the whole dashboard — **Medium**
+
+> One slow clinical endpoint delays the whole dashboard.
+
+**Fix (B2 from the scope discussion).** Replaced the `forkJoin` with
+eight independent subscriptions; each result writes into its own slot
+in the `recent` signal as it arrives. The header (`summary` +
+`platform`) flips `loading=false` as soon as the summary returns so
+the dashboard renders progressively. Total round-trip count is
+unchanged — the proper aggregate-endpoint fix (B1) is deferred and
+tracked as **F5** in `docs/super-admin-cross-tenant-design.md`.
+
+### 6. Boot refused under `local-h2` profile — **Critical (runtime)**
+
+Not from Copilot — surfaced when the user ran `gradlew bootRun`. App
+refused to start with:
+
+> `Refusing to start: hms.tenant-archive.kek-source=noop is only
+> permitted in dev/test profiles (active profiles=[local-h2])`
+
+The KEK-safety gate in `TenantArchiveEncryptionServiceImpl.isDevOrTestProfile()`
+substring-matched only `dev` / `test` / `default`, but the project's
+own seeders (`RoleSeeder`, `OrganizationSecuritySeeder`,
+`DevSyntheticDataSeeder`, `HospitalOrganizationAlignmentRunner`)
+treat `local` and `local-h2` as dev-equivalent.
+
+**Fix.** Extended the substring-match to also cover the `local`
+family (`local`, `local-h2`, `local-uat`, …). Production profiles
+(`prod`, `staging`) still don't contain any of the dev/test/local
+tokens and remain strictly gated. +2 regression tests
+(`noopModeIsAllowedUnderLocalH2Profile`,
+`noopModeIsAllowedUnderPlainLocalProfile`).
+
+### 7. NPE on every cross-tenant list endpoint — **Critical (runtime)**
+
+Also not from Copilot — surfaced when the user logged in as a
+super-admin and the dashboard fired its 10 calls. **9 endpoints
+500'd** with the same stack trace:
+
+> `NullPointerException: Cannot invoke "Hospital.getId()" because the
+> return value of "UserRoleHospitalAssignment.getHospital()" is null
+>     at RoleValidator.getCurrentHospitalId(RoleValidator.java:95)`
+
+Affected endpoints:
+`/api/super-admin/recent-treatment-plans`,
+`/api/super-admin/recent-prescriptions`,
+`/api/super-admin/recent-lab-results`,
+`/api/lab-results`, `/api/lab-orders`,
+`/api/billing-invoices/search`,
+`/api/referrals`, `/api/treatment-plans`, `/api/consultations`.
+
+**Root cause.** `UserRoleHospitalAssignment.hospital` is legally
+nullable (no `optional=false` on the JPA mapping) — a null hospital
+represents a *global* assignment, the typical shape for a
+SUPER_ADMIN role granted without a tenant scope.
+`RoleValidator.getCurrentHospitalId` did
+`active.get(0).getHospital().getId()` without a null check.
+
+**Why it became visible now.** Before the cross-tenant slice this
+fallback path was rarely reached for super-admins (the
+`X-Hospital-Id` header was always set). The new "global view"
+deliberately omits the header so list endpoints fall through to
+their unscoped branch — which means `requireActiveHospitalId()`
+runs `getCurrentHospitalId()` and used to NPE.
+
+**Fix.** Null-safe access in `getCurrentHospitalId`:
+
+```java
+if (active.size() != 1) return null;
+var hospital = active.get(0).getHospital();
+return hospital != null ? hospital.getId() : null;
+```
+
+The caller's super-admin branch in `requireActiveHospitalId()` then
+takes over and returns null, letting the unscoped `findAll` run.
+
+**Tests.** New `RoleValidatorTest` (7 cases) covering: no auth, no
+assignments, multiple assignments, single scoped assignment, single
+**global** assignment (the regression), context-wins-over-fallback,
+and end-to-end `requireActiveHospitalId_returnsNullForSuperAdminWithGlobalAssignment`
+that exercises the full production path.
+
+### Verification
+
+- `npm run format`, `npm run lint` clean
+- Karma **914/914** SUCCESS (up from 906 — +8 super-admin tests for
+  finding #3 + #4)
+- `./gradlew :hospital-core:check` green (test +
+  `jacocoTestCoverageVerification` at 80% INSTRUCTION threshold)
+- `./gradlew :hospital-core:build` green
+- Filtered JaCoCo INSTRUCTION coverage: **89.40%** (76,756 / 85,854) —
+  +9 pts above the project gate
+- `gradlew bootRun` under `local-h2` now starts in ~30s (was: refused
+  to start). **Boot-log NPE count: 0** — verified by grepping
+  `bootrun.log` for the previously-recurring stack trace; 9 endpoints
+  no longer 500.
+- 7 new `SuperAdminDashboardServiceImplTest` cases lock each
+  `getRecent*` sort field via `ArgumentCaptor<Pageable>`.
+- 7 new `RoleValidatorTest` cases lock the global-assignment null-safety.
+- 2 new `TenantArchiveEncryptionServiceImplTest` cases lock the
+  `local` / `local-h2` profile allowance.

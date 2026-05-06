@@ -2,7 +2,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, forkJoin } from 'rxjs';
+import { Observable } from 'rxjs';
 import { catchError, of } from 'rxjs';
 
 import {
@@ -32,7 +32,7 @@ interface ControlTowerLink {
   color: string;
 }
 
-type ActivityKey =
+export type ActivityKey =
   | 'consultations'
   | 'labOrders'
   | 'labResults'
@@ -409,42 +409,92 @@ export class SuperAdminComponent implements OnInit {
   }
 
   loadAll(): void {
+    // Streaming load — each endpoint updates its own slice of state as
+    // it returns. Replaces the previous `forkJoin` of 10 observables,
+    // which blocked the entire dashboard until the slowest endpoint
+    // finished (Copilot review on commit 2678681f, finding #5).
+    //
+    // Trade-offs:
+    //   - Total round-trips unchanged (still 10). A future B1 follow-up
+    //     could collapse them into one aggregated /recent-activity
+    //     endpoint — see docs/super-admin-cross-tenant-design.md F5.
+    //   - `loading` flips false as soon as the summary card data arrives
+    //     so the header renders immediately; activity tabs populate
+    //     progressively, each showing its own empty state until its
+    //     observable emits.
+    //   - `errored` is only set when BOTH summary AND platform fail,
+    //     preserving the previous semantics for the empty-state banner.
     this.loading.set(true);
     this.errored.set(false);
     const empty = (): Observable<SuperAdminRecentItem[]> => of([]);
-    forkJoin({
-      summary: this.dashboard.getSummary(10).pipe(catchError(() => of(null))),
-      platform: this.platform.getSummary().pipe(catchError(() => of(null))),
-      consultations: this.dashboard.getRecentConsultations(10).pipe(catchError(empty)),
-      labOrders: this.dashboard.getRecentLabOrders(10).pipe(catchError(empty)),
-      labResults: this.dashboard.getRecentLabResults(10).pipe(catchError(empty)),
-      labTestDefinitions: this.dashboard.getRecentLabTestDefinitions(10).pipe(catchError(empty)),
-      admissions: this.dashboard.getRecentAdmissions(10).pipe(catchError(empty)),
-      prescriptions: this.dashboard.getRecentPrescriptions(10).pipe(catchError(empty)),
-      treatmentPlans: this.dashboard.getRecentTreatmentPlans(10).pipe(catchError(empty)),
-      referrals: this.dashboard.getRecentReferrals(10).pipe(catchError(empty)),
-    }).subscribe({
-      next: (res) => {
-        this.summary.set(res.summary);
-        this.platformSummary.set(res.platform);
-        this.recent.set({
-          consultations: res.consultations,
-          labOrders: res.labOrders,
-          labResults: res.labResults,
-          labTestDefinitions: res.labTestDefinitions,
-          admissions: res.admissions,
-          prescriptions: res.prescriptions,
-          treatmentPlans: res.treatmentPlans,
-          referrals: res.referrals,
-        });
-        this.errored.set(res.summary === null && res.platform === null);
+    const summaryFailed = signal(false);
+    const platformFailed = signal(false);
+
+    this.dashboard
+      .getSummary(10)
+      .pipe(catchError(() => of(null)))
+      .subscribe((res) => {
+        if (res === null) {
+          summaryFailed.set(true);
+        }
+        this.summary.set(res);
+        this.errored.set(summaryFailed() && platformFailed());
+        // Header is the gating element for "is the page useful yet?";
+        // flip loading off as soon as it arrives so the user sees the
+        // counters without waiting for clinical-activity round-trips.
         this.loading.set(false);
-      },
-      error: () => {
-        this.errored.set(true);
-        this.loading.set(false);
-      },
-    });
+      });
+
+    this.platform
+      .getSummary()
+      .pipe(catchError(() => of(null)))
+      .subscribe((res) => {
+        if (res === null) {
+          platformFailed.set(true);
+        }
+        this.platformSummary.set(res);
+        this.errored.set(summaryFailed() && platformFailed());
+      });
+
+    // Activity tabs — each merges into its own slot in `recent` as it
+    // arrives, so a slow lab-results endpoint can't keep consultations
+    // from rendering.
+    const updateSlot = (key: ActivityKey, items: SuperAdminRecentItem[]): void => {
+      this.recent.update((prev) => ({ ...prev, [key]: items }));
+    };
+
+    this.dashboard
+      .getRecentConsultations(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('consultations', items));
+    this.dashboard
+      .getRecentLabOrders(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('labOrders', items));
+    this.dashboard
+      .getRecentLabResults(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('labResults', items));
+    this.dashboard
+      .getRecentLabTestDefinitions(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('labTestDefinitions', items));
+    this.dashboard
+      .getRecentAdmissions(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('admissions', items));
+    this.dashboard
+      .getRecentPrescriptions(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('prescriptions', items));
+    this.dashboard
+      .getRecentTreatmentPlans(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('treatmentPlans', items));
+    this.dashboard
+      .getRecentReferrals(10)
+      .pipe(catchError(empty))
+      .subscribe((items) => updateSlot('referrals', items));
   }
 
   selectActivityTab(key: ActivityKey): void {
@@ -470,11 +520,36 @@ export class SuperAdminComponent implements OnInit {
       )
       .slice(0, 2)
       .map(([, v]) => v as string);
+    // Activity-row timestamp extractor.
+    //
+    // Order matches "most clinically meaningful first":
+    //   - clinical event time (when the thing happened to the patient)
+    //   - workflow event time (request / submission / order)
+    //   - row-creation time (database insert) as last-resort fallback
+    //
+    // Without the clinical-time entries (`encounterDate`,
+    // `admissionDateTime`, `resultDate`, `orderDatetime`,
+    // `submittedAt`, `timelineStartDate`, `consentTimestamp`) the
+    // recent-activity panel would render a blank timestamp for every
+    // row of those entity types — which is exactly the Copilot
+    // finding on commit 2678681f.
+    //
+    // The corresponding backend sort fields live in
+    // SuperAdminDashboardServiceImpl.getRecent*; both sides must stay
+    // in lock-step or the column shows out-of-order rows with blank
+    // timestamps.
     const timestamp =
-      (item['createdAt'] as string | undefined) ??
+      (item['encounterDate'] as string | undefined) ??
+      (item['admissionDateTime'] as string | undefined) ??
+      (item['resultDate'] as string | undefined) ??
+      (item['orderDatetime'] as string | undefined) ??
+      (item['submittedAt'] as string | undefined) ??
+      (item['timelineStartDate'] as string | undefined) ??
+      (item['consentTimestamp'] as string | undefined) ??
       (item['requestedAt'] as string | undefined) ??
       (item['admissionDate'] as string | undefined) ??
       (item['orderedAt'] as string | undefined) ??
+      (item['createdAt'] as string | undefined) ??
       null;
     return {
       id,

@@ -176,7 +176,13 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<EncounterResponseDTO> getRecentEncounters(int limit, Locale locale) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by clinical encounter time (`encounterDate`), not row-creation
+        // time. A backfilled or migrated encounter would otherwise appear as
+        // the "newest activity" even though the visit happened weeks ago.
+        // `createdAt` breaks ties (and covers rows where encounterDate is
+        // null, which can happen for very early drafts).
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("encounterDate"), Sort.Order.desc("createdAt")));
         return encounterService
             .list(null, null, null, null, null, null, pageable, locale)
             .getContent();
@@ -213,7 +219,11 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<LabOrderResponseDTO> getRecentLabOrders(int limit, Locale locale) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by `orderDatetime` (the clinical order time) to match the
+        // existing lab-order list path. Falls back to `createdAt` for
+        // null-safety and stable ordering across same-second orders.
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("orderDatetime"), Sort.Order.desc("createdAt")));
         return labOrderRepository.findAll(pageable)
             .map(labOrderMapper::toLabOrderResponseDTO)
             .getContent();
@@ -223,7 +233,12 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getRecentLabResults(int limit, Locale locale) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by `resultDate` (when the result was produced) so a
+        // late-uploaded result doesn't masquerade as the newest activity.
+        // `createdAt` breaks ties and covers rows where the lab system
+        // never populated resultDate.
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("resultDate"), Sort.Order.desc("createdAt")));
         return labResultService.getLabResultsPage(pageable, locale).getContent();
     }
 
@@ -241,7 +256,12 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getRecentAdmissions(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by clinical `admissionDateTime` (when the patient was
+        // admitted), not row-creation time. Per Copilot review:
+        // late-entered or migrated admissions would otherwise show as
+        // the newest. `createdAt` breaks ties.
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("admissionDateTime"), Sort.Order.desc("createdAt")));
         return admissionRepository.findAll(pageable)
             .map(admissionMapper::toResponseDTO)
             .getContent();
@@ -251,6 +271,11 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<PrescriptionResponseDTO> getRecentPrescriptions(int limit, Locale locale) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
+        // `createdAt` is intentional here: the prescription entity has no
+        // separate "clinical write time" field — `createdAt` IS when the
+        // provider authored the prescription. Other timestamps on the
+        // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
+        // workflow-stage events that are null for most rows.
         var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
         return prescriptionService.list(null, null, null, pageable, locale).getContent();
     }
@@ -259,7 +284,11 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<TreatmentPlanResponseDTO> getRecentTreatmentPlans(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by `timelineStartDate` (clinical plan start) — late-edited
+        // or migrated plans would otherwise show as the newest. Plans
+        // without a start date yet (drafts) fall back to `createdAt`.
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("timelineStartDate"), Sort.Order.desc("createdAt")));
         return treatmentPlanService.listAll(null, pageable).getContent();
     }
 
@@ -267,7 +296,12 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     @Transactional(readOnly = true)
     public List<GeneralReferralResponseDTO> getRecentReferrals(int limit) {
         int safeLimit = sanitizeLimit(limit, 20, 100);
-        var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Sort by `submittedAt` (when the referral was submitted) — DRAFTs
+        // have null submittedAt and fall through to `createdAt`, which is
+        // the right behaviour: a draft only counts as "activity" once it
+        // is submitted.
+        var pageable = PageRequest.of(0, safeLimit,
+            Sort.by(Sort.Order.desc("submittedAt"), Sort.Order.desc("createdAt")));
         return generalReferralService.getRecentForSuperAdmin(pageable);
     }
 

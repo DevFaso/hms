@@ -318,11 +318,35 @@ can land as its own small fixup commit.
   once we adopt cursor/keyset pagination (design call #2 follow-up).
 - **Effort:** 1 migration.
 
+#### F5 — Aggregate `/super-admin/recent-activity` endpoint
+
+- **Origin:** Copilot review on commit 2678681f, finding #5 (later
+  closed by the streaming-load refactor in the
+  cross-tenant-list-pages fixup commit).
+- **Status (2026-05-05): PARTIALLY ADDRESSED.** The dashboard now
+  fires its 10 recent-activity calls in parallel and writes each
+  result into its own signal slot as it returns, so a slow endpoint
+  no longer blocks the rest of the dashboard from rendering (B2 from
+  the scope discussion). **The total round-trip count is unchanged.**
+- **Follow-up (B1, deferred):** Add a backend
+  `GET /api/super-admin/recent-activity?limit=N` returning a single
+  `RecentActivityDTO { consultations, labOrders, labResults,
+  labTestDefinitions, admissions, prescriptions, treatmentPlans,
+  referrals, encounters }` so the dashboard makes one round-trip
+  instead of ten. Frontend would replace the eight independent
+  subscriptions in `loadAll()` with a single subscription against the
+  new endpoint. Also a good moment to add a new `encounters` activity
+  tab + `getRecentEncounters` Angular service method (the gap that
+  surfaced while writing F5's spec coverage).
+- **Effort:** ~80 lines backend (DTO + service method composing the
+  existing 8 + controller wrapper + test) + ~30 lines frontend.
+
 These do not block shipping the chip + URL state + page wiring — the
 user-facing UX, the cross-tenant data flow, and the test coverage are
 all in place. The follow-ups harden the security posture (F1), align
 the search index with the query (F2), close the audit traceability
-gap (F3), and prepare for cursor pagination at scale (F4).
+gap (F3), prepare for cursor pagination at scale (F4), and collapse
+the dashboard to a single round-trip (F5).
 
 ---
 
