@@ -1,4 +1,5 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -64,6 +65,7 @@ interface ActivityRow {
 export class SuperAdminComponent implements OnInit {
   private readonly dashboard = inject(DashboardService);
   private readonly platform = inject(PlatformService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly loading = signal(true);
   readonly errored = signal(false);
@@ -434,9 +436,17 @@ export class SuperAdminComponent implements OnInit {
     const summaryFailed = signal(false);
     const platformFailed = signal(false);
 
+    // takeUntilDestroyed wired on every subscription so navigating away
+    // from the super-admin route during an in-flight request tears down
+    // the subscription instead of leaking it into the global Subscription
+    // tree. Mirrors the pattern used in HospitalScopeChipComponent /
+    // HospitalTypeaheadComponent. (Copilot review 2026-05-06.)
     this.dashboard
       .getSummary(10)
-      .pipe(catchError(() => of(null)))
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((res) => {
         if (res === null) {
           summaryFailed.set(true);
@@ -451,7 +461,10 @@ export class SuperAdminComponent implements OnInit {
 
     this.platform
       .getSummary()
-      .pipe(catchError(() => of(null)))
+      .pipe(
+        catchError(() => of(null)),
+        takeUntilDestroyed(this.destroyRef),
+      )
       .subscribe((res) => {
         if (res === null) {
           platformFailed.set(true);
@@ -463,21 +476,24 @@ export class SuperAdminComponent implements OnInit {
     // Aggregate recent-activity bundle — one call, 9 feeds. The service
     // already swallows transport errors into an empty bundle so we
     // don't need a per-tab catchError here.
-    this.dashboard.getRecentActivity(10).subscribe((bundle) => {
-      this.recent.set({
-        consultations: bundle.consultations ?? [],
-        labOrders: bundle.labOrders ?? [],
-        labResults: bundle.labResults ?? [],
-        labTestDefinitions: bundle.labTestDefinitions ?? [],
-        admissions: bundle.admissions ?? [],
-        prescriptions: bundle.prescriptions ?? [],
-        treatmentPlans: bundle.treatmentPlans ?? [],
-        referrals: bundle.referrals ?? [],
-        // bundle.encounters is fetched too; not surfaced as an activity
-        // tab today (that's a separate frontend follow-up — the tab
-        // map currently has 8 keys, encounters is on the cards row).
+    this.dashboard
+      .getRecentActivity(10)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((bundle) => {
+        this.recent.set({
+          consultations: bundle.consultations ?? [],
+          labOrders: bundle.labOrders ?? [],
+          labResults: bundle.labResults ?? [],
+          labTestDefinitions: bundle.labTestDefinitions ?? [],
+          admissions: bundle.admissions ?? [],
+          prescriptions: bundle.prescriptions ?? [],
+          treatmentPlans: bundle.treatmentPlans ?? [],
+          referrals: bundle.referrals ?? [],
+          // bundle.encounters is fetched too; not surfaced as an activity
+          // tab today (that's a separate frontend follow-up — the tab
+          // map currently has 8 keys, encounters is on the cards row).
+        });
       });
-    });
   }
 
   selectActivityTab(key: ActivityKey): void {

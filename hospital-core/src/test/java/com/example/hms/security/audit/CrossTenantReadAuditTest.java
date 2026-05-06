@@ -18,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -107,9 +108,17 @@ class CrossTenantReadAuditTest {
             new UsernamePasswordAuthenticationToken("admin", "n/a"));
         when(auditEventLogService.logEvent(org.mockito.ArgumentMatchers.any()))
             .thenThrow(new RuntimeException("simulated audit DB outage"));
+        CrossTenantReadAudit audit = new CrossTenantReadAudit(auditEventLogService);
 
-        // Must not throw.
-        new CrossTenantReadAudit(auditEventLogService)
-            .recordCrossTenantRead("ENCOUNTER", "recent-encounters", 1);
+        // Explicit assertion (Sonar S2699): the call must not propagate
+        // any exception — the read path has already returned data and
+        // an audit failure must never surface to the caller.
+        assertThatCode(() ->
+            audit.recordCrossTenantRead("ENCOUNTER", "recent-encounters", 1)
+        ).doesNotThrowAnyException();
+
+        // Belt-and-braces: the audit service WAS called (we exercised
+        // the throwing branch, not the gating short-circuit).
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.any());
     }
 }

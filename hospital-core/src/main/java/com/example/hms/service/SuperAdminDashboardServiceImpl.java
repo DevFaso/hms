@@ -36,6 +36,8 @@ import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -80,6 +82,34 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final GeneralReferralService generalReferralService;
     private final LabOrderMapper labOrderMapper;
     private final AdmissionMapper admissionMapper;
+
+    /**
+     * Self-reference for the Spring AOP proxy. Used by
+     * {@link #getRecentActivity(int, Locale)} to call the nine per-feed
+     * {@code getRecent*} methods <i>through</i> the proxy so each one's
+     * {@code @Transactional(readOnly = true)} actually applies.
+     *
+     * <p>Why this is needed: Spring's transaction management is
+     * proxy-based — calling {@code this.getRecentEncounters(...)} bypasses
+     * the proxy and silently drops the inner method's transactional
+     * configuration. Sonar S6809 / S6809-fr flags this exact pattern.
+     * In our case the outer method is also {@code @Transactional} so the
+     * functional behaviour is correct (REQUIRED propagation joins the
+     * outer tx anyway), but the inner annotations would become
+     * load-bearing the day someone removes the outer one — better to
+     * keep them honest now.</p>
+     *
+     * <p>{@code @Lazy} breaks the otherwise-circular constructor
+     * dependency Spring would detect (this bean depending on itself).
+     * Setter injection (rather than adding to {@code @RequiredArgsConstructor})
+     * keeps the existing 30-arg constructor untouched.</p>
+     */
+    private SuperAdminDashboardService self;
+
+    @Autowired
+    public void setSelf(@Lazy SuperAdminDashboardService self) {
+        this.self = self;
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -319,20 +349,27 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
      * concurrent write between them would surface partial state in the
      * dashboard (e.g. "5 encounters" in the counter but only 3 in the
      * recent-encounters tab because a delete landed mid-fan-out).</p>
+     *
+     * <p>Each per-feed call goes through {@link #self} (the AOP proxy)
+     * rather than {@code this} so the inner methods' own
+     * {@code @Transactional} annotations stay load-bearing — see the
+     * Javadoc on {@code self} above. With REQUIRED propagation each
+     * inner call joins the outer transaction, preserving the
+     * single-snapshot guarantee.</p>
      */
     @Override
     @Transactional(readOnly = true)
     public RecentActivityDTO getRecentActivity(int limit, Locale locale) {
         return RecentActivityDTO.builder()
-            .encounters(getRecentEncounters(limit, locale))
-            .consultations(getRecentConsultations(limit))
-            .labOrders(getRecentLabOrders(limit, locale))
-            .labResults(getRecentLabResults(limit, locale))
-            .labTestDefinitions(getRecentLabTestDefinitions(limit))
-            .admissions(getRecentAdmissions(limit))
-            .prescriptions(getRecentPrescriptions(limit, locale))
-            .treatmentPlans(getRecentTreatmentPlans(limit))
-            .referrals(getRecentReferrals(limit))
+            .encounters(self.getRecentEncounters(limit, locale))
+            .consultations(self.getRecentConsultations(limit))
+            .labOrders(self.getRecentLabOrders(limit, locale))
+            .labResults(self.getRecentLabResults(limit, locale))
+            .labTestDefinitions(self.getRecentLabTestDefinitions(limit))
+            .admissions(self.getRecentAdmissions(limit))
+            .prescriptions(self.getRecentPrescriptions(limit, locale))
+            .treatmentPlans(self.getRecentTreatmentPlans(limit))
+            .referrals(self.getRecentReferrals(limit))
             .build();
     }
 

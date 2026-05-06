@@ -96,6 +96,24 @@ class SuperAdminDashboardServiceImplTest {
 
     @InjectMocks private SuperAdminDashboardServiceImpl service;
 
+    /**
+     * In production Spring's container injects a proxy of the bean into
+     * {@code self} via {@code setSelf(@Lazy ...)} so
+     * {@link SuperAdminDashboardServiceImpl#getRecentActivity} can call
+     * the per-feed {@code getRecent*} methods through the AOP proxy
+     * (Sonar S6809). In Mockito-only unit tests there is no container
+     * and {@code @InjectMocks} doesn't call public setters, so we wire
+     * {@code self} to the same instance manually. Calling the real
+     * methods (rather than mocking them on a separate
+     * {@code SuperAdminDashboardService} mock) keeps the F5 composition
+     * test honest: it must verify each stubbed feed actually flows
+     * through the real {@code getRecent*} bodies.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void wireSelf() {
+        service.setSelf(service);
+    }
+
     @Test
     void getSummary_success() {
         when(userRepository.countByIsDeletedFalse()).thenReturn(100L);

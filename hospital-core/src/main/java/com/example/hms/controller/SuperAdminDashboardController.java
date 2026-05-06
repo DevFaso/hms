@@ -58,6 +58,30 @@ public class SuperAdminDashboardController {
     private static final int HOSPITAL_SEARCH_MIN_QUERY_LENGTH = 2;
 
     /**
+     * Belt-and-braces re-check that the caller is a <b>real</b> super-admin
+     * per the discrete {@code isSuperAdmin} JWT claim — not just per
+     * authorities (which {@link com.example.hms.security.JwtTokenProvider}
+     * inflates for real super-admins, and which an impersonation context
+     * could carry verbatim). Every cross-tenant endpoint on this controller
+     * must call this <i>before</i> reading data and <i>before</i> emitting
+     * the audit event, so neither the data nor the audit hook can be
+     * reached by a principal whose JWT does not carry the claim.
+     *
+     * <p>{@link PreAuthorize} stays in place as the first line of defence;
+     * this method is the second line. See design call #1 in
+     * {@code docs/super-admin-cross-tenant-design.md} and the F1 entry in
+     * {@code docs/copilot-review.md} (2026-05-06).</p>
+     *
+     * @throws ResponseStatusException 403 when the JWT claim is absent.
+     */
+    private void requireRealSuperAdminFromJwtClaim() {
+        if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Cross-tenant super-admin endpoint is restricted to principals carrying the isSuperAdmin JWT claim.");
+        }
+    }
+
+    /**
      * Aggregated metrics + a slice of recent audit events for dashboard widgets.
      */
     @GetMapping("/summary")
@@ -148,6 +172,7 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<EncounterResponseDTO> rows = dashboardService.getRecentEncounters(limit, locale);
         crossTenantReadAudit.recordCrossTenantRead("ENCOUNTER", "recent-encounters", rows.size());
         return ResponseEntity.ok(rows);
@@ -191,6 +216,7 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<ConsultationResponseDTO>> getRecentConsultations(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<ConsultationResponseDTO> rows = dashboardService.getRecentConsultations(limit);
         crossTenantReadAudit.recordCrossTenantRead("CONSULTATION", "recent-consultations", rows.size());
         return ResponseEntity.ok(rows);
@@ -202,6 +228,7 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<LabOrderResponseDTO> rows = dashboardService.getRecentLabOrders(limit, locale);
         crossTenantReadAudit.recordCrossTenantRead("LAB_ORDER", "recent-lab-orders", rows.size());
         return ResponseEntity.ok(rows);
@@ -213,6 +240,7 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<LabResultResponseDTO> rows = dashboardService.getRecentLabResults(limit, locale);
         crossTenantReadAudit.recordCrossTenantRead("LAB_RESULT", "recent-lab-results", rows.size());
         return ResponseEntity.ok(rows);
@@ -223,6 +251,7 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<LabTestDefinitionResponseDTO>> getRecentLabTestDefinitions(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<LabTestDefinitionResponseDTO> rows = dashboardService.getRecentLabTestDefinitions(limit);
         crossTenantReadAudit.recordCrossTenantRead("LAB_TEST_DEFINITION", "recent-lab-test-definitions", rows.size());
         return ResponseEntity.ok(rows);
@@ -233,6 +262,7 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<AdmissionResponseDTO>> getRecentAdmissions(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<AdmissionResponseDTO> rows = dashboardService.getRecentAdmissions(limit);
         crossTenantReadAudit.recordCrossTenantRead("ADMISSION", "recent-admissions", rows.size());
         return ResponseEntity.ok(rows);
@@ -244,6 +274,7 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<PrescriptionResponseDTO> rows = dashboardService.getRecentPrescriptions(limit, locale);
         crossTenantReadAudit.recordCrossTenantRead("PRESCRIPTION", "recent-prescriptions", rows.size());
         return ResponseEntity.ok(rows);
@@ -254,6 +285,7 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<TreatmentPlanResponseDTO>> getRecentTreatmentPlans(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<TreatmentPlanResponseDTO> rows = dashboardService.getRecentTreatmentPlans(limit);
         crossTenantReadAudit.recordCrossTenantRead("TREATMENT_PLAN", "recent-treatment-plans", rows.size());
         return ResponseEntity.ok(rows);
@@ -264,6 +296,7 @@ public class SuperAdminDashboardController {
     public ResponseEntity<List<GeneralReferralResponseDTO>> getRecentReferrals(
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
+        requireRealSuperAdminFromJwtClaim();
         List<GeneralReferralResponseDTO> rows = dashboardService.getRecentReferrals(limit);
         crossTenantReadAudit.recordCrossTenantRead("REFERRAL", "recent-referrals", rows.size());
         return ResponseEntity.ok(rows);
@@ -289,20 +322,30 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit,
         Locale locale
     ) {
+        requireRealSuperAdminFromJwtClaim();
         RecentActivityDTO bundle = dashboardService.getRecentActivity(limit, locale);
+        // Null-safe row count: every list is *expected* to be non-null
+        // because the service composes from real `getRecent*` calls (each
+        // returns at worst an empty list), but Copilot is right that
+        // RecentActivityDTO fields are nullable. A future partial-response
+        // path or a test stub passing null must not 500 the audit hook.
         int totalRows =
-            bundle.getEncounters().size()
-                + bundle.getConsultations().size()
-                + bundle.getLabOrders().size()
-                + bundle.getLabResults().size()
-                + bundle.getLabTestDefinitions().size()
-                + bundle.getAdmissions().size()
-                + bundle.getPrescriptions().size()
-                + bundle.getTreatmentPlans().size()
-                + bundle.getReferrals().size();
+            sizeOrZero(bundle.getEncounters())
+                + sizeOrZero(bundle.getConsultations())
+                + sizeOrZero(bundle.getLabOrders())
+                + sizeOrZero(bundle.getLabResults())
+                + sizeOrZero(bundle.getLabTestDefinitions())
+                + sizeOrZero(bundle.getAdmissions())
+                + sizeOrZero(bundle.getPrescriptions())
+                + sizeOrZero(bundle.getTreatmentPlans())
+                + sizeOrZero(bundle.getReferrals());
         crossTenantReadAudit.recordCrossTenantRead(
             "RECENT_ACTIVITY_BUNDLE", "recent-activity", totalRows);
         return ResponseEntity.ok(bundle);
+    }
+
+    private static int sizeOrZero(List<?> list) {
+        return list == null ? 0 : list.size();
     }
 
     /**
@@ -326,13 +369,10 @@ public class SuperAdminDashboardController {
             defaultValue = "" + HOSPITAL_SEARCH_DEFAULT_LIMIT) int limit,
         Locale locale
     ) {
-        if (!HospitalContextHolder.getContextOrEmpty().isSuperAdmin()) {
-            // The PreAuthorize check above can succeed for impersonation contexts
-            // where authorities were inflated; the JWT claim is the only signal
-            // that the caller is *really* a super-admin right now.
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                "Cross-tenant hospital search is restricted to super-admins.");
-        }
+        // Belt-and-braces: PreAuthorize succeeds for impersonation contexts
+        // with inflated authorities; the JWT claim is the only signal that
+        // the caller is *really* a super-admin right now.
+        requireRealSuperAdminFromJwtClaim();
 
         String trimmed = q == null ? "" : q.trim();
         if (trimmed.length() < HOSPITAL_SEARCH_MIN_QUERY_LENGTH) {

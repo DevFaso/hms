@@ -17,7 +17,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * Audit hook for cross-tenant reads performed by super-admins through the
@@ -125,9 +124,4 @@ public class CrossTenantReadAudit {
         }
     }
 
-    // Suppress "unused" warning while keeping the import explicit for clarity.
-    @SuppressWarnings("unused")
-    private static UUID nullSafePrincipal(HospitalContext ctx) {
-        return ctx == null ? null : ctx.getPrincipalUserId();
-    }
 }

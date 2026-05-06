@@ -403,3 +403,124 @@ they showed correct global totals while every list page returned 0.
 - Frontend Karma — **914/914 SUCCESS**.
 - `npm run format` clean (no files reformatted).
 - `npm run lint` clean (0 errors / 0 warnings).
+
+---
+
+## 2026-05-06 (b) — Copilot + Sonar review on the F1–F5 PR
+
+Six findings on PR #245 (the F1–F5 follow-up commit `3f5eb636`):
+five from Copilot, two High/Critical Sonar code smells. All
+addressed in a single fixup commit on the same branch before
+merging.
+
+### C1 / C2 — Cross-tenant `recent-*` endpoints lack JWT-claim re-check — **High**
+
+> The `/super-admin/recent-*` endpoints are gated only by
+> `@PreAuthorize("hasRole('SUPER_ADMIN')")`. Only `/hospitals/search`
+> does the additional `HospitalContextHolder.getContextOrEmpty().isSuperAdmin()`
+> check. Since these endpoints are also cross-tenant reads, they
+> should apply the same belt-and-braces JWT-claim gate (ideally via
+> a shared private helper) before calling the service and before
+> emitting the audit event.
+>
+> Same finding for `/recent-activity`.
+
+**Fix.** Extracted a private
+`SuperAdminDashboardController.requireRealSuperAdminFromJwtClaim()`
+helper that throws `ResponseStatusException(403)` when the JWT
+claim is absent. Called from all 9 `recent-*` endpoints + the new
+`/recent-activity` + the existing `/hospitals/search` (de-dup'd the
+inline check). Gate fires BEFORE the service call AND BEFORE the
+audit emission, so neither data nor audit can be reached by a
+principal whose JWT does not carry the claim.
+
+**Tests.** New parameterised
+`SuperAdminDashboardControllerTest.everyCrossTenantEndpoint_blocks403WhenJwtClaimAbsent`
+loops all 10 endpoints, verifies 403 + `verifyNoInteractions`
+on both `dashboardService` and `crossTenantReadAudit`. New
+`@BeforeEach setupSuperAdminContext()` sets a real-super-admin
+context as the default so existing happy-path tests don't each
+have to set it.
+
+### C3 — `totalRows` NPE risk on null `RecentActivityDTO` lists — **Medium**
+
+> `totalRows` calls `.size()` directly on each list. Since
+> `RecentActivityDTO` fields are nullable (not `@NotNull`), this can
+> throw NPE if any feed is omitted (future partial responses, test
+> stubs, error paths).
+
+**Fix.** Added a private static `sizeOrZero(List<?>)` helper, used
+for all 9 list size accumulations. The audit hook now records 0
+rows for a fully-null bundle instead of 500'ing.
+
+**Test.** New `getRecentActivity_isNullSafeWhenBundleListsAreNull`
+exercises an empty `RecentActivityDTO.builder().build()` and asserts
+`recordCrossTenantRead("RECENT_ACTIVITY_BUNDLE", ..., 0)`.
+
+### C4 — `nullSafePrincipal()` is unused dead code — **Minor**
+
+> The static helper is only present to justify keeping the `UUID`
+> import and should be removed.
+
+**Fix.** Removed both the helper and the now-unused
+`import java.util.UUID`. The `HospitalContext` import remains
+(still referenced by `getContextOrEmpty()`).
+
+### C5 — `super-admin.ts` subscriptions leak on navigation away — **Medium**
+
+> `loadAll()` creates subscriptions (`getSummary`,
+> `platform.getSummary`, `getRecentActivity`) without teardown. The
+> codebase already uses `takeUntilDestroyed` elsewhere; do the same
+> here to avoid leaks when navigating away.
+
+**Fix.** Injected `DestroyRef` and piped each of the three
+subscriptions through `takeUntilDestroyed(this.destroyRef)`,
+matching the pattern used in `HospitalScopeChipComponent` /
+`HospitalTypeaheadComponent`.
+
+### S6 — Self-invocation of `@Transactional` methods (Sonar S6809) — **Critical × 9**
+
+> `getRecentActivity` calls `getRecentEncounters(...)`,
+> `getRecentConsultations(...)`, etc. via `this`. Each inner method
+> is `@Transactional(readOnly = true)`, but Spring's proxy-based
+> transaction management bypasses self-invocations — the inner
+> annotations are silently dropped.
+
+**Fix.** Added a self-reference field
+`private SuperAdminDashboardService self` on
+`SuperAdminDashboardServiceImpl` with `@Autowired @Lazy`
+setter-injection (the `@Lazy` breaks the otherwise-circular
+constructor dep Spring would detect). `getRecentActivity` now calls
+through `self.getRecentEncounters(...)` etc., so the AOP proxy is
+crossed and each inner `@Transactional` actually applies. Setter
+injection (vs. extending the 30-arg `@RequiredArgsConstructor`)
+keeps the existing constructor untouched.
+
+**Test wiring.** Added `@BeforeEach service.setSelf(service)` in
+`SuperAdminDashboardServiceImplTest` — Mockito's `@InjectMocks`
+doesn't call public setters, so we wire the self-reference to the
+real instance for unit tests (no Spring container, so no proxy is
+needed; behaviour is correct via plain method dispatch).
+
+### S7 — `recordCrossTenantRead_swallowsExceptionsFromAuditService` lacks assertion (Sonar S2699) — **Blocker**
+
+> The test exercises the throwing path but has no assertion.
+
+**Fix.** Added explicit
+`assertThatCode(...).doesNotThrowAnyException()` plus a
+belt-and-braces `verify(auditEventLogService).logEvent(any())` to
+confirm we exercised the throwing branch (not the gating
+short-circuit).
+
+### Verification
+
+- `./gradlew :hospital-core:test` — green, full suite (+ 2 new
+  controller tests, + 1 new service-test `@BeforeEach`, all targeted
+  test classes pass).
+- `./gradlew :hospital-core:build` — **BUILD SUCCESSFUL**.
+- `./gradlew :hospital-core:jacocoTestCoverageVerification` — green.
+  Filtered INSTRUCTION coverage **89.46%** (gate ≥80%, +9.46 pts
+  above floor; 77,622 / 86,768 covered across the included classes).
+- Frontend Karma — **914/914 SUCCESS**.
+- `npm run format` clean. `npm run lint` clean (0 errors / 0
+  warnings).

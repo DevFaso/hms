@@ -57,6 +57,17 @@ class SuperAdminDashboardControllerTest {
 
     @InjectMocks private SuperAdminDashboardController controller;
 
+    @org.junit.jupiter.api.BeforeEach
+    void setupSuperAdminContext() {
+        // After the F1 / Copilot follow-up, every cross-tenant endpoint
+        // re-checks the JWT-claim super-admin flag via
+        // requireRealSuperAdminFromJwtClaim(). Default the HospitalContext
+        // to a real super-admin so the existing happy-path tests don't
+        // each have to set it; gate-test cases override this with
+        // nonSuperAdminContext().
+        HospitalContextHolder.setContext(superAdminContext());
+    }
+
     @AfterEach
     void clearTenantContext() {
         // Tests below set HospitalContextHolder; clear so we don't leak state
@@ -482,5 +493,65 @@ class SuperAdminDashboardControllerTest {
         controller.getRecentActivity(15, Locale.FRENCH);
 
         verify(dashboardService).getRecentActivity(15, Locale.FRENCH);
+    }
+
+    /**
+     * Copilot review 2026-05-06: {@code RecentActivityDTO} fields are
+     * nullable. The audit-hook row-count must treat null lists as 0
+     * rather than NPE. Builds a bundle where every list is null and
+     * verifies the controller (a) returns the body unchanged and (b)
+     * records 0 rows on the audit hook.
+     */
+    @Test
+    void getRecentActivity_isNullSafeWhenBundleListsAreNull() {
+        RecentActivityDTO sparseBundle = RecentActivityDTO.builder().build(); // all 9 lists null
+        when(dashboardService.getRecentActivity(anyInt(), any())).thenReturn(sparseBundle);
+
+        ResponseEntity<RecentActivityDTO> result =
+            controller.getRecentActivity(20, Locale.ENGLISH);
+
+        assertThat(result.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(result.getBody()).isSameAs(sparseBundle);
+        verify(crossTenantReadAudit).recordCrossTenantRead(
+            "RECENT_ACTIVITY_BUNDLE", "recent-activity", 0);
+    }
+
+    /* ────────────────────────────────────────────────────────────────────
+     * Copilot review 2026-05-06 — JWT-claim re-check on every cross-tenant
+     * endpoint. Each `recent-*` endpoint + `/recent-activity` must apply
+     * the same belt-and-braces gate the search endpoint already had,
+     * BEFORE calling the service and BEFORE emitting the audit event.
+     * ──────────────────────────────────────────────────────────────────── */
+
+    @Test
+    void everyCrossTenantEndpoint_blocks403WhenJwtClaimAbsent() {
+        // Override the @BeforeEach default with an inflated-authorities
+        // / no-claim context — what an impersonation token looks like.
+        HospitalContextHolder.setContext(nonSuperAdminContext());
+
+        java.util.List<Runnable> calls = java.util.List.of(
+            () -> controller.getRecentEncounters(10, Locale.ENGLISH),
+            () -> controller.getRecentConsultations(10),
+            () -> controller.getRecentLabOrders(10, Locale.ENGLISH),
+            () -> controller.getRecentLabResults(10, Locale.ENGLISH),
+            () -> controller.getRecentLabTestDefinitions(10),
+            () -> controller.getRecentAdmissions(10),
+            () -> controller.getRecentPrescriptions(10, Locale.ENGLISH),
+            () -> controller.getRecentTreatmentPlans(10),
+            () -> controller.getRecentReferrals(10),
+            () -> controller.getRecentActivity(10, Locale.ENGLISH)
+        );
+
+        for (Runnable call : calls) {
+            assertThatThrownBy(call::run)
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                    .isEqualTo(HttpStatus.FORBIDDEN));
+        }
+
+        // Critical: neither the data path nor the audit hook must have
+        // been reached. The gate fires BEFORE both.
+        org.mockito.Mockito.verifyNoInteractions(dashboardService);
+        verify(crossTenantReadAudit, never()).recordCrossTenantRead(any(), any(), anyInt());
     }
 }
