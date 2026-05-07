@@ -116,7 +116,11 @@ class ConsultationServiceImplTest {
     }
 
     @Test void getConsultationsForHospital_withoutStatus() {
-        when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any())).thenReturn(List.of());
+        // After fix: no-status path returns ALL consultations for the hospital
+        // (matches dashboard count(*) tile semantics). Was previously filtered
+        // to [REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS] which silently
+        // hid COMPLETED / CANCELLED rows and produced "tile says 3, list shows 0".
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId)).thenReturn(List.of());
         assertThat(service.getConsultationsForHospital(hospitalId, null)).isEmpty();
     }
 

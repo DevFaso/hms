@@ -60,6 +60,7 @@ class ConsultationRepositoryEntityGraphTest {
     private static final List<MethodSig> LIST_METHODS = List.of(
         MethodSig.of("findByPatient_IdOrderByRequestedAtDesc", UUID.class),
         MethodSig.of("findByHospital_IdAndStatusOrderByRequestedAtDesc", UUID.class, ConsultationStatus.class),
+        MethodSig.of("findByHospital_IdOrderByRequestedAtDesc", UUID.class),
         MethodSig.of("findByRequestingProvider_IdOrderByRequestedAtDesc", UUID.class),
         MethodSig.of("findByConsultant_IdAndStatusOrderByRequestedAtDesc", UUID.class, ConsultationStatus.class),
         MethodSig.of("findByConsultant_IdOrderByRequestedAtDesc", UUID.class),

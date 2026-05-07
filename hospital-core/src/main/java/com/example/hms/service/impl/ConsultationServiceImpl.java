@@ -142,10 +142,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (status != null) {
             consultations = consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(hospitalId, status);
         } else {
-            consultations = consultationRepository.findByHospitalAndStatuses(
-                hospitalId,
-                Arrays.asList(ConsultationStatus.REQUESTED, ConsultationStatus.ACKNOWLEDGED, ConsultationStatus.SCHEDULED, ConsultationStatus.IN_PROGRESS)
-            );
+            // No status filter ⇒ return ALL consultations for the hospital, matching
+            // the semantics of the cross-tenant SUPER_ADMIN path (which also
+            // returns all statuses) and matching the dashboard "Total Consultations"
+            // tile (which reads count(*) with no filter). Previously this fell
+            // through to findByHospitalAndStatuses with the 4 "active" statuses
+            // hard-coded — that silently hid COMPLETED / CANCELLED / DECLINED rows
+            // and produced the "Dashboard says 3, list shows 0" UX bug. Pending /
+            // active-only worklists already have their own dedicated endpoints
+            // (`/consultations/hospital/{id}/pending`).
+            consultations = consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId);
         }
         return consultations.stream()
             .map(this::toResponseDTO)

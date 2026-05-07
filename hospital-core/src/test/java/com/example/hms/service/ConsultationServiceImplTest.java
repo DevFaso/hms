@@ -344,15 +344,20 @@ class ConsultationServiceImplTest {
         }
 
         @Test
-        @DisplayName("returns active statuses when status is null")
-        void returnsActiveWhenNull() {
-            when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any()))
+        @DisplayName("returns ALL statuses when status is null (matches dashboard count(*) tile)")
+        void returnsAllWhenNull() {
+            // Was previously filtered to [REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS],
+            // which silently hid COMPLETED / CANCELLED rows and produced the
+            // "Dashboard says 3 Consultations, list shows 0" UX bug. Pending /
+            // active-only worklists already have a dedicated endpoint
+            // (`/consultations/hospital/{id}/pending`).
+            when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
                     .thenReturn(List.of());
 
             List<ConsultationResponseDTO> result = service.getConsultationsForHospital(hospitalId, null);
 
             assertThat(result).isEmpty();
-            verify(consultationRepository).findByHospitalAndStatuses(eq(hospitalId), any());
+            verify(consultationRepository).findByHospital_IdOrderByRequestedAtDesc(hospitalId);
         }
     }
 

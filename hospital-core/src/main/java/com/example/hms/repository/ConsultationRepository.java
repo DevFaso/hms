@@ -43,6 +43,20 @@ public interface ConsultationRepository extends JpaRepository<Consultation, UUID
     @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByHospital_IdAndStatusOrderByRequestedAtDesc(UUID hospitalId, ConsultationStatus status);
 
+    /**
+     * Hospital-scoped list with NO status filter — used by the
+     * {@code GET /api/consultations} hospital-scoped path when the caller
+     * passes no {@code status} param. Previously the code fell through to
+     * {@link #findByHospitalAndStatuses} with the 4 "active" statuses
+     * hard-coded, which silently hid {@code COMPLETED}/{@code CANCELLED}/
+     * {@code DECLINED} rows even though the dashboard tile counts them.
+     * The mismatch surfaced as "Dashboard says 3 Consultations, list shows 0"
+     * for super-admins viewing a hospital with only completed work and for
+     * any hospital-admin whose tenant has no active consultations.
+     */
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
+    List<Consultation> findByHospital_IdOrderByRequestedAtDesc(UUID hospitalId);
+
     @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByRequestingProvider_IdOrderByRequestedAtDesc(UUID providerId);
 
