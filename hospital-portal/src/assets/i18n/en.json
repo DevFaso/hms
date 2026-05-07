@@ -224,8 +224,12 @@
       "DESC": "Publishes a banner message to /topic/emergency-broadcast.",
       "MESSAGE": "Message",
       "SEVERITY": "Severity",
+      "SEVERITY_INFO": "Info",
+      "SEVERITY_WARN": "Warning",
+      "SEVERITY_CRITICAL": "Critical",
       "ACTION": "Send broadcast"
-    }
+    },
+    "REQUEST_FAILED": "Request failed."
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Issued by",

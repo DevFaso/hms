@@ -162,9 +162,11 @@
       <label>
         <span>{{ 'EMERGENCY.BROADCAST.SEVERITY' | translate }}</span>
         <select [ngModel]="broadcastSeverity()" (ngModelChange)="broadcastSeverity.set($event)">
-          <option value="INFO">INFO</option>
-          <option value="WARN">WARN</option>
-          <option value="CRITICAL">CRITICAL</option>
+          <option value="INFO">{{ 'EMERGENCY.BROADCAST.SEVERITY_INFO' | translate }}</option>
+          <option value="WARN">{{ 'EMERGENCY.BROADCAST.SEVERITY_WARN' | translate }}</option>
+          <option value="CRITICAL">
+            {{ 'EMERGENCY.BROADCAST.SEVERITY_CRITICAL' | translate }}
+          </option>
         </select>
       </label>
       <label>

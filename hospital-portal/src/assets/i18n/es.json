@@ -223,9 +223,13 @@
       "TITLE": "Banner de difusión",
       "DESC": "Publica un mensaje banner en /topic/emergency-broadcast.",
       "MESSAGE": "Mensaje",
+      "SEVERITY_INFO": "Información",
+      "SEVERITY_WARN": "Advertencia",
+      "SEVERITY_CRITICAL": "Crítico",
       "SEVERITY": "Gravedad",
       "ACTION": "Enviar difusión"
-    }
+    },
+    "REQUEST_FAILED": "La solicitud falló."
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Emitido por",

@@ -224,8 +224,12 @@
       "DESC": "Publie un message bannière sur /topic/emergency-broadcast.",
       "MESSAGE": "Message",
       "SEVERITY": "Gravité",
+      "SEVERITY_INFO": "Information",
+      "SEVERITY_WARN": "Avertissement",
+      "SEVERITY_CRITICAL": "Critique",
       "ACTION": "Envoyer la diffusion"
-    }
+    },
+    "REQUEST_FAILED": "La requête a échoué."
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Émis par",
