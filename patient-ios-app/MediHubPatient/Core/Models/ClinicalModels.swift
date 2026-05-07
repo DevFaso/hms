@@ -116,7 +116,9 @@ struct MedicationReconciliationDTO: Codable {
     let reconciliationAction: String?
 
     /// Legacy alias kept so existing call sites (`med.action`) keep compiling.
-    var action: String? { reconciliationAction }
+    var action: String? {
+        reconciliationAction
+    }
 
     private enum CodingKeys: String, CodingKey {
         case medicationName, dosage, frequency, route
@@ -127,9 +129,9 @@ struct MedicationReconciliationDTO: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         medicationName = try c.decodeIfPresent(String.self, forKey: .medicationName)
-        dosage         = try c.decodeIfPresent(String.self, forKey: .dosage)
-        frequency      = try c.decodeIfPresent(String.self, forKey: .frequency)
-        route          = try c.decodeIfPresent(String.self, forKey: .route)
+        dosage = try c.decodeIfPresent(String.self, forKey: .dosage)
+        frequency = try c.decodeIfPresent(String.self, forKey: .frequency)
+        route = try c.decodeIfPresent(String.self, forKey: .route)
         // Prefer the canonical key, fall back to the legacy one.
         reconciliationAction = try c.decodeIfPresent(String.self, forKey: .reconciliationAction)
             ?? c.decodeIfPresent(String.self, forKey: .action)
