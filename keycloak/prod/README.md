@@ -35,8 +35,20 @@ each downstream env reuses settings proven in the previous one.
 3. Under **Settings → Source → Config-as-code**, set the config path to
    `keycloak/prod/railway.toml`. (Yes, the same file for every env — the
    directory name is historical; this Dockerfile now serves all envs.)
-4. Under **Settings → Networking**, enable a public domain. Note the
-   generated domain (e.g. `hms-keycloak-dev.up.railway.app`).
+4. Under **Settings → Source → Branch**, set the branch to match the
+   environment. Railway defaults new services to `main`, which is wrong
+   for dev/uat — without this the service won't pick up Keycloak fixes
+   until they're promoted to `main`:
+
+   | Service | Branch |
+   | --- | --- |
+   | `hms-keycloak-dev` | `develop` |
+   | `hms-keycloak-uat` | `uat` |
+   | `hms-keycloak-prod` | `main` |
+
+5. Under **Settings → Networking**, enable a public domain. Note the
+   generated domain (e.g. `hms-keycloak-dev.up.railway.app` — Railway
+   may append your environment name as a suffix, e.g. `hms-keycloak-dev-dev`).
 
 ### 2. Provision Keycloak's Postgres
 
@@ -57,7 +69,7 @@ Under **Variables**, add:
 | `KC_DB_URL` | `jdbc:postgresql://${{hms-keycloak-<env>-db.PGHOST}}:${{hms-keycloak-<env>-db.PGPORT}}/${{hms-keycloak-<env>-db.PGDATABASE}}` | Reference-style so Railway wires it automatically. |
 | `KC_DB_USERNAME` | `${{hms-keycloak-<env>-db.PGUSER}}` | |
 | `KC_DB_PASSWORD` | `${{hms-keycloak-<env>-db.PGPASSWORD}}` | |
-| `KC_HOSTNAME` | `https://hms-keycloak-<env>.up.railway.app` | Must match the public domain exactly, including scheme. |
+| `KC_HOSTNAME` | `https://hms-keycloak-<env>.up.railway.app` | **Must include the `https://` scheme.** A bare hostname (no scheme) causes the account console to return HTTP 403 — Keycloak's URL builder gets ambiguous about the scheme behind Railway's edge proxy. No trailing slash. Must match the public domain exactly. |
 | `KC_BOOTSTRAP_ADMIN_USERNAME` | `kc-admin` (or your convention) | Used once on first boot. |
 | `KC_BOOTSTRAP_ADMIN_PASSWORD` | (generate 32 random bytes, base64) | **Rotate within 24 h** via the admin console. |
 | `KC_LOG_LEVEL` | `INFO` (`DEBUG` only for `dev` while troubleshooting) | Don't leave `DEBUG` on in uat/prod. |
