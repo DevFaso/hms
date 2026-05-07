@@ -131,8 +131,8 @@ class LabTestDefinitionSearchNullKeywordTest {
         Page<LabTestDefinition> hit = repository.search(
             "blood", null, null, null, null, PageRequest.of(0, 20));
 
-        // "blood" matches CBC.description ("Routine diagnostics") only via
-        // the .name path — name="Complete Blood Count" contains "Blood".
+        // "blood" matches CBC via the .name path only —
+        // name="Complete Blood Count" contains "Blood".
         assertThat(hit.getContent())
             .extracting(LabTestDefinition::getTestCode)
             .containsExactlyInAnyOrder("CBC");
