@@ -25,6 +25,16 @@ describe('EnumLabelPipe', () => {
     pipe = TestBed.runInInjectionContext(() => new EnumLabelPipe());
   });
 
+  // The pipe subscribes to TranslateService.onLangChange in its constructor.
+  // Each spec creates a fresh instance via `new EnumLabelPipe()` (rather than
+  // a host fixture that Angular would destroy automatically), so we must
+  // tear that subscription down by hand — otherwise subscribers from prior
+  // specs accumulate on the same TranslateService instance and we leak
+  // observers / risk cross-test interference. (Copilot review on PR #261.)
+  afterEach(() => {
+    pipe.ngOnDestroy();
+  });
+
   /* ── Tier 0: defensive null/empty ────────────────────────── */
 
   it('returns empty string for null / undefined / empty input', () => {
