@@ -30,7 +30,7 @@ ENV KC_DB=postgres \
 # service's Postgres + the migration script's output.
 COPY keycloak/realm-export.json /opt/keycloak/data/import/realm-export.json
 
-RUN /opt/keycloak/bin/kc.sh build
+RUN /opt/keycloak/bin/kc.sh build --legacy-observability-interface=true
 
 # --- Final image ---------------------------------------------------------
 FROM quay.io/keycloak/keycloak:26.0.7
@@ -58,4 +58,4 @@ EXPOSE 8080
 
 # Import the realm on every boot so realm-export.json changes are picked up.
 # `--optimized` skips the build step at runtime (already baked in above).
-ENTRYPOINT ["/bin/sh", "-c", "exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080}"]
+ENTRYPOINT ["/bin/sh", "-c", "exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080} --legacy-observability-interface=true"]
