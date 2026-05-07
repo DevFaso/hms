@@ -1758,7 +1758,9 @@
       "CREATED": "Department created",
       "SAVE_FAILED": "Failed to save department",
       "LOAD_FAILED": "Failed to load departments",
-      "NOT_FOUND": "Department not found"
+      "NOT_FOUND": "Department not found",
+      "DELETED": "Department deleted",
+      "DELETE_FAILED": "Failed to delete department"
     }
   },
   "ENCOUNTERS": {
@@ -2990,18 +2992,7 @@
     "SERVICES": "Services",
     "SERVICE_INFO": "Service Info",
     "SERVICE_LEVEL": "Service Level",
-    "SERVICE_TYPE": {
-      "EHR": "Electronic Health Records",
-      "BILLING": "Billing System",
-      "INVENTORY": "Inventory Management",
-      "LIS": "Lab Information System",
-      "ANALYTICS": "Analytics Platform",
-      "CLINICAL_ANALYTICS": "Clinical Analytics",
-      "REMOTE_MONITORING": "Remote Monitoring",
-      "PEDIATRIC_MESSAGING": "Pediatric Messaging",
-      "ORTHOPEDIC_IMAGING": "Orthopedic Imaging",
-      "RESPIRATORY_TELEHEALTH": "Respiratory Telehealth"
-    },
+    "SERVICE_TYPE": "Service Type",
     "SESSION_TIMEOUT": "Session Timeout",
     "SMTP_CONFIG": "SMTP Configuration",
     "SSO_CONFIG": "SSO Configuration",
@@ -3066,6 +3057,18 @@
       "TIER": "e.g. Gold, Silver",
       "RELEASE_NAME": "e.g. Q1 2025 Platform Release",
       "RELEASE_NOTES": "Additional release notes…"
+    },
+    "SERVICE_TYPES": {
+      "EHR": "Electronic Health Records",
+      "BILLING": "Billing System",
+      "INVENTORY": "Inventory Management",
+      "LIS": "Lab Information System",
+      "ANALYTICS": "Analytics Platform",
+      "CLINICAL_ANALYTICS": "Clinical Analytics",
+      "REMOTE_MONITORING": "Remote Monitoring",
+      "PEDIATRIC_MESSAGING": "Pediatric Messaging",
+      "ORTHOPEDIC_IMAGING": "Orthopedic Imaging",
+      "RESPIRATORY_TELEHEALTH": "Respiratory Telehealth"
     }
   },
   "PORTAL": {

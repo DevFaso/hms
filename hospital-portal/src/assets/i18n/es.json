@@ -1759,7 +1759,9 @@
       "CREATED": "Departamento creado",
       "SAVE_FAILED": "Error al guardar el departamento",
       "LOAD_FAILED": "Error al cargar los departamentos",
-      "NOT_FOUND": "Departamento no encontrado"
+      "NOT_FOUND": "Departamento no encontrado",
+      "DELETED": "Departamento eliminado",
+      "DELETE_FAILED": "Error al eliminar el departamento"
     }
   },
   "ENCOUNTERS": {
@@ -3084,18 +3086,7 @@
     "SERVICES": "Services",
     "SERVICE_INFO": "Info del servicio",
     "SERVICE_LEVEL": "Nivel de servicio",
-    "SERVICE_TYPE": {
-      "EHR": "Historial clínico electrónico",
-      "BILLING": "Sistema de facturación",
-      "INVENTORY": "Gestión de inventario",
-      "LIS": "Sistema de información de laboratorio",
-      "ANALYTICS": "Plataforma de análisis",
-      "CLINICAL_ANALYTICS": "Análisis clínico",
-      "REMOTE_MONITORING": "Monitoreo remoto",
-      "PEDIATRIC_MESSAGING": "Mensajería pediátrica",
-      "ORTHOPEDIC_IMAGING": "Imagenología ortopédica",
-      "RESPIRATORY_TELEHEALTH": "Telesalud respiratoria"
-    },
+    "SERVICE_TYPE": "Tipo de servicio",
     "SESSION_TIMEOUT": "Session Timeout",
     "SMTP_CONFIG": "SMTP Configuration",
     "SSO_CONFIG": "SSO Configuration",
@@ -3160,6 +3151,18 @@
       "TIER": "p. ej. Oro, Plata",
       "RELEASE_NAME": "p. ej. Lanzamiento Q1 2025",
       "RELEASE_NOTES": "Notas de versión adicionales…"
+    },
+    "SERVICE_TYPES": {
+      "EHR": "Historial clínico electrónico",
+      "BILLING": "Sistema de facturación",
+      "INVENTORY": "Gestión de inventario",
+      "LIS": "Sistema de información de laboratorio",
+      "ANALYTICS": "Plataforma de análisis",
+      "CLINICAL_ANALYTICS": "Análisis clínico",
+      "REMOTE_MONITORING": "Monitoreo remoto",
+      "PEDIATRIC_MESSAGING": "Mensajería pediátrica",
+      "ORTHOPEDIC_IMAGING": "Imagenología ortopédica",
+      "RESPIRATORY_TELEHEALTH": "Telesalud respiratoria"
     }
   },
   "PRESCRIPTIONS": {

@@ -1758,7 +1758,9 @@
       "CREATED": "Département créé",
       "SAVE_FAILED": "Échec de l'enregistrement du département",
       "LOAD_FAILED": "Échec du chargement des départements",
-      "NOT_FOUND": "Département introuvable"
+      "NOT_FOUND": "Département introuvable",
+      "DELETED": "Département supprimé",
+      "DELETE_FAILED": "Échec de la suppression du département"
     }
   },
   "ENCOUNTERS": {
@@ -2989,18 +2991,7 @@
     "SERVICES": "Services",
     "SERVICE_INFO": "Info du service",
     "SERVICE_LEVEL": "Niveau de service",
-    "SERVICE_TYPE": {
-      "EHR": "Dossiers de santé électroniques",
-      "BILLING": "Système de facturation",
-      "INVENTORY": "Gestion des stocks",
-      "LIS": "Système d'information de laboratoire",
-      "ANALYTICS": "Plateforme d'analytique",
-      "CLINICAL_ANALYTICS": "Analytique clinique",
-      "REMOTE_MONITORING": "Surveillance à distance",
-      "PEDIATRIC_MESSAGING": "Messagerie pédiatrique",
-      "ORTHOPEDIC_IMAGING": "Imagerie orthopédique",
-      "RESPIRATORY_TELEHEALTH": "Télémédecine respiratoire"
-    },
+    "SERVICE_TYPE": "Type de service",
     "SESSION_TIMEOUT": "Session Timeout",
     "SMTP_CONFIG": "SMTP Configuration",
     "SSO_CONFIG": "SSO Configuration",
@@ -3065,6 +3056,18 @@
       "TIER": "ex. Or, Argent",
       "RELEASE_NAME": "ex. Release plateforme T1 2025",
       "RELEASE_NOTES": "Notes de release supplémentaires…"
+    },
+    "SERVICE_TYPES": {
+      "EHR": "Dossiers de santé électroniques",
+      "BILLING": "Système de facturation",
+      "INVENTORY": "Gestion des stocks",
+      "LIS": "Système d'information de laboratoire",
+      "ANALYTICS": "Plateforme d'analytique",
+      "CLINICAL_ANALYTICS": "Analytique clinique",
+      "REMOTE_MONITORING": "Surveillance à distance",
+      "PEDIATRIC_MESSAGING": "Messagerie pédiatrique",
+      "ORTHOPEDIC_IMAGING": "Imagerie orthopédique",
+      "RESPIRATORY_TELEHEALTH": "Télémédecine respiratoire"
     }
   },
   "PORTAL": {

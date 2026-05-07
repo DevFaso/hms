@@ -315,8 +315,11 @@ export class DepartmentListComponent implements OnInit {
         this.loadDepartments();
       },
       error: (err) => {
+        // Delete-failure path needs its own key — falling back to
+        // SAVE_FAILED here would surface "Failed to save department" on
+        // a delete error (Copilot review on PR #256).
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DEPARTMENTS.TOAST.SAVE_FAILED'),
+          err?.error?.message ?? this.translate.instant('DEPARTMENTS.TOAST.DELETE_FAILED'),
         );
         this.deleting.set(false);
       },

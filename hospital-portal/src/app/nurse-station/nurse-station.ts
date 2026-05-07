@@ -353,11 +353,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       .administerMedication(prompt.taskId, { status: prompt.action, note: reason })
       .subscribe({
         next: () => {
+          // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
+          // signature), so feed it directly into the NURSE.MED_ACTION.* key.
+          // The prior `=== 'HOLD'` check was always false and silently coerced
+          // every Hold toast into "refused" — caught by Copilot review on PR #256.
           this.toast.success(
             this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
-              action: this.translate.instant(
-                'NURSE.MED_ACTION.' + (prompt.action === 'HOLD' ? 'HELD' : 'REFUSED'),
-              ),
+              action: this.translate.instant('NURSE.MED_ACTION.' + prompt.action),
             }),
           );
           this.actionInProgress.set(null);
