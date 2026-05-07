@@ -47,10 +47,13 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  *
  * <p>This test exercises the all-nulls call shape (the exact one
  * {@code SuperAdminDashboardServiceImpl#getRecentLabTestDefinitions}
- * makes — and the one the UAT super-admin hit). On H2 the test passes
- * either way; on Postgres without the CAST it would throw at
- * parse-time. Locking it as a test means a future "tidy up" that
- * removes the CAST will trip CI.</p>
+ * makes — and the one the UAT super-admin hit) under the
+ * {@code test} profile. It documents the intended repository behavior
+ * for that invocation shape, but because this {@link DataJpaTest}
+ * runs against H2, it does not by itself prove that a future removal
+ * of the {@code CAST} will fail in CI. A Postgres-backed repository
+ * test is still required to catch the Postgres-specific parse-time
+ * {@code lower(bytea)} regression.</p>
  */
 @DataJpaTest
 @ActiveProfiles("test")
