@@ -1,5 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin } from 'rxjs';
 import {
   LabService,
@@ -44,13 +45,14 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-qc-dashboard',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
   styleUrl: './lab-qc-dashboard.scss',
 })
 export class LabQcDashboardComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   loading = signal(true);
   qcSummary = signal<LabQcSummary[]>([]);
@@ -85,7 +87,7 @@ export class LabQcDashboardComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load QC dashboard data.');
+        this.toast.error(this.translate.instant('LAB_QC.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -106,7 +108,7 @@ export class LabQcDashboardComponent implements OnInit {
         this.loadingChart.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load QC events for chart.');
+        this.toast.error(this.translate.instant('LAB_QC.TOAST.CHART_LOAD_FAILED'));
         this.loadingChart.set(false);
       },
     });
