@@ -118,8 +118,10 @@ export class EmergencyComponent {
   private errorText(err: unknown): string {
     if (err && typeof err === 'object' && 'error' in err) {
       const inner = (err as { error?: { message?: string } }).error;
-      // Server-supplied messages are already i18n'd by the backend's
-      // GlobalExceptionHandler (Accept-Language honoured) — pass through.
+      // Pass through any server-provided message as-is. The backend
+      // GlobalExceptionHandler currently emits hardcoded English strings
+      // with no Accept-Language resolution, so this branch is not localised
+      // — only the client-side fallback below is.
       if (inner?.message) return inner.message;
     }
     // Fallback when the network call itself fails (no server response):
