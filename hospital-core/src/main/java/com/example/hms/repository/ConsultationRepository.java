@@ -2,6 +2,7 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.model.Consultation;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,20 +15,45 @@ import java.util.UUID;
 @Repository
 public interface ConsultationRepository extends JpaRepository<Consultation, UUID> {
 
+    /*
+     * Common attribute graph used by the read endpoints. Eagerly loads every
+     * association the response mapper dereferences (patient + its hospital
+     * registrations for MRN resolution, hospital, requesting/consultant staff,
+     * encounter), so a single SQL round-trip materialises everything via
+     * LEFT OUTER JOIN. Without this, the mapper triggers per-row lazy proxy
+     * initialisation; any dangling FK (e.g. a Patient hard-deleted while a
+     * Consultation still references it) raises EntityNotFoundException →
+     * 500 "A referenced record could not be found".
+     */
+    String LIST_GRAPH_PATIENT = "patient";
+    String LIST_GRAPH_PATIENT_REGS = "patient.hospitalRegistrations";
+    String LIST_GRAPH_HOSPITAL = "hospital";
+    String LIST_GRAPH_REQUESTER = "requestingProvider";
+    String LIST_GRAPH_CONSULTANT = "consultant";
+    String LIST_GRAPH_ENCOUNTER = "encounter";
+
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByPatient_IdOrderByRequestedAtDesc(UUID patientId);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByHospital_IdAndStatusOrderByRequestedAtDesc(UUID hospitalId, ConsultationStatus status);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByRequestingProvider_IdOrderByRequestedAtDesc(UUID providerId);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByConsultant_IdAndStatusOrderByRequestedAtDesc(UUID consultantId, ConsultationStatus status);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByConsultant_IdOrderByRequestedAtDesc(UUID consultantId);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findByStatusOrderByRequestedAtDesc(ConsultationStatus status);
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     List<Consultation> findAllByOrderByRequestedAtDesc();
 
+    @EntityGraph(attributePaths = {LIST_GRAPH_PATIENT, LIST_GRAPH_PATIENT_REGS, LIST_GRAPH_HOSPITAL, LIST_GRAPH_REQUESTER, LIST_GRAPH_CONSULTANT, LIST_GRAPH_ENCOUNTER})
     @Query("SELECT c FROM Consultation c WHERE c.hospital.id = :hospitalId " +
            "AND c.status IN :statuses ORDER BY c.urgency DESC, c.requestedAt ASC")
     List<Consultation> findByHospitalAndStatuses(

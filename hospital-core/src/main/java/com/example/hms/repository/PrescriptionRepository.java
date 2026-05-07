@@ -14,6 +14,18 @@ import java.util.UUID;
 @Repository
 public interface PrescriptionRepository extends JpaRepository<Prescription, UUID> {
 
+    /**
+     * SUPER_ADMIN cross-tenant fallback list. Overrides {@link JpaRepository#findAll(Pageable)}
+     * so the same {@link EntityGraph} as the hospital-scoped queries is applied — without it
+     * the mapper triggers lazy proxy initialisation per row, and any dangling FK
+     * (e.g. a Patient hard-deleted while a Prescription still references it) raises
+     * {@link jakarta.persistence.EntityNotFoundException} → 500 from
+     * {@code GlobalExceptionHandler.handleEntityNotFound}.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"patient", "patient.hospitalRegistrations", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    Page<Prescription> findAll(Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_Id(UUID patientId, Pageable pageable);
 
