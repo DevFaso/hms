@@ -650,16 +650,18 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/login##https://uat.hms.example.com/login##https://hms.example.com/login",
+        "post.logout.redirect.uris": "http://localhost:4200/login##https://hms.dev.bitnesttechs.com/login##https://uat.hms.example.com/login##https://hms.example.com/login",
         "access.token.lifespan": "900"
       },
       "redirectUris": [
         "http://localhost:4200/*",
+        "https://hms.dev.bitnesttechs.com/*",
         "https://uat.hms.example.com/*",
         "https://hms.example.com/*"
       ],
       "webOrigins": [
         "http://localhost:4200",
+        "https://hms.dev.bitnesttechs.com",
         "https://uat.hms.example.com",
         "https://hms.example.com"
       ],
