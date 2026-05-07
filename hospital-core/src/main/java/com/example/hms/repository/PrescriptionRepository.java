@@ -23,7 +23,7 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      * {@code GlobalExceptionHandler.handleEntityNotFound}.
      */
     @Override
-    @EntityGraph(attributePaths = {"patient", "patient.hospitalRegistrations", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findAll(Pageable pageable);
 
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
