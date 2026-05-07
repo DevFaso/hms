@@ -53,7 +53,10 @@ export class EmergencyComponent {
       // it is a global confirmation token that must match exactly across locales,
       // matching the placeholder shown in emergency.html
       // (EMERGENCY.FORCE_LOGOUT.CONFIRM_PLACEHOLDER).
-      this.logoutPanel.set({ ...FRESH_PANEL, error: this.translate.instant('EMERGENCY.CONFIRM_TYPED') });
+      this.logoutPanel.set({
+        ...FRESH_PANEL,
+        error: this.translate.instant('EMERGENCY.CONFIRM_TYPED'),
+      });
       return;
     }
     this.logoutPanel.set({ busy: true, result: null, error: null });
