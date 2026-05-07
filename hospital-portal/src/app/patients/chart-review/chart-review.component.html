@@ -371,7 +371,7 @@
                     <strong
                       >{{ 'CHART_REVIEW.IMPRESSION' | translate }}
                       @if (i.reportStatus) {
-                        ({{ i.reportStatus }})
+                        ({{ i.reportStatus | enumLabel: 'imagingReportStatus' }})
                       }
                       :
                     </strong>

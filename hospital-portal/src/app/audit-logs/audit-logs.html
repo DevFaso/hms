@@ -111,7 +111,7 @@
               <td>{{ l.entityType || '--' }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(l.status) }}">{{
-                  l.status | enumLabel: 'status'
+                  l.status | enumLabel: 'auditStatus'
                 }}</span>
               </td>
               <td class="ip-cell">{{ l.ipAddress || '--' }}</td>

@@ -134,7 +134,7 @@
               <td>{{ r.adherenceConcern ? '✓' : '—' }}</td>
               <td>
                 <span class="badge" [ngClass]="statusBadgeClass(r.status)">{{
-                  r.status | enumLabel: 'status'
+                  r.status | enumLabel: 'mtmReviewStatus'
                 }}</span>
               </td>
               <td>{{ r.followUpDate || '—' }}</td>

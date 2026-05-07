@@ -249,7 +249,7 @@
                 <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
                 <td>
                   <span class="badge" [ngClass]="getStatusClass(d.status)">{{
-                    d.status | enumLabel: 'status'
+                    d.status | enumLabel: 'dispenseStatus'
                   }}</span>
                 </td>
                 <td>{{ d.dispensedByName }}</td>
