@@ -1,6 +1,13 @@
 # After-Visit Summary on Patient Portal (iOS / Android) — User Stories
 
-**Source incident:** Encounter `c7483dd8-a204-499c-a5c1-59c5040a4386` (Patient `4b6ea3b4-…`, Hospital `513df1b3-…`) was checked out on **2026-04-11 16:18:21** with `status = COMPLETED`, `checkout_timestamp`, `follow_up_instructions` ("return to clinic after seeing the Cardiologist in 2 weeks") and `discharge_diagnoses` populated — but the patient's iOS / Android **Visit Summaries** screen is still empty the next day. Vitals, medications, and labs taken at the linked appointment are not appearing in the AVS.
+> **PHI handling.** This document describes a real production-incident shape but
+> uses **synthetic placeholders** for every identifier and clinical string —
+> never paste a real UUID, MRN, free-text instruction, diagnosis, or
+> patient/hospital name into this file. Anyone investigating the actual
+> incident should look up the real values in the operational data store and
+> keep them out of source control. (Per the Copilot/CodeQL review on PR #259.)
+
+**Source incident (synthetic example):** Encounter `ENCOUNTER_ID_EXAMPLE` (Patient `PATIENT_ID_EXAMPLE`, Hospital `HOSPITAL_ID_EXAMPLE`) was checked out on **YYYY-MM-DD HH:MM:SS** with `status = COMPLETED`, `checkout_timestamp`, `follow_up_instructions` ("Synthetic example: follow up with a specialist in N weeks") and `discharge_diagnoses` ("Synthetic example diagnosis") populated — but the patient's iOS / Android **Visit Summaries** screen is still empty the next day. Vitals, medications, and labs taken at the linked appointment are not appearing in the AVS.
 
 **Scope:** Patient Portal — Android ([patient-android-app/](patient-android-app/)) and iOS ([patient-ios-app/](patient-ios-app/)) — plus the Spring Boot backend that feeds `GET /me/patient/after-visit-summaries`.
 
@@ -153,7 +160,7 @@
 
 ---
 
-### US-AVS-010 — End-to-end test reproducing the 2026-04-11 incident
+### US-AVS-010 — End-to-end test reproducing the incident shape
 
 **As a** QA engineer
 **I want** a Playwright / instrumented mobile test that reproduces this exact scenario
@@ -226,7 +233,7 @@ Backend tests — [DischargeSummaryServiceImplTest.java](hospital-core/src/test/
 - New nested class `PortalPatientAvs` with 4 tests:
   - empty patient → counter `outcome=empty`
   - existing summary returned → counter `outcome=hit`
-  - **orphan COMPLETED encounter (the 2026-04-11 incident shape) → counter `outcome=backfilled`**, summary persisted with diagnoses + follow-up + notes
+  - **orphan COMPLETED encounter (the incident shape) → counter `outcome=backfilled`**, summary persisted with diagnoses + follow-up + notes
   - calling twice on a fully-enriched patient → no duplicate writes, counter increments to 2
 
 iOS — [ClinicalModels.swift](patient-ios-app/MediHubPatient/Core/Models/ClinicalModels.swift)
@@ -246,4 +253,4 @@ iOS — [ClinicalModels.swift](patient-ios-app/MediHubPatient/Core/Models/Clinic
 
 1. After deploy, watch Grafana for `hms.avs.portal.fetch{outcome="backfilled"}`.
 2. If the affected patient (or any patient with a COMPLETED encounter and an empty mobile screen) opens Visit Summaries, the structured log will print and the counter will increment.
-3. The 2026-04-11 incident encounter (`c7483dd8-…`) should be retroactively visible on iOS / Android once the patient pulls fresh data — the GET-path backfill+enrich already runs on every call.
+3. The affected encounter from the source incident (look up the real ID in the operational data store — keep it out of this doc) should be retroactively visible on iOS / Android once the patient pulls fresh data — the GET-path backfill+enrich already runs on every call.

@@ -32,6 +32,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -536,6 +537,18 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 dischargeSummaryRepository.save(summary);
                 created++;
                 log.info("Backfilled discharge summary for encounter {}", enc.getId());
+            } catch (DataIntegrityViolationException dup) {
+                // Concurrent backfill won the race: another mobile load (or the
+                // checkout-time write path firing in parallel) inserted a
+                // DischargeSummary for this encounter between our orphan query
+                // and our save. The unique constraint on
+                // discharge_summaries.encounter_id (V92) makes that observable
+                // here so we don't end up with duplicates. Treat as a no-op —
+                // the enrichment pass that follows will pick up the row that
+                // landed first. See Copilot review on PR #259.
+                log.info(
+                    "Backfill skipped for encounter {} — concurrent insert won the race; existing row will be used",
+                    enc.getId());
             } catch (Exception ex) {
                 log.warn("Failed to backfill discharge summary for encounter {}: {}",
                         enc.getId(), ex.getMessage());

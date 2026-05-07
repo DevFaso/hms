@@ -484,5 +484,46 @@ class DischargeSummaryServiceImplTest {
                     DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
                     DischargeSummaryServiceImpl.OUTCOME_HIT)).isEqualTo(2.0d);
         }
+
+        /**
+         * Concurrency contract for the portal-side backfill.
+         *
+         * <p>Two concurrent {@code /me/patient/after-visit-summaries} calls can
+         * both observe the same orphan COMPLETED encounter. One wins the
+         * insert; the other's {@code save()} surfaces as a
+         * {@link org.springframework.dao.DataIntegrityViolationException} thanks
+         * to the unique constraint on {@code discharge_summaries.encounter_id}
+         * added in V92. The service must catch that exception, log a friendly
+         * message, and let the GET endpoint return 200 with the row that
+         * landed first. (Copilot review on PR #259.)
+         */
+        @Test
+        @DisplayName("backfill is race-safe — DataIntegrityViolationException treated as no-op")
+        void portalFetch_concurrentInsertRace_isHandled() {
+            Encounter orphan = new Encounter();
+            orphan.setId(UUID.randomUUID());
+            orphan.setPatient(patient);
+            orphan.setHospital(hospital);
+            orphan.setStaff(staff);
+            orphan.setAssignment(assignment);
+            orphan.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            orphan.setCheckoutTimestamp(java.time.LocalDateTime.now().minusDays(1));
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of(orphan));
+            when(dischargeSummaryRepository.save(any()))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                            "duplicate key value violates unique constraint "
+                                + "\"uk_discharge_summaries_encounter_id\""));
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+            List<DischargeSummaryResponseDTO> result =
+                    service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(result).hasSize(1);
+            verify(dischargeSummaryRepository, org.mockito.Mockito.times(1)).save(any());
+        }
     }
 }
