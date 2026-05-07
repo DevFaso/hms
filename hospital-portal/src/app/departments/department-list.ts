@@ -7,7 +7,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ProfileService } from '../services/profile.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 interface Department {
   id: string;
@@ -49,6 +49,7 @@ export class DepartmentListComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly roleContext = inject(RoleContextService);
   private readonly profileService = inject(ProfileService);
+  private readonly translate = inject(TranslateService);
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
@@ -136,7 +137,7 @@ export class DepartmentListComponent implements OnInit {
   /** Name shown in the locked hospital display for non-SUPER_ADMIN */
   get lockedHospitalName(): string {
     const h = this.hospitals();
-    return h.length === 1 ? h[0].name : 'No hospital assigned';
+    return h.length === 1 ? h[0].name : this.translate.instant('DEPARTMENTS.NO_HOSPITAL_ASSIGNED');
   }
 
   /** Whether the hospital field should be a read-only locked display */
@@ -154,7 +155,7 @@ export class DepartmentListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load departments');
+        this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -251,7 +252,7 @@ export class DepartmentListComponent implements OnInit {
 
   submitForm(): void {
     if (!this.form.name || !this.form.code || !this.form.hospitalId) {
-      this.toast.error('Hospital, name, and code are required');
+      this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.REQUIRED_FIELDS'));
       return;
     }
     this.saving.set(true);
@@ -268,7 +269,11 @@ export class DepartmentListComponent implements OnInit {
 
     request$.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Department updated' : 'Department created');
+        this.toast.success(
+          this.translate.instant(
+            existing ? 'DEPARTMENTS.TOAST.UPDATED' : 'DEPARTMENTS.TOAST.CREATED',
+          ),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadDepartments();
@@ -304,13 +309,15 @@ export class DepartmentListComponent implements OnInit {
     this.deleting.set(true);
     this.http.delete(`/departments/${dept.id}`).subscribe({
       next: () => {
-        this.toast.success('Department deleted');
+        this.toast.success(this.translate.instant('DEPARTMENTS.TOAST.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadDepartments();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete department');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('DEPARTMENTS.TOAST.SAVE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });

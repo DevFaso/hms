@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { forkJoin, catchError, of } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
@@ -106,6 +106,7 @@ export class PlatformComponent implements OnInit {
   private readonly platformSvc = inject(PlatformService);
   private readonly orgSvc = inject(OrganizationService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Reactive state ── */
   activeView = signal<ActiveView>('dashboard');
@@ -239,11 +240,11 @@ export class PlatformComponent implements OnInit {
         a.download = `platform-snapshot-${new Date().toISOString().slice(0, 10)}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        this.toast.success('Snapshot exported successfully');
+        this.toast.success(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORTED'));
         this.saving.set(false);
       },
       error: () => {
-        this.toast.error('Failed to export snapshot');
+        this.toast.error(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'));
         this.saving.set(false);
       },
     });
@@ -264,7 +265,7 @@ export class PlatformComponent implements OnInit {
         }
       },
       error: () => {
-        this.toast.error('Failed to load organizations');
+        this.toast.error(this.translate.instant('PLATFORM.TOAST.ORGS_LOAD_FAILED'));
         this.servicesLoading.set(false);
       },
     });
@@ -283,7 +284,7 @@ export class PlatformComponent implements OnInit {
         this.servicesLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load organization services');
+        this.toast.error(this.translate.instant('PLATFORM.TOAST.ORG_SERVICES_LOAD_FAILED'));
         this.servicesLoading.set(false);
       },
     });
@@ -375,11 +376,13 @@ export class PlatformComponent implements OnInit {
         this.orgServices.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
         this.editingService.set(false);
         this.saving.set(false);
-        this.toast.success('Service updated successfully');
+        this.toast.success(this.translate.instant('PLATFORM.TOAST.SERVICE_UPDATED'));
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to update service');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PLATFORM.TOAST.SERVICE_UPDATE_FAILED'),
+        );
       },
     });
   }
@@ -396,11 +399,15 @@ export class PlatformComponent implements OnInit {
           this.selectedService.set(updated);
         }
         this.saving.set(false);
-        this.toast.success(`Service status changed to ${newStatus}`);
+        this.toast.success(
+          this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', { status: newStatus }),
+        );
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to change status');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PLATFORM.TOAST.STATUS_CHANGE_FAILED'),
+        );
       },
     });
   }
@@ -443,11 +450,15 @@ export class PlatformComponent implements OnInit {
         this.orgServices.update((list) => [...list, created]);
         this.registerDrawerOpen.set(false);
         this.saving.set(false);
-        this.toast.success(`Service "${f.serviceType}" registered`);
+        this.toast.success(
+          this.translate.instant('PLATFORM.TOAST.SERVICE_REGISTERED', { name: f.serviceType }),
+        );
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to register service');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PLATFORM.TOAST.SERVICE_REGISTER_FAILED'),
+        );
       },
     });
   }
@@ -460,17 +471,23 @@ export class PlatformComponent implements OnInit {
       this.platformSvc.unlinkHospital(link.hospitalId, svc.id).subscribe({
         next: () => {
           this.hospitalLinks.update((list) => list.filter((l) => l.id !== link.id));
-          this.toast.success(`Unlinked hospital "${link.hospitalName}"`);
+          this.toast.success(
+            this.translate.instant('PLATFORM.TOAST.HOSPITAL_UNLINKED', { name: link.hospitalName }),
+          );
         },
-        error: () => this.toast.error('Failed to unlink hospital'),
+        error: () =>
+          this.toast.error(this.translate.instant('PLATFORM.TOAST.HOSPITAL_UNLINK_FAILED')),
       });
     } else {
       this.platformSvc.linkHospital(link.hospitalId, svc.id, { enabled: true }).subscribe({
         next: (updated) => {
           this.hospitalLinks.update((list) => list.map((l) => (l.id === link.id ? updated : l)));
-          this.toast.success(`Linked hospital "${link.hospitalName}"`);
+          this.toast.success(
+            this.translate.instant('PLATFORM.TOAST.HOSPITAL_LINKED', { name: link.hospitalName }),
+          );
         },
-        error: () => this.toast.error('Failed to link hospital'),
+        error: () =>
+          this.toast.error(this.translate.instant('PLATFORM.TOAST.HOSPITAL_LINK_FAILED')),
       });
     }
   }
@@ -487,7 +504,7 @@ export class PlatformComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load catalog');
+        this.toast.error(this.translate.instant('PLATFORM.TOAST.CATALOG_LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -514,10 +531,10 @@ export class PlatformComponent implements OnInit {
             this.selectedOrgId.set(page.content[0].id);
             this.doProvision(page.content[0].id, item);
           } else {
-            this.toast.error('No organizations available to provision to');
+            this.toast.error(this.translate.instant('PLATFORM.TOAST.NO_ORGS_AVAILABLE'));
           }
         },
-        error: () => this.toast.error('Failed to load organizations'),
+        error: () => this.toast.error(this.translate.instant('PLATFORM.TOAST.ORGS_LOAD_FAILED')),
       });
       return;
     }
@@ -539,11 +556,15 @@ export class PlatformComponent implements OnInit {
     this.platformSvc.registerOrgService(orgId, request).subscribe({
       next: () => {
         this.saving.set(false);
-        this.toast.success(`"${item.displayName}" provisioned to organization`);
+        this.toast.success(
+          this.translate.instant('PLATFORM.TOAST.PROVISIONED', { name: item.displayName }),
+        );
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to provision service');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PLATFORM.TOAST.PROVISION_FAILED'),
+        );
       },
     });
   }
@@ -556,7 +577,7 @@ export class PlatformComponent implements OnInit {
     } else if (item.baseUrl) {
       window.open(item.baseUrl, '_blank');
     } else {
-      this.toast.info('No documentation URL available');
+      this.toast.info(this.translate.instant('PLATFORM.TOAST.NO_DOCS_URL'));
     }
   }
 
@@ -564,7 +585,7 @@ export class PlatformComponent implements OnInit {
     if (item.sandboxUrl) {
       window.open(item.sandboxUrl, '_blank');
     } else {
-      this.toast.info('No sandbox environment available');
+      this.toast.info(this.translate.instant('PLATFORM.TOAST.NO_SANDBOX'));
     }
   }
 
@@ -584,7 +605,7 @@ export class PlatformComponent implements OnInit {
   scheduleRelease(): void {
     const f = this.releaseForm();
     if (!f.name || !f.startsAt || !f.endsAt || !f.environment) {
-      this.toast.error('Name, environment, start and end times are required');
+      this.toast.error(this.translate.instant('PLATFORM.TOAST.RELEASE_REQUIRED_FIELDS'));
       return;
     }
 
@@ -605,12 +626,16 @@ export class PlatformComponent implements OnInit {
         this.releases.update((list) => [created, ...list]);
         this.releaseFormOpen.set(false);
         this.saving.set(false);
-        this.toast.success(`Release window "${created.name}" scheduled`);
+        this.toast.success(
+          this.translate.instant('PLATFORM.TOAST.RELEASE_SCHEDULED', { name: created.name }),
+        );
         this.loadDashboard();
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? 'Failed to schedule release window');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PLATFORM.TOAST.RELEASE_SCHEDULE_FAILED'),
+        );
       },
     });
   }
@@ -681,32 +706,38 @@ export class PlatformComponent implements OnInit {
   }
 
   serviceTypeLabel(type: PlatformServiceType): string {
-    const labels: Record<string, string> = {
-      EHR: 'Electronic Health Records',
-      BILLING: 'Billing System',
-      INVENTORY: 'Inventory Management',
-      LIMS: 'Lab Information System',
-      ANALYTICS: 'Analytics Platform',
-      CLINICAL_ANALYTICS: 'Clinical Analytics',
-      REMOTE_MONITORING: 'Remote Monitoring',
-      PEDIATRIC_MESSAGING: 'Pediatric Messaging',
-      ORTHO_IMAGING: 'Orthopedic Imaging',
-      RESP_TELEMED: 'Respiratory Telehealth',
+    const keys: Record<string, string> = {
+      EHR: 'PLATFORM.SERVICE_TYPE.EHR',
+      BILLING: 'PLATFORM.SERVICE_TYPE.BILLING',
+      INVENTORY: 'PLATFORM.SERVICE_TYPE.INVENTORY',
+      LIMS: 'PLATFORM.SERVICE_TYPE.LIS',
+      ANALYTICS: 'PLATFORM.SERVICE_TYPE.ANALYTICS',
+      CLINICAL_ANALYTICS: 'PLATFORM.SERVICE_TYPE.CLINICAL_ANALYTICS',
+      REMOTE_MONITORING: 'PLATFORM.SERVICE_TYPE.REMOTE_MONITORING',
+      PEDIATRIC_MESSAGING: 'PLATFORM.SERVICE_TYPE.PEDIATRIC_MESSAGING',
+      ORTHO_IMAGING: 'PLATFORM.SERVICE_TYPE.ORTHOPEDIC_IMAGING',
+      RESP_TELEMED: 'PLATFORM.SERVICE_TYPE.RESPIRATORY_TELEHEALTH',
     };
-    return labels[type] ?? type;
+    const key = keys[type];
+    return key ? this.translate.instant(key) : type;
   }
 
   taskActionLabel(status: string): string {
+    let key: string;
     switch (status) {
       case 'ON_TRACK':
-        return 'Run Now';
+        key = 'PLATFORM.TASK_ACTION.RUN_NOW';
+        break;
       case 'AT_RISK':
-        return 'Investigate';
+        key = 'PLATFORM.TASK_ACTION.INVESTIGATE';
+        break;
       case 'BLOCKED':
-        return 'Unblock';
+        key = 'PLATFORM.TASK_ACTION.UNBLOCK';
+        break;
       default:
-        return 'Run';
+        key = 'PLATFORM.TASK_ACTION.RUN';
     }
+    return this.translate.instant(key);
   }
 
   taskActionIcon(status: string): string {

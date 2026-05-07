@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 interface DepartmentDetail {
   id: string;
@@ -46,6 +46,7 @@ export class DepartmentDetailComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   department = signal<DepartmentDetail | null>(null);
   staff = signal<DepartmentStaff[]>([]);
@@ -71,7 +72,7 @@ export class DepartmentDetailComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Department not found');
+        this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.NOT_FOUND'));
         this.loading.set(false);
         this.router.navigate(['/departments']);
       },

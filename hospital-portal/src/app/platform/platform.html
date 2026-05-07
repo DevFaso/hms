@@ -882,7 +882,7 @@
               [ngModel]="registerForm().provider"
               (ngModelChange)="updateRegisterField('provider', $event)"
               name="provider"
-              placeholder="e.g. Epic, Cerner"
+              [placeholder]="'PLATFORM.PLACEHOLDER.VENDOR' | translate"
             />
           </div>
           <div class="form-group">
@@ -894,7 +894,7 @@
               [ngModel]="registerForm().baseUrl"
               (ngModelChange)="updateRegisterField('baseUrl', $event)"
               name="baseUrl"
-              placeholder="https://..."
+              [placeholder]="'PLATFORM.PLACEHOLDER.URL' | translate"
             />
           </div>
           <div class="form-group">
@@ -973,7 +973,7 @@
               [ngModel]="registerForm().serviceLevel"
               (ngModelChange)="updateRegisterField('serviceLevel', $event)"
               name="serviceLevel"
-              placeholder="e.g. Gold, Silver"
+              [placeholder]="'PLATFORM.PLACEHOLDER.TIER' | translate"
             />
           </div>
 
@@ -1195,7 +1195,7 @@
               (ngModelChange)="updateReleaseField('name', $event)"
               name="name"
               required
-              placeholder="e.g. Q1 2025 Platform Release"
+              [placeholder]="'PLATFORM.PLACEHOLDER.RELEASE_NAME' | translate"
             />
           </div>
           <div class="form-group">
@@ -1281,7 +1281,7 @@
               [ngModel]="releaseForm().notes"
               (ngModelChange)="updateReleaseField('notes', $event)"
               name="notes"
-              placeholder="Additional release notes…"
+              [placeholder]="'PLATFORM.PLACEHOLDER.RELEASE_NOTES' | translate"
             ></textarea>
           </div>
 

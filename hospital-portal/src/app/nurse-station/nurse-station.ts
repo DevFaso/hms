@@ -34,7 +34,7 @@ import {
   NurseCareNoteResponse,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
@@ -70,6 +70,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly encounterService = inject(EncounterService);
+  private readonly translate = inject(TranslateService);
   private refreshSub?: Subscription;
   private slowRefreshSub?: Subscription;
 
@@ -180,13 +181,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         vitals: this.nurseService.getVitalsDue(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load vitals');
+            this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_LOAD_FAILED'));
             return of([] as NurseVitalTask[]);
           }),
         ),
         medications: this.nurseService.getMedicationMAR(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load medications');
+            this.toast.error(this.translate.instant('NURSE.TOAST.MEDS_LOAD_FAILED'));
             return of([] as NurseMedicationTask[]);
           }),
         ),
@@ -223,13 +224,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         orders: this.nurseService.getOrders(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load orders');
+            this.toast.error(this.translate.instant('NURSE.TOAST.ORDERS_LOAD_FAILED'));
             return of([] as NurseOrderTask[]);
           }),
         ),
         handoffs: this.nurseService.getHandoffs(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load handoffs');
+            this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFFS_LOAD_FAILED'));
             return of([] as NurseHandoff[]);
           }),
         ),
@@ -319,12 +320,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.actionInProgress.set(taskId);
     this.nurseService.administerMedication(taskId, { status: 'GIVEN' }).subscribe({
       next: () => {
-        this.toast.success('Medication administered');
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
+            action: this.translate.instant('NURSE.MED_ACTION.GIVEN'),
+          }),
+        );
         this.actionInProgress.set(null);
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to record administration');
+        this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
         this.actionInProgress.set(null);
       },
     });
@@ -340,7 +345,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     if (!prompt) return;
     const reason = this.reasonText().trim();
     if (!reason) {
-      this.toast.error('A reason is required for Hold/Refuse');
+      this.toast.error(this.translate.instant('NURSE.TOAST.REASON_REQUIRED'));
       return;
     }
     this.actionInProgress.set(prompt.taskId);
@@ -348,13 +353,19 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       .administerMedication(prompt.taskId, { status: prompt.action, note: reason })
       .subscribe({
         next: () => {
-          this.toast.success(`Medication ${prompt.action.toLowerCase()}`);
+          this.toast.success(
+            this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
+              action: this.translate.instant(
+                'NURSE.MED_ACTION.' + (prompt.action === 'HOLD' ? 'HELD' : 'REFUSED'),
+              ),
+            }),
+          );
           this.actionInProgress.set(null);
           this.reasonPrompt.set(null);
           this.loadAll();
         },
         error: () => {
-          this.toast.error('Failed to record action');
+          this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
           this.actionInProgress.set(null);
         },
       });
@@ -393,19 +404,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     const form = this.vitalsForm();
     const hasAtLeastOne = Object.values(form).some((v) => v !== undefined && v !== '');
     if (!hasAtLeastOne) {
-      this.toast.error('Please enter at least one vital sign value.');
+      this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
     }
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
       next: () => {
-        this.toast.success(`Vitals recorded for ${target.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.VITALS_RECORDED', { patient: target.patientName }),
+        );
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to save vitals');
+        this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
         this.vitalsCapturing.set(false);
       },
     });
@@ -441,12 +454,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.actionInProgress.set(handoffId);
     this.nurseService.completeHandoff(handoffId).subscribe({
       next: () => {
-        this.toast.success('Handoff completed');
+        this.toast.success(this.translate.instant('NURSE.TOAST.HANDOFF_COMPLETED'));
         this.actionInProgress.set(null);
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to complete handoff');
+        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'));
         this.actionInProgress.set(null);
       },
     });
@@ -470,19 +483,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   submitCreateTask(): void {
     const form = this.taskForm();
     if (!form.patientId || !form.category) {
-      this.toast.error('Patient and category are required.');
+      this.toast.error(this.translate.instant('NURSE.TOAST.TASK_REQUIRED'));
       return;
     }
     this.taskCreating.set(true);
     this.nurseService.createNursingTask(form as NurseTaskCreateRequest).subscribe({
       next: (task) => {
-        this.toast.success(`Task created for ${task.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.TASK_CREATED', { patient: task.patientName }),
+        );
         this.taskCreating.set(false);
         this.closeTaskCreate();
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to create task');
+        this.toast.error(this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'));
         this.taskCreating.set(false);
       },
     });
@@ -494,12 +509,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       .completeNursingTask(taskId, note ? { completionNote: note } : undefined)
       .subscribe({
         next: () => {
-          this.toast.success('Task completed');
+          this.toast.success(this.translate.instant('NURSE.TOAST.TASK_COMPLETED'));
           this.actionInProgress.set(null);
           this.loadAll();
         },
         error: () => {
-          this.toast.error('Failed to complete task');
+          this.toast.error(this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'));
           this.actionInProgress.set(null);
         },
       });
@@ -538,7 +553,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         this.inboxUnreadCount.update((n) => Math.max(0, n - 1));
       },
-      error: () => this.toast.error('Failed to mark as read'),
+      error: () => this.toast.error(this.translate.instant('NURSE.TOAST.MARK_READ_FAILED')),
     });
   }
 
@@ -570,12 +585,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.careNoteCreating.set(true);
     this.nurseService.createCareNote(target.patientId, form).subscribe({
       next: (note: NurseCareNoteResponse) => {
-        this.toast.success(`Care note saved for ${note.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.NOTE_SAVED', { patient: note.patientName }),
+        );
         this.careNoteCreating.set(false);
         this.closeCareNote();
       },
       error: () => {
-        this.toast.error('Failed to save care note');
+        this.toast.error(this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
         this.careNoteCreating.set(false);
       },
     });
@@ -622,12 +639,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         if (active) {
           callback(active);
         } else {
-          this.toast.error('No active encounter found for this patient.');
+          this.toast.error(this.translate.instant('NURSE.TOAST.NO_ENCOUNTER'));
         }
       },
       error: () => {
         this.encounterLookupInProgress.set(false);
-        this.toast.error('Failed to look up encounter.');
+        this.toast.error(this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'));
       },
     });
   }

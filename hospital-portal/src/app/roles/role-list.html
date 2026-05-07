@@ -119,7 +119,7 @@
                 type="text"
                 [(ngModel)]="createForm.name"
                 name="name"
-                placeholder="e.g., ROLE_PHARMACIST"
+                [placeholder]="'ROLES.CODE_PLACEHOLDER_EXAMPLE' | translate"
                 required
               />
             </div>
