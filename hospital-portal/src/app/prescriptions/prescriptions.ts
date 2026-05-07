@@ -16,7 +16,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -43,6 +43,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly communityPharmacyService = inject(CommunityPharmacyService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -110,12 +111,12 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   prescriptionStatuses = [
-    { value: 'DRAFT', label: 'Draft' },
-    { value: 'PENDING_SIGNATURE', label: 'Pending Signature' },
-    { value: 'SIGNED', label: 'Signed' },
-    { value: 'TRANSMITTED', label: 'Transmitted' },
-    { value: 'CANCELLED', label: 'Cancelled' },
-    { value: 'DISCONTINUED', label: 'Discontinued' },
+    { value: 'DRAFT', labelKey: 'PRESCRIPTIONS.STATUS.DRAFT' },
+    { value: 'PENDING_SIGNATURE', labelKey: 'PRESCRIPTIONS.STATUS.PENDING_SIGNATURE' },
+    { value: 'SIGNED', labelKey: 'PRESCRIPTIONS.STATUS.SIGNED' },
+    { value: 'TRANSMITTED', labelKey: 'PRESCRIPTIONS.STATUS.TRANSMITTED' },
+    { value: 'CANCELLED', labelKey: 'PRESCRIPTIONS.STATUS.CANCELLED' },
+    { value: 'DISCONTINUED', labelKey: 'PRESCRIPTIONS.STATUS.DISCONTINUED' },
   ];
 
   emptyForm(): PrescriptionRequest {
@@ -225,7 +226,11 @@ export class PrescriptionsComponent implements OnInit {
         const advisories = saved?.cdsAdvisories ?? [];
         this.cdsAdvisories.set(advisories);
         this.cdsCriticalBlocked.set(false);
-        this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
+        this.toast.success(
+          this.translate.instant(
+            this.editing() ? 'PRESCRIPTIONS.TOAST.UPDATED' : 'PRESCRIPTIONS.TOAST.CREATED',
+          ),
+        );
         this.saving.set(false);
         this.load();
         // Only auto-close when there is nothing for the clinician to
@@ -245,7 +250,7 @@ export class PrescriptionsComponent implements OnInit {
           this.cdsCriticalBlocked.set(true);
           this.toast.error(this.extractErrorMessage(err));
         } else {
-          this.toast.error('Save failed');
+          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'));
         }
         this.saving.set(false);
       },
@@ -296,13 +301,13 @@ export class PrescriptionsComponent implements OnInit {
     this.deleting.set(true);
     this.prescriptionService.delete(this.deletingRx()!.id).subscribe({
       next: () => {
-        this.toast.success('Prescription deleted');
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -323,7 +328,7 @@ export class PrescriptionsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load prescriptions');
+        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -395,7 +400,11 @@ export class PrescriptionsComponent implements OnInit {
       .subscribe({
         next: (result) => {
           this.dispatching.set(false);
-          this.toast.success(`SMS sent to ${result.pharmacyName}`);
+          this.toast.success(
+            this.translate.instant('PRESCRIPTIONS.TOAST.SMS_SENT', {
+              pharmacy: result.pharmacyName,
+            }),
+          );
           this.closeDispatchModal();
         },
         error: (err) => {

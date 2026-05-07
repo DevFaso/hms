@@ -42,6 +42,34 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     List<LabResult> findAll();
 
+    /**
+     * Paginated unscoped {@code findAll} used by the super-admin
+     * cross-tenant view ({@code LabResultServiceImpl.getLabResultsPage}
+     * with {@code hospitalId == null}). Without this override Spring
+     * Data resolves the inherited {@code findAll(Pageable)} from
+     * {@link JpaRepository} which has no {@code @EntityGraph}, so the
+     * mapper sees uninitialised proxies and the {@code Hibernate.isInitialized(...)}
+     * defensive checks in {@code LabResultMapper#resolveHospitalName/...}
+     * return null — surfacing as empty HOSPITAL / ORDER CODE / PATIENT NAME
+     * / TEST columns on the cross-tenant Lab Results list page.
+     *
+     * <p>Identical attribute paths to the other {@code @EntityGraph}-decorated
+     * finders in this repo so the mapper's expectations stay uniform
+     * across scoped and unscoped queries.</p>
+     */
+    @Override
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    Page<LabResult> findAll(Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",

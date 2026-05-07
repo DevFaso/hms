@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Lab Test Definition Approval Queue</h1>
-      <p class="page-subtitle">Review and approve lab test definitions for clinical use</p>
+      <h1 class="page-title">{{ 'LAB_APPROVAL.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'LAB_APPROVAL.SUBTITLE' | translate }}</p>
     </div>
   </div>
 
@@ -13,28 +13,30 @@
       [class.active]="activeStatusFilter() === 'ALL'"
       (click)="setStatusFilter('ALL')"
     >
-      All ({{ definitions().length }})
+      {{ 'LAB_APPROVAL.TAB.ALL' | translate }} ({{ definitions().length }})
     </button>
     <button
       class="tab"
       [class.active]="activeStatusFilter() === 'DRAFT'"
       (click)="setStatusFilter('DRAFT')"
     >
-      Draft ({{ countByStatus('DRAFT') }})
+      {{ 'LAB_APPROVAL.TAB.DRAFT' | translate }} ({{ countByStatus('DRAFT') }})
     </button>
     <button
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
       (click)="setStatusFilter('PENDING_QA_REVIEW')"
     >
-      Pending QA Review ({{ countByStatus('PENDING_QA_REVIEW') }})
+      {{ 'LAB_APPROVAL.TAB.PENDING_QA' | translate }} ({{ countByStatus('PENDING_QA_REVIEW') }})
     </button>
     <button
       class="tab"
       [class.active]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
       (click)="setStatusFilter('PENDING_DIRECTOR_APPROVAL')"
     >
-      Pending Director Approval ({{ countByStatus('PENDING_DIRECTOR_APPROVAL') }})
+      {{ 'LAB_APPROVAL.TAB.PENDING_DIRECTOR' | translate }} ({{
+        countByStatus('PENDING_DIRECTOR_APPROVAL')
+      }})
     </button>
   </div>
 
@@ -42,7 +44,8 @@
     <span class="material-symbols-outlined">search</span>
     <input
       type="text"
-      placeholder="Search by name, code or category…"
+      [placeholder]="'LAB_APPROVAL.SEARCH_PLACEHOLDER' | translate"
+      [attr.aria-label]="'LAB_APPROVAL.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
       (input)="applyFilter()"
     />
@@ -51,7 +54,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading queue…</p>
+      <p>{{ 'LAB_APPROVAL.LOADING' | translate }}</p>
     </div>
   }
 
@@ -60,12 +63,12 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Code</th>
-            <th scope="col">Name</th>
-            <th scope="col">Category</th>
-            <th scope="col">Sample Type</th>
-            <th scope="col">Status</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.CODE' | translate }}</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.NAME' | translate }}</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.CATEGORY' | translate }}</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.SAMPLE_TYPE' | translate }}</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.STATUS' | translate }}</th>
+            <th scope="col">{{ 'LAB_APPROVAL.COL.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -90,7 +93,7 @@
                   <!-- View definition detail + validation studies -->
                   <button
                     class="btn-action btn-view"
-                    title="View definition & validation studies"
+                    [title]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
                     (click)="viewDefinition(def)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -100,10 +103,11 @@
                   @if (def.approvalStatus === 'DRAFT') {
                     <button
                       class="btn-action btn-submit"
-                      title="Submit for QA Review"
+                      [title]="'LAB_APPROVAL.ACTION.SUBMIT_TITLE' | translate"
                       (click)="openApprovalModal(def, 'SUBMIT_FOR_QA')"
                     >
-                      <span class="material-symbols-outlined">send</span> Submit
+                      <span class="material-symbols-outlined">send</span>
+                      {{ 'LAB_APPROVAL.ACTION.SUBMIT' | translate }}
                     </button>
                   }
 
@@ -114,17 +118,19 @@
                   ) {
                     <button
                       class="btn-action btn-review"
-                      title="Complete QA Review"
+                      [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
                       (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
                     >
-                      <span class="material-symbols-outlined">fact_check</span> QA Pass
+                      <span class="material-symbols-outlined">fact_check</span>
+                      {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
                     </button>
                     <button
                       class="btn-action btn-reject"
-                      title="Reject"
+                      [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
                       (click)="openApprovalModal(def, 'REJECT')"
                     >
-                      <span class="material-symbols-outlined">cancel</span> Reject
+                      <span class="material-symbols-outlined">cancel</span>
+                      {{ 'LAB_APPROVAL.ACTION.REJECT' | translate }}
                     </button>
                   }
 
@@ -135,17 +141,19 @@
                   ) {
                     <button
                       class="btn-action btn-approve"
-                      title="Approve"
+                      [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
                       (click)="openApprovalModal(def, 'APPROVE')"
                     >
-                      <span class="material-symbols-outlined">verified</span> Approve
+                      <span class="material-symbols-outlined">verified</span>
+                      {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
                     </button>
                     <button
                       class="btn-action btn-reject"
-                      title="Reject"
+                      [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
                       (click)="openApprovalModal(def, 'REJECT')"
                     >
-                      <span class="material-symbols-outlined">cancel</span> Reject
+                      <span class="material-symbols-outlined">cancel</span>
+                      {{ 'LAB_APPROVAL.ACTION.REJECT' | translate }}
                     </button>
                   }
                 </div>
@@ -160,12 +168,10 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">task_alt</span>
-      <h3>Queue is clear</h3>
+      <h3>{{ 'LAB_APPROVAL.EMPTY.TITLE' | translate }}</h3>
       <p>
         {{
-          searchTerm
-            ? 'No definitions match your search.'
-            : 'No definitions awaiting review or approval.'
+          (searchTerm ? 'LAB_APPROVAL.EMPTY.NO_MATCH' : 'LAB_APPROVAL.EMPTY.ALL_CLEAR') | translate
         }}
       </p>
     </div>
@@ -180,7 +186,11 @@
         <h2>
           {{ def.testName }} <span class="code-badge">{{ def.testCode }}</span>
         </h2>
-        <button class="close-btn" title="Close" (click)="closeDetail()">
+        <button
+          class="close-btn"
+          [title]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
+          (click)="closeDetail()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -189,22 +199,24 @@
         <!-- Definition meta -->
         <div class="detail-grid">
           <div class="detail-field">
-            <span class="field-label">Category</span>
+            <span class="field-label">{{ 'LAB_APPROVAL.FIELD.CATEGORY' | translate }}</span>
             <span class="field-value">{{ def.category || '—' }}</span>
           </div>
           <div class="detail-field">
-            <span class="field-label">Sample Type</span>
+            <span class="field-label">{{ 'LAB_APPROVAL.FIELD.SAMPLE_TYPE' | translate }}</span>
             <span class="field-value">{{ def.sampleType || '—' }}</span>
           </div>
           <div class="detail-field">
-            <span class="field-label">Approval Status</span>
+            <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
             <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
               {{ def.approvalStatus | titlecase }}
             </span>
           </div>
           @if (def.rejectionReason) {
             <div class="detail-field full-width">
-              <span class="field-label">Rejection Reason</span>
+              <span class="field-label">{{
+                'LAB_APPROVAL.FIELD.REJECTION_REASON' | translate
+              }}</span>
               <span class="field-value rejection">{{ def.rejectionReason }}</span>
             </div>
           }
@@ -212,23 +224,24 @@
 
         <!-- Validation studies section -->
         <div class="section-header">
-          <h3>Validation Studies</h3>
+          <h3>{{ 'LAB_APPROVAL.STUDIES.TITLE' | translate }}</h3>
           <button class="btn-action btn-submit" (click)="openStudyModal()">
-            <span class="material-symbols-outlined">add</span> Add Study
+            <span class="material-symbols-outlined">add</span>
+            {{ 'LAB_APPROVAL.STUDIES.ADD' | translate }}
           </button>
         </div>
 
         @if (loadingStudies()) {
           <div class="loading-state compact">
             <div class="spinner"></div>
-            <p>Loading studies…</p>
+            <p>{{ 'LAB_APPROVAL.STUDIES.LOADING' | translate }}</p>
           </div>
         }
 
         @if (!loadingStudies() && validationStudies().length === 0) {
           <div class="empty-state compact">
             <span class="material-symbols-outlined empty-icon">science</span>
-            <p>No validation studies recorded yet.</p>
+            <p>{{ 'LAB_APPROVAL.STUDIES.EMPTY' | translate }}</p>
           </div>
         }
 
@@ -239,11 +252,14 @@
                 <div class="study-card-header">
                   <span class="study-type">{{ study.studyType }}</span>
                   <span class="status-badge" [class]="studyPassedClass(study.passed)">
-                    {{ study.passed ? 'Passed' : 'Failed' }}
+                    {{
+                      (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
+                        | translate
+                    }}
                   </span>
                   <button
                     class="btn-icon delete-btn"
-                    title="Delete study"
+                    [title]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
                     (click)="deleteStudy(study)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -251,9 +267,15 @@
                 </div>
                 <div class="study-card-body">
                   <div class="study-meta">
-                    <span><strong>Date:</strong> {{ study.studyDate }}</span>
+                    <span
+                      ><strong>{{ 'LAB_APPROVAL.STUDIES.DATE_LABEL' | translate }}</strong>
+                      {{ study.studyDate }}</span
+                    >
                     @if (study.performedByDisplay) {
-                      <span><strong>By:</strong> {{ study.performedByDisplay }}</span>
+                      <span
+                        ><strong>{{ 'LAB_APPROVAL.STUDIES.BY_LABEL' | translate }}</strong>
+                        {{ study.performedByDisplay }}</span
+                      >
                     }
                   </div>
                   @if (study.summary) {
@@ -270,25 +292,30 @@
 
         <!-- QC Control Chart section -->
         <div class="section-header">
-          <h3>QC Control Chart (Levey-Jennings)</h3>
+          <h3>{{ 'LAB_APPROVAL.CHART.TITLE' | translate }}</h3>
         </div>
 
         @if (loadingQc()) {
           <div class="loading-state compact">
             <div class="spinner"></div>
-            <p>Loading QC data…</p>
+            <p>{{ 'LAB_QC.CHART.LOADING' | translate }}</p>
           </div>
         } @else if (!loadingQc() && qcChartGroups().length === 0) {
           <div class="empty-state compact">
             <span class="material-symbols-outlined empty-icon">show_chart</span>
-            <p>No QC events recorded for this test.</p>
+            <p>{{ 'LAB_QC.CHART.NO_EVENTS' | translate }}</p>
           </div>
         } @else {
           @for (group of qcChartGroups(); track group.level) {
             <div class="qc-chart-group">
               <div class="qc-chart-title">
                 <span class="qc-level-badge">
-                  {{ group.level === 'LOW_CONTROL' ? 'Low Control' : 'High Control' }}
+                  {{
+                    (group.level === 'LOW_CONTROL'
+                      ? 'LAB_QC.CHART.LEVEL_LOW'
+                      : 'LAB_QC.CHART.LEVEL_HIGH'
+                    ) | translate
+                  }}
                 </span>
                 @if (!group.insufficient) {
                   <span class="qc-stats">
@@ -300,7 +327,7 @@
 
               @if (group.insufficient) {
                 <div class="empty-state compact">
-                  <p>At least 3 QC events required to render chart.</p>
+                  <p>{{ 'LAB_QC.CHART.INSUFFICIENT_DATA' | translate }}</p>
                 </div>
               } @else {
                 <div class="qc-svg-wrap">
@@ -452,7 +479,9 @@
 
                     <!-- Legend -->
                     <circle cx="70" cy="12" r="4" class="lj-point lj-point-ok" stroke-width="1.5" />
-                    <text x="78" y="15.5" font-size="7" fill="#374151">Within ±1s</text>
+                    <text x="78" y="15.5" font-size="7" fill="#374151">
+                      {{ 'LAB_QC.CHART.LEGEND_OK' | translate }}
+                    </text>
                     <circle
                       cx="130"
                       cy="12"
@@ -460,7 +489,9 @@
                       class="lj-point lj-point-warn"
                       stroke-width="1.5"
                     />
-                    <text x="138" y="15.5" font-size="7" fill="#374151">±1s–2s warning</text>
+                    <text x="138" y="15.5" font-size="7" fill="#374151">
+                      {{ 'LAB_QC.CHART.LEGEND_WARN' | translate }}
+                    </text>
                     <circle
                       cx="210"
                       cy="12"
@@ -468,7 +499,9 @@
                       class="lj-point lj-point-fail"
                       stroke-width="1.5"
                     />
-                    <text x="218" y="15.5" font-size="7" fill="#374151">Outside ±2s</text>
+                    <text x="218" y="15.5" font-size="7" fill="#374151">
+                      {{ 'LAB_QC.CHART.LEGEND_FAIL' | translate }}
+                    </text>
                   </svg>
                 </div>
               }
@@ -495,7 +528,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>Record Validation Study</h2>
+        <h2>{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
         <button class="modal-close" (click)="closeStudyModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -504,7 +537,7 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="study-type">Study Type *</label>
+            <label for="study-type">{{ 'LAB_APPROVAL.STUDY_FORM.STUDY_TYPE' | translate }}</label>
             <select id="study-type" [(ngModel)]="studyForm.studyType" required>
               @for (t of studyTypes; track t) {
                 <option [value]="t">{{ t | titlecase }}</option>
@@ -512,24 +545,28 @@
             </select>
           </div>
           <div class="field">
-            <label for="study-date">Study Date *</label>
+            <label for="study-date">{{ 'LAB_APPROVAL.STUDY_FORM.STUDY_DATE' | translate }}</label>
             <input id="study-date" type="date" [(ngModel)]="studyForm.studyDate" required />
           </div>
         </div>
 
         <div class="form-row">
           <div class="field">
-            <label for="performed-by">Performed By</label>
+            <label for="performed-by">{{
+              'LAB_APPROVAL.STUDY_FORM.PERFORMED_BY' | translate
+            }}</label>
             <input
               id="performed-by"
               type="text"
               [(ngModel)]="studyForm.performedByDisplay"
-              placeholder="Name of person who performed the study"
+              [placeholder]="'LAB_APPROVAL.STUDY_FORM.PERFORMED_BY_PLACEHOLDER' | translate"
               maxlength="255"
             />
           </div>
           <div class="field">
-            <span class="field-group-label">Result</span>
+            <span class="field-group-label">{{
+              'LAB_APPROVAL.STUDY_FORM.RESULT' | translate
+            }}</span>
             <div class="radio-group">
               <label class="radio-label" for="study-passed-true">
                 <input
@@ -539,7 +576,7 @@
                   [value]="true"
                   [(ngModel)]="studyForm.passed"
                 />
-                Passed
+                {{ 'LAB_APPROVAL.STUDIES.PASSED' | translate }}
               </label>
               <label class="radio-label" for="study-passed-false">
                 <input
@@ -549,37 +586,39 @@
                   [value]="false"
                   [(ngModel)]="studyForm.passed"
                 />
-                Failed
+                {{ 'LAB_APPROVAL.STUDIES.FAILED' | translate }}
               </label>
             </div>
           </div>
         </div>
 
         <div class="field">
-          <label for="study-summary">Summary</label>
+          <label for="study-summary">{{ 'LAB_APPROVAL.STUDY_FORM.SUMMARY' | translate }}</label>
           <textarea
             id="study-summary"
             rows="3"
             [(ngModel)]="studyForm.summary"
-            placeholder="Outcome / conclusion of the study (e.g. Meets CLSI EP05-A3 criteria)"
+            [placeholder]="'LAB_APPROVAL.STUDY_FORM.SUMMARY_PLACEHOLDER' | translate"
             maxlength="2048"
           ></textarea>
         </div>
 
         <div class="field">
-          <label for="study-notes">Notes</label>
+          <label for="study-notes">{{ 'LAB_APPROVAL.STUDY_FORM.NOTES' | translate }}</label>
           <textarea
             id="study-notes"
             rows="2"
             [(ngModel)]="studyForm.notes"
-            placeholder="Additional notes or observations"
+            [placeholder]="'LAB_APPROVAL.STUDY_FORM.NOTES_PLACEHOLDER' | translate"
             maxlength="2048"
           ></textarea>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn-secondary" (click)="closeStudyModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeStudyModal()">
+          {{ 'LAB_APPROVAL.STUDY_FORM.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           [disabled]="savingStudy() || !studyForm.studyType || !studyForm.studyDate"
@@ -588,7 +627,7 @@
           @if (savingStudy()) {
             <span class="material-symbols-outlined spin">progress_activity</span>
           }
-          Save Study
+          {{ 'LAB_APPROVAL.STUDY_FORM.SAVE' | translate }}
         </button>
       </div>
     </div>
@@ -613,19 +652,19 @@
         <h2>
           @switch (approvalAction()) {
             @case ('SUBMIT_FOR_QA') {
-              Submit for QA Review
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_SUBMIT' | translate }}
             }
             @case ('COMPLETE_QA_REVIEW') {
-              Complete QA Review
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_QA_PASS' | translate }}
             }
             @case ('APPROVE') {
-              Director Approval
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_APPROVE' | translate }}
             }
             @case ('REJECT') {
-              Reject Definition
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_REJECT' | translate }}
             }
             @default {
-              Approval Action
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_DEFAULT' | translate }}
             }
           }
         </h2>
@@ -637,18 +676,21 @@
       <div class="modal-body">
         @if (approvalTarget(); as def) {
           <p class="confirm-description">
-            Definition: <strong>{{ def.testName }} ({{ def.testCode }})</strong>
+            {{ 'LAB_APPROVAL.CONFIRM.DEFINITION_LABEL' | translate }}
+            <strong>{{ def.testName }} ({{ def.testCode }})</strong>
           </p>
 
           @if (approvalAction() === 'REJECT') {
             <div class="field">
-              <label for="rejection-reason">Rejection Reason *</label>
+              <label for="rejection-reason">{{
+                'LAB_APPROVAL.CONFIRM.REASON_REQUIRED' | translate
+              }}</label>
               <textarea
                 id="rejection-reason"
                 rows="4"
                 [ngModel]="approvalRejectionReason()"
                 (ngModelChange)="approvalRejectionReason.set($event)"
-                placeholder="Explain the reason for rejection…"
+                [placeholder]="'LAB_APPROVAL.CONFIRM.REASON_PLACEHOLDER' | translate"
                 maxlength="2048"
               ></textarea>
             </div>
@@ -657,7 +699,9 @@
       </div>
 
       <div class="modal-footer">
-        <button class="btn-secondary" (click)="closeApprovalModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeApprovalModal()">
+          {{ 'LAB_APPROVAL.CONFIRM.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           [disabled]="
@@ -668,7 +712,7 @@
           @if (processingApproval()) {
             <span class="material-symbols-outlined spin">progress_activity</span>
           }
-          Confirm
+          {{ 'LAB_APPROVAL.CONFIRM.CONFIRM' | translate }}
         </button>
       </div>
     </div>

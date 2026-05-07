@@ -15,7 +15,7 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-scheduling',
@@ -29,6 +29,7 @@ export class SchedulingComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly permissions = inject(PermissionService);
+  private readonly translate = inject(TranslateService);
 
   /** True for admin/clinician roles that can manage shifts, leaves & bulk scheduling. */
   readonly isSchedulingAdmin = this.permissions.hasAnyPermission(
@@ -169,7 +170,7 @@ export class SchedulingComponent implements OnInit {
         },
         error: () => {
           this.staffLoading.set(false);
-          this.toast.error('Could not load staff list.');
+          this.toast.error(this.translate.instant('SCHEDULING.TOAST.STAFF_LOAD_FAILED'));
         },
       });
     }
@@ -205,15 +206,15 @@ export class SchedulingComponent implements OnInit {
 
   submitBulk(): void {
     if (!this.bulk.staffId || !this.bulk.hospitalId) {
-      this.toast.error('Staff ID and Hospital ID are required.');
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.IDS_REQUIRED'));
       return;
     }
     if (!this.bulk.startDate || !this.bulk.endDate) {
-      this.toast.error('Please specify the date range.');
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.DATE_RANGE_REQUIRED'));
       return;
     }
     if (this.bulk.daysOfWeek.length === 0) {
-      this.toast.error('Select at least one day of the week.');
+      this.toast.error(this.translate.instant('SCHEDULING.TOAST.DOW_REQUIRED'));
       return;
     }
     this.bulkSubmitting.set(true);
@@ -223,18 +224,24 @@ export class SchedulingComponent implements OnInit {
         this.bulkResult.set(result);
         this.bulkSubmitting.set(false);
         if (result.totalScheduled > 0) {
-          this.toast.success(
-            `${result.totalScheduled} shift(s) scheduled` +
-              (result.totalSkipped > 0 ? `, ${result.totalSkipped} skipped.` : '.'),
-          );
+          const baseMsg = this.translate.instant('SCHEDULING.TOAST.BULK_SUCCESS', {
+            count: result.totalScheduled,
+          });
+          const skippedSuffix =
+            result.totalSkipped > 0
+              ? this.translate.instant('SCHEDULING.TOAST.BULK_SKIPPED_SUFFIX', {
+                  count: result.totalSkipped,
+                })
+              : '.';
+          this.toast.success(baseMsg + skippedSuffix);
           this.loadShifts();
         } else {
-          this.toast.error('No shifts were created. All candidate dates were skipped.');
+          this.toast.error(this.translate.instant('SCHEDULING.TOAST.BULK_ALL_SKIPPED'));
         }
       },
       error: (err) => {
         this.bulkSubmitting.set(false);
-        const msg = err?.error?.message ?? 'Bulk scheduling failed. Please try again.';
+        const msg = err?.error?.message ?? this.translate.instant('SCHEDULING.TOAST.BULK_FAILED');
         this.toast.error(msg);
       },
     });
@@ -267,7 +274,7 @@ export class SchedulingComponent implements OnInit {
         this.shiftsLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load shifts');
+        this.toast.error(this.translate.instant('SCHEDULING.TOAST.SHIFTS_LOAD_FAILED'));
         this.shifts.set([]);
         this.shiftsLoading.set(false);
       },
@@ -334,7 +341,7 @@ export class SchedulingComponent implements OnInit {
         this.leavesLoading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load leave requests');
+        this.toast.error(this.translate.instant('SCHEDULING.TOAST.LEAVE_LOAD_FAILED'));
         this.leaves.set([]);
         this.leavesLoading.set(false);
       },

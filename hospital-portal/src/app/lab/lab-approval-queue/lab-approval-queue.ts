@@ -12,7 +12,7 @@ import {
 } from '../../services/lab.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 interface QcPoint {
   x: number;
@@ -57,6 +57,7 @@ export class LabApprovalQueueComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   loading = signal(true);
   definitions = signal<LabTestDefinition[]>([]);
@@ -121,7 +122,7 @@ export class LabApprovalQueueComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load approval queue');
+        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.LOAD_QUEUE_FAILED'));
         this.loading.set(false);
       },
     });
@@ -186,13 +187,13 @@ export class LabApprovalQueueComponent implements OnInit {
     this.processingApproval.set(true);
     this.labService.submitApprovalAction(def.id, req).subscribe({
       next: () => {
-        this.toast.success('Approval action recorded');
+        this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.ACTION_RECORDED'));
         this.closeApprovalModal();
         this.processingApproval.set(false);
         this.loadQueue();
       },
       error: () => {
-        this.toast.error('Action failed — check role permissions or current status');
+        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'));
         this.processingApproval.set(false);
       },
     });
@@ -212,7 +213,7 @@ export class LabApprovalQueueComponent implements OnInit {
         this.loadingStudies.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load validation studies');
+        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDIES_LOAD_FAILED'));
         this.loadingStudies.set(false);
       },
     });
@@ -261,12 +262,12 @@ export class LabApprovalQueueComponent implements OnInit {
     this.labService.createValidationStudy(def.id, this.studyForm).subscribe({
       next: (study) => {
         this.validationStudies.update((list) => [study, ...list]);
-        this.toast.success('Validation study recorded');
+        this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_RECORDED'));
         this.closeStudyModal();
         this.savingStudy.set(false);
       },
       error: () => {
-        this.toast.error('Failed to save validation study');
+        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'));
         this.savingStudy.set(false);
       },
     });
@@ -276,9 +277,10 @@ export class LabApprovalQueueComponent implements OnInit {
     this.labService.deleteValidationStudy(study.id).subscribe({
       next: () => {
         this.validationStudies.update((list) => list.filter((s) => s.id !== study.id));
-        this.toast.success('Study removed');
+        this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVED'));
       },
-      error: () => this.toast.error('Failed to remove validation study'),
+      error: () =>
+        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED')),
     });
   }
 

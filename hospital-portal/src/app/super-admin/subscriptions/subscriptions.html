@@ -133,7 +133,7 @@
           <span>{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS' | translate }}</span>
           <input
             type="text"
-            placeholder="comma-separated keys"
+            placeholder="{{ 'SUBSCRIPTIONS.FORM.FEATURE_KEYS_PLACEHOLDER' | translate }}"
             [ngModel]="form().featureKeys"
             (ngModelChange)="updateForm('featureKeys', $event)"
           />

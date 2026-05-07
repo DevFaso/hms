@@ -147,7 +147,7 @@
                   type="text"
                   [(ngModel)]="form.name"
                   name="name"
-                  placeholder="e.g., Cardiology"
+                  [placeholder]="'DEPARTMENTS.PLACEHOLDER.NAME' | translate"
                   required
                 />
               </div>
@@ -162,7 +162,7 @@
                   [ngModel]="form.code"
                   (input)="onCodeInput($event)"
                   name="code"
-                  placeholder="e.g., CARDIO-01"
+                  [placeholder]="'DEPARTMENTS.PLACEHOLDER.CODE' | translate"
                   required
                 />
                 <span class="field-hint">{{ 'DEPARTMENTS.CODE_HINT' | translate }}</span>
@@ -174,7 +174,7 @@
                   type="email"
                   [(ngModel)]="form.email"
                   name="email"
-                  placeholder="dept&#64;hospital.com"
+                  [placeholder]="'DEPARTMENTS.PLACEHOLDER.EMAIL' | translate"
                 />
               </div>
             </div>
@@ -187,7 +187,7 @@
                   type="tel"
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
-                  placeholder="+22625000001"
+                  [placeholder]="'DEPARTMENTS.PLACEHOLDER.PHONE' | translate"
                 />
               </div>
               <div class="field">

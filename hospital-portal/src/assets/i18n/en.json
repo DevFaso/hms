@@ -142,7 +142,9 @@
       "USER_NAME_PLACEHOLDER": "substring match on actor",
       "IMPERSONATOR_USER_ID": "Impersonator user id",
       "ENTITY_TYPE": "Target entity type",
+      "ENTITY_TYPE_PLACEHOLDER": "PATIENT / USER / …",
       "RESOURCE_ID": "Target resource id",
+      "RESOURCE_ID_PLACEHOLDER": "UUID",
       "STATUS": "Status",
       "FROM_DATE": "From",
       "TO_DATE": "To",
@@ -201,7 +203,8 @@
     "FORCE_LOGOUT": {
       "TITLE": "Force-logout all sessions",
       "DESC": "Bumps the global min-iat timestamp; every active JWT is invalidated.",
-      "ACTION": "Force logout all"
+      "ACTION": "Force logout all",
+      "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
       "TITLE": "Kill a feature flag",
@@ -213,6 +216,7 @@
       "TITLE": "Force MFA re-enrolment",
       "DESC": "Clears MFA enrolment + backup codes for the listed users (or all users when blank).",
       "USER_IDS": "User ids (comma-separated, optional)",
+      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
       "ACTION": "Force re-enrol"
     },
     "BROADCAST": {
@@ -220,8 +224,12 @@
       "DESC": "Publishes a banner message to /topic/emergency-broadcast.",
       "MESSAGE": "Message",
       "SEVERITY": "Severity",
+      "SEVERITY_INFO": "Info",
+      "SEVERITY_WARN": "Warning",
+      "SEVERITY_CRITICAL": "Critical",
       "ACTION": "Send broadcast"
-    }
+    },
+    "REQUEST_FAILED": "Request failed."
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Issued by",
@@ -249,7 +257,8 @@
       "PRICE_CENTS": "Monthly price (cents)",
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
-      "FEATURE_KEYS": "Feature keys"
+      "FEATURE_KEYS": "Feature keys",
+      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Name and tier code are required.",
@@ -1735,7 +1744,24 @@
     "STATISTICS": "Statistics",
     "SUBTITLE": "Manage hospital departments and divisions",
     "TITLE": "Departments",
-    "TOTAL_STAFF": "Total Staff"
+    "TOTAL_STAFF": "Total Staff",
+    "PLACEHOLDER": {
+      "NAME": "e.g., Cardiology",
+      "CODE": "e.g., CARDIO-01",
+      "EMAIL": "dept@hospital.com",
+      "PHONE": "+22625000001"
+    },
+    "NO_HOSPITAL_ASSIGNED": "No hospital assigned",
+    "TOAST": {
+      "REQUIRED_FIELDS": "Hospital, name, and code are required",
+      "UPDATED": "Department updated",
+      "CREATED": "Department created",
+      "SAVE_FAILED": "Failed to save department",
+      "LOAD_FAILED": "Failed to load departments",
+      "NOT_FOUND": "Department not found",
+      "DELETED": "Department deleted",
+      "DELETE_FAILED": "Failed to delete department"
+    }
   },
   "ENCOUNTERS": {
     "ADD_NOTE": "Add Note",
@@ -2540,7 +2566,53 @@
     "WARD": "Ward",
     "WEIGHT": "Weight",
     "WORKBOARD": "Workboard",
-    "WOUND_CARE": "Wound Care"
+    "WOUND_CARE": "Wound Care",
+    "UPDATED_PREFIX": "Updated",
+    "MIN_UNIT": "min",
+    "DUE_LABEL": "Due:",
+    "OVERDUE_BADGE": "OVERDUE",
+    "COMPLETED_PREFIX": "Completed",
+    "BY_PREFIX": "by",
+    "PATIENT_UUID_PLACEHOLDER": "Patient UUID",
+    "VITALS_PLACEHOLDER": {
+      "TEMP": "e.g. 37.2",
+      "HEART_RATE": "e.g. 72",
+      "RESP_RATE": "e.g. 16",
+      "SYSTOLIC": "e.g. 120",
+      "DIASTOLIC": "e.g. 80",
+      "SPO2": "e.g. 98",
+      "GLUCOSE": "e.g. 100",
+      "WEIGHT": "e.g. 70.5"
+    },
+    "TOAST": {
+      "VITALS_LOAD_FAILED": "Failed to load vitals",
+      "MEDS_LOAD_FAILED": "Failed to load medications",
+      "ORDERS_LOAD_FAILED": "Failed to load orders",
+      "HANDOFFS_LOAD_FAILED": "Failed to load handoffs",
+      "REASON_REQUIRED": "A reason is required for Hold/Refuse",
+      "MED_ACTION_RECORDED": "Medication {action}",
+      "ACTION_FAILED": "Failed to record action",
+      "VITALS_REQUIRED": "Please enter at least one vital sign value.",
+      "VITALS_RECORDED": "Vitals recorded for {patient}",
+      "VITALS_SAVE_FAILED": "Failed to save vitals",
+      "HANDOFF_COMPLETED": "Handoff completed",
+      "HANDOFF_FAILED": "Failed to complete handoff",
+      "TASK_REQUIRED": "Patient and category are required.",
+      "TASK_CREATED": "Task created for {patient}",
+      "TASK_CREATE_FAILED": "Failed to create task",
+      "TASK_COMPLETED": "Task completed",
+      "TASK_COMPLETE_FAILED": "Failed to complete task",
+      "MARK_READ_FAILED": "Failed to mark as read",
+      "NOTE_SAVED": "Care note saved for {patient}",
+      "NOTE_FAILED": "Failed to save care note",
+      "NO_ENCOUNTER": "No active encounter found for this patient.",
+      "ENCOUNTER_LOOKUP_FAILED": "Failed to look up encounter."
+    },
+    "MED_ACTION": {
+      "GIVEN": "given",
+      "HELD": "held",
+      "REFUSED": "refused"
+    }
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -2947,7 +3019,57 @@
     "VERSION": "Version",
     "VIEW_DETAILS": "View Details",
     "VIEW_DOCS": "View Docs",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "TOAST": {
+      "SNAPSHOT_EXPORTED": "Snapshot exported successfully",
+      "SNAPSHOT_EXPORT_FAILED": "Failed to export snapshot",
+      "ORGS_LOAD_FAILED": "Failed to load organizations",
+      "ORG_SERVICES_LOAD_FAILED": "Failed to load organization services",
+      "SERVICE_UPDATED": "Service updated successfully",
+      "SERVICE_REGISTERED": "Service \"{name}\" registered",
+      "HOSPITAL_UNLINKED": "Unlinked hospital \"{name}\"",
+      "HOSPITAL_UNLINK_FAILED": "Failed to unlink hospital",
+      "HOSPITAL_LINKED": "Linked hospital \"{name}\"",
+      "HOSPITAL_LINK_FAILED": "Failed to link hospital",
+      "CATALOG_LOAD_FAILED": "Failed to load catalog",
+      "NO_ORGS_AVAILABLE": "No organizations available to provision to",
+      "PROVISIONED": "\"{name}\" provisioned to organization",
+      "NO_DOCS_URL": "No documentation URL available",
+      "NO_SANDBOX": "No sandbox environment available",
+      "RELEASE_REQUIRED_FIELDS": "Name, environment, start and end times are required",
+      "RELEASE_SCHEDULED": "Release window \"{name}\" scheduled",
+      "STATUS_CHANGED": "Service status changed to {status}",
+      "SERVICE_UPDATE_FAILED": "Failed to update service",
+      "STATUS_CHANGE_FAILED": "Failed to change status",
+      "SERVICE_REGISTER_FAILED": "Failed to register service",
+      "PROVISION_FAILED": "Failed to provision service",
+      "RELEASE_SCHEDULE_FAILED": "Failed to schedule release window"
+    },
+    "TASK_ACTION": {
+      "RUN_NOW": "Run Now",
+      "INVESTIGATE": "Investigate",
+      "UNBLOCK": "Unblock",
+      "RUN": "Run"
+    },
+    "PLACEHOLDER": {
+      "VENDOR": "e.g. Epic, Cerner",
+      "URL": "https://...",
+      "TIER": "e.g. Gold, Silver",
+      "RELEASE_NAME": "e.g. Q1 2025 Platform Release",
+      "RELEASE_NOTES": "Additional release notes…"
+    },
+    "SERVICE_TYPES": {
+      "EHR": "Electronic Health Records",
+      "BILLING": "Billing System",
+      "INVENTORY": "Inventory Management",
+      "LIS": "Lab Information System",
+      "ANALYTICS": "Analytics Platform",
+      "CLINICAL_ANALYTICS": "Clinical Analytics",
+      "REMOTE_MONITORING": "Remote Monitoring",
+      "PEDIATRIC_MESSAGING": "Pediatric Messaging",
+      "ORTHOPEDIC_IMAGING": "Orthopedic Imaging",
+      "RESPIRATORY_TELEHEALTH": "Respiratory Telehealth"
+    }
   },
   "PORTAL": {
     "VITALS": {
@@ -3501,7 +3623,25 @@
     "STATUS_FILTER": "Status",
     "SUBTITLE": "Manage prescriptions",
     "TITLE": "Prescriptions",
-    "VIEW_DETAILS": "View Details"
+    "VIEW_DETAILS": "View Details",
+    "STATUS": {
+      "DRAFT": "Draft",
+      "PENDING_SIGNATURE": "Pending Signature",
+      "SIGNED": "Signed",
+      "TRANSMITTED": "Transmitted",
+      "CANCELLED": "Cancelled",
+      "DISCONTINUED": "Discontinued"
+    },
+    "TOAST": {
+      "UPDATED": "Prescription updated",
+      "CREATED": "Prescription created",
+      "SAVE_FAILED": "Save failed",
+      "DELETED": "Prescription deleted",
+      "DELETE_FAILED": "Delete failed",
+      "LOAD_FAILED": "Failed to load prescriptions",
+      "SMS_SENT": "SMS sent to {pharmacy}",
+      "SMS_FAILED": "Could not dispatch the prescription SMS"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
@@ -3909,7 +4049,20 @@
     "SUBTITLE": "Manage roles and access control",
     "SYSTEM_ROLE": "System Role",
     "TITLE": "Roles & Permissions",
-    "USERS_COUNT": "Users"
+    "USERS_COUNT": "Users",
+    "CODE_PLACEHOLDER_EXAMPLE": "e.g., ROLE_PHARMACIST",
+    "TOAST": {
+      "LOAD_FAILED": "Failed to load roles",
+      "NAME_REQUIRED": "Role name is required",
+      "UPDATED": "Role updated",
+      "CREATED": "Role created",
+      "OPERATION_FAILED": "Operation failed",
+      "DELETED": "Role deleted",
+      "DELETE_FAILED": "Failed to delete role",
+      "PERMS_LOAD_FAILED": "Failed to load permissions",
+      "PERMS_UPDATED": "Permissions updated",
+      "PERMS_UPDATE_FAILED": "Failed to update permissions"
+    }
   },
   "SCHEDULING": {
     "AFTERNOON": "Afternoon",
@@ -4010,7 +4163,29 @@
     "WEEK": "Week",
     "WEEKLY_SCHEDULE": "Weekly Schedule",
     "WEEKLY_STAFF_AVAILABILITY": "Weekly Staff Availability",
-    "WEEKLY_SUMMARY": "Weekly Summary"
+    "WEEKLY_SUMMARY": "Weekly Summary",
+    "ARIA": {
+      "PREV_WEEK": "Previous week",
+      "NEXT_WEEK": "Next week",
+      "CLOSE_BULK_MODAL": "Close bulk schedule modal",
+      "CLEAR_STAFF": "Clear selected staff",
+      "STAFF_SUGGESTIONS": "Staff suggestions",
+      "SKIP_CONFLICTING": "Skip conflicting dates"
+    },
+    "STAFF_FALLBACK": "Staff",
+    "SHIFT_CONTD": "← cont'd",
+    "TOAST": {
+      "STAFF_LOAD_FAILED": "Could not load staff list.",
+      "IDS_REQUIRED": "Staff ID and Hospital ID are required.",
+      "DATE_RANGE_REQUIRED": "Please specify the date range.",
+      "DOW_REQUIRED": "Select at least one day of the week.",
+      "BULK_SUCCESS": "{count} shift(s) scheduled",
+      "BULK_SKIPPED_SUFFIX": ", {count} skipped.",
+      "BULK_ALL_SKIPPED": "No shifts were created. All candidate dates were skipped.",
+      "BULK_FAILED": "Bulk scheduling failed. Please try again.",
+      "SHIFTS_LOAD_FAILED": "Failed to load shifts",
+      "LEAVE_LOAD_FAILED": "Failed to load leave requests"
+    }
   },
   "SETUP": {
     "ALL_SET": "You're All Set!",
@@ -4328,7 +4503,25 @@
     "USER": "User",
     "USERNAME": "Username",
     "USERS_PLURAL": "Users",
-    "USER_SINGULAR": "User"
+    "USER_SINGULAR": "User",
+    "TOAST": {
+      "LOAD_FAILED": "Failed to load users",
+      "REQUIRED_FIELDS": "All required fields must be filled",
+      "ROLE_REQUIRED": "At least one role must be selected",
+      "LICENSE_REQUIRED": "License number is required for medical roles",
+      "UPDATED": "User updated",
+      "CREATED": "User created successfully.",
+      "CONFLICT": "A conflict was detected. Please review the highlighted fields.",
+      "VALIDATION_ERRORS": "Please fix the highlighted fields and try again.",
+      "OPERATION_FAILED": "Operation failed. Please try again.",
+      "DELETED": "User deleted",
+      "DELETE_FAILED": "Failed to delete user",
+      "RESTORED": "{name} has been restored.",
+      "RESTORE_FAILED": "Failed to restore user",
+      "IMPERSONATE_REASON_TOO_SHORT": "Reason must be at least 5 characters.",
+      "IMPERSONATE_STARTED": "Now acting as {name}.",
+      "IMPERSONATE_FAILED": "Failed to start impersonation"
+    }
   },
   "TRIAGE": {
     "TITLE": "Triage Assessment",
@@ -4671,5 +4864,141 @@
     "PARTNER_DISPENSED": "Partner pharmacy confirmed dispense",
     "STOCK_CHECK_FAILED": "Stock check failed",
     "ROUTING_FAILED": "Routing operation failed"
+  },
+  "LAB_QC": {
+    "TITLE": "Quality Control Dashboard",
+    "SUBTITLE": "QC event trends and validation study results across all test definitions",
+    "LOADING": "Loading…",
+    "TOTAL_QC_EVENTS": "Total QC Events",
+    "FAILED_QC_EVENTS": "Failed QC Events",
+    "VALIDATION_STUDIES": "Validation Studies",
+    "VALIDATION_PASS_RATE": "Validation Pass Rate",
+    "EVENTS_BY_TEST": "QC Events by Test Definition",
+    "CLICK_ROW_HINT": "Click a row to view Levey-Jennings control charts",
+    "NO_EVENTS": "No QC events recorded yet.",
+    "COL": {
+      "TEST_NAME": "Test Name",
+      "TOTAL_EVENTS": "Total Events",
+      "FAILED": "Failed",
+      "FAILURE_RATE": "Failure Rate",
+      "LAST_EVENT": "Last Event"
+    },
+    "CHART": {
+      "LOADING": "Loading QC data…",
+      "NO_EVENTS": "No QC events recorded for this test.",
+      "LEVEL_LOW": "Low Control",
+      "LEVEL_HIGH": "High Control",
+      "INSUFFICIENT_DATA": "At least 3 QC events required to render chart.",
+      "LEGEND_OK": "Within ±1s",
+      "LEGEND_WARN": "±1s–2s warning",
+      "LEGEND_FAIL": "Outside ±2s"
+    },
+    "STUDIES_BY_TEST": "Validation Studies by Test Definition",
+    "NO_STUDIES": "No validation studies recorded yet.",
+    "STUDIES_COL": {
+      "CODE": "Code",
+      "TOTAL": "Total",
+      "PASSED": "Passed",
+      "PASS_RATE": "Pass Rate",
+      "LAST_STUDY": "Last Study"
+    },
+    "TOAST": {
+      "LOAD_FAILED": "Failed to load QC dashboard data.",
+      "CHART_LOAD_FAILED": "Failed to load QC events for chart."
+    }
+  },
+  "LAB_APPROVAL": {
+    "TITLE": "Lab Test Definition Approval Queue",
+    "SUBTITLE": "Review and approve lab test definitions for clinical use",
+    "TAB": {
+      "ALL": "All",
+      "DRAFT": "Draft",
+      "PENDING_QA": "Pending QA Review",
+      "PENDING_DIRECTOR": "Pending Director Approval"
+    },
+    "SEARCH_PLACEHOLDER": "Search by name, code or category…",
+    "LOADING": "Loading queue…",
+    "COL": {
+      "CODE": "Code",
+      "NAME": "Name",
+      "CATEGORY": "Category",
+      "SAMPLE_TYPE": "Sample Type",
+      "STATUS": "Status",
+      "ACTIONS": "Actions"
+    },
+    "ACTION": {
+      "VIEW_TITLE": "View definition & validation studies",
+      "SUBMIT": "Submit",
+      "SUBMIT_TITLE": "Submit for QA Review",
+      "QA_PASS": "QA Pass",
+      "QA_PASS_TITLE": "Complete QA Review",
+      "REJECT": "Reject",
+      "REJECT_TITLE": "Reject",
+      "APPROVE": "Approve",
+      "APPROVE_TITLE": "Approve",
+      "CLOSE_TITLE": "Close"
+    },
+    "EMPTY": {
+      "TITLE": "Queue is clear",
+      "NO_MATCH": "No definitions match your search.",
+      "ALL_CLEAR": "No definitions awaiting review or approval."
+    },
+    "FIELD": {
+      "CATEGORY": "Category",
+      "SAMPLE_TYPE": "Sample Type",
+      "APPROVAL_STATUS": "Approval Status",
+      "REJECTION_REASON": "Rejection Reason"
+    },
+    "STUDIES": {
+      "TITLE": "Validation Studies",
+      "ADD": "Add Study",
+      "LOADING": "Loading studies…",
+      "EMPTY": "No validation studies recorded yet.",
+      "PASSED": "Passed",
+      "FAILED": "Failed",
+      "DATE_LABEL": "Date:",
+      "BY_LABEL": "By:",
+      "DELETE_TITLE": "Delete study"
+    },
+    "CHART": {
+      "TITLE": "QC Control Chart (Levey-Jennings)"
+    },
+    "STUDY_FORM": {
+      "TITLE": "Record Validation Study",
+      "STUDY_TYPE": "Study Type *",
+      "STUDY_DATE": "Study Date *",
+      "PERFORMED_BY": "Performed By",
+      "PERFORMED_BY_PLACEHOLDER": "Name of person who performed the study",
+      "RESULT": "Result",
+      "SUMMARY": "Summary",
+      "SUMMARY_PLACEHOLDER": "Outcome / conclusion of the study (e.g. Meets CLSI EP05-A3 criteria)",
+      "NOTES": "Notes",
+      "NOTES_PLACEHOLDER": "Additional notes or observations",
+      "CANCEL": "Cancel",
+      "SAVE": "Save Study"
+    },
+    "CONFIRM": {
+      "TITLE_SUBMIT": "Submit for QA Review",
+      "TITLE_QA_PASS": "Complete QA Review",
+      "TITLE_APPROVE": "Director Approval",
+      "TITLE_REJECT": "Reject Definition",
+      "TITLE_DEFAULT": "Approval Action",
+      "DEFINITION_LABEL": "Definition:",
+      "REASON_REQUIRED": "Rejection Reason *",
+      "REASON_PLACEHOLDER": "Explain the reason for rejection…",
+      "CANCEL": "Cancel",
+      "CONFIRM": "Confirm"
+    },
+    "TOAST": {
+      "LOAD_QUEUE_FAILED": "Failed to load approval queue",
+      "ACTION_RECORDED": "Approval action recorded",
+      "ACTION_FAILED": "Action failed — check role permissions or current status",
+      "STUDIES_LOAD_FAILED": "Failed to load validation studies",
+      "CHART_LOAD_FAILED": "Failed to load QC events for chart.",
+      "STUDY_RECORDED": "Validation study recorded",
+      "STUDY_SAVE_FAILED": "Failed to save validation study",
+      "STUDY_REMOVED": "Study removed",
+      "STUDY_REMOVE_FAILED": "Failed to remove validation study"
+    }
   }
 }

@@ -32,7 +32,7 @@
         <span>{{ 'EMERGENCY.CONFIRM_TYPED' | translate }}</span>
         <input
           type="text"
-          placeholder="FORCE LOGOUT ALL"
+          placeholder="{{ 'EMERGENCY.FORCE_LOGOUT.CONFIRM_PLACEHOLDER' | translate }}"
           [ngModel]="logoutConfirm()"
           (ngModelChange)="logoutConfirm.set($event)"
         />
@@ -109,7 +109,7 @@
         <span>{{ 'EMERGENCY.FORCE_MFA.USER_IDS' | translate }}</span>
         <input
           type="text"
-          placeholder="UUID, UUID, …"
+          placeholder="{{ 'EMERGENCY.FORCE_MFA.USER_IDS_PLACEHOLDER' | translate }}"
           [ngModel]="mfaUserIds()"
           (ngModelChange)="mfaUserIds.set($event)"
         />
@@ -162,9 +162,11 @@
       <label>
         <span>{{ 'EMERGENCY.BROADCAST.SEVERITY' | translate }}</span>
         <select [ngModel]="broadcastSeverity()" (ngModelChange)="broadcastSeverity.set($event)">
-          <option value="INFO">INFO</option>
-          <option value="WARN">WARN</option>
-          <option value="CRITICAL">CRITICAL</option>
+          <option value="INFO">{{ 'EMERGENCY.BROADCAST.SEVERITY_INFO' | translate }}</option>
+          <option value="WARN">{{ 'EMERGENCY.BROADCAST.SEVERITY_WARN' | translate }}</option>
+          <option value="CRITICAL">
+            {{ 'EMERGENCY.BROADCAST.SEVERITY_CRITICAL' | translate }}
+          </option>
         </select>
       </label>
       <label>
