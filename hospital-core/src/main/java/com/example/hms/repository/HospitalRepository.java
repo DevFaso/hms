@@ -39,11 +39,21 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      * typeahead doesn't surface those fields, the legacy admin search
      * exercises them rarely, and there's no equivalent index to make
      * load-bearing.</p>
+     *
+     * <p><b>Postgres NULL-bind workaround.</b> All String parameters are
+     * wrapped in {@code CAST(:p AS string)} so Postgres can type-infer the
+     * placeholder when the caller passes {@code null}. Without the cast,
+     * {@code lower('%' || ? || '%')} with {@code ?} bound as {@code SQL NULL}
+     * resolves to {@code bytea} on Postgres and fails parse-time with
+     * {@code ERROR: function lower(bytea) does not exist} — the same UAT
+     * 500 that hit {@code LabTestDefinitionRepository.search}. H2 is more
+     * lenient. Same pattern as {@code UserRepository#searchByCriteria} and
+     * {@code findAllWithDepartments} below.</p>
      */
     @Query("SELECT h FROM Hospital h WHERE " +
-            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(:name, '%'))) AND " +
-            "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', :city, '%'))) AND " +
-            "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', :state, '%'))) AND " +
+            "(:name IS NULL OR LOWER(h.name) LIKE LOWER(CONCAT(CAST(:name AS string), '%'))) AND " +
+            "(:city IS NULL OR LOWER(h.city) LIKE LOWER(CONCAT('%', CAST(:city AS string), '%'))) AND " +
+            "(:state IS NULL OR LOWER(h.state) LIKE LOWER(CONCAT('%', CAST(:state AS string), '%'))) AND " +
             "(:active IS NULL OR h.active = :active)")
     Page<Hospital> searchHospitals(@Param("name") String name,
                                    @Param("city") String city,
