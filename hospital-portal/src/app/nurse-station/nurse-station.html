@@ -7,7 +7,9 @@
     </div>
     <div class="header-actions">
       @if (lastRefreshed()) {
-        <span class="last-refreshed">Updated {{ lastRefreshed() | date: 'shortTime' }}</span>
+        <span class="last-refreshed"
+          >{{ 'NURSE.UPDATED_PREFIX' | translate }} {{ lastRefreshed() | date: 'shortTime' }}</span
+        >
       }
       <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
         <span class="material-symbols-outlined">refresh</span>
@@ -550,7 +552,9 @@
                         {{ acuityLabel(c.acuityLevel) }}
                       </span>
                     }
-                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                    <div class="flow-card-wait">
+                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                    </div>
                   </div>
                 }
               </div>
@@ -581,7 +585,9 @@
                         {{ acuityLabel(c.acuityLevel) }}
                       </span>
                     }
-                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                    <div class="flow-card-wait">
+                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                    </div>
                   </div>
                 }
               </div>
@@ -612,7 +618,9 @@
                         {{ acuityLabel(c.acuityLevel) }}
                       </span>
                     }
-                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                    <div class="flow-card-wait">
+                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                    </div>
                   </div>
                 }
               </div>
@@ -643,7 +651,9 @@
                         {{ acuityLabel(c.acuityLevel) }}
                       </span>
                     }
-                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                    <div class="flow-card-wait">
+                      {{ c.waitMinutes }} {{ 'NURSE.MIN_UNIT' | translate }}
+                    </div>
                   </div>
                 }
               </div>
@@ -760,9 +770,9 @@
                   }
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
-                      Due: {{ task.dueAt | date: 'shortTime' }}
+                      {{ 'NURSE.DUE_LABEL' | translate }} {{ task.dueAt | date: 'shortTime' }}
                       @if (task.overdue) {
-                        <span class="overdue-badge">OVERDUE</span>
+                        <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }
                     </span>
                   }
@@ -786,9 +796,10 @@
                     </button>
                   } @else {
                     <span class="task-completed-info">
-                      Completed {{ task.completedAt | date: 'short' }}
+                      {{ 'NURSE.COMPLETED_PREFIX' | translate }}
+                      {{ task.completedAt | date: 'short' }}
                       @if (task.completedByName) {
-                        by {{ task.completedByName }}
+                        {{ 'NURSE.BY_PREFIX' | translate }} {{ task.completedByName }}
                       }
                     </span>
                   }
@@ -952,7 +963,7 @@
             step="0.1"
             min="30"
             max="45"
-            placeholder="e.g. 37.2"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.TEMP' | translate"
             [value]="vitalsForm().temperatureCelsius ?? ''"
             (input)="updateVitalsField('temperatureCelsius', $any($event.target).value)"
           />
@@ -964,7 +975,7 @@
             type="number"
             min="20"
             max="300"
-            placeholder="e.g. 72"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.HEART_RATE' | translate"
             [value]="vitalsForm().heartRateBpm ?? ''"
             (input)="updateVitalsField('heartRateBpm', $any($event.target).value)"
           />
@@ -976,7 +987,7 @@
             type="number"
             min="1"
             max="60"
-            placeholder="e.g. 16"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.RESP_RATE' | translate"
             [value]="vitalsForm().respiratoryRateBpm ?? ''"
             (input)="updateVitalsField('respiratoryRateBpm', $any($event.target).value)"
           />
@@ -988,7 +999,7 @@
             type="number"
             min="40"
             max="300"
-            placeholder="e.g. 120"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.SYSTOLIC' | translate"
             [value]="vitalsForm().systolicBpMmHg ?? ''"
             (input)="updateVitalsField('systolicBpMmHg', $any($event.target).value)"
           />
@@ -1000,7 +1011,7 @@
             type="number"
             min="20"
             max="200"
-            placeholder="e.g. 80"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.DIASTOLIC' | translate"
             [value]="vitalsForm().diastolicBpMmHg ?? ''"
             (input)="updateVitalsField('diastolicBpMmHg', $any($event.target).value)"
           />
@@ -1012,7 +1023,7 @@
             type="number"
             min="50"
             max="100"
-            placeholder="e.g. 98"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.SPO2' | translate"
             [value]="vitalsForm().spo2Percent ?? ''"
             (input)="updateVitalsField('spo2Percent', $any($event.target).value)"
           />
@@ -1024,7 +1035,7 @@
             type="number"
             min="10"
             max="1000"
-            placeholder="e.g. 100"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.GLUCOSE' | translate"
             [value]="vitalsForm().bloodGlucoseMgDl ?? ''"
             (input)="updateVitalsField('bloodGlucoseMgDl', $any($event.target).value)"
           />
@@ -1037,7 +1048,7 @@
             step="0.1"
             min="1"
             max="500"
-            placeholder="e.g. 70.5"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.WEIGHT' | translate"
             [value]="vitalsForm().weightKg ?? ''"
             (input)="updateVitalsField('weightKg', $any($event.target).value)"
           />
@@ -1109,7 +1120,7 @@
             id="tc-patient"
             type="text"
             class="reason-input"
-            placeholder="Patient UUID"
+            [placeholder]="'NURSE.PATIENT_UUID_PLACEHOLDER' | translate"
             [value]="taskForm().patientId"
             (input)="updateTaskField('patientId', $any($event.target).value)"
           />

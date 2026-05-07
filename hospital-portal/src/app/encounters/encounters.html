@@ -4,10 +4,15 @@
       <h1 class="page-title">{{ 'ENCOUNTERS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'ENCOUNTERS.SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
-    </button>
+    <div class="page-actions">
+      <!-- Cross-tenant scope chip — only renders for super-admin
+           (docs/super-admin-cross-tenant-design.md). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
+      </button>
+    </div>
   </div>
 
   <div class="summary-cards">
@@ -99,7 +104,11 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medical_services</span>
-      <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ENCOUNTERS' | translate }}</h3>
+      } @else {
+        <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+      }
       <p>{{ 'ENCOUNTERS.EMPTY_MSG' | translate }}</p>
     </div>
   }
@@ -109,6 +118,9 @@
       <table>
         <thead>
           <tr>
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
             <th scope="col">{{ 'ENCOUNTERS.PROVIDER' | translate }}</th>
             <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
@@ -121,6 +133,11 @@
         <tbody>
           @for (enc of filtered(); track enc.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ enc.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">{{ enc.patientName || 'Unknown' }}</div>
               </td>

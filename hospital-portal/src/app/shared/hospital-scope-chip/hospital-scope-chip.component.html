@@ -1,0 +1,68 @@
+@if (isSuperAdmin()) {
+  <!--
+    Two sibling <button> elements inside the chip wrapper, NOT nested:
+    the main "open overlay" button and (when scoped) the clear button.
+    Earlier this template nested the clear button inside the main one,
+    which is invalid HTML and broke screen-reader semantics + click
+    handling. Copilot review on PR #245 (2026-05-06) caught it.
+  -->
+  <div
+    class="hospital-scope-chip"
+    [class.hospital-scope-chip--scoped]="!globalView()"
+    data-testid="hospital-scope-chip"
+  >
+    <button
+      type="button"
+      class="hospital-scope-chip__button"
+      data-testid="hospital-scope-chip-button"
+      [class.hospital-scope-chip__button--global]="globalView()"
+      [class.hospital-scope-chip__button--scoped]="!globalView()"
+      [attr.aria-haspopup]="'listbox'"
+      [attr.aria-expanded]="overlayOpen()"
+      [attr.aria-label]="
+        globalView()
+          ? ('HOSPITAL_SCOPE.ALL_HOSPITALS' | translate)
+          : (selectedHospitalName() ?? ('HOSPITAL_SCOPE.SCOPED' | translate))
+      "
+      (click)="toggleOverlay()"
+    >
+      @if (globalView()) {
+        <span class="material-icons hospital-scope-chip__icon" aria-hidden="true">public</span>
+        <span class="hospital-scope-chip__label">
+          {{ 'HOSPITAL_SCOPE.ALL_HOSPITALS' | translate }}
+        </span>
+      } @else {
+        <span class="material-icons hospital-scope-chip__icon" aria-hidden="true"
+          >local_hospital</span
+        >
+        <span class="hospital-scope-chip__label" data-testid="hospital-scope-chip-name">
+          {{ selectedHospitalName() ?? ('HOSPITAL_SCOPE.SCOPED' | translate) }}
+        </span>
+      }
+      <span class="material-icons hospital-scope-chip__caret" aria-hidden="true">expand_more</span>
+    </button>
+
+    @if (!globalView()) {
+      <button
+        type="button"
+        class="hospital-scope-chip__clear"
+        data-testid="hospital-scope-chip-clear"
+        [attr.aria-label]="'HOSPITAL_SCOPE.CLEAR' | translate"
+        [attr.title]="'HOSPITAL_SCOPE.CLEAR' | translate"
+        (click)="clearScope($event)"
+      >
+        <span class="material-icons" aria-hidden="true">close</span>
+      </button>
+    }
+
+    @if (overlayOpen()) {
+      <div class="hospital-scope-chip__overlay" data-testid="hospital-scope-chip-overlay">
+        <app-hospital-typeahead
+          (selectAll)="onSelectAll()"
+          (selectHospital)="onSelectHospital($event)"
+          (dismiss)="closeOverlay()"
+        />
+      </div>
+    }
+  </div>
+}

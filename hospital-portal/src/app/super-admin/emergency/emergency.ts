@@ -2,7 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EmergencyControlService } from '../../services/emergency-control.service';
 import { EmergencyActionResponse } from '../../services/emergency-control.model';
@@ -24,6 +24,7 @@ const FRESH_PANEL: PanelState = { busy: false, result: null, error: null };
 })
 export class EmergencyComponent {
   private readonly service = inject(EmergencyControlService);
+  private readonly translate = inject(TranslateService);
 
   readonly logoutPanel = signal<PanelState>({ ...FRESH_PANEL });
   readonly killPanel = signal<PanelState>({ ...FRESH_PANEL });
@@ -48,7 +49,14 @@ export class EmergencyComponent {
 
   forceLogoutAll(): void {
     if (this.logoutConfirm() !== 'FORCE LOGOUT ALL') {
-      this.logoutPanel.set({ ...FRESH_PANEL, error: 'Type FORCE LOGOUT ALL to confirm.' });
+      // The literal 'FORCE LOGOUT ALL' phrase is intentionally NOT translated —
+      // it is a global confirmation token that must match exactly across locales,
+      // matching the placeholder shown in emergency.html
+      // (EMERGENCY.FORCE_LOGOUT.CONFIRM_PLACEHOLDER).
+      this.logoutPanel.set({
+        ...FRESH_PANEL,
+        error: this.translate.instant('EMERGENCY.CONFIRM_TYPED'),
+      });
       return;
     }
     this.logoutPanel.set({ busy: true, result: null, error: null });
@@ -113,8 +121,14 @@ export class EmergencyComponent {
   private errorText(err: unknown): string {
     if (err && typeof err === 'object' && 'error' in err) {
       const inner = (err as { error?: { message?: string } }).error;
+      // Pass through any server-provided message as-is. The backend
+      // GlobalExceptionHandler currently emits hardcoded English strings
+      // with no Accept-Language resolution, so this branch is not localised
+      // — only the client-side fallback below is.
       if (inner?.message) return inner.message;
     }
-    return 'Request failed.';
+    // Fallback when the network call itself fails (no server response):
+    // localise via the active TranslateService instance.
+    return this.translate.instant('EMERGENCY.REQUEST_FAILED');
   }
 }

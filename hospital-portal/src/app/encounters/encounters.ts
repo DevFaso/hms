@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -16,9 +17,11 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note-form.component';
 import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 
 @Component({
   selector: 'app-encounters',
@@ -29,6 +32,7 @@ import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/elig
     TranslateModule,
     EncounterNoteFormComponent,
     EligibilityCheckDialogComponent,
+    HospitalScopeChipComponent,
   ],
   templateUrl: './encounters.html',
   styleUrl: './encounters.scss',
@@ -41,9 +45,17 @@ export class EncountersComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
 
-  /** true when the logged-in user is a super-admin (can pick any hospital) */
-  isSuperAdmin = false;
+  /**
+   * Signal exposure for the cross-tenant chip + Hospital column toggle
+   * (docs/super-admin-cross-tenant-design.md). Pre-existing template
+   * `isSuperAdmin` callers (none in encounters today) would keep working
+   * via the property-call syntax `isSuperAdmin()`.
+   */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */
@@ -105,13 +117,23 @@ export class EncountersComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate the super-admin scope from `?hospitalId=`
+    // BEFORE the first list fetch so the auth interceptor sends the
+    // right (or no) X-Hospital-Id header on the initial request.
+    // See docs/super-admin-cross-tenant-design.md "URL state".
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.loadEncounters();
 
-    // Determine role-based hospital access
-    this.isSuperAdmin = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
+    // Determine role-based hospital access. We intentionally consult
+    // `auth.hasAnyRole` here (and not the `roleContext.isSuperAdmin()`
+    // signal) because this branch existed before the cross-tenant
+    // refactor and changing its source would alter the dropdown logic
+    // below — kept as-is to avoid scope creep.
+    const isSuperAdminUser = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
     const permitted = this.roleContext.permittedHospitalIds;
 
-    if (this.isSuperAdmin) {
+    if (isSuperAdminUser) {
       // Super admin: load ALL hospitals for dropdown selection
       this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
     } else {
@@ -317,10 +339,24 @@ export class EncountersComponent implements OnInit {
     });
   }
 
+  /**
+   * Fired by the cross-tenant scope chip after the super-admin picks a
+   * hospital (or "All hospitals"). The chip handles the URL round-trip
+   * itself; we just re-fetch under the new scope.
+   */
+  onScopeChange(_hospitalId: string | null): void {
+    this.loadEncounters();
+  }
+
   loadEncounters(): void {
     this.loading.set(true);
-    // ── TENANT ISOLATION: always scope encounter list to active hospital ──
-    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    // ── Tenant isolation ──────────────────────────────────────────
+    // Use the cross-tenant aware hospital id: null for super-admin in
+    // global view, the selected hospital for scoped super-admin, the
+    // user's active hospital for everyone else. The matching backend
+    // branch in EncounterServiceImpl falls through to an unscoped
+    // findAll when null. See docs/super-admin-cross-tenant-design.md.
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
     this.encounterService.list(hospitalId ? { hospitalId } : undefined).subscribe({
       next: (data) => {
         const list = Array.isArray(data) ? data : [];

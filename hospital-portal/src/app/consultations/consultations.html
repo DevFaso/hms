@@ -5,6 +5,9 @@
       <p class="page-subtitle">{{ 'CONSULTATIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Cross-tenant scope chip — only renders for super-admin
+           (docs/super-admin-cross-tenant-design.md). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span> {{ 'CONSULTATIONS.NEW' | translate }}
       </button>
@@ -124,8 +127,17 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">forum</span>
-      <h3>{{ 'CONSULTATIONS.NO_CONSULTATIONS' | translate }}</h3>
-      <p>{{ 'CONSULTATIONS.WILL_APPEAR' | translate }}</p>
+      <!-- Cross-tenant: a super-admin in global view who sees zero rows
+           must NOT see the generic "no data" message — otherwise they
+           can't tell whether scoping is wrong or data is just missing.
+           See docs/super-admin-cross-tenant-design.md "Empty-state messaging". -->
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'CONSULTATIONS.NO_DATA_GLOBAL' | translate }}</h3>
+        <p>{{ 'CONSULTATIONS.WILL_APPEAR' | translate }}</p>
+      } @else {
+        <h3>{{ 'CONSULTATIONS.NO_CONSULTATIONS' | translate }}</h3>
+        <p>{{ 'CONSULTATIONS.WILL_APPEAR' | translate }}</p>
+      }
     </div>
   }
   @if (!loading() && filtered().length > 0) {
@@ -133,6 +145,12 @@
       <table>
         <thead>
           <tr>
+            <!-- Hospital column only when a super-admin is viewing all
+                 tenants. Hidden when scoped to a single hospital — the
+                 chip already labels the scope. -->
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
             <th scope="col">{{ 'CONSULTATIONS.SPECIALTY' | translate }}</th>
             <th scope="col">{{ 'CONSULTATIONS.CONSULTANT' | translate }}</th>
@@ -145,6 +163,11 @@
         <tbody>
           @for (c of filtered(); track c.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ c.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">{{ c.patientName || 'Unknown' }}</div>
                 <div class="cell-secondary">{{ c.patientMrn }}</div>

@@ -11,14 +11,17 @@ builder = "dockerfile"
 dockerfilePath = "keycloak/prod/Dockerfile"
 
 [deploy]
-# Keycloak's built-in readiness probe. `KC_HEALTH_ENABLED=true` is set in
-# the Dockerfile.
-healthcheckPath = "/health/ready"
+# Keycloak 26 serves /health/ready on the management interface (port 9000),
+# which Railway's edge can't reach (only the main HTTP port is exposed).
+# `/realms/master/` is on the main port and always returns 200 when Keycloak
+# is up — equivalent liveness signal without the management-port split or
+# the deprecated --legacy-observability-interface workaround.
+healthcheckPath = "/realms/master/"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [deploy.healthcheck]
-path = "/health/ready"
+path = "/realms/master/"
 interval = 30
 timeout = 30

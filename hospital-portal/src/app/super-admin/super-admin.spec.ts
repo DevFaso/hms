@@ -5,13 +5,42 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { SuperAdminComponent } from './super-admin';
+import { ActivityKey, SuperAdminComponent } from './super-admin';
 import {
   DashboardService,
   RecentAuditEvent,
+  SuperAdminRecentActivityBundle,
+  SuperAdminRecentItem,
   SuperAdminSummary,
 } from '../services/dashboard.service';
 import { PlatformService, PlatformSummary } from '../services/platform.service';
+
+/**
+ * Empty {@link SuperAdminRecentActivityBundle} for tests — F5 from
+ * docs/super-admin-cross-tenant-design.md collapsed the dashboard's 8
+ * `getRecent*` subscriptions into a single `getRecentActivity()` call,
+ * so test stubs build a bundle once and overlay per-feed rows where
+ * needed via {@link bundleWith}.
+ */
+function emptyBundle(): SuperAdminRecentActivityBundle {
+  return {
+    encounters: [],
+    consultations: [],
+    labOrders: [],
+    labResults: [],
+    labTestDefinitions: [],
+    admissions: [],
+    prescriptions: [],
+    treatmentPlans: [],
+    referrals: [],
+  };
+}
+
+function bundleWith(
+  overrides: Partial<SuperAdminRecentActivityBundle>,
+): SuperAdminRecentActivityBundle {
+  return { ...emptyBundle(), ...overrides };
+}
 
 const fakeSummary = (overrides: Partial<SuperAdminSummary> = {}): SuperAdminSummary => ({
   totalUsers: 120,
@@ -31,6 +60,15 @@ const fakeSummary = (overrides: Partial<SuperAdminSummary> = {}): SuperAdminSumm
   globalAssignments: 5,
   activeGlobalAssignments: 5,
   todayAppointmentsCount: 42,
+  totalEncounters: 11,
+  totalConsultations: 22,
+  totalLabOrders: 33,
+  totalLabResults: 44,
+  totalLabTestDefinitions: 55,
+  totalAdmissions: 66,
+  totalPrescriptions: 77,
+  totalTreatmentPlans: 88,
+  totalReferrals: 99,
   generatedAt: '2026-05-02T12:00:00Z',
   recentAuditEvents: [],
   ...overrides,
@@ -65,6 +103,14 @@ describe('SuperAdminComponent', () => {
   let dashboard: jasmine.SpyObj<DashboardService>;
   let platform: jasmine.SpyObj<PlatformService>;
 
+  function stubAllRecent(): void {
+    // F5: super-admin.ts now fetches the aggregate /recent-activity
+    // bundle in one call instead of 8 individual calls. Stub the bundle
+    // method with empty arrays for every feed by default; tests that
+    // need a specific feed populate it via `bundleWith({ key: rows })`.
+    dashboard.getRecentActivity.and.returnValue(of(emptyBundle()));
+  }
+
   function setup(): SuperAdminComponent {
     TestBed.configureTestingModule({
       imports: [SuperAdminComponent, TranslateModule.forRoot()],
@@ -82,8 +128,12 @@ describe('SuperAdminComponent', () => {
   }
 
   beforeEach(() => {
-    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', ['getSummary']);
+    dashboard = jasmine.createSpyObj<DashboardService>('DashboardService', [
+      'getSummary',
+      'getRecentActivity',
+    ]);
     platform = jasmine.createSpyObj<PlatformService>('PlatformService', ['getSummary']);
+    stubAllRecent();
   });
 
   afterEach(() => TestBed.resetTestingModule());
@@ -167,6 +217,203 @@ describe('SuperAdminComponent', () => {
         '/super-admin/audit-logs',
         '/hospitals',
       ]),
+    );
+  });
+
+  it('builds 9 clinical stat tiles from the summary', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    const c = setup();
+
+    const clinical = c.clinicalStats();
+    expect(clinical.length).toBe(9);
+    expect(clinical.find((s) => s.key === 'encounters')?.value).toBe(11);
+    expect(clinical.find((s) => s.key === 'consultations')?.value).toBe(22);
+    expect(clinical.find((s) => s.key === 'lab_results')?.value).toBe(44);
+    expect(clinical.find((s) => s.key === 'referrals')?.value).toBe(99);
+  });
+
+  it('fetches the aggregate recent-activity bundle in a single call (F5)', () => {
+    // Pre-F5 the dashboard fanned out 8 individual `getRecentX` calls
+    // (`forkJoin` originally, then a streaming load). After F5 from
+    // docs/super-admin-cross-tenant-design.md the dashboard makes ONE
+    // round-trip against /super-admin/recent-activity. This test locks
+    // the new behaviour so a future "consistency" refactor doesn't
+    // silently re-introduce the 8-way fan-out.
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    setup();
+
+    expect(dashboard.getRecentActivity).toHaveBeenCalledTimes(1);
+    expect(dashboard.getRecentActivity).toHaveBeenCalledWith(10);
+  });
+
+  it('renders selected activity tab rows from the response', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          prescriptions: [
+            {
+              id: 'aaaa1111-2222-3333-4444-555555555555',
+              medicationName: 'Amoxicillin',
+              patientName: 'Ada',
+              createdAt: '2026-05-02T10:00:00Z',
+            },
+          ] as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+
+    const c = setup();
+    c.selectActivityTab('prescriptions');
+
+    const rows = c.selectedActivityRows();
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe('aaaa1111');
+    expect(rows[0].summary).toContain('Amoxicillin');
+    expect(rows[0].timestamp).toBe('2026-05-02T10:00:00Z');
+  });
+
+  it('reflects empty activity collections gracefully', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    // All recent endpoints already stubbed to of([])
+
+    const c = setup();
+    c.selectActivityTab('referrals');
+
+    expect(c.selectedActivityRows()).toEqual([]);
+  });
+
+  it('reports the correct count for each activity tab', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    const c = setup();
+    const consultationTab = c.activityTabs.find((t) => t.key === 'consultations')!;
+    const referralTab = c.activityTabs.find((t) => t.key === 'referrals')!;
+
+    expect(c.countForTab(consultationTab)).toBe(22);
+    expect(c.countForTab(referralTab)).toBe(99);
+  });
+
+  /* ────────────────────────────────────────────────────────────────────
+   * Copilot review on commit 2678681f.
+   * ──────────────────────────────────────────────────────────────────── */
+
+  // Finding #3: row-timestamp extractor must read the entity-specific
+  // clinical-time field, not just `createdAt` / a small allowlist. If
+  // the extractor falls back to null the activity panel renders rows
+  // with a blank timestamp.
+  //
+  // (The Angular DashboardService doesn't yet surface
+  // `getRecentEncounters` to the super-admin activity panel — that's
+  // a separate gap. Until the encounters tab is added here, we
+  // exercise the 7 tabs that DO exist plus their clinical-time field.)
+  const TIMESTAMP_FIELDS_BY_TAB: {
+    tab: ActivityKey;
+    field: string;
+    bundleKey: keyof SuperAdminRecentActivityBundle;
+  }[] = [
+    { tab: 'admissions', field: 'admissionDateTime', bundleKey: 'admissions' },
+    { tab: 'labResults', field: 'resultDate', bundleKey: 'labResults' },
+    { tab: 'labOrders', field: 'orderDatetime', bundleKey: 'labOrders' },
+    { tab: 'referrals', field: 'submittedAt', bundleKey: 'referrals' },
+    { tab: 'treatmentPlans', field: 'timelineStartDate', bundleKey: 'treatmentPlans' },
+    { tab: 'prescriptions', field: 'createdAt', bundleKey: 'prescriptions' },
+  ];
+
+  for (const { tab, field, bundleKey } of TIMESTAMP_FIELDS_BY_TAB) {
+    it(`row timestamp extractor reads "${field}" for ${tab}`, () => {
+      dashboard.getSummary.and.returnValue(of(fakeSummary()));
+      platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+      const row: SuperAdminRecentItem = {
+        id: 'aaaa1111-2222-3333-4444-555555555555',
+        patientName: 'Ada',
+        // Set the entity's clinical-time field — but NOT createdAt
+        // (except for the prescriptions row, where `createdAt` IS
+        // the clinical-time field by design — see the comment on
+        // SuperAdminDashboardServiceImpl.getRecentPrescriptions).
+        [field]: '2026-05-04T10:00:00Z',
+      };
+      dashboard.getRecentActivity.and.returnValue(
+        of(bundleWith({ [bundleKey]: [row] } as Partial<SuperAdminRecentActivityBundle>)),
+      );
+
+      const c = setup();
+      c.selectActivityTab(tab);
+
+      const rows = c.selectedActivityRows();
+      expect(rows.length).toBe(1);
+      expect(rows[0].timestamp).toBe('2026-05-04T10:00:00Z');
+    });
+  }
+
+  it('row timestamp prefers the clinical-time field over createdAt', () => {
+    // When both `admissionDateTime` (clinical) and `createdAt` (row
+    // insert) are present, the extractor must pick the clinical one —
+    // that's the whole point of the Copilot finding.
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    dashboard.getRecentActivity.and.returnValue(
+      of(
+        bundleWith({
+          admissions: [
+            {
+              id: 'adm-1',
+              patientName: 'Ada',
+              admissionDateTime: '2026-04-01T08:00:00Z',
+              createdAt: '2026-05-04T10:00:00Z', // late backfill
+            },
+          ] as unknown as SuperAdminRecentItem[],
+        }),
+      ),
+    );
+
+    const c = setup();
+    c.selectActivityTab('admissions');
+
+    expect(c.selectedActivityRows()[0].timestamp).toBe('2026-04-01T08:00:00Z');
+  });
+
+  // Finding #4: tabs need id + aria-controls; the panel needs a matching
+  // id + aria-labelledby pointing back at the active tab. Without these
+  // a screen-reader user can't tell which panel each tab opens.
+  it('activity tabs and panel are wired together for screen readers', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+
+    TestBed.configureTestingModule({
+      imports: [SuperAdminComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: DashboardService, useValue: dashboard },
+        { provide: PlatformService, useValue: platform },
+      ],
+    });
+    const fix = TestBed.createComponent(SuperAdminComponent);
+    fix.detectChanges();
+    const dom: HTMLElement = fix.nativeElement;
+
+    const tabs = dom.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    expect(tabs.length).toBeGreaterThan(0);
+    tabs.forEach((tab) => {
+      expect(tab.id).toMatch(/^activity-tab-/);
+      expect(tab.getAttribute('aria-controls')).toBe('activity-tabpanel');
+    });
+
+    const panel = dom.querySelector<HTMLElement>('[role="tabpanel"]');
+    expect(panel).toBeTruthy();
+    expect(panel!.id).toBe('activity-tabpanel');
+    // aria-labelledby points at the currently-selected tab's id
+    expect(panel!.getAttribute('aria-labelledby')).toBe(
+      `activity-tab-${fix.componentInstance.selectedActivityTab()}`,
     );
   });
 });

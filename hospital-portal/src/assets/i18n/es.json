@@ -67,6 +67,9 @@
     "QUICK_LINKS": "Enlaces rápidos",
     "RECENT_AUDIT": "Eventos de auditoría recientes",
     "VIEW_ALL_AUDIT": "Ver todos los registros de auditoría",
+    "CLINICAL_OVERVIEW": "Resumen clínico",
+    "RECENT_CLINICAL_ACTIVITY": "Actividad clínica reciente",
+    "ACTIVITY_EMPTY": "No hay elementos recientes en esta categoría.",
     "STAT": {
       "ORGANIZATIONS": "Organizaciones",
       "HOSPITALS": "Hospitales",
@@ -76,7 +79,16 @@
       "DEPARTMENTS": "Departamentos",
       "ROLES": "Roles",
       "ASSIGNMENTS": "Asignaciones de rol",
-      "ACTIVE": "activos"
+      "ACTIVE": "activos",
+      "ENCOUNTERS": "Encuentros",
+      "CONSULTATIONS": "Consultas",
+      "ADMISSIONS": "Ingresos",
+      "PRESCRIPTIONS": "Prescripciones",
+      "LAB_ORDERS": "Solicitudes de laboratorio",
+      "LAB_RESULTS": "Resultados de laboratorio",
+      "LAB_TEST_DEFINITIONS": "Catálogo de pruebas",
+      "TREATMENT_PLANS": "Planes de tratamiento",
+      "REFERRALS": "Derivaciones"
     },
     "PLATFORM": {
       "INTEGRATIONS": "Total integraciones",
@@ -130,7 +142,9 @@
       "USER_NAME_PLACEHOLDER": "coincidencia parcial sobre el actor",
       "IMPERSONATOR_USER_ID": "ID del suplantador",
       "ENTITY_TYPE": "Tipo de entidad objetivo",
+      "ENTITY_TYPE_PLACEHOLDER": "PATIENT / USUARIO / …",
       "RESOURCE_ID": "ID del recurso objetivo",
+      "RESOURCE_ID_PLACEHOLDER": "UUID",
       "STATUS": "Estado",
       "FROM_DATE": "Desde",
       "TO_DATE": "Hasta",
@@ -189,7 +203,8 @@
     "FORCE_LOGOUT": {
       "TITLE": "Cerrar todas las sesiones",
       "DESC": "Avanza el min-iat global; cada JWT activo queda invalidado.",
-      "ACTION": "Cerrar todas las sesiones"
+      "ACTION": "Cerrar todas las sesiones",
+      "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
       "TITLE": "Desactivar un feature flag",
@@ -201,15 +216,20 @@
       "TITLE": "Forzar re-enrolamiento MFA",
       "DESC": "Elimina el enrolamiento MFA + códigos de respaldo para los usuarios listados (o todos si está vacío).",
       "USER_IDS": "IDs de usuario (separados por coma, opcional)",
+      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
       "ACTION": "Forzar re-enrolamiento"
     },
     "BROADCAST": {
       "TITLE": "Banner de difusión",
       "DESC": "Publica un mensaje banner en /topic/emergency-broadcast.",
       "MESSAGE": "Mensaje",
+      "SEVERITY_INFO": "Información",
+      "SEVERITY_WARN": "Advertencia",
+      "SEVERITY_CRITICAL": "Crítico",
       "SEVERITY": "Gravedad",
       "ACTION": "Enviar difusión"
-    }
+    },
+    "REQUEST_FAILED": "La solicitud falló."
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Emitido por",
@@ -237,7 +257,8 @@
       "PRICE_CENTS": "Precio mensual (centavos)",
       "CURRENCY": "Moneda",
       "INCLUDED_SEATS": "Asientos incluidos",
-      "FEATURE_KEYS": "Claves de funcionalidad"
+      "FEATURE_KEYS": "Claves de funcionalidad",
+      "FEATURE_KEYS_PLACEHOLDER": "claves separadas por comas"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "El nombre y el código de nivel son obligatorios.",
@@ -1267,6 +1288,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGED": "Acknowledged",
+    "NO_DATA_GLOBAL": "No hay consultas en ninguno de sus hospitales.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Additional notes...",
     "ASSIGN": "Assign",
     "ASSIGNED": "Assigned",
@@ -1723,7 +1745,24 @@
     "STATISTICS": "Estadísticas",
     "SUBTITLE": "Gestionar departamentos y divisiones hospitalarias",
     "TITLE": "Departamentos",
-    "TOTAL_STAFF": "Personal Total"
+    "TOTAL_STAFF": "Personal Total",
+    "PLACEHOLDER": {
+      "NAME": "p. ej., Cardiología",
+      "CODE": "p. ej., CARDIO-01",
+      "EMAIL": "dept@hospital.com",
+      "PHONE": "+22625000001"
+    },
+    "NO_HOSPITAL_ASSIGNED": "Ningún hospital asignado",
+    "TOAST": {
+      "REQUIRED_FIELDS": "Hospital, nombre y código son obligatorios",
+      "UPDATED": "Departamento actualizado",
+      "CREATED": "Departamento creado",
+      "SAVE_FAILED": "Error al guardar el departamento",
+      "LOAD_FAILED": "Error al cargar los departamentos",
+      "NOT_FOUND": "Departamento no encontrado",
+      "DELETED": "Departamento eliminado",
+      "DELETE_FAILED": "Error al eliminar el departamento"
+    }
   },
   "ENCOUNTERS": {
     "ADD_NOTE": "Add Note",
@@ -1802,6 +1841,23 @@
     "SUBTITLE": "Manage feature toggles",
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle"
+  },
+  "HOSPITAL_SCOPE": {
+    "ALL_HOSPITALS": "Todos los hospitales",
+    "CLEAR": "Quitar el filtro de hospital",
+    "FILTER_BY_HOSPITAL": "Filtrar por hospital",
+    "HOSPITAL_COLUMN": "Hospital",
+    "NO_MATCHES": "Ningún hospital coincide con su búsqueda.",
+    "SCOPED": "Hospital",
+    "SEARCH_ERROR": "No se pudieron cargar los hospitales. Inténtelo de nuevo.",
+    "EMPTY_GLOBAL": {
+      "ENCOUNTERS": "No hay encuentros en ninguno de sus hospitales.",
+      "LAB_RESULTS": "No hay resultados de laboratorio en ninguno de sus hospitales.",
+      "ADMISSIONS": "No hay ingresos en ninguno de sus hospitales.",
+      "PRESCRIPTIONS": "No hay prescripciones en ninguno de sus hospitales.",
+      "TREATMENT_PLANS": "No hay planes de tratamiento en ninguno de sus hospitales.",
+      "REFERRALS": "No hay derivaciones en ninguno de sus hospitales."
+    }
   },
   "HOSPITALS": {
     "ADDRESS": "Dirección / Calle",
@@ -2503,7 +2559,53 @@
     "WARD": "Ward",
     "WEIGHT": "Weight",
     "WORKBOARD": "Panel de trabajo",
-    "WOUND_CARE": "Wound Care"
+    "WOUND_CARE": "Wound Care",
+    "UPDATED_PREFIX": "Actualizado",
+    "MIN_UNIT": "min",
+    "DUE_LABEL": "Vence:",
+    "OVERDUE_BADGE": "VENCIDO",
+    "COMPLETED_PREFIX": "Completado",
+    "BY_PREFIX": "por",
+    "PATIENT_UUID_PLACEHOLDER": "UUID del paciente",
+    "VITALS_PLACEHOLDER": {
+      "TEMP": "p. ej. 37,2",
+      "HEART_RATE": "p. ej. 72",
+      "RESP_RATE": "p. ej. 16",
+      "SYSTOLIC": "p. ej. 120",
+      "DIASTOLIC": "p. ej. 80",
+      "SPO2": "p. ej. 98",
+      "GLUCOSE": "p. ej. 100",
+      "WEIGHT": "p. ej. 70,5"
+    },
+    "TOAST": {
+      "VITALS_LOAD_FAILED": "Error al cargar los signos vitales",
+      "MEDS_LOAD_FAILED": "Error al cargar los medicamentos",
+      "ORDERS_LOAD_FAILED": "Error al cargar las órdenes",
+      "HANDOFFS_LOAD_FAILED": "Error al cargar los traspasos",
+      "REASON_REQUIRED": "Se requiere un motivo para Pausa/Rechazo",
+      "MED_ACTION_RECORDED": "Medicamento {action}",
+      "ACTION_FAILED": "Error al registrar la acción",
+      "VITALS_REQUIRED": "Introduzca al menos un valor de signo vital.",
+      "VITALS_RECORDED": "Signos vitales registrados para {patient}",
+      "VITALS_SAVE_FAILED": "Error al guardar los signos vitales",
+      "HANDOFF_COMPLETED": "Traspaso completado",
+      "HANDOFF_FAILED": "Error al completar el traspaso",
+      "TASK_REQUIRED": "Se requieren paciente y categoría.",
+      "TASK_CREATED": "Tarea creada para {patient}",
+      "TASK_CREATE_FAILED": "Error al crear la tarea",
+      "TASK_COMPLETED": "Tarea completada",
+      "TASK_COMPLETE_FAILED": "Error al completar la tarea",
+      "MARK_READ_FAILED": "Error al marcar como leído",
+      "NOTE_SAVED": "Nota de cuidado guardada para {patient}",
+      "NOTE_FAILED": "Error al guardar la nota de cuidado",
+      "NO_ENCOUNTER": "No se encontró ningún encuentro activo para este paciente.",
+      "ENCOUNTER_LOOKUP_FAILED": "Error al buscar el encuentro."
+    },
+    "MED_ACTION": {
+      "GIVEN": "administrado",
+      "HELD": "pausado",
+      "REFUSED": "rechazado"
+    }
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -3011,7 +3113,57 @@
     "VERSION": "Version",
     "VIEW_DETAILS": "Ver detalles",
     "VIEW_DOCS": "Ver documentación",
-    "WEBHOOKS": "Webhooks"
+    "WEBHOOKS": "Webhooks",
+    "TOAST": {
+      "SNAPSHOT_EXPORTED": "Instantánea exportada con éxito",
+      "SNAPSHOT_EXPORT_FAILED": "Error al exportar la instantánea",
+      "ORGS_LOAD_FAILED": "Error al cargar las organizaciones",
+      "ORG_SERVICES_LOAD_FAILED": "Error al cargar los servicios de la organización",
+      "SERVICE_UPDATED": "Servicio actualizado con éxito",
+      "SERVICE_REGISTERED": "Servicio «{name}» registrado",
+      "HOSPITAL_UNLINKED": "Hospital «{name}» desvinculado",
+      "HOSPITAL_UNLINK_FAILED": "Error al desvincular el hospital",
+      "HOSPITAL_LINKED": "Hospital «{name}» vinculado",
+      "HOSPITAL_LINK_FAILED": "Error al vincular el hospital",
+      "CATALOG_LOAD_FAILED": "Error al cargar el catálogo",
+      "NO_ORGS_AVAILABLE": "No hay organizaciones disponibles para aprovisionar",
+      "PROVISIONED": "«{name}» aprovisionado en la organización",
+      "NO_DOCS_URL": "No hay URL de documentación disponible",
+      "NO_SANDBOX": "No hay entorno de pruebas disponible",
+      "RELEASE_REQUIRED_FIELDS": "Nombre, entorno y horas de inicio y fin son obligatorios",
+      "RELEASE_SCHEDULED": "Ventana de versión «{name}» programada",
+      "STATUS_CHANGED": "Estado del servicio cambiado a {status}",
+      "SERVICE_UPDATE_FAILED": "Error al actualizar el servicio",
+      "STATUS_CHANGE_FAILED": "Error al cambiar el estado",
+      "SERVICE_REGISTER_FAILED": "Error al registrar el servicio",
+      "PROVISION_FAILED": "Error al aprovisionar el servicio",
+      "RELEASE_SCHEDULE_FAILED": "Error al programar la ventana de versión"
+    },
+    "TASK_ACTION": {
+      "RUN_NOW": "Ejecutar ahora",
+      "INVESTIGATE": "Investigar",
+      "UNBLOCK": "Desbloquear",
+      "RUN": "Ejecutar"
+    },
+    "PLACEHOLDER": {
+      "VENDOR": "p. ej. Epic, Cerner",
+      "URL": "https://...",
+      "TIER": "p. ej. Oro, Plata",
+      "RELEASE_NAME": "p. ej. Lanzamiento Q1 2025",
+      "RELEASE_NOTES": "Notas de versión adicionales…"
+    },
+    "SERVICE_TYPES": {
+      "EHR": "Historial clínico electrónico",
+      "BILLING": "Sistema de facturación",
+      "INVENTORY": "Gestión de inventario",
+      "LIS": "Sistema de información de laboratorio",
+      "ANALYTICS": "Plataforma de análisis",
+      "CLINICAL_ANALYTICS": "Análisis clínico",
+      "REMOTE_MONITORING": "Monitoreo remoto",
+      "PEDIATRIC_MESSAGING": "Mensajería pediátrica",
+      "ORTHOPEDIC_IMAGING": "Imagenología ortopédica",
+      "RESPIRATORY_TELEHEALTH": "Telesalud respiratoria"
+    }
   },
   "PRESCRIPTIONS": {
     "ACTIVE": "Active",
@@ -3075,7 +3227,25 @@
     "STATUS_FILTER": "Status",
     "SUBTITLE": "Manage prescriptions",
     "TITLE": "Prescriptions",
-    "VIEW_DETAILS": "Ver detalles"
+    "VIEW_DETAILS": "Ver detalles",
+    "STATUS": {
+      "DRAFT": "Borrador",
+      "PENDING_SIGNATURE": "Pendiente de firma",
+      "SIGNED": "Firmada",
+      "TRANSMITTED": "Transmitida",
+      "CANCELLED": "Cancelada",
+      "DISCONTINUED": "Descontinuada"
+    },
+    "TOAST": {
+      "UPDATED": "Prescripción actualizada",
+      "CREATED": "Prescripción creada",
+      "SAVE_FAILED": "Error al guardar",
+      "DELETED": "Prescripción eliminada",
+      "DELETE_FAILED": "Error al eliminar",
+      "LOAD_FAILED": "Error al cargar las prescripciones",
+      "SMS_SENT": "SMS enviado a {pharmacy}",
+      "SMS_FAILED": "No se pudo enviar el SMS de prescripción"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",
@@ -3451,7 +3621,20 @@
     "SUBTITLE": "Manage roles and access control",
     "SYSTEM_ROLE": "System Role",
     "TITLE": "Roles & Permissions",
-    "USERS_COUNT": "Users"
+    "USERS_COUNT": "Users",
+    "CODE_PLACEHOLDER_EXAMPLE": "p. ej., ROLE_PHARMACIST",
+    "TOAST": {
+      "LOAD_FAILED": "Error al cargar los roles",
+      "NAME_REQUIRED": "El nombre del rol es obligatorio",
+      "UPDATED": "Rol actualizado",
+      "CREATED": "Rol creado",
+      "OPERATION_FAILED": "La operación falló",
+      "DELETED": "Rol eliminado",
+      "DELETE_FAILED": "Error al eliminar el rol",
+      "PERMS_LOAD_FAILED": "Error al cargar los permisos",
+      "PERMS_UPDATED": "Permisos actualizados",
+      "PERMS_UPDATE_FAILED": "Error al actualizar los permisos"
+    }
   },
   "SCHEDULING": {
     "AFTERNOON": "Afternoon",
@@ -3552,7 +3735,29 @@
     "WEEK": "Week",
     "WEEKLY_SCHEDULE": "Horario semanal",
     "WEEKLY_STAFF_AVAILABILITY": "Disponibilidad semanal del personal",
-    "WEEKLY_SUMMARY": "Weekly Summary"
+    "WEEKLY_SUMMARY": "Weekly Summary",
+    "ARIA": {
+      "PREV_WEEK": "Semana anterior",
+      "NEXT_WEEK": "Semana siguiente",
+      "CLOSE_BULK_MODAL": "Cerrar la ventana de programación en bloque",
+      "CLEAR_STAFF": "Borrar personal seleccionado",
+      "STAFF_SUGGESTIONS": "Sugerencias de personal",
+      "SKIP_CONFLICTING": "Omitir fechas en conflicto"
+    },
+    "STAFF_FALLBACK": "Personal",
+    "SHIFT_CONTD": "← cont.",
+    "TOAST": {
+      "STAFF_LOAD_FAILED": "No se pudo cargar la lista del personal.",
+      "IDS_REQUIRED": "Se requieren los IDs de personal y hospital.",
+      "DATE_RANGE_REQUIRED": "Especifique el rango de fechas.",
+      "DOW_REQUIRED": "Seleccione al menos un día de la semana.",
+      "BULK_SUCCESS": "{count} turno(s) programado(s)",
+      "BULK_SKIPPED_SUFFIX": ", {count} omitido(s).",
+      "BULK_ALL_SKIPPED": "No se crearon turnos. Todas las fechas candidatas fueron omitidas.",
+      "BULK_FAILED": "La programación en bloque falló. Inténtelo de nuevo.",
+      "SHIFTS_LOAD_FAILED": "Error al cargar los turnos",
+      "LEAVE_LOAD_FAILED": "Error al cargar las solicitudes de licencia"
+    }
   },
   "SETUP": {
     "ALL_SET": "You're All Set!",
@@ -3870,7 +4075,25 @@
     "USER": "Usuario",
     "USERNAME": "Username",
     "USERS_PLURAL": "Usuarios",
-    "USER_SINGULAR": "Usuario"
+    "USER_SINGULAR": "Usuario",
+    "TOAST": {
+      "LOAD_FAILED": "Error al cargar los usuarios",
+      "REQUIRED_FIELDS": "Todos los campos obligatorios deben completarse",
+      "ROLE_REQUIRED": "Debe seleccionarse al menos un rol",
+      "LICENSE_REQUIRED": "El número de licencia es obligatorio para los roles médicos",
+      "UPDATED": "Usuario actualizado",
+      "CREATED": "Usuario creado con éxito.",
+      "CONFLICT": "Se detectó un conflicto. Revise los campos resaltados.",
+      "VALIDATION_ERRORS": "Corrija los campos resaltados e inténtelo de nuevo.",
+      "OPERATION_FAILED": "La operación falló. Inténtelo de nuevo.",
+      "DELETED": "Usuario eliminado",
+      "DELETE_FAILED": "Error al eliminar el usuario",
+      "RESTORED": "{name} ha sido restaurado.",
+      "RESTORE_FAILED": "Error al restaurar el usuario",
+      "IMPERSONATE_REASON_TOO_SHORT": "El motivo debe tener al menos 5 caracteres.",
+      "IMPERSONATE_STARTED": "Ahora actuando como {name}.",
+      "IMPERSONATE_FAILED": "Error al iniciar la suplantación"
+    }
   },
   "TRIAGE": {
     "TITLE": "Evaluación de triaje",
@@ -4072,5 +4295,141 @@
     "MTM_FOLLOW_UP_DATE": "Fecha de seguimiento",
     "MTM_EMPTY": "Sin revisiones MTM registradas",
     "PATIENT_ID": "ID del paciente"
+  },
+  "LAB_QC": {
+    "TITLE": "Panel de control de calidad",
+    "SUBTITLE": "Tendencias de eventos de CC y resultados de estudios de validación para todas las definiciones de pruebas",
+    "LOADING": "Cargando…",
+    "TOTAL_QC_EVENTS": "Total de eventos de CC",
+    "FAILED_QC_EVENTS": "Eventos de CC fallidos",
+    "VALIDATION_STUDIES": "Estudios de validación",
+    "VALIDATION_PASS_RATE": "Tasa de aprobación de validación",
+    "EVENTS_BY_TEST": "Eventos de CC por definición de prueba",
+    "CLICK_ROW_HINT": "Haga clic en una fila para ver los gráficos de control Levey-Jennings",
+    "NO_EVENTS": "Aún no se han registrado eventos de CC.",
+    "COL": {
+      "TEST_NAME": "Nombre de la prueba",
+      "TOTAL_EVENTS": "Total de eventos",
+      "FAILED": "Fallidos",
+      "FAILURE_RATE": "Tasa de fallos",
+      "LAST_EVENT": "Último evento"
+    },
+    "CHART": {
+      "LOADING": "Cargando datos de CC…",
+      "NO_EVENTS": "No se han registrado eventos de CC para esta prueba.",
+      "LEVEL_LOW": "Control bajo",
+      "LEVEL_HIGH": "Control alto",
+      "INSUFFICIENT_DATA": "Se requieren al menos 3 eventos de CC para mostrar el gráfico.",
+      "LEGEND_OK": "Dentro de ±1s",
+      "LEGEND_WARN": "Advertencia ±1s–2s",
+      "LEGEND_FAIL": "Fuera de ±2s"
+    },
+    "STUDIES_BY_TEST": "Estudios de validación por definición de prueba",
+    "NO_STUDIES": "Aún no se han registrado estudios de validación.",
+    "STUDIES_COL": {
+      "CODE": "Código",
+      "TOTAL": "Total",
+      "PASSED": "Aprobados",
+      "PASS_RATE": "Tasa de aprobación",
+      "LAST_STUDY": "Último estudio"
+    },
+    "TOAST": {
+      "LOAD_FAILED": "Error al cargar los datos del panel de CC.",
+      "CHART_LOAD_FAILED": "Error al cargar los eventos de CC para el gráfico."
+    }
+  },
+  "LAB_APPROVAL": {
+    "TITLE": "Cola de aprobación de definiciones de pruebas de laboratorio",
+    "SUBTITLE": "Revisar y aprobar definiciones de pruebas de laboratorio para uso clínico",
+    "TAB": {
+      "ALL": "Todos",
+      "DRAFT": "Borrador",
+      "PENDING_QA": "Pendiente de revisión de QA",
+      "PENDING_DIRECTOR": "Pendiente de aprobación del director"
+    },
+    "SEARCH_PLACEHOLDER": "Buscar por nombre, código o categoría…",
+    "LOADING": "Cargando cola…",
+    "COL": {
+      "CODE": "Código",
+      "NAME": "Nombre",
+      "CATEGORY": "Categoría",
+      "SAMPLE_TYPE": "Tipo de muestra",
+      "STATUS": "Estado",
+      "ACTIONS": "Acciones"
+    },
+    "ACTION": {
+      "VIEW_TITLE": "Ver definición y estudios de validación",
+      "SUBMIT": "Enviar",
+      "SUBMIT_TITLE": "Enviar para revisión de QA",
+      "QA_PASS": "QA Aprobado",
+      "QA_PASS_TITLE": "Completar revisión de QA",
+      "REJECT": "Rechazar",
+      "REJECT_TITLE": "Rechazar",
+      "APPROVE": "Aprobar",
+      "APPROVE_TITLE": "Aprobar",
+      "CLOSE_TITLE": "Cerrar"
+    },
+    "EMPTY": {
+      "TITLE": "La cola está vacía",
+      "NO_MATCH": "Ninguna definición coincide con su búsqueda.",
+      "ALL_CLEAR": "Ninguna definición en espera de revisión o aprobación."
+    },
+    "FIELD": {
+      "CATEGORY": "Categoría",
+      "SAMPLE_TYPE": "Tipo de muestra",
+      "APPROVAL_STATUS": "Estado de aprobación",
+      "REJECTION_REASON": "Motivo de rechazo"
+    },
+    "STUDIES": {
+      "TITLE": "Estudios de validación",
+      "ADD": "Añadir estudio",
+      "LOADING": "Cargando estudios…",
+      "EMPTY": "Aún no se han registrado estudios de validación.",
+      "PASSED": "Aprobado",
+      "FAILED": "Fallido",
+      "DATE_LABEL": "Fecha:",
+      "BY_LABEL": "Por:",
+      "DELETE_TITLE": "Eliminar estudio"
+    },
+    "CHART": {
+      "TITLE": "Gráfico de control de CC (Levey-Jennings)"
+    },
+    "STUDY_FORM": {
+      "TITLE": "Registrar estudio de validación",
+      "STUDY_TYPE": "Tipo de estudio *",
+      "STUDY_DATE": "Fecha del estudio *",
+      "PERFORMED_BY": "Realizado por",
+      "PERFORMED_BY_PLACEHOLDER": "Nombre de la persona que realizó el estudio",
+      "RESULT": "Resultado",
+      "SUMMARY": "Resumen",
+      "SUMMARY_PLACEHOLDER": "Resultado / conclusión del estudio (p. ej. Cumple los criterios CLSI EP05-A3)",
+      "NOTES": "Notas",
+      "NOTES_PLACEHOLDER": "Notas u observaciones adicionales",
+      "CANCEL": "Cancelar",
+      "SAVE": "Guardar estudio"
+    },
+    "CONFIRM": {
+      "TITLE_SUBMIT": "Enviar para revisión de QA",
+      "TITLE_QA_PASS": "Completar revisión de QA",
+      "TITLE_APPROVE": "Aprobación del director",
+      "TITLE_REJECT": "Rechazar definición",
+      "TITLE_DEFAULT": "Acción de aprobación",
+      "DEFINITION_LABEL": "Definición:",
+      "REASON_REQUIRED": "Motivo de rechazo *",
+      "REASON_PLACEHOLDER": "Explique el motivo del rechazo…",
+      "CANCEL": "Cancelar",
+      "CONFIRM": "Confirmar"
+    },
+    "TOAST": {
+      "LOAD_QUEUE_FAILED": "Error al cargar la cola de aprobación",
+      "ACTION_RECORDED": "Acción de aprobación registrada",
+      "ACTION_FAILED": "Acción fallida — compruebe los permisos del rol o el estado actual",
+      "STUDIES_LOAD_FAILED": "Error al cargar los estudios de validación",
+      "CHART_LOAD_FAILED": "Error al cargar los eventos de CC para el gráfico.",
+      "STUDY_RECORDED": "Estudio de validación registrado",
+      "STUDY_SAVE_FAILED": "Error al guardar el estudio de validación",
+      "STUDY_REMOVED": "Estudio eliminado",
+      "STUDY_REMOVE_FAILED": "Error al eliminar el estudio de validación"
+    }
   }
 }

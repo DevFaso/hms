@@ -101,7 +101,7 @@
             type="text"
             [ngModel]="impersonatorUserId()"
             (ngModelChange)="impersonatorUserId.set($event)"
-            placeholder="UUID"
+            placeholder="{{ 'AUDIT_SEARCH.FILTER.RESOURCE_ID_PLACEHOLDER' | translate }}"
           />
         </label>
         <label class="filter-field">
@@ -110,7 +110,7 @@
             type="text"
             [ngModel]="entityType()"
             (ngModelChange)="entityType.set($event)"
-            placeholder="PATIENT / USER / …"
+            placeholder="{{ 'AUDIT_SEARCH.FILTER.ENTITY_TYPE_PLACEHOLDER' | translate }}"
           />
         </label>
         <label class="filter-field">

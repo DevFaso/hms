@@ -27,6 +27,7 @@ import com.example.hms.service.GeneralReferralService;
 import com.example.hms.service.ReferralEventRecorder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -290,6 +291,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referrals.stream()
             .map(this::toResponse)
             .toList();
+    }
+
+    @Override
+    public List<GeneralReferralResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
+        return referralRepository.findAll(pageable)
+            .map(this::toResponse)
+            .getContent();
     }
 
     @Override

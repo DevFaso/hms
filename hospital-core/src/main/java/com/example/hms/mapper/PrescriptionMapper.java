@@ -1,15 +1,23 @@
 package com.example.hms.mapper;
 
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import jakarta.persistence.EntityNotFoundException;
+import org.hibernate.Hibernate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
 @Component
 public class PrescriptionMapper {
+
+    private static final Logger log = LoggerFactory.getLogger(PrescriptionMapper.class);
 
     /* ============================
        Response mapping
@@ -17,9 +25,15 @@ public class PrescriptionMapper {
     public PrescriptionResponseDTO toResponseDTO(Prescription p) {
         if (p == null) return null;
 
-        Patient patient = p.getPatient();
-        Staff   staff   = p.getStaff();
-        Encounter enc   = p.getEncounter();
+        // Defensive: if a parent row was hard-deleted while a Prescription
+        // still references it (dangling FK), `safeInit` returns null instead
+        // of letting the lazy proxy throw EntityNotFoundException — which
+        // would otherwise 500 the entire list endpoint via
+        // GlobalExceptionHandler.handleEntityNotFound.
+        Patient   patient = safeInit(p.getPatient(), "Prescription", p.getId(), "patient");
+        Staff     staff   = safeInit(p.getStaff(),   "Prescription", p.getId(), "staff");
+        Encounter enc     = safeInit(p.getEncounter(), "Prescription", p.getId(), "encounter");
+        Hospital  hospital = safeInit(p.getHospital(), "Prescription", p.getId(), "hospital");
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
@@ -32,7 +46,8 @@ public class PrescriptionMapper {
             .staffFullName(resolveStaffFullName(staff))
 
             .encounterId(enc != null ? enc.getId() : null)
-            .hospitalId(resolveHospitalId(enc))
+            .hospitalId(resolveHospitalId(hospital, enc))
+            .hospitalName(resolveHospitalName(hospital, enc))
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
@@ -125,8 +140,12 @@ public class PrescriptionMapper {
         if (staff != null && notBlank(staff.getName())) {
             return staff.getName();
         }
-        String firstName = (staff != null && staff.getUser() != null) ? staff.getUser().getFirstName() : null;
-        String lastName  = (staff != null && staff.getUser() != null) ? staff.getUser().getLastName()  : null;
+        // staff.user is itself a LAZY @ManyToOne — guard against a dangling FK.
+        com.example.hms.model.User user = staff != null
+            ? safeInit(staff.getUser(), "Staff", staff.getId(), "user")
+            : null;
+        String firstName = user != null ? user.getFirstName() : null;
+        String lastName  = user != null ? user.getLastName()  : null;
         return buildFullName(firstName, lastName);
     }
 
@@ -135,8 +154,52 @@ public class PrescriptionMapper {
         return buildFullName(patient.getFirstName(), patient.getLastName());
     }
 
-    private java.util.UUID resolveHospitalId(Encounter enc) {
-        return enc != null && enc.getHospital() != null ? enc.getHospital().getId() : null;
+    /**
+     * Resolve the prescription's hospital, preferring the prescription's own
+     * {@code hospital} field (set by {@code toEntity}) and falling back to
+     * the encounter for older rows written before that field was always
+     * populated. Both inputs are passed in already-{@link #safeInit safeInit}'d
+     * to absorb dangling-FK lazy load failures.
+     */
+    private Hospital resolveHospital(Hospital hospital, Encounter enc) {
+        if (hospital != null) {
+            return hospital;
+        }
+        if (enc == null) {
+            return null;
+        }
+        return safeInit(enc.getHospital(), "Encounter", enc.getId(), "hospital");
+    }
+
+    private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {
+        Hospital h = resolveHospital(hospital, enc);
+        return h != null ? h.getId() : null;
+    }
+
+    private String resolveHospitalName(Hospital hospital, Encounter enc) {
+        Hospital h = resolveHospital(hospital, enc);
+        return h != null ? h.getName() : null;
+    }
+
+    /**
+     * Safely initialise a Hibernate lazy proxy. Returns {@code null} when the
+     * referenced row was hard-deleted while this row still references it
+     * (dangling FK) instead of letting {@link EntityNotFoundException} /
+     * {@link JpaObjectRetrievalFailureException} propagate out — which would
+     * otherwise be mapped to HTTP 500 by {@code GlobalExceptionHandler.handleEntityNotFound}
+     * and break the whole list response over a single bad row.
+     */
+    private static <T> T safeInit(T proxyOrEntity, String parentEntity, Object parentId, String association) {
+        if (proxyOrEntity == null) return null;
+        try {
+            Hibernate.initialize(proxyOrEntity);
+            return proxyOrEntity;
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
+            log.warn("⚠️ {}({}) has a dangling FK on '{}' — referenced row was deleted. " +
+                     "Returning null for this association; DB cleanup required.",
+                     parentEntity, parentId, association);
+            return null;
+        }
     }
 
     private String buildFullName(String first, String last) {

@@ -1,0 +1,65 @@
+<div
+  class="hospital-typeahead"
+  data-testid="hospital-typeahead"
+  tabindex="-1"
+  (keydown)="onKeydown($event)"
+>
+  <div class="hospital-typeahead__search-row">
+    <span class="material-icons hospital-typeahead__icon" aria-hidden="true">search</span>
+    <input
+      #searchInput
+      type="text"
+      class="hospital-typeahead__input"
+      data-testid="hospital-typeahead-input"
+      [placeholder]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+      [attr.aria-label]="'HOSPITAL_SCOPE.FILTER_BY_HOSPITAL' | translate"
+      [value]="query()"
+      (input)="onQueryChange($any($event.target).value)"
+      autocomplete="off"
+    />
+    @if (loading()) {
+      <span class="hospital-typeahead__spinner" aria-hidden="true"></span>
+    }
+  </div>
+
+  <ul class="hospital-typeahead__list" role="listbox">
+    @if (!hideAllOption()) {
+      <li
+        class="hospital-typeahead__item hospital-typeahead__item--all"
+        data-testid="hospital-typeahead-all"
+        role="option"
+        aria-selected="false"
+        tabindex="0"
+        (click)="pickAll()"
+        (keydown.enter)="pickAll()"
+        (keydown.space)="pickAll(); $event.preventDefault()"
+      >
+        <span class="material-icons" aria-hidden="true">public</span>
+        <span>{{ 'HOSPITAL_SCOPE.ALL_HOSPITALS' | translate }}</span>
+      </li>
+    }
+    @for (hospital of results(); track hospital.id) {
+      <li
+        class="hospital-typeahead__item"
+        [attr.data-testid]="'hospital-typeahead-option-' + hospital.id"
+        role="option"
+        aria-selected="false"
+        tabindex="0"
+        (click)="pickHospital(hospital)"
+        (keydown.enter)="pickHospital(hospital)"
+        (keydown.space)="pickHospital(hospital); $event.preventDefault()"
+      >
+        <span class="material-icons" aria-hidden="true">local_hospital</span>
+        <span class="hospital-typeahead__item-label">{{ hospital.name }}</span>
+        @if (hospital.city) {
+          <span class="hospital-typeahead__item-meta">{{ hospital.city }}</span>
+        }
+      </li>
+    }
+    @if (emptyMessageKey(); as key) {
+      <li class="hospital-typeahead__item hospital-typeahead__item--empty" role="presentation">
+        {{ key | translate }}
+      </li>
+    }
+  </ul>
+</div>

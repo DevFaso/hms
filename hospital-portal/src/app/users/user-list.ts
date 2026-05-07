@@ -10,7 +10,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -85,6 +85,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly roleContext = inject(RoleContextService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
+  private readonly translate = inject(TranslateService);
 
   private readonly searchSubject = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
@@ -182,7 +183,7 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load users');
+        this.toast.error(this.translate.instant('USERS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -343,15 +344,15 @@ export class UserListComponent implements OnInit, OnDestroy {
       !this.createForm.firstName ||
       !this.createForm.lastName
     ) {
-      this.toast.error('All required fields must be filled');
+      this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
       return;
     }
     if (this.selectedRoles.length === 0) {
-      this.toast.error('At least one role must be selected');
+      this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
       return;
     }
     if (this.licenseRequired && !this.createForm.licenseNumber?.trim()) {
-      this.toast.error('License number is required for medical roles');
+      this.toast.error(this.translate.instant('USERS.TOAST.LICENSE_REQUIRED'));
       return;
     }
 
@@ -380,7 +381,9 @@ export class UserListComponent implements OnInit, OnDestroy {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'User updated' : 'User created successfully.');
+        this.toast.success(
+          this.translate.instant(existing ? 'USERS.TOAST.UPDATED' : 'USERS.TOAST.CREATED'),
+        );
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
@@ -398,21 +401,19 @@ export class UserListComponent implements OnInit, OnDestroy {
             ...prev,
             [body.field]: body.message ?? 'Already in use',
           }));
-          this.toast.error(
-            body.message ?? 'A conflict was detected. Please review the highlighted fields.',
-          );
+          this.toast.error(body.message ?? this.translate.instant('USERS.TOAST.CONFLICT'));
           return;
         }
 
         // 400 with fieldErrors map (from @Valid / Bean Validation)
         if (status === 400 && body?.fieldErrors) {
           this.fieldErrors.set(body.fieldErrors as Record<string, string>);
-          this.toast.error('Please fix the highlighted fields and try again.');
+          this.toast.error(this.translate.instant('USERS.TOAST.VALIDATION_ERRORS'));
           return;
         }
 
         // Generic fallback
-        this.toast.error(body?.message ?? 'Operation failed. Please try again.');
+        this.toast.error(body?.message ?? this.translate.instant('USERS.TOAST.OPERATION_FAILED'));
       },
     });
   }
@@ -443,14 +444,16 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.deleting.set(true);
     this.userService.delete(user.id).subscribe({
       next: () => {
-        this.toast.success('User deleted');
+        this.toast.success(this.translate.instant('USERS.TOAST.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingUser.set(null);
         this.loadUsers();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete user');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('USERS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -460,12 +463,18 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.restoring.set(true);
     this.userService.restore(user.id).subscribe({
       next: () => {
-        this.toast.success(`${user.firstName} ${user.lastName} has been restored.`);
+        this.toast.success(
+          this.translate.instant('USERS.TOAST.RESTORED', {
+            name: `${user.firstName} ${user.lastName}`,
+          }),
+        );
         this.restoring.set(false);
         this.loadUsers(this.currentPage());
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to restore user');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('USERS.TOAST.RESTORE_FAILED'),
+        );
         this.restoring.set(false);
       },
     });
@@ -500,7 +509,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     const target = this.impersonateTarget();
     const reason = this.impersonateReason.trim();
     if (!target || reason.length < 5) {
-      this.impersonateError.set('Reason must be at least 5 characters.');
+      this.impersonateError.set(this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT'));
       return;
     }
     this.impersonating.set(true);
@@ -511,12 +520,16 @@ export class UserListComponent implements OnInit, OnDestroy {
         next: () => {
           this.impersonating.set(false);
           this.closeImpersonate();
-          this.toast.success(`Now acting as ${target.username}.`);
+          this.toast.success(
+            this.translate.instant('USERS.TOAST.IMPERSONATE_STARTED', { name: target.username }),
+          );
           this.router.navigateByUrl('/dashboard');
         },
         error: (err) => {
           this.impersonating.set(false);
-          this.impersonateError.set(err?.error?.message ?? 'Failed to start impersonation');
+          this.impersonateError.set(
+            err?.error?.message ?? this.translate.instant('USERS.TOAST.IMPERSONATE_FAILED'),
+          );
         },
       });
   }
