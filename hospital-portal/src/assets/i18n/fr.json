@@ -3749,6 +3749,12 @@
         "USER_DISABLE": "Utilisateur désactivé",
         "USER_ENABLE": "Utilisateur activé",
         "USER_UPDATE": "Utilisateur modifié"
+      },
+      "TREATMENT_PLAN_TASK_STATUS": {
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
+        "IN_PROGRESS": "En cours",
+        "PENDING": "En attente"
       }
     },
     "DOCUMENTS": {

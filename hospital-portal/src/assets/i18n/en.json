@@ -3808,6 +3808,12 @@
         "USER_DISABLE": "User Disabled",
         "USER_ENABLE": "User Enabled",
         "USER_UPDATE": "User Updated"
+      },
+      "TREATMENT_PLAN_TASK_STATUS": {
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "IN_PROGRESS": "In Progress",
+        "PENDING": "Pending"
       }
     },
     "DOCUMENTS": {

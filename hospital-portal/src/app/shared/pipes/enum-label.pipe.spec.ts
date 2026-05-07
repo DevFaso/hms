@@ -190,6 +190,11 @@ describe('EnumLabelPipe', () => {
     );
     expect(pipe.transform('PRELIMINARY', 'imagingReportStatus')).toBe('Preliminary');
     expect(pipe.transform('REVISIONS_REQUIRED', 'treatmentPlanStatus')).toBe('Revisions Required');
+    // TreatmentPlanTaskStatus is a separate enum from TreatmentPlanStatus.
+    // Copilot review on PR #262 caught this — PENDING / IN_PROGRESS aren't
+    // valid TREATMENT_PLAN_STATUS values and would fall through to prettify.
+    expect(pipe.transform('PENDING', 'treatmentPlanTaskStatus')).toBe('Pending');
+    expect(pipe.transform('IN_PROGRESS', 'treatmentPlanTaskStatus')).toBe('In Progress');
     expect(pipe.transform('ACKNOWLEDGED', 'referralStatus')).toBe('Acknowledged');
     expect(pipe.transform('PRIORITY', 'referralUrgency')).toBe('Priority');
     expect(pipe.transform('SHARED_CARE', 'referralType')).toBe('Shared Care');

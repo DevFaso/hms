@@ -336,6 +336,16 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       ARCHIVED: 'Archived',
       CANCELLED: 'Cancelled',
     },
+    /* TreatmentPlanTaskStatus is a different enum than TreatmentPlanStatus —
+     * follow-up items inside a plan use this 4-value workflow. Adding a
+     * dedicated group avoids the prettifier-fallthrough that Copilot flagged
+     * on PR #262 (PENDING / IN_PROGRESS aren't in TREATMENT_PLAN_STATUS). */
+    treatmentPlanTaskStatus: {
+      PENDING: 'Pending',
+      IN_PROGRESS: 'In Progress',
+      COMPLETED: 'Completed',
+      CANCELLED: 'Cancelled',
+    },
     referralStatus: {
       DRAFT: 'Draft',
       SUBMITTED: 'Submitted',
