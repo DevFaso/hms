@@ -33,15 +33,35 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
 
     List<LabTestDefinition> findByHospitalIsNullAndActiveTrue();
 
+    /**
+     * Search lab test definitions with all filters optional.
+     *
+     * <p><b>Postgres NULL-bind workaround.</b> The {@code :keyword} /
+     * {@code :unit} / {@code :category} parameters are wrapped in
+     * {@code CAST(:p AS string)} so Postgres can type-infer the
+     * placeholder when the caller passes {@code null}. Without the cast,
+     * an SQL like {@code lower('%' || ? || '%')} with {@code ?} bound as
+     * {@code SQL NULL} resolves to type {@code bytea} on Postgres
+     * (Hibernate's default {@code setNull} type), and the query fails
+     * with {@code ERROR: function lower(bytea) does not exist} at parse
+     * time — Postgres type-checks every branch of an OR-short-circuit
+     * even when the leading {@code :keyword IS NULL} would skip the
+     * concatenation at runtime. H2 is more lenient (treats NULL as
+     * {@code varchar} by default) which is why the bug only surfaced on
+     * UAT. Same fix pattern as {@code UserRepository#searchByCriteria}
+     * and {@code HospitalRepository#findAllWithDepartments} — any
+     * existing JPQL with {@code CONCAT('%', :param, '%')} where
+     * {@code :param} can be null needs the same cast.</p>
+     */
     @Query("""
         SELECT l FROM LabTestDefinition l
         WHERE (:keyword IS NULL OR (
-                 LOWER(l.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(l.testCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(COALESCE(l.description, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                 LOWER(l.name) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+                 OR LOWER(l.testCode) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+                 OR LOWER(COALESCE(l.description, '')) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
               ))
-          AND (:unit IS NULL OR LOWER(l.unit) = LOWER(:unit))
-          AND (:category IS NULL OR LOWER(l.category) = LOWER(:category))
+          AND (:unit IS NULL OR LOWER(l.unit) = LOWER(CAST(:unit AS string)))
+          AND (:category IS NULL OR LOWER(l.category) = LOWER(CAST(:category AS string)))
           AND (:active IS NULL OR l.active = :active)
           AND (:approvalStatus IS NULL OR l.approvalStatus = :approvalStatus)
     """)
