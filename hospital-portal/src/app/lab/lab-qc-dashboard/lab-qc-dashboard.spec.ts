@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { LabQcDashboardComponent } from './lab-qc-dashboard';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   LabService,
   LabQcSummary,
@@ -69,7 +70,7 @@ describe('LabQcDashboardComponent', () => {
     mockToastService.error.calls.reset();
 
     await TestBed.configureTestingModule({
-      imports: [LabQcDashboardComponent],
+      imports: [LabQcDashboardComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -114,7 +115,7 @@ describe('LabQcDashboardComponent', () => {
     const newFixture = TestBed.createComponent(LabQcDashboardComponent);
     newFixture.detectChanges();
 
-    expect(mockToastService.error).toHaveBeenCalledWith('Failed to load QC dashboard data.');
+    expect(mockToastService.error).toHaveBeenCalledWith('LAB_QC.TOAST.LOAD_FAILED');
   });
 
   // ── drill-down ──────────────────────────────────────────────────────────
@@ -200,6 +201,6 @@ describe('LabQcDashboardComponent', () => {
       throwError(() => new Error('chart fail')),
     );
     component.toggleChart('def-1');
-    expect(mockToastService.error).toHaveBeenCalledWith('Failed to load QC events for chart.');
+    expect(mockToastService.error).toHaveBeenCalledWith('LAB_QC.TOAST.CHART_LOAD_FAILED');
   });
 });
