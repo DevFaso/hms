@@ -756,7 +756,9 @@
               >
                 <div class="task-card-header">
                   <span class="task-category">{{ taskCategoryLabel(task.category) }}</span>
-                  <span class="task-priority-badge">{{ task.priority }}</span>
+                  <span class="task-priority-badge">{{
+                    task.priority | enumLabel: 'taskPriority'
+                  }}</span>
                 </div>
                 <div class="task-card-body">
                   <div class="task-patient">

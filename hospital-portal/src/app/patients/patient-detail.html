@@ -390,7 +390,9 @@
                   <td>{{ enc.staffFullName || enc.staffName || '—' }}</td>
                   <td>{{ enc.departmentName || '—' }}</td>
                   <td>
-                    <span [class]="getEncounterStatusClass(enc.status)">{{ enc.status }}</span>
+                    <span [class]="getEncounterStatusClass(enc.status)">{{
+                      enc.status | enumLabel: 'encounterStatus'
+                    }}</span>
                   </td>
                   <td class="notes-cell">{{ enc.notes || '—' }}</td>
                 </tr>
@@ -436,7 +438,9 @@
                   <td>{{ appt.staffName || '—' }}</td>
                   <td>{{ appt.reason || '—' }}</td>
                   <td>
-                    <span [class]="getApptStatusClass(appt.status)">{{ appt.status }}</span>
+                    <span [class]="getApptStatusClass(appt.status)">{{
+                      appt.status | enumLabel: 'appointmentStatus'
+                    }}</span>
                   </td>
                 </tr>
               }

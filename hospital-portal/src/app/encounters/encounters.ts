@@ -22,6 +22,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note-form.component';
 import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-encounters',
@@ -33,6 +34,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
     EncounterNoteFormComponent,
     EligibilityCheckDialogComponent,
     HospitalScopeChipComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './encounters.html',
   styleUrl: './encounters.scss',

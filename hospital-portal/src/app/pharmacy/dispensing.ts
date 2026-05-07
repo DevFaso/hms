@@ -13,11 +13,12 @@ import {
   WorkQueuePrescription,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-dispensing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './dispensing.html',
   styleUrl: './dispensing.scss',
 })

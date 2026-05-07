@@ -144,7 +144,9 @@
               <td>{{ p.duration || '—' }}</td>
               <td>{{ p.staffFullName || '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(p.status) }}">{{ p.status }}</span>
+                <span class="status-badge {{ getStatusClass(p.status) }}">{{
+                  p.status | enumLabel: 'prescriptionStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">

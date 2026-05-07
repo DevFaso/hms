@@ -202,7 +202,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(o.status)">{{ o.status }}</span>
+              ><span class="status-badge" [class]="getStatusClass(o.status)">{{
+                o.status | enumLabel: 'status'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span

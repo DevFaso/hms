@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -15,7 +16,7 @@ import { AuthService } from '../auth/auth.service';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './mtm-review.html',
   styleUrl: './mtm-review.scss',
 })

@@ -154,7 +154,9 @@
               <td class="complaint-cell">{{ a.chiefComplaint || '—' }}</td>
               <td>{{ a.admissionDateTime ? (a.admissionDateTime | date: 'mediumDate') : '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(a.status) }}">{{ a.status }}</span>
+                <span class="status-badge {{ getStatusClass(a.status) }}">{{
+                  a.status | enumLabel: 'status'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">

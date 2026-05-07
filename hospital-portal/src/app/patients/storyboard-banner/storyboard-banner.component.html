@@ -155,7 +155,7 @@
             @if (enc.status) {
               <div class="storyboard__kv-row">
                 <dt>{{ 'STORYBOARD.STATUS' | translate }}</dt>
-                <dd>{{ enc.status }}</dd>
+                <dd>{{ enc.status | enumLabel: 'encounterStatus' }}</dd>
               </div>
             }
             @if (enc.staffFullName) {
@@ -199,7 +199,7 @@
         @if (hasCodeStatus() && s.codeStatus; as cs) {
           @if (cs.status) {
             <span class="storyboard__pill" [ngClass]="codeStatusPillClass(cs.status)">
-              {{ cs.status }}
+              {{ cs.status | enumLabel: 'status' }}
             </span>
           }
           @if (cs.directives && cs.directives.length > 0) {

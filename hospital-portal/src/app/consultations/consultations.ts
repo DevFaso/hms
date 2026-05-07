@@ -20,11 +20,12 @@ import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-consultations',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './consultations.html',
   styleUrl: './consultations.scss',
 })

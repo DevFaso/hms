@@ -18,6 +18,7 @@ import {
   PatientStoryboard,
   StoryboardService,
 } from '../../services/storyboard.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -37,7 +38,7 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
 @Component({
   selector: 'app-storyboard-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './storyboard-banner.component.html',
   styleUrl: './storyboard-banner.component.scss',
