@@ -195,28 +195,28 @@
         [class.active]="leaveFilter() === 'PENDING'"
         (click)="setLeaveFilter('PENDING')"
       >
-        {{ 'SCHEDULING.PENDING' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.PENDING' | translate }}
       </button>
       <button
         class="filter-chip approved"
         [class.active]="leaveFilter() === 'APPROVED'"
         (click)="setLeaveFilter('APPROVED')"
       >
-        {{ 'SCHEDULING.APPROVED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.APPROVED' | translate }}
       </button>
       <button
         class="filter-chip denied"
         [class.active]="leaveFilter() === 'REJECTED'"
         (click)="setLeaveFilter('REJECTED')"
       >
-        {{ 'SCHEDULING.REJECTED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.REJECTED' | translate }}
       </button>
       <button
         class="filter-chip cancelled"
         [class.active]="leaveFilter() === 'CANCELLED'"
         (click)="setLeaveFilter('CANCELLED')"
       >
-        {{ 'SCHEDULING.CANCELLED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.CANCELLED' | translate }}
       </button>
     </div>
 
@@ -559,7 +559,9 @@
             <div class="bulk-stat scheduled">
               <span class="material-symbols-outlined">check_circle</span>
               <span class="bulk-stat-val">{{ bulkResult()!.totalScheduled }}</span>
-              <span class="bulk-stat-lbl">{{ 'SCHEDULING.SCHEDULED' | translate }}</span>
+              <span class="bulk-stat-lbl">{{
+                'PORTAL.ENUM.SHIFT_STATUS.SCHEDULED' | translate
+              }}</span>
             </div>
             <div class="bulk-stat skipped">
               <span class="material-symbols-outlined">cancel</span>
