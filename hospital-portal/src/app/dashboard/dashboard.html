@@ -1308,7 +1308,7 @@
                             class="inbox-urgency-pill"
                             [class.urgency-critical]="item.urgency === 'CRITICAL'"
                           >
-                            {{ item.urgency }}
+                            {{ item.urgency | enumLabel: 'consultationUrgency' }}
                           </span>
                         }
                       </div>
@@ -1429,7 +1429,7 @@
                       <span
                         class="alert-sev-pill"
                         [class]="'sev-' + (alert.severity | lowercase)"
-                        >{{ alert.severity }}</span
+                        >{{ alert.severity | enumLabel: 'alertSeverity' }}</span
                       >
                       <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
                     </div>
@@ -1707,7 +1707,7 @@
                       <span
                         class="alert-sev-pill"
                         [class]="'sev-' + (alert.severity | lowercase)"
-                        >{{ alert.severity }}</span
+                        >{{ alert.severity | enumLabel: 'alertSeverity' }}</span
                       >
                       <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
                     </div>

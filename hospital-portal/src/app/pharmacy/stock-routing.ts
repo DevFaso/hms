@@ -10,11 +10,12 @@ import {
   PartnerOption,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './stock-routing.html',
   styleUrl: './stock-routing.scss',
 })

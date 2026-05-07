@@ -82,7 +82,7 @@
                     }
                     @if (event.status) {
                       <span class="chart-review__pill" [ngClass]="statusClass(event.status)">
-                        {{ event.status }}
+                        {{ event.status | enumLabel: 'status' }}
                       </span>
                     }
                   </div>
@@ -357,7 +357,7 @@
                     >
                   }
                   @if (i.priority) {
-                    <span> · {{ i.priority }}</span>
+                    <span> · {{ i.priority | enumLabel: 'taskPriority' }}</span>
                   }
                 </p>
                 @if (i.clinicalQuestion) {

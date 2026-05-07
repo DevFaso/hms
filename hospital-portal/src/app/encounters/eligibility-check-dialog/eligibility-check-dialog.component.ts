@@ -18,6 +18,7 @@ import {
   EligibilityService,
 } from '../../services/eligibility.service';
 import { ToastService } from '../../core/toast.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 interface SchemeOption {
   value: EligibilityScheme;
@@ -34,7 +35,7 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, EnumLabelPipe],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

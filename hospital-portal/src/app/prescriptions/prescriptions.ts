@@ -20,6 +20,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-prescriptions',
@@ -30,6 +31,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
     TranslateModule,
     CdsCardListComponent,
     HospitalScopeChipComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',

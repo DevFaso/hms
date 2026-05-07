@@ -63,6 +63,7 @@ import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patien
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 import { EncounterService } from '../services/encounter.service';
 import { ToastService } from '../core/toast.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -123,6 +124,7 @@ interface NavTile {
     DoctorResultsPanelComponent,
     PatientSnapshotDrawerComponent,
     InBasketPanelComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',

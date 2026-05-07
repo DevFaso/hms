@@ -2910,6 +2910,103 @@
         "LAB_DIRECTOR": "Director(a) de Laboratorio",
         "QUALITY_MANAGER": "Gestor(a) de Calidad",
         "RECEPTIONIST": "Recepcionista"
+      },
+      "PRESCRIPTION_STATUS": {
+        "CANCELLED": "Cancelada",
+        "DISCONTINUED": "Suspendida",
+        "DISPENSED": "Dispensada",
+        "DRAFT": "Borrador",
+        "PARTIALLY_FILLED": "Parcialmente surtida",
+        "PARTNER_ACCEPTED": "Aceptada por el socio",
+        "PARTNER_DISPENSED": "Dispensada por el socio",
+        "PARTNER_REJECTED": "Rechazada por el socio",
+        "PENDING_CLARIFICATION": "Pendiente de aclaración",
+        "PENDING_SIGNATURE": "Pendiente de firma",
+        "PENDING_STOCK": "En espera de stock",
+        "PRINTED_FOR_PATIENT": "Impresa para el paciente",
+        "REQUIRES_EXTERNAL_FILL": "Requiere surtido externo",
+        "SENT_TO_PARTNER": "Enviada al socio",
+        "SIGNED": "Firmada",
+        "TRANSMISSION_FAILED": "Error de transmisión",
+        "TRANSMITTED": "Transmitida"
+      },
+      "CONSULTATION_STATUS": {
+        "ACKNOWLEDGED": "Confirmada",
+        "ASSIGNED": "Asignada",
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "DECLINED": "Rechazada",
+        "IN_PROGRESS": "En curso",
+        "REQUESTED": "Solicitada",
+        "SCHEDULED": "Programada"
+      },
+      "CONSULTATION_URGENCY": {
+        "EMERGENCY": "Emergencia",
+        "ROUTINE": "Rutinaria",
+        "STAT": "STAT",
+        "URGENT": "Urgente"
+      },
+      "CONSULTATION_TYPE": {
+        "CURBSIDE_CONSULT": "Consulta informal",
+        "EMERGENCY_CONSULT": "Consulta de emergencia",
+        "FOLLOW_UP_CONSULT": "Consulta de seguimiento",
+        "INPATIENT_CONSULT": "Consulta hospitalaria",
+        "OUTPATIENT_CONSULT": "Consulta externa"
+      },
+      "APPOINTMENT_STATUS": {
+        "CANCELLED": "Cancelada",
+        "CHECKED_IN": "Registrada",
+        "COMPLETED": "Completada",
+        "CONFIRMED": "Confirmada",
+        "FAILED": "Fallida",
+        "IN_PROGRESS": "En curso",
+        "NO_SHOW": "No asistió",
+        "PENDING": "Pendiente",
+        "RESCHEDULED": "Reprogramada",
+        "SCHEDULED": "Programada",
+        "UNKNOWN": "Desconocida"
+      },
+      "ENCOUNTER_STATUS": {
+        "ARRIVED": "Llegó",
+        "AWAITING_RESULTS": "Esperando resultados",
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "IN_PROGRESS": "En curso",
+        "READY_FOR_DISCHARGE": "Listo para el alta",
+        "SCHEDULED": "Programado",
+        "TRIAGE": "Triaje",
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
+      },
+      "LEAVE_STATUS": {
+        "APPROVED": "Aprobada",
+        "CANCELLED": "Cancelada",
+        "PENDING": "Pendiente",
+        "REJECTED": "Rechazada"
+      },
+      "SHIFT_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "SCHEDULED": "Programado"
+      },
+      "ALERT_SEVERITY": {
+        "CRITICAL": "Crítica",
+        "EXPIRED": "Vencida",
+        "INFO": "Info",
+        "LIFE_THREATENING": "Riesgo vital",
+        "MILD": "Leve",
+        "MODERATE": "Moderada",
+        "SEVERE": "Severa",
+        "URGENT": "Urgente",
+        "WARN": "Advertencia",
+        "WARNING": "Advertencia"
+      },
+      "TASK_PRIORITY": {
+        "CRITICAL": "Crítica",
+        "HIGH": "Alta",
+        "LOW": "Baja",
+        "NORMAL": "Normal",
+        "ROUTINE": "Rutinaria",
+        "URGENT": "Urgente"
       }
     },
     "APPOINTMENTS": {

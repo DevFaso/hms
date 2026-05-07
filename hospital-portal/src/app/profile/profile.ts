@@ -16,13 +16,14 @@ import {
   ProfileUpdateRequest,
   RecoveryContact,
 } from '../services/profile.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
 })

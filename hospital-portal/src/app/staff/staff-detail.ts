@@ -9,13 +9,14 @@ import {
 } from '../services/staff-scheduling.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [CommonModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './staff-detail.html',
   styleUrl: './staff-detail.scss',
 })

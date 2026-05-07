@@ -3511,6 +3511,103 @@
         "BANK_TRANSFER": "Bank Transfer",
         "MOBILE_MONEY": "Mobile Money",
         "CASH": "Cash"
+      },
+      "PRESCRIPTION_STATUS": {
+        "CANCELLED": "Cancelled",
+        "DISCONTINUED": "Discontinued",
+        "DISPENSED": "Dispensed",
+        "DRAFT": "Draft",
+        "PARTIALLY_FILLED": "Partially Filled",
+        "PARTNER_ACCEPTED": "Partner Accepted",
+        "PARTNER_DISPENSED": "Partner Dispensed",
+        "PARTNER_REJECTED": "Partner Rejected",
+        "PENDING_CLARIFICATION": "Pending Clarification",
+        "PENDING_SIGNATURE": "Pending Signature",
+        "PENDING_STOCK": "Pending Stock",
+        "PRINTED_FOR_PATIENT": "Printed for Patient",
+        "REQUIRES_EXTERNAL_FILL": "Requires External Fill",
+        "SENT_TO_PARTNER": "Sent to Partner",
+        "SIGNED": "Signed",
+        "TRANSMISSION_FAILED": "Transmission Failed",
+        "TRANSMITTED": "Transmitted"
+      },
+      "CONSULTATION_STATUS": {
+        "ACKNOWLEDGED": "Acknowledged",
+        "ASSIGNED": "Assigned",
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "DECLINED": "Declined",
+        "IN_PROGRESS": "In Progress",
+        "REQUESTED": "Requested",
+        "SCHEDULED": "Scheduled"
+      },
+      "CONSULTATION_URGENCY": {
+        "EMERGENCY": "Emergency",
+        "ROUTINE": "Routine",
+        "STAT": "STAT",
+        "URGENT": "Urgent"
+      },
+      "CONSULTATION_TYPE": {
+        "CURBSIDE_CONSULT": "Curbside Consult",
+        "EMERGENCY_CONSULT": "Emergency Consult",
+        "FOLLOW_UP_CONSULT": "Follow-Up Consult",
+        "INPATIENT_CONSULT": "Inpatient Consult",
+        "OUTPATIENT_CONSULT": "Outpatient Consult"
+      },
+      "APPOINTMENT_STATUS": {
+        "CANCELLED": "Cancelled",
+        "CHECKED_IN": "Checked In",
+        "COMPLETED": "Completed",
+        "CONFIRMED": "Confirmed",
+        "FAILED": "Failed",
+        "IN_PROGRESS": "In Progress",
+        "NO_SHOW": "No Show",
+        "PENDING": "Pending",
+        "RESCHEDULED": "Rescheduled",
+        "SCHEDULED": "Scheduled",
+        "UNKNOWN": "Unknown"
+      },
+      "ENCOUNTER_STATUS": {
+        "ARRIVED": "Arrived",
+        "AWAITING_RESULTS": "Awaiting Results",
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "IN_PROGRESS": "In Progress",
+        "READY_FOR_DISCHARGE": "Ready for Discharge",
+        "SCHEDULED": "Scheduled",
+        "TRIAGE": "Triage",
+        "WAITING_FOR_PHYSICIAN": "Waiting for Physician"
+      },
+      "LEAVE_STATUS": {
+        "APPROVED": "Approved",
+        "CANCELLED": "Cancelled",
+        "PENDING": "Pending",
+        "REJECTED": "Rejected"
+      },
+      "SHIFT_STATUS": {
+        "CANCELLED": "Cancelled",
+        "COMPLETED": "Completed",
+        "SCHEDULED": "Scheduled"
+      },
+      "ALERT_SEVERITY": {
+        "CRITICAL": "Critical",
+        "EXPIRED": "Expired",
+        "INFO": "Info",
+        "LIFE_THREATENING": "Life-Threatening",
+        "MILD": "Mild",
+        "MODERATE": "Moderate",
+        "SEVERE": "Severe",
+        "URGENT": "Urgent",
+        "WARN": "Warning",
+        "WARNING": "Warning"
+      },
+      "TASK_PRIORITY": {
+        "CRITICAL": "Critical",
+        "HIGH": "High",
+        "LOW": "Low",
+        "NORMAL": "Normal",
+        "ROUTINE": "Routine",
+        "URGENT": "Urgent"
       }
     },
     "DOCUMENTS": {

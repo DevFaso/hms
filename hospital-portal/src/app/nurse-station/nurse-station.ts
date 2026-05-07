@@ -38,6 +38,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -61,6 +62,7 @@ type SectionType =
     TranslateModule,
     TriageFormComponent,
     NursingIntakeFormComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './nurse-station.html',
   styleUrl: './nurse-station.scss',

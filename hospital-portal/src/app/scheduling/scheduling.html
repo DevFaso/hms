@@ -166,7 +166,7 @@
                       </span>
                     </div>
                     <span class="shift-status-badge" [attr.data-status]="shift.status">
-                      {{ shift.status }}
+                      {{ shift.status | enumLabel: 'shiftStatus' }}
                     </span>
                   </div>
                 } @empty {

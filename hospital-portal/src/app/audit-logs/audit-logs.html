@@ -110,7 +110,9 @@
               <td class="desc-cell">{{ l.eventDescription || '--' }}</td>
               <td>{{ l.entityType || '--' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(l.status) }}">{{ l.status }}</span>
+                <span class="status-badge {{ getStatusClass(l.status) }}">{{
+                  l.status | enumLabel: 'status'
+                }}</span>
               </td>
               <td class="ip-cell">{{ l.ipAddress || '--' }}</td>
             </tr>

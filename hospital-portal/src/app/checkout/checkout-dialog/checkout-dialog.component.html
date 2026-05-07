@@ -23,7 +23,9 @@
         @if (encounter) {
           <div class="patient-banner">
             <strong>{{ encounter.patientName }}</strong>
-            <span class="encounter-badge">{{ encounter.status }}</span>
+            <span class="encounter-badge">{{
+              encounter.status | enumLabel: 'encounterStatus'
+            }}</span>
           </div>
         }
 

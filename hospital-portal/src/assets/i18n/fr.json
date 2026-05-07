@@ -3452,6 +3452,103 @@
         "BANK_TRANSFER": "Virement bancaire",
         "MOBILE_MONEY": "Mobile Money",
         "CASH": "Espèces"
+      },
+      "PRESCRIPTION_STATUS": {
+        "CANCELLED": "Annulée",
+        "DISCONTINUED": "Interrompue",
+        "DISPENSED": "Délivrée",
+        "DRAFT": "Brouillon",
+        "PARTIALLY_FILLED": "Partiellement délivrée",
+        "PARTNER_ACCEPTED": "Acceptée par le partenaire",
+        "PARTNER_DISPENSED": "Délivrée par le partenaire",
+        "PARTNER_REJECTED": "Refusée par le partenaire",
+        "PENDING_CLARIFICATION": "En attente de clarification",
+        "PENDING_SIGNATURE": "En attente de signature",
+        "PENDING_STOCK": "En attente de stock",
+        "PRINTED_FOR_PATIENT": "Imprimée pour le patient",
+        "REQUIRES_EXTERNAL_FILL": "Nécessite délivrance externe",
+        "SENT_TO_PARTNER": "Envoyée au partenaire",
+        "SIGNED": "Signée",
+        "TRANSMISSION_FAILED": "Échec de transmission",
+        "TRANSMITTED": "Transmise"
+      },
+      "CONSULTATION_STATUS": {
+        "ACKNOWLEDGED": "Confirmée",
+        "ASSIGNED": "Assignée",
+        "CANCELLED": "Annulée",
+        "COMPLETED": "Terminée",
+        "DECLINED": "Refusée",
+        "IN_PROGRESS": "En cours",
+        "REQUESTED": "Demandée",
+        "SCHEDULED": "Planifiée"
+      },
+      "CONSULTATION_URGENCY": {
+        "EMERGENCY": "Urgence",
+        "ROUTINE": "Routine",
+        "STAT": "STAT",
+        "URGENT": "Urgent"
+      },
+      "CONSULTATION_TYPE": {
+        "CURBSIDE_CONSULT": "Avis informel",
+        "EMERGENCY_CONSULT": "Consultation d’urgence",
+        "FOLLOW_UP_CONSULT": "Consultation de suivi",
+        "INPATIENT_CONSULT": "Consultation en hospitalisation",
+        "OUTPATIENT_CONSULT": "Consultation externe"
+      },
+      "APPOINTMENT_STATUS": {
+        "CANCELLED": "Annulé",
+        "CHECKED_IN": "Enregistré",
+        "COMPLETED": "Terminé",
+        "CONFIRMED": "Confirmé",
+        "FAILED": "Échec",
+        "IN_PROGRESS": "En cours",
+        "NO_SHOW": "Absent",
+        "PENDING": "En attente",
+        "RESCHEDULED": "Reprogrammé",
+        "SCHEDULED": "Planifié",
+        "UNKNOWN": "Inconnu"
+      },
+      "ENCOUNTER_STATUS": {
+        "ARRIVED": "Arrivé",
+        "AWAITING_RESULTS": "En attente des résultats",
+        "CANCELLED": "Annulé",
+        "COMPLETED": "Terminé",
+        "IN_PROGRESS": "En cours",
+        "READY_FOR_DISCHARGE": "Prêt pour la sortie",
+        "SCHEDULED": "Planifié",
+        "TRIAGE": "Triage",
+        "WAITING_FOR_PHYSICIAN": "En attente du médecin"
+      },
+      "LEAVE_STATUS": {
+        "APPROVED": "Approuvé",
+        "CANCELLED": "Annulé",
+        "PENDING": "En attente",
+        "REJECTED": "Refusé"
+      },
+      "SHIFT_STATUS": {
+        "CANCELLED": "Annulé",
+        "COMPLETED": "Terminé",
+        "SCHEDULED": "Planifié"
+      },
+      "ALERT_SEVERITY": {
+        "CRITICAL": "Critique",
+        "EXPIRED": "Expiré",
+        "INFO": "Info",
+        "LIFE_THREATENING": "Risque vital",
+        "MILD": "Léger",
+        "MODERATE": "Modéré",
+        "SEVERE": "Sévère",
+        "URGENT": "Urgent",
+        "WARN": "Avertissement",
+        "WARNING": "Avertissement"
+      },
+      "TASK_PRIORITY": {
+        "CRITICAL": "Critique",
+        "HIGH": "Élevée",
+        "LOW": "Faible",
+        "NORMAL": "Normale",
+        "ROUTINE": "Routine",
+        "URGENT": "Urgente"
       }
     },
     "DOCUMENTS": {

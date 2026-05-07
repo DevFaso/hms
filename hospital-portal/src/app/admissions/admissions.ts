@@ -22,6 +22,7 @@ import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.com
 import { AuthService } from '../auth/auth.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -39,6 +40,7 @@ interface OrderSetPickerCtx {
     TranslateModule,
     OrderSetPickerComponent,
     HospitalScopeChipComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './admissions.html',
   styleUrl: './admissions.scss',
