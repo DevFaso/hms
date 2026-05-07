@@ -142,7 +142,9 @@
       "USER_NAME_PLACEHOLDER": "substring match on actor",
       "IMPERSONATOR_USER_ID": "Impersonator user id",
       "ENTITY_TYPE": "Target entity type",
+      "ENTITY_TYPE_PLACEHOLDER": "PATIENT / USER / …",
       "RESOURCE_ID": "Target resource id",
+      "RESOURCE_ID_PLACEHOLDER": "UUID",
       "STATUS": "Status",
       "FROM_DATE": "From",
       "TO_DATE": "To",
@@ -201,7 +203,8 @@
     "FORCE_LOGOUT": {
       "TITLE": "Force-logout all sessions",
       "DESC": "Bumps the global min-iat timestamp; every active JWT is invalidated.",
-      "ACTION": "Force logout all"
+      "ACTION": "Force logout all",
+      "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
       "TITLE": "Kill a feature flag",
@@ -213,6 +216,7 @@
       "TITLE": "Force MFA re-enrolment",
       "DESC": "Clears MFA enrolment + backup codes for the listed users (or all users when blank).",
       "USER_IDS": "User ids (comma-separated, optional)",
+      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
       "ACTION": "Force re-enrol"
     },
     "BROADCAST": {
@@ -249,7 +253,8 @@
       "PRICE_CENTS": "Monthly price (cents)",
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
-      "FEATURE_KEYS": "Feature keys"
+      "FEATURE_KEYS": "Feature keys",
+      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Name and tier code are required.",

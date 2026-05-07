@@ -142,7 +142,9 @@
       "USER_NAME_PLACEHOLDER": "coincidencia parcial sobre el actor",
       "IMPERSONATOR_USER_ID": "ID del suplantador",
       "ENTITY_TYPE": "Tipo de entidad objetivo",
+      "ENTITY_TYPE_PLACEHOLDER": "PATIENT / USUARIO / …",
       "RESOURCE_ID": "ID del recurso objetivo",
+      "RESOURCE_ID_PLACEHOLDER": "UUID",
       "STATUS": "Estado",
       "FROM_DATE": "Desde",
       "TO_DATE": "Hasta",
@@ -201,7 +203,8 @@
     "FORCE_LOGOUT": {
       "TITLE": "Cerrar todas las sesiones",
       "DESC": "Avanza el min-iat global; cada JWT activo queda invalidado.",
-      "ACTION": "Cerrar todas las sesiones"
+      "ACTION": "Cerrar todas las sesiones",
+      "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
       "TITLE": "Desactivar un feature flag",
@@ -213,6 +216,7 @@
       "TITLE": "Forzar re-enrolamiento MFA",
       "DESC": "Elimina el enrolamiento MFA + códigos de respaldo para los usuarios listados (o todos si está vacío).",
       "USER_IDS": "IDs de usuario (separados por coma, opcional)",
+      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
       "ACTION": "Forzar re-enrolamiento"
     },
     "BROADCAST": {
@@ -249,7 +253,8 @@
       "PRICE_CENTS": "Precio mensual (centavos)",
       "CURRENCY": "Moneda",
       "INCLUDED_SEATS": "Asientos incluidos",
-      "FEATURE_KEYS": "Claves de funcionalidad"
+      "FEATURE_KEYS": "Claves de funcionalidad",
+      "FEATURE_KEYS_PLACEHOLDER": "claves separadas por comas"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "El nombre y el código de nivel son obligatorios.",

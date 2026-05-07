@@ -103,7 +103,7 @@
       "USERS_DESC": "Gouvernance et provisionnement multi-tenant",
       "ROLES_TITLE": "Rôles",
       "ROLES_DESC": "Catalogue de rôles et matrice des permissions",
-      "FEATURE_FLAGS_TITLE": "Feature flags",
+      "FEATURE_FLAGS_TITLE": "Indicateurs de fonctionnalités",
       "FEATURE_FLAGS_DESC": "Surcharges par tenant et contrôle de déploiement",
       "ANALYTICS_TITLE": "Analytique plateforme",
       "ANALYTICS_DESC": "Métriques et tendances multi-tenant",
@@ -142,7 +142,9 @@
       "USER_NAME_PLACEHOLDER": "correspondance partielle sur l'acteur",
       "IMPERSONATOR_USER_ID": "ID de l'usurpateur",
       "ENTITY_TYPE": "Type d'entité cible",
+      "ENTITY_TYPE_PLACEHOLDER": "PATIENT / UTILISATEUR / …",
       "RESOURCE_ID": "ID de la ressource cible",
+      "RESOURCE_ID_PLACEHOLDER": "UUID",
       "STATUS": "Statut",
       "FROM_DATE": "Du",
       "TO_DATE": "Au",
@@ -201,7 +203,8 @@
     "FORCE_LOGOUT": {
       "TITLE": "Déconnecter toutes les sessions",
       "DESC": "Avance le min-iat global ; chaque JWT actif est invalidé.",
-      "ACTION": "Déconnecter tous"
+      "ACTION": "Déconnecter tous",
+      "CONFIRM_PLACEHOLDER": "FORCE LOGOUT ALL"
     },
     "KILL_FEATURE": {
       "TITLE": "Désactiver un feature flag",
@@ -213,6 +216,7 @@
       "TITLE": "Forcer le ré-enrôlement MFA",
       "DESC": "Efface l'enrôlement MFA + les codes de secours pour les utilisateurs listés (ou tous si vide).",
       "USER_IDS": "Identifiants utilisateur (séparés par virgule, optionnel)",
+      "USER_IDS_PLACEHOLDER": "UUID, UUID, …",
       "ACTION": "Forcer le ré-enrôlement"
     },
     "BROADCAST": {
@@ -249,7 +253,8 @@
       "PRICE_CENTS": "Prix mensuel (centimes)",
       "CURRENCY": "Devise",
       "INCLUDED_SEATS": "Sièges inclus",
-      "FEATURE_KEYS": "Clés de fonctionnalité"
+      "FEATURE_KEYS": "Clés de fonctionnalité",
+      "FEATURE_KEYS_PLACEHOLDER": "clés séparées par des virgules"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Le nom et le code de palier sont requis.",
