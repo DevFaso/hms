@@ -18,9 +18,10 @@
 
 | Environment | Origin | Login redirect URI | Post-logout redirect URI |
 |-------------|--------|--------------------|--------------------------|
-| Local dev   | `http://localhost:4200`          | `http://localhost:4200/*`          | `http://localhost:4200/login` |
-| UAT         | `https://uat.hms.example.com`    | `https://uat.hms.example.com/*`    | `https://uat.hms.example.com/login` |
-| Prod        | `https://hms.example.com`        | `https://hms.example.com/*`        | `https://hms.example.com/login` |
+| Local dev   | `http://localhost:4200`               | `http://localhost:4200/*`               | `http://localhost:4200/login` |
+| Hosted dev  | `https://hms.dev.bitnesttechs.com`    | `https://hms.dev.bitnesttechs.com/*`    | `https://hms.dev.bitnesttechs.com/login` |
+| UAT         | `https://uat.hms.example.com`         | `https://uat.hms.example.com/*`         | `https://uat.hms.example.com/login` |
+| Prod        | `https://hms.example.com`             | `https://hms.example.com/*`             | `https://hms.example.com/login` |
 
 Notes:
 - Web Origins (for silent refresh + CORS) are registered as exact
