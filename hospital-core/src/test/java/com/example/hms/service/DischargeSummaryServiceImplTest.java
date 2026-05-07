@@ -16,13 +16,19 @@ import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
@@ -48,7 +54,10 @@ class DischargeSummaryServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private DischargeApprovalRepository dischargeApprovalRepository;
+    @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    /** Real registry so the portal-fetch tests can assert counter values. */
+    @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     @InjectMocks private DischargeSummaryServiceImpl service;
 
@@ -339,5 +348,141 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findWithPendingTestResults(hospitalId)).thenReturn(List.of(summary));
         when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
         assertThat(service.getDischargeSummariesWithPendingResults(otherHospitalId, Locale.ENGLISH)).hasSize(1);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // getDischargeSummariesForPortalPatient — root-cause coverage for the
+    // 2026-04-11 incident (encounter COMPLETED yesterday but mobile AVS empty).
+    // See docs/avs-mobile-user-stories.md (US-AVS-008, US-AVS-009).
+    // ════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("Portal-patient AVS retrieval — observability + backfill")
+    class PortalPatientAvs {
+
+        private double counterCount(String name, String outcome) {
+            io.micrometer.core.instrument.Counter c = meterRegistry.find(name)
+                    .tag(DischargeSummaryServiceImpl.TAG_OUTCOME, outcome)
+                    .counter();
+            return c == null ? 0.0d : c.count();
+        }
+
+        @Test
+        @DisplayName("empty patient → counter tagged outcome=empty, no save calls")
+        void portalFetch_empty_taggedEmpty() {
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of());
+
+            List<DischargeSummaryResponseDTO> result =
+                    service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(result).isEmpty();
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_EMPTY)).isEqualTo(1.0d);
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_HIT)).isZero();
+        }
+
+        @Test
+        @DisplayName("existing summary returned → counter tagged outcome=hit")
+        void portalFetch_existingSummary_taggedHit() {
+            // Prime the existing summary with hospitalCourse + a medication so the
+            // enrichment branch does not fire and the outcome resolves to "hit".
+            summary.setHospitalCourse("seen");
+            summary.addMedicationReconciliation(
+                    com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                        .medicationName("Aspirin").dosage("81mg")
+                        .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
+                        .continueAtDischarge(true)
+                        .build());
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+
+            List<DischargeSummaryResponseDTO> result =
+                    service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(result).hasSize(1);
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_HIT)).isEqualTo(1.0d);
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_BACKFILLED)).isZero();
+        }
+
+        @Test
+        @DisplayName("orphan COMPLETED encounter → backfilled, counter tagged backfilled")
+        void portalFetch_orphanEncounter_backfilled() {
+            // Simulate the 2026-04-11 incident: encounter COMPLETED with notes +
+            // discharge_diagnoses + checkout_timestamp but no DischargeSummary row.
+            Encounter orphan = new Encounter();
+            orphan.setId(UUID.randomUUID());
+            orphan.setPatient(patient);
+            orphan.setHospital(hospital);
+            orphan.setStaff(staff);
+            orphan.setAssignment(assignment);
+            orphan.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            orphan.setCheckoutTimestamp(java.time.LocalDateTime.now().minusDays(1));
+            orphan.setNotes("testing updates");
+            orphan.setDischargeDiagnoses("[\"Patient is suffering from testing workflow\"]");
+            orphan.setFollowUpInstructions("return to clinic after seeing the Cardiologist in 2 weeks");
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of(orphan));
+            when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> {
+                DischargeSummary s = inv.getArgument(0);
+                if (s.getId() == null) s.setId(UUID.randomUUID());
+                return s;
+            });
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+            List<DischargeSummaryResponseDTO> result =
+                    service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(result).hasSize(1);
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_BACKFILLED)).isEqualTo(1.0d);
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_BACKFILL_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_BACKFILLED)).isEqualTo(1.0d);
+        }
+
+        @Test
+        @DisplayName("calling twice with no orphans is idempotent — no duplicate writes")
+        void portalFetch_idempotent_noDuplicateWrites() {
+            summary.setHospitalCourse("already enriched");
+            summary.addMedicationReconciliation(
+                    com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                        .medicationName("Aspirin").dosage("81mg")
+                        .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
+                        .continueAtDischarge(true)
+                        .build());
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            // No saves at all — the existing summary is already enriched.
+            verify(dischargeSummaryRepository, org.mockito.Mockito.never()).save(any());
+            assertThat(counterCount(
+                    DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
+                    DischargeSummaryServiceImpl.OUTCOME_HIT)).isEqualTo(2.0d);
+        }
     }
 }

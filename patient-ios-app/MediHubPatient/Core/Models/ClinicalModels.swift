@@ -101,12 +101,56 @@ struct AfterVisitSummaryDTO: Codable, Identifiable {
 
 // MARK: - Discharge sub-DTOs
 
+/// The backend's `MedicationReconciliationDTO.reconciliationAction` (an enum
+/// serialised as a String — `CONTINUED`, `STOPPED`, `NEW`, `MODIFIED`, `HELD`)
+/// was previously read here as `action`, which silently produced `nil` and made
+/// the medication action blank on the iOS Visit Summaries screen even when the
+/// backend had populated the value. Decode the canonical key and accept the
+/// legacy key as a fallback so older response shapes still parse cleanly.
+/// Tracked in docs/avs-mobile-user-stories.md (US-AVS-006).
 struct MedicationReconciliationDTO: Codable {
     let medicationName: String?
     let dosage: String?
     let frequency: String?
     let route: String?
-    let action: String? // CONTINUE, STOP, NEW, MODIFIED
+    let reconciliationAction: String?
+
+    /// Legacy alias kept so existing call sites (`med.action`) keep compiling.
+    var action: String? { reconciliationAction }
+
+    private enum CodingKeys: String, CodingKey {
+        case medicationName, dosage, frequency, route
+        case reconciliationAction
+        case action // legacy fallback
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        medicationName = try c.decodeIfPresent(String.self, forKey: .medicationName)
+        dosage         = try c.decodeIfPresent(String.self, forKey: .dosage)
+        frequency      = try c.decodeIfPresent(String.self, forKey: .frequency)
+        route          = try c.decodeIfPresent(String.self, forKey: .route)
+        // Prefer the canonical key, fall back to the legacy one.
+        reconciliationAction = try c.decodeIfPresent(String.self, forKey: .reconciliationAction)
+            ?? c.decodeIfPresent(String.self, forKey: .action)
+    }
+
+    init(medicationName: String?, dosage: String?, frequency: String?, route: String?, reconciliationAction: String?) {
+        self.medicationName = medicationName
+        self.dosage = dosage
+        self.frequency = frequency
+        self.route = route
+        self.reconciliationAction = reconciliationAction
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(medicationName, forKey: .medicationName)
+        try c.encodeIfPresent(dosage, forKey: .dosage)
+        try c.encodeIfPresent(frequency, forKey: .frequency)
+        try c.encodeIfPresent(route, forKey: .route)
+        try c.encodeIfPresent(reconciliationAction, forKey: .reconciliationAction)
+    }
 }
 
 struct PendingTestResultDTO: Codable {
