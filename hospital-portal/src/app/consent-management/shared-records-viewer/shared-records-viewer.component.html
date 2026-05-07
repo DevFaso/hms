@@ -1676,7 +1676,9 @@
                           <span class="detail-label">{{
                             'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
                           }}</span
-                          ><span class="detail-value">{{ a.verificationStatus }}</span>
+                          ><span class="detail-value">{{
+                            a.verificationStatus | enumLabel: 'allergyVerificationStatus'
+                          }}</span>
                         </div>
                       }
                       @if (a.onsetDate) {
@@ -1754,7 +1756,9 @@
                           <span class="detail-label">{{
                             'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
                           }}</span
-                          ><span class="detail-value">{{ a.verificationStatus }}</span>
+                          ><span class="detail-value">{{
+                            a.verificationStatus | enumLabel: 'allergyVerificationStatus'
+                          }}</span>
                         </div>
                       }
                       @if (a.onsetDate) {

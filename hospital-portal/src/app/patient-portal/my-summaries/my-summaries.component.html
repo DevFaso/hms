@@ -72,7 +72,7 @@
                   @if (s.disposition) {
                     <p>
                       <strong>{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate }}:</strong>
-                      {{ s.disposition }}
+                      {{ s.disposition | enumLabel: 'dischargeDisposition' }}
                     </p>
                   }
                   @if (s.dischargeCondition) {

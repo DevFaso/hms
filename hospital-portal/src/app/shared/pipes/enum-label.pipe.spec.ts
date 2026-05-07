@@ -20,7 +20,8 @@ describe('EnumLabelPipe', () => {
       imports: [TranslateModule.forRoot()],
     });
     translate = TestBed.inject(TranslateService);
-    translate.setDefaultLang('en');
+    // ngx-translate v17 renamed `setDefaultLang` → `setFallbackLang`.
+    translate.setFallbackLang('en');
     translate.use('en');
     pipe = TestBed.runInInjectionContext(() => new EnumLabelPipe());
   });
@@ -173,5 +174,79 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('CRITICAL', 'alertSeverity')).toBe('Critical');
     expect(pipe.transform('LIFE_THREATENING', 'alertSeverity')).toBe('Life-Threatening');
     expect(pipe.transform('HIGH', 'taskPriority')).toBe('High');
+  });
+
+  /* ── Phase 2 groups (lab + admin + referrals + signatures) ─ */
+
+  it('handles all Phase-2 groups via the English fallback', () => {
+    expect(pipe.transform('RESULTED', 'labOrderStatus')).toBe('Resulted');
+    expect(pipe.transform('ABNORMAL', 'abnormalFlag')).toBe('Abnormal');
+    expect(pipe.transform('METHOD_COMPARISON', 'validationStudyType')).toBe('Method Comparison');
+    expect(pipe.transform('AWAITING_DISCHARGE', 'admissionStatus')).toBe('Awaiting Discharge');
+    expect(pipe.transform('OUT_OF_SERVICE', 'bedStatus')).toBe('Out of Service');
+    expect(pipe.transform('PARTIAL', 'dispenseStatus')).toBe('Partial');
+    expect(pipe.transform('PENDING_AUTHORIZATION', 'imagingOrderStatus')).toBe(
+      'Pending Authorization',
+    );
+    expect(pipe.transform('PRELIMINARY', 'imagingReportStatus')).toBe('Preliminary');
+    expect(pipe.transform('REVISIONS_REQUIRED', 'treatmentPlanStatus')).toBe('Revisions Required');
+    expect(pipe.transform('ACKNOWLEDGED', 'referralStatus')).toBe('Acknowledged');
+    expect(pipe.transform('PRIORITY', 'referralUrgency')).toBe('Priority');
+    expect(pipe.transform('SHARED_CARE', 'referralType')).toBe('Shared Care');
+    expect(pipe.transform('REFERRED', 'mtmReviewStatus')).toBe('Referred');
+    expect(pipe.transform('REVOKED', 'signatureStatus')).toBe('Revoked');
+    expect(pipe.transform('PARTIALLY_PAID', 'invoiceStatus')).toBe('Partially Paid');
+    expect(pipe.transform('ENTERED_IN_ERROR', 'allergyVerificationStatus')).toBe(
+      'Entered in Error',
+    );
+    expect(pipe.transform('SNF', 'dischargeDisposition')).toBe('Skilled Nursing Facility');
+  });
+
+  /* ── Phase 3 groups (audit + internal) ───────────────────── */
+
+  it('handles all Phase-3 groups via the English fallback', () => {
+    expect(pipe.transform('SUCCESS', 'auditStatus')).toBe('Success');
+    expect(pipe.transform('FAILURE', 'auditStatus')).toBe('Failure');
+    expect(pipe.transform('SYSTEM', 'actorType')).toBe('System');
+    expect(pipe.transform('BREAK_GLASS_ACCESS', 'auditEventType')).toBe('Break-Glass Access');
+    expect(pipe.transform('PASSWORD_CHANGED', 'auditEventType')).toBe('Password Changed');
+    // AuditEventType has hundreds of values; ensure unmapped ones still
+    // never render as the raw key — they fall through to the prettifier.
+    expect(pipe.transform('STOCK_REORDER_ALERT', 'auditEventType')).toBe('Stock Reorder Alert');
+  });
+
+  /* ── Migrated PR #256 keys: PORTAL.ENUM.* is now the only source ── */
+
+  it('reads migrated PRESCRIPTION_STATUS keys via i18n (PR #256 migration)', () => {
+    translate.setTranslation('en', {
+      PORTAL: {
+        ENUM: {
+          PRESCRIPTION_STATUS: {
+            DRAFT: 'Draft',
+            SIGNED: 'Signed',
+            DISCONTINUED: 'Discontinued',
+          },
+        },
+      },
+    });
+    // Each value rendered through the canonical namespace — no fallback to
+    // the deleted PRESCRIPTIONS.STATUS.* sub-tree.
+    expect(pipe.transform('DRAFT', 'prescriptionStatus')).toBe('Draft');
+    expect(pipe.transform('SIGNED', 'prescriptionStatus')).toBe('Signed');
+    expect(pipe.transform('DISCONTINUED', 'prescriptionStatus')).toBe('Discontinued');
+  });
+
+  it('reads migrated LEAVE_STATUS keys via i18n (PR #256 SCHEDULING.* migration)', () => {
+    translate.setTranslation('en', {
+      PORTAL: {
+        ENUM: {
+          LEAVE_STATUS: { PENDING: 'Pending', APPROVED: 'Approved' },
+          SHIFT_STATUS: { SCHEDULED: 'Scheduled' },
+        },
+      },
+    });
+    expect(pipe.transform('PENDING', 'leaveStatus')).toBe('Pending');
+    expect(pipe.transform('APPROVED', 'leaveStatus')).toBe('Approved');
+    expect(pipe.transform('SCHEDULED', 'shiftStatus')).toBe('Scheduled');
   });
 });

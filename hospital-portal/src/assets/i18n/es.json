@@ -3047,6 +3047,187 @@
         "VERIFIED": "Verificado",
         "RESULTED": "Con resultados",
         "UNKNOWN": "Desconocido"
+      },
+      "LAB_ORDER_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COLLECTED": "Recogido",
+        "COMPLETED": "Completado",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Solicitado",
+        "PENDING": "Pendiente",
+        "RECEIVED": "Recibido",
+        "RESULTED": "Con resultados",
+        "VERIFIED": "Verificado"
+      },
+      "ABNORMAL_FLAG": {
+        "ABNORMAL": "Anormal",
+        "CRITICAL": "Crítico",
+        "NORMAL": "Normal"
+      },
+      "VALIDATION_STUDY_TYPE": {
+        "ACCURACY": "Exactitud",
+        "CARRYOVER": "Arrastre",
+        "INTERFERENCE": "Interferencia",
+        "LINEARITY": "Linealidad",
+        "METHOD_COMPARISON": "Comparación de métodos",
+        "PRECISION": "Precisión",
+        "REFERENCE_RANGE": "Rango de referencia"
+      },
+      "ADMISSION_STATUS": {
+        "ACTIVE": "Activo",
+        "AWAITING_DISCHARGE": "En espera de alta",
+        "CANCELLED": "Cancelado",
+        "DECEASED": "Fallecido",
+        "DISCHARGED": "Dado de alta",
+        "ON_LEAVE": "De permiso",
+        "PENDING": "Pendiente",
+        "TRANSFERRED": "Transferido"
+      },
+      "BED_STATUS": {
+        "AVAILABLE": "Disponible",
+        "MAINTENANCE": "Mantenimiento",
+        "OCCUPIED": "Ocupada",
+        "OUT_OF_SERVICE": "Fuera de servicio",
+        "RESERVED": "Reservada"
+      },
+      "DISPENSE_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Dispensado",
+        "PARTIAL": "Parcial",
+        "PENDING": "Pendiente"
+      },
+      "IMAGING_ORDER_STATUS": {
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "DRAFT": "Borrador",
+        "IN_PROGRESS": "En curso",
+        "ORDERED": "Solicitado",
+        "PENDING_AUTHORIZATION": "Pendiente de autorización",
+        "RESULTS_AVAILABLE": "Resultados disponibles",
+        "SCHEDULED": "Programado"
+      },
+      "IMAGING_REPORT_STATUS": {
+        "ADDENDUM": "Anexo",
+        "AMENDED": "Enmendado",
+        "CANCELLED": "Cancelado",
+        "CORRECTED": "Corregido",
+        "DRAFT": "Borrador",
+        "ERROR": "Error",
+        "FINAL": "Final",
+        "PRELIMINARY": "Preliminar"
+      },
+      "TREATMENT_PLAN_STATUS": {
+        "APPROVED": "Aprobado",
+        "ARCHIVED": "Archivado",
+        "CANCELLED": "Cancelado",
+        "DRAFT": "Borrador",
+        "IN_REVIEW": "En revisión",
+        "REVISIONS_REQUIRED": "Revisiones requeridas"
+      },
+      "REFERRAL_STATUS": {
+        "ACKNOWLEDGED": "Confirmada",
+        "CANCELLED": "Cancelada",
+        "COMPLETED": "Completada",
+        "DRAFT": "Borrador",
+        "EXPIRED": "Vencida",
+        "IN_PROGRESS": "En curso",
+        "REJECTED": "Rechazada",
+        "SCHEDULED": "Programada",
+        "SUBMITTED": "Enviada"
+      },
+      "REFERRAL_URGENCY": {
+        "EMERGENCY": "Emergencia",
+        "PRIORITY": "Prioritaria",
+        "ROUTINE": "Rutinaria",
+        "URGENT": "Urgente"
+      },
+      "REFERRAL_TYPE": {
+        "CONSULTATION": "Consulta",
+        "EMERGENCY_TRANSFER": "Transferencia de emergencia",
+        "SHARED_CARE": "Atención compartida",
+        "TRANSFER_OF_CARE": "Transferencia de atención"
+      },
+      "MTM_REVIEW_STATUS": {
+        "COMPLETED": "Completado",
+        "DRAFT": "Borrador",
+        "REFERRED": "Referido"
+      },
+      "SIGNATURE_STATUS": {
+        "EXPIRED": "Vencida",
+        "INVALID": "Inválida",
+        "PENDING": "Pendiente",
+        "REVOKED": "Revocada",
+        "SIGNED": "Firmada"
+      },
+      "INVOICE_STATUS": {
+        "CANCELLED": "Cancelada",
+        "DRAFT": "Borrador",
+        "PAID": "Pagada",
+        "PARTIALLY_PAID": "Parcialmente pagada",
+        "SENT": "Enviada"
+      },
+      "ALLERGY_VERIFICATION_STATUS": {
+        "CONFIRMED": "Confirmada",
+        "ENTERED_IN_ERROR": "Registrada por error",
+        "PROVISIONAL": "Provisional",
+        "REFUTED": "Refutada",
+        "UNCONFIRMED": "No confirmada"
+      },
+      "DISCHARGE_DISPOSITION": {
+        "AMA": "Contra consejo médico",
+        "ANOTHER_HOSPITAL": "Otro hospital",
+        "EXPIRED": "Fallecido",
+        "HOME": "Domicilio",
+        "HOSPICE": "Cuidados paliativos",
+        "OTHER": "Otro",
+        "REHAB": "Centro de rehabilitación",
+        "SNF": "Centro de enfermería especializada"
+      },
+      "AUDIT_STATUS": {
+        "APPROVED": "Aprobado",
+        "CANCELLED": "Cancelado",
+        "COMPLETED": "Completado",
+        "ERROR": "Error",
+        "FAILURE": "Fallo",
+        "IN_PROGRESS": "En curso",
+        "PENDING": "Pendiente",
+        "REJECTED": "Rechazado",
+        "SUCCESS": "Éxito"
+      },
+      "ACTOR_TYPE": {
+        "SYSTEM": "Sistema",
+        "USER": "Usuario"
+      },
+      "AUDIT_EVENT_TYPE": {
+        "ACCOUNT_LOCKED": "Cuenta bloqueada",
+        "ACCOUNT_UNLOCKED": "Cuenta desbloqueada",
+        "APPOINTMENT_CREATED": "Cita creada",
+        "BREAK_GLASS_ACCESS": "Acceso de emergencia",
+        "CONSENT_GRANTED": "Consentimiento otorgado",
+        "CONSENT_REVOKED": "Consentimiento revocado",
+        "DATA_EXPORT": "Exportación de datos",
+        "IMAGING_ORDER_CREATED": "Orden de imagen creada",
+        "IMPERSONATION_ENDED": "Suplantación finalizada",
+        "IMPERSONATION_STARTED": "Suplantación iniciada",
+        "LAB_ORDER_CREATED": "Orden de laboratorio creada",
+        "LOGIN": "Inicio de sesión",
+        "LOGIN_FAILURE": "Inicio de sesión fallido",
+        "LOGOUT": "Cierre de sesión",
+        "MFA_CHALLENGE": "Desafío MFA",
+        "MFA_FAILURE": "Fallo de MFA",
+        "MFA_VERIFIED": "MFA verificado",
+        "OTHER": "Otro",
+        "PASSWORD_CHANGED": "Contraseña cambiada",
+        "PATIENT_ACCESS": "Acceso al paciente",
+        "PATIENT_EXPORT": "Exportación de paciente",
+        "PRESCRIPTION_CREATED": "Receta creada",
+        "ROLE_ASSIGNED": "Rol asignado",
+        "ROLE_REVOKED": "Rol revocado",
+        "USER_CREATE": "Usuario creado",
+        "USER_DELETE": "Usuario eliminado",
+        "USER_DISABLE": "Usuario desactivado",
+        "USER_ENABLE": "Usuario activado",
+        "USER_UPDATE": "Usuario actualizado"
       }
     },
     "APPOINTMENTS": {
@@ -3365,14 +3546,6 @@
     "SUBTITLE": "Manage prescriptions",
     "TITLE": "Prescriptions",
     "VIEW_DETAILS": "Ver detalles",
-    "STATUS": {
-      "DRAFT": "Borrador",
-      "PENDING_SIGNATURE": "Pendiente de firma",
-      "SIGNED": "Firmada",
-      "TRANSMITTED": "Transmitida",
-      "CANCELLED": "Cancelada",
-      "DISCONTINUED": "Descontinuada"
-    },
     "TOAST": {
       "UPDATED": "Prescripción actualizada",
       "CREATED": "Prescripción creada",
@@ -3779,14 +3952,12 @@
     "ALL_DEPARTMENTS": "All Departments",
     "ALL_STAFF": "All Staff",
     "APPROVE": "Approve",
-    "APPROVED": "Approved",
     "APPROVED_LEAVES": "Permisos aprobados",
     "AUTO_MATCHED": "Coincidencia automática",
     "AVAILABILITY": "Availability",
     "BULK_SCHEDULE": "Programación masiva",
     "BULK_SCHEDULE_SHIFTS": "Programar turnos masivamente",
     "BULK_SUBTITLE": "Programar múltiples turnos a la vez",
-    "CANCELLED": "Cancelado",
     "CAN_BE_NEXT_DAY": "Puede ser el día siguiente",
     "CONFLICTS": "Conflicts",
     "COVERAGE": "Coverage",
@@ -3831,7 +4002,6 @@
     "OPTIONAL": "Opcional",
     "OVERTIME": "Overtime",
     "PASTE_HOSPITAL_UUID": "Pegar UUID del hospital",
-    "PENDING": "Pending",
     "PENDING_LEAVES": "Permisos pendientes",
     "PREVIOUS": "Previous",
     "PROVIDER_AVAILABILITY": "Disponibilidad del proveedor",
@@ -3840,12 +4010,10 @@
     "REASON": "Reason",
     "RECURRING": "Recurring",
     "REJECT": "Reject",
-    "REJECTED": "Rejected",
     "REPEAT_UNTIL": "Repeat Until",
     "REPEAT_WEEKLY": "Repeat Weekly",
     "REVIEWED": "Revisado",
     "SAT_SUN": "Sáb-Dom",
-    "SCHEDULED": "Programado",
     "SCHEDULED_STAFF_WEEK": "Personal programado esta semana",
     "SCHEDULING": "Programación",
     "SEARCH": "Search...",
