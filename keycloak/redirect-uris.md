@@ -20,8 +20,8 @@
 |-------------|--------|--------------------|--------------------------|
 | Local dev   | `http://localhost:4200`               | `http://localhost:4200/*`               | `http://localhost:4200/login` |
 | Hosted dev  | `https://hms.dev.bitnesttechs.com`    | `https://hms.dev.bitnesttechs.com/*`    | `https://hms.dev.bitnesttechs.com/login` |
-| UAT         | `https://uat.hms.example.com`         | `https://uat.hms.example.com/*`         | `https://uat.hms.example.com/login` |
-| Prod        | `https://hms.example.com`             | `https://hms.example.com/*`             | `https://hms.example.com/login` |
+| UAT         | `https://hms.uat.bitnesttechs.com`    | `https://hms.uat.bitnesttechs.com/*`    | `https://hms.uat.bitnesttechs.com/login` |
+| Prod        | `https://hms.bitnesttechs.com`        | `https://hms.bitnesttechs.com/*`        | `https://hms.bitnesttechs.com/login` |
 
 Notes:
 - Web Origins (for silent refresh + CORS) are registered as exact
