@@ -58,4 +58,17 @@ EXPOSE 8080
 
 # Import the realm on every boot so realm-export.json changes are picked up.
 # `--optimized` skips the build step at runtime (already baked in above).
-ENTRYPOINT ["/bin/sh", "-c", "exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080}"]
+#
+# `--bootstrap-admin-*` flags create a master-realm admin if none exists. They
+# are idempotent — Keycloak ignores them once an admin exists, so they're safe
+# to leave in. Sourced from KC_BOOTSTRAP_ADMIN_USERNAME / KC_BOOTSTRAP_ADMIN_PASSWORD
+# env vars; the `${VAR:+value}` expansion omits the flags entirely when those
+# env vars are unset (recommended posture after the named admin is in place,
+# to avoid the bootstrap creds appearing in `ps aux` output).
+#
+# Why flags instead of env vars: KC_BOOTSTRAP_ADMIN_* are honored only on the
+# very first realm initialization. Once the master realm exists in the DB, KC
+# ignores those env vars on subsequent boots, leaving an env that booted
+# without admin creds permanently unmanageable. The CLI flags work on every
+# start when no admin exists.
+ENTRYPOINT ["/bin/sh", "-c", "exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080} ${KC_BOOTSTRAP_ADMIN_USERNAME:+--bootstrap-admin-username \"$KC_BOOTSTRAP_ADMIN_USERNAME\"} ${KC_BOOTSTRAP_ADMIN_PASSWORD:+--bootstrap-admin-password \"$KC_BOOTSTRAP_ADMIN_PASSWORD\"}"]
