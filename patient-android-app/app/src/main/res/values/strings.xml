@@ -33,6 +33,7 @@
     <string name="medications">Medications</string>
     <string name="prescriptions">Prescriptions</string>
     <string name="billing">Billing</string>
+    <string name="pharmacy_invoices">Pharmacy Invoices</string>
     <string name="vitals">Vitals</string>
     <string name="care_team">Care Team</string>
     <string name="visit_history">Visit History</string>
@@ -135,6 +136,14 @@
     <string name="total">Total</string>
     <string name="paid">Paid</string>
     <string name="balance">Balance</string>
+    <string name="payments">Payments</string>
+    <string name="claims">Claims</string>
+    <string name="claim">Claim</string>
+    <string name="total_paid">Total Paid</string>
+    <string name="total_claimed">Total Claimed</string>
+    <string name="no_pharmacy_payments">No pharmacy payments found</string>
+    <string name="no_pharmacy_claims">No pharmacy claims found</string>
+    <string name="reference_with_value">Ref: %1$s</string>
 
     <!-- Vitals -->
     <string name="record_vitals">Record Vitals</string>

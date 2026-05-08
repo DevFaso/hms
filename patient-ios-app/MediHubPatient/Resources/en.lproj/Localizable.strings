@@ -33,6 +33,7 @@
 "refills" = "Refills";
 "billing" = "Billing";
 "billing_title" = "Billing";
+"pharmacy_invoices" = "Pharmacy Invoices";
 "vitals" = "Vitals";
 "vitals_title" = "Vitals";
 "care_team" = "Care Team";
@@ -182,6 +183,16 @@
 "confirm_payment" = "Confirm Payment";
 "invoice_details" = "Invoice Details";
 "items" = "Items";
+"payments" = "Payments";
+"claims" = "Claims";
+"claim" = "Claim";
+"total_paid" = "Total Paid";
+"total_claimed" = "Total Claimed";
+"no_pharmacy_payments" = "No pharmacy payments";
+"no_pharmacy_payments_desc" = "Medication payment history will appear here.";
+"no_pharmacy_claims" = "No pharmacy claims";
+"no_pharmacy_claims_desc" = "Insurance claim history will appear here.";
+"reference_format" = "Ref: %@";
 
 /* Vitals */
 "record_vitals" = "Record Vitals";

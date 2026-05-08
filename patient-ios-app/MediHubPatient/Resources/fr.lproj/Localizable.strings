@@ -33,6 +33,7 @@
 "refills" = "Renouvellements";
 "billing" = "Facturation";
 "billing_title" = "Facturation";
+"pharmacy_invoices" = "Factures de pharmacie";
 "vitals" = "Signes vitaux";
 "vitals_title" = "Signes vitaux";
 "care_team" = "Équipe de soins";
@@ -182,6 +183,16 @@
 "confirm_payment" = "Confirmer le paiement";
 "invoice_details" = "Détails de la facture";
 "items" = "Articles";
+"payments" = "Paiements";
+"claims" = "Réclamations";
+"claim" = "Réclamation";
+"total_paid" = "Total payé";
+"total_claimed" = "Total réclamé";
+"no_pharmacy_payments" = "Aucun paiement de pharmacie";
+"no_pharmacy_payments_desc" = "L'historique des paiements de médicaments apparaîtra ici.";
+"no_pharmacy_claims" = "Aucune réclamation de pharmacie";
+"no_pharmacy_claims_desc" = "L'historique des réclamations d'assurance apparaîtra ici.";
+"reference_format" = "Réf. : %@";
 
 /* Vitals */
 "record_vitals" = "Enregistrer les signes vitaux";

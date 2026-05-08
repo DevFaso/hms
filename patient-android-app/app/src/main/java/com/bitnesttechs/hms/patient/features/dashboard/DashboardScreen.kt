@@ -180,6 +180,7 @@ fun DashboardScreen(
                         Triple(stringResource(R.string.lab_results), Icons.Default.Science, "lab_results"),
                         Triple(stringResource(R.string.medications), Icons.Default.Medication, "medications"),
                         Triple(stringResource(R.string.billing), Icons.Default.Receipt, "billing"),
+                        Triple(stringResource(R.string.pharmacy_invoices), Icons.Default.LocalPharmacy, "pharmacy_invoices"),
                         Triple(stringResource(R.string.vitals), Icons.Default.Favorite, "vitals"),
                         Triple(stringResource(R.string.care_team), Icons.Default.Group, "care_team"),
                         Triple(stringResource(R.string.visits), Icons.Default.History, "visits"),

@@ -94,12 +94,12 @@ targets:
         - MediHubPatientTests
       gatherCoverageData: true
       environmentVariables:
-        # KC-3: populate to enable live Keycloak SSO in dev builds.
-        # Leave blank by default — SSO button stays hidden (default OFF).
-        MEDIHUB_KEYCLOAK_ISSUER: ""
+        # KC-3: enable live Keycloak SSO for local Xcode dev builds.
+        # Release-Dev/UAT/Prod archive values still come from Config/*.xcconfig.
+        MEDIHUB_KEYCLOAK_ISSUER: "https://hms-keycloak-dev.up.railway.app/realms/hms"
         MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
         MEDIHUB_KEYCLOAK_REDIRECT_URI: "com.bitnesttechs.hms.patient.native:/oauth2redirect"
-        MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: "1"
 
   MediHubPatientTests:
     type: bundle.unit-test

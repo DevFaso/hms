@@ -46,15 +46,13 @@ interface ApiService {
     @POST("appointments")
     suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<AppointmentDto>
 
-    @PUT("me/patient/appointments/{id}/cancel")
+    @PUT("me/patient/appointments/cancel")
     suspend fun cancelAppointment(
-        @Path("id") id: String,
         @Body request: CancelAppointmentRequest
     ): Response<ApiResponse<AppointmentDto>>
 
-    @PUT("me/patient/appointments/{id}/reschedule")
+    @PUT("me/patient/appointments/reschedule")
     suspend fun rescheduleAppointment(
-        @Path("id") id: String,
         @Body request: RescheduleAppointmentRequest
     ): Response<ApiResponse<AppointmentDto>>
 
@@ -99,6 +97,18 @@ interface ApiService {
     @GET("me/patient/billing/invoices/{id}")
     suspend fun getInvoice(@Path("id") id: String): Response<ApiResponse<InvoiceDto>>
 
+    @GET("me/patient/pharmacy/payments")
+    suspend fun getPharmacyPayments(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 50
+    ): Response<ApiResponse<PageDto<PharmacyPaymentDto>>>
+
+    @GET("me/patient/pharmacy/claims")
+    suspend fun getPharmacyClaims(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 50
+    ): Response<ApiResponse<PageDto<PharmacyClaimDto>>>
+
     // ── Vitals ────────────────────────────────────────────────────────────────
     @GET("me/patient/vitals")
     suspend fun getVitals(
@@ -141,18 +151,27 @@ interface ApiService {
     ): Response<ApiResponse<List<ReferralDto>>>
 
     @GET("me/patient/treatment-plans")
-    suspend fun getTreatmentPlans(): Response<ApiResponse<List<TreatmentPlanDto>>>
+    suspend fun getTreatmentPlans(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): Response<ApiResponse<PageDto<TreatmentPlanDto>>>
 
     // ── Notifications ─────────────────────────────────────────────────────────
-    @GET("notifications")
+    @GET("me/patient/notifications")
     suspend fun getNotifications(
         @Query("read") read: Boolean? = null,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<PageDto<NotificationDto>>
+    ): Response<ApiResponse<PageDto<NotificationDto>>>
 
-    @POST("notifications/{id}/read")
-    suspend fun markNotificationRead(@Path("id") id: String): Response<Unit>
+    @GET("me/patient/notifications/unread-count")
+    suspend fun getUnreadNotificationCount(): Response<ApiResponse<Map<String, Long>>>
+
+    @PUT("me/patient/notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): Response<ApiResponse<Unit>>
+
+    @PUT("me/patient/notifications/read-all")
+    suspend fun markAllNotificationsRead(): Response<ApiResponse<Map<String, Int>>>
 
     // ── Chat / Messages ───────────────────────────────────────────────────────
     @GET("chat/conversations/{userId}")

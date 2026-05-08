@@ -7,6 +7,8 @@
   <div class="total-banner" *ngIf="!loading()">
     <span>Total payé</span>
     <strong>{{ totalPaid() | number: '1.0-0' }} XOF</strong>
+    <span>Total réclamé</span>
+    <strong>{{ totalClaimed() | number: '1.0-0' }} XOF</strong>
   </div>
 
   <div class="loading" *ngIf="loading()">Chargement…</div>
@@ -26,6 +28,27 @@
         <span class="ref" *ngIf="p.referenceNumber">Réf: {{ p.referenceNumber }}</span>
       </div>
       <p class="notes" *ngIf="p.notes">{{ p.notes }}</p>
+    </li>
+  </ul>
+
+  <h3 class="section-title" *ngIf="!loading()">Réclamations d'assurance</h3>
+
+  <div class="empty" *ngIf="!loading() && claims().length === 0">
+    Aucune réclamation de pharmacie pour le moment.
+  </div>
+
+  <ul class="payment-list" *ngIf="claims().length > 0">
+    <li *ngFor="let c of claims()" class="payment-item">
+      <div class="row-top">
+        <span class="date">{{ (c.submittedAt || c.createdAt) | date: 'dd/MM/yyyy HH:mm' }}</span>
+        <span class="amount">{{ c.amount | number: '1.0-0' }} {{ c.currency }}</span>
+      </div>
+      <div class="row-meta">
+        <span class="method">{{ statusLabel(c.claimStatus) }}</span>
+        <span class="ref" *ngIf="c.coverageReference">Réf: {{ c.coverageReference }}</span>
+      </div>
+      <p class="notes" *ngIf="c.rejectionReason">{{ c.rejectionReason }}</p>
+      <p class="notes" *ngIf="c.notes">{{ c.notes }}</p>
     </li>
   </ul>
 </section>

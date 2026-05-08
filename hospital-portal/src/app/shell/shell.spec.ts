@@ -166,4 +166,20 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/super-admin');
     expect(routes).toContain('/dashboard');
   });
+
+  it('shows patient parity nav entries on patient active role', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/my-pharmacy-invoices');
+    expect(routes).toContain('/my-care-team');
+    expect(routes).toContain('/my-family-access');
+    expect(routes).toContain('/my-documents');
+    expect(routes).toContain('/my-notifications');
+    expect(routes).not.toContain('/notifications');
+  });
 });

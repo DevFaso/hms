@@ -1,6 +1,7 @@
 .total-banner {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto;
+  gap: 0.75rem 1.25rem;
   align-items: center;
   background: var(--primary-bg, #eef5ff);
   color: var(--primary-fg, #0a2b55);
@@ -8,6 +9,17 @@
   border-radius: 6px;
   margin-bottom: 1rem;
   font-size: 1.1rem;
+}
+
+.section-title {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .total-banner {
+    grid-template-columns: 1fr auto;
+  }
 }
 
 .loading,

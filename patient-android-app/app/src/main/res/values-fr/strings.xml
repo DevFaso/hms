@@ -33,6 +33,7 @@
     <string name="medications">Médicaments</string>
     <string name="prescriptions">Ordonnances</string>
     <string name="billing">Facturation</string>
+    <string name="pharmacy_invoices">Factures de pharmacie</string>
     <string name="vitals">Signes vitaux</string>
     <string name="care_team">Équipe de soins</string>
     <string name="visit_history">Historique des visites</string>
@@ -135,6 +136,14 @@
     <string name="total">Total</string>
     <string name="paid">Payé</string>
     <string name="balance">Solde</string>
+    <string name="payments">Paiements</string>
+    <string name="claims">Réclamations</string>
+    <string name="claim">Réclamation</string>
+    <string name="total_paid">Total payé</string>
+    <string name="total_claimed">Total réclamé</string>
+    <string name="no_pharmacy_payments">Aucun paiement de pharmacie</string>
+    <string name="no_pharmacy_claims">Aucune réclamation de pharmacie</string>
+    <string name="reference_with_value">Réf. : %1$s</string>
 
     <!-- Vitals -->
     <string name="record_vitals">Enregistrer les signes vitaux</string>
