@@ -140,10 +140,14 @@
               <td>{{ r.referringProviderName || '—' }}</td>
               <td>{{ r.receivingProviderName || 'Unassigned' }}</td>
               <td>
-                <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{ r.urgency }}</span>
+                <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{
+                  r.urgency | enumLabel: 'consultationUrgency'
+                }}</span>
               </td>
               <td>
-                <span class="status-badge {{ getStatusClass(r.status) }}">{{ r.status }}</span>
+                <span class="status-badge {{ getStatusClass(r.status) }}">{{
+                  r.status | enumLabel: 'referralStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">

@@ -16,11 +16,12 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-scheduling',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './scheduling.html',
   styleUrl: './scheduling.scss',
 })

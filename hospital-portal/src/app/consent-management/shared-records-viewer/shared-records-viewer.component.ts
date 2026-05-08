@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { RecordSharingService, PatientRecord } from '../../services/record-sharing.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-shared-records-viewer',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, EnumLabelPipe],
   templateUrl: './shared-records-viewer.component.html',
   styleUrl: './shared-records-viewer.component.scss',
 })

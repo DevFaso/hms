@@ -28,8 +28,11 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,6 +69,23 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final DischargeApprovalRepository dischargeApprovalRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
+
+    /**
+     * Optional Micrometer registry. Auto-configured by spring-boot-starter-actuator in
+     * production but may be {@code null} in unit tests that construct this service via
+     * Mockito's {@code @InjectMocks} without a corresponding {@code @Mock}. Always go
+     * through {@link #incrementCounter} which is null-safe.
+     */
+    private final MeterRegistry meterRegistry;
+
+    // ── Metric names ─────────────────────────────────────────────────────────
+    static final String METRIC_AVS_FETCH_TOTAL = "hms.avs.portal.fetch";
+    static final String METRIC_AVS_BACKFILL_TOTAL = "hms.avs.portal.backfill";
+    static final String METRIC_AVS_ENRICH_TOTAL = "hms.avs.portal.enrich";
+    static final String TAG_OUTCOME = "outcome";
+    static final String OUTCOME_HIT = "hit";          // patient had ≥1 summary returned
+    static final String OUTCOME_EMPTY = "empty";      // patient had no summaries (and no orphans)
+    static final String OUTCOME_BACKFILLED = "backfilled"; // GET-path created or enriched a summary
 
     @Override
     @Transactional
@@ -378,20 +398,97 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Override
     @Transactional
     public List<DischargeSummaryResponseDTO> getDischargeSummariesForPortalPatient(UUID patientId) {
-        log.debug("Portal: fetching discharge summaries for patient {}", patientId);
+        // INFO-level structured log so on-call can answer the
+        // "why is the AVS empty on mobile?" question from a single grep
+        // (see docs/avs-mobile-user-stories.md, US-AVS-009). Patient ID is
+        // already considered semi-PHI but is logged elsewhere on this code path
+        // (see PatientPortalServiceImpl.cancelMyRefill etc.); no clinical
+        // content is logged here.
+        long startNanos = System.nanoTime();
 
         // 1. Backfill: create DischargeSummary rows for any COMPLETED encounters
         //    that are missing them (defensive — ensures checkout data is always surfaced).
-        backfillMissingDischargeSummaries(patientId);
+        int backfilled = backfillMissingDischargeSummaries(patientId);
 
         // 2. Enrich existing summaries that were backfilled before medication/notes enrichment
-        enrichSparseExistingSummaries(patientId);
+        int enriched = enrichSparseExistingSummaries(patientId);
 
         // 3. Return all discharge summaries for this patient
-        return dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)
-                .stream()
+        List<DischargeSummary> rows = dischargeSummaryRepository
+                .findByPatient_IdOrderByDischargeDateDesc(patientId);
+        List<DischargeSummaryResponseDTO> result = rows.stream()
                 .map(dischargeSummaryMapper::toResponseDTO)
                 .toList();
+
+        long durationMs = (System.nanoTime() - startNanos) / 1_000_000L;
+        recordPortalFetchOutcome(patientId, rows, backfilled, enriched, durationMs);
+        return result;
+    }
+
+    /**
+     * Emits the structured INFO log + Prometheus counters that make AVS retrieval
+     * incidents diagnosable without database access. Outcome tagging:
+     * <ul>
+     *   <li>{@code hit} — at least one summary returned</li>
+     *   <li>{@code empty} — no summaries and no backfill/enrichment performed
+     *       (patient genuinely has no completed encounters)</li>
+     *   <li>{@code backfilled} — summaries were created or enriched on this call;
+     *       still useful even if the resulting list is also non-empty
+     *       (a {@code backfilled} count rising in production usually means a
+     *       checkout-time write path is failing silently and needs investigation)</li>
+     * </ul>
+     */
+    private void recordPortalFetchOutcome(
+            UUID patientId,
+            List<DischargeSummary> rows,
+            int backfilled,
+            int enriched,
+            long durationMs) {
+        // Limit encounter ID logging to a small number to keep log lines bounded,
+        // even for patients with long histories.
+        List<UUID> encounterIds = rows.stream()
+                .map(s -> s.getEncounter() != null ? s.getEncounter().getId() : null)
+                .filter(java.util.Objects::nonNull)
+                .limit(10)
+                .toList();
+
+        log.info(
+                "AVS portal fetch: patientId={} returnedCount={} backfilledCount={} enrichedCount={} firstEncounterIds={} durationMs={}",
+                patientId,
+                rows.size(),
+                backfilled,
+                enriched,
+                encounterIds,
+                durationMs);
+
+        String outcome;
+        if (backfilled > 0 || enriched > 0) {
+            outcome = OUTCOME_BACKFILLED;
+        } else if (rows.isEmpty()) {
+            outcome = OUTCOME_EMPTY;
+        } else {
+            outcome = OUTCOME_HIT;
+        }
+        incrementCounter(METRIC_AVS_FETCH_TOTAL, outcome);
+        if (backfilled > 0) incrementCounter(METRIC_AVS_BACKFILL_TOTAL, OUTCOME_BACKFILLED, backfilled);
+        if (enriched > 0) incrementCounter(METRIC_AVS_ENRICH_TOTAL, OUTCOME_BACKFILLED, enriched);
+    }
+
+    private void incrementCounter(String name, String outcome) {
+        incrementCounter(name, outcome, 1);
+    }
+
+    private void incrementCounter(String name, String outcome, long amount) {
+        if (meterRegistry == null) return; // unit-test path
+        try {
+            Counter.builder(name)
+                    .tag(TAG_OUTCOME, outcome)
+                    .register(meterRegistry)
+                    .increment(amount);
+        } catch (Exception ex) {
+            // Metrics must never fail the request.
+            log.debug("Failed to record metric {}: {}", name, ex.getMessage());
+        }
     }
 
     /**
@@ -399,13 +496,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      * This can happen if the encounter was completed via a code path that didn't call
      * {@code upsertDischargeSummaryForCheckout}, or if the original insert failed
      * silently (e.g. a constraint edge case on a prior version of the code).
+     *
+     * @return the number of summaries successfully created (≥ 0).
      */
-    private void backfillMissingDischargeSummaries(UUID patientId) {
+    private int backfillMissingDischargeSummaries(UUID patientId) {
         List<Encounter> orphans = encounterRepository.findCompletedWithoutDischargeSummary(patientId);
         if (orphans.isEmpty()) {
-            return;
+            return 0;
         }
         log.info("Backfilling {} missing discharge summaries for patient {}", orphans.size(), patientId);
+        int created = 0;
         for (Encounter enc : orphans) {
             try {
                 DischargeSummary summary = new DischargeSummary();
@@ -435,22 +535,39 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 populateMedicationsFromPrescriptions(summary, enc);
 
                 dischargeSummaryRepository.save(summary);
+                created++;
                 log.info("Backfilled discharge summary for encounter {}", enc.getId());
+            } catch (DataIntegrityViolationException dup) {
+                // Concurrent backfill won the race: another mobile load (or the
+                // checkout-time write path firing in parallel) inserted a
+                // DischargeSummary for this encounter between our orphan query
+                // and our save. The unique constraint on
+                // discharge_summaries.encounter_id (V92) makes that observable
+                // here so we don't end up with duplicates. Treat as a no-op —
+                // the enrichment pass that follows will pick up the row that
+                // landed first. See Copilot review on PR #259.
+                log.info(
+                    "Backfill skipped for encounter {} — concurrent insert won the race; existing row will be used",
+                    enc.getId());
             } catch (Exception ex) {
                 log.warn("Failed to backfill discharge summary for encounter {}: {}",
                         enc.getId(), ex.getMessage());
             }
         }
+        return created;
     }
 
     /**
      * Enriches existing discharge summaries that were created before the medication/notes
      * enrichment logic was added. Populates hospitalCourse and medicationReconciliation
      * for summaries that are missing them.
+     *
+     * @return the number of summaries enriched (i.e. at least one field changed and saved).
      */
-    private void enrichSparseExistingSummaries(UUID patientId) {
+    private int enrichSparseExistingSummaries(UUID patientId) {
         List<DischargeSummary> summaries = dischargeSummaryRepository
                 .findByPatient_IdOrderByDischargeDateDesc(patientId);
+        int enriched = 0;
         for (DischargeSummary summary : summaries) {
             boolean changed = false;
             Encounter enc = summary.getEncounter();
@@ -476,10 +593,12 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
             if (changed) {
                 dischargeSummaryRepository.save(summary);
+                enriched++;
                 log.info("Enriched sparse discharge summary {} for encounter {}",
                         summary.getId(), enc.getId());
             }
         }
+        return enriched;
     }
 
     /**

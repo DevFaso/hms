@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 interface SignatureItem {
   id: string;
@@ -37,7 +38,7 @@ interface AuditEntry {
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './digital-signatures.html',
   styleUrl: './digital-signatures.scss',
 })

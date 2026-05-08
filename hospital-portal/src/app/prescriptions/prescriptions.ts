@@ -20,6 +20,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-prescriptions',
@@ -30,6 +31,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
     TranslateModule,
     CdsCardListComponent,
     HospitalScopeChipComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',
@@ -110,13 +112,18 @@ export class PrescriptionsComponent implements OnInit {
     }
   }
 
+  // Status filter dropdown. The wire `value` is the raw enum (preserved for
+  // API/DB equality checks); `labelKey` points at the canonical
+  // PORTAL.ENUM.PRESCRIPTION_STATUS namespace introduced in
+  // feat/i18n-enum-label-pipe-phase1, so this UI no longer carries its own
+  // duplicate translation namespace (PR #256 keys removed in Phase 2/3).
   prescriptionStatuses = [
-    { value: 'DRAFT', labelKey: 'PRESCRIPTIONS.STATUS.DRAFT' },
-    { value: 'PENDING_SIGNATURE', labelKey: 'PRESCRIPTIONS.STATUS.PENDING_SIGNATURE' },
-    { value: 'SIGNED', labelKey: 'PRESCRIPTIONS.STATUS.SIGNED' },
-    { value: 'TRANSMITTED', labelKey: 'PRESCRIPTIONS.STATUS.TRANSMITTED' },
-    { value: 'CANCELLED', labelKey: 'PRESCRIPTIONS.STATUS.CANCELLED' },
-    { value: 'DISCONTINUED', labelKey: 'PRESCRIPTIONS.STATUS.DISCONTINUED' },
+    { value: 'DRAFT', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DRAFT' },
+    { value: 'PENDING_SIGNATURE', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.PENDING_SIGNATURE' },
+    { value: 'SIGNED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.SIGNED' },
+    { value: 'TRANSMITTED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.TRANSMITTED' },
+    { value: 'CANCELLED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED' },
+    { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
   ];
 
   emptyForm(): PrescriptionRequest {

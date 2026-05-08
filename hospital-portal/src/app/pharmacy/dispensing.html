@@ -176,7 +176,9 @@
                 <td>{{ rx.dosage }}</td>
                 <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
                 <td>
-                  <span class="badge badge-info">{{ rx.status }}</span>
+                  <span class="badge badge-info">{{
+                    rx.status | enumLabel: 'prescriptionStatus'
+                  }}</span>
                 </td>
                 <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
                 <td>
@@ -246,7 +248,9 @@
                 <td>{{ d.medicationName }}</td>
                 <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
                 <td>
-                  <span class="badge" [ngClass]="getStatusClass(d.status)">{{ d.status }}</span>
+                  <span class="badge" [ngClass]="getStatusClass(d.status)">{{
+                    d.status | enumLabel: 'dispenseStatus'
+                  }}</span>
                 </td>
                 <td>{{ d.dispensedByName }}</td>
                 <td>{{ d.dispensedAt | date: 'short' }}</td>

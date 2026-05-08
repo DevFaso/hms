@@ -153,7 +153,9 @@
               </td>
               <td>{{ enc.encounterDate ? (enc.encounterDate | date: 'mediumDate') : '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+                <span class="status-badge {{ getStatusClass(enc.status) }}">{{
+                  enc.status | enumLabel: 'encounterStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">
@@ -212,7 +214,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+              ><span class="status-badge {{ getStatusClass(enc.status) }}">{{
+                enc.status | enumLabel: 'encounterStatus'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.DATE' | translate }}</span

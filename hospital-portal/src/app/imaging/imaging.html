@@ -127,7 +127,9 @@
               </td>
               <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(o.status) }}">{{ o.status }}</span>
+                <span class="status-badge {{ getStatusClass(o.status) }}">{{
+                  o.status | enumLabel: 'imagingOrderStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">

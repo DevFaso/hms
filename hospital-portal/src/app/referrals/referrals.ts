@@ -18,11 +18,12 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './referrals.html',
   styleUrl: './referrals.scss',
 })

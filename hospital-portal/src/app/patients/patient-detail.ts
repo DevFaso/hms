@@ -21,6 +21,7 @@ import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
 import { ChartReviewComponent } from './chart-review/chart-review.component';
 import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type TabKey =
   | 'overview'
@@ -43,6 +44,7 @@ type TabKey =
     StoryboardBannerComponent,
     ChartReviewComponent,
     BreakGlassBannerComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',

@@ -45,7 +45,8 @@
       <div class="status-banner" [class]="getStatusClass(appt.status)">
         <span class="material-symbols-outlined">info</span>
         <span
-          >{{ 'COMMON.STATUS' | translate }}: <strong>{{ appt.status }}</strong></span
+          >{{ 'COMMON.STATUS' | translate }}:
+          <strong>{{ appt.status | enumLabel: 'appointmentStatus' }}</strong></span
         >
 
         @if (canUpdateStatus) {

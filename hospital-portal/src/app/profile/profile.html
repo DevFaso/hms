@@ -928,7 +928,7 @@
                               [class.success]="event.status === 'SUCCESS'"
                               [class.failure]="event.status !== 'SUCCESS'"
                             >
-                              {{ event.status }}
+                              {{ event.status | enumLabel: 'status' }}
                             </span>
                           }
                         </div>

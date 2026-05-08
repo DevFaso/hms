@@ -12,6 +12,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
 const STATUS_UPDATE_ROLES: readonly string[] = [
@@ -36,7 +37,7 @@ const CHECK_IN_ROLES: readonly string[] = [
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-detail.html',
   styleUrl: './appointment-detail.scss',
 })

@@ -75,7 +75,9 @@
               <td>{{ sig.hospitalName || '—' }}</td>
               <td>{{ formatDate(sig.signatureDateTime) }}</td>
               <td>
-                <span class="badge" [class]="statusClass(sig.status)">{{ sig.status }}</span>
+                <span class="badge" [class]="statusClass(sig.status)">{{
+                  sig.status | enumLabel: 'signatureStatus'
+                }}</span>
               </td>
               <td class="action-cell" (click)="$event.stopPropagation()">
                 <button

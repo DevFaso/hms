@@ -349,7 +349,7 @@
                   <div class="leave-title">
                     <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
                     <span class="leave-status-badge" [attr.data-status]="leave.status">
-                      {{ leave.status }}
+                      {{ leave.status | enumLabel: 'leaveStatus' }}
                     </span>
                   </div>
                   <div class="leave-dates">

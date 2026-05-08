@@ -79,7 +79,7 @@
                 {{ r.checkType === 'PRIOR_AUTH' ? 'Prior-auth' : 'Coverage' }}
                 — {{ r.scheme }}
               </h4>
-              <span [class]="statusClass(r.status)">{{ r.status }}</span>
+              <span [class]="statusClass(r.status)">{{ r.status | enumLabel: 'status' }}</span>
             </header>
 
             <dl>

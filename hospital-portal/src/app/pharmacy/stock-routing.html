@@ -206,7 +206,7 @@
           <td>{{ d.targetPharmacyName || '—' }}</td>
           <td>
             <span class="badge" [ngClass]="statusBadgeClass(d.status)">
-              {{ d.status }}
+              {{ d.status | enumLabel: 'status' }}
             </span>
           </td>
           <td>{{ d.reason || '—' }}</td>

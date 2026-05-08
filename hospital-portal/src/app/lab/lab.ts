@@ -17,11 +17,12 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab.html',
   styleUrl: './lab.scss',
 })
