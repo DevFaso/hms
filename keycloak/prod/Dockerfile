@@ -75,10 +75,24 @@ EXPOSE 8080
 #     step, after creating a named admin) skips this entirely.
 #   - `--password:env` reads the password from the env var rather than
 #     accepting it on the command line, so it never appears in `ps aux`.
-#   - `|| echo ... ; ` swallows non-zero exits so the boot continues when
-#     an admin already exists (the subcommand returns non-zero in that
-#     case; functionally equivalent to "no-op, success").
+#   - `--optimized` is REQUIRED. Without it, kc.sh re-evaluates configuration
+#     from environment variables in the bootstrap subshell, doesn't see the
+#     build-time KC_DB=postgres, and rebuilds the optimized image with
+#     KC_DB=dev-file. That rebuild silently strips the Postgres JDBC driver,
+#     so the next `kc.sh start` fails with "Driver does not support the
+#     provided URL: jdbc:postgresql://…". Keycloak itself prints the correct
+#     incantation in its own startup log: see Keycloak Quarkus mappers output.
+#   - The non-zero-exit handling tries to distinguish "admin already exists"
+#     (legitimate idempotent re-run) from real failures (DB unreachable,
+#     password too weak, config invalid). Real failures cause an immediate
+#     `exit 1` so Railway's healthcheck flips red in seconds rather than
+#     spending 5 minutes retrying a server that can't connect to its DB.
 #
 # Once the named admin is in place and the bootstrap creds are removed
 # from Railway, this whole block becomes a no-op.
-ENTRYPOINT ["/bin/sh", "-c", "if [ -n \"$KC_BOOTSTRAP_ADMIN_USERNAME\" ] && [ -n \"$KC_BOOTSTRAP_ADMIN_PASSWORD\" ]; then echo '[entrypoint] Attempting kc.sh bootstrap-admin user (idempotent)'; /opt/keycloak/bin/kc.sh bootstrap-admin user --username \"$KC_BOOTSTRAP_ADMIN_USERNAME\" --password:env KC_BOOTSTRAP_ADMIN_PASSWORD --no-prompt || echo '[entrypoint] bootstrap-admin returned non-zero (likely admin already exists); continuing'; fi; exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080}"]
+# --chmod=0755 makes the script executable at COPY time. A separate `RUN chmod`
+# step would fail because the Keycloak base image runs as a non-root user
+# without write permission on /opt/keycloak/bin. BuildKit syntax (enabled at
+# the top of this file) honors --chmod since dockerfile/1.x.
+COPY --chmod=0755 keycloak/prod/entrypoint.sh /opt/keycloak/bin/hms-entrypoint.sh
+ENTRYPOINT ["/opt/keycloak/bin/hms-entrypoint.sh"]
