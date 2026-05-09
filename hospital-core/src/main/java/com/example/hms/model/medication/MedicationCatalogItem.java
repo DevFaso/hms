@@ -92,6 +92,16 @@ public class MedicationCatalogItem extends BaseEntity {
     @Column(name = "rxnorm_code", length = 20)
     private String rxnormCode;
 
+    /**
+     * Optional ISMP "tall-man" lettering for confusable drug pairs
+     * (e.g. {@code "predniSONE"} vs {@code "prednisoLONE"}). When present,
+     * the medication-prescribe CDS hook service surfaces this in card
+     * detail to disambiguate at authoring time. Added in V93.
+     */
+    @Size(max = 200)
+    @Column(name = "tall_man_name", length = 200)
+    private String tallManName;
+
     /** Route of administration (oral, IV, IM, topical, etc.). */
     @Size(max = 100)
     @Column(length = 100)

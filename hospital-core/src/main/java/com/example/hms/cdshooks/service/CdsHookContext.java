@@ -35,6 +35,39 @@ public final class CdsHookContext {
     }
 
     /**
+     * Reads the {@code context.selections} array from an {@code order-select}
+     * request. Per CDS Hooks 1.0, {@code selections} is a list of FHIR
+     * references (e.g. {@code "MedicationRequest/abc-123"}) identifying
+     * which entries from {@code draftOrders} the clinician has highlighted.
+     *
+     * <p>The returned list contains only the trailing identifier of each
+     * reference, matching the {@code id} field carried on the corresponding
+     * {@code draftOrders.entry[].resource}. Returns an empty list when the
+     * key is absent or malformed so callers can use it as a positive filter
+     * without null-checking; an empty list signals "no narrowing — evaluate
+     * everything in {@code draftOrders}".
+     */
+    public static List<String> selectionIds(CdsHookRequest request) {
+        if (request == null || request.context() == null) return List.of();
+        Object raw = request.context().get("selections");
+        if (!(raw instanceof List<?> list) || list.isEmpty()) return List.of();
+        List<String> out = new java.util.ArrayList<>(list.size());
+        for (Object entry : list) {
+            if (entry == null) continue;
+            String s = entry.toString().trim();
+            if (s.isEmpty()) continue;
+            int slash = s.lastIndexOf('/');
+            // Trailing-slash references like "MedicationRequest/" must not
+            // contribute an empty id — otherwise the selection filter would
+            // silently swallow every draft as a positive match.
+            String id = (slash >= 0 ? s.substring(slash + 1) : s).trim();
+            if (id.isEmpty()) continue;
+            out.add(id);
+        }
+        return List.copyOf(out);
+    }
+
+    /**
      * Pulls a list of {@code MedicationRequest}-shaped maps from the
      * {@code context.draftOrders.entry[*].resource} or
      * {@code context.medications.entry[*].resource} structure used by the

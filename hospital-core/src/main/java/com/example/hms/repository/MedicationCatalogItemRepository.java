@@ -43,4 +43,20 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     java.util.List<MedicationCatalogItem> findByHospitalIdAndCodeIn(
             @Param("hospitalId") UUID hospitalId,
             @Param("codes") java.util.Collection<String> codes);
+
+    /**
+     * RxNorm-keyed lookup added in V93 for the {@code order-select} and
+     * {@code medication-prescribe} CDS hooks. Backed by the partial index
+     * {@code idx_med_catalog_rxnorm_active} so it stays O(log n) on the
+     * active subset. Returns the first active row whose RxCUI matches —
+     * the catalog model does not enforce uniqueness on rxnorm_code (a
+     * single drug can have multiple SKUs / strengths sharing a code), so
+     * callers are expected to treat the match as a representative entry
+     * and rely on the rule engine for SKU-level decisions.
+     */
+    @Query("SELECT m FROM MedicationCatalogItem m " +
+           "WHERE m.hospital.id = :hospitalId AND m.rxnormCode = :rxnormCode AND m.active = true")
+    java.util.List<MedicationCatalogItem> findActiveByHospitalIdAndRxnormCode(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("rxnormCode") String rxnormCode);
 }

@@ -34,6 +34,16 @@ class CdsHooksDiscoveryIT {
             .contains("\"hook\":\"patient-view\"")
             .contains("\"id\":\"hms-patient-view\"")
             .contains("\"hook\":\"order-sign\"")
-            .contains("\"id\":\"hms-medication-allergy-check\"");
+            .contains("\"id\":\"hms-medication-allergy-check\"")
+            // v1.0 / Clinical Safety / CDS Hooks expansion (roadmap row 2):
+            // two new descriptors were registered automatically through
+            // CdsHookRegistry. Discovery is the public contract external
+            // EHRs (Cerner, Epic) probe before invoking — a regression
+            // guard belongs here so removing or renaming a service
+            // breaks the build, not a downstream integration.
+            .contains("\"hook\":\"order-select\"")
+            .contains("\"id\":\"hms-order-select-rules\"")
+            .contains("\"hook\":\"medication-prescribe\"")
+            .contains("\"id\":\"hms-medication-prescribe-rules\"");
     }
 }
