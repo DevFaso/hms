@@ -1,0 +1,202 @@
+# Prometheus alerting rules for the HMS stack.
+# Two flavours:
+#   - SLO burn-rate alerts (multi-window multi-burn-rate per Google SRE).
+#   - Operational alerts (instance down, saturation, deploy regressions).
+#
+# Severity convention:
+#   page  → wakes someone up (SLO fast burn, hard outage)
+#   ticket → next-business-day (slow burn, capacity warning)
+# These can be routed independently in grafana/provisioning/alerting/
+# notification-policies.yml.
+#
+# Multi-window multi-burn-rate (MWMBR) follows the standard pattern from
+# https://sre.google/workbook/alerting-on-slos/.  For a 99.9% SLO the
+# 1h burn=14.4 means we'd exhaust 30d budget in ~2h — page.
+
+groups:
+  # ── SLO burn-rate alerts (assume 99.9% availability target) ───────
+  - name: hms.slo.burnrate
+    rules:
+      - alert: HmsErrorBudgetFastBurn
+        expr: |
+          (
+            app:slo_error_ratio:5m{application="hms"} > (14.4 * 0.001)
+            and
+            app:slo_error_ratio:1h{application="hms"} > (14.4 * 0.001)
+          )
+        for: 2m
+        labels:
+          severity: page
+          service: hms-backend
+          slo: availability
+        annotations:
+          summary: "HMS error budget burning fast (>14x)"
+          description: |
+            5m and 1h 5xx error ratio both exceed 14.4x the 99.9% SLO budget.
+            At this rate the 30-day error budget is exhausted in ~2 hours.
+            Investigate https://grafana/d/hms-slo-overview and check recent deploys.
+          runbook_url: "https://github.com/your-org/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetfastburn"
+
+      - alert: HmsErrorBudgetSlowBurn
+        expr: |
+          (
+            app:slo_error_ratio:30m{application="hms"} > (6 * 0.001)
+            and
+            app:slo_error_ratio:6h{application="hms"} > (6 * 0.001)
+          )
+        for: 15m
+        labels:
+          severity: ticket
+          service: hms-backend
+          slo: availability
+        annotations:
+          summary: "HMS error budget burning slowly (>6x)"
+          description: |
+            30m and 6h 5xx ratio both exceed 6x the 99.9% SLO budget.
+            Open a ticket to find the failing endpoint(s).
+
+  # ── Latency alerts (per URI hot-spot) ──────────────────────────────
+  - name: hms.latency
+    rules:
+      - alert: HmsP99LatencyHigh
+        expr: app:http_request_duration_seconds:p99_5m{application="hms"} > 2
+        for: 10m
+        labels:
+          severity: ticket
+          service: hms-backend
+        annotations:
+          summary: "HMS p99 latency > 2s for 10m"
+          description: "Application-wide p99 has been above 2s. Check endpoint deep-dive."
+
+  # ── Instance / target health ───────────────────────────────────────
+  - name: hms.targets
+    rules:
+      - alert: HmsTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Prometheus target {{ $labels.job }} ({{ $labels.instance }}) is DOWN"
+          description: "Scrape target has been unreachable for 5 minutes."
+
+      - alert: HmsBackendNoTraffic
+        expr: |
+          absent(app:http_requests:rate5m{application="hms"})
+            or app:http_requests:rate5m{application="hms"} == 0
+        for: 10m
+        labels:
+          severity: ticket
+          service: hms-backend
+        annotations:
+          summary: "HMS backend received no traffic for 10 minutes"
+          description: "Either the gateway is down or scrape is broken — investigate."
+
+  # ── Saturation (USE) ───────────────────────────────────────────────
+  - name: hms.saturation
+    rules:
+      - alert: HmsHeapHigh
+        expr: app:jvm_heap_used_ratio{application="hms"} > 0.9
+        for: 10m
+        labels:
+          severity: ticket
+          service: hms-backend
+        annotations:
+          summary: "JVM heap > 90% for 10m"
+          description: "Heap pressure could trigger OOM or GC thrash."
+
+      - alert: HmsDbPoolSaturated
+        expr: app:hikaricp_pool_utilisation{application="hms"} > 0.9
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "HikariCP pool > 90% utilised for 5m"
+          description: "Backend may start refusing/queuing requests. Check long-running queries."
+
+      - alert: HmsDbPoolPendingHigh
+        expr: sum by (application) (hikaricp_connections_pending) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "Threads waiting on a DB connection for 5m"
+          description: "{{ $value }} threads pending. Investigate slow queries / pool size."
+
+  # ── Database / Postgres ────────────────────────────────────────────
+  - name: hms.postgres
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: page
+          service: postgres
+        annotations:
+          summary: "Postgres exporter cannot reach Postgres ({{ $labels.instance }})"
+          description: "Backend will start failing as soon as connections are exhausted."
+
+      - alert: PostgresDeadlocksSpiking
+        expr: increase(pg_stat_database_deadlocks[5m]) > 5
+        for: 5m
+        labels:
+          severity: ticket
+          service: postgres
+        annotations:
+          summary: "Postgres deadlocks > 5 in 5m"
+          description: "Investigate the queries shown on hms-postgres dashboard."
+
+      - alert: PostgresCacheHitRatioLow
+        expr: |
+          sum(rate(pg_stat_database_blks_hit[10m]))
+            /
+          clamp_min(sum(rate(pg_stat_database_blks_hit[10m]) + rate(pg_stat_database_blks_read[10m])), 0.0001)
+            < 0.95
+        for: 30m
+        labels:
+          severity: ticket
+          service: postgres
+        annotations:
+          summary: "Postgres cache hit ratio < 95%"
+          description: "Indexes or shared_buffers may be undersized."
+
+  # ── Host (when node-exporter is enabled) ───────────────────────────
+  - name: hms.host
+    rules:
+      - alert: NodeFilesystemFull
+        expr: |
+          100 * (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|devtmpfs|squashfs"}
+                       / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|devtmpfs|squashfs"}))
+            > 90
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Filesystem {{ $labels.mountpoint }} > 90% full"
+          description: "Disk pressure — clear logs or extend the volume."
+
+      - alert: NodeMemoryHigh
+        expr: |
+          100 * (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 90
+        for: 15m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Host memory > 90% used for 15m"
+          description: "Container or process leak — check top consumers."
+
+  # ── Deploy / configuration regressions ─────────────────────────────
+  - name: hms.deploys
+    rules:
+      - alert: HmsRecentlyRestartedRepeatedly
+        expr: |
+          changes(process_start_time_seconds{application="hms"}[10m]) > 2
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "Backend restarted >2 times in 10 minutes"
+          description: "Crash loop suspected. Check `Errors & Warnings` panel and deploy logs."

@@ -1,5 +1,12 @@
 apiVersion: 1
 
+# Dashboards are auto-loaded from /var/lib/grafana/dashboards on every start.
+# Edits in the Grafana UI are persisted to the on-disk JSON when
+# `allowUiUpdates: true`, so reviewers can iterate live and commit the result.
+#
+# Adding a new dashboard? Drop the JSON file into grafana/dashboards/ — no
+# provisioner restart needed; updateIntervalSeconds rescans every 30s.
+
 providers:
   - name: 'HMS Dashboards'
     orgId: 1
@@ -7,6 +14,8 @@ providers:
     type: file
     disableDeletion: false
     editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false

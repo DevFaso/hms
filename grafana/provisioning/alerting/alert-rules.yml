@@ -1,0 +1,160 @@
+# Grafana Unified Alerting — alert rules (provisioned).
+# These mirror the higher-level Prometheus alerts in grafana/rules/alerts.yml
+# but use Grafana's UI-aware alert engine so they show up in the "Alerting" tab
+# with state, history, and silences.
+#
+# Two folders:
+#   - HMS – SLO       multi-window burn-rate alerts
+#   - HMS – Infra     instance-level health
+#
+# Re-provisioned on every Grafana restart.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: hms-slo
+    folder: "HMS – SLO"
+    interval: 1m
+    rules:
+      - uid: hms-slo-fast-burn
+        title: HMS error budget – fast burn
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: A
+              expr: app:slo_error_ratio:5m{application="hms"}
+              instant: true
+              interval: ""
+          - refId: B
+            relativeTimeRange: { from: 3600, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: B
+              expr: app:slo_error_ratio:1h{application="hms"}
+              instant: true
+              interval: ""
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: math
+              # Trigger when both 5m and 1h burn rates exceed 14.4 * (1 - 0.999).
+              expression: "$A > 0.0144 && $B > 0.0144"
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        labels:
+          severity: page
+          service: hms-backend
+          slo: availability
+        annotations:
+          summary: "HMS error budget burning fast (>14x)"
+          description: "5m and 1h burn both above 14.4x the 99.9% SLO budget. ~2h until 30d budget exhausted."
+          runbook_url: "../docs/runbooks/grafana-observability.md"
+
+      - uid: hms-slo-slow-burn
+        title: HMS error budget – slow burn
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: { from: 1800, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: A
+              expr: app:slo_error_ratio:30m{application="hms"}
+              instant: true
+          - refId: B
+            relativeTimeRange: { from: 21600, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: B
+              expr: app:slo_error_ratio:6h{application="hms"}
+              instant: true
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: math
+              expression: "$A > 0.006 && $B > 0.006"
+        noDataState: NoData
+        execErrState: Error
+        for: 15m
+        labels:
+          severity: ticket
+          service: hms-backend
+          slo: availability
+        annotations:
+          summary: "HMS error budget burning slowly (>6x)"
+          description: "30m and 6h burn both above 6x the 99.9% SLO budget."
+
+  - orgId: 1
+    name: hms-infra
+    folder: "HMS – Infra"
+    interval: 1m
+    rules:
+      - uid: hms-target-down
+        title: HMS scrape target down
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: A
+              expr: up
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: "$A"
+              conditions:
+                - evaluator: { type: lt, params: [1] }
+                  operator: { type: and }
+                  reducer: { type: last }
+                  type: query
+        noDataState: Alerting
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: page
+        annotations:
+          summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) is DOWN"
+          description: "Prometheus has not scraped this target for 5 minutes."
+
+      - uid: hms-hikari-saturated
+        title: HMS HikariCP pool saturated
+        condition: B
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: hms-prometheus
+            model:
+              refId: A
+              expr: app:hikaricp_pool_utilisation{application="hms"}
+              instant: true
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: threshold
+              expression: "$A"
+              conditions:
+                - evaluator: { type: gt, params: [0.9] }
+                  operator: { type: and }
+                  reducer: { type: last }
+                  type: query
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "HikariCP pool > 90% utilised for 5m"
+          description: "Backend may queue or refuse requests. Check long-running queries."

@@ -1,0 +1,168 @@
+{
+  "annotations": { "list": [] },
+  "description": "Host / VM metrics from node-exporter (CPU, memory, disk, network).\nEnabled via the `observability` compose profile. On macOS Docker Desktop these reflect the Linux VM, not the macOS host.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "HMS Dashboards", "asDropdown": true, "includeVars": true, "keepTime": true, "tags": ["hms"], "type": "dashboards", "icon": "external link", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "CPU (busy %)",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\", instance=~\"$instance\"}[5m])))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Memory used %",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * (1 - (node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"}))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Root FS used %",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * (1 - (node_filesystem_avail_bytes{mountpoint=\"/host\", instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=\"/host\", instance=~\"$instance\"}))", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Load1 / Load5 / Load15",
+      "type": "stat",
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "decimals": 2 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "horizontal" },
+      "targets": [
+        { "expr": "max(node_load1{instance=~\"$instance\"})", "legendFormat": "1m" },
+        { "expr": "max(node_load5{instance=~\"$instance\"})", "legendFormat": "5m" },
+        { "expr": "max(node_load15{instance=~\"$instance\"})", "legendFormat": "15m" }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "CPU by mode",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 15 } } },
+      "targets": [
+        { "expr": "avg by (mode) (rate(node_cpu_seconds_total{mode!=\"idle\", instance=~\"$instance\"}[$__rate_interval]))", "legendFormat": "{{mode}}" }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Memory breakdown",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 15 } } },
+      "targets": [
+        { "expr": "node_memory_MemTotal_bytes{instance=~\"$instance\"} - node_memory_MemAvailable_bytes{instance=~\"$instance\"}", "legendFormat": "used" },
+        { "expr": "node_memory_Buffers_bytes{instance=~\"$instance\"}", "legendFormat": "buffers" },
+        { "expr": "node_memory_Cached_bytes{instance=~\"$instance\"}", "legendFormat": "cached" },
+        { "expr": "node_memory_MemFree_bytes{instance=~\"$instance\"}", "legendFormat": "free" }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Disk I/O (bytes/s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "Bps" } },
+      "targets": [
+        { "expr": "sum by (device) (rate(node_disk_read_bytes_total{instance=~\"$instance\"}[$__rate_interval]))", "legendFormat": "{{device}} read" },
+        { "expr": "sum by (device) (rate(node_disk_written_bytes_total{instance=~\"$instance\"}[$__rate_interval])) * -1", "legendFormat": "{{device}} write" }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Network throughput",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "bps" } },
+      "targets": [
+        { "expr": "sum by (device) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*\", instance=~\"$instance\"}[$__rate_interval])) * 8", "legendFormat": "{{device}} rx" },
+        { "expr": "sum by (device) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*\", instance=~\"$instance\"}[$__rate_interval])) * 8 * -1", "legendFormat": "{{device}} tx" }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Filesystems used %",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 90 }] }
+        }
+      },
+      "options": { "displayMode": "lcd", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "100 * (1 - (node_filesystem_avail_bytes{instance=~\"$instance\", fstype!~\"tmpfs|overlay|devtmpfs|squashfs\"} / node_filesystem_size_bytes{instance=~\"$instance\", fstype!~\"tmpfs|overlay|devtmpfs|squashfs\"}))", "legendFormat": "{{mountpoint}}" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["hms", "host", "node-exporter"],
+  "templating": {
+    "list": [
+      { "name": "prometheus_ds", "type": "datasource", "label": "Prometheus", "query": "prometheus", "current": { "text": "Prometheus", "value": "hms-prometheus" } },
+      {
+        "name": "instance", "type": "query", "label": "Host",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(node_uname_info, instance)" },
+        "refresh": 2, "current": { "text": "All", "value": ".*" }, "includeAll": true, "allValue": ".*", "multi": true, "sort": 1
+      }
+    ]
+  },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HMS – Host Metrics",
+  "uid": "hms-host",
+  "version": 1
+}

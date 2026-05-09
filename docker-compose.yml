@@ -150,11 +150,13 @@ services:
       - "9090:9090"
     volumes:
       - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./grafana/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
       - '--web.enable-remote-write-receiver'
+      - '--web.enable-lifecycle'
 
   # ── Loki (log aggregation) ─────────────────────────────────
   loki:
@@ -219,6 +221,54 @@ services:
       SERVER_PORT: "8080"
       LOG_LEVEL: INFO
 
+  # ── postgres-exporter (profile: observability) ────────────
+  # Scrapes the local Postgres container so the HMS PostgreSQL dashboard has
+  # data. DATA_SOURCE_NAME points at the `postgres` service from this compose
+  # file (profile: local). To monitor postgres-dev / postgres-uat instead,
+  # add additional postgres-exporter-* services or override DATA_SOURCE_NAME.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: hms-postgres-exporter
+    profiles: ["observability"]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://hospital_user:hospital_pass@postgres:5432/hospital_db?sslmode=disable"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "true"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── redis-exporter (profile: observability) ───────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: hms-redis-exporter
+    profiles: ["observability"]
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── node-exporter (profile: observability) ────────────────
+  # Exposes host CPU / memory / disk / network metrics on :9100.
+  # On macOS Docker Desktop the metrics describe the Linux VM rather than the
+  # macOS host, but they're still useful for spotting compose-stack saturation.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: hms-node-exporter
+    profiles: ["observability"]
+    pid: host
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.rootfs=/host'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+
   # ── Grafana ────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.1.0
@@ -226,10 +276,18 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      # Log panels need to know about the Loki datasource — provisioning handles
-      # the rest (see grafana/provisioning/datasources/datasources.yml).
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Allow loading the public Grafana plugins listed below (none by default).
+      GF_INSTALL_PLUGINS: ""
+      # Default home dashboard = SLO overview when present.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hms-slo-overview.json
+      # Unified alerting is on by default in Grafana 11; explicit for clarity.
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      GF_ALERTING_ENABLED: "false"
+      # Disable analytics + update checks for cleaner local logs.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
