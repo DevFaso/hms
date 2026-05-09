@@ -6,7 +6,7 @@ v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense p
 v1.0,2026-06-23,Pharmacy,T-72 perf baseline,k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md,—,S,Platform,not-started,#h1.exit
 v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,not-started,#h1.exit
 v1.0,2026-06-23,Security,Keycloak Phase C cutover,Flip OIDC_REQUIRED=true in UAT; soak 7 days; promote to prod; legacy /auth/login returns 410 Gone,Idle session timeout,S,Backend,not-started,#h1.exit
-v1.0,2026-06-23,Operations,DR runbook,"docs/runbooks/disaster-recovery.md covering Railway snapshot+restore, Postgres PITR, observability stack rebuild",—,S,Platform,not-started,#h1.exit
+v1.0,2026-06-23,Operations,DR runbook,"docs/runbooks/disaster-recovery.md covering Railway snapshot+restore, Postgres PITR, observability stack rebuild",—,S,Platform,started,#h1.exit
 v1.0,2026-06-23,Accessibility,axe-core/playwright smoke,"Fail PR on any new a11y violation across login, doctor dashboard, patient tracker, AVS",—,S,Frontend,not-started,#h1.exit
 v1.0,2026-06-23,Accessibility,Keyboard navigation pass,All clinical-flow screens reachable + actionable via keyboard; documented in docs/ui/accessibility.md,axe-core/playwright smoke,M,Frontend,not-started,#h1.exit
 v1.0,2026-06-23,i18n,FR completeness gate,Tooling extracts all *.json keys; CI fails when any locale is < 99% of EN; enforced in frontend-ci.yml,—,S,Frontend,not-started,#h1.exit
