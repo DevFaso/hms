@@ -70,8 +70,9 @@ EXPOSE 8080
 # master realm tables and works on every invocation regardless of realm
 # state. We invoke it before `kc.sh start`:
 #
-#   - Guarded by an `[ -n ]` check so an env that has already removed the
-#     bootstrap creds (per README step 5.3) skips this entirely.
+#   - Guarded by an `[ -n ]` check so an env that has already removed
+#     the bootstrap creds (per the README "Lock down the admin console"
+#     step, after creating a named admin) skips this entirely.
 #   - `--password:env` reads the password from the env var rather than
 #     accepting it on the command line, so it never appears in `ps aux`.
 #   - `|| echo ... ; ` swallows non-zero exits so the boot continues when
