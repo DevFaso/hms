@@ -174,21 +174,32 @@ final class PharmacyInvoicesViewModel: ObservableObject {
     func load() async {
         isLoading = true
         errorMessage = nil
-        do {
-            let paymentsPage: PageDTO<PharmacyPaymentDTO> = try await APIClient.shared.get(
-                APIEndpoints.pharmacyPayments,
-                queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-            )
-            payments = paymentsPage.content
 
-            let claimsPage: PageDTO<PharmacyClaimDTO> = try await APIClient.shared.get(
-                APIEndpoints.pharmacyClaims,
-                queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
-            )
+        async let paymentsRequest: PageDTO<PharmacyPaymentDTO> = APIClient.shared.get(
+            APIEndpoints.pharmacyPayments,
+            queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
+        )
+        async let claimsRequest: PageDTO<PharmacyClaimDTO> = APIClient.shared.get(
+            APIEndpoints.pharmacyClaims,
+            queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
+        )
+
+        var errors: [String] = []
+        do {
+            let paymentsPage = try await paymentsRequest
+            payments = paymentsPage.content
+        } catch {
+            payments = []
+            errors.append(String(format: "pharmacy_payments_load_failed".localized, error.localizedDescription))
+        }
+        do {
+            let claimsPage = try await claimsRequest
             claims = claimsPage.content
         } catch {
-            errorMessage = error.localizedDescription
+            claims = []
+            errors.append(String(format: "pharmacy_claims_load_failed".localized, error.localizedDescription))
         }
+        errorMessage = errors.isEmpty ? nil : errors.joined(separator: "\n")
         isLoading = false
     }
 }

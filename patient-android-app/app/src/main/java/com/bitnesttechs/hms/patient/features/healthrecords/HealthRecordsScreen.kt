@@ -158,25 +158,25 @@ private fun PatientIdentityHeader(summary: HealthSummaryDto?) {
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                profile?.fullName?.takeIf { it.isNotBlank() } ?: "My chart",
+                profile?.fullName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.my_chart),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = BrandBlue
             )
             val mrn = profile?.medicalRecordNumber ?: profile?.mrn
             if (!mrn.isNullOrBlank()) {
-                Text("MRN $mrn", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.mrn_prefix, mrn), style = MaterialTheme.typography.bodySmall)
             }
-            val details = listOfNotNull(profile?.dateOfBirth?.let { "DOB ${it.take(10)}" }, profile?.gender, profile?.bloodType)
+            val details = listOfNotNull(profile?.dateOfBirth?.let { stringResource(R.string.dob_prefix, it.take(10)) }, profile?.gender, profile?.bloodType)
             if (details.isNotEmpty()) {
                 Text(details.joinToString("  |  "), style = MaterialTheme.typography.bodySmall)
             }
             val primarySource = profile?.hospitalName
                 ?: profile?.primaryHospitalName
-                ?: profile?.hospitalId?.let { "Hospital ID $it" }
-                ?: profile?.primaryHospitalId?.let { "Hospital ID $it" }
+                ?: profile?.hospitalId?.let { stringResource(R.string.hospital_id_with_value, it) }
+                ?: profile?.primaryHospitalId?.let { stringResource(R.string.hospital_id_with_value, it) }
             primarySource?.takeIf { it.isNotBlank() }?.let {
-                SourceText(listOf("Primary hospital: $it"))
+                SourceText(listOf(stringResource(R.string.primary_hospital_with_value, it)))
             }
         }
     }
@@ -185,9 +185,9 @@ private fun PatientIdentityHeader(summary: HealthSummaryDto?) {
 @Composable
 private fun OverviewTab(summary: HealthSummaryDto?) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { StringListCard("Allergies", summary?.allergies ?: emptyList(), Icons.Default.Warning, "No known allergies") }
-        item { StringListCard("Active diagnoses", summary?.activeDiagnoses ?: emptyList(), Icons.Default.MedicalInformation, "No active diagnoses") }
-        item { StringListCard("Chronic conditions", summary?.chronicConditions ?: emptyList(), Icons.Default.Assignment, "No chronic conditions") }
+        item { StringListCard(stringResource(R.string.allergies), summary?.allergies ?: emptyList(), Icons.Default.Warning, stringResource(R.string.no_known_allergies)) }
+        item { StringListCard(stringResource(R.string.active_diagnoses), summary?.activeDiagnoses ?: emptyList(), Icons.Default.MedicalInformation, stringResource(R.string.no_active_diagnoses)) }
+        item { StringListCard(stringResource(R.string.chronic_conditions), summary?.chronicConditions ?: emptyList(), Icons.Default.Assignment, stringResource(R.string.no_chronic_conditions)) }
         item { Spacer(Modifier.height(16.dp)) }
     }
 }
@@ -195,27 +195,27 @@ private fun OverviewTab(summary: HealthSummaryDto?) {
 @Composable
 private fun VitalsTab(vitals: List<VitalSignDto>) {
     if (vitals.isEmpty()) {
-        EmptyState("No recent vitals")
+        EmptyState(stringResource(R.string.no_recent_vitals))
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(vitals, key = { it.id }) { vital ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Favorite,
-                sourceParts = listOfNotNull(vital.hospitalName ?: vital.hospitalId?.let { "Hospital ID $it" }, vital.recordedByName?.let { "Recorded by $it" }, vital.sourceDisplay),
+                sourceParts = listOfNotNull(vital.hospitalName ?: vital.hospitalId?.let { stringResource(R.string.hospital_id_with_value, it) }, vital.recordedByName?.let { stringResource(R.string.recorded_by_with_value, it) }, vital.sourceDisplay),
                 details = {
                     DetailGrid(
-                        DetailItem("Blood pressure", vital.bloodPressureDisplay, Icons.Default.Favorite),
-                        DetailItem("Heart rate", vital.heartRateDisplay, Icons.Default.MonitorHeart),
-                        DetailItem("Temperature", vital.temperatureDisplay, Icons.Default.Thermostat),
-                        DetailItem("Oxygen", vital.oxygenDisplay, Icons.Default.MonitorHeart),
-                        DetailItem("Resp. rate", vital.respiratoryRateDisplay, Icons.Default.MonitorHeart),
-                        DetailItem("Glucose", vital.bloodGlucoseDisplay, Icons.Default.Bloodtype),
-                        DetailItem("Weight", vital.weightDisplay, Icons.Default.Scale),
-                        DetailItem("Position", vital.bodyPosition, Icons.Default.Info),
-                        DetailItem("Clinical flag", vital.clinicallySignificant?.let { if (it) "Significant" else "Not flagged" }, Icons.Default.Warning)
+                        DetailItem(stringResource(R.string.blood_pressure), vital.bloodPressureDisplay, Icons.Default.Favorite),
+                        DetailItem(stringResource(R.string.heart_rate), vital.heartRateDisplay, Icons.Default.MonitorHeart),
+                        DetailItem(stringResource(R.string.temperature), vital.temperatureDisplay, Icons.Default.Thermostat),
+                        DetailItem(stringResource(R.string.oxygen), vital.oxygenDisplay, Icons.Default.MonitorHeart),
+                        DetailItem(stringResource(R.string.respiratory_rate), vital.respiratoryRateDisplay, Icons.Default.MonitorHeart),
+                        DetailItem(stringResource(R.string.glucose), vital.bloodGlucoseDisplay, Icons.Default.Bloodtype),
+                        DetailItem(stringResource(R.string.weight), vital.weightDisplay, Icons.Default.Scale),
+                        DetailItem(stringResource(R.string.position), vital.bodyPosition, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.clinical_flag), vital.clinicallySignificant?.let { if (it) stringResource(R.string.significant) else stringResource(R.string.not_flagged) }, Icons.Default.Warning)
                     )
-                    DetailNote("Notes", vital.notes)
+                    DetailNote(stringResource(R.string.notes), vital.notes)
                 }
             ) {
                 Text(vital.recordedDateDisplay, fontWeight = FontWeight.SemiBold)
@@ -229,25 +229,25 @@ private fun VitalsTab(vitals: List<VitalSignDto>) {
 @Composable
 private fun LabsTab(labs: List<LabResultDto>) {
     if (labs.isEmpty()) {
-        EmptyState("No recent lab results")
+        EmptyState(stringResource(R.string.no_recent_lab_results))
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(labs, key = { it.id }) { lab ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Science,
-                sourceParts = listOfNotNull(lab.labName, lab.orderedBy?.let { "Ordered by $it" }),
+                sourceParts = listOfNotNull(lab.labName, lab.orderedBy?.let { stringResource(R.string.ordered_by_with_value, it) }),
                 details = {
                     DetailGrid(
-                        DetailItem("Result", listOfNotNull(lab.result, lab.unit).joinToString(" ").takeIf { it.isNotBlank() }, Icons.Default.Science),
-                        DetailItem("Range", lab.referenceRange, Icons.Default.Info),
-                        DetailItem("Status", lab.statusDisplay, Icons.Default.Warning),
-                        DetailItem("Collected", lab.collectionDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("Result date", lab.resultDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("Ordered by", lab.orderedBy, Icons.Default.Person),
-                        DetailItem("Laboratory", lab.labName, Icons.Default.LocalHospital)
+                        DetailItem(stringResource(R.string.result), listOfNotNull(lab.result, lab.unit).joinToString(" ").takeIf { it.isNotBlank() }, Icons.Default.Science),
+                        DetailItem(stringResource(R.string.range), lab.referenceRange, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.status), lab.statusDisplay, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.collected), lab.collectionDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.result_date), lab.resultDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.ordered_by), lab.orderedBy, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.laboratory), lab.labName, Icons.Default.LocalHospital)
                     )
-                    DetailNote("Notes", lab.notes)
+                    DetailNote(stringResource(R.string.notes), lab.notes)
                 }
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -265,30 +265,30 @@ private fun LabsTab(labs: List<LabResultDto>) {
 @Composable
 private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
     if (medications.isEmpty()) {
-        EmptyState("No active medications")
+        EmptyState(stringResource(R.string.no_active_medications))
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(medications, key = { it.id }) { med ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Medication,
-                sourceParts = listOfNotNull(med.prescribedBy?.let { "Prescribed by $it" }, med.indication),
+                sourceParts = listOfNotNull(med.prescribedBy?.let { stringResource(R.string.prescribed_by_with_value, it) }, med.indication),
                 details = {
                     DetailGrid(
-                        DetailItem("Medication", med.medicationName, Icons.Default.Medication),
-                        DetailItem("Dosage", med.dosage, Icons.Default.Medication),
-                        DetailItem("Frequency", med.frequency, Icons.Default.Info),
-                        DetailItem("Status", med.status, Icons.Default.Warning),
-                        DetailItem("Prescriber", med.prescribedBy, Icons.Default.Person),
-                        DetailItem("Start", med.startDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("End", med.endDate?.take(10), Icons.Default.CalendarMonth)
+                        DetailItem(stringResource(R.string.medication), med.medicationName, Icons.Default.Medication),
+                        DetailItem(stringResource(R.string.dosage), med.dosage, Icons.Default.Medication),
+                        DetailItem(stringResource(R.string.frequency), med.frequency, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.status), med.status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.prescriber), med.prescribedBy, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.start), med.startDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.end), med.endDate?.take(10), Icons.Default.CalendarMonth)
                     )
-                    DetailNote("Indication", med.indication)
+                    DetailNote(stringResource(R.string.indication), med.indication)
                 }
             ) {
                 Text(med.medicationName, fontWeight = FontWeight.SemiBold)
                 FlowText(listOfNotNull(med.dosage, med.frequency, med.status))
-                med.startDate?.let { SecondaryText("Start ${it.take(10)}") }
+                med.startDate?.let { SecondaryText(stringResource(R.string.start_date_with_value, it.take(10))) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -298,30 +298,30 @@ private fun MedicationsTab(medications: List<CurrentMedicationDto>) {
 @Composable
 private fun ImmunizationsTab(immunizations: List<ImmunizationDto>) {
     if (immunizations.isEmpty()) {
-        EmptyState("No immunization records")
+        EmptyState(stringResource(R.string.no_immunization_records))
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(immunizations, key = { it.id }) { imm ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Vaccines,
-                sourceParts = listOfNotNull(imm.administeredBy?.let { "Administered by $it" }),
+                sourceParts = listOfNotNull(imm.administeredBy?.let { stringResource(R.string.administered_by_with_value, it) }),
                 details = {
                     DetailGrid(
-                        DetailItem("Vaccine", imm.vaccineName, Icons.Default.Vaccines),
-                        DetailItem("Given", imm.administeredDate.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("By", imm.administeredBy, Icons.Default.Person),
-                        DetailItem("Maker", imm.manufacturer, Icons.Default.LocalHospital),
-                        DetailItem("Lot", imm.lotNumber, Icons.Default.Info),
-                        DetailItem("Next dose", imm.nextDoseDate?.take(10) ?: imm.nextDueDate?.take(10), Icons.Default.CalendarMonth)
+                        DetailItem(stringResource(R.string.vaccine), imm.vaccineName, Icons.Default.Vaccines),
+                        DetailItem(stringResource(R.string.given), imm.administeredDate.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.by), imm.administeredBy, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.maker), imm.manufacturer, Icons.Default.LocalHospital),
+                        DetailItem(stringResource(R.string.lot), imm.lotNumber, Icons.Default.Info),
+                        DetailItem(stringResource(R.string.next_dose), imm.nextDoseDate?.take(10) ?: imm.nextDueDate?.take(10), Icons.Default.CalendarMonth)
                     )
-                    DetailNote("Notes", imm.notes)
+                    DetailNote(stringResource(R.string.notes), imm.notes)
                 }
             ) {
                 Text(imm.vaccineName, fontWeight = FontWeight.SemiBold)
                 FlowText(listOfNotNull(imm.manufacturer, imm.administeredBy))
                 SecondaryText(imm.administeredDate.take(10))
-                imm.nextDoseDate?.let { SecondaryText("Next dose ${it.take(10)}") }
+                imm.nextDoseDate?.let { SecondaryText(stringResource(R.string.next_dose_with_value, it.take(10))) }
             }
         }
         item { Spacer(Modifier.height(16.dp)) }
@@ -331,28 +331,28 @@ private fun ImmunizationsTab(immunizations: List<ImmunizationDto>) {
 @Composable
 private fun TreatmentPlansTab(treatmentPlans: List<TreatmentPlanDto>) {
     if (treatmentPlans.isEmpty()) {
-        EmptyState("No treatment plans")
+        EmptyState(stringResource(R.string.no_treatment_plans))
         return
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(treatmentPlans, key = { it.id }) { plan ->
             ExpandableClinicalCard(
                 icon = Icons.Default.Assignment,
-                sourceParts = listOfNotNull(plan.createdBy?.let { "Created by $it" }),
+                sourceParts = listOfNotNull(plan.createdBy?.let { stringResource(R.string.created_by_with_value, it) }),
                 details = {
                     DetailGrid(
-                        DetailItem("Status", plan.status, Icons.Default.Warning),
-                        DetailItem("Start", plan.startDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("End", plan.endDate?.take(10), Icons.Default.CalendarMonth),
-                        DetailItem("Created by", plan.createdBy, Icons.Default.Person)
+                        DetailItem(stringResource(R.string.status), plan.status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.start), plan.startDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.end), plan.endDate?.take(10), Icons.Default.CalendarMonth),
+                        DetailItem(stringResource(R.string.created_by), plan.createdBy, Icons.Default.Person)
                     )
-                    DetailNote("Description", plan.description)
+                    DetailNote(stringResource(R.string.description), plan.description)
                     plan.goals?.takeIf { it.isNotEmpty() }?.let { goals ->
-                        DetailNote("Goals", goals.joinToString("\n"))
+                        DetailNote(stringResource(R.string.goals), goals.joinToString("\n"))
                     }
                 }
             ) {
-                Text(plan.title, fontWeight = FontWeight.SemiBold)
+                Text(plan.title ?: stringResource(R.string.treatment_plan), fontWeight = FontWeight.SemiBold)
                 plan.description?.let { SecondaryText(it) }
                 FlowText(listOfNotNull(plan.status, plan.startDate?.take(10), plan.endDate?.take(10)))
             }
@@ -460,7 +460,7 @@ private fun ExpandableClinicalCard(
                 }
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse details" else "Read details",
+                    contentDescription = if (expanded) stringResource(R.string.collapse_details) else stringResource(R.string.read_details),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(22.dp)
                 )
@@ -494,7 +494,7 @@ private fun SourceText(values: List<String>) {
     if (text.isNotBlank()) {
         Surface(shape = RoundedCornerShape(6.dp), color = BrandLightBlue) {
             Text(
-                "Source: $text",
+                stringResource(R.string.source_with_value, text),
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = BrandBlue,

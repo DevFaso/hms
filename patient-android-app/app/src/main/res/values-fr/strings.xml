@@ -49,6 +49,7 @@
     <string name="upcoming_appointments">Prochains rendez-vous</string>
     <string name="recent_lab_results">Résultats récents</string>
     <string name="allergies">Allergies</string>
+    <string name="no_known_allergies">Aucune allergie connue</string>
     <string name="active_conditions">Conditions actives</string>
     <string name="chronic_conditions">Conditions chroniques</string>
     <string name="see_all">Voir tout</string>
@@ -129,6 +130,7 @@
     <string name="result">Résultat</string>
     <string name="reference">Référence</string>
     <string name="ordered_by">Prescrit par</string>
+    <string name="ordered_by_with_value">Prescrit par %1$s</string>
     <string name="critical">CRITIQUE</string>
     <string name="abnormal">ANORMAL</string>
     <string name="normal">Normal</string>
@@ -139,6 +141,7 @@
     <string name="dosage">Dosage</string>
     <string name="frequency">Fréquence</string>
     <string name="prescribed_by">Prescrit par</string>
+    <string name="prescribed_by_with_value">Prescrit par %1$s</string>
     <string name="refills_remaining">Renouvellements restants</string>
 
     <!-- Billing -->
@@ -156,6 +159,8 @@
     <string name="no_pharmacy_payments">Aucun paiement de pharmacie</string>
     <string name="no_pharmacy_claims">Aucune réclamation de pharmacie</string>
     <string name="reference_with_value">Réf. : %1$s</string>
+    <string name="pharmacy_payments_load_failed">Les paiements n\'ont pas pu être chargés (%1$s)</string>
+    <string name="pharmacy_claims_load_failed">Les réclamations n\'ont pas pu être chargées (%1$s)</string>
 
     <!-- Vitals -->
     <string name="record_vitals">Enregistrer les signes vitaux</string>
@@ -164,6 +169,14 @@
     <string name="heart_rate">Fréquence cardiaque</string>
     <string name="temperature">Température</string>
     <string name="oxygen_saturation">Saturation en oxygène</string>
+    <string name="oxygen">Oxygène</string>
+    <string name="respiratory_rate">Fréq. respiratoire</string>
+    <string name="glucose">Glycémie</string>
+    <string name="position">Position</string>
+    <string name="clinical_flag">Indicateur clinique</string>
+    <string name="significant">Significatif</string>
+    <string name="not_flagged">Non signalé</string>
+    <string name="recorded_by_with_value">Enregistré par %1$s</string>
     <string name="weight">Poids</string>
     <string name="latest_readings">Dernières mesures</string>
     <string name="history">Historique</string>
@@ -207,6 +220,42 @@
     <string name="immunizations">Vaccinations</string>
     <string name="treatment_plans">Plans de traitement</string>
     <string name="referrals">Orientations</string>
+    <string name="my_chart">Mon dossier</string>
+    <string name="dob_prefix">Né(e) le %1$s</string>
+    <string name="hospital_id_with_value">ID hôpital %1$s</string>
+    <string name="primary_hospital_with_value">Hôpital principal : %1$s</string>
+    <string name="source_with_value">Source : %1$s</string>
+    <string name="read_details">Voir les détails</string>
+    <string name="collapse_details">Réduire les détails</string>
+    <string name="active_diagnoses">Diagnostics actifs</string>
+    <string name="no_active_diagnoses">Aucun diagnostic actif</string>
+    <string name="no_chronic_conditions">Aucune condition chronique</string>
+    <string name="no_recent_vitals">Aucun signe vital récent</string>
+    <string name="no_recent_lab_results">Aucun résultat récent de laboratoire</string>
+    <string name="range">Intervalle</string>
+    <string name="collected">Prélevé</string>
+    <string name="result_date">Date du résultat</string>
+    <string name="laboratory">Laboratoire</string>
+    <string name="medication">Médicament</string>
+    <string name="prescriber">Prescripteur</string>
+    <string name="start">Début</string>
+    <string name="start_date_with_value">Début %1$s</string>
+    <string name="end">Fin</string>
+    <string name="indication">Indication</string>
+    <string name="no_immunization_records">Aucun dossier de vaccination</string>
+    <string name="administered_by_with_value">Administré par %1$s</string>
+    <string name="vaccine">Vaccin</string>
+    <string name="given">Administré</string>
+    <string name="by">Par</string>
+    <string name="maker">Fabricant</string>
+    <string name="lot">Lot</string>
+    <string name="next_dose">Prochaine dose</string>
+    <string name="next_dose_with_value">Prochaine dose %1$s</string>
+    <string name="treatment_plan">Plan de traitement</string>
+    <string name="created_by">Créé par</string>
+    <string name="created_by_with_value">Créé par %1$s</string>
+    <string name="description">Description</string>
+    <string name="goals">Objectifs</string>
     <string name="no_immunizations">Aucune vaccination</string>
     <string name="no_treatment_plans">Aucun plan de traitement</string>
     <string name="no_referrals">Aucune orientation</string>

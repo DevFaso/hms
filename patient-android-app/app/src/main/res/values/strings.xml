@@ -49,6 +49,7 @@
     <string name="upcoming_appointments">Upcoming Appointments</string>
     <string name="recent_lab_results">Recent Lab Results</string>
     <string name="allergies">Allergies</string>
+    <string name="no_known_allergies">No known allergies</string>
     <string name="active_conditions">Active Conditions</string>
     <string name="chronic_conditions">Chronic Conditions</string>
     <string name="see_all">See all</string>
@@ -129,6 +130,7 @@
     <string name="result">Result</string>
     <string name="reference">Reference</string>
     <string name="ordered_by">Ordered by</string>
+    <string name="ordered_by_with_value">Ordered by %1$s</string>
     <string name="critical">CRITICAL</string>
     <string name="abnormal">ABNORMAL</string>
     <string name="normal">Normal</string>
@@ -139,6 +141,7 @@
     <string name="dosage">Dosage</string>
     <string name="frequency">Frequency</string>
     <string name="prescribed_by">Prescribed by</string>
+    <string name="prescribed_by_with_value">Prescribed by %1$s</string>
     <string name="refills_remaining">Refills remaining</string>
 
     <!-- Billing -->
@@ -156,6 +159,8 @@
     <string name="no_pharmacy_payments">No pharmacy payments found</string>
     <string name="no_pharmacy_claims">No pharmacy claims found</string>
     <string name="reference_with_value">Ref: %1$s</string>
+    <string name="pharmacy_payments_load_failed">Payments could not be loaded (%1$s)</string>
+    <string name="pharmacy_claims_load_failed">Claims could not be loaded (%1$s)</string>
 
     <!-- Vitals -->
     <string name="record_vitals">Record Vitals</string>
@@ -164,6 +169,14 @@
     <string name="heart_rate">Heart Rate</string>
     <string name="temperature">Temperature</string>
     <string name="oxygen_saturation">Oxygen Saturation</string>
+    <string name="oxygen">Oxygen</string>
+    <string name="respiratory_rate">Resp. rate</string>
+    <string name="glucose">Glucose</string>
+    <string name="position">Position</string>
+    <string name="clinical_flag">Clinical flag</string>
+    <string name="significant">Significant</string>
+    <string name="not_flagged">Not flagged</string>
+    <string name="recorded_by_with_value">Recorded by %1$s</string>
     <string name="weight">Weight</string>
     <string name="latest_readings">Latest Readings</string>
     <string name="history">History</string>
@@ -207,6 +220,42 @@
     <string name="immunizations">Immunizations</string>
     <string name="treatment_plans">Treatment Plans</string>
     <string name="referrals">Referrals</string>
+    <string name="my_chart">My chart</string>
+    <string name="dob_prefix">DOB %1$s</string>
+    <string name="hospital_id_with_value">Hospital ID %1$s</string>
+    <string name="primary_hospital_with_value">Primary hospital: %1$s</string>
+    <string name="source_with_value">Source: %1$s</string>
+    <string name="read_details">Read details</string>
+    <string name="collapse_details">Collapse details</string>
+    <string name="active_diagnoses">Active diagnoses</string>
+    <string name="no_active_diagnoses">No active diagnoses</string>
+    <string name="no_chronic_conditions">No chronic conditions</string>
+    <string name="no_recent_vitals">No recent vitals</string>
+    <string name="no_recent_lab_results">No recent lab results</string>
+    <string name="range">Range</string>
+    <string name="collected">Collected</string>
+    <string name="result_date">Result date</string>
+    <string name="laboratory">Laboratory</string>
+    <string name="medication">Medication</string>
+    <string name="prescriber">Prescriber</string>
+    <string name="start">Start</string>
+    <string name="start_date_with_value">Start %1$s</string>
+    <string name="end">End</string>
+    <string name="indication">Indication</string>
+    <string name="no_immunization_records">No immunization records</string>
+    <string name="administered_by_with_value">Administered by %1$s</string>
+    <string name="vaccine">Vaccine</string>
+    <string name="given">Given</string>
+    <string name="by">By</string>
+    <string name="maker">Maker</string>
+    <string name="lot">Lot</string>
+    <string name="next_dose">Next dose</string>
+    <string name="next_dose_with_value">Next dose %1$s</string>
+    <string name="treatment_plan">Treatment plan</string>
+    <string name="created_by">Created by</string>
+    <string name="created_by_with_value">Created by %1$s</string>
+    <string name="description">Description</string>
+    <string name="goals">Goals</string>
     <string name="no_immunizations">No immunizations</string>
     <string name="no_treatment_plans">No treatment plans</string>
     <string name="no_referrals">No referrals</string>

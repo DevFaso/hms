@@ -153,21 +153,21 @@ struct HealthRecordsView: View {
             // Tab picker
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    TabChip(title: "Overview", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabChip(title: "Vitals", isSelected: selectedTab == 1) { selectedTab = 1 }
-                    TabChip(title: "Labs", isSelected: selectedTab == 2) { selectedTab = 2 }
-                    TabChip(title: "Medications", isSelected: selectedTab == 3) { selectedTab = 3 }
-                    TabChip(title: "Immunizations", isSelected: selectedTab == 4) { selectedTab = 4 }
+                    TabChip(title: "overview".localized, isSelected: selectedTab == 0) { selectedTab = 0 }
+                    TabChip(title: "vitals".localized, isSelected: selectedTab == 1) { selectedTab = 1 }
+                    TabChip(title: "lab_results".localized, isSelected: selectedTab == 2) { selectedTab = 2 }
+                    TabChip(title: "medications".localized, isSelected: selectedTab == 3) { selectedTab = 3 }
+                    TabChip(title: "immunizations".localized, isSelected: selectedTab == 4) { selectedTab = 4 }
                     TabChip(title: "treatment_plans".localized, isSelected: selectedTab == 5) { selectedTab = 5 }
                     TabChip(title: "referrals".localized, isSelected: selectedTab == 6) { selectedTab = 6 }
-                    TabChip(title: "Encounters", isSelected: selectedTab == 7) { selectedTab = 7 }
+                    TabChip(title: "encounters".localized, isSelected: selectedTab == 7) { selectedTab = 7 }
                 }
                 .padding(.horizontal)
             }
             .padding(.vertical, 8)
 
             if vm.isLoading {
-                ProgressView("Loading…").padding()
+                ProgressView("loading".localized).padding()
             } else {
                 switch selectedTab {
                 case 0: overviewTab
@@ -189,13 +189,13 @@ struct HealthRecordsView: View {
     private var patientIdentityHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             let profile = vm.summary?.profile
-            Text(profile?.fullName.isEmpty == false ? profile?.fullName ?? "My chart" : "My chart")
+            Text(profile?.fullName.isEmpty == false ? profile?.fullName ?? "my_chart".localized : "my_chart".localized)
                 .font(.title3.bold())
                 .foregroundColor(.accentColor)
             if let mrn = profile?.mrn, !mrn.isEmpty {
-                Text("MRN \(mrn)").font(.subheadline)
+                Text(String(format: "mrn_format".localized, mrn)).font(.subheadline)
             }
-            let details = [profile?.dateOfBirth.map { "DOB \($0.prefix(10))" }, profile?.gender, profile?.bloodType]
+            let details = [profile?.dateOfBirth.map { String(format: "dob_format".localized, String($0.prefix(10))) }, profile?.gender, profile?.bloodType]
                 .compactMap { $0 }
                 .filter { !$0.isEmpty }
             if !details.isEmpty {
@@ -205,10 +205,10 @@ struct HealthRecordsView: View {
             }
             let primarySource = profile?.hospitalName
                 ?? profile?.primaryHospitalName
-                ?? profile?.hospitalId.map { "Hospital ID \($0)" }
-                ?? profile?.primaryHospitalId.map { "Hospital ID \($0)" }
+                ?? profile?.hospitalId.map { String(format: "hospital_id_format".localized, $0) }
+                ?? profile?.primaryHospitalId.map { String(format: "hospital_id_format".localized, $0) }
             if let hospital = primarySource, !hospital.isEmpty {
-                SourceLine(parts: ["Primary hospital: \(hospital)"])
+                SourceLine(parts: [String(format: "primary_hospital_format".localized, hospital)])
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

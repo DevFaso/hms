@@ -253,6 +253,15 @@
 "no_immunizations" = "No immunizations";
 "no_treatment_plans" = "No treatment plans";
 "no_referrals" = "No referrals";
+"my_chart" = "My chart";
+"mrn_format" = "MRN %@";
+"dob_format" = "DOB %@";
+"hospital_id_format" = "Hospital ID %@";
+"primary_hospital_format" = "Primary hospital: %@";
+
+/* Pharmacy invoices */
+"pharmacy_payments_load_failed" = "Payments could not be loaded: %@";
+"pharmacy_claims_load_failed" = "Claims could not be loaded: %@";
 
 /* Notifications */
 "no_notifications" = "No notifications";

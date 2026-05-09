@@ -253,6 +253,15 @@
 "no_immunizations" = "Aucune vaccination";
 "no_treatment_plans" = "Aucun plan de traitement";
 "no_referrals" = "Aucune orientation";
+"my_chart" = "Mon dossier";
+"mrn_format" = "NRM %@";
+"dob_format" = "Né(e) le %@";
+"hospital_id_format" = "ID hôpital %@";
+"primary_hospital_format" = "Hôpital principal : %@";
+
+/* Factures de pharmacie */
+"pharmacy_payments_load_failed" = "Les paiements n'ont pas pu être chargés : %@";
+"pharmacy_claims_load_failed" = "Les réclamations n'ont pas pu être chargées : %@";
 
 /* Notifications */
 "no_notifications" = "Aucune notification";
