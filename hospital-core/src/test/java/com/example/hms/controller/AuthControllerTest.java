@@ -62,6 +62,7 @@ class AuthControllerTest {
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
     @MockitoBean private TokenBlacklistService tokenBlacklistService;
+    @MockitoBean private com.example.hms.security.IdleSessionGate idleSessionGate;
     @MockitoBean private com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     @MockitoBean private LoginAttemptService loginAttemptService;
     @MockitoBean private AuditEventLogService auditEventLogService;

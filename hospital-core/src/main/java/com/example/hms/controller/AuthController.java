@@ -89,6 +89,7 @@ public class AuthController {
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final TokenBlacklistService tokenBlacklistService;
+    private final com.example.hms.security.IdleSessionGate idleSessionGate;
     private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
     private final LoginAttemptService loginAttemptService;
     private final AuditEventLogService auditEventLogService;
@@ -118,6 +119,7 @@ public class AuthController {
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
             TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.IdleSessionGate idleSessionGate,
             com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
             LoginAttemptService loginAttemptService,
             AuditEventLogService auditEventLogService,
@@ -137,6 +139,7 @@ public class AuthController {
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
         this.tokenBlacklistService = tokenBlacklistService;
+        this.idleSessionGate = idleSessionGate;
         this.impersonationSessionTracker = impersonationSessionTracker;
         this.loginAttemptService = loginAttemptService;
         this.auditEventLogService = auditEventLogService;
@@ -605,6 +608,33 @@ public class AuthController {
                 .distinct()
                 .toList();
 
+        // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
+        // Refusing refresh-while-idle is the spec invariant: a silent
+        // refresh of an idle session would defeat the timeout entirely.
+        // Gate sits AFTER the impersonation + role-resolution checks so
+        // the role list is available for the machine-role carve-out, and
+        // BEFORE token rotation so a rejected refresh does not extend the
+        // window via the post-rotation touch below.
+        var refreshAuthorities = roles.stream()
+                .<org.springframework.security.core.GrantedAuthority>map(
+                    org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                .toList();
+        if (idleSessionGate.shouldReject(user.getId(), refreshAuthorities)) {
+            log.warn("🔄 [REFRESH] Refused — user '{}' has been idle past the configured window", username);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Refresh refused — idle timeout")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header("WWW-Authenticate",
+                        com.example.hms.security.IdleSessionGate.wwwAuthenticateChallenge())
+                    .body(new MessageResponse(
+                        "Session timed out due to inactivity. Please log in again."));
+        }
+
         var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
         String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
 
@@ -626,6 +656,11 @@ public class AuthController {
             tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
             log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
         }
+
+        // ── Idle session timeout — touch on successful refresh ──────────
+        // Only after the rotation has succeeded; touching pre-rotation
+        // would extend the window even if rotation failed downstream.
+        idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
 
         long nowMs      = System.currentTimeMillis();
         long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
