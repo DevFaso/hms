@@ -538,7 +538,12 @@
               </div>
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
-              <select id="con-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
+              <select
+                id="con-hospitalId"
+                [ngModel]="form.hospitalId"
+                (ngModelChange)="onHospitalChange($event)"
+                title="Hospital"
+              >
                 <option value="">{{ 'CONSULTATIONS.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>

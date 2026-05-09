@@ -16,6 +16,7 @@ import com.example.hms.service.NotificationService;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,6 +42,7 @@ class ConsultationServiceImplTest {
 
     @Mock private ConsultationRepository consultationRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -75,8 +77,9 @@ class ConsultationServiceImplTest {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(consultationRepository.save(any())).thenAnswer(i -> { Consultation c = i.getArgument(0); c.setId(consultationId); return c; });
         ConsultationResponseDTO result = service.createConsultation(r, staffId);
@@ -87,7 +90,7 @@ class ConsultationServiceImplTest {
     @Test void createConsultation_patientNotFound() {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setUrgency(ConsultationUrgency.URGENT);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
     }
 

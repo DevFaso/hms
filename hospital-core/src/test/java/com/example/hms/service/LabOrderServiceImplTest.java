@@ -5,6 +5,7 @@ import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
@@ -266,8 +267,48 @@ class LabOrderServiceImplTest {
         assertThat(saved.getStandingOrderReviewNotes()).isEqualTo(reviewNotes);
     }
 
+    @Test
+    void createLabOrderUsesUnscopedPatientLookupBeforeHospitalRegistrationCheck() {
+        mockCommonLookups();
+        LabOrderRequestDTO request = baseRequestBuilder().build();
+
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().id(UUID.randomUUID().toString()).build());
+
+        labOrderService.createLabOrder(request, Locale.ENGLISH);
+
+        verify(patientRepository).findByIdUnscoped(patientId);
+        verify(patientHospitalRegistrationRepository).existsByPatientIdAndHospitalId(patientId, hospitalId);
+    }
+
+    @Test
+    void createLabOrderThrowsClearScopeErrorWhenPatientIsNotRegisteredAtHospital() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("Patient is not registered with the specified hospital.");
+
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrderThrowsNotFoundWhenPatientDoesNotExist() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(patientHospitalRegistrationRepository, never()).existsByPatientIdAndHospitalId(any(), any());
+        verify(labOrderRepository, never()).save(any());
+    }
+
     private void mockCommonLookups() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
