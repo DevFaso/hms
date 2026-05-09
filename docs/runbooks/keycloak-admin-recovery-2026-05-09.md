@@ -90,6 +90,7 @@ After uat login is verified:
 1. From this PR branch (post-merge) or from a fresh checkout of
    `uat` HEAD, fast-forward or cherry-pick the entrypoint change
    onto `main`:
+
    ```bash
    git checkout main
    git pull --ff-only
@@ -98,6 +99,7 @@ After uat login is verified:
    git cherry-pick <sha-of-the-entrypoint-commit>
    git push origin main
    ```
+
 2. Repeat the watch + verify steps for `hms-keycloak-prod`. Use
    the prod password set as `KC_BOOTSTRAP_ADMIN_PASSWORD` on the
    prod service.
@@ -135,12 +137,12 @@ No DB rollback required.
 
 Use these only if Step 3 fails on uat.
 
-### Path #2 — Wipe master-realm user records, force a clean
-### first-boot
+### Path #2 — Wipe master-realm user records, force a clean first-boot
 
 1. Open the `hms-keycloak-uat-db` Postgres in Railway's data
    browser (or psql).
 2. Inside a transaction, delete master-realm user records:
+
    ```sql
    BEGIN;
    DELETE FROM user_role_mapping WHERE user_id IN
@@ -156,6 +158,7 @@ Use these only if Step 3 fails on uat.
    DELETE FROM user_entity WHERE realm_id = 'master';
    COMMIT;
    ```
+
    Do **not** delete from the `realm` table — only the user records.
 3. Restart the `hms-keycloak-uat` service. With master-realm users
    wiped, the next boot's bootstrap step runs as if it were the
@@ -175,12 +178,14 @@ If the Railway plan supports container shell access:
 1. From the Railway UI, open a shell on the running
    `hms-keycloak-uat` container.
 2. Run:
+
    ```bash
    /opt/keycloak/bin/kc.sh bootstrap-admin user \
      --username "$KC_BOOTSTRAP_ADMIN_USERNAME" \
      --password:env KC_BOOTSTRAP_ADMIN_PASSWORD \
      --no-prompt
    ```
+
 3. Verify admin login per Step 3 above. No restart required —
    the subcommand writes directly to the master realm tables.
 
@@ -190,10 +195,17 @@ specific reason it can't be merged.
 
 ## Quality gates
 
-The Dockerfile entrypoint change touches no Java or TypeScript
-code, so the project's standard `format` / `lint` / `test` /
-`jacoco ≥ 80%` gates pass as no-ops on the changed files. The
-Dockerfile linter in VS Code emits a benign warning about the
+The Dockerfile entrypoint change touches no Java or TypeScript code,
+so it should not materially affect the project's standard `format` /
+`lint` / `test` / `jacoco ≥ 80%` gates, but the full backend and
+frontend quality suites still execute in CI on every PR (see
+[`.github/workflows/project-quality.yml`](../../.github/workflows/project-quality.yml),
+which runs unconditionally on PRs to `main` / `develop` / `uat`).
+The CI also runs hadolint against this Dockerfile and yamllint
+against `railway.toml` via the `lint-docker-yaml` job — both should
+remain green; if either fails, fix it before merging rather than
+relying on the "Dockerfile-only change" framing. The VS Code Docker
+linter additionally emits a benign in-editor warning about the
 upstream base image's inherited `ENTRYPOINT` colliding with our
 explicit one — same false positive present on the pre-PR Dockerfile;
-not a defect.
+not a defect, and not surfaced by hadolint in CI.

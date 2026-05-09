@@ -96,9 +96,20 @@ confirm the JSON comes back.
 2. Create a named per-person admin user (first + last name, unique
    email) with `realm-admin` role.
 3. **Delete** (or at minimum disable + rotate password on) the
-   bootstrap admin account. Remove the bootstrap env vars from the
-   Railway service — Keycloak only reads them on first boot, they are
-   dead weight afterwards.
+   bootstrap admin account. Remove `KC_BOOTSTRAP_ADMIN_USERNAME` and
+   `KC_BOOTSTRAP_ADMIN_PASSWORD` from the Railway service — the
+   container entrypoint runs `kc.sh bootstrap-admin user` on every
+   boot when both vars are set (idempotent: a no-op once an admin
+   exists), so removing them is what turns the bootstrap step into a
+   true no-op and avoids leaving the bootstrap credential standing on
+   Railway. (Earlier revisions of this README claimed the env vars
+   were "dead weight afterwards" because Keycloak reads them only on
+   first boot; that was true under the old `--bootstrap-admin-*`
+   start-flag mechanism, but the entrypoint was changed in
+   `fix(keycloak): bootstrap admin user on container start (path #1)`
+   to invoke the standalone subcommand on every boot — see
+   [`../docs/runbooks/keycloak-admin-recovery-2026-05-09.md`](../../docs/runbooks/keycloak-admin-recovery-2026-05-09.md)
+   for the why.)
 4. **Prod only:** enable Cloudflare Access or a Railway Private Network
    rule limiting `/admin` to known IPs. The public realm endpoint
    (`/realms/hms/**`) must stay open for OIDC discovery + token
