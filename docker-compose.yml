@@ -265,7 +265,11 @@ services:
       - "9100:9100"
     command:
       - '--path.rootfs=/host'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      # `--path.rootfs=/host` rewrites mountpoints so `/host` appears as `/`
+      # in the exported metrics. We must NOT put `host` in the exclude regex,
+      # otherwise the host root filesystem would be filtered out and the
+      # "Root FS used %" panel on hms-host-metrics would have no data.
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|etc)($$|/)'
     volumes:
       - /:/host:ro,rslave
 

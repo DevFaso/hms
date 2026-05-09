@@ -34,8 +34,8 @@ groups:
           description: |
             5m and 1h 5xx error ratio both exceed 14.4x the 99.9% SLO budget.
             At this rate the 30-day error budget is exhausted in ~2 hours.
-            Investigate https://grafana/d/hms-slo-overview and check recent deploys.
-          runbook_url: "https://github.com/your-org/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetfastburn"
+            Open the SLO & Golden Signals dashboard and check recent deploys.
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetfastburn"
 
       - alert: HmsErrorBudgetSlowBurn
         expr: |
@@ -54,6 +54,7 @@ groups:
           description: |
             30m and 6h 5xx ratio both exceed 6x the 99.9% SLO budget.
             Open a ticket to find the failing endpoint(s).
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetslowburn"
 
   # ── Latency alerts (per URI hot-spot) ──────────────────────────────
   - name: hms.latency
@@ -71,14 +72,33 @@ groups:
   # ── Instance / target health ───────────────────────────────────────
   - name: hms.targets
     rules:
+      # Restricted to always-on jobs in the bare stack. The exporters
+      # (postgres/redis/node) only run under `--profile observability`, so
+      # alerting on `up == 0` for those would page continuously when the
+      # bare stack is up. Profile-gated alerts live in `hms.exporters` below.
       - alert: HmsTargetDown
-        expr: up == 0
+        expr: up{job=~"prometheus|grafana|loki|alloy|integrations/spring-boot"} == 0
         for: 5m
         labels:
           severity: page
         annotations:
           summary: "Prometheus target {{ $labels.job }} ({{ $labels.instance }}) is DOWN"
           description: "Scrape target has been unreachable for 5 minutes."
+
+  # ── Exporter health (only meaningful under --profile observability) ─
+  # These targets only exist when the observability profile is up. Keep
+  # them in their own group so they can be silenced or split into a
+  # separate rule_files glob when the profile is off.
+  - name: hms.exporters
+    rules:
+      - alert: HmsExporterDown
+        expr: up{job=~"postgres|redis|node"} == 0
+        for: 10m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "Exporter {{ $labels.job }} ({{ $labels.instance }}) is DOWN"
+          description: "Only fires when the observability profile is running. Silence if intentional."
 
       - alert: HmsBackendNoTraffic
         expr: |

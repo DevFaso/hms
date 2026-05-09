@@ -59,7 +59,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
-        { "expr": "100 * (1 - (node_filesystem_avail_bytes{mountpoint=\"/host\", instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=\"/host\", instance=~\"$instance\"}))", "legendFormat": "{{instance}}" }
+        { "expr": "100 * (1 - (node_filesystem_avail_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay|devtmpfs|squashfs\", instance=~\"$instance\"} / node_filesystem_size_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay|devtmpfs|squashfs\", instance=~\"$instance\"}))", "legendFormat": "{{instance}}" }
       ]
     },
     {

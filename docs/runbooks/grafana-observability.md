@@ -35,8 +35,11 @@ is consumed in about two hours.
 
 **Mitigation.**
 
-- If a recent deploy is suspect, roll back via
-  `make rollback` (or your CD provider's UI).
+- If a recent deploy is suspect, redeploy the previous good build from
+  Railway: open the `hms-backend` service → **Deployments** tab → find the
+  last deployment marked SUCCESS *before* the regression → click the kebab
+  menu → **Redeploy**. (See [`railway-services.md`](./railway-services.md)
+  for service map and CLI alternatives.)
 - If DB is the cause, see `HmsDbPoolSaturated` below.
 - Otherwise drop traffic at the gateway / scale up replicas.
 
@@ -70,12 +73,23 @@ endpoints and noisy 4xx misclassifications.
 
 **What it means.** Prometheus has not scraped a target for 5 minutes.
 
-- If `job=hms-backend` → the backend is down or its `/api/actuator/prometheus`
-  endpoint is failing. Hit `curl http://hms-backend:8081/api/actuator/health`
-  and check container logs.
-- If `job=postgres` → postgres-exporter cannot reach Postgres. Check the
-  `postgres-exporter` container logs.
-- If `job=node` → node-exporter container is unhealthy.
+The alert is restricted to always-on jobs in the bare stack
+(`prometheus`, `grafana`, `loki`, `alloy`, `integrations/spring-boot`).
+Profile-only exporter targets are covered by `HmsExporterDown` (ticket-only).
+
+- If `job=integrations/spring-boot` → the backend is down or its
+  `/api/actuator/prometheus` endpoint is failing, *or* Alloy is failing to
+  scrape/forward. Hit `curl http://hms-backend:8081/api/actuator/health`
+  and check both `hms-backend` and `alloy` container logs.
+- If `job=alloy` → Alloy is down; backend metrics will stop flowing even
+  if the backend itself is healthy. Check `docker compose logs alloy`.
+- If `job=loki` → log shipping is broken; the SLO error-rate signal is
+  unaffected but `Errors & Warnings` panels go cold.
+- If `job=prometheus|grafana` → the observability plane itself is down.
+
+For exporter-down (postgres / redis / node) under
+`--profile observability`, see `HmsExporterDown` — silence it if the
+profile is intentionally off.
 
 ---
 
@@ -111,6 +125,7 @@ size for 5 minutes. Backend will queue or refuse requests soon.
      transactions.
    - "Locks held" — long-held `AccessExclusiveLock` may be blocking.
 2. On the database, run:
+
    ```sql
    SELECT pid, state, wait_event_type, wait_event, now() - xact_start AS xact_age, query
    FROM pg_stat_activity
@@ -118,6 +133,7 @@ size for 5 minutes. Backend will queue or refuse requests soon.
    ORDER BY xact_age DESC NULLS LAST
    LIMIT 20;
    ```
+
 3. Kill blocking sessions if absolutely necessary:
    `SELECT pg_cancel_backend(pid);` (graceful) or
    `SELECT pg_terminate_backend(pid);` (force).

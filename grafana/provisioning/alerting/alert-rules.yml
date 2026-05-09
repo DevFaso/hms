@@ -22,7 +22,7 @@ groups:
         condition: C
         data:
           - refId: A
-            relativeTimeRange: { from: 600, to: 0 }
+            relativeTimeRange: {from: 600, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: A
@@ -30,7 +30,7 @@ groups:
               instant: true
               interval: ""
           - refId: B
-            relativeTimeRange: { from: 3600, to: 0 }
+            relativeTimeRange: {from: 3600, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: B
@@ -54,21 +54,21 @@ groups:
         annotations:
           summary: "HMS error budget burning fast (>14x)"
           description: "5m and 1h burn both above 14.4x the 99.9% SLO budget. ~2h until 30d budget exhausted."
-          runbook_url: "../docs/runbooks/grafana-observability.md"
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetfastburn"
 
       - uid: hms-slo-slow-burn
         title: HMS error budget – slow burn
         condition: C
         data:
           - refId: A
-            relativeTimeRange: { from: 1800, to: 0 }
+            relativeTimeRange: {from: 1800, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: A
               expr: app:slo_error_ratio:30m{application="hms"}
               instant: true
           - refId: B
-            relativeTimeRange: { from: 21600, to: 0 }
+            relativeTimeRange: {from: 21600, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: B
@@ -90,6 +90,7 @@ groups:
         annotations:
           summary: "HMS error budget burning slowly (>6x)"
           description: "30m and 6h burn both above 6x the 99.9% SLO budget."
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmserrorbudgetslowburn"
 
   - orgId: 1
     name: hms-infra
@@ -101,7 +102,7 @@ groups:
         condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: {from: 300, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: A
@@ -114,9 +115,9 @@ groups:
               type: threshold
               expression: "$A"
               conditions:
-                - evaluator: { type: lt, params: [1] }
-                  operator: { type: and }
-                  reducer: { type: last }
+                - evaluator: {type: lt, params: [1]}
+                  operator: {type: and}
+                  reducer: {type: last}
                   type: query
         noDataState: Alerting
         execErrState: Error
@@ -126,13 +127,14 @@ groups:
         annotations:
           summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) is DOWN"
           description: "Prometheus has not scraped this target for 5 minutes."
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmstargetdown"
 
       - uid: hms-hikari-saturated
         title: HMS HikariCP pool saturated
         condition: B
         data:
           - refId: A
-            relativeTimeRange: { from: 300, to: 0 }
+            relativeTimeRange: {from: 300, to: 0}
             datasourceUid: hms-prometheus
             model:
               refId: A
@@ -145,9 +147,9 @@ groups:
               type: threshold
               expression: "$A"
               conditions:
-                - evaluator: { type: gt, params: [0.9] }
-                  operator: { type: and }
-                  reducer: { type: last }
+                - evaluator: {type: gt, params: [0.9]}
+                  operator: {type: and}
+                  reducer: {type: last}
                   type: query
         noDataState: NoData
         execErrState: Error
@@ -158,3 +160,4 @@ groups:
         annotations:
           summary: "HikariCP pool > 90% utilised for 5m"
           description: "Backend may queue or refuse requests. Check long-running queries."
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmsdbpoolsaturated"

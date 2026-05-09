@@ -2,10 +2,13 @@
 # This file is mounted at /etc/prometheus/prometheus.yml in the
 # `prometheus` service from docker-compose.yml.
 #
-# Two metric paths feed this instance:
-#   1. Direct scrape of the backend (the http jobs below).
-#   2. remote_write from Alloy (production-shaped pipeline; activated when
-#      the Alloy GRAFANA_METRICS_URL env var points at /api/v1/write here).
+# Backend metrics path (single source):
+#   The HMS Spring Boot backend is NOT scraped directly here. Alloy scrapes
+#   it (see grafana/config.alloy) and remote_writes the whitelisted series
+#   to this Prometheus via /api/v1/write — same shape as the production
+#   pipeline against Grafana Cloud Mimir. Prometheus only direct-scrapes
+#   infra components (postgres-exporter, redis-exporter, node-exporter,
+#   plus the stack's own self-scrapes).
 #
 # Recording + alerting rules live alongside this file under ./rules/ and are
 # auto-loaded via the rule_files glob below.
@@ -30,14 +33,9 @@ rule_files:
 #         - targets: ["alertmanager:9093"]
 
 scrape_configs:
-  # ── HMS Spring Boot backend (direct scrape) ─────────────────────────
-  - job_name: 'hms-backend'
-    metrics_path: '/api/actuator/prometheus'
-    static_configs:
-      - targets: ['hms-backend:8081']
-        labels:
-          application: 'hms'
-          service: 'hms-backend'
+  # NOTE: hms-backend metrics arrive via Alloy remote_write (see grafana/config.alloy).
+  # Do NOT add a direct scrape job for the backend — it would duplicate every
+  # series and double-count rates/ratios in the recording rules and SLO panels.
 
   # ── postgres-exporter (profile: observability) ──────────────────────
   - job_name: 'postgres'
