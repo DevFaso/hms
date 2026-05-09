@@ -4,7 +4,7 @@ v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,Extend hms-medicatio
 v1.0,2026-06-23,Pharmacy,T-68 offline dispense queue,IndexedDB queue in pharmacy UI plus replay endpoint; covers hospitals with patchy connectivity,—,M,Mixed (Frontend + Backend),not-started,#h1.exit
 v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense path: Tier 1 in-house, Tier 2 partner, refill, AMU export",—,S,Frontend,not-started,#h1.exit
 v1.0,2026-06-23,Pharmacy,T-72 perf baseline,k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md,—,S,Platform,not-started,#h1.exit
-v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,not-started,#h1.exit
+v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,started,#h1.exit
 v1.0,2026-06-23,Security,Keycloak Phase C cutover,Flip OIDC_REQUIRED=true in UAT; soak 7 days; promote to prod; legacy /auth/login returns 410 Gone,Idle session timeout,S,Backend,not-started,#h1.exit
 v1.0,2026-06-23,Operations,DR runbook,"docs/runbooks/disaster-recovery.md covering Railway snapshot+restore, Postgres PITR, observability stack rebuild",—,S,Platform,not-started,#h1.exit
 v1.0,2026-06-23,Accessibility,axe-core/playwright smoke,"Fail PR on any new a11y violation across login, doctor dashboard, patient tracker, AVS",—,S,Frontend,not-started,#h1.exit
