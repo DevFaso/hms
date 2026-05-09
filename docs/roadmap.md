@@ -1,9 +1,13 @@
 # HMS Roadmap
 
 Canonical roadmap for the Hospital Management System project. Source of truth for
-"what is shipped vs. planned vs. deferred". Companion CSV at
-[`roadmap.csv`](./roadmap.csv) is the flat machine-readable export for tools that import
-backlogs (Jira, Linear, Notion, Airtable, GitHub Projects).
+"what is shipped vs. planned vs. deferred". Two companion exports:
+
+- [`roadmap.csv`](./roadmap.csv) — flat machine-readable, for Jira / Linear / Notion /
+  Airtable / GitHub Projects import.
+- [`roadmap.xlsx`](./roadmap.xlsx) — pre-formatted spreadsheet (bold + frozen header,
+  auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
+  Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
 Last updated: **2026-05-09**. Update both files together when scope moves.
 
@@ -192,6 +196,24 @@ gantt
 ## How this roadmap is maintained
 
 - **Cadence:** review every 4 weeks during the v1.0 push, monthly thereafter.
-- **Promotion:** items move horizon → horizon by editing `docs/roadmap.md` + `docs/roadmap.csv` together; never edit one without the other.
-- **Status field in CSV** — values: `planned`, `in-progress`, `done`, `deferred`, `dropped`. Keep it accurate so the CSV stays useful for tool import.
-- **PR template hint:** when a PR closes a roadmap item, reference its row by `lane / item` so the changelog can pivot back here.
+- **Source of truth:** `docs/roadmap.csv` is the canonical data; `docs/roadmap.md` and
+  `docs/roadmap.xlsx` are presentations of it. Edit the CSV when scope moves, then
+  re-render the xlsx (see "Regenerating roadmap.xlsx" below) and update the narrative
+  in this file.
+- **Status field in CSV** — values: `planned`, `in-progress`, `done`, `deferred`,
+  `dropped`. Keep it accurate so the CSV stays useful for tool import.
+- **PR template hint:** when a PR closes a roadmap item, reference its row by `lane /
+  item` so the changelog can pivot back here.
+
+### Regenerating `roadmap.xlsx`
+
+```bash
+python3 -m venv /tmp/xlsx-venv && /tmp/xlsx-venv/bin/pip install -q openpyxl
+/tmp/xlsx-venv/bin/python scripts/build-roadmap-xlsx.py
+```
+
+The xlsx applies a fixed style (frozen + bold header, auto-filter, light-green/yellow/
+orange backgrounds for horizons v1.0/v1.1/v2.0, gray for out-of-scope, status-tinted
+status column). If the styling needs to change, edit
+[`scripts/build-roadmap-xlsx.py`](../scripts/build-roadmap-xlsx.py), not the xlsx
+directly.
