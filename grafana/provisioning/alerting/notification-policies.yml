@@ -1,0 +1,39 @@
+# Grafana Unified Alerting — notification policy tree (provisioned).
+# Default behaviour: every alert routes to `default-grafana` (Grafana UI +
+# stub email). Add additional contact points in contact-points.yml and
+# uncomment the matching route(s) below to escalate.
+
+apiVersion: 1
+
+policies:
+  - orgId: 1
+    receiver: default-grafana
+    group_by: ["alertname", "service", "severity"]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h
+    routes:
+      # Ticket-grade alerts get longer repeat intervals to reduce noise.
+      - receiver: default-grafana
+        matchers:
+          - severity = ticket
+        group_wait: 1m
+        group_interval: 10m
+        repeat_interval: 12h
+        continue: false
+
+      # ── Example escalation routes (enable in contact-points.yml first) ──
+      # - receiver: slack-oncall
+      #   matchers:
+      #     - severity = page
+      #   group_by: ["alertname", "service"]
+      #   group_wait: 10s
+      #   group_interval: 2m
+      #   repeat_interval: 30m
+      #   continue: false
+      #
+      # - receiver: pagerduty
+      #   matchers:
+      #     - severity = page
+      #   group_wait: 10s
+      #   continue: false

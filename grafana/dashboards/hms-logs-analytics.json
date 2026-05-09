@@ -1,0 +1,156 @@
+{
+  "annotations": { "list": [] },
+  "description": "Log analytics powered by Loki: error volume by class, exception breakdown, slow request log lines, audit/auth events, and a free-text search panel.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "HMS Dashboards", "asDropdown": true, "includeVars": true, "keepTime": true, "tags": ["hms"], "type": "dashboards", "icon": "external link", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Error log lines (5m, by container)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 50 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum by (container) (count_over_time({application=\"$application\"} | level=\"ERROR\" [5m]))", "legendFormat": "{{container}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Warning log lines (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "fieldConfig": { "defaults": {} },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(count_over_time({application=\"$application\"} | level=\"WARN\" [5m]))", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Throughput (lines/min, all levels)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(rate({application=\"$application\"}[1m])) * 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Log volume by level",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "fieldConfig": {
+        "defaults": { "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 15 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ERROR" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "WARN" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "INFO" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+          { "matcher": { "id": "byName", "options": "DEBUG" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "grey" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "sum by (level) (rate({application=\"$application\"}[$__rate_interval]))", "legendFormat": "{{level}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Top exception classes",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } }
+      },
+      "transformations": [
+        { "id": "organize", "options": { "renameByName": { "Value": "count", "exception": "exception" } } }
+      ],
+      "targets": [
+        { "expr": "topk(15, sum by (exception) (count_over_time({application=\"$application\"} | level=\"ERROR\" | regexp `(?P<exception>[A-Za-z0-9_$.]+Exception)`[1h])))", "format": "table", "instant": true, "refId": "A" }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Auth / security events (rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "targets": [
+        { "expr": "sum(rate({application=\"$application\"} |~ `(?i)(login|jwt|token).*(invalid|expired|denied|unauthor|missing|disabled)` [$__rate_interval]))", "legendFormat": "auth failures", "refId": "A" },
+        { "expr": "sum(rate({application=\"$application\"} |~ `(?i)access.{0,15}(denied|forbidden)` [$__rate_interval]))", "legendFormat": "access denied", "refId": "B" }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "Slow request log entries",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true },
+      "targets": [
+        { "expr": "{application=\"$application\"} |~ `(?i)(slow query|took [0-9]{4,}ms|elapsed [0-9]{4,})`", "refId": "A" }
+      ]
+    },
+    {
+      "id": 30,
+      "title": "Live tail — ERROR + WARN",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 20 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true, "showLabels": true },
+      "targets": [
+        { "expr": "{application=\"$application\"} | level=~\"ERROR|WARN\"", "refId": "A" }
+      ]
+    },
+    {
+      "id": 40,
+      "title": "Free-text search ($search)",
+      "type": "logs",
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 32 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true, "showLabels": true },
+      "targets": [
+        { "expr": "{application=\"$application\"} |~ `(?i)$search`", "refId": "A" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["hms", "loki", "logs"],
+  "templating": {
+    "list": [
+      { "name": "loki_ds", "type": "datasource", "label": "Loki", "query": "loki", "current": { "text": "Loki", "value": "hms-loki" } },
+      {
+        "name": "application", "type": "custom", "label": "Application",
+        "query": "hms",
+        "current": { "text": "hms", "value": "hms" },
+        "options": [{ "text": "hms", "value": "hms", "selected": true }]
+      },
+      {
+        "name": "search", "type": "textbox", "label": "Free-text regex",
+        "query": ".*",
+        "current": { "text": ".*", "value": ".*" }
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HMS – Log Analytics (Loki)",
+  "uid": "hms-logs",
+  "version": 1
+}
