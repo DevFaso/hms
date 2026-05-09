@@ -41,11 +41,14 @@ HORIZON_FILL = {
     "oos":  PatternFill("solid", fgColor="FFEDEDED"),  # gray — out of scope
 }
 
-# Color palette per status.
+# Color palette per status. Vocabulary fixed in docs/roadmap.md ("Status field in
+# CSV"). Adding a new value here without also updating that section is a bug — the
+# build script and the human contract must agree.
 STATUS_FILL = {
-    "planned":     PatternFill("solid", fgColor="FFFFFFFF"),
-    "in-progress": PatternFill("solid", fgColor="FFFFE699"),
-    "done":        PatternFill("solid", fgColor="FFC6EFCE"),
+    "not-started": PatternFill("solid", fgColor="FFFFFFFF"),
+    "started":     PatternFill("solid", fgColor="FFFFE699"),  # amber
+    "blocked":     PatternFill("solid", fgColor="FFF8CBAD"),  # salmon — pulls the eye
+    "completed":   PatternFill("solid", fgColor="FFC6EFCE"),  # green
     "deferred":    PatternFill("solid", fgColor="FFEDEDED"),
     "dropped":     PatternFill("solid", fgColor="FFD9D9D9"),
 }

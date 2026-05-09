@@ -200,8 +200,19 @@ gantt
   `docs/roadmap.xlsx` are presentations of it. Edit the CSV when scope moves, then
   re-render the xlsx (see "Regenerating roadmap.xlsx" below) and update the narrative
   in this file.
-- **Status field in CSV** — values: `planned`, `in-progress`, `done`, `deferred`,
-  `dropped`. Keep it accurate so the CSV stays useful for tool import.
+- **Status field in CSV** — controlled vocabulary, exactly six allowed values:
+
+  | Value | Meaning |
+  | --- | --- |
+  | `not-started` | Work has not begun. Default state for every new row. |
+  | `started` | Actively in flight — a branch exists, a PR is open, or a person is heads-down on it this week. |
+  | `blocked` | Work paused on an external dependency or decision. Always pair with a one-line note in the `deliverable` cell explaining what is blocking. |
+  | `completed` | Shipped. The deliverable described in the row is verifiable on the listed branch / runbook. |
+  | `deferred` | Still on the roadmap but moved to a later horizon. The row stays in place; only the `horizon` cell changes. |
+  | `dropped` | Explicitly removed from the roadmap. Kept as a row so future readers see the decision; never delete. |
+
+  The build script's color palette in `scripts/build-roadmap-xlsx.py` keys off these
+  exact strings — adding a new value without updating both places is a bug.
 - **PR template hint:** when a PR closes a roadmap item, reference its row by `lane /
   item` so the changelog can pivot back here.
 
