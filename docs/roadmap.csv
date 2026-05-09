@@ -1,0 +1,43 @@
+horizon,target,lane,item,deliverable,dependency,effort,owner,status,exit_criteria_link
+v1.0,2026-06-23,Clinical Safety,CDS Hooks expansion,"Add order-select and medication-prescribe hooks with RxNorm bindings; integration tests against existing prescriptions module",—,M,Backend,planned,#h1.exit
+v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,"Extend hms-medication-allergy-check to fire on coexisting prescriptions; warn-card on critical interactions",CDS Hooks expansion,M,Mixed (Backend + UI),planned,#h1.exit
+v1.0,2026-06-23,Pharmacy,T-68 offline dispense queue,"IndexedDB queue in pharmacy UI plus replay endpoint; covers hospitals with patchy connectivity",—,M,Mixed (Frontend + Backend),planned,#h1.exit
+v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense path: Tier 1 in-house, Tier 2 partner, refill, AMU export",—,S,Frontend,planned,#h1.exit
+v1.0,2026-06-23,Pharmacy,T-72 perf baseline,"k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md",—,S,Platform,planned,#h1.exit
+v1.0,2026-06-23,Security,Idle session timeout (server-side),"Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window",—,M,Backend,planned,#h1.exit
+v1.0,2026-06-23,Security,Keycloak Phase C cutover,"Flip OIDC_REQUIRED=true in UAT; soak 7 days; promote to prod; legacy /auth/login returns 410 Gone",Idle session timeout,S,Backend,planned,#h1.exit
+v1.0,2026-06-23,Operations,DR runbook,"docs/runbooks/disaster-recovery.md covering Railway snapshot+restore, Postgres PITR, observability stack rebuild",—,S,Platform,planned,#h1.exit
+v1.0,2026-06-23,Accessibility,axe-core/playwright smoke,"Fail PR on any new a11y violation across login, doctor dashboard, patient tracker, AVS",—,S,Frontend,planned,#h1.exit
+v1.0,2026-06-23,Accessibility,Keyboard navigation pass,"All clinical-flow screens reachable + actionable via keyboard; documented in docs/ui/accessibility.md",axe-core/playwright smoke,M,Frontend,planned,#h1.exit
+v1.0,2026-06-23,i18n,FR completeness gate,"Tooling extracts all *.json keys; CI fails when any locale is < 99% of EN; enforced in frontend-ci.yml",—,S,Frontend,planned,#h1.exit
+v1.0,2026-06-23,Releases,v1.0.0-rc1 cut,"Tag, signed release notes from CHANGELOG.md, freeze feat/* for 1 week, only fix/* allowed during soak",All v1.0 items,S,Platform,planned,#h1.exit
+v1.1,2026-10-01,Interop FHIR,FHIR write API,"POST/PUT for Patient, Encounter, Observation; conditional create via If-None-Exist; metadata updated to advertise write capabilities",FHIR read API (done),L,Backend,planned,#h2.exit
+v1.1,2026-10-01,Interop FHIR,FHIR Bulk Data Access ($export),"Bulk export for Patient and Group; output to S3-compatible bucket; documented in docs/fhir-bulk.md",FHIR write API,M,Backend,planned,#h2.exit
+v1.1,2026-10-01,Interop FHIR,FHIR $everything operation,"Patient compartment export; required by most HIE handshakes",FHIR write API,M,Backend,planned,#h2.exit
+v1.1,2026-10-01,Interop HL7,ORU^R01 → LabResult persistence,"Match by accession number; write to existing lab_result schema; link to encounter; integration tested with Mindray/Sysmex sample messages",HL7 MLLP listener (done),M,Backend,planned,#h2.exit
+v1.1,2026-10-01,Interop HL7,ADT → Admission/Encounter sync,"ADT^A01/A04/A08 trigger Admission and Encounter sync; conflict-resolution rules documented",HL7 MLLP listener (done),M,Backend,planned,#h2.exit
+v1.1,2026-10-01,Patient Identity,EMPI v0 (intra-tenant),"Probabilistic match on name + DOB + sex + national-ID where present; candidate-match workflow in receptionist UI; ≥90% recall on labelled audit set",—,L,Mixed (Backend + Frontend),planned,#h2.exit
+v1.1,2026-10-01,Clinical Safety,CDS Hooks LOINC binding,"Bind hms-patient-view problem cards to LOINC alongside existing ICD",CDS Hooks expansion (v1.0),S,Backend,planned,#h2.exit
+v1.1,2026-10-01,Clinical Safety,CDS Hooks public discovery,"/api/cds-services validated against Cerner and Epic CDS Hooks sandbox",CDS Hooks expansion (v1.0),S,Backend,planned,#h2.exit
+v1.1,2026-10-01,Mobile,Patient mobile parity (Android),"Add Referrals, Treatments, Billing screens to Android app to match web portal capability",—,L,Mobile,planned,#h2.exit
+v1.1,2026-10-01,Mobile,Patient mobile parity (iOS),"Add Referrals, Treatments, Billing screens to iOS app to match web portal capability",—,L,Mobile,planned,#h2.exit
+v1.1,2026-10-01,Mobile,Push notifications for lab results,"FCM/APNs already wired backend-side; add UI toggles + deep links to LabResultsDetail",Mobile parity,M,Mixed (Mobile + Backend),planned,#h2.exit
+v1.1,2026-10-01,Mobile,Mobile test coverage uplift,"Bring per-app test count from 5 to 30+ (unit + UI snapshots); add Detox or Maestro for E2E",—,M,Mobile,planned,#h2.exit
+v1.1,2026-10-01,Reporting,KPI dashboard service,"Materialized views for avg door-to-doctor, dispense lead time, no-show rate; surfaced in existing analytics/ module",—,M,Mixed (Backend + Frontend),planned,#h2.exit
+v2.0,2027-04-01,Multi-tenancy,Schema-per-tenant migration path,"Row-level multi-tenancy stays default; schema-per-tenant available for hospitals with strong isolation needs (military, private foreign)",—,XL,Mixed (Backend + Platform),planned,#h3.exit
+v2.0,2027-04-01,Multi-tenancy,Tenant onboarding pipeline,"One-command provision: realm, schema, seed data, observability namespace, Splunk index",Schema-per-tenant migration path,L,Platform,planned,#h3.exit
+v2.0,2027-04-01,Performance,Read replicas + Hikari tuning,"Hikari pool sized to actual concurrent users; RO replica routing for FHIR reads and dashboards",—,M,Backend,planned,#h3.exit
+v2.0,2027-04-01,Performance,Async dispense + lab via Kafka,"Move ORU result + dispense settlement to Kafka consumers; reduce request-thread blocking",ORU^R01 persistence,L,Backend,planned,#h3.exit
+v2.0,2027-04-01,Compliance,SOC 2 Type I → Type II,"Control map (existing audit logs/RBAC/encryption cover ~60% of CC1–CC9); gap analysis in docs/compliance/soc2-gap.md; 12-month observation window",—,XL,Mixed (Compliance + Backend),planned,#h3.exit
+v2.0,2027-04-01,Compliance,HIPAA-equivalent posture,"BAA template; PHI inventory; key rotation; access review cadence — for international customers",—,L,Compliance,planned,#h3.exit
+v2.0,2027-04-01,Compliance,ECOWAS data-residency support,"Per-tenant region pinning (Railway → AWS or OVH-Africa); required for Senegal/Côte d'Ivoire/Ghana sales",—,L,Platform,planned,#h3.exit
+v2.0,2027-04-01,Patient Identity,EMPI v1 (cross-tenant),"National-ID-keyed; explicit patient Consent resource per data-sharing event; FHIR Consent",EMPI v0,L,Backend,planned,#h3.exit
+v2.0,2027-04-01,Clinical Depth,OB/GYN + pediatrics finish,"Complete the partially-designed HighRiskPregnancyCarePlan*, NewbornAssessment*, PostpartumCare* services and matching UI",—,L,Mixed (Backend + Frontend),planned,#h3.exit
+v2.0,2027-04-01,Clinical Depth,DICOM proxy,"Extend existing imaging/ module with Orthanc or dcm4chee adapter for actual image viewing",—,L,Mixed (Backend + Frontend),planned,#h3.exit
+v2.0,2027-04-01,Operations,Synthetic monitoring,"Grafana k6 cloud or Blackbox-exporter probes from 3 geos; alert on > 10% probe failure for 5 min",DR runbook,S,Platform,planned,#h3.exit
+v2.0,2027-04-01,Operations,Per-tenant cost observability,"Tag every Splunk event + Grafana series with tenant; chargeback report per hospital",Splunk HEC (done #276),M,Platform,planned,#h3.exit
+oos,—,Out of scope,AI/LLM clinical features,"Deferred — regulatorily risky in healthcare; no existing groundwork in repo. Revisit after v1.0",—,—,—,deferred,—
+oos,—,Out of scope,Splunk Observability Cloud (metrics),"Deferred — duplicates the OTel→Grafana Cloud path landed in #276",—,—,—,deferred,—
+oos,—,Out of scope,Jenkins,"Dropped — GitHub Actions already covers CI/CD; Jenkins would be parallel duplication",—,—,—,dropped,—
+oos,—,Out of scope,Direct LDAP/Kerberos in hospital-core,"Dropped — auth concerns belong in Keycloak; configure user federation there per deployment",—,—,—,dropped,—
+oos,—,Out of scope,Revenue-cycle / claims module,"Deferred — out of scope for clinical+pharmacy MVP; partner with a billing vendor instead",—,—,—,deferred,—
