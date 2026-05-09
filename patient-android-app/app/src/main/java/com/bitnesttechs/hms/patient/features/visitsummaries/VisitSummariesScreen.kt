@@ -158,14 +158,12 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                     }
                 }
 
-                // Diagnosis
                 summary.dischargeDiagnosis?.let {
-                    IconSection(icon = "🩺", title = "DIAGNOSIS", body = it, accentColor = Color(0xFFE53935))
+                    IconSection(icon = "", title = "Diagnosis", body = it, accentColor = Color(0xFFE53935))
                 }
 
-                // Treatment Summary
                 summary.hospitalCourse?.let {
-                    IconSection(icon = "📋", title = "TREATMENT SUMMARY", body = it, accentColor = Color(0xFF7B1FA2))
+                    IconSection(icon = "", title = "Hospital course", body = it, accentColor = Color(0xFF7B1FA2))
                 }
 
                 // Disposition + Condition pills
@@ -194,29 +192,24 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                     }
                 }
 
-                // Medications
                 summary.medicationReconciliation?.takeIf { it.isNotEmpty() }?.let { meds ->
                     MedicationsSection(meds)
                 }
 
-                // Follow-up instructions
                 summary.followUpInstructions?.let {
-                    IconSection(icon = "📅", title = "FOLLOW-UP INSTRUCTIONS", body = it, accentColor = WarningOrange)
+                    IconSection(icon = "", title = "Follow-up", body = it, accentColor = WarningOrange)
                 }
 
-                // Activity restrictions
                 summary.activityRestrictions?.let {
-                    IconSection(icon = "🚶", title = "ACTIVITY RESTRICTIONS", body = it, accentColor = Color(0xFF0097A7))
+                    IconSection(icon = "", title = "Activity restrictions", body = it, accentColor = Color(0xFF0097A7))
                 }
 
-                // Diet instructions
                 summary.dietInstructions?.let {
-                    IconSection(icon = "🍎", title = "DIET INSTRUCTIONS", body = it, accentColor = Color(0xFF43A047))
+                    IconSection(icon = "", title = "Diet", body = it, accentColor = Color(0xFF43A047))
                 }
 
-                // Wound care
                 summary.woundCareInstructions?.let {
-                    IconSection(icon = "🩹", title = "WOUND CARE", body = it, accentColor = Color(0xFFE91E63))
+                    IconSection(icon = "", title = "Wound care", body = it, accentColor = Color(0xFFE91E63))
                 }
 
                 // Warning signs
@@ -224,14 +217,12 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                     WarningSection(warnings)
                 }
 
-                // Patient education
                 summary.patientEducationProvided?.let {
-                    IconSection(icon = "📖", title = "PATIENT EDUCATION", body = it, accentColor = BrandBlue)
+                    IconSection(icon = "", title = "Patient education", body = it, accentColor = BrandBlue)
                 }
 
-                // Additional notes
                 summary.additionalNotes?.let {
-                    IconSection(icon = "📝", title = "ADDITIONAL NOTES", body = it, accentColor = Color(0xFF757575))
+                    IconSection(icon = "", title = "Additional notes", body = it, accentColor = Color(0xFF757575))
                 }
             }
         }
@@ -321,36 +312,37 @@ private fun CardHeader(summary: DischargeSummaryDto) {
 
 @Composable
 private fun IconSection(
-    icon: String,
+    @Suppress("UNUSED_PARAMETER") icon: String,
     title: String,
     body: String,
     accentColor: Color
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = icon,
-            fontSize = 16.sp,
-            modifier = Modifier.padding(top = 1.dp)
-        )
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp,
-                    fontSize = 10.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier
+                    .width(4.dp)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(accentColor)
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accentColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
@@ -390,17 +382,12 @@ private fun InfoPill(
 @Composable
 private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("💊", fontSize = 16.sp)
-            Spacer(Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Text(
-                "MEDICATIONS",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 0.5.sp,
-                    fontSize = 10.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                "Medications",
+                style = MaterialTheme.typography.labelMedium,
+                color = BrandBlue,
+                fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.weight(1f))
             Surface(
@@ -421,7 +408,7 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
 
         Surface(
             shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         ) {
             Column {
                 meds.forEachIndexed { index, med ->
@@ -430,22 +417,13 @@ private fun MedicationsSection(meds: List<MedicationReconciliationDto>) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(BrandBlue.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("💊", fontSize = 14.sp)
-                        }
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 med.medicationName ?: "Unknown",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium)
                             )
                             val details = listOfNotNull(med.dosage, med.frequency)
-                                .joinToString("  •  ")
+                                .joinToString(" | ")
                             if (details.isNotEmpty()) {
                                 Text(
                                     details,
@@ -479,28 +457,21 @@ private fun WarningSection(warnings: String) {
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(WarningOrange),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("⚠️", fontSize = 14.sp)
-            }
-            Column {
+                Modifier
+                    .width(4.dp)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(WarningOrange)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    "WARNING SIGNS",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp,
-                        fontSize = 10.sp
-                    ),
+                    "Warning signs",
+                    style = MaterialTheme.typography.labelMedium,
                     color = WarningOrange
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     warnings,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }

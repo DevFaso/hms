@@ -26,6 +26,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
     val consents by viewModel.consents.collectAsState()
     val accessLog by viewModel.accessLog.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
 
     Scaffold(
@@ -58,6 +59,15 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
                 return@Column
             }
 
+            error?.let { message ->
+                AssistChip(
+                    onClick = { viewModel.load() },
+                    label = { Text(message) },
+                    leadingIcon = { Icon(Icons.Default.Refresh, null) },
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+
             when (selectedTab) {
                 0 -> ConsentsTab(consents) { viewModel.revokeConsent(it) }
                 1 -> AccessLogTab(accessLog)
@@ -67,7 +77,7 @@ fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewM
 }
 
 @Composable
-private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (String) -> Unit) {
+private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (ConsentDto) -> Unit) {
     if (consents.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No consent records", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -84,10 +94,15 @@ private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (String) -> Unit) 
 }
 
 @Composable
-private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
+private fun ConsentCard(consent: ConsentDto, onRevoke: (ConsentDto) -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
     var expanded by remember { mutableStateOf(false) }
-    val isActive = consent.status.uppercase() == "ACTIVE" || consent.status.uppercase() == "GRANTED"
+    val isActive = consent.consentGiven == true || consent.isGranted || consent.status?.uppercase() in setOf("ACTIVE", "GRANTED")
+    val statusText = consent.status ?: if (isActive) "ACTIVE" else "REVOKED"
+    val title = consent.title?.takeIf { it.isNotBlank() }
+        ?: consent.purpose?.takeIf { it.isNotBlank() }
+        ?: consent.consentType?.replace("_", " ")?.replaceFirstChar { it.uppercase() }
+        ?: "Sharing consent"
 
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -97,12 +112,12 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(consent.consentType.replace("_", " ").replaceFirstChar { it.uppercase() },
+                Text(title,
                     fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f))
                 Surface(shape = RoundedCornerShape(20.dp),
                     color = if (isActive) Color(0xFFDCFCE7) else Color(0xFFFEE2E2)) {
-                    Text(consent.status, Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    Text(statusText, Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = if (isActive) Color(0xFF166534) else Color(0xFFDC2626),
                         fontWeight = FontWeight.SemiBold)
@@ -114,7 +129,7 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            consent.recipientName?.let {
+            (consent.recipientName ?: consent.toHospital?.name)?.let {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Icon(Icons.Default.Person, null, modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -124,39 +139,38 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
             }
 
             AnimatedVisibility(visible = expanded) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                    consent.title.takeIf { it.isNotBlank() }?.let {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(Icons.Default.Title, null, modifier = Modifier.size(14.dp), tint = BrandBlue)
-                            Text("Title: $it", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
+                    ConsentHospitalRoute(consent)
                     consent.description?.let {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
                             Icon(Icons.Default.Description, null, modifier = Modifier.size(14.dp), tint = BrandBlue)
                             Text(it, style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    consent.type.takeIf { it.isNotBlank() && it != consent.consentType }?.let {
-                        Text("Type: ${it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }}",
-                            style = MaterialTheme.typography.bodySmall)
+                    consent.scope?.takeIf { it.isNotBlank() }?.let {
+                        ConsentScope(it)
                     }
-                    consent.grantedAt?.let {
+                    consent.type?.takeIf { it.isNotBlank() && it != consent.consentType }?.let {
+                        ConsentMetaRow("Type", it.replace("_", " ").replaceFirstChar { c -> c.uppercase() })
+                    }
+                    (consent.grantedAt ?: consent.consentTimestamp)?.let {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(14.dp), tint = Color(0xFF166534))
                             Text("Granted: ${it.take(10)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
-                    consent.expiresAt?.let {
+                    (consent.expiresAt ?: consent.consentExpiration)?.let {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Default.Schedule, null, modifier = Modifier.size(14.dp), tint = Color(0xFFFF9800))
                             Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     if (isActive) {
-                        TextButton(onClick = { showConfirm = true },
+                        TextButton(
+                            onClick = { showConfirm = true },
+                            enabled = consent.fromHospital?.id != null && consent.toHospital?.id != null,
                             colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                             Text("Revoke Access")
                         }
@@ -166,12 +180,14 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
 
             // Show expiry in collapsed view too
             if (!expanded) {
-                consent.expiresAt?.let {
+                (consent.expiresAt ?: consent.consentExpiration)?.let {
                     Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (isActive) {
-                    TextButton(onClick = { showConfirm = true },
+                    TextButton(
+                        onClick = { showConfirm = true },
+                        enabled = consent.fromHospital?.id != null && consent.toHospital?.id != null,
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                         Text("Revoke Access")
                     }
@@ -186,7 +202,7 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
             title = { Text("Revoke Consent") },
             text = { Text("Are you sure you want to revoke this access?") },
             confirmButton = {
-                TextButton(onClick = { showConfirm = false; onRevoke(consent.id) },
+                TextButton(onClick = { showConfirm = false; onRevoke(consent) },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
                     Text("Revoke")
                 }
@@ -195,6 +211,69 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
                 TextButton(onClick = { showConfirm = false }) { Text("Cancel") }
             }
         )
+    }
+}
+
+@Composable
+private fun ConsentHospitalRoute(consent: ConsentDto) {
+    val from = consent.fromHospital?.name
+    val to = consent.toHospital?.name
+    if (from == null && to == null) return
+
+    Surface(
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            from?.let { ConsentMetaRow("From", it) }
+            to?.let { ConsentMetaRow("To", it) }
+        }
+    }
+}
+
+@Composable
+private fun ConsentMetaRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.widthIn(min = 44.dp)
+        )
+        Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ConsentScope(scope: String) {
+    val items = scope.split(",")
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .map { value -> value.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() } }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            "Allowed information",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items.forEach { item ->
+                Surface(shape = RoundedCornerShape(16.dp), color = BrandBlue.copy(alpha = 0.08f)) {
+                    Text(
+                        item,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = BrandBlue,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -214,14 +293,15 @@ private fun AccessLogTab(logs: List<AccessLogDto>) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.History, null, tint = BrandBlue, modifier = Modifier.size(20.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(log.action.replace("_", " ").replaceFirstChar { it.uppercase() },
+                        val action = log.action ?: log.eventType ?: "Access"
+                        Text(action.replace("_", " ").replaceFirstChar { it.uppercase() },
                             fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodySmall)
-                        log.accessedBy?.let {
+                        (log.accessedBy ?: log.actor ?: log.description)?.let {
                             Text(it, style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Text(log.accessedAt.take(10), style = MaterialTheme.typography.labelSmall,
+                    Text((log.accessedAt ?: log.timestamp ?: "").take(10), style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

@@ -27,17 +27,32 @@ class SharingPrivacyViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error
+
     init { load() }
 
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
+            _error.value = null
             try {
                 val consentDef = async { api.getConsents() }
                 val logDef = async { api.getAccessLog() }
-                consentDef.await().body()?.data?.let { _consents.value = it }
-                logDef.await().body()?.data?.let { _accessLog.value = it }
-            } catch (_: Exception) {
+                val consentResp = consentDef.await()
+                val logResp = logDef.await()
+                if (consentResp.isSuccessful) {
+                    _consents.value = consentResp.body()?.data?.content ?: emptyList()
+                } else {
+                    _error.value = "Unable to load consent records"
+                }
+                if (logResp.isSuccessful) {
+                    _accessLog.value = logResp.body()?.data?.content ?: emptyList()
+                } else {
+                    _error.value = "Unable to load access log"
+                }
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Unable to load sharing records"
             } finally {
                 _isLoading.value = false
             }
@@ -59,13 +74,15 @@ class SharingPrivacyViewModel @Inject constructor(
         }
     }
 
-    fun revokeConsent(consentId: String) {
+    fun revokeConsent(consent: ConsentDto) {
         viewModelScope.launch {
             try {
-                val resp = api.revokeConsent(consentId)
+                val fromHospitalId = consent.fromHospital?.id ?: return@launch
+                val toHospitalId = consent.toHospital?.id ?: return@launch
+                val resp = api.revokeConsent(fromHospitalId, toHospitalId)
                 if (resp.isSuccessful) {
                     _consents.value = _consents.value.map {
-                        if (it.id == consentId) it.copy(status = "REVOKED") else it
+                        if (it.id == consent.id) it.copy(status = "REVOKED", consentGiven = false) else it
                     }
                 }
             } catch (_: Exception) {}

@@ -100,7 +100,6 @@ class AppointmentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val resp = api.cancelAppointment(
-                    appointmentId,
                     CancelAppointmentRequest(appointmentId = appointmentId, reason = reason)
                 )
                 if (resp.isSuccessful) {
@@ -117,7 +116,6 @@ class AppointmentsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val resp = api.rescheduleAppointment(
-                    appointmentId,
                     RescheduleAppointmentRequest(
                         appointmentId = appointmentId,
                         newDate = newDate,

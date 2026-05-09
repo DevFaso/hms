@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.features.healthrecords
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.core.models.HealthSummaryDto
 import com.bitnesttechs.hms.patient.core.models.ImmunizationDto
 import com.bitnesttechs.hms.patient.core.models.ReferralDto
 import com.bitnesttechs.hms.patient.core.models.TreatmentPlanDto
@@ -17,6 +18,9 @@ import javax.inject.Inject
 class HealthRecordsViewModel @Inject constructor(
     private val api: ApiService
 ) : ViewModel() {
+
+    private val _summary = MutableStateFlow<HealthSummaryDto?>(null)
+    val summary: StateFlow<HealthSummaryDto?> = _summary
 
     private val _immunizations = MutableStateFlow<List<ImmunizationDto>>(emptyList())
     val immunizations: StateFlow<List<ImmunizationDto>> = _immunizations
@@ -36,11 +40,16 @@ class HealthRecordsViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                val summaryDef = async { api.getHealthSummary() }
                 val immDef = async { api.getImmunizations() }
                 val tpDef = async { api.getTreatmentPlans() }
                 val refDef = async { api.getReferrals() }
+                summaryDef.await().body()?.data?.let { summary ->
+                    _summary.value = summary
+                    _immunizations.value = summary.immunizations ?: emptyList()
+                }
                 immDef.await().body()?.data?.let { _immunizations.value = it }
-                tpDef.await().body()?.data?.let { _treatmentPlans.value = it }
+                tpDef.await().body()?.data?.content?.let { _treatmentPlans.value = it }
                 refDef.await().body()?.data?.let { _referrals.value = it }
             } catch (_: Exception) {
             } finally {

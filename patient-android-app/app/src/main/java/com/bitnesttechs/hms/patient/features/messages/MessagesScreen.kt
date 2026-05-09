@@ -16,9 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.R
+import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
@@ -33,11 +37,12 @@ fun MessagesScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val isLoadingCareTeam by viewModel.isLoadingCareTeam.collectAsState()
     var showProviderPicker by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Messages") },
+                title = { Text(stringResource(R.string.messages)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = Color.White)
             )
@@ -50,7 +55,7 @@ fun MessagesScreen(
                 },
                 containerColor = BrandBlue
             ) {
-                Icon(Icons.Default.Edit, "New message", tint = Color.White)
+                Icon(Icons.Default.Edit, stringResource(R.string.new_message), tint = Color.White)
             }
         }
     ) { padding ->
@@ -66,7 +71,7 @@ fun MessagesScreen(
                     Icon(Icons.Default.Message, null, Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
-                    Text("No messages", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.no_messages), style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(12.dp))
                     FilledTonalButton(onClick = {
                         viewModel.loadCareTeam()
@@ -74,7 +79,7 @@ fun MessagesScreen(
                     }) {
                         Icon(Icons.Default.Edit, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Message a Provider")
+                        Text(stringResource(R.string.message_provider))
                     }
                 }
             }
@@ -122,7 +127,7 @@ fun MessagesScreen(
         ModalBottomSheet(onDismissRequest = { showProviderPicker = false }) {
             Column(Modifier.padding(16.dp)) {
                 Text(
-                    "Select a Provider",
+                    stringResource(R.string.select_provider),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 12.dp)
@@ -132,7 +137,7 @@ fun MessagesScreen(
                         if (isLoadingCareTeam) {
                             CircularProgressIndicator(color = BrandBlue)
                         } else {
-                            Text("No providers found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.no_providers_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 } else {
@@ -140,7 +145,11 @@ fun MessagesScreen(
                         ListItem(
                             headlineContent = { Text(member.name, fontWeight = FontWeight.Medium) },
                             supportingContent = {
-                                val info = listOfNotNull(member.role, member.specialty, member.department)
+                                val info = listOfNotNull(
+                                    LocaleHelper.translateProviderDescriptor(context, member.role),
+                                    LocaleHelper.translateProviderDescriptor(context, member.specialty),
+                                    LocaleHelper.translateProviderDescriptor(context, member.department)
+                                )
                                     .joinToString(" · ")
                                 if (info.isNotEmpty()) Text(info)
                             },
@@ -187,10 +196,10 @@ fun MessageThreadScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Messages") },
+                title = { Text(stringResource(R.string.messages)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
@@ -198,7 +207,10 @@ fun MessageThreadScreen(
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 4.dp) {
+            Surface(
+                modifier = Modifier.imePadding(),
+                shadowElevation = 4.dp
+            ) {
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -206,7 +218,7 @@ fun MessageThreadScreen(
                     OutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        placeholder = { Text("Type a message…") },
+                        placeholder = { Text(stringResource(R.string.type_message)) },
                         modifier = Modifier.weight(1f),
                         maxLines = 4,
                         shape = RoundedCornerShape(24.dp)

@@ -35,6 +35,7 @@ import com.bitnesttechs.hms.patient.features.medications.MedicationsScreen
 import com.bitnesttechs.hms.patient.features.messages.MessagesScreen
 import com.bitnesttechs.hms.patient.features.messages.MessageThreadScreen
 import com.bitnesttechs.hms.patient.features.notifications.NotificationsScreen
+import com.bitnesttechs.hms.patient.features.pharmacyinvoices.PharmacyInvoicesScreen
 import com.bitnesttechs.hms.patient.features.profile.ProfileScreen
 import com.bitnesttechs.hms.patient.features.sharingprivacy.SharingPrivacyScreen
 import com.bitnesttechs.hms.patient.features.visits.VisitHistoryScreen
@@ -62,6 +63,7 @@ val drawerItems = listOf(
     DrawerItem(R.string.medications, Icons.Default.Medication, "medications"),
     DrawerItem(R.string.vitals, Icons.Default.Favorite, "vitals"),
     DrawerItem(R.string.billing, Icons.Default.Receipt, "billing"),
+    DrawerItem(R.string.pharmacy_invoices, Icons.Default.LocalPharmacy, "pharmacy_invoices"),
     DrawerItem(R.string.care_team, Icons.Default.Group, "care_team"),
     DrawerItem(R.string.visit_history, Icons.Default.History, "visits"),
     DrawerItem(R.string.after_visit_summaries, Icons.Default.Description, "visit_summaries"),
@@ -136,7 +138,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "care_team", "visits", "visit_summaries", "documents", "health_records",
+                            "pharmacy_invoices", "care_team", "visits", "visit_summaries", "documents", "health_records",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
@@ -202,6 +204,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("lab_results") { LabResultsScreen(onBack = { navController.popBackStack() }) }
                 composable("medications") { MedicationsScreen(onBack = { navController.popBackStack() }) }
                 composable("billing") { BillingScreen(onBack = { navController.popBackStack() }) }
+                composable("pharmacy_invoices") { PharmacyInvoicesScreen(onBack = { navController.popBackStack() }) }
                 composable("vitals") { VitalsScreen(onBack = { navController.popBackStack() }) }
                 composable("care_team") { CareTeamScreen(onBack = { navController.popBackStack() }) }
                 composable("visits") { VisitHistoryScreen(onBack = { navController.popBackStack() }) }

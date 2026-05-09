@@ -86,7 +86,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
         String notes = normalizeOptionalText(request.getNotes());
 
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
 
         Staff staff = staffRepository.findById(request.getOrderingStaffId())

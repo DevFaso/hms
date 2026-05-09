@@ -1,10 +1,9 @@
 package com.bitnesttechs.hms.patient.features.login
 
-import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.filterToOne
 import androidx.compose.ui.test.hasClickAction
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -45,9 +44,10 @@ import org.robolectric.shadows.ShadowToast
  *   2. Steer any legacy username/password attempt toward SSO instead of
  *      the generic "Login failed. Please try again." copy.
  *
- * Runs as a Robolectric Compose UI test so it executes in CI without an
- * emulator. Mirrors the Playwright `keycloak-login.spec.ts` describe
- * block on the portal side.
+ * Runs as a debug-variant Robolectric Compose UI test so it executes in CI
+ * without an emulator and has access to Compose's test activity manifest.
+ * Mirrors the Playwright `keycloak-login.spec.ts` describe block on the
+ * portal side.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
@@ -55,7 +55,7 @@ import org.robolectric.shadows.ShadowToast
 class LoginScreenSsoOnlyTest {
 
     @get:Rule
-    val composeTestRule = createAndroidComposeRule<ComponentActivity>()
+    val composeTestRule = createComposeRule()
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -75,8 +75,6 @@ class LoginScreenSsoOnlyTest {
 
     @Test
     fun `cutover state surfaces SSO button and routes legacy login to the SSO copy`() {
-        // Given: cutover-state collaborators — flag ON, issuer configured,
-        // backend would return 410 on legacy login.
         val featureFlagManager = mockk<FeatureFlagManager> {
             every { keycloakSsoEnabled } returns flowOf(true)
         }
@@ -94,7 +92,6 @@ class LoginScreenSsoOnlyTest {
 
         val viewModel = LoginViewModel(authRepository, featureFlagManager, keycloakAuthService)
 
-        // When: the login screen renders
         composeTestRule.setContent {
             LoginScreen(
                 tokenStorage = tokenStorage,
@@ -103,23 +100,15 @@ class LoginScreenSsoOnlyTest {
             )
         }
 
-        // Wait for the StateFlow-backed `ssoEnabled` to propagate through
-        // `collectAsState()` and Compose's recomposition before asserting.
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             composeTestRule.onAllNodesWithText("Sign in with SSO")
                 .fetchSemanticsNodes().isNotEmpty()
         }
 
-        // Then: SSO button is offered up-front (the cutover affordance).
-        // Scroll first because the login screen is taller than the test
-        // viewport — the button is below the fold by default.
         composeTestRule.onNodeWithText("Sign in with SSO")
             .performScrollTo()
             .assertIsDisplayed()
 
-        // And: when the user still tries the legacy form, the screen
-        // surfaces the runbook copy that points at SSO — never the
-        // generic "Login failed. Please try again." fallback.
         composeTestRule.onNodeWithText("Username or Email").performTextInput("alice")
         composeTestRule.onNodeWithText("Password").performTextInput("hunter2")
         composeTestRule.onAllNodesWithText("Sign In")
@@ -127,11 +116,6 @@ class LoginScreenSsoOnlyTest {
             .performScrollTo()
             .performClick()
 
-        // The screen pushes errors through `Toast.makeText(...).show()` (driven
-        // by a `LaunchedEffect(uiState.error)` that runs on Compose's recomposer
-        // dispatcher), then clears `uiState.error`. We wait for the toast to
-        // appear rather than reading state directly, because state has already
-        // been cleared by the time the assertion runs.
         composeTestRule.waitUntil(timeoutMillis = 5_000) {
             ShadowToast.getTextOfLatestToast() != null
         }

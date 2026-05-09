@@ -60,7 +60,11 @@ final class NotificationsViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        notifications = await (try? APIClient.shared.get(APIEndpoints.notifications)) ?? []
+        let page: PageDTO<NotificationDTO>? = try? await APIClient.shared.get(
+            APIEndpoints.notifications,
+            queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
+        )
+        notifications = page?.content ?? []
         isLoading = false
     }
 }
@@ -144,34 +148,75 @@ struct HealthRecordsView: View {
 
     private var content: some View {
         VStack(spacing: 0) {
+            patientIdentityHeader
+
             // Tab picker
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    TabChip(title: "Overview", isSelected: selectedTab == 0) { selectedTab = 0 }
-                    TabChip(title: "Encounters", isSelected: selectedTab == 1) { selectedTab = 1 }
-                    TabChip(title: "Labs", isSelected: selectedTab == 2) { selectedTab = 2 }
-                    TabChip(title: "Medications", isSelected: selectedTab == 3) { selectedTab = 3 }
-                    TabChip(title: "Immunizations", isSelected: selectedTab == 4) { selectedTab = 4 }
+                    TabChip(title: "overview".localized, isSelected: selectedTab == 0) { selectedTab = 0 }
+                    TabChip(title: "vitals".localized, isSelected: selectedTab == 1) { selectedTab = 1 }
+                    TabChip(title: "lab_results".localized, isSelected: selectedTab == 2) { selectedTab = 2 }
+                    TabChip(title: "medications".localized, isSelected: selectedTab == 3) { selectedTab = 3 }
+                    TabChip(title: "immunizations".localized, isSelected: selectedTab == 4) { selectedTab = 4 }
+                    TabChip(title: "treatment_plans".localized, isSelected: selectedTab == 5) { selectedTab = 5 }
+                    TabChip(title: "referrals".localized, isSelected: selectedTab == 6) { selectedTab = 6 }
+                    TabChip(title: "encounters".localized, isSelected: selectedTab == 7) { selectedTab = 7 }
                 }
                 .padding(.horizontal)
             }
             .padding(.vertical, 8)
 
             if vm.isLoading {
-                ProgressView("Loading…").padding()
+                ProgressView("loading".localized).padding()
             } else {
                 switch selectedTab {
                 case 0: overviewTab
-                case 1: encountersTab
+                case 1: vitalsTab
                 case 2: labsTab
                 case 3: medicationsTab
                 case 4: immunizationsTab
+                case 5: treatmentPlansTab
+                case 6: referralsTab
+                case 7: encountersTab
                 default: overviewTab
                 }
             }
         }
         .navigationTitle("health_records".localized)
         .refreshable { await vm.loadAll() }
+    }
+
+    private var patientIdentityHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            let profile = vm.summary?.profile
+            Text(profile?.fullName.isEmpty == false ? profile?.fullName ?? "my_chart".localized : "my_chart".localized)
+                .font(.title3.bold())
+                .foregroundColor(.accentColor)
+            if let mrn = profile?.mrn, !mrn.isEmpty {
+                Text(String(format: "mrn_format".localized, mrn)).font(.subheadline)
+            }
+            let details = [profile?.dateOfBirth.map { String(format: "dob_format".localized, String($0.prefix(10))) }, profile?.gender, profile?.bloodType]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+            if !details.isEmpty {
+                Text(details.joined(separator: "  |  "))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            let primarySource = profile?.hospitalName
+                ?? profile?.primaryHospitalName
+                ?? profile?.hospitalId.map { String(format: "hospital_id_format".localized, $0) }
+                ?? profile?.primaryHospitalId.map { String(format: "hospital_id_format".localized, $0) }
+            if let hospital = primarySource, !hospital.isEmpty {
+                SourceLine(parts: [String(format: "primary_hospital_format".localized, hospital)])
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(Color.accentColor.opacity(0.12))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal)
+        .padding(.top, 12)
     }
 
     // MARK: Overview
@@ -203,8 +248,40 @@ struct HealthRecordsView: View {
                     ForEach(conditions, id: \.self) { Text($0) }
                 }
             }
+            Section("Chronic Conditions") {
+                let conditions = vm.summary?.chronicConditions ?? []
+                if conditions.isEmpty {
+                    Text("No chronic conditions").foregroundColor(.secondary)
+                } else {
+                    ForEach(conditions, id: \.self) { Text($0) }
+                }
+            }
         }
         .listStyle(.insetGrouped)
+    }
+
+    // MARK: Vitals
+
+    private var vitalsTab: some View {
+        Group {
+            let vitals = vm.summary?.allVitals ?? []
+            if vitals.isEmpty {
+                ContentUnavailableView("no_vitals".localized, systemImage: "waveform.path.ecg",
+                                       description: Text("no_vitals_desc".localized))
+            } else {
+                List(vitals) { vital in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(vital.recordedDateDisplay).font(.headline)
+                        Text(vital.allReadings.map { "\($0.label): \($0.value)" }.joined(separator: "  |  "))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        SourceLine(parts: [vital.hospitalName ?? vital.hospitalId.map { "Hospital ID \($0)" }, vital.recordedByName.map { "Recorded by \($0)" }, vital.sourceDisplay])
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
     }
 
     // MARK: Encounters
@@ -216,7 +293,10 @@ struct HealthRecordsView: View {
                                        description: Text("No encounters found."))
             } else {
                 List(vm.encounters) { enc in
-                    EncounterRowView(encounter: enc)
+                    VStack(alignment: .leading, spacing: 4) {
+                        EncounterRowView(encounter: enc)
+                        SourceLine(parts: [enc.hospitalName, enc.providerName, enc.department])
+                    }
                 }
                 .listStyle(.insetGrouped)
             }
@@ -232,7 +312,10 @@ struct HealthRecordsView: View {
                                        description: Text("No lab results on file."))
             } else {
                 List(vm.labs) { lab in
-                    LabResultSummaryRow(result: lab)
+                    VStack(alignment: .leading, spacing: 4) {
+                        LabResultSummaryRow(result: lab)
+                        SourceLine(parts: [lab.labName, lab.orderedBy.map { "Ordered by \($0)" }])
+                    }
                 }
                 .listStyle(.insetGrouped)
             }
@@ -252,6 +335,7 @@ struct HealthRecordsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(med.displayName).font(.headline)
                             if let dosage = med.dosage { Text(dosage).font(.subheadline).foregroundColor(.secondary) }
+                            SourceLine(parts: [med.prescribedBy.map { "Prescribed by \($0)" }, med.frequency])
                         }
                         Spacer()
                         StatusBadge(text: med.status?.capitalized ?? "Active",
@@ -291,6 +375,96 @@ struct HealthRecordsView: View {
             }
         }
     }
+
+    // MARK: Treatment Plans
+
+    private var treatmentPlansTab: some View {
+        Group {
+            if vm.treatmentPlans.isEmpty {
+                ContentUnavailableView("no_treatment_plans".localized, systemImage: "list.clipboard",
+                                       description: Text("no_treatment_plans".localized))
+            } else {
+                List(vm.treatmentPlans) { plan in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top) {
+                            Text(plan.title ?? "Treatment plan").font(.headline)
+                            Spacer()
+                            StatusBadge(text: plan.status?.capitalized ?? "—", color: "blue")
+                        }
+                        if let goals = plan.goals, !goals.isEmpty {
+                            Text(goals).font(.subheadline).foregroundColor(.secondary)
+                        }
+                        if let doctor = plan.doctorName, !doctor.isEmpty {
+                            SourceLine(parts: ["Created by \(doctor)"])
+                        }
+                        let dates = [plan.startDate, plan.endDate].compactMap { $0?.prefix(10) }
+                        if !dates.isEmpty {
+                            Text(dates.joined(separator: " - ")).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    // MARK: Referrals
+
+    private var referralsTab: some View {
+        Group {
+            if vm.referrals.isEmpty {
+                ContentUnavailableView("no_referrals".localized, systemImage: "arrowshape.turn.up.right.fill",
+                                       description: Text("no_referrals".localized))
+            } else {
+                List(vm.referrals) { referral in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .top) {
+                            Text(referral.toSpecialty ?? "referrals".localized).font(.headline)
+                            Spacer()
+                            StatusBadge(text: referral.status?.capitalized ?? "—", color: "blue")
+                        }
+                        if let doctor = referral.toDoctorName, !doctor.isEmpty {
+                            Text(doctor).font(.subheadline).foregroundColor(.secondary)
+                        }
+                        if let reason = referral.reason, !reason.isEmpty {
+                            Text(reason).font(.caption).foregroundColor(.secondary)
+                        }
+                        SourceLine(parts: [referral.toHospitalName, referral.fromDoctorName.map { "From \($0)" }, referral.urgency])
+                        if let date = referral.referralDate {
+                            Text(String(date.prefix(10))).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+}
+
+private struct SourceLine: View {
+    let parts: [String?]
+
+    var body: some View {
+        let text = parts.compactMap { part in
+            guard let value = part?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty, value != "—" else {
+                return nil
+            }
+            return value
+        }
+        .reduce(into: [String]()) { values, value in
+            if !values.contains(value) { values.append(value) }
+        }
+        .joined(separator: "  |  ")
+
+        if !text.isEmpty {
+            Text("Source: \(text)")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(Color("BrandBlue"))
+        }
+    }
 }
 
 struct TabChip: View {
@@ -316,6 +490,8 @@ final class HealthRecordsViewModel: ObservableObject {
     @Published var labs: [LabResultDTO] = []
     @Published var medications: [MedicationDTO] = []
     @Published var immunizations: [ImmunizationDTO] = []
+    @Published var treatmentPlans: [TreatmentPlanDTO] = []
+    @Published var referrals: [ReferralDTO] = []
     @Published var isLoading = false
 
     func loadAll() async {
@@ -341,6 +517,30 @@ final class HealthRecordsViewModel: ObservableObject {
             }
             group.addTask { @MainActor in
                 self.immunizations = await (try? APIClient.shared.get(APIEndpoints.immunizations)) ?? []
+            }
+            group.addTask { @MainActor in
+                let page: PageDTO<TreatmentPlanDTO>? = try? await APIClient.shared.get(
+                    APIEndpoints.treatmentPlans,
+                    queryItems: [URLQueryItem(name: "page", value: "0"),
+                                 URLQueryItem(name: "size", value: "50")]
+                )
+                if let content = page?.content {
+                    self.treatmentPlans = content
+                } else {
+                    self.treatmentPlans = await (try? APIClient.shared.get(APIEndpoints.treatmentPlans)) ?? []
+                }
+            }
+            group.addTask { @MainActor in
+                if let list: [ReferralDTO] = try? await APIClient.shared.get(APIEndpoints.referrals) {
+                    self.referrals = list
+                } else {
+                    let page: PageDTO<ReferralDTO>? = try? await APIClient.shared.get(
+                        APIEndpoints.referrals,
+                        queryItems: [URLQueryItem(name: "page", value: "0"),
+                                     URLQueryItem(name: "size", value: "50")]
+                    )
+                    self.referrals = page?.content ?? []
+                }
             }
         }
         isLoading = false

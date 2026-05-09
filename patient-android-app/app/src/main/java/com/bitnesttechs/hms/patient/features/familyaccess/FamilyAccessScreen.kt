@@ -339,6 +339,24 @@ fun GrantProxyBottomSheet(
 
             Text("Permissions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "${selectedPermissions.size} of ${allPermissions.size} selected",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = {
+                    selectedPermissions = if (selectedPermissions.size == allPermissions.size) emptySet()
+                    else allPermissions.toSet()
+                }) {
+                    Text(if (selectedPermissions.size == allPermissions.size) "Clear all" else "Select all")
+                }
+            }
+
             allPermissions.forEach { perm ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

@@ -233,6 +233,9 @@ struct SideMenuView: View {
                     MenuLink(icon: "creditcard.fill", title: "billing_title".localized) {
                         selectedTab = .dashboard; isShowing = false
                     }
+                    MenuLink(icon: "cross.case.fill", title: "pharmacy_invoices".localized) {
+                        selectedTab = .dashboard; isShowing = false
+                    }
                     MenuLink(icon: "heart.fill", title: "vitals_title".localized) {
                         selectedTab = .dashboard; isShowing = false
                     }
