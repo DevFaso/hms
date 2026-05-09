@@ -57,12 +57,22 @@ skip the uat verification.
 Railway picks up the `uat` push within ~30 s and starts a redeploy.
 In the `hms-keycloak-uat` logs, watch for:
 
-- `[entrypoint] Attempting kc.sh bootstrap-admin user (idempotent)`
+- `[hms-keycloak-entrypoint] Attempting kc.sh bootstrap-admin user (idempotent, --optimized)`
   — confirms the new entrypoint is in effect.
-- One of:
-  - `Added user 'kc-admin' to realm master` — admin created.
-  - `[entrypoint] bootstrap-admin returned non-zero (likely admin
-    already exists); continuing` — admin already present, no-op.
+- The subcommand's own output (echoed verbatim by the entrypoint), then
+  one of:
+  - `[hms-keycloak-entrypoint] bootstrap-admin succeeded` — admin
+    created cleanly. On a freshly truncated master realm (path #2
+    fallback), this is the line you want to see.
+  - `[hms-keycloak-entrypoint] bootstrap-admin reports admin already exists — continuing`
+    — idempotent re-run on an env where the admin was created in a
+    previous deploy. Expected steady state once recovery is done.
+  - `[hms-keycloak-entrypoint] bootstrap-admin FAILED with rc=N — aborting`
+    — real failure (DB unreachable, password too weak, malformed
+    config). The container terminates rather than limping into
+    `kc.sh start`; Railway's healthcheck flips red within seconds.
+    Read the captured subcommand output above this line for the
+    actual error and pivot to a fallback path.
 - `Listening on http://0.0.0.0:${PORT}` — Keycloak start completed.
 - `Imported realm hms` — realm import unaffected.
 
@@ -71,7 +81,11 @@ Total redeploy time is ~3 min.
 ### 3. Verify uat admin login
 
 1. Navigate to
-   `https://hms-keycloak-uat.up.railway.app/admin/master/console/`.
+   `https://hms-keycloak-uat-uat.up.railway.app/admin/master/console/`.
+   (Note the doubled `-uat` — Railway appends the environment name to
+   the service name when generating the public domain. The README
+   provisioning recipe warns about this; same pattern applies to
+   prod: `https://hms-keycloak-prod-prod.up.railway.app/...`.)
 2. Log in with username `kc-admin` and the password set on the
    Railway uat service as `KC_BOOTSTRAP_ADMIN_PASSWORD`.
 3. Success criteria:
