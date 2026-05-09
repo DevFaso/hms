@@ -1,0 +1,102 @@
+# Prometheus recording rules for the HMS stack.
+# Pre-aggregate expensive queries used on dashboards and SLO alerting so the
+# UI/alert evaluator scans cheap series instead of recomputing histograms on
+# every refresh.
+#
+# Naming convention follows the Prometheus best-practice
+# `level:metric:operations` style.
+
+groups:
+  # ── HTTP RED metrics (per application) ─────────────────────────────
+  - name: hms.http.red
+    interval: 30s
+    rules:
+      - record: app:http_requests:rate1m
+        expr: sum by (application) (rate(http_server_requests_seconds_count[1m]))
+
+      - record: app:http_requests:rate5m
+        expr: sum by (application) (rate(http_server_requests_seconds_count[5m]))
+
+      - record: app:http_5xx:rate1m
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[1m]))
+
+      - record: app:http_5xx:rate5m
+        expr: sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+
+      - record: app:http_5xx:ratio5m
+        expr: |
+          app:http_5xx:rate5m
+            /
+          clamp_min(app:http_requests:rate5m, 0.0001)
+
+      - record: app:http_request_duration_seconds:p95_5m
+        expr: |
+          histogram_quantile(0.95,
+            sum by (application, le) (rate(http_server_requests_seconds_bucket[5m]))
+          )
+
+      - record: app:http_request_duration_seconds:p99_5m
+        expr: |
+          histogram_quantile(0.99,
+            sum by (application, le) (rate(http_server_requests_seconds_bucket[5m]))
+          )
+
+  # ── HTTP RED per URI (used by API endpoint dashboard + alerts) ─────
+  - name: hms.http.red.byuri
+    interval: 30s
+    rules:
+      - record: app_uri:http_requests:rate5m
+        expr: sum by (application, uri, method) (rate(http_server_requests_seconds_count[5m]))
+
+      - record: app_uri:http_5xx:rate5m
+        expr: sum by (application, uri, method) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+
+      - record: app_uri:http_request_duration_seconds:p99_15m
+        expr: |
+          histogram_quantile(0.99,
+            sum by (application, uri, method, le) (rate(http_server_requests_seconds_bucket[15m]))
+          )
+
+  # ── SLO multi-window error ratio (5m / 30m / 1h / 6h) ──────────────
+  - name: hms.slo.error_ratio
+    interval: 30s
+    rules:
+      - record: app:slo_error_ratio:5m
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[5m])), 0.0001)
+
+      - record: app:slo_error_ratio:30m
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[30m]))
+            /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[30m])), 0.0001)
+
+      - record: app:slo_error_ratio:1h
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[1h]))
+            /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[1h])), 0.0001)
+
+      - record: app:slo_error_ratio:6h
+        expr: |
+          sum by (application) (rate(http_server_requests_seconds_count{status=~"5.."}[6h]))
+            /
+          clamp_min(sum by (application) (rate(http_server_requests_seconds_count[6h])), 0.0001)
+
+  # ── JVM saturation (for USE method) ────────────────────────────────
+  - name: hms.jvm.saturation
+    interval: 30s
+    rules:
+      - record: app:jvm_heap_used_ratio
+        expr: |
+          sum by (application) (jvm_memory_used_bytes{area="heap"})
+            /
+          clamp_min(sum by (application) (jvm_memory_max_bytes{area="heap"}), 1)
+
+      - record: app:hikaricp_pool_utilisation
+        expr: |
+          sum by (application) (hikaricp_connections_active)
+            /
+          clamp_min(sum by (application) (hikaricp_connections), 1)
