@@ -196,7 +196,10 @@ interface ApiService {
 
     // ── Consents / Privacy ────────────────────────────────────────────────────
     @GET("me/patient/consents")
-    suspend fun getConsents(): Response<ApiResponse<List<ConsentDto>>>
+    suspend fun getConsents(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 50
+    ): Response<ApiResponse<PageDto<ConsentDto>>>
 
     @POST("me/patient/consents/{id}/grant")
     suspend fun grantConsent(
@@ -204,14 +207,17 @@ interface ApiService {
         @Body request: GrantConsentRequest
     ): Response<ApiResponse<ConsentDto>>
 
-    @POST("me/patient/consents/{id}/revoke")
-    suspend fun revokeConsent(@Path("id") id: String): Response<ApiResponse<ConsentDto>>
+    @DELETE("me/patient/consents")
+    suspend fun revokeConsent(
+        @Query("fromHospitalId") fromHospitalId: String,
+        @Query("toHospitalId") toHospitalId: String
+    ): Response<ApiResponse<Unit>>
 
     @GET("me/patient/access-log")
     suspend fun getAccessLog(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<List<AccessLogDto>>>
+    ): Response<ApiResponse<PageDto<AccessLogDto>>>
 
     // ── Proxy / Family Access ─────────────────────────────────────────────────
     @GET("me/patient/proxies")

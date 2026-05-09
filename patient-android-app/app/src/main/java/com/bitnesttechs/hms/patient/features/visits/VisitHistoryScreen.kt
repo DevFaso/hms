@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.models.DischargeSummaryDto
 import com.bitnesttechs.hms.patient.core.models.EncounterDto
@@ -278,42 +279,95 @@ private fun SummaryCard(summary: DischargeSummaryDto) {
             // Expandable body
             if (expanded) {
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                summary.dischargeDiagnosis?.takeIf { it.isNotBlank() }?.let {
-                    DetailRow("Diagnosis", it)
-                }
-                summary.dischargeCondition?.let { DetailRow("Condition", it) }
-                summary.hospitalCourse?.let { DetailRow("Hospital Course", it) }
-                summary.followUpInstructions?.let { DetailRow("Follow-up", it) }
-                summary.activityRestrictions?.let { DetailRow("Activity Restrictions", it) }
-                summary.dietInstructions?.let { DetailRow("Diet", it) }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    summary.dischargeDiagnosis?.takeIf { it.isNotBlank() }?.let {
+                        SummaryField("Diagnosis", it)
+                    }
+                summary.dischargeCondition?.let { SummaryField("Condition", it) }
+                summary.hospitalCourse?.let { SummaryField("Hospital Course", it) }
+                summary.followUpInstructions?.let { SummaryField("Follow-up", it) }
+                summary.activityRestrictions?.let { SummaryField("Activity Restrictions", it) }
+                summary.dietInstructions?.let { SummaryField("Diet", it) }
                 summary.warningSigns?.takeIf { it.isNotBlank() }?.let {
-                    Spacer(Modifier.height(4.dp))
                     Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFFFEF3C7)) {
-                        Text("⚠ $it", modifier = Modifier.padding(8.dp),
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("Warning signs", style = MaterialTheme.typography.labelMedium,
+                                color = Color(0xFF92400E), fontWeight = FontWeight.SemiBold)
+                            Text(it,
                             style = MaterialTheme.typography.labelSmall, color = Color(0xFF92400E))
+                        }
                     }
                 }
                 summary.medicationReconciliation?.takeIf { it.isNotEmpty() }?.let { meds ->
-                    Spacer(Modifier.height(8.dp))
-                    Text("Medications", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    meds.forEach { med ->
-                        val parts = listOfNotNull(med.medicationName, med.dosage, med.frequency, med.reconciliationAction)
-                        Text("• ${parts.joinToString(" — ")}", style = MaterialTheme.typography.bodySmall)
-                    }
+                    SummaryMedicationList(meds)
                 }
                 summary.followUpAppointments?.takeIf { it.isNotEmpty() }?.let { appts ->
-                    Spacer(Modifier.height(8.dp))
-                    Text("Follow-up Appointments", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    appts.forEach { appt ->
-                        val parts = listOfNotNull(appt.providerName, appt.department, appt.appointmentDate)
-                        Text("• ${parts.joinToString(" — ")}", style = MaterialTheme.typography.bodySmall)
-                    }
+                    SummaryAppointmentList(appts)
                 }
                 summary.additionalNotes?.takeIf { it.isNotBlank() }?.let {
-                    Spacer(Modifier.height(4.dp))
-                    DetailRow("Notes", it)
+                    SummaryField("Notes", it)
+                }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMedicationList(meds: List<MedicationReconciliationDto>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Medications", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+        meds.forEach { med ->
+            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(med.medicationName ?: "Medication", style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold)
+                    listOfNotNull(med.dosage, med.frequency, med.reconciliationAction)
+                        .takeIf { it.isNotEmpty() }
+                        ?.let { details ->
+                            Text(details.joinToString(" | "), style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryAppointmentList(appts: List<FollowUpAppointmentDto>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Follow-up appointments", style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+        appts.forEach { appt ->
+            val details = listOfNotNull(appt.providerName, appt.department, appt.appointmentDate)
+            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()) {
+                Text(details.joinToString(" | "), modifier = Modifier.padding(10.dp),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryField(label: String, value: String) {
+    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = BrandBlue,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }

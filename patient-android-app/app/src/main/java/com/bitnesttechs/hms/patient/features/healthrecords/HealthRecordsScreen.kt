@@ -67,9 +67,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.R
+import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.core.models.CurrentMedicationDto
 import com.bitnesttechs.hms.patient.core.models.HealthSummaryDto
 import com.bitnesttechs.hms.patient.core.models.ImmunizationDto
@@ -89,15 +93,23 @@ fun HealthRecordsScreen(onBack: () -> Unit = {}, viewModel: HealthRecordsViewMod
     val referrals by viewModel.referrals.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Overview", "Vitals", "Labs", "Medications", "Immunizations", "Treatment", "Referrals")
+    val tabs = listOf(
+        stringResource(R.string.overview),
+        stringResource(R.string.vitals),
+        stringResource(R.string.lab_results),
+        stringResource(R.string.medications),
+        stringResource(R.string.immunizations),
+        stringResource(R.string.treatment_plans),
+        stringResource(R.string.referrals)
+    )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Health Records") },
+                title = { Text(stringResource(R.string.health_records)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue, titleContentColor = Color.White)
@@ -352,29 +364,31 @@ private fun TreatmentPlansTab(treatmentPlans: List<TreatmentPlanDto>) {
 @Composable
 private fun ReferralsTab(referrals: List<ReferralDto>) {
     if (referrals.isEmpty()) {
-        EmptyState("No referrals")
+        EmptyState(stringResource(R.string.no_referrals))
         return
     }
+    val context = LocalContext.current
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         lazyItems(referrals, key = { it.id }) { referral ->
+            val specialty = LocaleHelper.translateProviderDescriptor(context, referral.specialty)
             ExpandableClinicalCard(
                 icon = Icons.Default.Description,
-                sourceParts = listOfNotNull(referral.referredTo?.let { "Referred to $it" }, referral.specialistName),
+                sourceParts = listOfNotNull(referral.referredTo?.let { context.getString(R.string.referred_to) + " " + it }, referral.specialistName),
                 details = {
                     DetailGrid(
-                        DetailItem("Type", referral.referralType, Icons.Default.Description),
-                        DetailItem("Status", referral.status, Icons.Default.Warning),
-                        DetailItem("Specialist", referral.specialistName, Icons.Default.Person),
-                        DetailItem("Specialty", referral.specialty, Icons.Default.MedicalInformation),
-                        DetailItem("Referred to", referral.referredTo, Icons.Default.LocalHospital),
-                        DetailItem("Date", referral.referralDate?.take(10), Icons.Default.CalendarMonth)
+                        DetailItem(stringResource(R.string.type_label), referral.referralType, Icons.Default.Description),
+                        DetailItem(stringResource(R.string.status), referral.status, Icons.Default.Warning),
+                        DetailItem(stringResource(R.string.specialist), referral.specialistName, Icons.Default.Person),
+                        DetailItem(stringResource(R.string.specialty), specialty, Icons.Default.MedicalInformation),
+                        DetailItem(stringResource(R.string.referred_to), referral.referredTo, Icons.Default.LocalHospital),
+                        DetailItem(stringResource(R.string.date_label), referral.referralDate?.take(10), Icons.Default.CalendarMonth)
                     )
-                    DetailNote("Reason", referral.reason)
-                    DetailNote("Notes", referral.notes)
+                    DetailNote(stringResource(R.string.reason), referral.reason)
+                    DetailNote(stringResource(R.string.notes), referral.notes)
                 }
             ) {
-                Text(referral.referralType ?: "Referral", fontWeight = FontWeight.SemiBold)
-                FlowText(listOfNotNull(referral.specialistName, referral.specialty, referral.status))
+                Text(referral.referralType ?: stringResource(R.string.referral), fontWeight = FontWeight.SemiBold)
+                FlowText(listOfNotNull(referral.specialistName, specialty, referral.status))
                 referral.reason?.let { SecondaryText(it) }
                 referral.referralDate?.let { SecondaryText(it.take(10)) }
             }

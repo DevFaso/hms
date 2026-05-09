@@ -91,6 +91,7 @@
     <string name="language_french">Français</string>
     <string name="language_settings">Language Settings</string>
     <string name="select_language">Select Language</string>
+    <string name="language_restart_note">Language changes apply immediately.</string>
 
     <!-- Appointments -->
     <string name="book_appointment">Book Appointment</string>
@@ -111,6 +112,17 @@
     <string name="cancellation_reason">Cancellation Reason</string>
     <string name="appointment_details">Appointment Details</string>
     <string name="status">Status</string>
+    <string name="no_appointments_found">No appointments found</string>
+    <string name="reason_with_value">Reason: %1$s</string>
+    <string name="cancel_appointment_confirm">Are you sure you want to cancel this appointment?</string>
+    <string name="keep">Keep</string>
+    <string name="appointment_date">Appointment Date</string>
+    <string name="start_time">Start Time</string>
+    <string name="select_time_title">Select Time</string>
+    <string name="pick_date">Pick date</string>
+    <string name="pick_time">Pick time</string>
+    <string name="reason_optional">Reason (optional)</string>
+    <string name="no_doctors_for_booking">No doctors found from previous appointments. Please visit a hospital first.</string>
 
     <!-- Lab Results -->
     <string name="no_lab_results">No lab results</string>
@@ -159,6 +171,11 @@
     <!-- Care Team -->
     <string name="no_care_team">No care team members</string>
     <string name="primary_physician">Primary Physician</string>
+    <string name="care_team_members">Care Team Members</string>
+    <string name="no_primary_care_provider">No primary care provider is assigned yet</string>
+    <string name="care_team_member">Care team member</string>
+    <string name="provider_fallback">Provider</string>
+    <string name="since_date">Since %1$s</string>
     <string name="call">Call</string>
     <string name="role">Role</string>
     <string name="specialty">Specialty</string>
@@ -173,6 +190,9 @@
     <!-- Messages -->
     <string name="no_messages">No messages</string>
     <string name="new_message">New Message</string>
+    <string name="message_provider">Message a Provider</string>
+    <string name="select_provider">Select a Provider</string>
+    <string name="no_providers_found">No providers found</string>
     <string name="type_message">Type a message…</string>
     <string name="send">Send</string>
     <string name="conversations">Conversations</string>
@@ -190,6 +210,10 @@
     <string name="no_immunizations">No immunizations</string>
     <string name="no_treatment_plans">No treatment plans</string>
     <string name="no_referrals">No referrals</string>
+    <string name="type_label">Type</string>
+    <string name="specialist">Specialist</string>
+    <string name="referred_to">Referred to</string>
+    <string name="referral">Referral</string>
 
     <!-- Notifications -->
     <string name="no_notifications">No notifications</string>

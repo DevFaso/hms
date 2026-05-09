@@ -231,6 +231,11 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Text("Requested: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
+                                if (refill.status.uppercase() == "REQUESTED") {
+                                    Text("Sent to the prescribing provider for review",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                                 refill.updatedAt?.takeIf { it != refill.requestedAt }?.let {
                                     Text("Updated: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant)

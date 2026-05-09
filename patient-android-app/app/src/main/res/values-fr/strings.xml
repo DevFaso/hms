@@ -91,6 +91,7 @@
     <string name="language_french">Français</string>
     <string name="language_settings">Paramètres de langue</string>
     <string name="select_language">Sélectionner la langue</string>
+    <string name="language_restart_note">Les changements de langue s\'appliquent immédiatement.</string>
 
     <!-- Appointments -->
     <string name="book_appointment">Prendre rendez-vous</string>
@@ -111,6 +112,17 @@
     <string name="cancellation_reason">Motif d\'annulation</string>
     <string name="appointment_details">Détails du rendez-vous</string>
     <string name="status">Statut</string>
+    <string name="no_appointments_found">Aucun rendez-vous trouvé</string>
+    <string name="reason_with_value">Motif : %1$s</string>
+    <string name="cancel_appointment_confirm">Êtes-vous sûr de vouloir annuler ce rendez-vous ?</string>
+    <string name="keep">Conserver</string>
+    <string name="appointment_date">Date du rendez-vous</string>
+    <string name="start_time">Heure de début</string>
+    <string name="select_time_title">Sélectionner l\'heure</string>
+    <string name="pick_date">Choisir une date</string>
+    <string name="pick_time">Choisir une heure</string>
+    <string name="reason_optional">Motif (facultatif)</string>
+    <string name="no_doctors_for_booking">Aucun médecin trouvé dans les rendez-vous précédents. Veuillez d\'abord consulter un hôpital.</string>
 
     <!-- Lab Results -->
     <string name="no_lab_results">Aucun résultat de laboratoire</string>
@@ -159,6 +171,11 @@
     <!-- Care Team -->
     <string name="no_care_team">Aucun membre de l\'équipe de soins</string>
     <string name="primary_physician">Médecin traitant</string>
+    <string name="care_team_members">Membres de l\'équipe de soins</string>
+    <string name="no_primary_care_provider">Aucun médecin traitant n\'est encore assigné</string>
+    <string name="care_team_member">Membre de l\'équipe de soins</string>
+    <string name="provider_fallback">Prestataire</string>
+    <string name="since_date">Depuis %1$s</string>
     <string name="call">Appeler</string>
     <string name="role">Rôle</string>
     <string name="specialty">Spécialité</string>
@@ -173,6 +190,9 @@
     <!-- Messages -->
     <string name="no_messages">Aucun message</string>
     <string name="new_message">Nouveau message</string>
+    <string name="message_provider">Envoyer un message à un prestataire</string>
+    <string name="select_provider">Sélectionner un prestataire</string>
+    <string name="no_providers_found">Aucun prestataire trouvé</string>
     <string name="type_message">Saisissez un message…</string>
     <string name="send">Envoyer</string>
     <string name="conversations">Conversations</string>
@@ -190,6 +210,10 @@
     <string name="no_immunizations">Aucune vaccination</string>
     <string name="no_treatment_plans">Aucun plan de traitement</string>
     <string name="no_referrals">Aucune orientation</string>
+    <string name="type_label">Type</string>
+    <string name="specialist">Spécialiste</string>
+    <string name="referred_to">Orienté vers</string>
+    <string name="referral">Orientation</string>
 
     <!-- Notifications -->
     <string name="no_notifications">Aucune notification</string>

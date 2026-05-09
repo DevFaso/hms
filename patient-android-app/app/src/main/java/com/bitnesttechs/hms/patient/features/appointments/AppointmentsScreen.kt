@@ -12,10 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.core.models.BookAppointmentRequest
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -53,10 +55,10 @@ fun AppointmentsScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Appointments") },
+                title = { Text(stringResource(R.string.appointments)) },
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+                        Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
@@ -73,7 +75,7 @@ fun AppointmentsScreen(
                 onClick = { showBookingSheet = true },
                 containerColor = BrandBlue
             ) {
-                Icon(Icons.Default.Add, "Book appointment", tint = Color.White)
+                Icon(Icons.Default.Add, stringResource(R.string.book_appointment), tint = Color.White)
             }
         }
     ) { padding ->
@@ -89,12 +91,12 @@ fun AppointmentsScreen(
                     Icon(Icons.Default.CalendarMonth, null, Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
-                    Text("No appointments found", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.no_appointments_found), style = MaterialTheme.typography.bodyLarge)
                     Spacer(Modifier.height(16.dp))
                     FilledTonalButton(onClick = { showBookingSheet = true }) {
                         Icon(Icons.Default.Add, null, Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Book Appointment")
+                        Text(stringResource(R.string.book_appointment))
                     }
                 }
             }
@@ -126,7 +128,7 @@ fun AppointmentsScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    appt.staffName ?: "Unknown Doctor",
+                                    appt.staffName ?: stringResource(R.string.unknown_doctor),
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -145,7 +147,7 @@ fun AppointmentsScreen(
                                 }
                                 appt.reason?.let {
                                     Spacer(Modifier.height(4.dp))
-                                    Text("Reason: $it", style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(R.string.reason_with_value, it), style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             StatusBadge(
@@ -168,7 +170,7 @@ fun AppointmentsScreen(
                                 ) {
                                     Icon(Icons.Default.Cancel, null, Modifier.size(16.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Cancel")
+                                    Text(stringResource(R.string.cancel))
                                 }
                             }
                         }
@@ -183,16 +185,16 @@ fun AppointmentsScreen(
     cancelDialogId?.let { id ->
         AlertDialog(
             onDismissRequest = { cancelDialogId = null },
-            title = { Text("Cancel Appointment") },
-            text = { Text("Are you sure you want to cancel this appointment?") },
+            title = { Text(stringResource(R.string.cancel_appointment)) },
+            text = { Text(stringResource(R.string.cancel_appointment_confirm)) },
             confirmButton = {
                 TextButton(
                     onClick = { viewModel.cancelAppointment(id, "Patient cancelled"); cancelDialogId = null },
                     colors = ButtonDefaults.textButtonColors(contentColor = ErrorRed)
-                ) { Text("Cancel Appointment") }
+                ) { Text(stringResource(R.string.cancel_appointment)) }
             },
             dismissButton = {
-                TextButton(onClick = { cancelDialogId = null }) { Text("Keep") }
+                TextButton(onClick = { cancelDialogId = null }) { Text(stringResource(R.string.keep)) }
             }
         )
     }
@@ -239,7 +241,7 @@ fun BookAppointmentSheet(
             Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Book Appointment", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.book_appointment), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
 
             if (doctors.isEmpty()) {
                 Card(
@@ -248,7 +250,7 @@ fun BookAppointmentSheet(
                     )
                 ) {
                     Text(
-                        "No doctors found from previous appointments. Please visit a hospital first.",
+                        stringResource(R.string.no_doctors_for_booking),
                         modifier = Modifier.padding(16.dp),
                         color = MaterialTheme.colorScheme.onErrorContainer
                     )
@@ -260,10 +262,10 @@ fun BookAppointmentSheet(
                     onExpandedChange = { expanded = !expanded }
                 ) {
                     OutlinedTextField(
-                        value = selectedDoctor?.let { "${it.staffName} — ${it.hospitalName ?: ""}" } ?: "Select doctor",
+                        value = selectedDoctor?.let { "${it.staffName} — ${it.hospitalName ?: ""}" } ?: stringResource(R.string.select_doctor),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Doctor") },
+                        label = { Text(stringResource(R.string.doctor)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
                         modifier = Modifier.fillMaxWidth().menuAnchor()
                     )
@@ -294,11 +296,11 @@ fun BookAppointmentSheet(
                 value = date,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Appointment Date") },
-                placeholder = { Text("Select date") },
+                label = { Text(stringResource(R.string.appointment_date)) },
+                placeholder = { Text(stringResource(R.string.select_date)) },
                 trailingIcon = {
                     IconButton(onClick = { showDatePicker = true }) {
-                        Icon(Icons.Default.CalendarMonth, "Pick date")
+                        Icon(Icons.Default.CalendarMonth, stringResource(R.string.pick_date))
                     }
                 },
                 modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
@@ -309,10 +311,10 @@ fun BookAppointmentSheet(
                 value = displayTime,
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("Start Time") },
+                label = { Text(stringResource(R.string.start_time)) },
                 trailingIcon = {
                     IconButton(onClick = { showTimePicker = true }) {
-                        Icon(Icons.Default.Schedule, "Pick time")
+                        Icon(Icons.Default.Schedule, stringResource(R.string.pick_time))
                     }
                 },
                 modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true }
@@ -321,7 +323,7 @@ fun BookAppointmentSheet(
             OutlinedTextField(
                 value = reason,
                 onValueChange = { reason = it },
-                label = { Text("Reason (optional)") },
+                label = { Text(stringResource(R.string.reason_optional)) },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -346,7 +348,7 @@ fun BookAppointmentSheet(
                 enabled = selectedDoctor != null && date.length >= 10,
                 colors = ButtonDefaults.buttonColors(containerColor = BrandBlue)
             ) {
-                Text("Book Appointment", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.book_appointment), fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(Modifier.height(32.dp))
@@ -374,10 +376,10 @@ fun BookAppointmentSheet(
                         date = ld.format(DateTimeFormatter.ISO_LOCAL_DATE)
                     }
                     showDatePicker = false
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text(stringResource(R.string.cancel)) }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -393,17 +395,17 @@ fun BookAppointmentSheet(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
+            title = { Text(stringResource(R.string.select_time_title)) },
             text = { TimePicker(state = timePickerState) },
             confirmButton = {
                 TextButton(onClick = {
                     selectedHour = timePickerState.hour
                     selectedMinute = timePickerState.minute
                     showTimePicker = false
-                }) { Text("OK") }
+                }) { Text(stringResource(R.string.ok)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showTimePicker = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
