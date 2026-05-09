@@ -106,7 +106,10 @@ groups:
             datasourceUid: hms-prometheus
             model:
               refId: A
-              expr: up
+              # Mirrors HmsTargetDown in grafana/rules/alerts.yml — restrict to
+              # always-on bare-stack jobs so running without --profile observability
+              # doesn't page on intentionally-not-running exporters.
+              expr: up{job=~"prometheus|grafana|loki|alloy|integrations/spring-boot"}
               instant: true
           - refId: B
             datasourceUid: __expr__

@@ -84,16 +84,18 @@ signal.
 ## Failure modes
 
 `logback-spring.xml` registers an `OnConsoleStatusListener`, so the appender's
-internal warnings (HEC unreachable, 4xx/5xx, etc.) are printed to **stderr** alongside
+internal warnings (HEC unreachable, 4xx/5xx, etc.) are printed to **stdout** alongside
 regular application logs. They are tagged `WARN in [SplunkHecAppender]` and won't be
 indexed by Splunk itself (the listener is outside the logging pipeline by design — it
-cannot recurse back into the HEC appender).
+cannot recurse back into the HEC appender). Container log shippers that capture both
+stdout and stderr (Alloy, Loki driver, Datadog Agent, etc.) will pick these lines up;
+shippers that capture only stderr will not.
 
 | Symptom | Where to look |
 | --- | --- |
 | App fails to start with `IllegalStateException: hec.url is blank` | `SPLUNK_HEC_ENABLED=true` but URL/token unset on Railway. Either set them or flip enabled back to `false`. |
 | App fails to start with `must be HTTPS` | URL begins with `http://`. Either fix the URL or set `SPLUNK_HEC_ALLOW_INSECURE_URL=true` (local dev only — never set this in UAT/prod). |
-| App boots, no events in Splunk | Check container `stderr` for `WARN in [SplunkHecAppender]` lines from the status listener. `401`/`403` → token wrong or expired; `404` → URL missing the HEC port (`:8088`) or the wrong host; connect-timeout → network ACL between Railway and the HEC. |
+| App boots, no events in Splunk | Check container `stdout` for `WARN in [SplunkHecAppender]` lines from the status listener. `401`/`403` → token wrong or expired; `404` → URL missing the HEC port (`:8088`) or the wrong host; connect-timeout → network ACL between Railway and the HEC. |
 | Burst of warnings, then quiet | HEC backpressure or transient outage. The appender increments an internal failure counter and never throws; console + Loki paths are unaffected. |
 
 ## Local dev

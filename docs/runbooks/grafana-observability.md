@@ -14,6 +14,8 @@ production base URL.
 
 ---
 
+<a id="hmserrorbudgetfastburn"></a>
+
 ## HmsErrorBudgetFastBurn  (`severity: page`)
 
 **What it means.** Both the 5-minute and 1-hour 5xx error ratios exceed
@@ -49,6 +51,8 @@ is consumed in about two hours.
 
 ---
 
+<a id="hmserrorbudgetslowburn"></a>
+
 ## HmsErrorBudgetSlowBurn  (`severity: ticket`)
 
 **What it means.** Same query as fast burn but at 6× burn rate over
@@ -59,6 +63,8 @@ within the business day.
 endpoints and noisy 4xx misclassifications.
 
 ---
+
+<a id="hmsp99latencyhigh"></a>
 
 ## HmsP99LatencyHigh  (`severity: ticket`)
 
@@ -72,6 +78,8 @@ endpoints and noisy 4xx misclassifications.
    for a corresponding spike in transaction time.
 
 ---
+
+<a id="hmstargetdown"></a>
 
 ## HmsTargetDown  (`severity: page`)
 
@@ -97,6 +105,8 @@ profile is intentionally off.
 
 ---
 
+<a id="hmsbackendnotraffic"></a>
+
 ## HmsBackendNoTraffic  (`severity: ticket`)
 
 **What it means.** Either no clients are reaching the backend or the metric
@@ -106,6 +116,8 @@ pipeline is broken.
 - If logs are flowing but no metrics arrive, restart Alloy.
 
 ---
+
+<a id="hmsheaphigh"></a>
 
 ## HmsHeapHigh  (`severity: ticket`)
 
@@ -118,6 +130,8 @@ pipeline is broken.
    have shell access; otherwise schedule a restart and triage later.
 
 ---
+
+<a id="hmsdbpoolsaturated"></a>
 
 ## HmsDbPoolSaturated  (`severity: page`)
 
@@ -145,12 +159,16 @@ size for 5 minutes. Backend will queue or refuse requests soon.
 
 ---
 
+<a id="hmsdbpoolpendinghigh"></a>
+
 ## HmsDbPoolPendingHigh  (`severity: page`)
 
 **What it means.** At least one Spring thread is waiting on the connection
 pool for 5 minutes. Same triage as `HmsDbPoolSaturated`.
 
 ---
+
+<a id="postgresdown"></a>
 
 ## PostgresDown  (`severity: page`)
 
@@ -163,6 +181,8 @@ pool for 5 minutes. Same triage as `HmsDbPoolSaturated`.
 
 ---
 
+<a id="postgresdeadlocksspiking"></a>
+
 ## PostgresDeadlocksSpiking  (`severity: ticket`)
 
 **What it means.** More than 5 deadlocks in 5 minutes.
@@ -174,6 +194,8 @@ pool for 5 minutes. Same triage as `HmsDbPoolSaturated`.
 
 ---
 
+<a id="postgrescachehitratiolow"></a>
+
 ## PostgresCacheHitRatioLow  (`severity: ticket`)
 
 **What it means.** Buffer cache hit ratio under 95% for 30 minutes.
@@ -184,12 +206,16 @@ pool for 5 minutes. Same triage as `HmsDbPoolSaturated`.
 
 ---
 
+<a id="nodefilesystemfull-nodememoryhigh"></a>
+
 ## NodeFilesystemFull / NodeMemoryHigh  (`severity: ticket`)
 
 Standard host saturation alerts — clear logs, prune docker volumes,
 extend the disk, or scale the host.
 
 ---
+
+<a id="hmsrecentlyrestartedrepeatedly"></a>
 
 ## HmsRecentlyRestartedRepeatedly  (`severity: page`)
 
