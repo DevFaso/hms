@@ -40,7 +40,7 @@
   <ul class="payment-list" *ngIf="claims().length > 0">
     <li *ngFor="let c of claims()" class="payment-item">
       <div class="row-top">
-        <span class="date">{{ (c.submittedAt || c.createdAt) | date: 'dd/MM/yyyy HH:mm' }}</span>
+        <span class="date">{{ c.submittedAt || c.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
         <span class="amount">{{ c.amount | number: '1.0-0' }} {{ c.currency }}</span>
       </div>
       <div class="row-meta">

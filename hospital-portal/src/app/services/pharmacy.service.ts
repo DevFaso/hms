@@ -858,15 +858,11 @@ export class PharmacyService {
   }
 
   /** Patient self-service: backend resolves patientId from the JWT. */
-  listMyPharmacyClaims(
-    page = 0,
-    size = 20,
-  ): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+  listMyPharmacyClaims(page = 0, size = 20): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
     const params = new HttpParams().set('page', page).set('size', size);
-    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>(
-      '/me/patient/pharmacy/claims',
-      { params },
-    );
+    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>('/me/patient/pharmacy/claims', {
+      params,
+    });
   }
 
   exportClaimsCsv(statuses: PharmacyClaimStatus[] = []): Observable<Blob> {
