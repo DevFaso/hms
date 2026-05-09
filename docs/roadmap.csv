@@ -1,6 +1,6 @@
 horizon,target,lane,item,deliverable,dependency,effort,owner,status,exit_criteria_link
-v1.0,2026-06-23,Clinical Safety,CDS Hooks expansion,Add order-select and medication-prescribe hooks with RxNorm bindings; integration tests against existing prescriptions module,—,M,Backend,started,#h1.exit
-v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,Extend hms-medication-allergy-check to fire on coexisting prescriptions; warn-card on critical interactions,CDS Hooks expansion,M,Mixed (Backend + UI),started,#h1.exit
+v1.0,2026-06-23,Clinical Safety,CDS Hooks expansion,Add order-select and medication-prescribe hooks with RxNorm bindings; integration tests against existing prescriptions module,—,M,Backend,completed,#h1.exit
+v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,Extend hms-medication-allergy-check to fire on coexisting prescriptions; warn-card on critical interactions,CDS Hooks expansion,M,Mixed (Backend + UI),completed,#h1.exit
 v1.0,2026-06-23,Pharmacy,T-68 offline dispense queue,IndexedDB queue in pharmacy UI plus replay endpoint; covers hospitals with patchy connectivity,—,M,Mixed (Frontend + Backend),not-started,#h1.exit
 v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense path: Tier 1 in-house, Tier 2 partner, refill, AMU export",—,S,Frontend,not-started,#h1.exit
 v1.0,2026-06-23,Pharmacy,T-72 perf baseline,k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md,—,S,Platform,not-started,#h1.exit
