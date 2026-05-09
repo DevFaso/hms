@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ConsultationService;
@@ -28,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +53,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
@@ -59,11 +62,20 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
-        Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+
+        boolean patientRegistered = patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(
+            patient.getId(), hospital.getId()
+        );
+        if (!patientRegistered) {
+            throw new AccessDeniedException(
+                "You are not authorized to create consultations for this patient in the selected hospital."
+            );
+        }
 
         Staff requestingProvider = resolveRequestingProvider(requestingProviderId, hospital.getId());
 

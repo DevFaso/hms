@@ -31,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -86,7 +87,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
         String notes = normalizeOptionalText(request.getNotes());
 
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
 
         Staff staff = staffRepository.findById(request.getOrderingStaffId())
@@ -118,7 +119,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             hospital.getId()
         );
         if (!patientRegistered) {
-            throw new BusinessException("Patient is not registered with the specified hospital.");
+            throw new AccessDeniedException("You are not authorized to create orders for this patient in the selected hospital.");
         }
 
         // Role check based on assignment, not JWT

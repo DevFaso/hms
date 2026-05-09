@@ -162,7 +162,8 @@ export class LabComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          const hospitalId = this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
+          return this.patientService.list(hospitalId, q);
         }),
       )
       .subscribe({

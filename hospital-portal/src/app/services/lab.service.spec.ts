@@ -19,6 +19,36 @@ describe('LabService', () => {
 
   // ── Lab Result CRUD ──────────────────────────────────────────────────
 
+  describe('createOrder', () => {
+    it('should POST to /lab-orders with patientId and hospitalId from payload', () => {
+      const req = {
+        patientId: 'patient-123',
+        hospitalId: 'hospital-456',
+        testName: 'Complete Blood Count',
+        status: 'ORDERED',
+        clinicalIndication: 'Fever workup',
+        medicalNecessityNote: 'Rule out infection',
+        orderingStaffId: 'staff-001',
+        labTestDefinitionId: 'def-001',
+        assignmentId: 'assign-001',
+        primaryDiagnosisCode: 'A01.1',
+        orderChannel: 'PORTAL',
+        providerSignature: 'signed',
+      };
+      const mockResp = { data: { id: 'order-1', patientId: req.patientId, hospitalName: 'General' }, success: true };
+
+      service.createOrder(req).subscribe((res) => {
+        expect(res.id).toBe('order-1');
+      });
+
+      const httpReq = httpMock.expectOne('/lab-orders');
+      expect(httpReq.request.method).toBe('POST');
+      expect(httpReq.request.body.patientId).toBe(req.patientId);
+      expect(httpReq.request.body.hospitalId).toBe(req.hospitalId);
+      httpReq.flush(mockResp);
+    });
+  });
+
   describe('createResult', () => {
     it('should POST to /lab-results', () => {
       const req: LabResultRequest = {

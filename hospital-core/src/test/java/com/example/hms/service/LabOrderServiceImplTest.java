@@ -32,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -266,8 +267,20 @@ class LabOrderServiceImplTest {
         assertThat(saved.getStandingOrderReviewNotes()).isEqualTo(reviewNotes);
     }
 
+    @Test
+    void createLabOrderThrowsAccessDeniedWhenPatientNotRegisteredForHospital() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(baseRequestBuilder().build(), Locale.ENGLISH))
+            .isInstanceOf(AccessDeniedException.class)
+            .hasMessageContaining("not authorized");
+    }
+
     private void mockCommonLookups() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
