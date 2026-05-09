@@ -1281,4 +1281,59 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V92 — 1:1 enforcement between Encounter and DischargeSummary
+         Defensively dedupes any pre-existing duplicate discharge_summaries
+         rows (keeping the original by created_at), then adds a UNIQUE
+         constraint on (encounter_id) so concurrent /me/patient/
+         after-visit-summaries backfills can no longer race-create
+         duplicates. The dedupe + constraint addition share a single DO $$
+         block, so splitStatements MUST be false (same reasoning as V9 /
+         V61 / V63).
+         Originally landed via PR #259 (fix(avs): address Copilot review
+         findings) but the changelog entry was missed; this entry registers
+         the existing migration with Liquibase. The SQL is idempotent —
+         the DO block guards on pg_constraint — so re-applying on
+         deployments that already ran V92 directly is a no-op.
+         ================================================================= -->
+    <changeSet id="V92-discharge-summaries-unique-encounter-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V92__discharge_summaries_unique_encounter_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V93 — v1.0 / Clinical Safety / CDS Hooks expansion (roadmap row 2)
+         Strengthens the RxNorm binding on
+         clinical.medication_catalog_items so the new order-select and
+         medication-prescribe hook services can resolve a catalog row
+         from a FHIR CodeableConcept whose only typed coding is the
+         canonical RxNorm system.
+         Adds (additive, idempotent):
+           1. Pre-flight UPDATE NULL-ing any malformed rxnorm_code so
+              the CHECK constraint can be added safely.
+           2. CHECK constraint chk_med_catalog_rxnorm_format pinning
+              rxnorm_code to ^[0-9]{1,12}$ — same regex
+              TerminologyCodes.RXNORM enforces in Java. Wrapped in a
+              DO $$ + pg_constraint guard so re-running is a no-op.
+           3. Partial index idx_med_catalog_rxnorm_active backing the
+              new MedicationCatalogItemRepository
+              .findActiveByHospitalIdAndRxnormCode lookup used by both
+              new hooks and by the extended hms-medication-allergy-check
+              (drug-drug interaction add-on, roadmap row 3).
+           4. Optional tall_man_name VARCHAR(200) column for ISMP
+              confusable-name pairs surfaced in card detail by
+              MedicationPrescribeRulesCdsService.
+         splitStatements MUST be false because the CHECK-constraint
+         step uses a DO $$ ... $$; block (same reasoning as V9 / V61 /
+         V63 / V92).
+         ================================================================= -->
+    <changeSet id="V93-cds-rxnorm-bindings" author="hms-team" runOnChange="false">
+        <sqlFile path="V93__cds_rxnorm_bindings.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
