@@ -20,6 +20,7 @@ splashscreen = "1.0.1"
 material3Xml = "1.12.0"
 appauth = "0.11.1"
 datastorePreferences = "1.1.1"
+desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
 mockk = "1.13.13"
 coroutinesTest = "1.9.0"
@@ -60,6 +61,7 @@ splashscreen = { group = "androidx.core", name = "core-splashscreen", version.re
 material3-xml = { group = "com.google.android.material", name = "material", version.ref = "material3Xml" }
 appauth = { group = "net.openid", name = "appauth", version.ref = "appauth" }
 datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 mockk-android = { group = "io.mockk", name = "mockk-android", version.ref = "mockk" }

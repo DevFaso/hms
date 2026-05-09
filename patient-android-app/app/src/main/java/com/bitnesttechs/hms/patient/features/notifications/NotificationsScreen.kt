@@ -24,7 +24,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewModel = hiltViewModel()) {
     val notifications by viewModel.notifications.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val unreadCount = notifications.count { !it.isRead }
+    val unreadCount by viewModel.unreadCount.collectAsState()
     var selectedNotification by remember { mutableStateOf<NotificationDto?>(null) }
 
     Scaffold(
@@ -40,7 +40,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
                     containerColor = BrandBlue, titleContentColor = Color.White
                 ),
                 actions = {
-                    if (unreadCount > 0) {
+                    if (unreadCount > 0L) {
                         TextButton(onClick = { viewModel.markAllRead() }) {
                             Text("Mark all read", color = Color.White,
                                 style = MaterialTheme.typography.labelMedium)

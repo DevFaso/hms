@@ -18,6 +18,9 @@ class NotificationsViewModel @Inject constructor(
     private val _notifications = MutableStateFlow<List<NotificationDto>>(emptyList())
     val notifications: StateFlow<List<NotificationDto>> = _notifications
 
+    private val _unreadCount = MutableStateFlow(0L)
+    val unreadCount: StateFlow<Long> = _unreadCount
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
@@ -29,8 +32,11 @@ class NotificationsViewModel @Inject constructor(
             try {
                 val resp = api.getNotifications()
                 if (resp.isSuccessful) {
-                    _notifications.value = resp.body()?.content ?: emptyList()
+                    val page = resp.body()?.data
+                    _notifications.value = page?.content ?: emptyList()
+                    _unreadCount.value = _notifications.value.count { !it.isRead }.toLong()
                 }
+                loadUnreadCount()
             } catch (_: Exception) {
             } finally {
                 _isLoading.value = false
@@ -46,6 +52,7 @@ class NotificationsViewModel @Inject constructor(
                     _notifications.value = _notifications.value.map {
                         if (it.id == id) it.copy(isRead = true) else it
                     }
+                    _unreadCount.value = _notifications.value.count { !it.isRead }.toLong()
                 }
             } catch (_: Exception) {}
         }
@@ -54,18 +61,23 @@ class NotificationsViewModel @Inject constructor(
     fun markAllRead() {
         viewModelScope.launch {
             try {
-                val unread = _notifications.value.filter { !it.isRead }
-                val marked = mutableSetOf<String>()
-                unread.forEach { notif ->
-                    val resp = api.markNotificationRead(notif.id)
-                    if (resp.isSuccessful) marked.add(notif.id)
-                }
-                if (marked.isNotEmpty()) {
+                val resp = api.markAllNotificationsRead()
+                if (resp.isSuccessful) {
                     _notifications.value = _notifications.value.map {
-                        if (it.id in marked) it.copy(isRead = true) else it
+                        it.copy(isRead = true)
                     }
+                    _unreadCount.value = 0
                 }
             } catch (_: Exception) {}
         }
+    }
+
+    private suspend fun loadUnreadCount() {
+        try {
+            val resp = api.getUnreadNotificationCount()
+            if (resp.isSuccessful) {
+                _unreadCount.value = resp.body()?.data?.get("unreadCount") ?: _unreadCount.value
+            }
+        } catch (_: Exception) {}
     }
 }

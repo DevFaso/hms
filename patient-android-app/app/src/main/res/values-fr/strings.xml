@@ -33,6 +33,7 @@
     <string name="medications">Médicaments</string>
     <string name="prescriptions">Ordonnances</string>
     <string name="billing">Facturation</string>
+    <string name="pharmacy_invoices">Factures de pharmacie</string>
     <string name="vitals">Signes vitaux</string>
     <string name="care_team">Équipe de soins</string>
     <string name="visit_history">Historique des visites</string>
@@ -48,6 +49,7 @@
     <string name="upcoming_appointments">Prochains rendez-vous</string>
     <string name="recent_lab_results">Résultats récents</string>
     <string name="allergies">Allergies</string>
+    <string name="no_known_allergies">Aucune allergie connue</string>
     <string name="active_conditions">Conditions actives</string>
     <string name="chronic_conditions">Conditions chroniques</string>
     <string name="see_all">Voir tout</string>
@@ -90,6 +92,7 @@
     <string name="language_french">Français</string>
     <string name="language_settings">Paramètres de langue</string>
     <string name="select_language">Sélectionner la langue</string>
+    <string name="language_restart_note">Les changements de langue s\'appliquent immédiatement.</string>
 
     <!-- Appointments -->
     <string name="book_appointment">Prendre rendez-vous</string>
@@ -110,12 +113,24 @@
     <string name="cancellation_reason">Motif d\'annulation</string>
     <string name="appointment_details">Détails du rendez-vous</string>
     <string name="status">Statut</string>
+    <string name="no_appointments_found">Aucun rendez-vous trouvé</string>
+    <string name="reason_with_value">Motif : %1$s</string>
+    <string name="cancel_appointment_confirm">Êtes-vous sûr de vouloir annuler ce rendez-vous ?</string>
+    <string name="keep">Conserver</string>
+    <string name="appointment_date">Date du rendez-vous</string>
+    <string name="start_time">Heure de début</string>
+    <string name="select_time_title">Sélectionner l\'heure</string>
+    <string name="pick_date">Choisir une date</string>
+    <string name="pick_time">Choisir une heure</string>
+    <string name="reason_optional">Motif (facultatif)</string>
+    <string name="no_doctors_for_booking">Aucun médecin trouvé dans les rendez-vous précédents. Veuillez d\'abord consulter un hôpital.</string>
 
     <!-- Lab Results -->
     <string name="no_lab_results">Aucun résultat de laboratoire</string>
     <string name="result">Résultat</string>
     <string name="reference">Référence</string>
     <string name="ordered_by">Prescrit par</string>
+    <string name="ordered_by_with_value">Prescrit par %1$s</string>
     <string name="critical">CRITIQUE</string>
     <string name="abnormal">ANORMAL</string>
     <string name="normal">Normal</string>
@@ -126,6 +141,7 @@
     <string name="dosage">Dosage</string>
     <string name="frequency">Fréquence</string>
     <string name="prescribed_by">Prescrit par</string>
+    <string name="prescribed_by_with_value">Prescrit par %1$s</string>
     <string name="refills_remaining">Renouvellements restants</string>
 
     <!-- Billing -->
@@ -135,6 +151,16 @@
     <string name="total">Total</string>
     <string name="paid">Payé</string>
     <string name="balance">Solde</string>
+    <string name="payments">Paiements</string>
+    <string name="claims">Réclamations</string>
+    <string name="claim">Réclamation</string>
+    <string name="total_paid">Total payé</string>
+    <string name="total_claimed">Total réclamé</string>
+    <string name="no_pharmacy_payments">Aucun paiement de pharmacie</string>
+    <string name="no_pharmacy_claims">Aucune réclamation de pharmacie</string>
+    <string name="reference_with_value">Réf. : %1$s</string>
+    <string name="pharmacy_payments_load_failed">Les paiements n\'ont pas pu être chargés (%1$s)</string>
+    <string name="pharmacy_claims_load_failed">Les réclamations n\'ont pas pu être chargées (%1$s)</string>
 
     <!-- Vitals -->
     <string name="record_vitals">Enregistrer les signes vitaux</string>
@@ -143,6 +169,14 @@
     <string name="heart_rate">Fréquence cardiaque</string>
     <string name="temperature">Température</string>
     <string name="oxygen_saturation">Saturation en oxygène</string>
+    <string name="oxygen">Oxygène</string>
+    <string name="respiratory_rate">Fréq. respiratoire</string>
+    <string name="glucose">Glycémie</string>
+    <string name="position">Position</string>
+    <string name="clinical_flag">Indicateur clinique</string>
+    <string name="significant">Significatif</string>
+    <string name="not_flagged">Non signalé</string>
+    <string name="recorded_by_with_value">Enregistré par %1$s</string>
     <string name="weight">Poids</string>
     <string name="latest_readings">Dernières mesures</string>
     <string name="history">Historique</string>
@@ -150,6 +184,11 @@
     <!-- Care Team -->
     <string name="no_care_team">Aucun membre de l\'équipe de soins</string>
     <string name="primary_physician">Médecin traitant</string>
+    <string name="care_team_members">Membres de l\'équipe de soins</string>
+    <string name="no_primary_care_provider">Aucun médecin traitant n\'est encore assigné</string>
+    <string name="care_team_member">Membre de l\'équipe de soins</string>
+    <string name="provider_fallback">Prestataire</string>
+    <string name="since_date">Depuis %1$s</string>
     <string name="call">Appeler</string>
     <string name="role">Rôle</string>
     <string name="specialty">Spécialité</string>
@@ -164,6 +203,9 @@
     <!-- Messages -->
     <string name="no_messages">Aucun message</string>
     <string name="new_message">Nouveau message</string>
+    <string name="message_provider">Envoyer un message à un prestataire</string>
+    <string name="select_provider">Sélectionner un prestataire</string>
+    <string name="no_providers_found">Aucun prestataire trouvé</string>
     <string name="type_message">Saisissez un message…</string>
     <string name="send">Envoyer</string>
     <string name="conversations">Conversations</string>
@@ -178,9 +220,49 @@
     <string name="immunizations">Vaccinations</string>
     <string name="treatment_plans">Plans de traitement</string>
     <string name="referrals">Orientations</string>
+    <string name="my_chart">Mon dossier</string>
+    <string name="dob_prefix">Né(e) le %1$s</string>
+    <string name="hospital_id_with_value">ID hôpital %1$s</string>
+    <string name="primary_hospital_with_value">Hôpital principal : %1$s</string>
+    <string name="source_with_value">Source : %1$s</string>
+    <string name="read_details">Voir les détails</string>
+    <string name="collapse_details">Réduire les détails</string>
+    <string name="active_diagnoses">Diagnostics actifs</string>
+    <string name="no_active_diagnoses">Aucun diagnostic actif</string>
+    <string name="no_chronic_conditions">Aucune condition chronique</string>
+    <string name="no_recent_vitals">Aucun signe vital récent</string>
+    <string name="no_recent_lab_results">Aucun résultat récent de laboratoire</string>
+    <string name="range">Intervalle</string>
+    <string name="collected">Prélevé</string>
+    <string name="result_date">Date du résultat</string>
+    <string name="laboratory">Laboratoire</string>
+    <string name="medication">Médicament</string>
+    <string name="prescriber">Prescripteur</string>
+    <string name="start">Début</string>
+    <string name="start_date_with_value">Début %1$s</string>
+    <string name="end">Fin</string>
+    <string name="indication">Indication</string>
+    <string name="no_immunization_records">Aucun dossier de vaccination</string>
+    <string name="administered_by_with_value">Administré par %1$s</string>
+    <string name="vaccine">Vaccin</string>
+    <string name="given">Administré</string>
+    <string name="by">Par</string>
+    <string name="maker">Fabricant</string>
+    <string name="lot">Lot</string>
+    <string name="next_dose">Prochaine dose</string>
+    <string name="next_dose_with_value">Prochaine dose %1$s</string>
+    <string name="treatment_plan">Plan de traitement</string>
+    <string name="created_by">Créé par</string>
+    <string name="created_by_with_value">Créé par %1$s</string>
+    <string name="description">Description</string>
+    <string name="goals">Objectifs</string>
     <string name="no_immunizations">Aucune vaccination</string>
     <string name="no_treatment_plans">Aucun plan de traitement</string>
     <string name="no_referrals">Aucune orientation</string>
+    <string name="type_label">Type</string>
+    <string name="specialist">Spécialiste</string>
+    <string name="referred_to">Orienté vers</string>
+    <string name="referral">Orientation</string>
 
     <!-- Notifications -->
     <string name="no_notifications">Aucune notification</string>

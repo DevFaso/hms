@@ -197,7 +197,7 @@ export class ConsultationsComponent implements OnInit {
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
+          const hid = this.patientSearchHospitalId();
           return this.patientService.list(hid, q);
         }),
       )
@@ -233,8 +233,19 @@ export class ConsultationsComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  onHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.clearPatient();
+    this.patientSuggestions.set([]);
+    this.patientDropdownOpen.set(false);
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
   }
 
   openCreate(): void {

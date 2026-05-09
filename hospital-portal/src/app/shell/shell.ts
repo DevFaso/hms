@@ -139,10 +139,22 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/my-billing',
         },
         {
+          icon: 'local_pharmacy',
+          label: 'Pharmacy Invoices',
+          translationKey: 'NAV.PHARMACY_INVOICES',
+          route: '/my-pharmacy-invoices',
+        },
+        {
           icon: 'history',
           label: 'Visit History',
           translationKey: 'NAV.VISIT_HISTORY',
           route: '/my-visits',
+        },
+        {
+          icon: 'groups',
+          label: 'Care Team',
+          translationKey: 'NAV.CARE_TEAM',
+          route: '/my-care-team',
         },
         {
           icon: 'folder_shared',
@@ -163,17 +175,29 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/my-sharing',
         },
         {
+          icon: 'family_restroom',
+          label: 'Family Access',
+          translationKey: 'NAV.FAMILY_ACCESS',
+          route: '/my-family-access',
+        },
+        {
           icon: 'summarize',
           label: 'Visit Summaries',
           translationKey: 'NAV.VISIT_SUMMARIES',
           route: '/my-summaries',
+        },
+        {
+          icon: 'description',
+          label: 'Documents',
+          translationKey: 'NAV.DOCUMENTS',
+          route: '/my-documents',
         },
         { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
         {
           icon: 'notifications',
           label: 'Notifications',
           translationKey: 'NAV.NOTIFICATIONS',
-          route: '/notifications',
+          route: '/my-notifications',
         },
       ];
     }

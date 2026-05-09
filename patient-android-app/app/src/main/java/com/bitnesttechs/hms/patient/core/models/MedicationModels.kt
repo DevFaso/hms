@@ -51,6 +51,7 @@ data class RefillDto(
 
 @JsonClass(generateAdapter = true)
 data class RefillRequest(
-    @Json(name = "pharmacyId") val pharmacyId: String? = null,
+    @Json(name = "prescriptionId") val prescriptionId: String,
+    @Json(name = "preferredPharmacy") val preferredPharmacy: String? = null,
     @Json(name = "notes") val notes: String? = null
 )

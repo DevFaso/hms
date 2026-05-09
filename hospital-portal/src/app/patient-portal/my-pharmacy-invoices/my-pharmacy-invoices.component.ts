@@ -1,6 +1,10 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { PharmacyService, PharmacyPaymentResponse } from '../../services/pharmacy.service';
+import {
+  PharmacyClaimResponse,
+  PharmacyService,
+  PharmacyPaymentResponse,
+} from '../../services/pharmacy.service';
 
 /**
  * T-45: patient portal — pharmacy invoices & payment history.
@@ -19,8 +23,10 @@ export class MyPharmacyInvoicesComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
 
   payments = signal<PharmacyPaymentResponse[]>([]);
+  claims = signal<PharmacyClaimResponse[]>([]);
   loading = signal(true);
   totalPaid = signal(0);
+  totalClaimed = signal(0);
 
   readonly methodLabels: Record<string, string> = {
     CASH: 'Espèces',
@@ -44,9 +50,22 @@ export class MyPharmacyInvoicesComponent implements OnInit {
       },
       error: () => this.loading.set(false),
     });
+
+    this.svc.listMyPharmacyClaims(0, 50).subscribe({
+      next: (res) => {
+        const items = res?.data?.content ?? [];
+        this.claims.set(items);
+        this.totalClaimed.set(items.reduce((sum, c) => sum + (c.amount ?? 0), 0));
+      },
+      error: () => undefined,
+    });
   }
 
   methodLabel(m: string): string {
     return this.methodLabels[m] ?? m;
+  }
+
+  statusLabel(status: string): string {
+    return status.replace(/_/g, ' ').toLowerCase();
   }
 }
