@@ -146,8 +146,14 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: hms-prometheus
+    # Bind to localhost only. --web.enable-lifecycle below exposes UNAUTHENTICATED
+    # admin endpoints (POST /-/reload, POST /-/quit). On a developer laptop "127.0.0.1"
+    # keeps those endpoints reachable from the host (`curl localhost:9090/-/reload`)
+    # while preventing access from other machines on the same Wi-Fi network. Other
+    # Docker services on this compose network can still reach Prometheus by service
+    # name (`prometheus:9090`) — the port mapping only affects host-side exposure.
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./grafana/rules:/etc/prometheus/rules:ro
