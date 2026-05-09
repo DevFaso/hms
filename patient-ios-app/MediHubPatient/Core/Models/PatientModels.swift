@@ -52,6 +52,10 @@ struct PatientProfileDTO: Codable, Identifiable {
     let chronicConditions: String?
     let preferredPharmacy: String?
     let mrn: String?
+    let hospitalId: String?
+    let hospitalName: String?
+    let primaryHospitalId: String?
+    let primaryHospitalName: String?
 
     // Legacy compat fields
     let phoneNumberPrimary: String?
@@ -77,7 +81,7 @@ struct PatientProfileDTO: Codable, Identifiable {
         case insuranceProvider, insuranceMemberId, insurancePlan
         case bloodType, preferredLanguage, primaryCareProvider
         case facility, memberSince, profileImageUrl, username
-        case country, chronicConditions, preferredPharmacy, mrn
+        case country, chronicConditions, preferredPharmacy, mrn, hospitalId, hospitalName, primaryHospitalId, primaryHospitalName
         case phoneNumberPrimary, phoneNumberSecondary, lastVisit
         case addressLine1, addressLine2, city, state, zipCode
         case insurancePolicyNumber, insuranceGroupNumber, insurancePlanType

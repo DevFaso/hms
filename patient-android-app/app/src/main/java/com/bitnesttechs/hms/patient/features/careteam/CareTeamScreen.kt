@@ -1,6 +1,7 @@
 package com.bitnesttechs.hms.patient.features.careteam
 
 import android.content.Intent
+import android.content.Context
 import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,9 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.R
+import com.bitnesttechs.hms.patient.core.locale.LocaleHelper
 import com.bitnesttechs.hms.patient.core.models.CareTeamMemberDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
@@ -27,15 +31,16 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltViewModel()) {
     val careTeam by viewModel.careTeam.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Care Team") },
+                title = { Text(stringResource(R.string.care_team)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -58,8 +63,9 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
         ) {
             // Primary physician
             careTeam?.primaryPhysician?.let { primary ->
+                val primaryName = primary.displayName(context)
                 item {
-                    Text("Primary Physician", style = MaterialTheme.typography.titleSmall,
+                    Text(stringResource(R.string.primary_physician), style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold)
                 }
                 item {
@@ -80,7 +86,7 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
-                                        primary.name.take(1).uppercase(),
+                                        primaryName.take(1).uppercase(),
                                         color = Color.White,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
@@ -88,12 +94,12 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                                 }
                             }
                             Column(Modifier.weight(1f)) {
-                                Text(primary.name, fontWeight = FontWeight.Bold)
-                                Text(primary.specialty ?: "Physician",
+                                Text(primaryName, fontWeight = FontWeight.Bold)
+                                Text(primary.subtitle(context),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                primary.phone?.let {
-                                    Text(it, style = MaterialTheme.typography.labelSmall,
+                                primary.startDate?.let {
+                                    Text(stringResource(R.string.since_date, it.take(10)), style = MaterialTheme.typography.labelSmall,
                                         color = BrandBlue)
                                 }
                             }
@@ -101,7 +107,7 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                                 IconButton(onClick = {
                                     context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
                                 }) {
-                                    Icon(Icons.Default.Phone, "Call", tint = BrandBlue)
+                                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandBlue)
                                 }
                             }
                         }
@@ -114,7 +120,7 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
             if (!members.isNullOrEmpty()) {
                 item {
                     Spacer(Modifier.height(4.dp))
-                    Text("Care Team Members", style = MaterialTheme.typography.titleSmall,
+                    Text(stringResource(R.string.care_team_members), style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold)
                 }
                 items(members) { member ->
@@ -124,11 +130,16 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
                 }
             }
 
-            if (careTeam == null && !isLoading) {
+            val hasCareTeam = careTeam?.primaryPhysician != null || !members.isNullOrEmpty()
+            if (!hasCareTeam && !isLoading) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text("No care team information available",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Groups, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(8.dp))
+                            Text(error ?: context.getString(R.string.no_primary_care_provider),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -139,6 +150,8 @@ fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltV
 
 @Composable
 private fun CareTeamMemberRow(member: CareTeamMemberDto, onCallPhone: (String) -> Unit) {
+    val context = LocalContext.current
+    val name = member.displayName(context)
     Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(1.dp)) {
         Row(
             Modifier.padding(12.dp).fillMaxWidth(),
@@ -148,26 +161,38 @@ private fun CareTeamMemberRow(member: CareTeamMemberDto, onCallPhone: (String) -
             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
                 modifier = Modifier.size(44.dp)) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(member.name.take(1).uppercase(), fontWeight = FontWeight.Bold,
+                    Text(name.take(1).uppercase(), fontWeight = FontWeight.Bold,
                         color = BrandBlue)
                 }
             }
             Column(Modifier.weight(1f)) {
-                Text(member.name, fontWeight = FontWeight.SemiBold,
+                Text(name, fontWeight = FontWeight.SemiBold,
                     style = MaterialTheme.typography.bodyMedium)
-                Text(member.role ?: member.specialty ?: "Staff",
+                Text(member.subtitle(context),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                member.department?.let {
+                LocaleHelper.translateProviderDescriptor(context, member.department)?.let {
                     Text(it, style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             member.phone?.let { phone ->
                 IconButton(onClick = { onCallPhone(phone) }) {
-                    Icon(Icons.Default.Phone, "Call", tint = BrandBlue, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Phone, stringResource(R.string.call), tint = BrandBlue, modifier = Modifier.size(20.dp))
                 }
             }
         }
     }
 }
+
+private fun CareTeamMemberDto.displayName(context: Context): String =
+    name.takeIf { it.isNotBlank() } ?: doctorDisplay?.takeIf { it.isNotBlank() } ?: context.getString(R.string.provider_fallback)
+
+private fun CareTeamMemberDto.subtitle(context: Context): String =
+    listOfNotNull(
+        LocaleHelper.translateProviderDescriptor(context, role),
+        LocaleHelper.translateProviderDescriptor(context, specialty),
+        LocaleHelper.translateProviderDescriptor(context, department),
+        hospitalName
+    ).filter { it.isNotBlank() }.joinToString(" · ")
+        .ifBlank { context.getString(R.string.care_team_member) }

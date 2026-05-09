@@ -29,6 +29,8 @@ enum APIEndpoints {
     static let prescriptions = "/me/patient/prescriptions"
     static let refills = "/me/patient/refills"
     static let invoices = "/me/patient/billing/invoices"
+    static let pharmacyPayments = "/me/patient/pharmacy/payments"
+    static let pharmacyClaims = "/me/patient/pharmacy/claims"
     static let encounters = "/me/patient/encounters"
     static let afterVisitSummaries = "/me/patient/after-visit-summaries"
     static let careTeam = "/me/patient/care-team"
@@ -43,7 +45,12 @@ enum APIEndpoints {
 
     // MARK: Notifications
 
-    static let notifications = "/me/notifications"
+    static let notifications = "/me/patient/notifications"
+    static let notificationUnreadCount = "/me/patient/notifications/unread-count"
+    static let markAllNotificationsRead = "/me/patient/notifications/read-all"
+    static func markNotificationRead(id: String) -> String {
+        "/me/patient/notifications/\(id)/read"
+    }
 
     // MARK: Chat / Messages
 

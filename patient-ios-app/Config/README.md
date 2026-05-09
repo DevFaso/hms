@@ -62,9 +62,11 @@ xcodebuild -project MediHubPatient.xcodeproj \
            archive
 ```
 
-Default `Debug` and `Release` configurations remain unchanged for
-in-Xcode development; their `MEDIHUB_KEYCLOAK_*` values stay empty
-unless overridden via the scheme's environment variables.
+Default `Debug` and `Release` build settings remain unchanged; local
+Xcode Run/Test sessions use the scheme environment variables from
+[`../project.yml`](../project.yml), which point at the dev Keycloak
+realm with SSO enabled. Archive builds still take their values from the
+selected `Config/{Dev,UAT,Prod}.xcconfig` file.
 
 ## Flipping SSO on in prod (Phase 3 cutover)
 

@@ -14,7 +14,7 @@ Native Android patient portal built with **Kotlin + Jetpack Compose**.
 | Auth Storage | EncryptedSharedPreferences (AES256-GCM) |
 | Biometrics | BiometricPrompt (AndroidX Biometric) |
 | Image Loading | Coil 2.7 |
-| Min SDK | 26 (Android 8.0) |
+| Min SDK | 23 (Android 6.0) |
 | Target SDK | 35 |
 
 ## Project Structure
@@ -77,7 +77,7 @@ API base URLs are injected at build time via `BuildConfig.API_BASE_URL`:
 ### Prerequisites
 - Android Studio Ladybug or later
 - JDK 17+
-- Android emulator (API 26+) or physical device
+- Android emulator (API 23+) or physical device
 
 ### Steps
 

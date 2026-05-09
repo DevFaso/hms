@@ -136,9 +136,9 @@ fun AppointmentDetailScreen(
                 title = "Record Info",
                 icon = Icons.Default.Info
             ) {
-                DetailRow("Appointment ID", appointment.id.take(8) + "…")
-                DetailRow("Staff ID", appointment.staffId?.take(8)?.plus("…") ?: "—")
-                DetailRow("Patient ID", appointment.patientId?.take(8)?.plus("…") ?: "—")
+                DetailRow("Reference", "APPT-${appointment.id.take(8).uppercase()}")
+                DetailRow("Provider", appointment.staffName ?: "—")
+                DetailRow("Location", appointment.hospitalName ?: "—")
             }
 
             // Actions

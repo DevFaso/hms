@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ConsultationService;
@@ -52,6 +53,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
+    private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
@@ -59,11 +61,15 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+
+        if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            throw new BusinessException("Patient is not registered with the specified hospital.");
+        }
 
         Staff requestingProvider = resolveRequestingProvider(requestingProviderId, hospital.getId());
 

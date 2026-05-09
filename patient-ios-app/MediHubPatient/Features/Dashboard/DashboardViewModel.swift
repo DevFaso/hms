@@ -62,6 +62,10 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private func loadNotifications() async {
-        notifications = await (try? APIClient.shared.get(APIEndpoints.notifications)) ?? []
+        let page: PageDTO<NotificationDTO>? = try? await APIClient.shared.get(
+            APIEndpoints.notifications,
+            queryItems: [URLQueryItem(name: "read", value: "false"), URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "5")]
+        )
+        notifications = page?.content ?? []
     }
 }

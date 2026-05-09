@@ -82,11 +82,22 @@ data class CareTeamDto(
 data class CareTeamMemberDto(
     @Json(name = "id") val id: String = "",
     @Json(name = "name") val name: String = "",
+    @Json(name = "doctorDisplay") val doctorDisplay: String? = null,
     @Json(name = "role") val role: String? = null,
     @Json(name = "specialty") val specialty: String? = null,
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "email") val email: String? = null,
-    @Json(name = "department") val department: String? = null
+    @Json(name = "department") val department: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null,
+    @Json(name = "startDate") val startDate: String? = null,
+    @Json(name = "endDate") val endDate: String? = null,
+    @Json(name = "current") val current: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class ConsentHospitalDto(
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "name") val name: String? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -173,15 +184,22 @@ data class TreatmentPlanDto(
 @JsonClass(generateAdapter = true)
 data class ConsentDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "type") val type: String = "",
-    @Json(name = "consentType") val consentType: String = "",
-    @Json(name = "title") val title: String = "",
+    @Json(name = "type") val type: String? = null,
+    @Json(name = "consentType") val consentType: String? = null,
+    @Json(name = "title") val title: String? = null,
     @Json(name = "description") val description: String? = null,
-    @Json(name = "status") val status: String = "",
+    @Json(name = "status") val status: String? = null,
     @Json(name = "isGranted") val isGranted: Boolean = false,
+    @Json(name = "consentGiven") val consentGiven: Boolean? = null,
     @Json(name = "recipientName") val recipientName: String? = null,
     @Json(name = "grantedAt") val grantedAt: String? = null,
-    @Json(name = "expiresAt") val expiresAt: String? = null
+    @Json(name = "expiresAt") val expiresAt: String? = null,
+    @Json(name = "consentTimestamp") val consentTimestamp: String? = null,
+    @Json(name = "consentExpiration") val consentExpiration: String? = null,
+    @Json(name = "purpose") val purpose: String? = null,
+    @Json(name = "scope") val scope: String? = null,
+    @Json(name = "fromHospital") val fromHospital: ConsentHospitalDto? = null,
+    @Json(name = "toHospital") val toHospital: ConsentHospitalDto? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -193,11 +211,18 @@ data class GrantConsentRequest(
 @JsonClass(generateAdapter = true)
 data class AccessLogDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "accessedBy") val accessedBy: String = "",
-    @Json(name = "accessedAt") val accessedAt: String = "",
-    @Json(name = "action") val action: String = "",
+    @Json(name = "accessedBy") val accessedBy: String? = null,
+    @Json(name = "accessedAt") val accessedAt: String? = null,
+    @Json(name = "action") val action: String? = null,
     @Json(name = "resourceType") val resourceType: String? = null,
-    @Json(name = "ipAddress") val ipAddress: String? = null
+    @Json(name = "ipAddress") val ipAddress: String? = null,
+    @Json(name = "actor") val actor: String? = null,
+    @Json(name = "eventType") val eventType: String? = null,
+    @Json(name = "entityType") val entityType: String? = null,
+    @Json(name = "resourceId") val resourceId: String? = null,
+    @Json(name = "description") val description: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "timestamp") val timestamp: String? = null
 )
 
 @JsonClass(generateAdapter = true)
