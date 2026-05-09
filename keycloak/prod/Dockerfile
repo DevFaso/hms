@@ -59,16 +59,25 @@ EXPOSE 8080
 # Import the realm on every boot so realm-export.json changes are picked up.
 # `--optimized` skips the build step at runtime (already baked in above).
 #
-# `--bootstrap-admin-*` flags create a master-realm admin if none exists. They
-# are idempotent — Keycloak ignores them once an admin exists, so they're safe
-# to leave in. Sourced from KC_BOOTSTRAP_ADMIN_USERNAME / KC_BOOTSTRAP_ADMIN_PASSWORD
-# env vars; the `${VAR:+value}` expansion omits the flags entirely when those
-# env vars are unset (recommended posture after the named admin is in place,
-# to avoid the bootstrap creds appearing in `ps aux` output).
+# Admin bootstrap: KC_BOOTSTRAP_ADMIN_* env vars and the `--bootstrap-admin-*`
+# start flags are both honored only at very first realm initialization in
+# Keycloak 26. Once the master realm exists in the DB — even if no admin role
+# was assigned because the first boot crashed mid-startup — KC silently
+# ignores both, leaving the env permanently unmanageable.
 #
-# Why flags instead of env vars: KC_BOOTSTRAP_ADMIN_* are honored only on the
-# very first realm initialization. Once the master realm exists in the DB, KC
-# ignores those env vars on subsequent boots, leaving an env that booted
-# without admin creds permanently unmanageable. The CLI flags work on every
-# start when no admin exists.
-ENTRYPOINT ["/bin/sh", "-c", "exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080} ${KC_BOOTSTRAP_ADMIN_USERNAME:+--bootstrap-admin-username \"$KC_BOOTSTRAP_ADMIN_USERNAME\"} ${KC_BOOTSTRAP_ADMIN_PASSWORD:+--bootstrap-admin-password \"$KC_BOOTSTRAP_ADMIN_PASSWORD\"}"]
+# The recovery mechanism Keycloak ships for this case is the standalone
+# `kc.sh bootstrap-admin user` subcommand, which writes directly to the
+# master realm tables and works on every invocation regardless of realm
+# state. We invoke it before `kc.sh start`:
+#
+#   - Guarded by an `[ -n ]` check so an env that has already removed the
+#     bootstrap creds (per README step 5.3) skips this entirely.
+#   - `--password:env` reads the password from the env var rather than
+#     accepting it on the command line, so it never appears in `ps aux`.
+#   - `|| echo ... ; ` swallows non-zero exits so the boot continues when
+#     an admin already exists (the subcommand returns non-zero in that
+#     case; functionally equivalent to "no-op, success").
+#
+# Once the named admin is in place and the bootstrap creds are removed
+# from Railway, this whole block becomes a no-op.
+ENTRYPOINT ["/bin/sh", "-c", "if [ -n \"$KC_BOOTSTRAP_ADMIN_USERNAME\" ] && [ -n \"$KC_BOOTSTRAP_ADMIN_PASSWORD\" ]; then echo '[entrypoint] Attempting kc.sh bootstrap-admin user (idempotent)'; /opt/keycloak/bin/kc.sh bootstrap-admin user --username \"$KC_BOOTSTRAP_ADMIN_USERNAME\" --password:env KC_BOOTSTRAP_ADMIN_PASSWORD --no-prompt || echo '[entrypoint] bootstrap-admin returned non-zero (likely admin already exists); continuing'; fi; exec /opt/keycloak/bin/kc.sh start --optimized --import-realm --http-port=${PORT:-8080}"]
