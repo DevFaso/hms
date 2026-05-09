@@ -9,6 +9,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.terminology.TerminologyCodes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
@@ -146,9 +147,28 @@ public class CdsRuleEngine {
        Helpers — kept package-private so tests can verify in isolation.
        ===================================================================== */
 
+    /**
+     * Resolves a catalog row by the proposed medication code. Callers may
+     * pass either the formulary {@code code} column value (the historical
+     * behaviour used by {@code order-sign}) or — since V93 — an RxNorm
+     * RxCUI. We try the formulary code first because that is the cheapest,
+     * most-selective lookup; if it misses and the supplied value parses as
+     * a well-formed RxCUI, we fall back to {@code rxnorm_code} so the
+     * {@code order-select} / {@code medication-prescribe} hooks resolve
+     * cleanly when the FHIR payload only carries the canonical RxNorm
+     * coding. The fallback is bounded by the partial index
+     * {@code idx_med_catalog_rxnorm_active} added in V93.
+     */
     MedicationCatalogItem resolveCatalogItem(UUID hospitalId, String code) {
         if (hospitalId == null || code == null || code.isBlank()) return null;
-        return catalogRepository.findByHospitalIdAndCode(hospitalId, code).orElse(null);
+        Optional<MedicationCatalogItem> byCode =
+            catalogRepository.findByHospitalIdAndCode(hospitalId, code);
+        if (byCode.isPresent()) return byCode.get();
+        String trimmed = code.trim();
+        if (!TerminologyCodes.isValidRxNorm(trimmed)) return null;
+        List<MedicationCatalogItem> byRxnorm =
+            catalogRepository.findActiveByHospitalIdAndRxnormCode(hospitalId, trimmed);
+        return byRxnorm.isEmpty() ? null : byRxnorm.get(0);
     }
 
     List<Prescription> loadActivePrescriptions(UUID patientId, UUID hospitalId) {
