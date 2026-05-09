@@ -1,5 +1,18 @@
 apiVersion: 1
 
+# Dashboards are auto-loaded from /var/lib/grafana/dashboards on every start.
+# The dashboards directory is mounted READ-ONLY in docker-compose.yml, so
+# the JSON files in grafana/dashboards/ are the single source of truth —
+# UI edits are intentionally NOT persisted to disk.
+#
+# Workflow: tweak in the UI → "Save dashboard" → "JSON Model" → copy → paste
+# back into grafana/dashboards/<name>.json → commit. updateIntervalSeconds
+# rescans every 30s, so the change shows up without a Grafana restart.
+#
+# `editable: true` keeps the UI usable for ad-hoc exploration; the
+# `allowUiUpdates: false` flag is what blocks accidental writes against
+# the read-only mount (provisioned dashboards are otherwise un-deletable).
+
 providers:
   - name: 'HMS Dashboards'
     orgId: 1
@@ -7,6 +20,8 @@ providers:
     type: file
     disableDeletion: false
     editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
     options:
       path: /var/lib/grafana/dashboards
       foldersFromFilesStructure: false

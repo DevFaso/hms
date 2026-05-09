@@ -1,11 +1,95 @@
+# Prometheus config for the HMS local observability stack.
+# This file is mounted at /etc/prometheus/prometheus.yml in the
+# `prometheus` service from docker-compose.yml.
+#
+# Backend metrics path (single source):
+#   The HMS Spring Boot backend is NOT scraped directly here. Alloy scrapes
+#   it (see grafana/config.alloy) and remote_writes the whitelisted series
+#   to this Prometheus via /api/v1/write — same shape as the production
+#   pipeline against Grafana Cloud Mimir. Prometheus only direct-scrapes
+#   infra components (postgres-exporter, redis-exporter, node-exporter,
+#   plus the stack's own self-scrapes).
+#
+# Recording + alerting rules live alongside this file under ./rules/ and are
+# auto-loaded via the rule_files glob below.
+
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
+  external_labels:
+    cluster: hms-local
+    environment: dev
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Alertmanager target is left commented because the local stack ships alerts
+# through Grafana Unified Alerting (see grafana/provisioning/alerting/).
+# Uncomment + add an alertmanager service if you want native Prometheus
+# alert routing as well.
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
 
 scrape_configs:
-  - job_name: 'hms-backend'
-    metrics_path: '/api/actuator/prometheus'
+  # NOTE: hms-backend metrics arrive via Alloy remote_write (see grafana/config.alloy).
+  # Do NOT add a direct scrape job for the backend — it would duplicate every
+  # series and double-count rates/ratios in the recording rules and SLO panels.
+
+  # ── postgres-exporter (profile: observability) ──────────────────────
+  - job_name: 'postgres'
     static_configs:
-      - targets: ['hms-backend:8081']
+      - targets: ['postgres-exporter:9187']
         labels:
           application: 'hms'
+          service: 'postgres'
+
+  # ── redis-exporter (profile: observability) ─────────────────────────
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+        labels:
+          application: 'hms'
+          service: 'redis'
+
+  # ── node-exporter (profile: observability) ──────────────────────────
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          application: 'hms'
+          service: 'node'
+
+  # ── Prometheus self-scrape ──────────────────────────────────────────
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          application: 'hms'
+          service: 'prometheus'
+
+  # ── Grafana self-scrape (Grafana exposes /metrics on :3000) ─────────
+  - job_name: 'grafana'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['grafana:3000']
+        labels:
+          application: 'hms'
+          service: 'grafana'
+
+  # ── Loki self-scrape ────────────────────────────────────────────────
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+        labels:
+          application: 'hms'
+          service: 'loki'
+
+  # ── Alloy self-scrape ───────────────────────────────────────────────
+  - job_name: 'alloy'
+    static_configs:
+      - targets: ['alloy:12345']
+        labels:
+          application: 'hms'
+          service: 'alloy'

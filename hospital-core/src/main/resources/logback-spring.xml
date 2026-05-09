@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ HMS Logback configuration.
+  ~
+  ~ Appenders:
+  ~   1. CONSOLE          — Spring Boot's default, honors logging.pattern.console /
+  ~                         logging.level.* from application.properties. Local dev keeps
+  ~                         reading stdout via Alloy → Loki without any change.
+  ~   2. SPLUNK_HEC       — POSTs structured JSON events to Splunk HTTP Event Collector
+  ~                         via a synchronous HttpClient.send(). Silent no-op when
+  ~                         app.observability.splunk.enabled=false (the default outside
+  ~                         prod/UAT).
+  ~   3. ASYNC_SPLUNK_HEC — wraps SPLUNK_HEC so the HEC POST never runs on the caller
+  ~                         (request) thread. neverBlock=true means events are dropped
+  ~                         silently if the queue overflows under extreme load — the
+  ~                         deliberate tradeoff is "we may lose some Splunk events
+  ~                         instead of stalling clinical traffic when HEC is slow".
+  ~                         The CONSOLE appender stays synchronous (writing to stdout
+  ~                         is microseconds, so async wrapping would only add latency).
+  ~
+  ~ Property values are pulled from the Spring environment via <springProperty>, which
+  ~ means they obey the standard env-var precedence (SPLUNK_HEC_URL, SPLUNK_HEC_TOKEN,
+  ~ etc.). The values are ALSO mirrored on SplunkLoggingProperties for fail-fast
+  ~ validation in ApplicationContext startup.
+-->
+<configuration>
+
+  <!--
+    Surface Logback's own status events (config errors, appender failures, HEC POST warnings
+    from SplunkHecAppender.addWarn) to stdout. Without this listener the appender would emit
+    its failure warnings into the StatusManager and operators would never see them in
+    container logs — a broken Splunk pipeline could silently drop events.
+    OnConsoleStatusListener is intentionally a no-frills println; it does NOT route through
+    the normal logging pipeline so it cannot recurse back into SPLUNK_HEC.
+  -->
+  <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener"/>
+
+  <!-- Inherit Spring Boot's defaults (color, conversion rules, file rotation hooks) so
+       logging.pattern.console / logging.level.* in application.properties keep working. -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+  <!-- Splunk HEC config — sourced from Spring properties, defaulted so the file is valid
+       even when nothing about Splunk is configured. -->
+  <springProperty name="SPLUNK_ENABLED"     source="app.observability.splunk.enabled"        defaultValue="false"/>
+  <springProperty name="SPLUNK_URL"         source="app.observability.splunk.hec.url"        defaultValue=""/>
+  <springProperty name="SPLUNK_TOKEN"       source="app.observability.splunk.hec.token"      defaultValue=""/>
+  <springProperty name="SPLUNK_INDEX"       source="app.observability.splunk.hec.index"      defaultValue="main"/>
+  <springProperty name="SPLUNK_SOURCE"      source="app.observability.splunk.hec.source"     defaultValue="hms-backend"/>
+  <springProperty name="SPLUNK_SOURCETYPE"  source="app.observability.splunk.hec.source-type" defaultValue="spring-boot:json"/>
+  <springProperty name="SPLUNK_HOST"        source="app.observability.splunk.hec.host"       defaultValue=""/>
+  <springProperty name="SPLUNK_APPLICATION" source="spring.application.name"                 defaultValue="hms-backend"/>
+  <springProperty name="SPLUNK_ENVIRONMENT" source="spring.profiles.active"                  defaultValue="unknown"/>
+
+  <appender name="SPLUNK_HEC" class="com.example.hms.logging.SplunkHecAppender">
+    <enabled>${SPLUNK_ENABLED}</enabled>
+    <url>${SPLUNK_URL}</url>
+    <token>${SPLUNK_TOKEN}</token>
+    <index>${SPLUNK_INDEX}</index>
+    <source>${SPLUNK_SOURCE}</source>
+    <sourceType>${SPLUNK_SOURCETYPE}</sourceType>
+    <host>${SPLUNK_HOST}</host>
+    <application>${SPLUNK_APPLICATION}</application>
+    <environment>${SPLUNK_ENVIRONMENT}</environment>
+  </appender>
+
+  <!--
+    Async wrapper so the synchronous HttpClient.send() in SplunkHecAppender NEVER runs
+    on a request thread.
+
+    queueSize=512               — buffers ~512 events between request threads and the
+                                  async worker. Enough to absorb a 5s HEC stall at
+                                  ~100 events/s without backpressure.
+    discardingThreshold=0       — never silently drop INFO/DEBUG just because the queue
+                                  is filling up; with neverBlock=true the queue can drop
+                                  whole events on overflow but only after queueSize is
+                                  hit, not preemptively.
+    neverBlock=true             — when the queue is FULL, drop the new event silently
+                                  instead of blocking the caller. Protects clinical
+                                  request latency at the cost of losing some Splunk
+                                  events in the rare case that HEC is unreachable for
+                                  longer than queueSize / event-rate.
+    includeCallerData=false     — Logback default; saves CPU per event (caller-data
+                                  lookup is expensive and the JSON payload doesn't
+                                  use it).
+  -->
+  <appender name="ASYNC_SPLUNK_HEC" class="ch.qos.logback.classic.AsyncAppender">
+    <queueSize>512</queueSize>
+    <discardingThreshold>0</discardingThreshold>
+    <neverBlock>true</neverBlock>
+    <includeCallerData>false</includeCallerData>
+    <appender-ref ref="SPLUNK_HEC"/>
+  </appender>
+
+  <!-- Root logger: console always (synchronous, fast); Splunk via async wrapper so
+       slow HEC never blocks request threads. Levels themselves still come from
+       logging.level.* in application.properties / -*.yml. -->
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="ASYNC_SPLUNK_HEC"/>
+  </root>
+
+</configuration>
