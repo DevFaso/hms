@@ -2338,7 +2338,8 @@
     "AUDIT_SEARCH": "Recherche d'audit",
     "EMERGENCY_CONTROLS": "Contrôles d'urgence",
     "SUBSCRIPTIONS": "Abonnements",
-    "DATA_RESIDENCY": "Résidence des données"
+    "DATA_RESIDENCY": "Résidence des données",
+    "MEDICAL_HISTORY": "Antécédents médicaux"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -3258,7 +3259,18 @@
       "REF_PREFIX": "Réf :",
       "DIAGNOSIS_PREFIX": "Diagnostic :",
       "ADMINISTERED_BY": "Administré par",
-      "PRESCRIBED_BY": "Prescrit par"
+      "PRESCRIBED_BY": "Prescrit par",
+      "MORE": "plus",
+      "GO_TO_MEDICATIONS": "Voir tous les médicaments",
+      "GO_TO_TESTS": "Voir tous les résultats d'analyses",
+      "GO_TO_HEALTH_ISSUES": "Voir les antécédents médicaux",
+      "GO_TO_SHARING": "Gérer le partage",
+      "SHARE_RECORD": "Partager mon dossier",
+      "SHARE_DESC": "Partagez vos dossiers médicaux en toute sécurité avec d'autres prestataires ou hôpitaux.",
+      "QUICK_LINKS": "Liens rapides",
+      "UPCOMING_APPOINTMENTS": "Rendez-vous à venir",
+      "MEDICAL_HISTORY": "Antécédents médicaux et familiaux",
+      "CARE_TEAM": "Mon équipe de soins"
     },
     "SHARING": {
       "TITLE": "Partage et confidentialité",
@@ -3354,7 +3366,20 @@
       "MEDICATIONS": "Médicaments",
       "FOLLOW_UP": "Suivi",
       "SCHEDULED_FOR": "Prévu pour le",
-      "PRINT": "Imprimer le résumé"
+      "PRINT": "Imprimer le résumé",
+      "MED_NAME": "Médicament",
+      "MED_DOSAGE": "Posologie",
+      "MED_FREQUENCY": "Fréquence",
+      "DISPOSITION": "Statut de sortie",
+      "DISPOSITION_LABEL": "Disposition",
+      "DISCHARGE_CONDITION": "État à la sortie",
+      "FOLLOW_UP_INSTRUCTIONS": "Instructions de suivi",
+      "ACTIVITY_RESTRICTIONS": "Restrictions d'activité",
+      "DIET_INSTRUCTIONS": "Instructions alimentaires",
+      "WOUND_CARE": "Soins des plaies",
+      "WARNING_SIGNS": "Signes d'alerte — Quand consulter",
+      "PATIENT_EDUCATION": "Éducation thérapeutique du patient",
+      "ADDITIONAL_NOTES": "Notes supplémentaires"
     },
     "ENUM": {
       "VITAL_TYPE": {
@@ -3807,6 +3832,40 @@
       "LOAD_FAILED": "Impossible de charger les notifications",
       "MARK_READ_FAILED": "Impossible de marquer la notification comme lue",
       "MARK_ALL_SUCCESS": "Toutes les notifications ont été marquées comme lues"
+    },
+    "MEDICAL_HISTORY": {
+      "TITLE": "Antécédents médicaux et familiaux",
+      "LOADING": "Chargement de vos antécédents médicaux…",
+      "MEDICAL": "Antécédents médicaux",
+      "SURGICAL": "Antécédents chirurgicaux",
+      "FAMILY": "Antécédents familiaux",
+      "SOCIAL": "Antécédents sociaux",
+      "DIAGNOSIS": "Diagnostic",
+      "DATE": "Date",
+      "PROCEDURE": "Intervention",
+      "OUTCOME": "Résultat",
+      "PERSONAL_NOTES_LINK": "Notes personnelles sur cette section",
+      "PERSONAL_NOTES_MEDICAL": "Notes personnelles sur les antécédents médicaux",
+      "PERSONAL_NOTES_SURGICAL": "Notes personnelles sur les antécédents chirurgicaux",
+      "PERSONAL_NOTES_FAMILY": "Notes personnelles sur les antécédents familiaux",
+      "PERSONAL_NOTES_SOCIAL": "Notes personnelles sur les antécédents sociaux",
+      "NOTES_DISCLAIMER": "Ces notes sont conservées uniquement sur votre appareil et ne sont pas partagées avec votre équipe de soins.",
+      "ADD": "Ajouter",
+      "SAVE": "Enregistrer",
+      "NO_MEDICAL": "Aucun antécédent médical enregistré.",
+      "NO_SURGICAL": "Aucun antécédent chirurgical enregistré.",
+      "NO_FAMILY": "Aucun antécédent familial enregistré.",
+      "NO_SOCIAL": "Aucun antécédent social enregistré.",
+      "TOBACCO_USE": "Consommation de tabac",
+      "TOBACCO_TYPES": "Types",
+      "QUIT_DATE": "Date d'arrêt",
+      "SMOKING_TOBACCO": "Tabac à fumer",
+      "SMOKELESS_TOBACCO": "Tabac sans fumée",
+      "ALCOHOL": "Alcool",
+      "ALCOHOL_USE": "Consommation d'alcool",
+      "DRINKS_PER_WEEK": "Verres par semaine",
+      "SMOKELESS_USE": "Consommation de tabac sans fumée",
+      "AGE_AT_ONSET": "Âge au diagnostic"
     }
   },
   "PRESCRIPTIONS": {

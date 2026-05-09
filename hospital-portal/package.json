@@ -14,7 +14,9 @@
     "lint": "eslint \"src/**/*.{ts,html}\"",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier \"src/**/*.{ts,html,scss,md,json}\" --write",
-    "format:check": "prettier --check \"src/**/*.{ts,html,scss,md,json}\""
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss,md,json}\"",
+    "i18n:check": "node scripts/check-i18n-coverage.mjs",
+    "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
   },
   "prettier": {
     "printWidth": 100,
