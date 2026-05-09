@@ -83,28 +83,71 @@ signal.
 
 ## Failure modes
 
+`logback-spring.xml` registers an `OnConsoleStatusListener`, so the appender's
+internal warnings (HEC unreachable, 4xx/5xx, etc.) are printed to **stderr** alongside
+regular application logs. They are tagged `WARN in [SplunkHecAppender]` and won't be
+indexed by Splunk itself (the listener is outside the logging pipeline by design — it
+cannot recurse back into the HEC appender).
+
 | Symptom | Where to look |
 | --- | --- |
 | App fails to start with `IllegalStateException: hec.url is blank` | `SPLUNK_HEC_ENABLED=true` but URL/token unset on Railway. Either set them or flip enabled back to `false`. |
-| App boots, no events in Splunk | Check the container logs for `Splunk HEC POST returned status …` lines emitted by the appender's status manager. 401/403 → token wrong or expired. 404 → URL missing the HEC port (`:8088`) or the wrong host. |
-| Burst of warnings, then quiet | HEC backpressure or transient outage. The appender increments an internal failure counter and never throws; logs continue to console + Loki. |
+| App fails to start with `must be HTTPS` | URL begins with `http://`. Either fix the URL or set `SPLUNK_HEC_ALLOW_INSECURE_URL=true` (local dev only — never set this in UAT/prod). |
+| App boots, no events in Splunk | Check container `stderr` for `WARN in [SplunkHecAppender]` lines from the status listener. `401`/`403` → token wrong or expired; `404` → URL missing the HEC port (`:8088`) or the wrong host; connect-timeout → network ACL between Railway and the HEC. |
+| Burst of warnings, then quiet | HEC backpressure or transient outage. The appender increments an internal failure counter and never throws; console + Loki paths are unaffected. |
 
 ## Local dev
 
 Splunk is **off by default in every profile**. Local devs keep using the docker-compose
-Loki + Grafana stack (see `docker-compose.yml`). To exercise the Splunk path locally, run a
-disposable HEC mock and set the env vars from `.env`:
+Loki + Grafana stack (see `docker-compose.yml`). The HTTPS check in
+`SplunkLoggingProperties.validateWhenEnabled` will reject a plain-HTTP URL on boot, so a
+bare HTTP mock is not enough. Pick whichever local-dev path matches what you're trying
+to exercise:
+
+### Option 1 — The unit tests already cover the wire format (fastest)
+
+`SplunkHecAppenderTest` verifies URI, headers, body shape, MDC + exception handling, and
+the failure paths with a stubbed `HttpClient`. For everything except "is my real Splunk
+token valid", the unit tests are the right harness — no Docker needed.
+
+### Option 2 — `SPLUNK_HEC_ALLOW_INSECURE_URL=true` against an HTTP mock
+
+A local-only escape hatch lets the URL be plain HTTP. Use only on a developer machine —
+Railway env vars MUST NOT set this in UAT/prod.
 
 ```bash
 docker run -d --name splunk-mock -p 8088:8088 mocoso/splunk-hec-mock:latest
 SPLUNK_HEC_ENABLED=true \
-SPLUNK_HEC_URL=https://localhost:8088 \
+SPLUNK_HEC_ALLOW_INSECURE_URL=true \
+SPLUNK_HEC_URL=http://localhost:8088 \
 SPLUNK_HEC_TOKEN=any-token \
 ./gradlew :hospital-core:bootRun
 ```
 
-(For the HTTPS validation to allow a local self-signed cert, point at the mock via SSH
-tunnel from a stage Splunk Cloud trial instead — easier than wrangling a local TLS stack.)
+### Option 3 — Real HTTPS via a Caddy reverse proxy in front of the mock
+
+If you specifically want to exercise the HTTPS path end-to-end (cert validation, TLS
+handshake), put Caddy in front of the mock:
+
+```bash
+docker network create splunk-local
+docker run -d --network splunk-local --name splunk-mock mocoso/splunk-hec-mock:latest
+docker run -d --network splunk-local --name splunk-tls -p 8443:443 \
+  caddy:2 caddy reverse-proxy --from splunk-local.localhost --to splunk-mock:8088
+SPLUNK_HEC_ENABLED=true \
+SPLUNK_HEC_URL=https://splunk-local.localhost:8443 \
+SPLUNK_HEC_TOKEN=any-token \
+./gradlew :hospital-core:bootRun
+```
+
+Caddy issues a self-signed cert under `*.localhost`; you may need to add it to your
+trust store (`security add-trusted-cert` on macOS) for the JDK to validate it. For most
+dev work Option 1 or 2 is enough.
+
+### Option 4 — Splunk Cloud free trial
+
+Sign up for a 14-day trial at `splunk.com/free-trials` and use its real HTTPS HEC. This
+is the only option that catches token-permission and index-mapping mistakes.
 
 ## Why not the official `splunk-library-javalogging`?
 

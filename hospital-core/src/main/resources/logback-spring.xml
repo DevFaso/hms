@@ -17,6 +17,16 @@
 -->
 <configuration>
 
+  <!--
+    Surface Logback's own status events (config errors, appender failures, HEC POST warnings
+    from SplunkHecAppender.addWarn) to stdout. Without this listener the appender would emit
+    its failure warnings into the StatusManager and operators would never see them in
+    container logs — a broken Splunk pipeline could silently drop events.
+    OnConsoleStatusListener is intentionally a no-frills println; it does NOT route through
+    the normal logging pipeline so it cannot recurse back into SPLUNK_HEC.
+  -->
+  <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener"/>
+
   <!-- Inherit Spring Boot's defaults (color, conversion rules, file rotation hooks) so
        logging.pattern.console / logging.level.* in application.properties keep working. -->
   <include resource="org/springframework/boot/logging/logback/defaults.xml"/>

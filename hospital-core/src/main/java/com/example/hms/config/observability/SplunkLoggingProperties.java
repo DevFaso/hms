@@ -1,7 +1,7 @@
 package com.example.hms.config.observability;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.validation.constraints.NotBlank;
+import java.util.Locale;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -52,10 +52,14 @@ public class SplunkLoggingProperties {
                 "app.observability.splunk.enabled=true but app.observability.splunk.hec.token is blank — "
                     + "set SPLUNK_HEC_TOKEN (env var) or set SPLUNK_HEC_ENABLED=false.");
         }
-        if (!hec.getUrl().toLowerCase().startsWith("https://")) {
+        if (!hec.getUrl().toLowerCase(Locale.ROOT).startsWith("https://")
+                && !hec.isAllowInsecureUrl()) {
             throw new IllegalStateException(
-                "app.observability.splunk.hec.url must be HTTPS in any non-local environment — "
-                    + "got: " + hec.getUrl());
+                "app.observability.splunk.hec.url must be HTTPS — got: "
+                    + hec.getUrl()
+                    + ". For a true local-only override (e.g. an HTTP mock), set "
+                    + "app.observability.splunk.hec.allow-insecure-url=true; this MUST stay "
+                    + "false in UAT/prod.");
         }
     }
 
@@ -63,17 +67,21 @@ public class SplunkLoggingProperties {
         return s == null || s.isBlank();
     }
 
-    /** HEC connection details. */
+    /**
+     * HEC connection details. Required-field enforcement lives in {@link
+     * #validateWhenEnabled()} rather than as bean-validation annotations on these fields,
+     * because (a) {@code hec} is not annotated with {@code @Valid} so cascading wouldn't fire
+     * anyway, and (b) the requirements are conditional on {@link #enabled} — declarative
+     * {@code @NotBlank} would wrongly reject a disabled config that left URL/token empty.
+     */
     @Getter
     @Setter
     public static class Hec {
 
         /** HEC base URL, e.g. {@code https://splunk-hec.example.com:8088}. */
-        @NotBlank
         private String url = "";
 
         /** HEC token (env-driven; never logged). */
-        @NotBlank
         private String token = "";
 
         /** Splunk index — must match an index the token has write permission for. */
@@ -87,5 +95,12 @@ public class SplunkLoggingProperties {
 
         /** Splunk host field — defaults to the container hostname. */
         private String host = "";
+
+        /**
+         * Local-only escape hatch that lets the URL be HTTP instead of HTTPS. Intended for
+         * pointing the appender at a local HEC mock during development. MUST stay {@code
+         * false} in UAT/prod — Railway env should leave this unset.
+         */
+        private boolean allowInsecureUrl = false;
     }
 }

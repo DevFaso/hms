@@ -76,4 +76,33 @@ class SplunkLoggingPropertiesTest {
         // Just must not throw.
         props.validateWhenEnabled();
     }
+
+    @Test
+    void acceptsHttpUrl_whenAllowInsecureUrlIsTrue() {
+        // The local-dev escape hatch — required for pointing at an HTTP HEC mock without
+        // wrangling TLS termination. MUST stay false in UAT/prod (Railway should not set
+        // SPLUNK_HEC_ALLOW_INSECURE_URL there).
+        SplunkLoggingProperties props = new SplunkLoggingProperties();
+        props.setEnabled(true);
+        props.getHec().setUrl("http://localhost:8088");
+        props.getHec().setToken("any-token");
+        props.getHec().setAllowInsecureUrl(true);
+
+        // Just must not throw.
+        props.validateWhenEnabled();
+    }
+
+    @Test
+    void httpsCheckIsLocaleIndependent_acceptsTurkishCapitalizedScheme() {
+        // Turkish locale's toLowerCase() famously turns "I" into a dotless "ı", which would
+        // make a default-locale toLowerCase().startsWith("https://") reject "HTTPS://..." in a
+        // tr_TR JVM. Locale.ROOT in validateWhenEnabled keeps the check stable across locales.
+        SplunkLoggingProperties props = new SplunkLoggingProperties();
+        props.setEnabled(true);
+        props.getHec().setUrl("HTTPS://Splunk.Example.Com:8088");
+        props.getHec().setToken("a-token");
+
+        // Just must not throw, regardless of the runtime default locale.
+        props.validateWhenEnabled();
+    }
 }
