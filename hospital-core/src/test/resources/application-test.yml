@@ -90,3 +90,11 @@ app:
     # EncryptedStringConverter applied to PHI columns on Patient, Prescription,
     # and Dispense. NEVER use this key in any non-test environment.
     key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+  # Splunk HEC stays explicitly disabled in tests so the appender's send path is
+  # exercised only by SplunkHecAppenderTest (against a stubbed HttpClient).
+  observability:
+    splunk:
+      enabled: false
+      hec:
+        url: ""
+        token: ""
