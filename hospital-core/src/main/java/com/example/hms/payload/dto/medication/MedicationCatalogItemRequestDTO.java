@@ -44,6 +44,15 @@ public class MedicationCatalogItemRequestDTO {
     @Size(max = 20)
     private String rxnormCode;
 
+    /**
+     * Optional ISMP "tall-man" lettering for confusable name pairs
+     * (e.g. {@code "predniSONE"} vs {@code "prednisoLONE"}). Surfaced in
+     * card detail by the {@code medication-prescribe} CDS hook when set.
+     * Added in V93 (v1.0 / Clinical Safety / CDS Hooks expansion).
+     */
+    @Size(max = 200)
+    private String tallManName;
+
     @Size(max = 100)
     private String route;
 

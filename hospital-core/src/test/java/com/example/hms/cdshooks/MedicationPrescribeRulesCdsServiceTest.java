@@ -180,6 +180,62 @@ class MedicationPrescribeRulesCdsServiceTest {
     }
 
     @Test
+    @DisplayName("tall-man RxNorm fallback is gated on a valid RxCUI shape")
+    void tallManRxnormFallbackGatedOnValidRxnorm() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = patient(patientId, hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+            .thenReturn(List.of());
+        // No catalog hit by formulary code.
+        when(catalog.findByHospitalIdAndCode(eq(hospitalId), any()))
+            .thenReturn(Optional.empty());
+
+        // Code is "AMOX-500" — clearly not a numeric RxCUI; the fallback
+        // must NOT invoke findActiveByHospitalIdAndRxnormCode for it,
+        // otherwise we'd issue a needless query against a code shape that
+        // can never match the rxnorm_code column (CHECK ^[0-9]{1,12}$).
+        service.evaluate(prescribeRequest(patientId, List.of(
+            medRequest("Amoxicillin 500 mg", "AMOX-500", "500 mg")
+        )));
+
+        verify(catalog, never()).findActiveByHospitalIdAndRxnormCode(any(), any());
+    }
+
+    @Test
+    @DisplayName("tall-man RxNorm fallback fires when the proposed code IS a valid RxCUI")
+    void tallManRxnormFallbackFiresOnValidRxnorm() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = patient(patientId, hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+            .thenReturn(List.of());
+        when(catalog.findByHospitalIdAndCode(eq(hospitalId), eq("7052")))
+            .thenReturn(Optional.empty());
+        MedicationCatalogItem prednisone = MedicationCatalogItem.builder()
+            .code("PRED-5")
+            .nameFr("Prednisone 5 mg")
+            .genericName("prednisone")
+            .rxnormCode("7052")
+            .tallManName("predniSONE")
+            .hospital(hospital(hospitalId))
+            .build();
+        when(catalog.findActiveByHospitalIdAndRxnormCode(hospitalId, "7052"))
+            .thenReturn(List.of(prednisone));
+
+        CdsHookResponse response = service.evaluate(prescribeRequest(patientId, List.of(
+            medRequestWithRxnorm("Prednisone 5 mg", "7052", "1 tab")
+        )));
+
+        verify(catalog).findActiveByHospitalIdAndRxnormCode(hospitalId, "7052");
+        assertThat(response.cards())
+            .extracting(CdsCard::detail)
+            .anyMatch(d -> d != null && d.contains("predniSONE"));
+    }
+
+    @Test
     @DisplayName("ignores non-MedicationRequest payloads (medication-prescribe is medication-only)")
     void ignoresNonMedicationRequestEntries() {
         UUID patientId = UUID.randomUUID();

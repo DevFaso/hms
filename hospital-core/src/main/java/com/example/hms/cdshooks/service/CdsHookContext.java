@@ -57,7 +57,12 @@ public final class CdsHookContext {
             String s = entry.toString().trim();
             if (s.isEmpty()) continue;
             int slash = s.lastIndexOf('/');
-            out.add(slash >= 0 ? s.substring(slash + 1) : s);
+            // Trailing-slash references like "MedicationRequest/" must not
+            // contribute an empty id — otherwise the selection filter would
+            // silently swallow every draft as a positive match.
+            String id = (slash >= 0 ? s.substring(slash + 1) : s).trim();
+            if (id.isEmpty()) continue;
+            out.add(id);
         }
         return List.copyOf(out);
     }

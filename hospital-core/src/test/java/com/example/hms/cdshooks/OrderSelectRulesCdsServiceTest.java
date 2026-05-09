@@ -188,6 +188,35 @@ class OrderSelectRulesCdsServiceTest {
     }
 
     @Test
+    @DisplayName("trailing-slash selection refs don't degenerate to a blank id matching every draft")
+    void trailingSlashSelectionRefIsIgnored() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(engine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
+            .thenReturn(List.of());
+
+        // selections list containing only a malformed trailing-slash ref.
+        // After the fix, the ref produces no id, the filter set is empty,
+        // selectionFilter.isEmpty() short-circuits to "no narrowing", and
+        // every draft is evaluated. (Pre-fix the empty string would have
+        // landed in the filter and matched every draft anyway, but the
+        // contract is stricter now: malformed selections do not contribute.)
+        service.evaluate(selectRequest(patientId,
+            List.of("MedicationRequest/"),
+            List.of(
+                medRequest("mr-1", "Aspirin", "ASA", "100 mg"),
+                medRequest("mr-2", "Warfarin", "WAR", "5 mg"))));
+
+        // No narrowing → both drafts evaluated (selection list is effectively empty).
+        verify(engine).evaluateProposedPrescription(
+            patient, null, "Aspirin", "ASA", "100 mg");
+        verify(engine).evaluateProposedPrescription(
+            patient, null, "Warfarin", "WAR", "5 mg");
+    }
+
+    @Test
     @DisplayName("returns empty when patientId is missing from context")
     void emptyWhenPatientIdMissing() {
         Map<String, Object> ctx = new HashMap<>();

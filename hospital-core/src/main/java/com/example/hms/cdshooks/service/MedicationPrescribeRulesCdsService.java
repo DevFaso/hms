@@ -7,11 +7,11 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
 import com.example.hms.cdshooks.rules.CdsRuleEngine;
 import com.example.hms.cdshooks.service.MedicationDraftExtractor.ProposedMedication;
-import com.example.hms.cdshooks.terminology.RxNormCodingExtractor;
 import com.example.hms.model.Patient;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.terminology.TerminologyCodes;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -36,7 +36,7 @@ import java.util.UUID;
  * confusable name pairs at the point they can still be edited.
  *
  * <p>Like the other CDS services, this one tolerates RxNorm-only payloads:
- * {@link RxNormCodingExtractor} pulls the canonical RxCUI when present,
+ * {@link MedicationDraftExtractor} pulls the canonical RxCUI when present,
  * and the engine resolves the catalog row via the V93 partial index.
  */
 @Component
@@ -117,12 +117,18 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
         if (hospitalId == null) return Optional.empty();
         String code = proposed.code();
         if (code == null || code.isBlank()) return Optional.empty();
+        String trimmed = code.trim();
         Optional<MedicationCatalogItem> match =
-            catalogRepository.findByHospitalIdAndCode(hospitalId, code);
-        if (match.isEmpty()) {
-            // RxNorm-keyed fallback so RxNorm-only payloads still get the advisory.
+            catalogRepository.findByHospitalIdAndCode(hospitalId, trimmed);
+        if (match.isEmpty() && TerminologyCodes.isValidRxNorm(trimmed)) {
+            // RxNorm-keyed fallback so RxNorm-only payloads still get the
+            // advisory. Mirrors the gate in CdsRuleEngine.resolveCatalogItem
+            // — only attempt the rxnorm_code lookup when the value parses as
+            // a well-formed RxCUI, otherwise we'd issue a needless query
+            // against a code shape (e.g. ATC J01CA04, internal AMOX-500)
+            // that can never match the rxnorm_code column.
             List<MedicationCatalogItem> byRxnorm =
-                catalogRepository.findActiveByHospitalIdAndRxnormCode(hospitalId, code);
+                catalogRepository.findActiveByHospitalIdAndRxnormCode(hospitalId, trimmed);
             match = byRxnorm.isEmpty() ? Optional.empty() : Optional.of(byRxnorm.get(0));
         }
         return match
