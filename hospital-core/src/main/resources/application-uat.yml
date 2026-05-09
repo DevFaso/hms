@@ -55,6 +55,18 @@ management:
 # Roles and org security data are managed by Liquibase migrations.
 # Java-based seeders are disabled in UAT.
 app:
+  # Splunk HEC: opt-in via SPLUNK_HEC_ENABLED=true on the Railway service. URL + token are
+  # resolved from env vars; SplunkLoggingProperties fails fast at boot if enabled without them.
+  observability:
+    splunk:
+      enabled: ${SPLUNK_HEC_ENABLED:false}
+      hec:
+        url: ${SPLUNK_HEC_URL:}
+        token: ${SPLUNK_HEC_TOKEN:}
+        index: ${SPLUNK_HEC_INDEX:hms_uat}
+        source: ${SPLUNK_HEC_SOURCE:hms-backend}
+        source-type: ${SPLUNK_HEC_SOURCETYPE:spring-boot:json}
+        host: ${SPLUNK_HEC_HOST:}
   seed:
     enabled: false
     synthetic:

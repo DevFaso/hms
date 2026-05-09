@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ HMS Logback configuration.
+  ~
+  ~ Two appenders:
+  ~   1. CONSOLE — Spring Boot's default, honors logging.pattern.console / logging.level.* from
+  ~      application.properties exactly as before. Local dev keeps reading stdout via Alloy →
+  ~      Loki without any change.
+  ~   2. SPLUNK_HEC — POSTs structured JSON events to Splunk HTTP Event Collector. Registered
+  ~      unconditionally so this XML works in every profile; the appender itself silently no-ops
+  ~      when app.observability.splunk.enabled=false (the default outside prod/UAT).
+  ~
+  ~ Property values are pulled from the Spring environment via <springProperty>, which means
+  ~ they obey the standard env-var precedence (SPLUNK_HEC_URL, SPLUNK_HEC_TOKEN, etc.). The
+  ~ values are ALSO mirrored on SplunkLoggingProperties for fail-fast validation in
+  ~ ApplicationContext startup.
+-->
+<configuration>
+
+  <!--
+    Surface Logback's own status events (config errors, appender failures, HEC POST warnings
+    from SplunkHecAppender.addWarn) to stdout. Without this listener the appender would emit
+    its failure warnings into the StatusManager and operators would never see them in
+    container logs — a broken Splunk pipeline could silently drop events.
+    OnConsoleStatusListener is intentionally a no-frills println; it does NOT route through
+    the normal logging pipeline so it cannot recurse back into SPLUNK_HEC.
+  -->
+  <statusListener class="ch.qos.logback.core.status.OnConsoleStatusListener"/>
+
+  <!-- Inherit Spring Boot's defaults (color, conversion rules, file rotation hooks) so
+       logging.pattern.console / logging.level.* in application.properties keep working. -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+  <!-- Splunk HEC config — sourced from Spring properties, defaulted so the file is valid
+       even when nothing about Splunk is configured. -->
+  <springProperty name="SPLUNK_ENABLED"     source="app.observability.splunk.enabled"        defaultValue="false"/>
+  <springProperty name="SPLUNK_URL"         source="app.observability.splunk.hec.url"        defaultValue=""/>
+  <springProperty name="SPLUNK_TOKEN"       source="app.observability.splunk.hec.token"      defaultValue=""/>
+  <springProperty name="SPLUNK_INDEX"       source="app.observability.splunk.hec.index"      defaultValue="main"/>
+  <springProperty name="SPLUNK_SOURCE"      source="app.observability.splunk.hec.source"     defaultValue="hms-backend"/>
+  <springProperty name="SPLUNK_SOURCETYPE"  source="app.observability.splunk.hec.source-type" defaultValue="spring-boot:json"/>
+  <springProperty name="SPLUNK_HOST"        source="app.observability.splunk.hec.host"       defaultValue=""/>
+  <springProperty name="SPLUNK_APPLICATION" source="spring.application.name"                 defaultValue="hms-backend"/>
+  <springProperty name="SPLUNK_ENVIRONMENT" source="spring.profiles.active"                  defaultValue="unknown"/>
+
+  <appender name="SPLUNK_HEC" class="com.example.hms.logging.SplunkHecAppender">
+    <enabled>${SPLUNK_ENABLED}</enabled>
+    <url>${SPLUNK_URL}</url>
+    <token>${SPLUNK_TOKEN}</token>
+    <index>${SPLUNK_INDEX}</index>
+    <source>${SPLUNK_SOURCE}</source>
+    <sourceType>${SPLUNK_SOURCETYPE}</sourceType>
+    <host>${SPLUNK_HOST}</host>
+    <application>${SPLUNK_APPLICATION}</application>
+    <environment>${SPLUNK_ENVIRONMENT}</environment>
+  </appender>
+
+  <!-- Root logger: console always, Splunk in addition when enabled.
+       Levels themselves still come from logging.level.* in application.properties / -*.yml. -->
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="SPLUNK_HEC"/>
+  </root>
+
+</configuration>

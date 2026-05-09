@@ -4,6 +4,10 @@ Companion runbook for every alert defined in
 [`grafana/rules/alerts.yml`](../../grafana/rules/alerts.yml) and
 [`grafana/provisioning/alerting/alert-rules.yml`](../../grafana/provisioning/alerting/alert-rules.yml).
 
+For SIEM/SOC log search and audit retention, also see
+[`docs/observability/splunk.md`](../observability/splunk.md) — Splunk HEC ships the same
+Logback events as a JSON envelope when `SPLUNK_HEC_ENABLED=true` on the Railway service.
+
 When an alert fires, follow the matching section below. All dashboard links
 assume the local stack at `http://localhost:3000`; substitute your
 production base URL.

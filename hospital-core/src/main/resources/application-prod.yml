@@ -61,6 +61,19 @@ management:
 # (V4__seed_roles.sql, V5__seed_default_organization_security.sql).
 # Java-based seeders are disabled in production.
 app:
+  # Splunk HEC: opt-in via SPLUNK_HEC_ENABLED=true on the Railway service. URL + token are
+  # resolved from env vars; SplunkLoggingProperties fails fast at boot if enabled without them.
+  # The HEC URL MUST be HTTPS — that is enforced in SplunkLoggingProperties.validateWhenEnabled.
+  observability:
+    splunk:
+      enabled: ${SPLUNK_HEC_ENABLED:false}
+      hec:
+        url: ${SPLUNK_HEC_URL:}
+        token: ${SPLUNK_HEC_TOKEN:}
+        index: ${SPLUNK_HEC_INDEX:hms_prod}
+        source: ${SPLUNK_HEC_SOURCE:hms-backend}
+        source-type: ${SPLUNK_HEC_SOURCETYPE:spring-boot:json}
+        host: ${SPLUNK_HEC_HOST:}
   seed:
     enabled: false
     synthetic:
