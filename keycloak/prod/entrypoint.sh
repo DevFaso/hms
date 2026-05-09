@@ -9,8 +9,11 @@
 #      too weak) is treated as a real failure and aborts the container so
 #      Railway's healthcheck flips red within seconds instead of spending five
 #      minutes retrying a Keycloak that can't connect to its database.
-#   2. `kc.sh start --optimized --import-realm` with PORT mapped onto
-#      KC_HTTP_PORT so the app binds to whatever port Railway assigns.
+#   2. `kc.sh start --optimized --import-realm --http-port="$PORT"` so
+#      Keycloak binds to whatever port Railway assigns. PORT is forwarded
+#      via the --http-port CLI flag rather than being exported into
+#      KC_HTTP_PORT — both forms work, the flag form is one fewer env var
+#      in the runtime contract and is what `kc.sh start` parses directly.
 #
 # Lives at /opt/keycloak/bin/hms-entrypoint.sh in the image (see Dockerfile).
 # /bin/sh, not bash — the upstream Keycloak base image ships bash but we keep

@@ -40,8 +40,10 @@ LABEL com.bitnesttechs.hms.env="${BUILD_CONFIG}"
 
 COPY --from=builder /opt/keycloak/ /opt/keycloak/
 
-# Railway injects $PORT; Keycloak serves on $KC_HTTP_PORT. We map them via
-# the entrypoint below so the app binds to whatever port Railway assigns.
+# Railway injects $PORT into the container env. The entrypoint below
+# forwards it to `kc.sh start` via the --http-port CLI flag (not by
+# exporting KC_HTTP_PORT), so Keycloak binds to whatever port Railway
+# assigns.
 #
 # KC_HMS_ENV is grep-able from boot logs and a useful tag for the metrics
 # scrape; it has no functional effect on Keycloak itself.
