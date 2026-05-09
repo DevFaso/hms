@@ -27,6 +27,8 @@ public class MedicationCatalogItemResponseDTO {
     private String strength;
     private String strengthUnit;
     private String rxnormCode;
+    /** Optional ISMP tall-man lettering, see request DTO. Added in V93. */
+    private String tallManName;
     private String route;
     private String category;
     private boolean essentialList;

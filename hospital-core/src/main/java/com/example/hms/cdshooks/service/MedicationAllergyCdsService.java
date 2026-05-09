@@ -5,8 +5,14 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookRequest;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsHookResponse;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsServiceDescriptor;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
+import com.example.hms.cdshooks.rules.CdsRuleContext;
+import com.example.hms.cdshooks.rules.CdsRuleEngine;
+import com.example.hms.cdshooks.rules.DrugDrugInteractionRule;
+import com.example.hms.cdshooks.service.MedicationDraftExtractor.ProposedMedication;
+import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.repository.PatientRepository;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -17,15 +23,35 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * On {@code order-sign} for medication orders, returns a critical card
- * if the proposed medication name overlaps with any active allergy on
- * the patient's record.
+ * On {@code order-sign} for medication orders, returns:
  *
- * <p>This is a deliberately simple text-match check. RxNorm/ATC lookup
- * goes in P1 once those code systems are bound (gap #5). Even without
- * coded data, a string match catches the common case in West-African
- * deployments where allergies are recorded as freetext (e.g. "penicillin",
- * "sulfa", "aspirin").
+ * <ol>
+ *   <li>A <strong>critical</strong> drug-allergy card when the proposed
+ *       medication name overlaps an active allergy on the patient's chart.
+ *       Deliberately a freetext substring match — the West-African
+ *       deployments this codebase targets often record allergies as
+ *       "penicillin", "sulfa", "aspirin" rather than as coded values.</li>
+ *   <li>One <strong>drug-drug interaction</strong> card per coexisting
+ *       active prescription that pairs with the proposed medication in
+ *       {@code clinical.drug_interactions} (RxNorm-keyed). Severity maps
+ *       to the same critical/warning/info indicators the
+ *       {@code DrugDrugInteractionRule} uses on {@code order-sign}.</li>
+ * </ol>
+ *
+ * <p>v1.0 / Clinical Safety / Drug-drug interaction check (roadmap row 3)
+ * extended this service from allergy-only to allergy + DDI. The service
+ * id stays {@code hms-medication-allergy-check} so external CDS clients
+ * (Cerner / Epic sandboxes) keep their cached descriptor pointers; the
+ * descriptor's {@code title} and {@code description} are updated to
+ * reflect the broader scope.
+ *
+ * <p>The DDI evaluation reuses the engine's
+ * {@link CdsRuleEngine#buildContext(Patient, UUID, String, String, String)}
+ * to inherit the active-prescription scoping, RxNorm batch resolution,
+ * and the V93 RxNorm crosswalk fallback in a single place. We invoke
+ * {@link DrugDrugInteractionRule} directly rather than the full engine
+ * so a future addition to the rule catalogue cannot silently change the
+ * surface of this CDS service.
  */
 @Component
 public class MedicationAllergyCdsService implements CdsHookService {
@@ -34,9 +60,18 @@ public class MedicationAllergyCdsService implements CdsHookService {
     private static final String SOURCE_LABEL = "HMS Allergy Check";
 
     private final PatientAllergyRepository allergyRepository;
+    private final PatientRepository patientRepository;
+    private final CdsRuleEngine ruleEngine;
+    private final DrugDrugInteractionRule drugDrugInteractionRule;
 
-    public MedicationAllergyCdsService(PatientAllergyRepository allergyRepository) {
+    public MedicationAllergyCdsService(PatientAllergyRepository allergyRepository,
+                                       PatientRepository patientRepository,
+                                       CdsRuleEngine ruleEngine,
+                                       DrugDrugInteractionRule drugDrugInteractionRule) {
         this.allergyRepository = allergyRepository;
+        this.patientRepository = patientRepository;
+        this.ruleEngine = ruleEngine;
+        this.drugDrugInteractionRule = drugDrugInteractionRule;
     }
 
     @Override
@@ -44,9 +79,11 @@ public class MedicationAllergyCdsService implements CdsHookService {
         return new CdsServiceDescriptor(
             "order-sign",
             ID,
-            "Drug-allergy interaction check",
-            "Warns when a proposed MedicationRequest matches an active allergy "
-                + "on the patient's chart.",
+            "Drug allergy + drug-drug interaction check",
+            "Warns when a proposed MedicationRequest matches an active "
+                + "allergy on the patient's chart, and returns a card per "
+                + "drug-drug interaction with any coexisting active "
+                + "prescription (RxNorm-keyed against clinical.drug_interactions).",
             null
         );
     }
@@ -56,27 +93,51 @@ public class MedicationAllergyCdsService implements CdsHookService {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
 
-        Set<String> haystacks = collectAllergyTerms(allergyRepository.findByPatient_Id(patientId));
-        if (haystacks.isEmpty()) return CdsHookResponse.empty();
+        Set<String> allergyHaystack = collectAllergyTerms(allergyRepository.findByPatient_Id(patientId));
+        // The patient lookup is only needed when DDI evaluation has work to do.
+        // We defer it to the first MedicationRequest draft so requests with no
+        // medication entries (allergy-only check) keep their lightweight path.
+        Patient patient = null;
+        boolean patientLookupAttempted = false;
 
         List<CdsCard> cards = new ArrayList<>();
         for (Map<String, Object> draft : CdsHookContext.medicationDrafts(request)) {
-            CdsCard card = cardForDraft(draft, haystacks);
-            if (card != null) cards.add(card);
+            if (!"MedicationRequest".equals(draft.get("resourceType"))) continue;
+
+            String medText = MedicationDraftExtractor.extract(draft).name();
+            if (medText == null) {
+                medText = extractMedicationText(draft);
+            }
+            if (medText == null) continue;
+
+            // 1. Allergy card — same critical-match semantics as before.
+            if (!allergyHaystack.isEmpty()) {
+                CdsCard allergy = allergyCard(medText, allergyHaystack);
+                if (allergy != null) cards.add(allergy);
+            }
+
+            // 2. Drug-drug interaction cards — added in v1.0 row 3.
+            if (!patientLookupAttempted) {
+                patient = patientRepository.findByIdUnscoped(patientId).orElse(null);
+                patientLookupAttempted = true;
+            }
+            if (patient != null) {
+                cards.addAll(evaluateDrugDrugInteractions(patient, draft));
+            }
         }
         return CdsHookResponse.of(cards);
     }
 
-    /** Returns a critical card when the draft's medication text overlaps an active allergy term, else null. */
-    private CdsCard cardForDraft(Map<String, Object> draft, Set<String> haystacks) {
-        if (!"MedicationRequest".equals(draft.get("resourceType"))) return null;
-        String medText = extractMedicationText(draft);
-        if (medText == null) return null;
+    /* =====================================================================
+       Drug-allergy path — unchanged from the v0.x service.
+       ===================================================================== */
+
+    private CdsCard allergyCard(String medText, Set<String> haystacks) {
         String norm = medText.toLowerCase(Locale.ROOT);
         return haystacks.stream()
             .filter(norm::contains)
             .findFirst()
-            .map(allergen -> buildCard(medText, allergen))
+            .map(allergen -> buildAllergyCard(medText, allergen))
             .orElse(null);
     }
 
@@ -96,6 +157,13 @@ public class MedicationAllergyCdsService implements CdsHookService {
         if (trimmed.length() >= 3) sink.add(trimmed);
     }
 
+    /**
+     * Fallback extractor for the medication name. Mirrors the lighter
+     * extraction the original service used — kept so allergy-only payloads
+     * (no coding[] at all) still match. The shared
+     * {@link MedicationDraftExtractor} already covers this for the common
+     * case; we only fall through here when its name extraction returned null.
+     */
     private static String extractMedicationText(Map<String, Object> draft) {
         String fromConcept = textFromCodeableConcept(draft.get("medicationCodeableConcept"));
         if (fromConcept != null) return fromConcept;
@@ -125,7 +193,7 @@ public class MedicationAllergyCdsService implements CdsHookService {
         return (value instanceof String s && !s.isBlank()) ? s : null;
     }
 
-    private CdsCard buildCard(String medication, String matchedAllergen) {
+    private CdsCard buildAllergyCard(String medication, String matchedAllergen) {
         String summary = "Allergy alert: " + medication
             + " matches recorded allergy “" + matchedAllergen + "”";
         String detail =
@@ -138,5 +206,33 @@ public class MedicationAllergyCdsService implements CdsHookService {
             new Source(SOURCE_LABEL, null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         );
+    }
+
+    /* =====================================================================
+       Drug-drug interaction path — v1.0 row 3 add-on.
+       ===================================================================== */
+
+    /**
+     * Builds a {@link CdsRuleContext} for the proposed medication and runs
+     * the {@link DrugDrugInteractionRule} in isolation. Returns the cards
+     * the rule emits — one per coexisting active prescription that has a
+     * registered interaction. The engine's {@code buildContext} performs
+     * RxNorm resolution, active-prescription scoping, and the V93
+     * RxNorm-crosswalk fallback in a single place, so this service does
+     * not need to duplicate any of that work.
+     */
+    private List<CdsCard> evaluateDrugDrugInteractions(Patient patient, Map<String, Object> draft) {
+        ProposedMedication proposed = MedicationDraftExtractor.extract(draft);
+        if (proposed.name() == null && proposed.code() == null) return List.of();
+        CdsRuleContext context = ruleEngine.buildContext(
+            patient,
+            patient.getHospitalId(),
+            proposed.name(),
+            proposed.code(),
+            proposed.dose()
+        );
+        if (context == null) return List.of();
+        List<CdsCard> cards = drugDrugInteractionRule.evaluate(context);
+        return cards == null ? List.of() : cards;
     }
 }
