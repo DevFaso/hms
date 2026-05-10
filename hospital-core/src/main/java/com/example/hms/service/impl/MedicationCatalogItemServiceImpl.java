@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MedicationCatalogItemMapper;
 import com.example.hms.model.Hospital;
@@ -41,8 +42,15 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
 
     @Override
     public MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto) {
-        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+        // V95 platform-catalog semantics:
+        //   - super-admin: hospitalId optional. null  → global / LNME entry visible
+        //                  to every tenant. non-null → tenant-specific entry attached
+        //                  to that hospital (e.g. an SKU only one site stocks).
+        //   - hospital admin: hospitalId required and must equal their JWT scope.
+        //                  An admin from Hospital A cannot insert a medication into
+        //                  Hospital B's catalog, and cannot mint global entries —
+        //                  global creation is a platform governance act.
+        Hospital hospital = resolveCreateHospital(dto.getHospitalId());
 
         dto.setAtcCode(TerminologyCodes.normalizeAndRequireValidAtc(dto.getAtcCode()));
         dto.setRxnormCode(TerminologyCodes.normalizeAndRequireValidRxNorm(dto.getRxnormCode()));
@@ -51,8 +59,41 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         entity.setHospital(hospital);
 
         MedicationCatalogItem saved = catalogRepository.save(entity);
-        log.info("Created medication catalog item '{}' for hospital {}", saved.getNameFr(), hospital.getId());
+        if (hospital == null) {
+            log.info("Created global medication catalog item '{}'", saved.getNameFr());
+        } else {
+            log.info("Created medication catalog item '{}' for hospital {}",
+                saved.getNameFr(), hospital.getId());
+        }
         return mapper.toResponseDTO(saved);
+    }
+
+    /**
+     * Resolve the {@link Hospital} association for a create request,
+     * applying the platform-catalog authorization matrix described on
+     * {@link #create(MedicationCatalogItemRequestDTO)}. Returns {@code null}
+     * for a platform / global entry (super-admin only).
+     */
+    private Hospital resolveCreateHospital(UUID requestedHospitalId) {
+        boolean superAdmin = roleValidator.isSuperAdminFromAuth();
+        if (requestedHospitalId == null) {
+            if (!superAdmin) {
+                throw new BusinessException(
+                    "Hospital ID is required. Only super-admins may create global "
+                        + "(platform-wide) medication catalog entries.");
+            }
+            return null;
+        }
+        Hospital hospital = hospitalRepository.findById(requestedHospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
+        if (!superAdmin) {
+            UUID activeScope = roleValidator.requireActiveHospitalId();
+            if (!hospital.getId().equals(activeScope)) {
+                throw new BusinessException(
+                    "Hospital admins can only add medications to their own hospital's catalog.");
+            }
+        }
+        return hospital;
     }
 
     @Override

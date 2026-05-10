@@ -1,7 +1,6 @@
 package com.example.hms.payload.dto.medication;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -69,6 +68,13 @@ public class MedicationCatalogItemRequestDTO {
     @Size(max = 1000)
     private String description;
 
-    @NotNull(message = "Hospital ID is required")
+    /**
+     * Owning hospital. Optional from V95 onwards: super-admins may omit
+     * this field to create a <strong>global / platform catalog entry</strong>
+     * (visible to every tenant) representing an item on Burkina Faso's
+     * Liste Nationale des Médicaments Essentiels. Hospital admins must
+     * supply their own hospitalId — the service layer enforces this
+     * because bean validation alone cannot see the caller's role.
+     */
     private UUID hospitalId;
 }

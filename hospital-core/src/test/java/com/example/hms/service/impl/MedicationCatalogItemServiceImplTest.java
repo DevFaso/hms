@@ -94,6 +94,11 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void create_success() {
+        // Default-case create: a hospital admin adds Paracétamol to their own
+        // hospital's catalog. The V95 platform-scope refactor adds a scope
+        // check — JWT must report this hospital as the active scope.
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
@@ -107,10 +112,117 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void create_hospitalNotFound_throws() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── create — V95 platform-catalog scope ──
+
+    /**
+     * Regression for the dev 400 reported on 2026-05-10: super-admin posted
+     * a medication payload without {@code hospitalId} (the frontend doesn't
+     * carry the field) and was rejected by the old DTO-level {@code @NotNull}.
+     * After V95, super-admin omitting hospitalId means "create a global /
+     * platform / LNME entry" — the service must save the entity with a
+     * {@code null} Hospital association.
+     */
+    @Test
+    void create_asSuperAdmin_withoutHospitalId_savesAsGlobal() {
+        MedicationCatalogItemRequestDTO global = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Amoxicilline")
+                .genericName("Amoxicillin")
+                .atcCode("J01CA04")
+                .rxnormCode("112233")
+                .active(true)
+                .build(); // no hospitalId
+
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(mapper.toEntity(global)).thenReturn(item);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+
+        service.create(global);
+
+        // The saved entity must carry a null Hospital — that's what marks
+        // it as a platform-wide LNME row.
+        ArgumentCaptor<MedicationCatalogItem> captor =
+                ArgumentCaptor.forClass(MedicationCatalogItem.class);
+        verify(catalogRepository).save(captor.capture());
+        assertThat(captor.getValue().getHospital()).isNull();
+        // And we must NOT have looked up a hospital — there's no UUID to look up.
+        verify(hospitalRepository, never()).findById(any());
+    }
+
+    /**
+     * Guard: a hospital admin (not super-admin) cannot mint a platform/global
+     * entry by omitting hospitalId. Catalog governance stays with super-admin.
+     */
+    @Test
+    void create_asHospitalAdmin_withoutHospitalId_throws() {
+        MedicationCatalogItemRequestDTO global = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("Amoxicilline")
+                .genericName("Amoxicillin")
+                .build();
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+
+        assertThatThrownBy(() -> service.create(global))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("Only super-admins")
+                .hasMessageContaining("global");
+        verify(catalogRepository, never()).save(any());
+    }
+
+    /**
+     * Guard: a hospital admin cannot insert a medication into <em>another</em>
+     * hospital's catalog. The hospitalId in the request must match their JWT
+     * scope. Without this check, a Hospital A admin could mutate Hospital B's
+     * formulary by setting {@code hospitalId} in the body — a cross-tenant
+     * write that bypasses the JWT's hospital binding.
+     */
+    @Test
+    void create_asHospitalAdmin_withForeignHospitalId_throws() {
+        UUID foreignHospitalId = UUID.randomUUID();
+        Hospital foreign = new Hospital();
+        ReflectionTestUtils.setField(foreign, "id", foreignHospitalId);
+
+        MedicationCatalogItemRequestDTO foreignReq = MedicationCatalogItemRequestDTO.builder()
+                .nameFr("X")
+                .genericName("X")
+                .hospitalId(foreignHospitalId)
+                .build();
+
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId); // NOT foreign
+        when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
+
+        assertThatThrownBy(() -> service.create(foreignReq))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("their own hospital");
+        verify(catalogRepository, never()).save(any());
+    }
+
+    /**
+     * Super-admin may still create hospital-scoped entries by supplying an
+     * explicit hospitalId. This is a useful escape hatch for adding a SKU
+     * that only one site stocks.
+     */
+    @Test
+    void create_asSuperAdmin_withExplicitHospitalId_savesAsTenantScoped() {
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(mapper.toEntity(requestDTO)).thenReturn(item);
+        when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
+        when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
+
+        service.create(requestDTO);
+
+        ArgumentCaptor<MedicationCatalogItem> captor =
+                ArgumentCaptor.forClass(MedicationCatalogItem.class);
+        verify(catalogRepository).save(captor.capture());
+        assertThat(captor.getValue().getHospital()).isEqualTo(hospital);
     }
 
     // ── getById ──
