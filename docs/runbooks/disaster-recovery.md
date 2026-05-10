@@ -60,9 +60,12 @@ Run this **at least every 6 months** and within 14 days of any of:
 
 - [ ] **§ 3.1 Postgres PITR to a fresh database** — restore the
       production WAL stream into a *new* Railway Postgres instance
-      and confirm `flyway_schema_history` (or `databasechangelog` for
-      Liquibase) ends at the migration that was current at the chosen
-      restore point.
+      and confirm Liquibase `databasechangelog` ends at the changeset
+      that was current at the chosen restore point. Verify the latest
+      `id`, `author`, and `filename` values match what the production
+      backend reports on `/api/actuator/info` for the same release.
+      (HMS uses Liquibase exclusively; Flyway is disabled in every
+      profile and there is no `flyway_schema_history` table.)
 - [ ] **§ 4 Service redeploy** — pick the `hms-backend` service in
       Railway, redeploy the last green build from one week prior, and
       observe the `HmsErrorBudgetSlowBurn` alert reset within 5 min.
@@ -104,7 +107,7 @@ intact for forensics.
 3. **Validate the restored DB before cutover.** From a local shell:
    ```bash
    psql "$RESTORE_DB_URL" -c "SELECT COUNT(*) FROM clinical.patients WHERE is_deleted = FALSE;"
-   psql "$RESTORE_DB_URL" -c "SELECT id, filename, executed_on FROM databasechangelog ORDER BY executed_on DESC LIMIT 5;"
+   psql "$RESTORE_DB_URL" -c "SELECT id, author, filename, dateexecuted FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 5;"
    ```
    The `databasechangelog` query confirms Liquibase state. If the most
    recent entry is the migration *before* the bad one, you're good.
@@ -145,6 +148,54 @@ when the rows were *written*, decryption works transparently.
 
 If the key rotated between the write and the restore (rare, but
 possible during incident response): **§ 7**.
+
+### 3.4 Export-to-file (out-of-Railway backup)
+
+Used by **§ 5** (full project rebuild) when the Railway project itself
+is gone and you need a Postgres dump that lives outside Railway's
+managed snapshot store.
+
+**Cadence:** at least monthly, ideally weekly. Drop the resulting
+`backup.dump` file into the secret-manager / sealed offline store
+(same place that holds `APP_ENCRYPTION_KEY`).
+
+**Procedure:**
+
+1. Get the production `DATABASE_URL` from Railway → Postgres service →
+   **Variables**. The connection string already includes the password;
+   keep it in the on-call laptop's keychain, not the shell history.
+2. Run `pg_dump` from a machine with network reach to the Railway
+   Postgres (or via a Railway shell session):
+
+   ```bash
+   pg_dump --format=custom --no-owner --no-privileges \
+     --file "backup-$(date -u +%Y%m%dT%H%M%SZ).dump" \
+     "$DATABASE_URL"
+   ```
+
+   `--format=custom` produces the file `pg_restore` reads in § 5; the
+   `--no-owner --no-privileges` flags strip Railway-side role
+   ownership so the restore on a fresh project works without role
+   pre-creation.
+3. Verify the dump opens: `pg_restore --list backup-*.dump | head -50`
+   should show every schema (`billing`, `clinical`, `hospital`, `lab`,
+   `platform`, `reference`, `scheduling`, `security`, `support`,
+   `governance`, `empi`, `integration`).
+4. Hash the dump (`sha256sum backup-*.dump`) and record the hash
+   alongside the dump in the secret store so a tampered restore is
+   detectable later.
+5. Encrypt at rest before uploading to anywhere that isn't the secret
+   store — `gpg --symmetric --cipher-algo AES256 backup-*.dump` is
+   the project's documented baseline.
+
+**Restore back from the dump (during § 5 step 3):**
+```bash
+pg_restore --clean --no-owner --no-privileges \
+  --dbname "$NEW_DATABASE_URL" backup.dump
+```
+The `--clean` flag drops any pre-existing matching objects in the
+target so the new project starts identical to the source. Skip
+`--clean` if you're restoring into a known-empty database.
 
 ---
 
@@ -196,7 +247,8 @@ compromised, org dispute).
 **Prerequisites** — these must be recoverable from outside Railway:
 - GitHub repo access (`origin = https://github.com/DevFaso/hms.git`).
 - The current production secrets (see § 7 for the inventory).
-- The latest Postgres backup file (§ 3 export-to-file procedure).
+- The latest Postgres backup file produced by **§ 3.4** (out-of-Railway
+  `pg_dump`), retrieved from the secret-manager / sealed offline store.
 - The latest Keycloak realm export (`keycloak/prod/realm-export.json`
   in the repo, or the most recent manual export).
 
@@ -247,13 +299,30 @@ cd grafana/
 docker compose up -d
 ```
 
-Production runs Grafana Cloud; provisioning is via the
-[`grafana/provisioning/**`](../../grafana/provisioning) tree synced
-through the Grafana Cloud API. Re-sync via:
+Production runs Grafana Cloud. Dashboards and alert rules live in the
+repo under [`grafana/provisioning/**`](../../grafana/provisioning) so
+the canonical source survives any incident. There is **no automated
+sync script** — re-applying after a Grafana-side loss is a manual
+import:
 
-```bash
-./scripts/grafana-sync.sh   # if the script exists; otherwise re-import via the UI per dashboard
-```
+1. Open Grafana Cloud → **Dashboards** → **New** → **Import**.
+2. For each `*.json` file under `grafana/provisioning/dashboards/`,
+   click **Upload JSON file**, pick the file, then **Load** → set the
+   target folder to match the file's repo subdirectory (e.g.
+   `slo`, `api`, `postgres`) → **Import**.
+3. For alert rules, open **Alerting** → **Alert rules** → **New rule
+   from file** and upload each YAML under
+   `grafana/provisioning/alerting/`. The contact-point and
+   notification-policy YAMLs go through the same surface (**Contact
+   points** and **Notification policies** tabs).
+4. Smoke-test by opening the **SLO & Golden Signals** dashboard — it
+   should render with backend metrics within 1–2 minutes of the
+   re-import once the OTel exporter is also live (see § 6.3).
+
+If the team automates this later (a `grafana-sync.sh` driving the
+Grafana Cloud HTTP API would be the natural shape), update this
+section to point at the script and keep the manual fallback below it
+as a last resort.
 
 ### 6.2 Splunk HEC
 
