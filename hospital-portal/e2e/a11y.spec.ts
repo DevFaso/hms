@@ -1,5 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+
+import { test, expect } from './fixtures/test-fixtures';
 
 /**
  * v1.0 / Accessibility / axe-core/playwright smoke (roadmap row 10).
@@ -12,24 +14,28 @@ import { expect, test, type Page } from '@playwright/test';
  * `/api/**` and avoid a live backend dependency in CI.
  *
  * Runs axe-core against the four critical clinical-flow pages on every
- * PR. The gate fails only on `serious` or `critical` impact violations
- * — `moderate` and `minor` are reported in the run output but don't
- * block CI, so existing soft-debt doesn't lock up the pipeline. New
- * serious/critical regressions surface immediately.
+ * PR. The gate fails only on `serious` or `critical` impact violations.
+ * `moderate` and `minor` violations don't block CI but ARE printed to
+ * the console so existing soft-debt is visible to reviewers — addresses
+ * Copilot review on PR #286 which caught the original "filtered out
+ * silently, comment lied" mismatch.
  *
  * Coverage targets (per row 10 deliverable):
- * - /login              — public, unauthenticated
+ * - /login              — public, unauthenticated. Scanned with
+ *                         storageState explicitly cleared, otherwise
+ *                         LoginRedirectGuard bounces an authenticated
+ *                         visitor to /dashboard before axe sees the
+ *                         login DOM (Copilot review on PR #286).
  * - /dashboard          — main authenticated dashboard
  * - /patient-tracker    — clinician patient-tracker board
  * - /my-medications     — patient portal AVS-adjacent surface
  *                         (medications view; SuperAdmin storage state
  *                         carries the role bits needed to render).
  *
- * Auth is inherited from `e2e/global-setup.ts` (SuperAdmin storage
- * state with mocked /api/** routes, so the spec runs without a live
- * Spring Boot backend). The login test re-uses the same storage
- * state — the login page renders identically whether the visitor is
- * already authenticated or not, so axe sees the same DOM.
+ * Mock strategy: the shared `./fixtures/test-fixtures` auto-fixture
+ * registers comprehensive /api/** mocks so every spec runs against the
+ * same stable stubs. This spec does NOT redefine its own narrower
+ * stubBackend (Copilot review on PR #286 caught the divergence).
  *
  * Failure semantics: `expect(violations).toEqual([])` after filtering
  * by impact, with the violations array surfaced via Playwright's
@@ -43,30 +49,24 @@ type Violation = AxeResults['violations'][number];
 
 /** Impact levels we treat as PR-blocking. */
 const BLOCKING_IMPACTS = new Set<Violation['impact']>(['critical', 'serious']);
+/** Lower-impact buckets we report but don't block on. */
+const REPORT_ONLY_IMPACTS = new Set<Violation['impact']>(['moderate', 'minor']);
 
-/**
- * Stub the network calls the page makes on load so the spec runs
- * without a live backend. Mirrors the catch-all pattern from
- * global-setup.ts: anything under /api/** returns a benign empty
- * paginated response, so the Angular HTTP error interceptor never
- * kicks in and bounces the user back to /login.
- */
-async function stubBackend(page: Page) {
-  await page.route('**/api/**', (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 }),
-    }),
-  );
+function summarize(violations: Violation[]) {
+  return violations.map((v) => ({
+    id: v.id,
+    impact: v.impact,
+    description: v.description,
+    helpUrl: v.helpUrl,
+    nodes: v.nodes.map((n) => n.target),
+  }));
 }
 
 async function runAxe(page: Page, route: string) {
-  await stubBackend(page);
   await page.goto(route, { waitUntil: 'domcontentloaded' });
   // Let Angular finish its initial render — the body's data-cy="ready"
-  // hook isn't present on every page, so we fall back to a fixed wait
-  // for the framework to settle.
+  // hook isn't present on every page, so we fall back to networkidle
+  // (with a bounded catch — some pages keep polling forever).
   await page.waitForLoadState('networkidle').catch(() => {});
 
   const results = await new AxeBuilder({ page })
@@ -81,23 +81,29 @@ async function runAxe(page: Page, route: string) {
   const blocking = results.violations.filter(
     (v) => v.impact !== null && v.impact !== undefined && BLOCKING_IMPACTS.has(v.impact),
   );
-  const formatted = blocking.map((v) => ({
-    id: v.id,
-    impact: v.impact,
-    description: v.description,
-    helpUrl: v.helpUrl,
-    nodes: v.nodes.map((n) => n.target),
-  }));
+  const reportOnly = results.violations.filter(
+    (v) => v.impact !== null && v.impact !== undefined && REPORT_ONLY_IMPACTS.has(v.impact),
+  );
 
-  expect(formatted, `serious/critical a11y violations on ${route}: ${JSON.stringify(formatted, null, 2)}`)
-    .toEqual([]);
+  // Surface moderate/minor findings to the run output even though they
+  // don't fail the gate — keeps soft-debt visible and addresses Copilot
+  // review on PR #286. console.log over console.warn so Playwright's
+  // default reporter doesn't tag the line as an error.
+  if (reportOnly.length > 0) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[a11y] ${route} — ${reportOnly.length} non-blocking violation(s) (moderate/minor):\n` +
+        JSON.stringify(summarize(reportOnly), null, 2),
+    );
+  }
+
+  expect(
+    summarize(blocking),
+    `serious/critical a11y violations on ${route}`,
+  ).toEqual([]);
 }
 
-test.describe('a11y smoke (axe-core)', () => {
-  test('login page has no serious/critical violations', async ({ page }) => {
-    await runAxe(page, '/login');
-  });
-
+test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
   test('main dashboard has no serious/critical violations', async ({ page }) => {
     await runAxe(page, '/dashboard');
   });
@@ -113,5 +119,18 @@ test.describe('a11y smoke (axe-core)', () => {
     // case axe still scans a real page. Either outcome is useful
     // signal.
     await runAxe(page, '/my-medications');
+  });
+});
+
+test.describe('a11y smoke (axe-core) — unauthenticated /login', () => {
+  // Per-describe override: discard the SuperAdmin storage state from
+  // the chromium project so LoginRedirectGuard does NOT redirect us
+  // away from /login. Without this override, the test would silently
+  // scan /dashboard (the authenticated landing page) — Copilot review
+  // on PR #286 caught the bug.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('login page has no serious/critical violations', async ({ page }) => {
+    await runAxe(page, '/login');
   });
 });
