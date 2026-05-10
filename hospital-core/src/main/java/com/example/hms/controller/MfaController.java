@@ -10,6 +10,7 @@ import com.example.hms.payload.dto.mfa.MfaEnrollmentResponse;
 import com.example.hms.payload.dto.mfa.MfaVerifyRequest;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenUserDescriptor;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +54,7 @@ public class MfaController {
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final IdleSessionGate idleSessionGate;
 
     /**
      * Resolves the authenticated user from the security principal.
@@ -188,8 +191,22 @@ public class MfaController {
         }
 
         // MFA passed — issue full JWT pair
-        List<String> roles = assignmentRepository.findByUser_IdAndActiveTrue(user.getId()).stream()
+        var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+        List<String> roles = activeAssignments.stream()
                 .map(a -> a.getRole().getName())
+                .distinct()
+                .toList();
+        // Authority strings for the idle-gate touch must be Spring Security
+        // canonical form (ROLE_*). `Role.name` is not guaranteed to carry the
+        // ROLE_ prefix (per the entity Javadoc, examples include both
+        // "HOSPITAL_ADMIN" and "ROLE_SUPER_ADMIN"), so naively wrapping
+        // `roles` would break IdleSessionGate#hasMachineRole's exact-string
+        // carve-out — a real machine client (e.g. ROLE_FHIR_CLIENT) routed
+        // through this path would be misclassified as human and pinned in
+        // Redis. Use `Role.code`, which is uppercased on persist (Role.java)
+        // and mirrors the AuthController#refreshToken pattern (line ~617).
+        List<String> roleCodes = activeAssignments.stream()
+                .map(a -> a.getRole().getCode())
                 .distinct()
                 .toList();
 
@@ -236,6 +253,12 @@ public class MfaController {
         } catch (Exception ex) {
             log.warn("[MFA] Failed to set refresh cookie: {}", ex.getMessage());
         }
+
+        // Seed the idle window on token issue, mirroring
+        // AuthController.authenticateUser. The authority list is built from
+        // role codes — see the roleCodes block above for the rationale.
+        idleSessionGate.touchIfHuman(user.getId(),
+                AuthorityUtils.createAuthorityList(roleCodes.toArray(new String[0])));
 
         return ResponseEntity.ok(body);
     }
