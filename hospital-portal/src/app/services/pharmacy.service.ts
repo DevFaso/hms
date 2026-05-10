@@ -211,6 +211,14 @@ export interface DispenseRequest {
   substitution?: boolean;
   substitutionReason?: string;
   notes?: string;
+  /**
+   * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
+   * offline-dispense queue mints when the user clicks Dispense. Allows the
+   * same logical dispense to be replayed after connectivity returns without
+   * a second stock decrement / audit / ready-for-pickup SMS. Backend
+   * contract: see DispenseRequestDTO.idempotencyKey + V94 migration.
+   */
+  idempotencyKey?: string;
 }
 
 export interface DispenseResponse {

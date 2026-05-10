@@ -732,4 +732,110 @@ class DispenseServiceImplTest {
             assertThat(result.getContent().get(0).getPatient().getId()).isEqualTo(patientId);
         }
     }
+
+    /**
+     * Roadmap row 4 / T-68 — offline dispense queue replay path.
+     *
+     * <p>The contract under test: when the same {@code idempotencyKey} is
+     * POSTed twice (the second POST being the offline-queue replay after
+     * connectivity returns), the second call must return the existing
+     * DispenseResponseDTO and skip every side-effect — no second stock
+     * decrement, no second audit, no second SMS, no validation re-run.
+     *
+     * <p>We deliberately do NOT stub any of the validation collaborators
+     * (prescription/patient/pharmacy lookups, RoleValidator, CDS check,
+     * stock-lot consume) on the replay path. If the implementation were
+     * to fall through to the create branch, Mockito would throw on the
+     * unstubbed strict-stubs and the test would surface the regression.
+     */
+    @Nested
+    @DisplayName("createDispense — idempotency (T-68)")
+    class CreateDispenseIdempotency {
+
+        private static final String KEY = "user-001-rx-002-2026-05-10T13:45:30.123456789Z";
+
+        @Test
+        @DisplayName("replay with known key returns existing dispense and skips all side-effects")
+        void replayReturnsExistingAndSkipsSideEffects() {
+            DispenseRequestDTO replay = buildRequest();
+            replay.setIdempotencyKey(KEY);
+
+            Dispense existing = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO existingDto = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(dispenseRepository.findByIdempotencyKey(KEY)).thenReturn(Optional.of(existing));
+            when(dispenseMapper.toResponseDTO(existing)).thenReturn(existingDto);
+
+            DispenseResponseDTO result = service.createDispense(replay);
+
+            assertThat(result).isSameAs(existingDto);
+            // No write, no stock decrement, no audit, no SMS — the create
+            // branch is fully short-circuited.
+            verify(dispenseRepository, never()).save(any());
+            verify(prescriptionRepository, never()).save(any());
+            verify(stockLotRepository, never()).save(any());
+            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("blank idempotency key falls through to the normal create path")
+        void blankKeyFallsThroughToCreate() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setIdempotencyKey("   ");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            // The replay lookup must NOT be consulted for a blank key — that's
+            // wasted IO. Verified via never() below.
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(dispenseRepository, never()).findByIdempotencyKey(any());
+            verify(dispenseRepository).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("unknown key falls through to create — second POST persists with the key")
+        void unknownKeyCreatesNewRow() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setIdempotencyKey(KEY);
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).status("COMPLETED").build();
+
+            when(dispenseRepository.findByIdempotencyKey(KEY)).thenReturn(Optional.empty());
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(dispenseRepository).findByIdempotencyKey(KEY);
+            verify(dispenseRepository).save(any(Dispense.class));
+        }
+    }
 }

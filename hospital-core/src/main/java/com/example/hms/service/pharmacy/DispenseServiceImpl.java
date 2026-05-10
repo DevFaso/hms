@@ -71,6 +71,22 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO createDispense(DispenseRequestDTO dto) {
+        // Roadmap row 4 / T-68 — short-circuit a replayed POST from the offline
+        // pharmacy queue BEFORE any side-effects fire. We do not re-validate
+        // quantities here: the original POST already passed validation, the row
+        // is on file, and the goal is to make the second POST a pure read.
+        // Stock is NOT re-decremented, no audit emitted, no SMS re-sent.
+        // A blank/null key falls through to the normal create path.
+        String idempotencyKey = normalize(dto.getIdempotencyKey());
+        if (idempotencyKey != null) {
+            var replay = dispenseRepository.findByIdempotencyKey(idempotencyKey);
+            if (replay.isPresent()) {
+                log.info("[DISPENSE] idempotency replay hit — returning existing dispense id={} for key={}",
+                        replay.get().getId(), idempotencyKey);
+                return dispenseMapper.toResponseDTO(replay.get());
+            }
+        }
+
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         // Validate quantities at the boundary (positive, dispensed <= requested)
@@ -350,6 +366,21 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     // ── Private helpers ──
+
+    /**
+     * Roadmap row 4 / T-68 — trims and blank-coalesces the client-supplied
+     * idempotency key. Returns {@code null} for any input that should NOT
+     * participate in dedup (null, empty, whitespace-only). Mirrors the
+     * mapper's blank-to-null contract so the lookup and the eventual
+     * persisted column agree on what "no key" means.
+     */
+    private static String normalize(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        String trimmed = idempotencyKey.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
         if (requested == null || requested.signum() <= 0) {
