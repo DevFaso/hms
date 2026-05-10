@@ -97,7 +97,7 @@ class MedicationCatalogItemServiceImplTest {
         // Default-case create: a hospital admin adds Paracétamol to their own
         // hospital's catalog. The V95 platform-scope refactor adds a scope
         // check — JWT must report this hospital as the active scope.
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
@@ -112,7 +112,7 @@ class MedicationCatalogItemServiceImplTest {
 
     @Test
     void create_hospitalNotFound_throws() {
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
@@ -139,7 +139,7 @@ class MedicationCatalogItemServiceImplTest {
                 .active(true)
                 .build(); // no hospitalId
 
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(mapper.toEntity(global)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
@@ -166,7 +166,7 @@ class MedicationCatalogItemServiceImplTest {
                 .nameFr("Amoxicilline")
                 .genericName("Amoxicillin")
                 .build();
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
 
         assertThatThrownBy(() -> service.create(global))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class)
@@ -194,7 +194,7 @@ class MedicationCatalogItemServiceImplTest {
                 .hospitalId(foreignHospitalId)
                 .build();
 
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId); // NOT foreign
         when(hospitalRepository.findById(foreignHospitalId)).thenReturn(Optional.of(foreign));
 
@@ -211,7 +211,7 @@ class MedicationCatalogItemServiceImplTest {
      */
     @Test
     void create_asSuperAdmin_withExplicitHospitalId_savesAsTenantScoped() {
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(mapper.toEntity(requestDTO)).thenReturn(item);
         when(catalogRepository.save(any(MedicationCatalogItem.class))).thenReturn(item);

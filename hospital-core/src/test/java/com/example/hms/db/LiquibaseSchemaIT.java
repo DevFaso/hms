@@ -151,22 +151,26 @@ class LiquibaseSchemaIT {
 
     /**
      * V95 regression: medication catalog becomes a platform / LNME catalog.
-     * Two invariants worth pinning end-to-end (Hibernate's H2 dialect can't
-     * model PostgreSQL partial unique indexes, so this Testcontainers run
-     * is the only thing that proves the migration actually does what the
-     * SQL says it does):
+     *
+     * <p>Pinned end-to-end (Hibernate's H2 dialect can't model PostgreSQL
+     * partial unique indexes, so this Testcontainers run is the only thing
+     * that proves the migration actually does what the SQL says it does):
      *
      * <ol>
      *   <li>{@code hospital_id} is nullable on {@code clinical
      *       .medication_catalog_items} — a global row inserts cleanly with
      *       {@code hospital_id = NULL}.</li>
-     *   <li>The two partial unique indexes ({@code uq_mci_code_global} and
-     *       {@code uq_mci_code_hospital}) reject duplicates inside their
-     *       own scope without shadowing the other scope. Postgres treats
-     *       {@code NULL} as distinct in a multi-column {@code UNIQUE}, so
-     *       without the partial-index split, two globals with the same code
-     *       would silently coexist — which is the whole bug this migration
-     *       is supposed to prevent.</li>
+     *   <li>{@code code} is nullable — the DTO doesn't carry an internal
+     *       formulary code and globals legitimately don't need one
+     *       (RxNorm is their natural identifier).</li>
+     *   <li>{@code uq_mci_rxnorm_global} rejects two globals sharing the
+     *       same RxNorm code — uniqueness on the natural global key.</li>
+     *   <li>{@code uq_mci_code_hospital} rejects two hospital-scoped rows
+     *       sharing the same {@code (hospital_id, code)} — preserves the
+     *       V43 hospital-scoped invariant.</li>
+     *   <li>The two partial indexes don't shadow each other: a global with
+     *       a given RxNorm and a hospital-scoped row with a code that
+     *       reuses some identifier are independently uniqueness-checked.</li>
      * </ol>
      */
     @Test
@@ -175,16 +179,9 @@ class LiquibaseSchemaIT {
 
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
             // hospital_id must be nullable on medication_catalog_items.
-            try (ResultSet rs = stmt.executeQuery(
-                "SELECT is_nullable FROM information_schema.columns "
-                    + "WHERE table_schema = 'clinical' "
-                    + "AND table_name = 'medication_catalog_items' "
-                    + "AND column_name = 'hospital_id'")) {
-                assertThat(rs.next()).as("hospital_id column exists").isTrue();
-                assertThat(rs.getString("is_nullable"))
-                    .as("V95 must make medication_catalog_items.hospital_id nullable")
-                    .isEqualTo("YES");
-            }
+            assertColumnNullable(stmt, "clinical", "medication_catalog_items", "hospital_id");
+            // code must be nullable too — V43 had it NOT NULL, V95 relaxes it.
+            assertColumnNullable(stmt, "clinical", "medication_catalog_items", "code");
 
             // Insert a tenant for the hospital-scoped half of the test.
             stmt.executeUpdate("INSERT INTO hospital.hospitals "
@@ -192,50 +189,52 @@ class LiquibaseSchemaIT {
                 + "VALUES ('e0000000-0000-0000-0000-000000000001', "
                 + "'IT-MedCatalog', 'IT-MEDCAT', TRUE, NOW(), NOW())");
 
-            // (1) A global row inserts cleanly with hospital_id = NULL.
+            // (1) A global row inserts cleanly with hospital_id = NULL and
+            //     code = NULL — RxNorm is its identifier.
             stmt.executeUpdate("INSERT INTO clinical.medication_catalog_items "
-                + "(id, code, name_fr, generic_name, essential_list, controlled, "
-                + " active, hospital_id, created_at, updated_at) "
+                + "(id, code, name_fr, generic_name, rxnorm_code, "
+                + " essential_list, controlled, active, hospital_id, "
+                + " created_at, updated_at) "
                 + "VALUES ('e0000000-0000-0000-0000-000000000002', "
-                + "'AMOX500-GLOBAL', 'Amoxicilline', 'Amoxicillin', "
+                + "NULL, 'Amoxicilline', 'Amoxicillin', '112233', "
                 + "FALSE, FALSE, TRUE, NULL, NOW(), NOW())");
 
-            // (2) A second global row with the SAME code must be rejected by
-            //     uq_mci_code_global (partial unique on code WHERE hospital_id IS NULL).
+            // (2) A second global row with the SAME RxNorm must be rejected
+            //     by uq_mci_rxnorm_global.
             String dupGlobalSql = "INSERT INTO clinical.medication_catalog_items "
-                + "(id, code, name_fr, generic_name, essential_list, controlled, "
-                + " active, hospital_id, created_at, updated_at) "
+                + "(id, code, name_fr, generic_name, rxnorm_code, "
+                + " essential_list, controlled, active, hospital_id, "
+                + " created_at, updated_at) "
                 + "VALUES ('e0000000-0000-0000-0000-000000000003', "
-                + "'AMOX500-GLOBAL', 'Amoxicilline dup', 'Amoxicillin', "
+                + "NULL, 'Amoxicilline dup', 'Amoxicillin', '112233', "
                 + "FALSE, FALSE, TRUE, NULL, NOW(), NOW())";
             assertThatCode(() -> {
                 try (Statement s = conn.createStatement()) {
                     s.executeUpdate(dupGlobalSql);
                 }
-            }).as("duplicate global code must be rejected by uq_mci_code_global")
+            }).as("duplicate global RxNorm must be rejected by uq_mci_rxnorm_global")
                 .isInstanceOf(java.sql.SQLException.class);
 
-            // (3) A hospital-scoped row reusing the same code in a DIFFERENT
-            //     scope must SUCCEED — uq_mci_code_global only covers
-            //     hospital_id IS NULL, and uq_mci_code_hospital covers
-            //     (hospital_id, code) so a different (or here, any) hospital_id
-            //     leaves the (NULL, code) global row untouched.
+            // (3) A hospital-scoped row succeeds with an explicit code — the
+            //     two partial indexes don't shadow each other.
             stmt.executeUpdate("INSERT INTO clinical.medication_catalog_items "
-                + "(id, code, name_fr, generic_name, essential_list, controlled, "
-                + " active, hospital_id, created_at, updated_at) "
+                + "(id, code, name_fr, generic_name, rxnorm_code, "
+                + " essential_list, controlled, active, hospital_id, "
+                + " created_at, updated_at) "
                 + "VALUES ('e0000000-0000-0000-0000-000000000004', "
-                + "'AMOX500-GLOBAL', 'Amoxicilline Hospital A', 'Amoxicillin', "
-                + "FALSE, FALSE, TRUE, "
+                + "'AMOX500-LOCAL', 'Amoxicilline Hospital A', 'Amoxicillin', "
+                + "'112233', FALSE, FALSE, TRUE, "
                 + "'e0000000-0000-0000-0000-000000000001', NOW(), NOW())");
 
-            // (4) A duplicate within the same hospital is rejected by
-            //     uq_mci_code_hospital.
+            // (4) A second hospital-scoped row in the SAME hospital reusing
+            //     the same code is rejected by uq_mci_code_hospital.
             String dupHospitalSql = "INSERT INTO clinical.medication_catalog_items "
-                + "(id, code, name_fr, generic_name, essential_list, controlled, "
-                + " active, hospital_id, created_at, updated_at) "
+                + "(id, code, name_fr, generic_name, rxnorm_code, "
+                + " essential_list, controlled, active, hospital_id, "
+                + " created_at, updated_at) "
                 + "VALUES ('e0000000-0000-0000-0000-000000000005', "
-                + "'AMOX500-GLOBAL', 'Amoxicilline Hospital A dup', 'Amoxicillin', "
-                + "FALSE, FALSE, TRUE, "
+                + "'AMOX500-LOCAL', 'Amoxicilline Hospital A dup', 'Amoxicillin', "
+                + "'445566', FALSE, FALSE, TRUE, "
                 + "'e0000000-0000-0000-0000-000000000001', NOW(), NOW())";
             assertThatCode(() -> {
                 try (Statement s = conn.createStatement()) {
@@ -243,6 +242,19 @@ class LiquibaseSchemaIT {
                 }
             }).as("duplicate hospital-scoped code must be rejected by uq_mci_code_hospital")
                 .isInstanceOf(java.sql.SQLException.class);
+        }
+    }
+
+    private static void assertColumnNullable(Statement stmt, String schema, String table, String column) throws Exception {
+        try (ResultSet rs = stmt.executeQuery(
+            "SELECT is_nullable FROM information_schema.columns "
+                + "WHERE table_schema = '" + schema + "' "
+                + "AND table_name = '" + table + "' "
+                + "AND column_name = '" + column + "'")) {
+            assertThat(rs.next()).as("%s.%s.%s exists", schema, table, column).isTrue();
+            assertThat(rs.getString("is_nullable"))
+                .as("V95 must make %s.%s.%s nullable", schema, table, column)
+                .isEqualTo("YES");
         }
     }
 

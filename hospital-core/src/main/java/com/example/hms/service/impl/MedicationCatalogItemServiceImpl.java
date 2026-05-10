@@ -73,9 +73,18 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      * applying the platform-catalog authorization matrix described on
      * {@link #create(MedicationCatalogItemRequestDTO)}. Returns {@code null}
      * for a platform / global entry (super-admin only).
+     *
+     * <p>Uses {@link RoleValidator#isSuperAdminFromJwtClaim()} rather than
+     * the authority-based check because minting a global catalog row is a
+     * cross-tenant governance act: the JWT-claim signal is set only by the
+     * token issuer when the user is a real super-admin and is not
+     * influenced by per-request authority inflation (e.g. a token whose
+     * roles claim was forged before signature verification would carry the
+     * authority but lack the {@code isSuperAdmin} claim). Same reasoning
+     * applies to the cross-tenant write guard in the second branch.
      */
     private Hospital resolveCreateHospital(UUID requestedHospitalId) {
-        boolean superAdmin = roleValidator.isSuperAdminFromAuth();
+        boolean superAdmin = roleValidator.isSuperAdminFromJwtClaim();
         if (requestedHospitalId == null) {
             if (!superAdmin) {
                 throw new BusinessException(
