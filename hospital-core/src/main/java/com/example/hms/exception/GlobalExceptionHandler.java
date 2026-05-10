@@ -11,6 +11,7 @@ import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -107,6 +108,45 @@ public class GlobalExceptionHandler {
         ex.getMostSpecificCause();
         String message = ex.getMostSpecificCause().getMessage();
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    /**
+     * Catches Jackson deserialisation failures (unknown enum values, malformed
+     * JSON, type-coercion errors) and surfaces them as 400 with the original
+     * Jackson message — far more actionable than the generic 500 the catch-all
+     * RuntimeException handler used to produce. Triggered on dev when the
+     * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
+     * against the {@code PharmacyType} enum whose accepted values are
+     * {@code COMMUNITY_PHARMACY / PARTNER_PHARMACY / HOSPITAL_DISPENSARY}.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        // Jackson exception messages embed the offending field path and the
+        // accepted values for enums; surface them so the caller can self-
+        // diagnose. The cause's message is shorter and cleaner than the
+        // outer JsonMappingException stack-trace prefix, but it can be null
+        // even when the cause itself is non-null (rare Jackson paths build a
+        // cause with no detail message) — fall through to the outer message
+        // and then to a fixed default so the response is never
+        // "Malformed request body: null".
+        String detail = resolveJacksonDetail(ex);
+        String message = detail.isEmpty()
+            ? "Malformed request body."
+            : "Malformed request body: " + detail;
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    private static String resolveJacksonDetail(HttpMessageNotReadableException ex) {
+        // getMostSpecificCause() falls back to the throwable itself when no
+        // cause is chained, so it is documented non-null. Its detail message,
+        // however, can be null on edge-case Jackson paths.
+        String causeMessage = ex.getMostSpecificCause().getMessage();
+        if (causeMessage != null && !causeMessage.isBlank()) {
+            return causeMessage;
+        }
+        String outer = ex.getMessage();
+        return outer != null && !outer.isBlank() ? outer : "";
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

@@ -66,7 +66,9 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
-        return catalogRepository.findByHospital_IdAndActiveTrue(hospitalId, pageable)
+        // hospitalId may be null (super-admin global view) — same pattern as
+        // PharmacyServiceImpl.listByHospital (see comment there).
+        return catalogRepository.findActivePage(hospitalId, pageable)
                 .map(mapper::toResponseDTO);
     }
 
