@@ -57,7 +57,12 @@ public class InBasketController {
 
         UUID userId = requireUserId(auth);
         UUID resolvedHospitalId = resolveHospital(auth, hospitalId);
-        if (resolvedHospitalId == null) {
+        // Super-admins in global view legitimately have no active tenant
+        // scope; the repository's JPQL drops the hospital filter when
+        // resolvedHospitalId is null and returns every item addressed to the
+        // caller. For every other role we still require a scope — a
+        // clinician without one is a misconfigured token, not a feature.
+        if (resolvedHospitalId == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
             throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
         }
 
@@ -77,7 +82,12 @@ public class InBasketController {
 
         UUID userId = requireUserId(auth);
         UUID resolvedHospitalId = resolveHospital(auth, hospitalId);
-        if (resolvedHospitalId == null) {
+        // Super-admins in global view legitimately have no active tenant
+        // scope; the repository's JPQL drops the hospital filter when
+        // resolvedHospitalId is null and returns every item addressed to the
+        // caller. For every other role we still require a scope — a
+        // clinician without one is a misconfigured token, not a feature.
+        if (resolvedHospitalId == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
             throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
         }
 

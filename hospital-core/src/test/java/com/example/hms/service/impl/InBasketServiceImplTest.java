@@ -121,15 +121,15 @@ class InBasketServiceImplTest {
 
         @Test
         void returnsCountsByType() {
-            when(inBasketItemRepository.countByRecipientUser_IdAndHospital_IdAndStatus(
+            when(inBasketItemRepository.countByRecipientForSummary(
                     userId, hospitalId, InBasketItemStatus.UNREAD)).thenReturn(5L);
-            when(inBasketItemRepository.countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
+            when(inBasketItemRepository.countByRecipientAndTypeForSummary(
                     userId, hospitalId, InBasketItemStatus.UNREAD, InBasketItemType.RESULT)).thenReturn(3L);
-            when(inBasketItemRepository.countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
+            when(inBasketItemRepository.countByRecipientAndTypeForSummary(
                     userId, hospitalId, InBasketItemStatus.UNREAD, InBasketItemType.ORDER)).thenReturn(1L);
-            when(inBasketItemRepository.countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
+            when(inBasketItemRepository.countByRecipientAndTypeForSummary(
                     userId, hospitalId, InBasketItemStatus.UNREAD, InBasketItemType.MESSAGE)).thenReturn(0L);
-            when(inBasketItemRepository.countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
+            when(inBasketItemRepository.countByRecipientAndTypeForSummary(
                     userId, hospitalId, InBasketItemStatus.UNREAD, InBasketItemType.TASK)).thenReturn(1L);
 
             InBasketSummaryDTO summary = service.getSummary(userId, hospitalId);

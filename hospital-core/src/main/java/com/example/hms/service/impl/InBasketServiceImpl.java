@@ -51,8 +51,11 @@ public class InBasketServiceImpl implements InBasketService {
 
     @Override
     public InBasketSummaryDTO getSummary(UUID userId, UUID hospitalId) {
+        // hospitalId may be null (super-admin global view) — the repository's
+        // JPQL drops the hospital filter when it is, returning every item
+        // addressed to the recipient regardless of tenant.
         long totalUnread = inBasketItemRepository
-                .countByRecipientUser_IdAndHospital_IdAndStatus(userId, hospitalId, InBasketItemStatus.UNREAD);
+                .countByRecipientForSummary(userId, hospitalId, InBasketItemStatus.UNREAD);
 
         long resultUnread = countByType(userId, hospitalId, InBasketItemType.RESULT);
         long orderUnread = countByType(userId, hospitalId, InBasketItemType.ORDER);
@@ -146,7 +149,7 @@ public class InBasketServiceImpl implements InBasketService {
 
     private long countByType(UUID userId, UUID hospitalId, InBasketItemType type) {
         return inBasketItemRepository
-                .countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
+                .countByRecipientAndTypeForSummary(
                         userId, hospitalId, InBasketItemStatus.UNREAD, type);
     }
 
