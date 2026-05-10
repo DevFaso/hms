@@ -1032,6 +1032,8 @@
     "ALL_HOSPITALS": "Hospitales",
     "BACK": "Volver",
     "BACK_TO_CONTROL_TOWER": "Volver a la torre de control",
+    "HIDE_PASSWORD": "Ocultar contraseña",
+    "SHOW_PASSWORD": "Mostrar contraseña",
     "CANCEL": "Cancelar",
     "CANCELLING": "Cancelling...",
     "CANNOT_UNDO": "Esta acción no se puede deshacer.",

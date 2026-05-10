@@ -1032,6 +1032,8 @@
     "ALL_HOSPITALS": "Hospitals",
     "BACK": "Back",
     "BACK_TO_CONTROL_TOWER": "Back to Control Tower",
+    "HIDE_PASSWORD": "Hide password",
+    "SHOW_PASSWORD": "Show password",
     "CANCEL": "Cancel",
     "CANCELLING": "Cancelling...",
     "CANNOT_UNDO": "This action cannot be undone.",
