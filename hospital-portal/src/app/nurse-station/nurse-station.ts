@@ -431,14 +431,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Acuity display ─────────────────────────────────────── */
 
   acuityLabel(level: string): string {
+    // Map the backend enum to an i18n key. translate.instant resolves to the
+    // currently-active language so the FR/EN/ES toggle in the header
+    // re-renders these on the next change-detection pass without a reload.
+    // Falls through to the raw enum value for any unknown level so the UI
+    // stays useful if a future backend adds a new tier before the i18n
+    // catalogue catches up.
     const map: Record<string, string> = {
-      LEVEL_1_MINIMAL: 'L1 Minimal',
-      LEVEL_2_MODERATE: 'L2 Moderate',
-      LEVEL_3_MAJOR: 'L3 Major',
-      LEVEL_4_SEVERE: 'L4 Severe',
-      LEVEL_5_CRITICAL: 'L5 Critical',
+      LEVEL_1_MINIMAL: 'NURSE.ACUITY_L1_MINIMAL',
+      LEVEL_2_MODERATE: 'NURSE.ACUITY_L2_MODERATE',
+      LEVEL_3_MAJOR: 'NURSE.ACUITY_L3_MAJOR',
+      LEVEL_4_SEVERE: 'NURSE.ACUITY_L4_SEVERE',
+      LEVEL_5_CRITICAL: 'NURSE.ACUITY_L5_CRITICAL',
     };
-    return map[level] ?? level;
+    const key = map[level];
+    return key ? this.translate.instant(key) : level;
   }
 
   acuityCssClass(level: string): string {
@@ -534,17 +541,22 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   taskCategoryLabel(category: string): string {
+    // The NURSE.<CATEGORY> keys already exist in en/fr/es.json (added with
+    // MVP 13). The previous hardcoded English copy was a leftover from the
+    // initial scaffolding and was producing mixed-language output on the FR
+    // toggle.
     const map: Record<string, string> = {
-      DRESSING_CHANGE: 'Dressing Change',
-      IV_CHECK: 'IV Check',
-      CATHETER_CARE: 'Catheter Care',
-      PAIN_REASSESSMENT: 'Pain Reassessment',
-      MOBILITY_ASSIST: 'Mobility Assist',
-      INTAKE_OUTPUT: 'I&O Recording',
-      WOUND_CARE: 'Wound Care',
-      OTHER: 'Other',
+      DRESSING_CHANGE: 'NURSE.DRESSING_CHANGE',
+      IV_CHECK: 'NURSE.IV_CHECK',
+      CATHETER_CARE: 'NURSE.CATHETER_CARE',
+      PAIN_REASSESSMENT: 'NURSE.PAIN_REASSESSMENT',
+      MOBILITY_ASSIST: 'NURSE.MOBILITY_ASSIST',
+      INTAKE_OUTPUT: 'NURSE.INTAKE_OUTPUT',
+      WOUND_CARE: 'NURSE.WOUND_CARE',
+      OTHER: 'NURSE.OTHER',
     };
-    return map[category] ?? category;
+    const key = map[category];
+    return key ? this.translate.instant(key) : category;
   }
 
   /* ── MVP 13: Inbox ─────────────────────────────────────────── */
