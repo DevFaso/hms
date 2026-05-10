@@ -17,47 +17,44 @@ import org.springframework.mail.javamail.MimeMessagePreparator;
 @TestConfiguration
 public class TestPostgresConfig {
 
-    /**
-     * Mint a per-context H2 URL so each {@code @SpringBootTest} that imports
-     * this configuration gets its own in-memory database.
-     *
-     * <p>Why: prior to this change, every importing test pinned the URL to
-     * {@code jdbc:h2:mem:testdb}. Multiple {@code @SpringBootTest} contexts
-     * coexist in the same JVM (Spring's context cache + tests with distinct
-     * {@code @TestPropertySource} signatures each create their own context),
-     * and they all shared one H2 instance. With {@code ddl-auto=create-drop},
-     * any context shutting down would drop every schema in the shared DB,
-     * including ones live contexts were still querying. The race surfaced as
-     * a CI-only flake on {@code MllpTcpServerIT} where the MLLP worker
-     * thread queried {@code platform.mllp_allowed_senders} and got back
-     * {@code Schema "platform" not found} from a sibling context's
-     * {@code create-drop} shutdown — see PR #287 CI run job 75225475133.
-     *
-     * <p>Each Spring context now resolves its own UUID-suffixed URL exactly
-     * once at context startup, so cross-context shutdowns are no-ops on this
-     * context's DB. Within a context, transaction rollback / explicit
-     * cleanup work exactly as before.
-     */
-    private static String mintUniqueH2Url() {
-        String contextId = java.util.UUID.randomUUID().toString().replace("-", "");
-        return String.join(
-            "",
-            "jdbc:h2:mem:testdb_", contextId, ";",
-            "MODE=PostgreSQL;",
-            "DATABASE_TO_LOWER=TRUE;",
-            "DEFAULT_NULL_ORDERING=HIGH;",
-            "DB_CLOSE_DELAY=-1;",
-            "DB_CLOSE_ON_EXIT=FALSE"
-        );
-    }
+    private static final String H2_URL = String.join(
+        "",
+        "jdbc:h2:mem:testdb;",
+        "MODE=PostgreSQL;",
+        "DATABASE_TO_LOWER=TRUE;",
+        "DEFAULT_NULL_ORDERING=HIGH;",
+        "DB_CLOSE_DELAY=-1;",
+        "DB_CLOSE_ON_EXIT=FALSE"
+    );
 
+    /**
+     * NOTE on a CI flake the earlier per-context UUID variant of this method
+     * (commit c08a745d, now reverted) tried — but did NOT — fix:
+     *
+     * <p>{@code MllpTcpServerIT} was racing a sibling {@code @SpringBootTest}'s
+     * {@code create-drop} shutdown on the shared {@code jdbc:h2:mem:testdb}
+     * in-memory database, surfacing as {@code Schema "platform" not found}
+     * mid-query on the mllp-worker thread. The intent of the earlier
+     * UUID-per-context approach was to mint a unique URL per Spring context.
+     * That logic was correct in isolation, but did not move CI: the same
+     * flake reproduced on the very next push (job 75227501591) with the
+     * per-context UUID code in place, which means the dynamic property never
+     * actually overrode {@code spring.datasource.url} at the boundary that
+     * mattered for this test. The targeted fix instead lives at the test-
+     * class boundary — see {@code MllpTcpServerIT}'s own
+     * {@code @TestPropertySource(spring.datasource.url=…${random.uuid}…)} +
+     * {@code @DirtiesContext(AFTER_CLASS)}, which Spring DOES honor and
+     * which made the test green in one run locally and one in CI.
+     *
+     * <p>The remaining 3 importers (BaseIT, CdsHooksDiscoveryIT,
+     * PrescriptionsCdsHooksIT) keep the shared {@code testdb} behavior they
+     * have had since this file was added — none of them spin up a worker
+     * thread that queries the DB after Spring shutdown semantics could fire,
+     * so the race is invisible to them.
+     */
     @DynamicPropertySource
     static void dbProps(DynamicPropertyRegistry r) {
-        // Mint once per context invocation so every property reads back the
-        // same URL — the supplier closure runs multiple times during property
-        // resolution, but they all return this fixed value.
-        String url = mintUniqueH2Url();
-        r.add("spring.datasource.url", () -> url);
+        r.add("spring.datasource.url", () -> H2_URL);
         r.add("spring.datasource.username", () -> "sa");
         r.add("spring.datasource.password", () -> "");
         r.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
