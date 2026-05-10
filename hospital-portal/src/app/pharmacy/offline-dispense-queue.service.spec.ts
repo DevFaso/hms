@@ -14,22 +14,30 @@
  *      coalesce into one in-flight sweep so the same item is not POSTed
  *      twice from the same browser tab.
  */
+import { TestBed } from '@angular/core/testing';
+
 import {
   InMemoryQueueStore,
+  OFFLINE_QUEUE_STORE,
   OfflineDispenseQueueService,
   type QueueStore,
   type ReplayResult,
 } from './offline-dispense-queue.service';
 import type { DispenseRequest, DispenseResponse } from '../services/pharmacy.service';
 
-/** Constructs a service whose store is the supplied test double. */
+/**
+ * Builds a service that uses the supplied store via Angular DI. TestBed
+ * resolves OFFLINE_QUEUE_STORE BEFORE the service constructor runs, so the
+ * IDB-backed default factory never executes — Copilot review on PR #287
+ * caught the older field-monkeypatching seam, which raced the constructor's
+ * IDB connection.
+ */
 function makeService(store: QueueStore): OfflineDispenseQueueService {
-  const svc = new OfflineDispenseQueueService();
-  // Reach in once to swap the real store for the test fake — the service
-  // never re-creates the store, so this hands us full control without
-  // forcing the production class to expose a setter.
-  (svc as unknown as { store: QueueStore }).store = store;
-  return svc;
+  TestBed.resetTestingModule();
+  TestBed.configureTestingModule({
+    providers: [{ provide: OFFLINE_QUEUE_STORE, useValue: store }],
+  });
+  return TestBed.inject(OfflineDispenseQueueService);
 }
 
 function baseRequest(overrides: Partial<DispenseRequest> = {}): DispenseRequest {
@@ -191,6 +199,29 @@ describe('OfflineDispenseQueueService', () => {
         baseRequest({ dispensedBy: 'usr-7', prescriptionId: 'rx-9' }),
       );
       expect(id.startsWith('usr-7-rx-9-')).toBeTrue();
+    });
+
+    it('falls back to randomized suffix when UUID inputs would overflow VARCHAR(64)', () => {
+      // Two consecutive calls for the same logical dispense (UUIDs that
+      // make the natural candidate > 64 chars). Without the
+      // crypto.randomUUID fallback the mint would slice off the timestamp
+      // entirely and produce identical ids — the exact collision
+      // Copilot review on PR #287 flagged.
+      const longUserUuid = '12345678-1234-1234-1234-123456789abc';
+      const longRxUuid = 'abcdefab-1111-2222-3333-aaaaaaaaaaaa';
+      const a = OfflineDispenseQueueService.mintId(
+        baseRequest({ dispensedBy: longUserUuid, prescriptionId: longRxUuid }),
+      );
+      const b = OfflineDispenseQueueService.mintId(
+        baseRequest({ dispensedBy: longUserUuid, prescriptionId: longRxUuid }),
+      );
+      expect(a.length).toBeLessThanOrEqual(64);
+      expect(b.length).toBeLessThanOrEqual(64);
+      expect(a).not.toEqual(b);
+      // Human-debuggable prefix preserved so a DBA reading the column can
+      // still trace which user/prescription the row came from.
+      expect(a.startsWith('12345678-abcdefab-')).toBeTrue();
+      expect(b.startsWith('12345678-abcdefab-')).toBeTrue();
     });
   });
 });

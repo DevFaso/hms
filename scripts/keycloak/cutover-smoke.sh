@@ -65,7 +65,12 @@ log_ok()   { echo "  ✓ $*"; }
 # ─── 1. Legacy login → 410 with runbook copy ───────────────────────────────
 echo "[smoke] POST $API_BASE_URL/auth/login"
 login_tmp="$(mktemp)"
-trap 'rm -f "$login_tmp"' EXIT
+refresh_tmp="$(mktemp)"
+# Single trap installed up-front covers every temp file the script will
+# create. Copilot review on PR #287 caught the original two-stage trap:
+# under `set -e` the curl below could exit the script before refresh_tmp
+# was registered, leaving ${login_tmp}.headers behind.
+trap 'rm -f "$login_tmp" "${login_tmp}.headers" "$refresh_tmp"' EXIT
 login_status=$(curl -sS -o "$login_tmp" -w '%{http_code}' \
   -D "${login_tmp}.headers" \
   -X POST "$API_BASE_URL/auth/login" \
@@ -107,9 +112,9 @@ else
 fi
 
 # ─── 3. Legacy refresh → 410 with runbook copy ─────────────────────────────
+# refresh_tmp + trap were declared up-front next to login_tmp; nothing to
+# re-register here.
 echo "[smoke] POST $API_BASE_URL/auth/token/refresh"
-refresh_tmp="$(mktemp)"
-trap 'rm -f "$login_tmp" "${login_tmp}.headers" "$refresh_tmp"' EXIT
 refresh_status=$(curl -sS -o "$refresh_tmp" -w '%{http_code}' \
   -X POST "$API_BASE_URL/auth/token/refresh" \
   -H 'Content-Type: application/json' \

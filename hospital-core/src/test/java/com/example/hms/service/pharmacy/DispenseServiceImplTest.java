@@ -837,5 +837,85 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).findByIdempotencyKey(KEY);
             verify(dispenseRepository).save(any(Dispense.class));
         }
+
+        @Test
+        @DisplayName("race recovery: V94 unique violation on save → re-lookup returns winning DTO")
+        void racingWriteRecoversByLookingUpWinner() {
+            // Concurrency model: this thread's pre-check returns empty (the
+            // racing tx has not committed yet). The save then throws because
+            // the racing tx committed in between. The implementation must
+            // catch DataIntegrityViolationException and re-look up — the
+            // winner is now visible — and return that DTO instead of
+            // bubbling a 500.
+            DispenseRequestDTO racing = buildRequest();
+            racing.setIdempotencyKey(KEY);
+
+            Dispense winner = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO winnerDto = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            // First lookup (pre-check) sees empty; second lookup (post-rollback
+            // race recovery) sees the winning row.
+            when(dispenseRepository.findByIdempotencyKey(KEY))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(winner));
+
+            // Stub everything the create branch touches, up to and including
+            // the save() that explodes. Spring would normally roll back the
+            // tx here; in this unit test there is no real tx to roll back —
+            // we only need to verify the catch-and-recover path.
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(racing), any())).thenReturn(buildDispense(DispenseStatus.COMPLETED));
+            when(dispenseRepository.save(any(Dispense.class)))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                            "duplicate key value violates unique constraint \"uq_disp_idempotency_key\""));
+            when(dispenseMapper.toResponseDTO(winner)).thenReturn(winnerDto);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            DispenseResponseDTO result = service.createDispense(racing);
+
+            assertThat(result).isSameAs(winnerDto);
+            // Both lookups happened (pre-check + post-violation recovery).
+            verify(dispenseRepository, org.mockito.Mockito.times(2)).findByIdempotencyKey(KEY);
+            // We ATTEMPTED to save — that's how we discovered the race.
+            verify(dispenseRepository).save(any(Dispense.class));
+            // No prescription save / SMS / audit got committed because the
+            // tx (in production) would have rolled back. Mockito verifies
+            // we never reached those code paths after the violation.
+            verify(prescriptionRepository, never()).save(any(Prescription.class));
+            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("race recovery: violation with no recoverable winner → original exception bubbles")
+        void racingWriteWithNoWinnerRethrowsViolation() {
+            // Defensive case: V94 unique-index violation but the second
+            // lookup still finds nothing (should not happen — the constraint
+            // exists precisely because somebody won — but be honest about
+            // the failure rather than silently returning null).
+            DispenseRequestDTO racing = buildRequest();
+            racing.setIdempotencyKey(KEY);
+
+            when(dispenseRepository.findByIdempotencyKey(KEY))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.empty());
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(racing), any())).thenReturn(buildDispense(DispenseStatus.COMPLETED));
+            when(dispenseRepository.save(any(Dispense.class)))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException("constraint violation"));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.createDispense(racing))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
     }
 }

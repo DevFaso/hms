@@ -185,14 +185,20 @@ export function handleSummary(data) {
   const httpFailRate = data.metrics.http_req_failed?.values?.rate ?? 0;
   const wqp95 = data.metrics.dispense_workqueue_latency_ms?.values?.['p(95)'] ?? 0;
   const getp95 = data.metrics.dispense_get_latency_ms?.values?.['p(95)'] ?? 0;
-  const postp95 = data.metrics.dispense_post_latency_ms?.values?.['p(95)'] ?? 0;
+  // Copilot review on PR #287 — when the write scenario is disabled (no
+  // seeded fixture IDs) the post-dispense metric never registered, and the
+  // previous summary printed `post_p95=0ms` which read as a real
+  // measurement. Distinguish "did not run" from "ran and was instant" by
+  // emitting `n/a` only when the metric is absent.
+  const postMetric = data.metrics.dispense_post_latency_ms?.values?.['p(95)'];
+  const postp95 = postMetric === undefined ? 'n/a' : `${postMetric.toFixed(0)}ms`;
   const summary =
     `\n[perf-baseline]` +
     ` checks=${(checks * 100).toFixed(2)}%` +
     ` http_fail=${(httpFailRate * 100).toFixed(2)}%` +
     ` work_queue_p95=${wqp95.toFixed(0)}ms` +
     ` get_p95=${getp95.toFixed(0)}ms` +
-    ` post_p95=${postp95.toFixed(0)}ms\n`;
+    ` post_p95=${postp95}\n`;
   return {
     stdout: summary,
     'perf-baseline-summary.json': JSON.stringify(data, null, 2),

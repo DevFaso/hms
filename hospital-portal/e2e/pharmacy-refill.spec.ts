@@ -12,7 +12,7 @@
  */
 import { test, expect } from './fixtures/test-fixtures';
 
-const REFILL_LIST = [
+const REFILL_ROWS = [
   {
     id: '00000000-0000-0000-0000-000000000501',
     prescriptionId: '00000000-0000-0000-0000-000000000502',
@@ -25,6 +25,23 @@ const REFILL_LIST = [
   },
 ];
 
+// RefillApprovalService.list() reads `r.data.content` from an ApiWrapper-
+// over-PageEnvelope. Copilot review on PR #287 caught the original bare-array
+// stub — that shape would have TypeError'd on .map() inside the component.
+const REFILL_LIST_RESPONSE = {
+  data: {
+    content: REFILL_ROWS,
+    totalElements: REFILL_ROWS.length,
+    totalPages: 1,
+    size: 20,
+    number: 0,
+    first: true,
+    last: true,
+    empty: false,
+  },
+  success: true,
+};
+
 test.describe('Pharmacy — Refill approval queue', () => {
   test.beforeEach(async ({ page }) => {
     // /refills is a path used by both the provider list view and the patient
@@ -34,7 +51,7 @@ test.describe('Pharmacy — Refill approval queue', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(REFILL_LIST),
+        body: JSON.stringify(REFILL_LIST_RESPONSE),
       }),
     );
     await page.goto('/refills', { waitUntil: 'domcontentloaded' });

@@ -24,7 +24,7 @@
  * a missing global. All methods return Promises so the caller's lifecycle
  * is the same in both modes.
  */
-import { Injectable } from '@angular/core';
+import { Injectable, InjectionToken, inject } from '@angular/core';
 import { BehaviorSubject, type Observable } from 'rxjs';
 
 import type { DispenseRequest, DispenseResponse } from '../services/pharmacy.service';
@@ -156,20 +156,58 @@ export class InMemoryQueueStore implements QueueStore {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// DI token
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * DI token for the QueueStore implementation backing
+ * {@link OfflineDispenseQueueService}. Production code never references it
+ * — the {@code providedIn: 'root'} factory below picks the IndexedDB-backed
+ * store on browsers and the in-memory fallback elsewhere. Tests override it
+ * via TestBed providers so they never touch real IndexedDB:
+ *
+ * <pre>{@code
+ *   TestBed.configureTestingModule({
+ *     providers: [{ provide: OFFLINE_QUEUE_STORE, useValue: new InMemoryQueueStore() }],
+ *   });
+ *   const svc = TestBed.inject(OfflineDispenseQueueService);
+ * }</pre>
+ *
+ * Copilot review on PR #287: this replaces the earlier "construct service,
+ * monkey-patch its store field" test seam, which raced against the IDB
+ * connection {@code refreshPending} kicked off in the constructor.
+ */
+export const OFFLINE_QUEUE_STORE = new InjectionToken<QueueStore>('OfflineDispenseQueueStore', {
+  providedIn: 'root',
+  factory: () => {
+    if (typeof indexedDB !== 'undefined') {
+      try {
+        return new IndexedDbQueueStore();
+      } catch {
+        return new InMemoryQueueStore();
+      }
+    }
+    return new InMemoryQueueStore();
+  },
+});
+
+// ────────────────────────────────────────────────────────────────────────────
 // Service
 // ────────────────────────────────────────────────────────────────────────────
 
 @Injectable({ providedIn: 'root' })
 export class OfflineDispenseQueueService {
-  private readonly store: QueueStore;
+  private readonly store = inject(OFFLINE_QUEUE_STORE);
   private readonly pendingSubject = new BehaviorSubject<number>(0);
   private replayInFlight: Promise<ReplayResult> | null = null;
 
   constructor() {
-    this.store = OfflineDispenseQueueService.makeStore();
     // Best-effort initial count — fire-and-forget on construction so the
     // pending banner shows the right number after a reload before any user
-    // action drives a refresh.
+    // action drives a refresh. Safe by construction now: the store is
+    // resolved by Angular DI BEFORE the constructor body runs, so tests
+    // that override OFFLINE_QUEUE_STORE never race the IDB-backed default
+    // (Copilot review on PR #287).
     void this.refreshPending();
   }
 
@@ -266,24 +304,29 @@ export class OfflineDispenseQueueService {
 
   // ── Static helpers ────────────────────────────────────────────────────────
 
-  /** Picks the right QueueStore implementation for the current runtime. */
-  private static makeStore(): QueueStore {
-    if (typeof indexedDB !== 'undefined') {
-      try {
-        return new IndexedDbQueueStore();
-      } catch {
-        return new InMemoryQueueStore();
-      }
-    }
-    return new InMemoryQueueStore();
-  }
-
   /**
    * Build a stable id when the caller did not supply one. Format mirrors the
    * V94 migration's stated convention: {@code <userId>-<rxId>-<timestamp>}.
-   * Falls back to crypto.randomUUID when prescription/dispenser fields are
-   * missing — the worst case is dedup degrades to "never matches", which is
-   * the same as not opting in.
+   *
+   * <p>Width budget: V94 caps idempotency_key at VARCHAR(64). When
+   * {@code dispensedBy} and {@code prescriptionId} are both UUIDs (the
+   * normal case), the dash-joined candidate is already 80+ chars, so a
+   * naive {@code slice(0, 64)} would lop off the timestamp entirely and
+   * make two distinct dispenses of the same prescription seconds apart
+   * collide — Copilot review on PR #287 caught that. Strategy:
+   *
+   * <ol>
+   *   <li>If the natural candidate fits, use it (best for debug — the
+   *       UUIDs are visible in the DB column).</li>
+   *   <li>Otherwise build {@code <userPrefix>-<rxPrefix>-<random>} where
+   *       userPrefix and rxPrefix are the first 8 chars of each UUID and
+   *       random is a fresh {@link crypto.randomUUID()}. Keeps the row
+   *       human-debuggable while making accidental collisions
+   *       astronomically unlikely.</li>
+   *   <li>If {@link crypto.randomUUID} is unavailable (very old browsers
+   *       without secure-context), fall back to the timestamp+slice form
+   *       — degraded uniqueness, but still valid VARCHAR(64).</li>
+   * </ol>
    */
   static mintId(request: DispenseRequest): string {
     const user = request.dispensedBy || 'anon';
@@ -291,8 +334,24 @@ export class OfflineDispenseQueueService {
     const stamp = new Date().toISOString();
     const candidate = `${user}-${rx}-${stamp}`;
     if (candidate.length <= 64) return candidate;
-    // Width budget: V94 caps idempotency_key at VARCHAR(64). Hash truncate
-    // is a graceful degradation — the prefix keeps it human-debuggable.
-    return candidate.slice(0, 64);
+
+    const userPrefix = user.slice(0, 8);
+    const rxPrefix = rx.slice(0, 8);
+    const random = OfflineDispenseQueueService.randomToken();
+    const composed = `${userPrefix}-${rxPrefix}-${random}`;
+    return composed.length <= 64 ? composed : composed.slice(0, 64);
+  }
+
+  /**
+   * Cryptographically-strong random token used by {@link mintId} when the
+   * natural {@code <user>-<rx>-<ts>} candidate would overflow VARCHAR(64).
+   * Uses {@link crypto.randomUUID} when available; falls back to the
+   * ISO timestamp suffix on environments without it.
+   */
+  private static randomToken(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return new Date().toISOString();
   }
 }

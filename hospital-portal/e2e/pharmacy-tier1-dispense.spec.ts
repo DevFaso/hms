@@ -70,9 +70,14 @@ test.describe('Pharmacy — Tier 1 in-house dispense', () => {
     );
     await page.goto('/pharmacy/dispensing', { waitUntil: 'domcontentloaded' });
     const req = await queueRequest;
-    // Standard Spring-Data pagination params expected by the controller.
+    // Standard Spring-Data pagination contract enforced by the controller's
+    // @PageableDefault(size = 20, sort = "createdAt"). Assert BOTH params
+    // are present and pinned to the agreed defaults — Copilot review on
+    // PR #287 caught the original `||` assertion silently passing when
+    // only one of the two was emitted.
     const url = new URL(req.url());
-    expect(url.searchParams.has('page') || url.searchParams.has('size')).toBeTruthy();
+    expect(url.searchParams.get('page')).toBe('0');
+    expect(url.searchParams.get('size')).toBe('20');
   });
 
   test('page mounts without route-guard redirect to /login', async ({ page }) => {
