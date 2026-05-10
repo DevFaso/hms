@@ -34,6 +34,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -373,6 +375,71 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.primaryHospitalId").doesNotExist())
                 .andExpect(jsonPath("$.primaryHospitalName").doesNotExist())
                 .andExpect(jsonPath("$.hospitalIds").doesNotExist());
+    }
+
+    /**
+     * Regression for the "idle past the configured window" bug surfaced on
+     * dev: a fresh login → bootstrap → 401 → refresh → 401 loop because
+     * neither {@link com.example.hms.security.InMemoryIdleSessionTracker}
+     * nor {@link com.example.hms.security.RedisIdleSessionTracker} can
+     * distinguish "never touched" from "TTL-evicted" — both report
+     * isIdle=true on a missing entry, and the JWT filter only touches
+     * AFTER the gate has passed, so the entry is never created. The fix
+     * is to seed the idle window on token issue. This test pins that
+     * behaviour: a successful login MUST call {@code touchIfHuman} with
+     * the user id and the effective authorities.
+     */
+    @Test
+    void login_success_seedsIdleWindow() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("dr.jones@hospital-a.com")
+                .email("dr.jones@hospital-a.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                "dr.jones@hospital-a.com", null,
+                AuthorityUtils.createAuthorityList("ROLE_DOCTOR"));
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(auth);
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.refresh.token");
+        when(userRepository.findByUsername("dr.jones@hospital-a.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_DOCTOR")))
+                .thenReturn("ROLE_DOCTOR");
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of());
+
+        LoginRequest loginReq = new LoginRequest("dr.jones@hospital-a.com", "Password1!", null);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginReq)))
+                .andExpect(status().isOk());
+
+        // The crux of the regression: idleSessionGate.touchIfHuman MUST be
+        // called for this user with at least the selected authority, so the
+        // very next request after login does not see a missing entry and
+        // get rejected as "idle past the configured window".
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<? extends org.springframework.security.core.GrantedAuthority>> authoritiesCaptor =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(idleSessionGate).touchIfHuman(eq(userId), authoritiesCaptor.capture());
+        java.util.Collection<? extends org.springframework.security.core.GrantedAuthority> captured = authoritiesCaptor.getValue();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                captured.stream()
+                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .anyMatch("ROLE_DOCTOR"::equals),
+                "touchIfHuman must receive the issued role authority so the "
+                        + "machine-role carve-out has its data");
     }
 
     // =====================================================================

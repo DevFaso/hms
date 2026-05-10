@@ -10,6 +10,7 @@ import com.example.hms.payload.dto.mfa.MfaEnrollmentResponse;
 import com.example.hms.payload.dto.mfa.MfaVerifyRequest;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenUserDescriptor;
@@ -22,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +54,7 @@ public class MfaController {
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final IdleSessionGate idleSessionGate;
 
     /**
      * Resolves the authenticated user from the security principal.
@@ -236,6 +239,13 @@ public class MfaController {
         } catch (Exception ex) {
             log.warn("[MFA] Failed to set refresh cookie: {}", ex.getMessage());
         }
+
+        // ── Idle session timeout — seed the idle window on token issue ──
+        // Mirrors AuthController.authenticateUser: without this, the very
+        // first authenticated request after MFA verify hits the idle gate
+        // with no tracker entry and is treated as "idle past the window".
+        idleSessionGate.touchIfHuman(user.getId(),
+                AuthorityUtils.createAuthorityList(roles.toArray(new String[0])));
 
         return ResponseEntity.ok(body);
     }

@@ -381,6 +381,16 @@ public class AuthController {
             log.info("🔐 [LOGIN] Success user='{}' effectiveRoles={} in {}ms", loginRequest.getUsername(), effectiveRoles, elapsedMs);
             // S-01: deliver refresh token via HttpOnly cookie (in addition to JSON body during rollout)
             writeRefreshCookie(httpResponse, refreshToken);
+            // ── Idle session timeout — seed the idle window on token issue ──
+            // Without this, the very first authenticated request after login
+            // hits the idle gate with no tracker entry and is treated as
+            // "idle past the window" (both InMemoryIdleSessionTracker.isIdle
+            // and RedisIdleSessionTracker.isIdle return true on a missing
+            // key). Touching here means the session becomes idle only after
+            // the configured window of true inactivity, not immediately on
+            // first use.
+            idleSessionGate.touchIfHuman(user.getId(),
+                AuthorityUtils.createAuthorityList(effectiveRoles.toArray(new String[0])));
             return ResponseEntity.ok(body);
 
         } catch (BadCredentialsException ex) {
