@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.pharmacy.PharmacyRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyResponseDTO;
 import com.example.hms.service.PharmacyService;
@@ -13,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,12 +36,23 @@ import java.util.UUID;
 public class PharmacyRegistryController {
 
     private final PharmacyService pharmacyService;
+    private final ControllerAuthUtils authUtils;
 
     @PostMapping
     // P-01: pharmacy registration is a governance act — restrict to admin roles only.
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Register a new pharmacy")
     public ResponseEntity<PharmacyResponseDTO> create(@Valid @RequestBody PharmacyRequestDTO dto) {
+        // Defense in depth — @Valid + @NotNull on the DTO already reject a
+        // null hospitalId with a 400, but Jackson's UUID deserialiser has
+        // historically converted certain malformed strings ("", "null") to
+        // null AFTER bean validation has run. Reject explicitly here so a
+        // bad payload surfaces a clear "Hospital ID is required" message
+        // instead of falling through to the service's findById(null) which
+        // produces a generic IllegalArgumentException 400.
+        if (dto == null || dto.getHospitalId() == null) {
+            throw new BusinessException("Hospital ID is required.");
+        }
         return ResponseEntity.status(HttpStatus.CREATED).body(pharmacyService.create(dto));
     }
 
@@ -52,12 +66,27 @@ public class PharmacyRegistryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE')")
-    @Operation(summary = "List active pharmacies for a hospital")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List active pharmacies",
+        description = "Returns active pharmacies for the resolved hospital scope. "
+            + "Super-admins in global view (no JWT scope, no hospitalId param) "
+            + "see every active pharmacy across tenants.")
     public ResponseEntity<Page<PharmacyResponseDTO>> list(
-            @RequestParam UUID hospitalId,
-            Pageable pageable) {
-        return ResponseEntity.ok(pharmacyService.listByHospital(hospitalId, pageable));
+            @RequestParam(required = false) UUID hospitalId,
+            Pageable pageable,
+            Authentication auth) {
+        // Same super-admin global-view pattern as InBasketController (PR #292).
+        // resolveHospitalScope returns null for super-admins without an
+        // explicit hospitalId; the repository's optional JPQL filter then
+        // returns every active pharmacy across tenants. Non-super-admin
+        // clinicians without a scope still 400 — a missing hospital scope
+        // on a clinical token is a misconfiguration, not a feature.
+        UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+            throw new BusinessException("Hospital context is required. "
+                + "Pass hospitalId or ensure your token has a hospital scope.");
+        }
+        return ResponseEntity.ok(pharmacyService.listByHospital(resolved, pageable));
     }
 
     @GetMapping("/search")

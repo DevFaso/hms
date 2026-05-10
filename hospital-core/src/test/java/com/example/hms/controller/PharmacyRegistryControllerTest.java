@@ -45,6 +45,9 @@ class PharmacyRegistryControllerTest {
     @MockitoBean
     private PharmacyService pharmacyService;
 
+    @MockitoBean
+    private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID pharmacyId = UUID.randomUUID();
 
@@ -89,6 +92,10 @@ class PharmacyRegistryControllerTest {
 
     @Test
     void list_returnsPaginatedResults() throws Exception {
+        // The controller now resolves hospitalId via authUtils.resolveHospitalScope
+        // (added so super-admins in global view can list across tenants).
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false)))
+                .thenReturn(hospitalId);
         when(pharmacyService.listByHospital(eq(hospitalId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
@@ -96,6 +103,70 @@ class PharmacyRegistryControllerTest {
                         .param("hospitalId", hospitalId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].name").value("Pharmacie Centrale"));
+    }
+
+    /**
+     * Regression for the dev 400 reported on 2026-05-10:
+     * GET /api/pharmacy-registry?page=0&size=20 returned
+     * {@code MissingServletRequestParameterException} for super-admin
+     * tchico1er in global view (no JWT scope, no hospitalId param).
+     * The controller now lets the null hospitalId fall through for
+     * super-admins; the service's repository JPQL drops the filter
+     * and returns every active pharmacy across tenants.
+     */
+    @Test
+    void list_superAdminWithoutHospitalId_returns200() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+                .thenReturn(null);
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
+        when(pharmacyService.listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/pharmacy-registry"))
+                .andExpect(status().isOk());
+
+        // Null hospitalId must be carried through to the service so the
+        // repository's JPQL can drop its hospital filter.
+        verify(pharmacyService).listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class));
+    }
+
+    /** Guard: clinician without scope still 400s on the GET path. */
+    @Test
+    void list_clinicianWithoutHospitalScope_returns400() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+                .thenReturn(null);
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(false);
+
+        mockMvc.perform(get("/pharmacy-registry"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Hospital context is required")));
+    }
+
+    /**
+     * Regression for the dev 500 reported on 2026-05-10: the frontend's
+     * pharmacy-registry modal sent {@code "pharmacyType":"COMMUNITY"} but the
+     * backend enum expects {@code COMMUNITY_PHARMACY}. Jackson raised
+     * {@code HttpMessageNotReadableException}, and because the global
+     * exception handler had no specific mapping for it, the request fell
+     * through to the catch-all {@code RuntimeException} handler ⇒ 500.
+     * After this PR a Jackson deserialisation failure surfaces as a 400
+     * with the original "not one of the values accepted" message.
+     */
+    @Test
+    void create_malformedEnumValue_returns400NotGeneric500() throws Exception {
+        String malformedBody = "{"
+            + "\"hospitalId\":\"" + hospitalId + "\","
+            + "\"name\":\"Pharmacie Centrale\","
+            + "\"pharmacyType\":\"COMMUNITY\""    // unknown enum value
+            + "}";
+
+        mockMvc.perform(post("/pharmacy-registry")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(malformedBody))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Malformed request body")));
     }
 
     @Test

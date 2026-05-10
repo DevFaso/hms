@@ -164,6 +164,66 @@ class GlobalExceptionHandlerTest {
     // handleIllegalStateException
     // =========================================================================
 
+    // =========================================================================
+    // handleHttpMessageNotReadable — Jackson deserialisation failures
+    // =========================================================================
+
+    @Nested
+    @DisplayName("handleHttpMessageNotReadable")
+    class HandleHttpMessageNotReadable {
+
+        /**
+         * Regression for the dev 500 reported on 2026-05-10 where the
+         * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
+         * against a Java enum that expected {@code COMMUNITY_PHARMACY}.
+         * Jackson raised {@code HttpMessageNotReadableException}, the
+         * handler used to fall through to the catch-all RuntimeException
+         * branch and return a generic 500. Now it returns a 400 with the
+         * underlying Jackson message ("not one of the values accepted")
+         * so the frontend can self-diagnose enum drift.
+         */
+        @Test
+        @DisplayName("returns 400 with the original Jackson message preserved")
+        void returns400WithJacksonMessage() {
+            String jacksonMessage = "Cannot deserialize value of type "
+                + "`com.example.hms.enums.PharmacyType` from String \"COMMUNITY\": "
+                + "not one of the values accepted for Enum class: "
+                + "[COMMUNITY_PHARMACY, PARTNER_PHARMACY, HOSPITAL_DISPENSARY]";
+            org.springframework.http.converter.HttpMessageNotReadableException ex =
+                new org.springframework.http.converter.HttpMessageNotReadableException(
+                    "Outer wrapper",
+                    new com.fasterxml.jackson.databind.JsonMappingException(null, jacksonMessage),
+                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+
+            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(body).isNotNull().containsEntry("status", 400);
+            assertThat((String) body.get("message"))
+                .startsWith("Malformed request body:")
+                .contains("not one of the values accepted")
+                .contains("COMMUNITY_PHARMACY");
+        }
+
+        @Test
+        @DisplayName("falls back to outer message when no cause is set")
+        void fallsBackWhenCauseAbsent() {
+            org.springframework.http.converter.HttpMessageNotReadableException ex =
+                new org.springframework.http.converter.HttpMessageNotReadableException(
+                    "Required request body is missing",
+                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+
+            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // =========================================================================
+    // handleIllegalStateException
+    // =========================================================================
+
     @Nested
     @DisplayName("handleIllegalStateException")
     class HandleIllegalStateException {

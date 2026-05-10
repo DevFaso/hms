@@ -141,7 +141,7 @@ class MedicationCatalogItemServiceImplTest {
     void listByHospital_returnsPage() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<MedicationCatalogItem> page = new PageImpl<>(List.of(item));
-        when(catalogRepository.findByHospital_IdAndActiveTrue(hospitalId, pageable)).thenReturn(page);
+        when(catalogRepository.findActivePage(hospitalId, pageable)).thenReturn(page);
         when(mapper.toResponseDTO(item)).thenReturn(responseDTO);
 
         Page<MedicationCatalogItemResponseDTO> result = service.listByHospital(hospitalId, pageable);

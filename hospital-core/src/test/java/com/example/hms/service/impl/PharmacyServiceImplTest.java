@@ -125,7 +125,7 @@ class PharmacyServiceImplTest {
     void listByHospital_returnsPage() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Pharmacy> page = new PageImpl<>(List.of(pharmacy));
-        when(pharmacyRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable)).thenReturn(page);
+        when(pharmacyRepository.findActivePage(hospitalId, pageable)).thenReturn(page);
         when(mapper.toResponseDTO(pharmacy)).thenReturn(responseDTO);
 
         Page<PharmacyResponseDTO> result = service.listByHospital(hospitalId, pageable);

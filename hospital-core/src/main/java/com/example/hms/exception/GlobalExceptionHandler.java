@@ -11,6 +11,7 @@ import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -107,6 +108,29 @@ public class GlobalExceptionHandler {
         ex.getMostSpecificCause();
         String message = ex.getMostSpecificCause().getMessage();
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    /**
+     * Catches Jackson deserialisation failures (unknown enum values, malformed
+     * JSON, type-coercion errors) and surfaces them as 400 with the original
+     * Jackson message — far more actionable than the generic 500 the catch-all
+     * RuntimeException handler used to produce. Triggered on dev when the
+     * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
+     * against the {@code PharmacyType} enum whose accepted values are
+     * {@code COMMUNITY_PHARMACY / PARTNER_PHARMACY / HOSPITAL_DISPENSARY}.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        // Jackson exception messages embed the offending field path and the
+        // accepted values for enums; surface them so the caller can self-
+        // diagnose. The cause's message is shorter and cleaner than the
+        // outer JsonMappingException stack-trace prefix.
+        String message = ex.getMostSpecificCause() != null
+            ? ex.getMostSpecificCause().getMessage()
+            : ex.getMessage();
+        return buildErrorResponse(HttpStatus.BAD_REQUEST,
+            "Malformed request body: " + message, request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

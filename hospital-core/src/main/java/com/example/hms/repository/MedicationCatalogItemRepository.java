@@ -16,6 +16,23 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
 
     Page<MedicationCatalogItem> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
+    /**
+     * Cross-tenant page used by super-admin global view. The {@code hospitalId}
+     * filter is optional — null means "every hospital". Mirrors the InBasket
+     * pattern (PR #292) so the controller can drop the
+     * {@code @RequestParam(required = true)} requirement for super-admins.
+     */
+    @Query(value = """
+        SELECT m FROM MedicationCatalogItem m
+        WHERE m.active = true
+          AND (:hospitalId IS NULL OR m.hospital.id = :hospitalId)
+        """, countQuery = """
+        SELECT COUNT(m) FROM MedicationCatalogItem m
+        WHERE m.active = true
+          AND (:hospitalId IS NULL OR m.hospital.id = :hospitalId)
+        """)
+    Page<MedicationCatalogItem> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
     @Query("SELECT m FROM MedicationCatalogItem m WHERE m.hospital.id = :hospitalId AND m.active = true " +
            "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +
