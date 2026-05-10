@@ -61,7 +61,12 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
-        return pharmacyRepository.findByHospitalIdAndActiveTrue(hospitalId, pageable)
+        // hospitalId may be null (super-admin global view) — the repository's
+        // JPQL drops the hospital filter when it is, returning every active
+        // pharmacy across tenants. Non-super-admin callers always go through
+        // the controller's resolveHospital() guard, which still requires a
+        // scope, so this branch is only taken on cross-tenant reads.
+        return pharmacyRepository.findActivePage(hospitalId, pageable)
                 .map(mapper::toResponseDTO);
     }
 

@@ -11,7 +11,6 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -137,9 +136,22 @@ public class MedicationCatalogItem extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "hospital_id", nullable = false,
+    /**
+     * Owning hospital. Optional: {@code null} marks the entry as a
+     * <strong>platform / global catalog entry</strong> visible to every
+     * tenant — the intended representation of items on Burkina Faso's
+     * Liste Nationale des Médicaments Essentiels (LNME). A non-null
+     * hospital marks the entry as hospital-specific (an additional SKU
+     * or local substitution that should not surface to other tenants).
+     *
+     * <p>Uniqueness is enforced at the DB level (migration V95) via two
+     * partial unique indexes: one for global rows ({@code hospital_id
+     * IS NULL}) on {@code code} alone, one for hospital-scoped rows on
+     * {@code (hospital_id, code)}. The two scopes never shadow each
+     * other.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "hospital_id",
         foreignKey = @ForeignKey(name = "fk_med_catalog_hospital"))
     private Hospital hospital;
 }

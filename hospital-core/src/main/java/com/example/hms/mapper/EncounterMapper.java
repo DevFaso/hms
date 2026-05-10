@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
 import com.example.hms.payload.dto.EncounterNoteResponseDTO;
 import com.example.hms.payload.dto.EncounterRequestDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.persistence.JpaProxyUtils;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -29,11 +30,15 @@ import java.util.UUID;
 @Component
 public class EncounterMapper {
 
+    /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
+    private static final String OWNER = "Encounter";
+
     public EncounterResponseDTO toEncounterResponseDTO(Encounter e) {
         if (e == null) return null;
 
         EncounterResponseDTO dto = new EncounterResponseDTO();
-        dto.setId(e.getId());
+        UUID encounterId = e.getId();
+        dto.setId(encounterId);
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());
@@ -52,18 +57,23 @@ public class EncounterMapper {
         dto.setCreatedAt(e.getCreatedAt());
         dto.setUpdatedAt(e.getUpdatedAt());
 
-        populatePatient(dto, e.getPatient());
-        populateStaff(dto, e.getStaff());
+        // Force-initialise each lazy association up front and substitute null
+        // when the referenced row was hard-deleted (dangling FK). Without this
+        // defence a bare `e.getPatient().getFirstName()` blows up the whole
+        // list response with a 500 the moment a single referenced row is
+        // missing — visible on dev's /super-admin/recent-activity endpoint.
+        populatePatient(dto, JpaProxyUtils.safeInit(e.getPatient(), OWNER, encounterId, "patient"));
+        populateStaff(dto, JpaProxyUtils.safeInit(e.getStaff(), OWNER, encounterId, "staff"));
 
         // Department
-        Department d = e.getDepartment();
+        Department d = JpaProxyUtils.safeInit(e.getDepartment(), OWNER, encounterId, "department");
         if (d != null) {
             dto.setDepartmentId(d.getId());
             dto.setDepartmentName(nullSafe(d.getName()));
         }
 
         // Hospital
-        Hospital h = e.getHospital();
+        Hospital h = JpaProxyUtils.safeInit(e.getHospital(), OWNER, encounterId, "hospital");
         if (h != null) {
             dto.setHospitalId(h.getId());
             dto.setHospitalName(nullSafe(h.getName()));
@@ -72,7 +82,8 @@ public class EncounterMapper {
             dto.setHospitalPhoneNumber(nullSafe(h.getPhoneNumber()));
         }
 
-        populateAppointment(dto, e.getAppointment());
+        populateAppointment(dto,
+            JpaProxyUtils.safeInit(e.getAppointment(), OWNER, encounterId, "appointment"));
 
         dto.setNote(toEncounterNoteResponseDTO(e.getEncounterNote()));
 

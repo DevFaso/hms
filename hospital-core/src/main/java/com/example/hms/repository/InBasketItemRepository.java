@@ -16,14 +16,20 @@ import java.util.UUID;
 public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID> {
 
     /**
-     * Paginated list for a recipient, filtered by optional type and status.
+     * Paginated list for a recipient, filtered by optional type, status,
+     * and hospital. The hospital filter is optional: when {@code hospitalId}
+     * is {@code null} the controller has authorised a cross-tenant query
+     * (super-admin in global view), so we drop the scope clause and return
+     * every item addressed to the recipient. The {@code recipientUser.id}
+     * predicate stays the load-bearing access control — the recipient is
+     * always the calling user.
      */
     @Query(value = """
         SELECT i FROM InBasketItem i
         LEFT JOIN FETCH i.patient
         LEFT JOIN FETCH i.encounter
         WHERE i.recipientUser.id = :userId
-          AND i.hospital.id = :hospitalId
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
           AND (:type IS NULL OR i.itemType = :type)
           AND (:status IS NULL OR i.status = :status)
         ORDER BY
@@ -36,7 +42,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
     """, countQuery = """
         SELECT COUNT(i) FROM InBasketItem i
         WHERE i.recipientUser.id = :userId
-          AND i.hospital.id = :hospitalId
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
           AND (:type IS NULL OR i.itemType = :type)
           AND (:status IS NULL OR i.status = :status)
     """)
@@ -48,12 +54,35 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         Pageable pageable
     );
 
-    /** Count unread items by type for the summary badge. */
-    long countByRecipientUser_IdAndHospital_IdAndStatus(
-        UUID recipientUserId, UUID hospitalId, InBasketItemStatus status);
+    /**
+     * Count items by status for the summary badge. {@code hospitalId} is
+     * optional for the same super-admin global-view reason as
+     * {@link #findByRecipientFiltered}.
+     */
+    @Query("""
+        SELECT COUNT(i) FROM InBasketItem i
+        WHERE i.recipientUser.id = :userId
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND i.status = :status
+    """)
+    long countByRecipientForSummary(
+        @Param("userId") UUID userId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("status") InBasketItemStatus status);
 
-    long countByRecipientUser_IdAndHospital_IdAndStatusAndItemType(
-        UUID recipientUserId, UUID hospitalId, InBasketItemStatus status, InBasketItemType itemType);
+    /** Count items by status AND type. {@code hospitalId} is optional. */
+    @Query("""
+        SELECT COUNT(i) FROM InBasketItem i
+        WHERE i.recipientUser.id = :userId
+          AND (:hospitalId IS NULL OR i.hospital.id = :hospitalId)
+          AND i.status = :status
+          AND i.itemType = :itemType
+    """)
+    long countByRecipientAndTypeForSummary(
+        @Param("userId") UUID userId,
+        @Param("hospitalId") UUID hospitalId,
+        @Param("status") InBasketItemStatus status,
+        @Param("itemType") InBasketItemType itemType);
 
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(

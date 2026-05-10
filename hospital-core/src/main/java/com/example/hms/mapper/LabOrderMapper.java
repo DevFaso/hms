@@ -11,6 +11,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.persistence.JpaProxyUtils;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,29 +19,47 @@ import java.util.List;
 @Component
 public class LabOrderMapper {
 
+    /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
+    private static final String OWNER = "LabOrder";
+
     public LabOrderMapper() {
         // No dependencies needed for human-readable mapping
     }
 
     public LabOrderResponseDTO toLabOrderResponseDTO(LabOrder labOrder) {
-    if (labOrder == null) return null;
-    String patientFullName = labOrder.getPatient().getFirstName() + " " + labOrder.getPatient().getLastName();
-    String patientEmail = labOrder.getPatient().getEmail();
-    String hospitalName = labOrder.getHospital() != null ? labOrder.getHospital().getName() : null;
-    String labTestName = labOrder.getLabTestDefinition() != null ? labOrder.getLabTestDefinition().getName() : null;
-        String labOrderCode = labOrder.getId() != null ? labOrder.getId().toString() : null;
-    String status = labOrder.getStatus() != null ? labOrder.getStatus().name() : null;
+        if (labOrder == null) return null;
+
+        // Force-initialise each lazy association up front and substitute null
+        // when the referenced row was hard-deleted (dangling FK). Without this
+        // defence the bare `labOrder.getPatient().getFirstName()` below blows
+        // up the whole list response with a 500 the moment a single patient
+        // row is missing — the exact failure observed on dev's
+        // /super-admin/recent-activity endpoint.
+        java.util.UUID labOrderId = labOrder.getId();
+        Patient patient = JpaProxyUtils.safeInit(labOrder.getPatient(), OWNER, labOrderId, "patient");
+        Hospital hospital = JpaProxyUtils.safeInit(labOrder.getHospital(), OWNER, labOrderId, "hospital");
+        LabTestDefinition labTestDefinition = JpaProxyUtils.safeInit(
+            labOrder.getLabTestDefinition(), OWNER, labOrderId, "labTestDefinition");
+
+        String patientFullName = patient != null
+            ? buildFullName(patient.getFirstName(), patient.getLastName())
+            : null;
+        String patientEmail = patient != null ? patient.getEmail() : null;
+        String hospitalName = hospital != null ? hospital.getName() : null;
+        String labTestName = labTestDefinition != null ? labTestDefinition.getName() : null;
+        String labOrderCode = labOrderId != null ? labOrderId.toString() : null;
+        String status = labOrder.getStatus() != null ? labOrder.getStatus().name() : null;
 
     return LabOrderResponseDTO.builder()
-        .id(labOrder.getId() != null ? labOrder.getId().toString() : null)
+        .id(labOrderId != null ? labOrderId.toString() : null)
         .labOrderCode(labOrderCode)
-        .patientId(labOrder.getPatient() != null && labOrder.getPatient().getId() != null
-            ? labOrder.getPatient().getId().toString() : null)
+        .patientId(patient != null && patient.getId() != null
+            ? patient.getId().toString() : null)
         .patientFullName(patientFullName)
         .patientEmail(patientEmail)
         .hospitalName(hospitalName)
         .labTestName(labTestName)
-            .labTestCode(labOrder.getLabTestDefinition() != null ? labOrder.getLabTestDefinition().getTestCode() : null)
+            .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
         .orderDatetime(labOrder.getOrderDatetime())
         .status(status)
             .priority(labOrder.getPriority())
@@ -109,5 +128,12 @@ public class LabOrderMapper {
                 .assignment(assignment)
                 .hospital(hospital)
                 .build();
+    }
+
+    private static String buildFullName(String first, String last) {
+        String f = first == null ? "" : first.trim();
+        String l = last == null ? "" : last.trim();
+        String full = (f + " " + l).trim();
+        return full.isEmpty() ? null : full;
     }
 }
