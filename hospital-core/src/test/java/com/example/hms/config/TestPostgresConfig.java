@@ -17,19 +17,47 @@ import org.springframework.mail.javamail.MimeMessagePreparator;
 @TestConfiguration
 public class TestPostgresConfig {
 
-    private static final String H2_URL = String.join(
-        "",
-        "jdbc:h2:mem:testdb;",
-        "MODE=PostgreSQL;",
-        "DATABASE_TO_LOWER=TRUE;",
-        "DEFAULT_NULL_ORDERING=HIGH;",
-        "DB_CLOSE_DELAY=-1;",
-        "DB_CLOSE_ON_EXIT=FALSE"
-    );
+    /**
+     * Mint a per-context H2 URL so each {@code @SpringBootTest} that imports
+     * this configuration gets its own in-memory database.
+     *
+     * <p>Why: prior to this change, every importing test pinned the URL to
+     * {@code jdbc:h2:mem:testdb}. Multiple {@code @SpringBootTest} contexts
+     * coexist in the same JVM (Spring's context cache + tests with distinct
+     * {@code @TestPropertySource} signatures each create their own context),
+     * and they all shared one H2 instance. With {@code ddl-auto=create-drop},
+     * any context shutting down would drop every schema in the shared DB,
+     * including ones live contexts were still querying. The race surfaced as
+     * a CI-only flake on {@code MllpTcpServerIT} where the MLLP worker
+     * thread queried {@code platform.mllp_allowed_senders} and got back
+     * {@code Schema "platform" not found} from a sibling context's
+     * {@code create-drop} shutdown — see PR #287 CI run job 75225475133.
+     *
+     * <p>Each Spring context now resolves its own UUID-suffixed URL exactly
+     * once at context startup, so cross-context shutdowns are no-ops on this
+     * context's DB. Within a context, transaction rollback / explicit
+     * cleanup work exactly as before.
+     */
+    private static String mintUniqueH2Url() {
+        String contextId = java.util.UUID.randomUUID().toString().replace("-", "");
+        return String.join(
+            "",
+            "jdbc:h2:mem:testdb_", contextId, ";",
+            "MODE=PostgreSQL;",
+            "DATABASE_TO_LOWER=TRUE;",
+            "DEFAULT_NULL_ORDERING=HIGH;",
+            "DB_CLOSE_DELAY=-1;",
+            "DB_CLOSE_ON_EXIT=FALSE"
+        );
+    }
 
     @DynamicPropertySource
     static void dbProps(DynamicPropertyRegistry r) {
-        r.add("spring.datasource.url", () -> H2_URL);
+        // Mint once per context invocation so every property reads back the
+        // same URL — the supplier closure runs multiple times during property
+        // resolution, but they all return this fixed value.
+        String url = mintUniqueH2Url();
+        r.add("spring.datasource.url", () -> url);
         r.add("spring.datasource.username", () -> "sa");
         r.add("spring.datasource.password", () -> "");
         r.add("spring.datasource.driver-class-name", () -> "org.h2.Driver");
