@@ -70,4 +70,15 @@ public class DispenseRequestDTO {
 
     @Size(max = 1000)
     private String notes;
+
+    /**
+     * Roadmap row 4 / T-68 — optional idempotency key the offline pharmacy
+     * queue mints when the user clicks Dispense, so a replayed POST after
+     * connectivity returns produces the same DispenseResponseDTO without
+     * a second stock decrement / audit / ready-for-pickup SMS. Format is
+     * client-defined; the server only checks UNIQUE-ness and length.
+     * Omit (null) to opt out — preserves today's create-or-fail behaviour.
+     */
+    @Size(max = 64)
+    private String idempotencyKey;
 }

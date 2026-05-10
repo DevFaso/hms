@@ -30,14 +30,15 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * KC-5 prep — verifies that when {@code app.auth.oidc.required=true} the
- * legacy internal token issuer ({@code POST /auth/login} and
- * {@code POST /auth/token/refresh}) is sealed off with 410 Gone so
- * clients migrate to the Keycloak Auth Code + PKCE flow.
+ * Roadmap row 8 — companion to {@link AuthControllerOidcRequiredTest}.
+ * Verifies that when {@code app.auth.oidc.issuer-uri} is empty, the 410
+ * Gone response on the legacy issuer endpoints does NOT carry a
+ * {@code Link: rel="oauth2-issuer"} header. Local dev runs without OIDC
+ * configured still get the runbook copy in the JSON body — they just
+ * don't advertise a non-existent discovery document.
  */
 @AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(
@@ -50,12 +51,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @TestPropertySource(properties = {
     "app.mfa.required-roles=",
     "app.auth.oidc.required=true",
-    // Roadmap row 8 — when the issuer is set the 410 response carries a
-    // Link: rel="oauth2-issuer" header (RFC 8414) pointing at the discovery
-    // document so clients can self-route to SSO.
-    "app.auth.oidc.issuer-uri=https://keycloak.example.com/realms/hms"
+    "app.auth.oidc.issuer-uri="
 })
-class AuthControllerOidcRequiredTest {
+class AuthControllerOidcRequiredNoIssuerTest {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
@@ -78,33 +76,25 @@ class AuthControllerOidcRequiredTest {
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
     @MockitoBean private AuthBootstrapService authBootstrapService;
 
-    private static final String EXPECTED_LINK_HEADER =
-        "<https://keycloak.example.com/realms/hms/.well-known/openid-configuration>;"
-        + " rel=\"oauth2-issuer\"; type=\"application/json\"";
-
     @Test
-    void login_returns410Gone_whenOidcRequired() throws Exception {
+    void login_returns410Gone_withoutLinkHeader_whenIssuerUnset() throws Exception {
         LoginRequest login = new LoginRequest();
         login.setUsername("alice");
-        login.setPassword("irrelevant-because-the-flag-blocks-this");
+        login.setPassword("irrelevant");
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(login)))
                 .andExpect(status().isGone())
-                .andExpect(header().string("Link", EXPECTED_LINK_HEADER))
-                .andExpect(jsonPath("$.message")
-                        .value("Legacy username/password login is disabled. Sign in via Single Sign-On."));
+                .andExpect(header().doesNotExist("Link"));
     }
 
     @Test
-    void refresh_returns410Gone_whenOidcRequired() throws Exception {
+    void refresh_returns410Gone_withoutLinkHeader_whenIssuerUnset() throws Exception {
         mockMvc.perform(post("/auth/token/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"anything\"}"))
                 .andExpect(status().isGone())
-                .andExpect(header().string("Link", EXPECTED_LINK_HEADER))
-                .andExpect(jsonPath("$.message")
-                        .value("Legacy token refresh is disabled. Sign in via Single Sign-On."));
+                .andExpect(header().doesNotExist("Link"));
     }
 }

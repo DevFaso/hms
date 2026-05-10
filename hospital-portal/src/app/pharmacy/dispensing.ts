@@ -1,8 +1,9 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { firstValueFrom, Subscription } from 'rxjs';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -14,6 +15,7 @@ import {
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 
 @Component({
   selector: 'app-dispensing',
@@ -22,17 +24,28 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
   templateUrl: './dispensing.html',
   styleUrl: './dispensing.scss',
 })
-export class DispensingComponent implements OnInit {
+export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly offlineQueue = inject(OfflineDispenseQueueService);
 
   // Work queue
   workQueue = signal<WorkQueuePrescription[]>([]);
   queueLoading = signal(false);
   queuePage = 0;
   queueTotalPages = 0;
+
+  // Roadmap row 4 / T-68 — offline-queue UI state. `pendingQueued` mirrors
+  // OfflineDispenseQueueService.pending$ so the offline banner re-renders
+  // automatically as the user (or the online-event auto-replay) drains it.
+  // `syncing` flips while a replay is in flight to suppress double-clicks
+  // on the manual "Sync now" button.
+  pendingQueued = signal(0);
+  syncing = signal(false);
+  private pendingSubscription: Subscription | null = null;
+  private onlineHandler: (() => void) | null = null;
 
   // Pharmacies
   pharmacies = signal<PharmacyResponse[]>([]);
@@ -53,6 +66,58 @@ export class DispensingComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadPharmacies();
+
+    // Roadmap row 4 / T-68 — wire up the offline queue. Subscribe to the
+    // pending count so the banner reacts in real time, and trigger a replay
+    // sweep whenever the browser regains connectivity. Both teardowns happen
+    // in ngOnDestroy below.
+    this.pendingSubscription = this.offlineQueue.pending$.subscribe((n) =>
+      this.pendingQueued.set(n),
+    );
+    if (typeof window !== 'undefined') {
+      this.onlineHandler = () => {
+        // Best-effort — failures are surfaced in the per-item attempt
+        // counter. A toast on success keeps the pharmacist informed.
+        void this.replayQueue();
+      };
+      window.addEventListener('online', this.onlineHandler);
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.pendingSubscription?.unsubscribe();
+    if (typeof window !== 'undefined' && this.onlineHandler) {
+      window.removeEventListener('online', this.onlineHandler);
+    }
+  }
+
+  /**
+   * Drains the offline dispense queue against the live backend. Idempotent
+   * on the wire — every queued request carries an idempotency_key the
+   * backend (V94) deduplicates on, so a retry that races a successful
+   * original POST is a no-op rather than a double dispense.
+   */
+  async replayQueue(): Promise<void> {
+    if (this.syncing()) return;
+    this.syncing.set(true);
+    try {
+      const result = await this.offlineQueue.replayAll((req) =>
+        firstValueFrom(this.svc.createDispense(req)).then((res) => res.data),
+      );
+      if (result.succeeded > 0) {
+        this.toast.success(
+          `${result.succeeded} dispense(s) synchronisée(s)` +
+            (result.failed > 0 ? ` — ${result.failed} en attente` : ''),
+        );
+        // Refresh the on-screen queue so the just-synced rows appear.
+        this.loadRecentDispenses();
+        this.loadWorkQueue();
+      } else if (result.failed > 0) {
+        this.toast.error(`Échec — ${result.failed} dispense(s) restent en file d'attente`);
+      }
+    } finally {
+      this.syncing.set(false);
+    }
   }
 
   private loadPharmacies(): void {

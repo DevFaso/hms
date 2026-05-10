@@ -732,4 +732,190 @@ class DispenseServiceImplTest {
             assertThat(result.getContent().get(0).getPatient().getId()).isEqualTo(patientId);
         }
     }
+
+    /**
+     * Roadmap row 4 / T-68 — offline dispense queue replay path.
+     *
+     * <p>The contract under test: when the same {@code idempotencyKey} is
+     * POSTed twice (the second POST being the offline-queue replay after
+     * connectivity returns), the second call must return the existing
+     * DispenseResponseDTO and skip every side-effect — no second stock
+     * decrement, no second audit, no second SMS, no validation re-run.
+     *
+     * <p>We deliberately do NOT stub any of the validation collaborators
+     * (prescription/patient/pharmacy lookups, RoleValidator, CDS check,
+     * stock-lot consume) on the replay path. If the implementation were
+     * to fall through to the create branch, Mockito would throw on the
+     * unstubbed strict-stubs and the test would surface the regression.
+     */
+    @Nested
+    @DisplayName("createDispense — idempotency (T-68)")
+    class CreateDispenseIdempotency {
+
+        private static final String KEY = "user-001-rx-002-2026-05-10T13:45:30.123456789Z";
+
+        @Test
+        @DisplayName("replay with known key returns existing dispense and skips all side-effects")
+        void replayReturnsExistingAndSkipsSideEffects() {
+            DispenseRequestDTO replay = buildRequest();
+            replay.setIdempotencyKey(KEY);
+
+            Dispense existing = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO existingDto = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(dispenseRepository.findByIdempotencyKey(KEY)).thenReturn(Optional.of(existing));
+            when(dispenseMapper.toResponseDTO(existing)).thenReturn(existingDto);
+
+            DispenseResponseDTO result = service.createDispense(replay);
+
+            assertThat(result).isSameAs(existingDto);
+            // No write, no stock decrement, no audit, no SMS — the create
+            // branch is fully short-circuited.
+            verify(dispenseRepository, never()).save(any());
+            verify(prescriptionRepository, never()).save(any());
+            verify(stockLotRepository, never()).save(any());
+            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("blank idempotency key falls through to the normal create path")
+        void blankKeyFallsThroughToCreate() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setIdempotencyKey("   ");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            // The replay lookup must NOT be consulted for a blank key — that's
+            // wasted IO. Verified via never() below.
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(dispenseRepository, never()).findByIdempotencyKey(any());
+            verify(dispenseRepository).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("unknown key falls through to create — second POST persists with the key")
+        void unknownKeyCreatesNewRow() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setIdempotencyKey(KEY);
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).status("COMPLETED").build();
+
+            when(dispenseRepository.findByIdempotencyKey(KEY)).thenReturn(Optional.empty());
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(dispenseRepository).findByIdempotencyKey(KEY);
+            verify(dispenseRepository).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("race recovery: V94 unique violation on save → re-lookup returns winning DTO")
+        void racingWriteRecoversByLookingUpWinner() {
+            // Concurrency model: this thread's pre-check returns empty (the
+            // racing tx has not committed yet). The save then throws because
+            // the racing tx committed in between. The implementation must
+            // catch DataIntegrityViolationException and re-look up — the
+            // winner is now visible — and return that DTO instead of
+            // bubbling a 500.
+            DispenseRequestDTO racing = buildRequest();
+            racing.setIdempotencyKey(KEY);
+
+            Dispense winner = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO winnerDto = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            // First lookup (pre-check) sees empty; second lookup (post-rollback
+            // race recovery) sees the winning row.
+            when(dispenseRepository.findByIdempotencyKey(KEY))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.of(winner));
+
+            // Stub everything the create branch touches, up to and including
+            // the save() that explodes. Spring would normally roll back the
+            // tx here; in this unit test there is no real tx to roll back —
+            // we only need to verify the catch-and-recover path.
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(racing), any())).thenReturn(buildDispense(DispenseStatus.COMPLETED));
+            when(dispenseRepository.save(any(Dispense.class)))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException(
+                            "duplicate key value violates unique constraint \"uq_disp_idempotency_key\""));
+            when(dispenseMapper.toResponseDTO(winner)).thenReturn(winnerDto);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            DispenseResponseDTO result = service.createDispense(racing);
+
+            assertThat(result).isSameAs(winnerDto);
+            // Both lookups happened (pre-check + post-violation recovery).
+            verify(dispenseRepository, org.mockito.Mockito.times(2)).findByIdempotencyKey(KEY);
+            // We ATTEMPTED to save — that's how we discovered the race.
+            verify(dispenseRepository).save(any(Dispense.class));
+            // No prescription save / SMS / audit got committed because the
+            // tx (in production) would have rolled back. Mockito verifies
+            // we never reached those code paths after the violation.
+            verify(prescriptionRepository, never()).save(any(Prescription.class));
+            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("race recovery: violation with no recoverable winner → original exception bubbles")
+        void racingWriteWithNoWinnerRethrowsViolation() {
+            // Defensive case: V94 unique-index violation but the second
+            // lookup still finds nothing (should not happen — the constraint
+            // exists precisely because somebody won — but be honest about
+            // the failure rather than silently returning null).
+            DispenseRequestDTO racing = buildRequest();
+            racing.setIdempotencyKey(KEY);
+
+            when(dispenseRepository.findByIdempotencyKey(KEY))
+                    .thenReturn(Optional.empty())
+                    .thenReturn(Optional.empty());
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(racing), any())).thenReturn(buildDispense(DispenseStatus.COMPLETED));
+            when(dispenseRepository.save(any(Dispense.class)))
+                    .thenThrow(new org.springframework.dao.DataIntegrityViolationException("constraint violation"));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.createDispense(racing))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
+    }
 }
