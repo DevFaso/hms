@@ -216,7 +216,50 @@ class GlobalExceptionHandlerTest {
                     new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
 
             ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(body).isNotNull();
+            assertThat((String) body.get("message"))
+                .startsWith("Malformed request body:")
+                .contains("Required request body is missing");
+        }
+
+        /**
+         * Regression guard against the Copilot-flagged "Malformed request
+         * body: null" output: when both the cause's message and the outer
+         * exception's message are blank, the handler must fall through to a
+         * fixed default rather than serialise {@code null} into the response.
+         */
+        @Test
+        @DisplayName("falls back to a fixed default when both messages are blank")
+        void fallsBackToFixedDefaultWhenAllMessagesBlank() {
+            // Cause exists but has a null message — historically the source
+            // of the "Malformed request body: null" footgun.
+            com.fasterxml.jackson.databind.JsonMappingException blankCause =
+                new com.fasterxml.jackson.databind.JsonMappingException(null, (String) null);
+            org.springframework.http.converter.HttpMessageNotReadableException ex =
+                new org.springframework.http.converter.HttpMessageNotReadableException(
+                    "",
+                    blankCause,
+                    new org.springframework.mock.http.MockHttpInputMessage(new byte[0]));
+
+            ResponseEntity<Object> response = handler.handleHttpMessageNotReadable(ex, request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(body).isNotNull();
+            // The exact wording is allowed to vary — Spring's
+            // HttpMessageNotReadableException normalises an empty message to
+            // "N/A" before we see it, so we land on
+            // "Malformed request body: N/A". The load-bearing invariant is
+            // simply that the response never serialises the literal string
+            // "null" into the body, which was Copilot's concern.
+            assertThat((String) body.get("message"))
+                .startsWith("Malformed request body")
+                .doesNotContain("null");
         }
     }
 

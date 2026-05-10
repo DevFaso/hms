@@ -125,12 +125,28 @@ public class GlobalExceptionHandler {
         // Jackson exception messages embed the offending field path and the
         // accepted values for enums; surface them so the caller can self-
         // diagnose. The cause's message is shorter and cleaner than the
-        // outer JsonMappingException stack-trace prefix.
-        String message = ex.getMostSpecificCause() != null
-            ? ex.getMostSpecificCause().getMessage()
-            : ex.getMessage();
-        return buildErrorResponse(HttpStatus.BAD_REQUEST,
-            "Malformed request body: " + message, request);
+        // outer JsonMappingException stack-trace prefix, but it can be null
+        // even when the cause itself is non-null (rare Jackson paths build a
+        // cause with no detail message) — fall through to the outer message
+        // and then to a fixed default so the response is never
+        // "Malformed request body: null".
+        String detail = resolveJacksonDetail(ex);
+        String message = detail.isEmpty()
+            ? "Malformed request body."
+            : "Malformed request body: " + detail;
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    private static String resolveJacksonDetail(HttpMessageNotReadableException ex) {
+        // getMostSpecificCause() falls back to the throwable itself when no
+        // cause is chained, so it is documented non-null. Its detail message,
+        // however, can be null on edge-case Jackson paths.
+        String causeMessage = ex.getMostSpecificCause().getMessage();
+        if (causeMessage != null && !causeMessage.isBlank()) {
+            return causeMessage;
+        }
+        String outer = ex.getMessage();
+        return outer != null && !outer.isBlank() ? outer : "";
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

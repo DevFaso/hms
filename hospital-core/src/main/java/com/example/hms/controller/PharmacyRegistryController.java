@@ -43,16 +43,12 @@ public class PharmacyRegistryController {
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Register a new pharmacy")
     public ResponseEntity<PharmacyResponseDTO> create(@Valid @RequestBody PharmacyRequestDTO dto) {
-        // Defense in depth — @Valid + @NotNull on the DTO already reject a
-        // null hospitalId with a 400, but Jackson's UUID deserialiser has
-        // historically converted certain malformed strings ("", "null") to
-        // null AFTER bean validation has run. Reject explicitly here so a
-        // bad payload surfaces a clear "Hospital ID is required" message
-        // instead of falling through to the service's findById(null) which
-        // produces a generic IllegalArgumentException 400.
-        if (dto == null || dto.getHospitalId() == null) {
-            throw new BusinessException("Hospital ID is required.");
-        }
+        // Validation chain (covered by tests):
+        //   - Malformed JSON / unknown enum / unparseable UUID
+        //     → HttpMessageNotReadableException → global handler 400.
+        //   - Missing or null hospitalId on a parseable payload
+        //     → @NotNull on PharmacyRequestDTO → MethodArgumentNotValidException 400.
+        // No further defensive null-check is necessary here.
         return ResponseEntity.status(HttpStatus.CREATED).body(pharmacyService.create(dto));
     }
 
