@@ -79,7 +79,10 @@
     left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: #9ca3af;
+    // v1.0 row 11: aria-hidden via pointer-events:none, but axe still
+    // counts SVG fill against the surrounding text-contrast budget. #6b7280
+    // (5.0:1 on white) replaces #9ca3af (2.84:1).
+    color: #6b7280;
     pointer-events: none;
   }
 
@@ -250,7 +253,10 @@
 .empty-state p {
   margin: 0;
   font-size: 0.875rem;
-  color: #94a3b8;
+  // v1.0 row 11: bumped from #94a3b8 (2.83:1 on white) to #64748b
+  // (5.49:1) so empty-state body text passes WCAG AA. See
+  // docs/ui/accessibility.md §8.
+  color: #64748b;
 }
 
 @keyframes spin {
@@ -561,7 +567,9 @@
     }
 
     &::placeholder {
-      color: #9ca3af;
+      // v1.0 row 11: #9ca3af (2.84:1) was below WCAG AA 4.5:1 on white.
+      // #6b7280 (5.0:1) keeps the visual hierarchy without failing axe.
+      color: #6b7280;
     }
 
     &:disabled {

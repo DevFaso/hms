@@ -9,6 +9,41 @@
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --border: #e2e8f0;
+
+  // ─── Accessibility tokens (v1.0 roadmap row 11) ───────────────────
+  // High-contrast amber visible against both light surfaces (#fff /
+  // #f1f5f9) and the deep-blue sidebar (#0f172a). 2px outline is the
+  // WCAG 2.4.7 minimum; offset gives it a halo so it shows over busy
+  // backgrounds. See docs/ui/accessibility.md §3.
+  --focus-ring: 2px solid #2563eb;
+  --focus-ring-inverse: 2px solid #fbbf24; // for dark surfaces (sidebar)
+  --focus-ring-offset: 2px;
+}
+
+/* ── Global focus-visible indicator ─────────────────────────────────
+   Applied to every focusable element. Browsers that support
+   `:focus-visible` only show the ring for keyboard focus, not mouse
+   clicks. Components may override this locally if they need a
+   different treatment (e.g. the dark sidebar uses the inverse ring).
+   v1.0 roadmap row 11.
+   ─────────────────────────────────────────────────────────────────── */
+:focus {
+  outline: none; // Chrome/Safari default ring — replaced by :focus-visible
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: 4px;
+}
+
+// Form controls get an extra subtle box-shadow halo on top of the
+// outline so it reads against busy form layouts.
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 *,

@@ -134,6 +134,27 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     // signal.
     await runAxe(page, '/my-medications');
   });
+
+  // v1.0 roadmap row 11: widen coverage to the realistic West-African
+  // clinical-flow surfaces — reception, nurse station, prescriptions,
+  // pharmacy dispensing. These are the screens keyboard-only staff
+  // (data clerks, pharmacists, triage nurses) use most. Per-screen
+  // keyboard contracts are audited in keyboard-nav.spec.ts.
+  test('reception cockpit has no serious/critical violations', async ({ page }) => {
+    await runAxe(page, '/reception');
+  });
+
+  test('nurse station has no serious/critical violations', async ({ page }) => {
+    await runAxe(page, '/nurse-station');
+  });
+
+  test('prescriptions has no serious/critical violations', async ({ page }) => {
+    await runAxe(page, '/prescriptions');
+  });
+
+  test('pharmacy dispensing has no serious/critical violations', async ({ page }) => {
+    await runAxe(page, '/pharmacy/dispensing');
+  });
 });
 
 test.describe('a11y smoke (axe-core) — unauthenticated /login', () => {

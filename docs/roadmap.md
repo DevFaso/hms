@@ -23,6 +23,20 @@ Last updated: **2026-05-10**. Update both files together when scope moves.
 > a11y smoke) and
 > [`b7affa7e`](https://github.com/DevFaso/hms/commit/b7affa7e) (PR #287,
 > rows 4/5/6/8).
+>
+> **2026-05-10 follow-up — row 11 foundation pass started.** Row 11
+> (Keyboard navigation pass) flipped from `not-started` to `started` on
+> `feat/v1.0-keyboard-navigation`. Foundation shipped: WCAG 2.1 AA
+> keyboard contract in [`docs/ui/accessibility.md`](./ui/accessibility.md),
+> reusable `SkipLinkComponent` + `FocusOnErrorDirective` in
+> `hospital-portal/src/app/shared/a11y/`, global `:focus-visible` tokens,
+> shell `<main id="main-content">` + `NavigationEnd → focus(main)` hook,
+> the first slice of color-contrast remediation in shared styles, axe
+> coverage widened to `/reception`, `/nurse-station`, `/prescriptions`,
+> `/pharmacy/dispensing`, and a new `e2e/keyboard-nav.spec.ts` enforcing
+> skip-link and route-focus contracts. Per-screen audits (vitals-grid
+> roving tabindex, CDS warn-card Esc dismiss, prescription form focus
+> order) follow in subsequent PRs; row stays `started` until those land.
 
 ## Where the project is today
 

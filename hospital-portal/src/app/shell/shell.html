@@ -1,6 +1,12 @@
+<!--
+  v1.0 row 11: skip-link MUST be the first focusable element in the shell
+  so a keyboard user's first Tab reveals it. See docs/ui/accessibility.md §6.9.
+-->
+<app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
+
 <div class="shell" [class.collapsed]="sidebarCollapsed()">
   <!-- Sidebar -->
-  <aside class="sidebar">
+  <aside class="sidebar" aria-label="Primary navigation">
     <div class="sidebar-header">
       <div class="logo-area">
         <span class="material-symbols-outlined logo-icon">local_hospital</span>
@@ -71,7 +77,7 @@
   <!-- Main Content -->
   <div class="main-area">
     <!-- Header -->
-    <header class="topbar">
+    <header class="topbar" role="banner">
       <div class="topbar-left">
         <button class="mobile-toggle" (click)="toggleSidebar()" aria-label="Menu">
           <span class="material-symbols-outlined">menu</span>
@@ -231,8 +237,22 @@
       </div>
     }
 
-    <!-- Page Content -->
-    <main class="content">
+    <!--
+      Page Content.
+      v1.0 row 11: id + tabindex="-1" make this the landing target for
+      the skip-link (docs/ui/accessibility.md §6.9) AND the programmatic
+      focus destination on every NavigationEnd (see shell.ts
+      ngAfterViewInit). aria-label gives screen-reader users a stable
+      landmark name that doesn't depend on the inner page heading.
+    -->
+    <main
+      #mainContent
+      id="main-content"
+      class="content"
+      tabindex="-1"
+      role="main"
+      aria-label="Main content"
+    >
       <app-impersonation-banner />
       <!-- MVP-7b — surfaces the latest /topic/emergency-broadcast frame
            on every authenticated route. Mounted in the shell so a
