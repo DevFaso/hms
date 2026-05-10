@@ -6,6 +6,10 @@ import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.imaging.ImagingOrderDuplicateMatchDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.persistence.JpaProxyUtils;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -16,8 +20,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Component
 public class ImagingOrderMapper {
+
+    /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
+    private static final String OWNER = "ImagingOrder";
 
     public ImagingOrder toEntity(ImagingOrderRequestDTO dto, Patient patient, Hospital hospital) {
         if (dto == null) {
@@ -104,13 +112,23 @@ public class ImagingOrderMapper {
             return null;
         }
 
+        // Force-initialise each lazy association up front and substitute null
+        // when the referenced row was hard-deleted (dangling FK). Without this
+        // defence the bare `order.getPatient().getMrnForHospital(...)` call
+        // below blows up the whole list response with a 500 the moment a
+        // single referenced patient row is missing — the exact failure
+        // observed on dev's GET /api/imaging/orders endpoint.
+        UUID orderId = order.getId();
+        Patient patient = JpaProxyUtils.safeInit(order.getPatient(), OWNER, orderId, "patient");
+        Hospital hospital = JpaProxyUtils.safeInit(order.getHospital(), OWNER, orderId, "hospital");
+
         return ImagingOrderResponseDTO.builder()
-            .id(order.getId())
-            .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
-            .patientDisplayName(resolvePatientDisplayName(order.getPatient()))
-            .patientMrn(resolvePatientMrn(order))
-            .hospitalId(order.getHospital() != null ? order.getHospital().getId() : null)
-            .hospitalName(order.getHospital() != null ? order.getHospital().getName() : null)
+            .id(orderId)
+            .patientId(patient != null ? patient.getId() : null)
+            .patientDisplayName(resolvePatientDisplayName(patient))
+            .patientMrn(resolvePatientMrn(patient, hospital, orderId))
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            .hospitalName(hospital != null ? hospital.getName() : null)
             .modality(order.getModality())
             .studyType(order.getStudyType())
             .bodyRegion(order.getBodyRegion())
@@ -212,11 +230,27 @@ public class ImagingOrderMapper {
         return !first.isEmpty() ? first : null;
     }
 
-    private String resolvePatientMrn(ImagingOrder order) {
-        if (order == null || order.getPatient() == null) {
+    /**
+     * Resolves the patient's MRN for the order's hospital. Both the patient
+     * and hospital arguments are expected to have already been passed through
+     * {@link JpaProxyUtils#safeInit} so the top-level FK is known to be
+     * valid. The second-order guard (try/catch) covers the lazy
+     * {@code patient.hospitalRegistrations} collection: a registration row
+     * whose hospital_id points at a hard-deleted Hospital would otherwise
+     * throw on {@code reg.getHospital().getId()} inside
+     * {@link Patient#getMrnForHospital(UUID)}. Mirrors the proven pattern in
+     * {@code ConsultationServiceImpl.toResponseDTO}.
+     */
+    private String resolvePatientMrn(Patient patient, Hospital hospital, UUID orderId) {
+        if (patient == null || hospital == null || hospital.getId() == null) {
             return null;
         }
-        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
-        return order.getPatient().getMrnForHospital(hospitalId);
+        try {
+            return patient.getMrnForHospital(hospital.getId());
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException ex) {
+            log.warn("⚠️ ImagingOrder({}) patient {} has dangling hospitalRegistration FK; MRN unavailable.",
+                orderId, patient.getId());
+            return null;
+        }
     }
 }
