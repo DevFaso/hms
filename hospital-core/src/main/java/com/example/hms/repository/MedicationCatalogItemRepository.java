@@ -16,6 +16,38 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
 
     Page<MedicationCatalogItem> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
+    /**
+     * Active catalog page with platform-catalog semantics (V95).
+     *
+     * <p>Returns:
+     * <ul>
+     *   <li><strong>{@code hospitalId IS NULL}</strong> (super-admin global view):
+     *       every active row across every tenant, plus all global entries —
+     *       the unfiltered platform catalog.</li>
+     *   <li><strong>{@code hospitalId IS NOT NULL}</strong> (clinician / hospital
+     *       admin): the union of global entries
+     *       ({@code m.hospital IS NULL}, i.e. items on the national LNME)
+     *       <em>and</em> the caller's hospital-specific overrides. A
+     *       clinician at Hospital A can therefore prescribe Amoxicillin
+     *       from the national list without Hospital A having to re-enter
+     *       it locally.</li>
+     * </ul>
+     */
+    @Query(value = """
+        SELECT m FROM MedicationCatalogItem m
+        WHERE m.active = true
+          AND (:hospitalId IS NULL
+               OR m.hospital IS NULL
+               OR m.hospital.id = :hospitalId)
+        """, countQuery = """
+        SELECT COUNT(m) FROM MedicationCatalogItem m
+        WHERE m.active = true
+          AND (:hospitalId IS NULL
+               OR m.hospital IS NULL
+               OR m.hospital.id = :hospitalId)
+        """)
+    Page<MedicationCatalogItem> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
     @Query("SELECT m FROM MedicationCatalogItem m WHERE m.hospital.id = :hospitalId AND m.active = true " +
            "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
            "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +

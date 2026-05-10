@@ -1351,4 +1351,28 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V95: Medication catalog becomes a platform / LNME catalog
+         The original V43 schema modelled medication_catalog_items as
+         strictly hospital-scoped (hospital_id NOT NULL, UNIQUE
+         (hospital_id, code)), forcing every hospital to redundantly
+         insert "Amoxicillin", "Paracétamol", etc.  This migration
+         relaxes hospital_id to optional so a single super-admin can
+         curate the platform catalog (NULL = global / LNME entry visible
+         to every tenant), while leaving the door open for hospital-
+         specific entries.  The single composite UNIQUE constraint is
+         split into two partial unique indexes so the two scopes can't
+         shadow each other (Postgres treats NULLs as distinct in a
+         multi-column UNIQUE, so without the split multiple globals
+         with the same code would silently coexist).
+         Pure DDL; splitStatements true; idempotent (DROP CONSTRAINT IF
+         EXISTS + CREATE UNIQUE INDEX IF NOT EXISTS).
+         ================================================================= -->
+    <changeSet id="V95-medication-catalog-platform-scope" author="hms-team" runOnChange="false">
+        <sqlFile path="V95__medication_catalog_platform_scope.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

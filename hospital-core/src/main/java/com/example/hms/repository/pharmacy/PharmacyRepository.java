@@ -18,6 +18,23 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
 
     Page<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
+    /**
+     * Cross-tenant page used by super-admin global view. The {@code hospitalId}
+     * filter is optional — null means "every hospital". Mirrors the InBasket
+     * pattern (PR #292) so the controller can drop the
+     * {@code @RequestParam(required = true)} requirement for super-admins.
+     */
+    @Query(value = """
+        SELECT p FROM Pharmacy p
+        WHERE p.active = true
+          AND (:hospitalId IS NULL OR p.hospital.id = :hospitalId)
+        """, countQuery = """
+        SELECT COUNT(p) FROM Pharmacy p
+        WHERE p.active = true
+          AND (:hospitalId IS NULL OR p.hospital.id = :hospitalId)
+        """)
+    Page<Pharmacy> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
+
     List<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId);
 
     List<Pharmacy> findByHospitalIdAndActiveTrueOrderByNameAsc(UUID hospitalId);

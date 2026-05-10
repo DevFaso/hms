@@ -44,6 +44,9 @@ class MedicationCatalogControllerTest {
     @MockitoBean
     private MedicationCatalogItemService catalogService;
 
+    @MockitoBean
+    private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+
     private final UUID hospitalId = UUID.randomUUID();
     private final UUID itemId = UUID.randomUUID();
 
@@ -92,6 +95,10 @@ class MedicationCatalogControllerTest {
 
     @Test
     void list_returnsPaginatedResults() throws Exception {
+        // The controller now resolves hospitalId via authUtils.resolveHospitalScope
+        // (added so super-admins in global view can list across tenants).
+        when(authUtils.resolveHospitalScope(any(), eq(hospitalId), eq(false)))
+                .thenReturn(hospitalId);
         when(catalogService.listByHospital(eq(hospitalId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sampleResponse())));
 
@@ -99,6 +106,40 @@ class MedicationCatalogControllerTest {
                         .param("hospitalId", hospitalId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].nameFr").value("Paracétamol"));
+    }
+
+    /**
+     * Regression for the dev 400 reported on 2026-05-10:
+     * GET /api/medication-catalog?page=0&size=20 returned
+     * {@code MissingServletRequestParameterException} for super-admin
+     * tchico1er in global view. Same fix shape as the InBasket controller
+     * (PR #292) and the pharmacy-registry list path in this PR.
+     */
+    @Test
+    void list_superAdminWithoutHospitalId_returns200() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+                .thenReturn(null);
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
+        when(catalogService.listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/medication-catalog"))
+                .andExpect(status().isOk());
+
+        verify(catalogService).listByHospital(org.mockito.ArgumentMatchers.isNull(), any(Pageable.class));
+    }
+
+    /** Guard: clinician without scope still 400s on the GET path. */
+    @Test
+    void list_clinicianWithoutHospitalScope_returns400() throws Exception {
+        when(authUtils.resolveHospitalScope(any(), org.mockito.ArgumentMatchers.isNull(), eq(false)))
+                .thenReturn(null);
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(false);
+
+        mockMvc.perform(get("/medication-catalog"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Hospital context is required")));
     }
 
     @Test

@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.ReferralAttachmentResponseDTO;
 import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
 import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
 import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
+import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.enums.ReferralEventType;
 import com.example.hms.model.ReferralEvent;
 import com.example.hms.repository.DepartmentRepository;
@@ -355,24 +356,46 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referral;
     }
 
+    private static final String OWNER = "GeneralReferral";
+
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {
         GeneralReferralResponseDTO dto = new GeneralReferralResponseDTO();
-        dto.setId(referral.getId());
-        dto.setPatientId(referral.getPatient() != null ? referral.getPatient().getId() : null);
-        dto.setPatientName(extractPatientName(referral.getPatient()));
-        dto.setHospitalId(referral.getHospital() != null ? referral.getHospital().getId() : null);
-        dto.setHospitalName(referral.getHospital() != null ? referral.getHospital().getName() : null);
-        dto.setReceivingHospitalId(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getId() : null);
-        dto.setReceivingHospitalName(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getName() : null);
-        dto.setSourceDepartmentId(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getId() : null);
-        dto.setSourceDepartmentName(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getName() : null);
-        dto.setReferringProviderId(referral.getReferringProvider() != null ? referral.getReferringProvider().getId() : null);
-        dto.setReferringProviderName(extractStaffName(referral.getReferringProvider()));
-        dto.setReceivingProviderId(referral.getReceivingProvider() != null ? referral.getReceivingProvider().getId() : null);
-        dto.setReceivingProviderName(extractStaffName(referral.getReceivingProvider()));
+        java.util.UUID referralId = referral.getId();
+        dto.setId(referralId);
+
+        // Force-initialise each lazy association up front and substitute null
+        // when the referenced row was hard-deleted (dangling FK). Without this
+        // defence a bare `referral.getPatient().getFirstName()` blows up the
+        // whole list response with a 500 the moment a single referenced row
+        // is missing — visible on dev's /super-admin/recent-activity endpoint.
+        Patient patient = JpaProxyUtils.safeInit(referral.getPatient(), OWNER, referralId, "patient");
+        Hospital hospital = JpaProxyUtils.safeInit(referral.getHospital(), OWNER, referralId, "hospital");
+        Hospital receivingHospital = JpaProxyUtils.safeInit(
+            referral.getReceivingHospital(), OWNER, referralId, "receivingHospital");
+        Department sourceDepartment = JpaProxyUtils.safeInit(
+            referral.getSourceDepartment(), OWNER, referralId, "sourceDepartment");
+        Staff referringProvider = JpaProxyUtils.safeInit(
+            referral.getReferringProvider(), OWNER, referralId, "referringProvider");
+        Staff receivingProvider = JpaProxyUtils.safeInit(
+            referral.getReceivingProvider(), OWNER, referralId, "receivingProvider");
+        Department targetDepartment = JpaProxyUtils.safeInit(
+            referral.getTargetDepartment(), OWNER, referralId, "targetDepartment");
+
+        dto.setPatientId(patient != null ? patient.getId() : null);
+        dto.setPatientName(extractPatientName(patient));
+        dto.setHospitalId(hospital != null ? hospital.getId() : null);
+        dto.setHospitalName(hospital != null ? hospital.getName() : null);
+        dto.setReceivingHospitalId(receivingHospital != null ? receivingHospital.getId() : null);
+        dto.setReceivingHospitalName(receivingHospital != null ? receivingHospital.getName() : null);
+        dto.setSourceDepartmentId(sourceDepartment != null ? sourceDepartment.getId() : null);
+        dto.setSourceDepartmentName(sourceDepartment != null ? sourceDepartment.getName() : null);
+        dto.setReferringProviderId(referringProvider != null ? referringProvider.getId() : null);
+        dto.setReferringProviderName(extractStaffName(referringProvider));
+        dto.setReceivingProviderId(receivingProvider != null ? receivingProvider.getId() : null);
+        dto.setReceivingProviderName(extractStaffName(receivingProvider));
         dto.setTargetSpecialty(referral.getTargetSpecialty());
-        dto.setTargetDepartmentId(referral.getTargetDepartment() != null ? referral.getTargetDepartment().getId() : null);
-        dto.setTargetDepartmentName(referral.getTargetDepartment() != null ? referral.getTargetDepartment().getName() : null);
+        dto.setTargetDepartmentId(targetDepartment != null ? targetDepartment.getId() : null);
+        dto.setTargetDepartmentName(targetDepartment != null ? targetDepartment.getName() : null);
         dto.setTargetFacilityName(referral.getTargetFacilityName());
         dto.setReferralType(referral.getReferralType());
         dto.setStatus(referral.getStatus());
