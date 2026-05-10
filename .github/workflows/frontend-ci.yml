@@ -33,6 +33,17 @@ jobs:
       - name: Format check
         run: npm run format:check
 
+      # v1.0 row 12 — FR completeness gate. FR is held to the spec's
+      # 99% floor (was 100% as of the row-12 backfill). ES carries an
+      # 89% floor reflecting its current state — backfill to 99% is a
+      # tracked follow-up; the gate exists to prevent regression below
+      # today's level. Per-locale overrides documented in
+      # hospital-portal/scripts/check-i18n-coverage.mjs.
+      - name: i18n completeness check
+        run: npm run i18n:check
+        env:
+          I18N_LOCALE_THRESHOLDS: fr:99,es:89
+
       - name: Build
         run: npm run build
 

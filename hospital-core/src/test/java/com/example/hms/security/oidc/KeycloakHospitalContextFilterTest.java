@@ -1,5 +1,7 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.security.IdleSessionGate;
+import com.example.hms.security.IdleSessionTracker;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
@@ -38,7 +40,13 @@ import static org.mockito.Mockito.verify;
 class KeycloakHospitalContextFilterTest {
 
     private final KeycloakHospitalContextResolver resolver = new KeycloakHospitalContextResolver();
-    private final KeycloakHospitalContextFilter filter = new KeycloakHospitalContextFilter(resolver);
+    // Tracker disabled so the gate short-circuits — these tests focus on the
+    // existing populate/clear contract; idle behaviour is covered by
+    // IdleSessionGateTest + JwtAuthenticationFilter integration tests.
+    private final IdleSessionTracker disabledTracker = mock(IdleSessionTracker.class);
+    private final IdleSessionGate idleSessionGate = new IdleSessionGate(disabledTracker, "");
+    private final KeycloakHospitalContextFilter filter =
+            new KeycloakHospitalContextFilter(resolver, idleSessionGate);
 
     @AfterEach
     void cleanup() {

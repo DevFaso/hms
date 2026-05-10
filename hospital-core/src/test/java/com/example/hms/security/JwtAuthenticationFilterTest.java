@@ -61,6 +61,13 @@ class JwtAuthenticationFilterTest {
     @Mock
     private GlobalSessionRevocationService globalSessionRevocationService;
 
+    /** v1.0 row 7 — JwtAuthenticationFilter now also depends on the
+     *  IdleSessionGate. Defaulting to a Mockito mock means
+     *  {@code shouldReject} returns false (gate disabled) so the
+     *  pre-existing tests' behaviour is unchanged. */
+    @Mock
+    private IdleSessionGate idleSessionGate;
+
     @InjectMocks
     private JwtAuthenticationFilter filter;
 

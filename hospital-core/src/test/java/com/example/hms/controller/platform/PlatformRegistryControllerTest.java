@@ -84,6 +84,11 @@ class PlatformRegistryControllerTest {
     @MockitoBean
     private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
 
+    /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
+     *  IdleSessionGate. */
+    @MockitoBean
+    private com.example.hms.security.IdleSessionGate idleSessionGate;
+
     @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;
 
