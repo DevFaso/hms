@@ -191,8 +191,22 @@ public class MfaController {
         }
 
         // MFA passed — issue full JWT pair
-        List<String> roles = assignmentRepository.findByUser_IdAndActiveTrue(user.getId()).stream()
+        var activeAssignments = assignmentRepository.findByUser_IdAndActiveTrue(user.getId());
+        List<String> roles = activeAssignments.stream()
                 .map(a -> a.getRole().getName())
+                .distinct()
+                .toList();
+        // Authority strings for the idle-gate touch must be Spring Security
+        // canonical form (ROLE_*). `Role.name` is not guaranteed to carry the
+        // ROLE_ prefix (per the entity Javadoc, examples include both
+        // "HOSPITAL_ADMIN" and "ROLE_SUPER_ADMIN"), so naively wrapping
+        // `roles` would break IdleSessionGate#hasMachineRole's exact-string
+        // carve-out — a real machine client (e.g. ROLE_FHIR_CLIENT) routed
+        // through this path would be misclassified as human and pinned in
+        // Redis. Use `Role.code`, which is uppercased on persist (Role.java)
+        // and mirrors the AuthController#refreshToken pattern (line ~617).
+        List<String> roleCodes = activeAssignments.stream()
+                .map(a -> a.getRole().getCode())
                 .distinct()
                 .toList();
 
@@ -240,12 +254,11 @@ public class MfaController {
             log.warn("[MFA] Failed to set refresh cookie: {}", ex.getMessage());
         }
 
-        // ── Idle session timeout — seed the idle window on token issue ──
-        // Mirrors AuthController.authenticateUser: without this, the very
-        // first authenticated request after MFA verify hits the idle gate
-        // with no tracker entry and is treated as "idle past the window".
+        // Seed the idle window on token issue, mirroring
+        // AuthController.authenticateUser. The authority list is built from
+        // role codes — see the roleCodes block above for the rationale.
         idleSessionGate.touchIfHuman(user.getId(),
-                AuthorityUtils.createAuthorityList(roles.toArray(new String[0])));
+                AuthorityUtils.createAuthorityList(roleCodes.toArray(new String[0])));
 
         return ResponseEntity.ok(body);
     }
