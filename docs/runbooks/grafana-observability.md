@@ -8,6 +8,11 @@ For SIEM/SOC log search and audit retention, also see
 [`docs/observability/splunk.md`](../observability/splunk.md) — Splunk HEC ships the same
 Logback events as a JSON envelope when `SPLUNK_HEC_ENABLED=true` on the Railway service.
 
+If the alert is a real outage (DB corruption, project loss, encryption-key
+rotation) follow the [disaster-recovery runbook](./disaster-recovery.md)
+instead — this runbook covers per-alert mitigation; that one covers
+restore-from-snapshot, full project rebuild, and PHI-key recovery.
+
 When an alert fires, follow the matching section below. All dashboard links
 assume the local stack at `http://localhost:3000`; substitute your
 production base URL.

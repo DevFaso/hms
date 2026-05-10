@@ -1,5 +1,6 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.context.HospitalContextRequestOverrides;
@@ -7,6 +8,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,14 +39,18 @@ import java.io.IOException;
  * It only clears state it set itself — for legacy bearers,
  * {@code JwtAuthenticationFilter} owns the lifecycle.</p>
  */
+@Slf4j
 @Component
 @ConditionalOnExpression("'${app.auth.oidc.issuer-uri:}' != ''")
 public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
 
     private final KeycloakHospitalContextResolver resolver;
+    private final IdleSessionGate idleSessionGate;
 
-    public KeycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver) {
+    public KeycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
+                                         IdleSessionGate idleSessionGate) {
         this.resolver = resolver;
+        this.idleSessionGate = idleSessionGate;
     }
 
     @Override
@@ -64,6 +70,29 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                 context = HospitalContextRequestOverrides.applyRequestOverrides(context, request);
                 HospitalContextHolder.setContext(context);
                 populated = true;
+
+                // ── Idle session timeout gate (v1.0 row 7) ────────────────
+                // Mirrors the legacy JwtAuthenticationFilter wiring so
+                // row 8's OIDC_REQUIRED=true cutover does not silently
+                // disable the idle gate for OIDC clients.
+                //
+                // TODO(row 8 / Keycloak Phase C): the OIDC resolver does
+                // not currently populate principalUserId — the realm
+                // export emits hospital_id + role_assignments only. Until
+                // a `user_id` (or equivalent) custom claim is mapped on
+                // the realm, the gate short-circuits on null userId
+                // (no-op, matching pre-row-7 behaviour). This wiring is
+                // in place so the moment the resolver receives a userId,
+                // enforcement turns on without further code changes.
+                if (idleSessionGate.shouldReject(context.getPrincipalUserId(), jwtAuth.getAuthorities())) {
+                    log.warn("[OIDC] Refusing request — user has been idle past the configured window");
+                    HospitalContextHolder.clear();
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
+                    return;
+                }
+                // Touch on the way through so the OIDC user's window resets.
+                idleSessionGate.touchIfHuman(context.getPrincipalUserId(), jwtAuth.getAuthorities());
             }
             filterChain.doFilter(request, response);
         } finally {

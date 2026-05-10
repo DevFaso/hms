@@ -69,6 +69,11 @@ class UserRoleHospitalAssignmentControllerTest {
     @MockitoBean
     private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
 
+    /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
+     *  IdleSessionGate. Slice context needs a mock or autowiring fails. */
+    @MockitoBean
+    private com.example.hms.security.IdleSessionGate idleSessionGate;
+
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {
         UUID userId = UUID.randomUUID();

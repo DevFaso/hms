@@ -4,6 +4,10 @@
 > If a prod build fails because Railway picks up the wrong
 > `Dockerfile`, check this file first — the problem is almost always
 > a dashboard override drifting away from the values below.
+>
+> For the project-loss / DB-restore / full-rebuild path, see
+> [disaster-recovery.md](./disaster-recovery.md). This file owns the
+> per-service config; that one owns the recovery sequence.
 
 ## Services
 
