@@ -439,7 +439,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void respondIdleTimeout(HttpServletResponse response) {
         if (!response.isCommitted()) {
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setHeader("WWW-Authenticate", IdleSessionGate.wwwAuthenticateChallenge());
+            response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
         }
     }
 

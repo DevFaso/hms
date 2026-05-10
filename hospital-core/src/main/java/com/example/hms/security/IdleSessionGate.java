@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -53,6 +54,15 @@ public class IdleSessionGate {
         "ROLE_PARTNER_WEBHOOK"
     };
 
+    /**
+     * The {@code WWW-Authenticate} challenge a 401 carries when the
+     * rejection is due to idle timeout. Lets the frontend interceptor
+     * render a "session timed out" toast instead of the generic
+     * "session ended" message.
+     */
+    public static final String WWW_AUTHENTICATE_CHALLENGE =
+        "Bearer realm=\"Hospital\", error=\"invalid_token\", error_description=\"idle_timeout\"";
+
     private final IdleSessionTracker tracker;
     private final Set<String> machineRoles;
 
@@ -94,15 +104,6 @@ public class IdleSessionGate {
         tracker.clear(userId);
     }
 
-    /**
-     * The standard {@code WWW-Authenticate} reason a 401 should carry
-     * when the rejection is due to idle timeout. Lets the frontend toast
-     * "session timed out" instead of the generic "session ended".
-     */
-    public static String wwwAuthenticateChallenge() {
-        return "Bearer realm=\"Hospital\", error=\"invalid_token\", error_description=\"idle_timeout\"";
-    }
-
     private boolean hasMachineRole(Collection<? extends GrantedAuthority> authorities) {
         if (authorities == null || authorities.isEmpty() || machineRoles.isEmpty()) {
             return false;
@@ -127,7 +128,7 @@ public class IdleSessionGate {
                 .forEach(out::add);
         }
         if (out.isEmpty()) {
-            for (String role : DEFAULT_MACHINE_ROLES) out.add(role);
+            Collections.addAll(out, DEFAULT_MACHINE_ROLES);
         }
         return Set.copyOf(out);
     }

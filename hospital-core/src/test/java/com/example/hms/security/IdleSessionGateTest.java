@@ -137,7 +137,7 @@ class IdleSessionGateTest {
     @Test
     @DisplayName("WWW-Authenticate challenge surfaces the idle_timeout reason")
     void wwwAuthenticateChallengeFormat() {
-        assertThat(IdleSessionGate.wwwAuthenticateChallenge())
+        assertThat(IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE)
             .contains("Bearer", "error=\"invalid_token\"", "error_description=\"idle_timeout\"");
     }
 }

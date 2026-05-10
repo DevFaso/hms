@@ -630,7 +630,7 @@ public class AuthController {
                     .build());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .header("WWW-Authenticate",
-                        com.example.hms.security.IdleSessionGate.wwwAuthenticateChallenge())
+                        com.example.hms.security.IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE)
                     .body(new MessageResponse(
                         "Session timed out due to inactivity. Please log in again."));
         }

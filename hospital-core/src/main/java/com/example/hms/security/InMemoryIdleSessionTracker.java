@@ -1,11 +1,13 @@
 package com.example.hms.security;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -43,9 +45,21 @@ public class InMemoryIdleSessionTracker implements IdleSessionTracker {
     private final Map<UUID, Long> expiresAt = new ConcurrentHashMap<>();
 
     private final Duration idleWindow;
+    private final Clock clock;
 
+    /** Production constructor — picked by Spring. Wraps the system clock. */
+    @Autowired
     public InMemoryIdleSessionTracker(@Value("${app.auth.idle-window:PT15M}") Duration idleWindow) {
+        this(idleWindow, Clock.systemDefaultZone());
+    }
+
+    /**
+     * Test constructor — accepts an injectable {@link Clock} so unit tests
+     * can advance time deterministically without {@code Thread.sleep}.
+     */
+    InMemoryIdleSessionTracker(Duration idleWindow, Clock clock) {
         this.idleWindow = idleWindow;
+        this.clock = clock;
     }
 
     @Override
@@ -61,7 +75,7 @@ public class InMemoryIdleSessionTracker implements IdleSessionTracker {
     @Override
     public void touch(UUID userId) {
         if (userId == null) return;
-        expiresAt.put(userId, System.currentTimeMillis() + idleWindow.toMillis());
+        expiresAt.put(userId, clock.millis() + idleWindow.toMillis());
     }
 
     @Override
@@ -69,7 +83,7 @@ public class InMemoryIdleSessionTracker implements IdleSessionTracker {
         if (userId == null) return false;
         Long expiry = expiresAt.get(userId);
         if (expiry == null) return true;
-        if (expiry <= System.currentTimeMillis()) {
+        if (expiry <= clock.millis()) {
             // Lazy cleanup so the next touch starts fresh.
             expiresAt.remove(userId, expiry);
             return true;
@@ -86,7 +100,7 @@ public class InMemoryIdleSessionTracker implements IdleSessionTracker {
     /** Evict entries whose idle window has already lapsed. Runs every 5 minutes. */
     @Scheduled(fixedRate = 300_000)
     public void evictExpired() {
-        long now = System.currentTimeMillis();
+        long now = clock.millis();
         int before = expiresAt.size();
         expiresAt.entrySet().removeIf(e -> e.getValue() <= now);
         int evicted = before - expiresAt.size();

@@ -88,7 +88,7 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                     log.warn("[OIDC] Refusing request — user has been idle past the configured window");
                     HospitalContextHolder.clear();
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setHeader("WWW-Authenticate", IdleSessionGate.wwwAuthenticateChallenge());
+                    response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
                     return;
                 }
                 // Touch on the way through so the OIDC user's window resets.

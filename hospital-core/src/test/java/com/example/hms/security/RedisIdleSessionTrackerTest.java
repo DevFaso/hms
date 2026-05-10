@@ -138,8 +138,12 @@ class RedisIdleSessionTrackerTest {
         UUID id = UUID.randomUUID();
         when(redisTemplate.hasKey(any()))
             .thenThrow(new QueryTimeoutException("redis blip"));
+        // Hoist tracker construction out of the lambda — Sonar S5778 wants
+        // each assertThatThrownBy lambda to invoke at most one throwable
+        // call so the exception's origin is unambiguous.
+        RedisIdleSessionTracker failClosed = tracker(false);
 
-        assertThatThrownBy(() -> tracker(false).isIdle(id))
+        assertThatThrownBy(() -> failClosed.isIdle(id))
             .isInstanceOf(QueryTimeoutException.class);
     }
 }
