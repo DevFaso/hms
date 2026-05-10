@@ -102,7 +102,17 @@ export default defineConfig({
       command: 'npm start',
       url: defaultBaseURL,
       reuseExistingServer: true,
-      timeout: 120_000,
+      // 120 s was tight in CI — `ng serve` cold-start on GitHub Actions
+      // ubuntu-latest regularly takes 100–110 s, leaving no headroom for
+      // the first /login request. Bumping to 180 s (kept conservative —
+      // local dev re-uses an existing server, so this only affects CI).
+      // Surfaces as the global-setup "authenticate as SuperAdmin" failure
+      // Copilot/Sonar flagged on PR #286.
+      timeout: 180_000,
+      // Mirror webServer stdout/stderr into the Playwright report so a
+      // future CI failure is debuggable from the artifact alone.
+      stdout: 'pipe',
+      stderr: 'pipe',
     },
   }),
 });

@@ -75,6 +75,13 @@ public class DispenseMapper {
             .substitutionReason(dto.getSubstitutionReason())
             .status(dto.getStatus() != null ? dto.getStatus() : DispenseStatus.COMPLETED)
             .notes(dto.getNotes())
+            // Roadmap row 4 / T-68: blank → null so the partial UNIQUE
+            // index (uq_disp_idempotency_key) ignores opted-out callers.
+            .idempotencyKey(blankToNull(dto.getIdempotencyKey()))
             .build();
+    }
+
+    private static String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value.trim();
     }
 }

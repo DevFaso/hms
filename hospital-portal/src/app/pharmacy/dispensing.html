@@ -17,6 +17,38 @@
     </div>
   </div>
 
+  <!-- Roadmap row 4 / T-68 — offline-queue banner. Renders only when the
+       user has dispenses waiting to sync, so it stays out of the way during
+       normal online use. The "Sync now" button is a manual escape hatch for
+       when the online event did not fire (Wi-Fi reconnect on some browsers
+       skips it). data-testid hooks let the Playwright + Karma specs pin
+       behavior without coupling to the localized text. -->
+  @if (pendingQueued() > 0) {
+    <output class="offline-queue-banner" data-testid="offline-dispense-banner" aria-live="polite">
+      <span class="material-symbols-outlined" aria-hidden="true">cloud_off</span>
+      <span data-testid="offline-pending-count">
+        {{ pendingQueued() }}
+        {{
+          pendingQueued() === 1
+            ? ('PHARMACY.OFFLINE_PENDING_ONE' | translate)
+            : ('PHARMACY.OFFLINE_PENDING_MANY' | translate)
+        }}
+      </span>
+      <button
+        type="button"
+        class="btn btn-sm btn-primary"
+        [disabled]="syncing()"
+        (click)="replayQueue()"
+        data-testid="offline-sync-now"
+      >
+        @if (syncing()) {
+          <span class="spinner" aria-hidden="true"></span>
+        }
+        {{ 'PHARMACY.OFFLINE_SYNC_NOW' | translate }}
+      </button>
+    </output>
+  }
+
   <!-- Dispensing Form (slide-in when a prescription is selected) -->
   @if (showForm()) {
     <div class="form-card form-card-accent">

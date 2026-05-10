@@ -177,6 +177,11 @@
               class="toggle-password"
               (click)="toggleBootstrapPasswordVisibility()"
               tabindex="-1"
+              [attr.aria-label]="
+                (showBootstrapPassword ? 'COMMON.HIDE_PASSWORD' : 'COMMON.SHOW_PASSWORD')
+                  | translate
+              "
+              [attr.aria-pressed]="showBootstrapPassword"
             >
               @if (showBootstrapPassword) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -332,6 +337,10 @@
               class="toggle-password"
               (click)="togglePasswordVisibility()"
               tabindex="-1"
+              [attr.aria-label]="
+                (showPassword ? 'COMMON.HIDE_PASSWORD' : 'COMMON.SHOW_PASSWORD') | translate
+              "
+              [attr.aria-pressed]="showPassword"
             >
               @if (showPassword) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

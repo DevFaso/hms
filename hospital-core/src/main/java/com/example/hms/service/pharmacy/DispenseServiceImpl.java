@@ -31,6 +31,9 @@ import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -60,6 +63,26 @@ public class DispenseServiceImpl implements DispenseService {
     private final PharmacyServiceSupport support;
     private final CdsCheckService cdsCheckService;
 
+    /**
+     * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
+     * @Transactional persistence call traverses the Spring AOP proxy and the
+     * race-recovery {@code findByIdempotencyKey} below it runs OUTSIDE the
+     * rolled-back transaction. {@code @Lazy} is required to break the
+     * chicken-and-egg between bean construction and self-injection.
+     *
+     * <p>Field injection (not constructor) is intentional: {@link
+     * RequiredArgsConstructor} would force this field into the constructor
+     * signature, which Spring cannot satisfy at construction time.
+     *
+     * <p>Stays {@code null} in pure-unit tests (no Spring container);
+     * {@link #createDispense} falls back to a direct call in that case,
+     * which is correct because tests never exercise the AOP transaction
+     * machinery anyway.
+     */
+    @Lazy
+    @Autowired
+    private DispenseServiceImpl self;
+
     private static final String AUDIT_ENTITY = "DISPENSE";
 
     private static final Set<PrescriptionStatus> DISPENSABLE_STATUSES = Set.of(
@@ -68,9 +91,87 @@ public class DispenseServiceImpl implements DispenseService {
             PrescriptionStatus.PARTIALLY_FILLED
     );
 
+    /**
+     * Roadmap row 4 / T-68 — orchestrator that enforces idempotent replay
+     * semantics around the transactional create body in
+     * {@link #createDispenseTransactionally(DispenseRequestDTO)}.
+     *
+     * <p>Three paths:
+     * <ol>
+     *   <li><b>Pre-check fast path</b> — if the supplied idempotency key is
+     *       already on file, return the existing DTO without touching the
+     *       create transaction at all (no stock decrement, no audit, no SMS).</li>
+     *   <li><b>Normal create</b> — delegate through the AOP proxy to the
+     *       transactional inner method.</li>
+     *   <li><b>Race recovery</b> — if two concurrent POSTs both pass the
+     *       pre-check (each sees an empty lookup) and the second hits the
+     *       V94 partial UNIQUE index ({@code uq_disp_idempotency_key}),
+     *       Spring translates the constraint violation to
+     *       {@link DataIntegrityViolationException}; the @Transactional
+     *       proxy rolls back our stock decrement and bubbles the exception
+     *       here. We re-look up by key — guaranteed to find the winning
+     *       row at this point — and return that DTO. Copilot review on
+     *       PR #287 caught the original race window.</li>
+     * </ol>
+     *
+     * <p>Intentionally NOT @Transactional: the recovery {@code findByIdempotencyKey}
+     * must execute in its own (auto-commit) read so it sees the winning
+     * insert that committed in another transaction. Putting @Transactional
+     * on this wrapper would put the lookup in the same rolled-back tx and
+     * defeat the purpose.
+     */
+    @Override
+    public DispenseResponseDTO createDispense(DispenseRequestDTO dto) {
+        // Pre-check fast path — short-circuit a replayed POST from the
+        // offline pharmacy queue BEFORE any side-effects fire. A blank/null
+        // key falls through to the normal create path.
+        String idempotencyKey = normalize(dto.getIdempotencyKey());
+        if (idempotencyKey != null) {
+            var replay = dispenseRepository.findByIdempotencyKey(idempotencyKey);
+            if (replay.isPresent()) {
+                log.info("[DISPENSE] idempotency replay hit — returning existing dispense id={} for key={}",
+                        replay.get().getId(), idempotencyKey);
+                return dispenseMapper.toResponseDTO(replay.get());
+            }
+        }
+
+        // self may be null in pure-unit tests (no Spring container). Direct
+        // call in that case — correctness equivalent because tests never
+        // exercise the AOP transaction or the unique-index race.
+        DispenseService delegate = self != null ? self : this;
+        try {
+            return delegate.createDispenseTransactionally(dto);
+        } catch (DataIntegrityViolationException ex) {
+            if (idempotencyKey == null) {
+                // Some other unique-constraint hit (not idempotency); not
+                // ours to recover from.
+                throw ex;
+            }
+            // Race recovery — the @Transactional proxy already rolled back
+            // our stock decrement; the winning insert from the racing tx is
+            // now committed and visible.
+            var winner = dispenseRepository.findByIdempotencyKey(idempotencyKey);
+            if (winner.isPresent()) {
+                log.info("[DISPENSE] idempotency race resolved — returning winner dispense id={} for key={}",
+                        winner.get().getId(), idempotencyKey);
+                return dispenseMapper.toResponseDTO(winner.get());
+            }
+            // Constraint violation but no winning row — should not happen
+            // (the V94 index is the only constraint that could fire on this
+            // path) but be defensive: surface the original exception so the
+            // caller sees the real failure rather than a silent success.
+            throw ex;
+        }
+    }
+
+    /**
+     * Transactional body of {@link #createDispense}. Public so the AOP proxy
+     * can intercept; not invoked directly by callers — go through
+     * {@link #createDispense} so idempotency + race recovery apply.
+     */
     @Override
     @Transactional
-    public DispenseResponseDTO createDispense(DispenseRequestDTO dto) {
+    public DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         // Validate quantities at the boundary (positive, dispensed <= requested)
@@ -350,6 +451,21 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     // ── Private helpers ──
+
+    /**
+     * Roadmap row 4 / T-68 — trims and blank-coalesces the client-supplied
+     * idempotency key. Returns {@code null} for any input that should NOT
+     * participate in dedup (null, empty, whitespace-only). Mirrors the
+     * mapper's blank-to-null contract so the lookup and the eventual
+     * persisted column agree on what "no key" means.
+     */
+    private static String normalize(String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return null;
+        }
+        String trimmed = idempotencyKey.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
         if (requested == null || requested.signum() <= 0) {
