@@ -46,6 +46,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final OrganizationLifecycleStatusService lifecycleStatusService;
     private final HospitalLifecycleStatusService hospitalLifecycleStatusService;
     private final GlobalSessionRevocationService globalSessionRevocationService;
+    private final IdleSessionGate idleSessionGate;
 
     private static final Set<String> EXACT_SKIP_PATHS = Set.of(
         "/", "/index.html", "/favicon.ico",
@@ -240,12 +241,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return false;
         }
 
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
+        // Reject requests where the user has gone idle past the configured
+        // window. Service-to-server clients (FHIR / HL7 / CDS / DHIS2 /
+        // partner webhook) bypass via the role carve-out inside the gate.
+        // Sits AFTER applyAuthentication so we have a stable userId UUID,
+        // and BEFORE the tenant-lifecycle gate so an idle clinician sees
+        // an idle 401 (not a 423 tenant-blocked) when both apply.
+        if (idleSessionGate.shouldReject(context.getPrincipalUserId(),
+            authentication == null ? null : authentication.getAuthorities())) {
+            log.warn("[JWT] Refusing request on path={} — user has been idle past the configured window", path);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            respondIdleTimeout(response);
+            return false;
+        }
+
         // ── Tenant lifecycle gate (MVP-2) ────────────────────────────────
         // After authentication has populated the HospitalContext, refuse
         // requests whose user is attached to an org in a non-active state
         // (SUSPENDED / ARCHIVED / PENDING_PURGE / PURGED). Super admins
         // bypass — they need cross-tenant access to manage these orgs.
-        if (isBlockedByTenantLifecycle(HospitalContextHolder.getContextOrEmpty())) {
+        if (isBlockedByTenantLifecycle(context)) {
             log.warn("[JWT] Refusing request on path={} — user's organization is blocked by tenant lifecycle", path);
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
@@ -253,6 +274,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             respondTenantBlocked(response);
             return false;
         }
+
+        // Touch the idle window only after every other gate has passed —
+        // a rejected request must not extend the user's session.
+        idleSessionGate.touchIfHuman(context.getPrincipalUserId(),
+            authentication == null ? null : authentication.getAuthorities());
         return true;
     }
 
@@ -402,6 +428,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         if (log.isTraceEnabled()) {
             log.trace("[JWT] Responded 401 for missing user '{}'", subject);
+        }
+    }
+
+    /**
+     * 401 with a {@code WWW-Authenticate: ... error_description="idle_timeout"}
+     * challenge so the frontend interceptor can render a session-timed-out
+     * toast instead of the generic "session ended" message.
+     */
+    private void respondIdleTimeout(HttpServletResponse response) {
+        if (!response.isCommitted()) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setHeader("WWW-Authenticate", IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE);
         }
     }
 
