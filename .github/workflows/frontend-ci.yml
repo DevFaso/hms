@@ -49,3 +49,50 @@ jobs:
 
       - name: Unit tests
         run: npm run test:headless
+
+  # v1.0 row 10 — axe-core/playwright a11y smoke. Runs in its own job so
+  # the Chromium download (≈170 MB) and Angular dev-server startup (≈90 s)
+  # don't slow down the lint/build/test path that every PR needs. Fails
+  # on `serious` or `critical` violations only — see
+  # hospital-portal/e2e/a11y.spec.ts for the full ruleset and
+  # impact-filtering rationale.
+  a11y-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: hospital-portal/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      # Use the locally-installed playwright binary directly instead of
+      # `npx playwright …`. SonarCloud flagged the npx form on PR #286 as
+      # a security hotspot ("Define exact package version to avoid
+      # installing unverified releases"); this resolves it because the
+      # binary is the one resolved by the previous `npm ci` step from
+      # the pinned @playwright/test version in package.json. We pass
+      # `--with-deps chromium` so apt installs the Chromium browser
+      # libs — the `--with-deps` step legitimately needs to run a shell
+      # script with sudo, which is why the previous step DID use
+      # `--ignore-scripts` for `npm ci` (only the playwright browser
+      # install is allowed to run scripts here).
+      - name: Install Playwright browsers
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Run axe-core smoke
+        run: npm run e2e:a11y
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: hospital-portal/playwright-report/
+          retention-days: 7

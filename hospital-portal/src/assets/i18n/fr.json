@@ -1032,6 +1032,8 @@
     "ALL_HOSPITALS": "Hôpitaux",
     "BACK": "Retour",
     "BACK_TO_CONTROL_TOWER": "Retour à la tour de contrôle",
+    "HIDE_PASSWORD": "Masquer le mot de passe",
+    "SHOW_PASSWORD": "Afficher le mot de passe",
     "CANCEL": "Annuler",
     "CANCELLING": "Annulation…",
     "CANNOT_UNDO": "Cette action est irréversible.",
