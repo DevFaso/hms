@@ -1336,4 +1336,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V94: v1.0 / Pharmacy / T-68 offline dispense queue (roadmap row 4)
+         Adds an optional idempotency_key column on clinical.dispenses + a
+         partial UNIQUE index so the offline IndexedDB queue can replay
+         POST /pharmacy/dispense without producing duplicate rows / stock
+         decrements / ready-for-pickup SMS. Pure DDL — splitStatements true;
+         every statement is wrapped IF NOT EXISTS so re-running is a no-op.
+         ================================================================= -->
+    <changeSet id="V94-dispense-idempotency-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V94__dispense_idempotency_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -12,6 +12,16 @@ public interface DispenseService {
 
     DispenseResponseDTO createDispense(DispenseRequestDTO dto);
 
+    /**
+     * Transactional body of {@link #createDispense}. Exposed on the interface
+     * (not on the impl alone) so a Spring AOP proxy can intercept the
+     * self-invocation that {@link #createDispense} performs to enforce
+     * idempotency-key race recovery — see DispenseServiceImpl Javadoc for
+     * the three-path flow. Callers should NOT invoke this directly; they
+     * lose pre-check + race-recovery semantics if they do.
+     */
+    DispenseResponseDTO createDispenseTransactionally(DispenseRequestDTO dto);
+
     DispenseResponseDTO getDispense(UUID id);
 
     Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable);

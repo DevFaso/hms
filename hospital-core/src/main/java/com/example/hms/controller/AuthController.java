@@ -110,6 +110,16 @@ public class AuthController {
      */
     private final boolean oidcRequired;
 
+    /**
+     * Roadmap row 8 — OIDC issuer used to build the {@code Link:
+     * rel="oauth2-issuer"} header (per RFC 8414) on 410 responses, so a
+     * client receiving the runbook copy can self-discover the SSO
+     * endpoint without operator intervention. Empty string means no
+     * Link header is emitted; the JSON {@code message} field is still
+     * returned so humans can read the instruction.
+     */
+    private final String oidcIssuerUri;
+
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
             AuthBootstrapService authBootstrapService,
@@ -129,7 +139,8 @@ public class AuthController {
             RefreshTokenCookieService refreshTokenCookieService,
             @Value("${app.frontend.base-url}") String frontendBaseUrl,
             @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles,
-            @Value("${app.auth.oidc.required:false}") boolean oidcRequired) {
+            @Value("${app.auth.oidc.required:false}") boolean oidcRequired,
+            @Value("${app.auth.oidc.issuer-uri:}") String oidcIssuerUri) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.authBootstrapService = authBootstrapService;
@@ -150,6 +161,7 @@ public class AuthController {
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles;
         this.oidcRequired = oidcRequired;
+        this.oidcIssuerUri = oidcIssuerUri == null ? "" : oidcIssuerUri.trim();
 
         // KC-5 cutover signal: surface the gate state in the startup log so the
         // ops on-call running the cutover runbook can confirm the flip took
@@ -211,9 +223,8 @@ public class AuthController {
         if (oidcRequired) {
             log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
                     loginRequest.getUsername());
-            return ResponseEntity.status(HttpStatus.GONE)
-                    .body(new MessageResponse(
-                            "Legacy username/password login is disabled. Sign in via Single Sign-On."));
+            return legacyIssuerGone(
+                    "Legacy username/password login is disabled. Sign in via Single Sign-On.");
         }
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
@@ -549,9 +560,8 @@ public class AuthController {
         // via Keycloak.
         if (oidcRequired) {
             log.warn("🔄 [REFRESH] Rejected — legacy issuer disabled (app.auth.oidc.required=true)");
-            return ResponseEntity.status(HttpStatus.GONE)
-                    .body(new MessageResponse(
-                            "Legacy token refresh is disabled. Sign in via Single Sign-On."));
+            return legacyIssuerGone(
+                    "Legacy token refresh is disabled. Sign in via Single Sign-On.");
         }
 
         // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
@@ -1101,6 +1111,27 @@ public class AuthController {
             return false;
         }
         return roles.stream().anyMatch(mfaRequiredRoles::contains);
+    }
+
+    /**
+     * Roadmap row 8 — uniform 410 Gone response for the two legacy
+     * issuer endpoints. Adds an RFC 8414 {@code Link: rel="oauth2-issuer"}
+     * header pointing at the OIDC discovery document so clients can
+     * self-discover the SSO endpoint without operator intervention. The
+     * header is only emitted when {@code app.auth.oidc.issuer-uri} is
+     * non-empty — local dev runs without OIDC configured still get the
+     * runbook copy in the JSON body.
+     */
+    private ResponseEntity<Object> legacyIssuerGone(String userFacingMessage) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.GONE);
+        if (!oidcIssuerUri.isEmpty()) {
+            String discovery = oidcIssuerUri.endsWith("/")
+                    ? oidcIssuerUri + ".well-known/openid-configuration"
+                    : oidcIssuerUri + "/.well-known/openid-configuration";
+            builder = builder.header("Link",
+                    "<" + discovery + ">; rel=\"oauth2-issuer\"; type=\"application/json\"");
+        }
+        return builder.body(new MessageResponse(userFacingMessage));
     }
 
     /**

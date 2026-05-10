@@ -106,24 +106,32 @@ lines below — copy them into the change log:
 
 ### 3. Smoke verify (T+0 to T+5)
 
+The 410 invariants are packaged in
+[`scripts/keycloak/cutover-smoke.sh`](../../scripts/keycloak/cutover-smoke.sh)
+so the same exact bytes can run from a laptop, a CI job, or a cron monitor.
 From an external host (not the backend nodes):
 
 ```bash
-# Legacy login must now return 410 Gone with the runbook copy.
-curl -sS -o /tmp/login.json -w '%{http_code}\n' \
-  -X POST "https://api.<env>.example.com/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username":"smoketest","password":"whatever"}'
-# expect: 410
-jq -r .message /tmp/login.json
-# expect: "Legacy username/password login is disabled. Sign in via Single Sign-On."
+API_BASE_URL=https://api.<env>.example.com/api \
+ISSUER_URI=https://keycloak.<env>.example.com/realms/hms \
+  scripts/keycloak/cutover-smoke.sh
+# expect: "[smoke] OK — Phase C cutover invariants hold against ..."
+```
 
-# Legacy refresh must return 410 too.
-curl -sS -X POST "https://api.<env>.example.com/api/auth/token/refresh" \
-  -H "Content-Type: application/json" -d '{}' -o /dev/null -w '%{http_code}\n'
-# expect: 410
+The script asserts:
 
-# Resource server must still validate KC-issued JWTs.
+1. `POST /auth/login` returns **410 Gone** with the exact runbook copy in the
+   JSON `message` field.
+2. The 410 response carries
+   `Link: <issuer/.well-known/openid-configuration>; rel="oauth2-issuer"` so
+   clients can self-discover the SSO endpoint (RFC 8414).
+3. `POST /auth/token/refresh` returns **410 Gone** with its own runbook copy.
+4. `GET /auth/ping` returns **200** (connectivity sanity).
+
+After the script is green, manually verify the resource server still validates
+KC-issued JWTs:
+
+```bash
 TOKEN=$(curl -sS -X POST \
   "https://keycloak.<env>.example.com/realms/hms/protocol/openid-connect/token" \
   -d "grant_type=password&client_id=hms-portal&username=$SMOKETEST_USER&password=$SMOKETEST_PASS&scope=openid profile email roles hms-claims" \
@@ -134,7 +142,8 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 # expect: 200
 ```
 
-If any of the three checks deviate, **roll back** (§Rollback below).
+If the smoke script reports any failure or the SSO `users/me` check is not
+200, **roll back** (§Rollback below).
 
 ### 4. Drive an SSO login from each surface (T+5 to T+15)
 

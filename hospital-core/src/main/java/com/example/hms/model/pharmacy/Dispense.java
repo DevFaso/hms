@@ -137,4 +137,26 @@ public class Dispense extends BaseEntity {
     @Column(name = "dispensed_at", nullable = false)
     @Builder.Default
     private LocalDateTime dispensedAt = LocalDateTime.now();
+
+    /**
+     * Roadmap row 4 / T-68 — optional client-supplied idempotency key for
+     * POST /pharmacy/dispense replay from the offline queue.
+     *
+     * <p>Generation contract (frontend):
+     * {@code <userId>-<prescriptionId>-<isoTimestampWithNanos>} — stable
+     * across retries of the same logical action, distinct across two
+     * deliberate dispenses of the same prescription seconds apart.
+     *
+     * <p>Resolution contract (DispenseServiceImpl.createDispense):
+     * if a row with this key already exists, the second POST returns the
+     * existing record and skips every side-effect (stock decrement, audit,
+     * SMS). Default {@code null} preserves today's behaviour for callers
+     * that do not opt in.
+     *
+     * <p>Backed by V94 + a partial UNIQUE index ({@code uq_disp_idempotency_key})
+     * so concurrent replays collide at the DB layer.
+     */
+    @Size(max = 64)
+    @Column(name = "idempotency_key", length = 64, unique = true)
+    private String idempotencyKey;
 }

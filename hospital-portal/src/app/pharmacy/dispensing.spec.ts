@@ -6,7 +6,8 @@ import { DispensingComponent } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
-import { of, throwError } from 'rxjs';
+import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
+import { BehaviorSubject, of, throwError } from 'rxjs';
 
 describe('DispensingComponent', () => {
   let component: DispensingComponent;
@@ -92,6 +93,21 @@ describe('DispensingComponent', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
 
+    // Roadmap row 4 / T-68 — substitute the offline queue with a stub so the
+    // existing dispensing tests don't open the real IndexedDB. The pending$
+    // BehaviorSubject keeps the component's subscription happy with a
+    // deterministic value.
+    const offlineQueueStub: Pick<
+      OfflineDispenseQueueService,
+      'pending$' | 'pending' | 'enqueue' | 'replayAll' | 'clear'
+    > = {
+      pending$: new BehaviorSubject<number>(0).asObservable(),
+      pending: 0,
+      enqueue: () => Promise.resolve({ id: 'k', request: {} as any, enqueuedAt: 0, attempts: 0 }),
+      replayAll: () => Promise.resolve({ succeeded: 0, failed: 0, remaining: 0 }),
+      clear: () => Promise.resolve(),
+    };
+
     await TestBed.configureTestingModule({
       imports: [DispensingComponent, TranslateModule.forRoot()],
       providers: [
@@ -100,6 +116,7 @@ describe('DispensingComponent', () => {
         { provide: PharmacyService, useValue: pharmacySvc },
         { provide: AuthService, useValue: authSvc },
         { provide: ToastService, useValue: toastSvc },
+        { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
       ],
     }).compileComponents();
 

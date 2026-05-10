@@ -4587,6 +4587,9 @@
   "PHARMACY": {
     "ATC_FORMAT_HINT": "El código ATC debe seguir el formato OMS L##LL## (p. ej. J01CA04).",
     "RXNORM_FORMAT_HINT": "El código RxNorm debe tener entre 1 y 12 dígitos.",
+    "OFFLINE_PENDING_ONE": "dispensación pendiente de sincronizar",
+    "OFFLINE_PENDING_MANY": "dispensaciones pendientes de sincronizar",
+    "OFFLINE_SYNC_NOW": "Sincronizar ahora",
     "ROUTE": "Encaminar",
     "ROUTE_HINT": "Abrir el encaminamiento de stock para esta receta",
     "LOT_NUMBER": "Número de lote",

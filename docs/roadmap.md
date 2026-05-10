@@ -9,7 +9,15 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
   auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
   Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
-Last updated: **2026-05-09**. Update both files together when scope moves.
+Last updated: **2026-05-10**. Update both files together when scope moves.
+
+> **2026-05-10 update — v1.0 finishing line.** Rows 4 (T-68 offline dispense
+> queue), 5 (T-71 Playwright E2E), 6 (T-72 perf baseline), and 8 (Keycloak
+> Phase C cutover) flipped from `not-started` to `completed`. Of the
+> twelve v1.0 rows, only the dependent pair — row 11 (Keyboard navigation
+> pass, blocked on row 10's PR) and row 13 (`v1.0.0-rc1` cut, gates on
+> all of v1.0) — and row 10 (axe-core/playwright smoke, PR pending) remain.
+> See [`feat/v1.0-finishing-rows-4-5-6-8`](https://github.com/DevFaso/hms/tree/feat/v1.0-finishing-rows-4-5-6-8).
 
 ## Where the project is today
 
