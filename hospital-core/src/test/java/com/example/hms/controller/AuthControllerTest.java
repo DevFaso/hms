@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.service.AuthBootstrapService;
+import com.example.hms.controller.support.AuthControllerProperties;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.repository.UserRepository;
@@ -50,7 +51,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         pattern = "com\\.example\\.hms\\.security\\..*"
     )
 )
-@org.springframework.test.context.TestPropertySource(properties = "app.mfa.required-roles=")
+// AuthControllerProperties is a @Component but @WebMvcTest doesn't
+// auto-scan components — import it explicitly so the controller's
+// constructor dependency resolves.
+@org.springframework.context.annotation.Import(AuthControllerProperties.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+    "app.mfa.required-roles=",
+    "app.frontend.base-url=https://localhost",
+})
 class AuthControllerTest {
 
     @Autowired private MockMvc mockMvc;
