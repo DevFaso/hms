@@ -31,7 +31,7 @@ public class TreatmentServiceImpl implements TreatmentService {
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "treatment not found" appears 3x in this file.
-    private static final String TREATMENT_NOT_FOUND_KEY = "treatment.notFound";
+    private static final String TREATMENT_NOT_FOUND_KEY = "treatment.notfound";
 
     private final TreatmentRepository treatmentRepository;
     private final DepartmentRepository departmentRepository;
