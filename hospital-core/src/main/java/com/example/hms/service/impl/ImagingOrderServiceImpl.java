@@ -18,6 +18,8 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,20 @@ import java.util.UUID;
 public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
+
+    /**
+     * Self-reference for proxy-routed internal calls
+     * ({@link #getAllOrders(ImagingOrderStatus)}
+     * → {@link #getOrdersByHospital(UUID, ImagingOrderStatus)}).
+     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
+     * rationale and pattern docstring.
+     */
+    private ImagingOrderService self;
+
+    @Autowired
+    public void setSelf(@Lazy ImagingOrderService self) {
+        this.self = self;
+    }
 
     private final ImagingOrderRepository imagingOrderRepository;
     private final PatientRepository patientRepository;
@@ -198,7 +214,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         // ── Tenant isolation: non-superadmin scoped to active hospital ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            return getOrdersByHospital(activeHospitalId, status);
+            // Sonar S6809: route through the proxy so the inner
+            // method's @Transactional(readOnly=true) is honored.
+            return self.getOrdersByHospital(activeHospitalId, status);
         }
         List<ImagingOrder> orders;
         if (status != null) {

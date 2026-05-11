@@ -28,6 +28,8 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AdmissionService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +47,20 @@ import java.util.UUID;
 public class AdmissionServiceImpl implements AdmissionService {
     private static final String DEPARTMENT_NOT_FOUND_MSG = "Department not found";
     private static final String ADMISSION_NOT_FOUND_MSG = "Admission not found";
+
+    /**
+     * Self-reference for proxy-routed internal calls
+     * ({@link #getAllAdmissions(String, LocalDateTime, LocalDateTime)}
+     * → {@link #getAdmissionsByHospital(UUID, String, LocalDateTime, LocalDateTime)}).
+     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
+     * rationale and pattern docstring.
+     */
+    private AdmissionService self;
+
+    @Autowired
+    public void setSelf(@Lazy AdmissionService self) {
+        this.self = self;
+    }
 
     private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EnumSet.of(
             EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
@@ -271,7 +287,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         // ── Tenant isolation: non-superadmin must be scoped ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            return getAdmissionsByHospital(activeHospitalId, status, startDate, endDate);
+            // Sonar S6809: route through the proxy so the inner
+            // method's @Transactional(readOnly=true) is honored.
+            return self.getAdmissionsByHospital(activeHospitalId, status, startDate, endDate);
         }
         if (status != null && !status.isEmpty()) {
             AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
