@@ -11,6 +11,36 @@ The repo's authoritative roadmap and per-MVP narrative live in
 this file is the migration-keyed quick reference for operators
 running deploys.
 
+## [v1.0.0-rc1] — TBD-cut-date (release candidate)
+
+**Status as of materials landing:** the rc1 cut materials are
+prepped on branch `feat/v1.0.0-rc1-materials` (roadmap row 13).
+The signed tag has not yet been pushed; the actual cut is performed
+by the release manager via [scripts/cut-rc1.sh](scripts/cut-rc1.sh).
+This heading takes the cut date when the script runs.
+
+v1.0.0-rc1 is the cumulative SemVer release candidate for HMS v1.0
+GA. It bundles every roadmap row in the v1.0 horizon (rows 2 – 12
+of [docs/roadmap.csv](docs/roadmap.csv)):
+
+- Clinical Safety: CDS Hooks expansion + drug-drug interaction check
+- Pharmacy: T-68 offline dispense queue + T-71 Playwright E2E + T-72 perf baseline
+- Security: server-side idle session timeout + Keycloak Phase C cutover
+- Operations: disaster-recovery runbook
+- Accessibility: axe-core / Playwright smoke + keyboard navigation pass (WCAG 2.1 AA)
+- i18n: FR completeness gate (CI-enforced ≥ 99% parity)
+
+The full release notes live in
+[docs/releases/v1.0.0-rc1.md](docs/releases/v1.0.0-rc1.md). The
+freeze policy that begins the moment the tag is pushed lives in
+[docs/runbooks/release-soak-protocol.md](docs/runbooks/release-soak-protocol.md).
+
+This heading sits above the migration-keyed entries below because
+SemVer release tags and the migration high-water mark live at
+different layers. v1.0.0-rc1 will be cut at the migration
+high-water mark of `main` at cut time (currently `V96`; `V89`
+joins if the MVP-c3 promote chain lands first).
+
 ## [Unreleased] — MVP-c3 (branch `feature/super-admin-mvp-c3-foot-guns`)
 
 Closes the two pre-launch foot-guns + the platform-config audit gap +
