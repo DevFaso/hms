@@ -1280,6 +1280,19 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     }
 
     private UserRoleHospitalAssignment createAssignment(User user, Hospital hospital, Role role, User registeredBy) {
+        // Idempotent guard: the seeder is an ApplicationRunner and re-runs on
+        // every dev boot. Without this check, every boot would insert another
+        // (user, hospital, role) row — observed in dev as duplicate
+        // ROLE_PATIENT assignments on the same user/hospital across reboots.
+        // Mirrors the sibling guard in ensureGlobalAssignment for global
+        // (hospital-less) assignments.
+        Optional<UserRoleHospitalAssignment> existing =
+            assignmentRepository.findByUserIdAndHospitalIdAndRoleId(
+                user.getId(), hospital.getId(), role.getId());
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
         String assignmentCode = generateAssignmentCode(hospital.getCode(), role.getCode());
         UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
             .assignmentCode(assignmentCode)
