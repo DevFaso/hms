@@ -27,6 +27,8 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
@@ -49,6 +51,20 @@ import java.util.stream.Collectors;
 public class ConsultationServiceImpl implements ConsultationService {
 
     private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
+
+    /**
+     * Self-reference for proxy-routed internal calls
+     * ({@link #getAllConsultations(ConsultationStatus)}
+     * → {@link #getConsultationsForHospital(UUID, ConsultationStatus)}).
+     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
+     * rationale and pattern docstring.
+     */
+    private ConsultationService self;
+
+    @Autowired
+    public void setSelf(@Lazy ConsultationService self) {
+        this.self = self;
+    }
 
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
@@ -170,7 +186,9 @@ public class ConsultationServiceImpl implements ConsultationService {
         // ── Tenant isolation: non-superadmin scoped to active hospital ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            return getConsultationsForHospital(activeHospitalId, status);
+            // Sonar S6809: route through the proxy so the inner
+            // method's @Transactional(readOnly=true) is honored.
+            return self.getConsultationsForHospital(activeHospitalId, status);
         }
         List<Consultation> consultations;
         if (status != null) {

@@ -145,6 +145,11 @@ class TreatmentPlanServiceImplTest {
                 .status(TreatmentPlanStatus.DRAFT)
                 .problemStatement("Pain management")
                 .build();
+
+        // Sonar S6809: production wires `self` via setSelf(@Lazy ...).
+        // Point self at the SUT here so listAll(...) → self.listByHospital(...)
+        // doesn't NPE in the unit test.
+        service.setSelf(service);
     }
 
     // ---- create ----

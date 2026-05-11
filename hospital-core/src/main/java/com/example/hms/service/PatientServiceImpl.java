@@ -81,7 +81,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -113,6 +115,33 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+
+    /**
+     * Self-reference injected as a proxy so internal calls
+     * ({@link #backfillMissingPatients()} → {@link #createPatient(PatientRequestDTO, Locale)})
+     * route through the Spring transaction proxy instead of being
+     * direct in-class invocations that bypass it.
+     *
+     * <p>Sonar S6809 ("Call transactional methods via an injected
+     * dependency instead of directly via 'this'"). The outer method
+     * is also {@code @Transactional} so today the inner method's
+     * REQUIRED propagation joins the outer tx anyway and behaviour
+     * is correct — but the inner annotation would become silently
+     * load-bearing the day someone weakens or removes the outer
+     * one. Keep the annotations honest.</p>
+     *
+     * <p>{@code @Lazy} breaks the otherwise-circular constructor
+     * dependency Spring would detect (this bean depending on
+     * itself). Setter injection (rather than adding to the Lombok-
+     * generated {@code @RequiredArgsConstructor}) keeps the existing
+     * constructor untouched.</p>
+     */
+    private PatientService self;
+
+    @Autowired
+    public void setSelf(@Lazy PatientService self) {
+        this.self = self;
+    }
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String MSG_USER_NOT_FOUND_PREFIX = "User not found with ID: ";
@@ -501,7 +530,9 @@ public class PatientServiceImpl implements PatientService {
                 .emergencyContactRelationship(DEFAULT_UNKNOWN)
                 .isActive(true)
                 .build();
-            createPatient(dto, Locale.ENGLISH);
+            // Sonar S6809: route through the proxy so createPatient's
+            // own @Transactional is honored. See setSelf docstring.
+            self.createPatient(dto, Locale.ENGLISH);
         }
     }
 
