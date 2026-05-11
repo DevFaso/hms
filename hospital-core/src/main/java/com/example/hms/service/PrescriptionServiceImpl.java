@@ -45,6 +45,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private static final Logger logger = LoggerFactory.getLogger(PrescriptionServiceImpl.class);
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // i18n key for "prescription not found" appears 5x in this file.
+    private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
     private final PatientAllergyRepository patientAllergyRepository;
@@ -98,7 +102,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
         Prescription prescription = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
@@ -106,7 +110,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && prescription.getHospital() != null
                 && !prescription.getHospital().getId().equals(hospitalId)) {
             // Return 404 (not 403) to avoid info leakage
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
         return prescriptionMapper.toResponseDTO(prescription);
@@ -152,7 +156,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
         Prescription existing = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
         UUID currentUserId = authService.getCurrentUserId();
 
@@ -194,14 +198,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Transactional
     public void deletePrescription(UUID id, Locale locale) {
         Prescription prescription = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && prescription.getHospital() != null
                 && !prescription.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
         prescriptionRepository.deleteById(id);

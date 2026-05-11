@@ -68,7 +68,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User patientUser = userRepository.findByUsername(patientUsername)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
         Patient patient = patientRepository.findByUserId(patientUser.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + patientUsername));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
 
         User currentUser = getUserOrThrow(username);
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
@@ -100,6 +100,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private static final Logger log = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): this
+    // error-message prefix appears 3x in this file. Naming follows the
+    // existing USER_NOT_FOUND_PREFIX sibling above.
+    private static final String PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX = "Patient not found for username: ";
     private static final String APPOINTMENT_NOT_FOUND_MESSAGE = "Appointment not found";
     private static final String ROLE_SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
     private static final String ROLE_ADMIN_CODE = "ROLE_ADMIN";
@@ -368,7 +372,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername()))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + request.getPatientUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + request.getPatientUsername()));
         } else if (request.getPatientEmail() != null) {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
@@ -380,7 +384,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + authenticatedUsername));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
