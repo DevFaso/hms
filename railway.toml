@@ -8,6 +8,7 @@ dockerfilePath = "Dockerfile"
 watchPatterns = [
     "hospital-core/**",
     "Dockerfile",
+    ".dockerignore",
     "build.gradle",
     "settings.gradle",
     "gradle.properties",
