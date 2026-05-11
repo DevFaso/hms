@@ -1,7 +1,6 @@
 package com.example.hms.mapper.pharmacy;
 
 import com.example.hms.enums.RoutingDecisionStatus;
-import com.example.hms.enums.RoutingType;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;

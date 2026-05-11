@@ -996,15 +996,14 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private static com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO toCalendarEvent(com.example.hms.model.Appointment a) {
+        // Sonar S3358 (Pattern 8 of docs/SonarQubeInstructions.md):
+        // the original implementation packed three nested ternaries
+        // across L1002/1005/1007. Extracted into named helpers so each
+        // null-fallback step is independently readable / unit-testable.
         java.util.UUID providerId = a.getStaff() != null ? a.getStaff().getId() : null;
-        String providerName = a.getStaff() != null && a.getStaff().getFullName() != null
-            ? a.getStaff().getFullName()
-            : (a.getStaff() != null ? a.getStaff().getName() : null);
+        String providerName = resolveProviderName(a.getStaff());
         java.util.UUID patientId = a.getPatient() != null ? a.getPatient().getId() : null;
-        String patientName = a.getPatient() == null ? null
-            : ((a.getPatient().getFirstName() == null ? "" : a.getPatient().getFirstName())
-                + " "
-                + (a.getPatient().getLastName() == null ? "" : a.getPatient().getLastName())).trim();
+        String patientName = resolvePatientName(a.getPatient());
         java.time.LocalDateTime start = a.getAppointmentDate() == null || a.getStartTime() == null
             ? null : a.getAppointmentDate().atTime(a.getStartTime());
         java.time.LocalDateTime end = a.getAppointmentDate() == null || a.getEndTime() == null
@@ -1022,5 +1021,37 @@ public class AppointmentServiceImpl implements AppointmentService {
             a.getStatus() == null ? null : a.getStatus().name(),
             a.getReason()
         );
+    }
+
+    /**
+     * Prefer the staff's full name; fall back to plain name; null if no
+     * staff at all. Extracted from {@link #toCalendarEvent} to satisfy
+     * Sonar S3358 (Pattern 8). Behaviour byte-for-byte equivalent to
+     * the original nested ternary.
+     */
+    private static String resolveProviderName(com.example.hms.model.Staff staff) {
+        if (staff == null) {
+            return null;
+        }
+        if (staff.getFullName() != null) {
+            return staff.getFullName();
+        }
+        return staff.getName();
+    }
+
+    /**
+     * Compose a patient's display name from first + last with explicit
+     * empty-string fallbacks. Returns null when there is no patient.
+     * Extracted from {@link #toCalendarEvent} to satisfy Sonar S3358
+     * (Pattern 8). Behaviour byte-for-byte equivalent to the original
+     * nested ternaries.
+     */
+    private static String resolvePatientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        String first = patient.getFirstName() == null ? "" : patient.getFirstName();
+        String last = patient.getLastName() == null ? "" : patient.getLastName();
+        return (first + " " + last).trim();
     }
 }
