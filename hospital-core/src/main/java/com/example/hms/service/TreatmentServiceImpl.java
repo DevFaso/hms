@@ -29,6 +29,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TreatmentServiceImpl implements TreatmentService {
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // i18n key for "treatment not found" appears 3x in this file.
+    private static final String TREATMENT_NOT_FOUND_KEY = "treatment.notfound";
+
     private final TreatmentRepository treatmentRepository;
     private final DepartmentRepository departmentRepository;
     private final HospitalRepository hospitalRepository;
@@ -88,7 +92,7 @@ public class TreatmentServiceImpl implements TreatmentService {
     public TreatmentResponseDTO updateTreatment(UUID id, TreatmentRequestDTO dto, Locale locale) {
         Treatment treatment = treatmentRepository.findWithAssignmentById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("treatment.notFound", new Object[]{id}, locale)));
+                        messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
 
         treatmentValidationService.validateTreatmentUpdate(treatment, dto, locale);
 
@@ -120,13 +124,13 @@ public class TreatmentServiceImpl implements TreatmentService {
     public TreatmentResponseDTO getTreatmentById(UUID id, Locale locale, String language) {
         Treatment treatment = treatmentRepository.findWithAssignmentAndUserById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage("treatment.notFound", new Object[]{id}, locale)));
+                        messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale)));
 
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && treatment.getHospital() != null
                 && !activeHospitalId.equals(treatment.getHospital().getId())) {
             throw new ResourceNotFoundException(
-                    messageSource.getMessage("treatment.notFound", new Object[]{id}, locale));
+                    messageSource.getMessage(TREATMENT_NOT_FOUND_KEY, new Object[]{id}, locale));
         }
 
         return treatmentMapper.toTreatmentResponseDTO(treatment, language);

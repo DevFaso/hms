@@ -48,6 +48,13 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // KPI-card trend string TREND_STABLE appears 4x in this file. The
+    // companion values "up" / "down" appear only twice each so Sonar
+    // didn't flag them; if a third occurrence lands, extract both
+    // here following the same pattern.
+    private static final String TREND_STABLE = "stable";
+
     private final StaffRepository staffRepository;
     private final AppointmentRepository appointmentRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -261,7 +268,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 .label("Appointments Today")
                 .value(appointmentsToday)
                 .unit("scheduled")
-                .trend("stable")
+                .trend(TREND_STABLE)
                 .build());
 
         // --- Pending lab results ---
@@ -277,7 +284,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 .label("Pending Results")
                 .value((int) Math.min(pendingLabs, Integer.MAX_VALUE))
                 .unit("results")
-                .trend(pendingLabs > 0 ? "up" : "stable")
+                .trend(pendingLabs > 0 ? "up" : TREND_STABLE)
                 .build());
 
         // --- Active encounters (patients currently being seen) ---
@@ -291,7 +298,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 .label("Active Patients")
                 .value(activeEncounters)
                 .unit("patients")
-                .trend("stable")
+                .trend(TREND_STABLE)
                 .build());
 
         // --- Pending refill requests ---
@@ -305,7 +312,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 .label("Refill Requests")
                 .value((int) Math.min(pendingRefills, Integer.MAX_VALUE))
                 .unit("requests")
-                .trend(pendingRefills > 0 ? "up" : "stable")
+                .trend(pendingRefills > 0 ? "up" : TREND_STABLE)
                 .build());
 
         return kpis;

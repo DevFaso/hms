@@ -5,6 +5,14 @@ package com.example.hms.config;
  */
 public class SecurityConstants {
 
+    /**
+     * Common prefix shared by every role constant. Used by
+     * {@code UserServiceImpl.resolveRoleByName} to normalize a raw
+     * role name (with or without the prefix) into a canonical code.
+     * Pattern 5 of docs/SonarQubeInstructions.md (Sonar S1192).
+     */
+    public static final String ROLE_PREFIX = "ROLE_";
+
     // Role constants
     public static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     public static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
