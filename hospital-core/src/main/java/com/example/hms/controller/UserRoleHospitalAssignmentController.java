@@ -208,7 +208,7 @@ public class UserRoleHospitalAssignmentController {
                       "Prefer PATCH /{id}/deactivate to preserve audit history. " +
                       "This endpoint will be removed in a future release.",
         deprecated = true)
-    @Deprecated(since = "1.1", forRemoval = false)
+    @Deprecated(since = "1.1", forRemoval = true)
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAssignment(@PathVariable UUID id) {

@@ -69,9 +69,16 @@ public class OrganizationLifecycleStatusServiceImpl implements OrganizationLifec
             // If the DB is unreachable, fall back to a permissive empty set rather
             // than locking every user out. The filter will pass; the spec will
             // pass — we accept the brief gap until the next reload succeeds.
+            //
+            // Also CACHE the failure: with snapshot=null, every subsequent call
+            // re-enters reload() during the outage and slams Postgres with retry
+            // traffic + log spam. Holding the empty Snapshot until the TTL
+            // expires gives the DB ~30s of breathing room between attempts.
             log.warn("[TENANT-LIFECYCLE-STATUS] Cache reload failed, returning empty set: {}",
                 ex.getMessage());
-            return new Snapshot(Set.of(), System.currentTimeMillis());
+            Snapshot empty = new Snapshot(Set.of(), System.currentTimeMillis());
+            snapshot.set(empty);
+            return empty;
         }
     }
 
