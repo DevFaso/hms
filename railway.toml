@@ -1,6 +1,21 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+# Only rebuild the backend service when files that actually affect the
+# bootJar or its runtime image change. Without this, Railway redeploys
+# the backend on every push to the watched branch — including pure
+# frontend, Keycloak, docs, or CI-config changes. See PR description.
+watchPatterns = [
+    "hospital-core/**",
+    "Dockerfile",
+    ".dockerignore",
+    "build.gradle",
+    "settings.gradle",
+    "gradle.properties",
+    "gradle/**",
+    "gradlew",
+    "railway.toml",
+]
 
 [deploy]
 healthcheckPath = "/api/actuator/health"
