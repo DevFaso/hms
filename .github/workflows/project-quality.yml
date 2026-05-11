@@ -61,9 +61,10 @@ jobs:
   require-all-pass:
     name: Require All Jobs Pass
     runs-on: ubuntu-latest
-    # require-all-pass only reads the result of `needs:` — no repo /
-    # write permissions required, so omit the block entirely (defaults
-    # to empty under the new GitHub default-permissions model).
+    # require-all-pass only reads the result of `needs:` and does not
+    # need repository or write access, so explicitly disable all
+    # GITHUB_TOKEN permissions for least privilege.
+    permissions: {}
     needs:
       - backend-tests
       - frontend-tests

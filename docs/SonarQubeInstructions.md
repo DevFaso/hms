@@ -29,7 +29,7 @@
    titled `refactor(sonar): <pattern name>`.
 4. **Run the gates locally** before pushing:
    ```
-   cd hospital-portal && npm run lint && npm run format && npm run test:headless
+   cd hospital-portal && npm run lint && npm run format:check && npm run test:headless
    ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
    ```
 5. **Sonar runs on push** via [.github/workflows/build.yml](../.github/workflows/build.yml).
@@ -760,7 +760,7 @@ own effort estimates sum to ~25 hours; the gap is review + tests.
 
 Every PR in the queue above must show:
 
-1. `npm run lint && npm run format && npm run test:headless` — green
+1. `npm run lint && npm run format:check && npm run test:headless` — green
 2. `./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification` — `BUILD SUCCESSFUL`
 3. Coverage on the touched classes — **must not drop**. Sonar's diff
    coverage gate enforces 80% on new/changed lines.

@@ -19,7 +19,9 @@ jobs:
       # cannot land in our CI without a deliberate bump in this file.
       # Refresh cadence: monthly, or whenever Renovate opens a PR.
       - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli@0.48.0
+        # --ignore-scripts: prevent install-time scripts from running
+        # (Sonar S6321). markdownlint-cli is pure JS with no postinstall.
+        run: npm install -g --ignore-scripts markdownlint-cli@0.48.0
 
       - name: Lint agent markdown files
         run: markdownlint agent/*.md --config .markdownlint.json
@@ -80,7 +82,9 @@ jobs:
       # OPENAI_API_KEY in scope. Bump in a dedicated PR.
       - name: Install promptfoo
         if: steps.check_scenarios.outputs.found == 'true'
-        run: npm install -g promptfoo@0.121.11
+        # --ignore-scripts: prevent install-time scripts from running
+        # (Sonar S6321). promptfoo is JS-only; no postinstall needed.
+        run: npm install -g --ignore-scripts promptfoo@0.121.11
 
       - name: Run scenario-based tests
         if: steps.check_scenarios.outputs.found == 'true'
