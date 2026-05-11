@@ -1,48 +1,69 @@
 # SonarCloud PR Queue — Status
 
-> Tracks what has landed, what's deferred, and what needs manual
+> Tracks what's pushed, what's deferred, and what needs manual
 > action in the SonarCloud UI for the remediation effort kicked off
 > against the snapshot in [docs/copilot-review.md](./copilot-review.md).
 >
-> **How-to-fix** lives in [docs/SonarQubeInstructions.md](./SonarQubeInstructions.md) —
-> the playbook organised by pattern. This file is the **state**
-> (per-PR landed/deferred + reasoning) so a reviewer doesn't have
-> to re-derive the picture from the playbook + git log.
+> **How-to-fix** is the per-pattern playbook in `docs/SonarQubeInstructions.md`.
+> That file currently lives on the `feat/v1.0-keyboard-navigation` branch
+> (was created in the same session as this doc) and will land on
+> `develop` when that PR merges; this is a forward reference until then,
+> deliberately written as plain text rather than a relative link so it
+> doesn't render as broken before the playbook reaches `develop`.
+>
+> This file is the **state** (per-PR pushed/deferred + reasoning) so a
+> reviewer doesn't have to re-derive the picture from the playbook +
+> git log.
 >
 > Last refreshed: 2026-05-10.
 
 ## Snapshot
 
-| | Start of campaign | Current |
+| Metric | Start of campaign | Current |
 |---|---|---|
 | Vulnerabilities | 4 | **0** ✅ |
 | Critical code smells closed | 0 | **~47** |
 | False positives identified (need won't-fix in UI) | 0 | **5** |
-| Open PRs on branches | 0 | **8** |
+| PRs pushed (awaiting review / merge) | 0 | **8** |
 
-## Landed (8 PRs)
+## Pushed (8 PRs — awaiting review and merge)
 
 All branched off `develop@db504cbc`. Each PR's body documents its
-verification (`./gradlew :hospital-core:test
-:hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification`
-green, 5179/5179 backend tests, JaCoCo 80% gate passing).
+verification — the full backend gate is:
+
+```bash
+./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
+```
+
+— and lands green on every PR (5179 / 5179 backend tests, JaCoCo 80%
+gate passing). None of these has been merged yet at the time of this
+refresh — they are pushed branches with open PRs awaiting review.
+
+> **Note on numbering** — the playbook in `SonarQubeInstructions.md`
+> originally proposed a sequence of 16 PRs. PR **#2** in that sequence
+> ("Move workflow-level permissions to job level") was folded into
+> PR #1 once execution started, since both findings live in the same
+> three workflow files and SHA-pinning + permission relocation are
+> reviewed together cleanly. Hence the numbering below jumps from 1
+> to 3, and PRs #12 + #13 were combined into a single low-risk
+> housekeeping batch.
 
 | # | Branch | Commit | Pattern | Findings closed | Notes |
 |---|---|---|---|---|---|
-| 1 | `chore/sonar-pin-workflow-actions` | `406446cb` | 1a + 1b + 2 (S6321 + S6396) | 4 vulns + SHA-pinned all third-party actions | Closes every Vulnerability-class finding in the snapshot |
+| 1 | `chore/sonar-pin-workflow-actions` | `406446cb` | 1a + 1b + 2 (S6321 + S6396) | 4 vulns + SHA-pinned all third-party actions | Closes every Vulnerability-class finding in the snapshot. Folds in original PR #2 (workflow → job-level perms). |
 | 3 | `chore/sonar-securityconfig-path-constants` | `786e6433` | 5 (S1192) | 4 Critical — path-literal duplications in SecurityConfig | 13 inline literals → 3 new constants + 1 existing |
 | 4 | `chore/sonar-role-literal-constants` | `169e0184` | 5 | ~22 Critical — role-string literals across EncounterController + ChatMessageServiceImpl + UserServiceImpl | Reuses existing `SecurityConstants` + adds `ROLE_PREFIX` |
 | 5 | `chore/sonar-i18n-message-keys` | `50188246` | 5 | 6 Critical — i18n message keys + a non-i18n error prefix across 6 service impls | 25 inline literals → 6 constants |
 | 6 | `chore/sonar-status-enum-literals` | `758e387e` | 5 | 6 Critical — DoctorWorklist / ClinicalDashboard / ResultReview status/urgency strings | 24 inline literals → 6 constants. DTO contract stays String (frontend-facing) so no enum migration. |
 | 7 | `chore/sonar-transactional-self-invocation` | `351d9575` | 6 (S6809) | 5 Critical — `@Transactional` self-invocation in 5 service impls | Setter-injection of `@Lazy <Interface> self` (matches `SuperAdminDashboardServiceImpl` pattern). 3 Mockito unit tests required `service.setSelf(service)` in `@BeforeEach`. |
 | 8 | `chore/sonar-auth-controller-split` | `27963529` | 7 (S107) | **0 directly** — Option C only | 4 `@Value` scalars folded into `AuthControllerProperties`. Constructor 21→18 params; **still above Sonar's 7 threshold**. Residual is intentionally accepted; must be marked won't-fix in UI. |
-| 12+13 | `chore/sonar-modernization-and-housekeeping` | `18844696` | 8, 9, 10, 15, 18 | 8 mixed (lambdas → method refs, `Math.clamp`, nested-ternary extraction, unused imports, unused method param) | One pattern-match-guard attempt (S6884) failed to compile — Java 21 `when` requires type patterns, not enum constants. Reverted with documenting comment. |
+| 12+13 | `chore/sonar-modernization-and-housekeeping` | `18844696` | 8, 9, 10, 15, 18 | 8 mixed (lambdas → method refs, `Math.clamp`, nested-ternary extraction, unused imports, unused method param) | Combined as one batch (lower review burden than two separate PRs). One pattern-match-guard attempt (S6884) failed to compile — Java 21 `when` requires type patterns, not enum constants. Reverted with documenting comment. |
 
-### Total via landed PRs
+### Total via pushed PRs
 
 - **4 Vulnerabilities → 0** ✅
-- **~47 Critical code smells closed**
-- **8 open PRs awaiting review**
+- **~47 Critical code smells closed in pushed branches**
+- **8 PRs pushed; 0 merged at time of this refresh**
 
 ## Deferred — remaining playbook PRs
 
@@ -97,7 +118,7 @@ Without that they'll keep generating noise in every future scan.
    in code — see <file>:<line> inline comment or the playbook entry.
    ```
 
-## Won't-fix items embedded in landed PRs
+## Won't-fix items embedded in pushed PRs
 
 PRs #6 (status enum literals) and #8 (AuthController split) made
 explicit "won't fix" calls inside their commit bodies:
@@ -117,8 +138,11 @@ explicit "won't fix" calls inside their commit bodies:
 
 ## Cross-references
 
-- [docs/SonarQubeInstructions.md](./SonarQubeInstructions.md) — **how
-  to fix** each pattern + the original 16-PR sequence proposal
+- `docs/SonarQubeInstructions.md` — **how to fix** each pattern +
+  the original 16-PR sequence proposal. Currently on the
+  `feat/v1.0-keyboard-navigation` branch; will land on `develop`
+  when that PR merges. Left as plain text rather than a relative
+  link to avoid a broken link on `develop` until then.
 - [docs/copilot-review.md](./copilot-review.md) — raw export of the
   SonarCloud snapshot this campaign is working against
 - [.github/workflows/build.yml](../.github/workflows/build.yml) — the CI
