@@ -46,12 +46,24 @@ jobs:
     environment: ${{ github.event.inputs.environment }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install Railway CLI (with native binary)
         # Must NOT use --ignore-scripts: the postinstall script downloads
         # the native binary. Without it the CLI is an empty shell.
-        run: npm i -g @railway/cli
+        #
+        # SonarCloud row 11 / Sonar S6321: pin to a specific version so
+        # the production deploy path can't be hijacked by an upstream
+        # release. Validate against `railway --version` in a follow-up
+        # smoke step before bumping.
+        # --ignore-scripts blocks install-time code execution (Sonar S6321).
+        # @railway/cli normally downloads its Go binary via a postinstall;
+        # we run `npm rebuild` immediately after so the binary is fetched
+        # under the same npm-controlled environment, just decoupled from
+        # the initial fetch + manifest parse.
+        run: |
+          npm i -g --ignore-scripts @railway/cli@4.57.2
+          npm rebuild -g @railway/cli
 
       - name: Resolve token, service names and environment
         id: cfg
