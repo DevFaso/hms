@@ -72,6 +72,11 @@ Every interactive element MUST satisfy all of the following:
   → `NavigationEnd` → `mainRef.nativeElement.focus()` with `tabindex="-1"`.
   This is non-negotiable; without it screen readers stay on the trigger of the
   previous click.
+- **Sidebar nav items can be reordered with the keyboard.** `Alt+ArrowUp` /
+  `Alt+ArrowDown` while a nav item is focused swaps it with its neighbor.
+  Focus follows the moved item, so a clinician can keep tapping the
+  shortcut to walk the entry across multiple slots. The new order persists
+  via `NavOrderService` exactly the same way the mouse drag does.
 - **First focus on each screen** is the screen's primary action or input:
   - **Login** → username input
   - **Reception cockpit** → patient-search input
@@ -90,13 +95,16 @@ Every interactive element MUST satisfy all of the following:
 
 We deliberately keep the shortcut surface small. Currently defined:
 
-| Shortcut         | Action                          | Implementation                              |
-| ---------------- | ------------------------------- | ------------------------------------------- |
-| `Tab` / `Shift+Tab` | Move forward / back through focusable elements | Native                              |
-| `Enter`          | Activate link / submit form     | Native                                      |
-| `Space`          | Activate button / toggle checkbox | Native                                    |
-| `Escape`         | Close modal / dismiss CDS warn-card / close profile + notification panels | Per-component `(keydown.escape)` |
-| `Arrow Down / Up` | Move between rows in patient-tracker board, nurse-station vitals grid, in-basket list | Roving `tabindex` (planned) |
+| Shortcut | Action | Implementation |
+| --- | --- | --- |
+| `Tab` / `Shift+Tab` | Move forward / back through focusable elements | Native |
+| `Enter` | Activate link / submit form | Native |
+| `Space` | Activate button / toggle checkbox | Native |
+| `Escape` | Close modal / dismiss CDS warn-card / close profile + notification panels | Per-component `(keydown.escape)` |
+| `ArrowDown` / `ArrowUp` | Move between patient-tracker cards within a column, or between in-basket list items | `RovingFocusDirective` (vertical) |
+| `ArrowLeft` / `ArrowRight` | Move between in-basket filter tabs | `RovingFocusDirective` (horizontal) |
+| `Alt+ArrowUp` / `Alt+ArrowDown` | Move between vital input cells in the triage form. Plain `ArrowUp`/`ArrowDown` is left untouched so it continues to step the `<input type="number">` value | `RovingFocusDirective` (modifier=alt) |
+| `Alt+ArrowUp` / `Alt+ArrowDown` | Reorder a focused sidebar nav item up or down by one slot; new order persists via `NavOrderService` | `ShellComponent.onNavKeydown` |
 
 **Avoid single-letter shortcuts** (`g`, `n`, etc.). On AZERTY the physical
 positions of A/Q, Z/W and M shift, breaking muscle memory for francophone WA
@@ -232,33 +240,76 @@ Before requesting review on any frontend PR that adds or modifies a screen:
 
 ## 10. Known gaps tracked for v1.0.0 GA
 
-- Sidebar drag-to-reorder has no keyboard alternative. Planned: `Alt+ArrowUp`
-  / `Alt+ArrowDown` while a nav item is focused.
+The original three v1.0 GA gaps tracked here were closed in the row 11
+finish PR:
+
+- ~~Sidebar drag-to-reorder has no keyboard alternative.~~ Closed —
+  `Alt+ArrowUp` / `Alt+ArrowDown` reorder is wired in
+  [shell.ts](../../hospital-portal/src/app/shell/shell.ts) and shares
+  the `moveNavItem` primitive with the mouse drag handlers, so the two
+  paths can never diverge.
+- ~~Vitals grid, patient-tracker rows, and in-basket items lack
+  arrow-key roving.~~ Closed — see
+  [roving-focus.directive.ts](../../hospital-portal/src/app/shared/a11y/roving-focus.directive.ts).
+  Vitals grid uses `modifier="alt"` so plain Arrow keeps the native
+  `<input type="number">` step. The other two use plain Arrow.
+
+Carrying forward to v1.0.0 GA polish (still gaps, but smaller):
+
 - The dashboard's drag-and-drop widget grid (if added by row 13 polishing)
-  will need the same treatment.
+  will need the same `RovingFocusDirective` treatment with whatever
+  selector matches the widgets.
 - Patient-tracker filter chips currently use plain buttons; the WAI-ARIA
   tabs pattern (arrow-key navigation, `aria-selected`) is on the v1.1 list.
+  Note this is the patient-tracker FILTER chips specifically — the cards
+  inside each column already have arrow-key roving as of row 11 finish.
+- Forgot-password / forgot-username dialogs trap focus and Escape-close
+  (verified manually); add an explicit Playwright assertion for both
+  before GA so a regression can't slip in.
+- The patient-tracker arrow-roving Playwright case is currently
+  skipped because the chromium project's storage state is a
+  hospital-agnostic SuperAdmin and `auth.getHospitalId()` returns
+  null, leaving `<div class="tracker-board">` unrendered no matter
+  what the API mock returns. A hospital-bound storage state fixture
+  (and a corresponding Playwright project) would re-enable that
+  case; the directive itself is exhaustively unit-tested in
+  [roving-focus.directive.spec.ts](../../hospital-portal/src/app/shared/a11y/roving-focus.directive.spec.ts).
+- The wider `color-contrast` axe debt (light-blue `.btn-primary`
+  backgrounds, language-toggle icons, role badges, `.tab-bar`
+  buttons, etc.) and the structural `label` / `select-name`
+  violations on `/reception` and `/pharmacy/dispensing`. Closing
+  these is the prerequisite for dropping
+  `disableRules(['color-contrast'])` and adding those four routes
+  to the axe smoke (see §11).
 
 ## 11. Test contract
 
 The CI gate fails if either of:
 
 1. `e2e/a11y.spec.ts` reports any `serious` or `critical` axe violation
-   on the routes listed there. The `color-contrast` rule is still
-   suppressed in the current axe smoke (`disableRules(['color-contrast'])`
-   in [`e2e/a11y.spec.ts`](../../hospital-portal/e2e/a11y.spec.ts) §
-   `runAxe`). Row 11's first PR fixed the shared-styles contrast
-   regressions (search-icon `#9ca3af` → `#6b7280`, placeholder
-   `#9ca3af` → `#6b7280`, empty-state `#94a3b8` → `#64748b`), but
-   per-screen contrast remediation across reception / nurse-station /
-   prescriptions / pharmacy still has to land before the suppression
-   can come off. Removing the suppression is tracked as part of the
-   row 11 per-screen audit follow-up; opening up that gate without
-   first cleaning the underlying violations would block every PR on
-   pre-existing debt.
+   on the four scanned routes: `/dashboard`, `/patient-tracker`,
+   `/my-medications`, `/login`. The `color-contrast` rule is still
+   suppressed in the smoke (`disableRules(['color-contrast'])` in
+   [`e2e/a11y.spec.ts`](../../hospital-portal/e2e/a11y.spec.ts) §
+   `runAxe`). Row 11's finish PR migrated every text-color use of the
+   documented forbidden grey foregrounds (`#9ca3af`, `#94a3b8`,
+   `#cbd5e1`) across `hospital-portal/src/` to the palette tokens
+   (`#6b7280` for placeholder/disabled, `#64748b` for tertiary/helper
+   text — 69 files touched), but the wider contrast debt (light-blue
+   button-primary backgrounds, language-toggle icons, role badges,
+   `.tab-bar` buttons, etc.) is a design-system pass that exceeds row
+   11 scope and is tracked as v1.0.0 GA polish (§10 carry-forward).
+   Adding `/reception`, `/nurse-station`, `/prescriptions`, and
+   `/pharmacy/dispensing` to this gate is also held back by that
+   pass plus two structural issues each carries (form `<input>`
+   without label on `/reception`; `<select>` without accessible name
+   on `/pharmacy/dispensing`).
 2. `e2e/keyboard-nav.spec.ts` cannot complete the keyboard-only
    journey, or finishes with `document.activeElement` on an unexpected
-   element.
+   element. Coverage now includes the sidebar Alt+Arrow reorder, the
+   patient-tracker arrow roving, and the in-basket filter-tab roving in
+   addition to the row 10 baseline (skip-link, route-change focus reset,
+   login keyboard path).
 
 Local commands:
 

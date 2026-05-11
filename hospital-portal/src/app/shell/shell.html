@@ -32,6 +32,7 @@
     <nav class="sidebar-nav" aria-label="Primary navigation">
       @for (item of navItems(); track item.route; let i = $index) {
         <a
+          #navItemRef
           class="nav-item"
           [class.dragging]="dragIndex() === i"
           [class.drag-over]="dragOverIndex() === i && dragIndex() !== i"
@@ -40,7 +41,9 @@
           [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
           draggable="true"
           [attr.aria-grabbed]="dragIndex() === i"
+          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
           (click)="closeOverlays()"
+          (keydown)="onNavKeydown($event, i)"
           (dragstart)="onDragStart($event, i)"
           (dragover)="onDragOver($event, i)"
           (dragleave)="onDragLeave()"

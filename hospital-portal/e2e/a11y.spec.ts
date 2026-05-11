@@ -32,6 +32,14 @@ import { test, expect } from './fixtures/test-fixtures';
  *                         (medications view; SuperAdmin storage state
  *                         carries the role bits needed to render).
  *
+ * The row-11 widening to /reception, /nurse-station, /prescriptions,
+ * and /pharmacy/dispensing was attempted but reverted because each
+ * carries pre-existing structural a11y debt (form input missing
+ * label on /reception; select missing accessible name on
+ * /pharmacy/dispensing) on top of the wider color-contrast debt that
+ * blocks dropping the suppression here. Re-add each route once its
+ * per-screen audit closes the underlying violations.
+ *
  * Mock strategy: the shared `./fixtures/test-fixtures` auto-fixture
  * registers comprehensive /api/** mocks so every spec runs against the
  * same stable stubs. This spec does NOT redefine its own narrower
@@ -80,14 +88,19 @@ async function runAxe(page: Page, route: string) {
     // start catching NEW regressions immediately, per the row 10
     // deliverable ("fail PR on any new a11y violation"). Each entry
     // here is a tracked exception that must be removed before v1.0.0
-    // GA. The first PR run on PR #286 surfaced these on every page —
-    // they are CSS/design issues, not code structure issues, and
-    // belong with the row 11 keyboard-nav + theming sweep.
+    // GA.
     .disableRules([
-      // color-contrast violations on dashboard, patient-tracker,
-      // my-medications and login footer. Belongs to the design-system
-      // theming pass tracked under row 11 (Keyboard navigation + a11y
-      // hygiene) — see docs/ui/accessibility.md once row 11 lands.
+      // Color-contrast debt is wider than the three forbidden hexes
+      // listed in docs/ui/accessibility.md §8. Row 11 finish PR
+      // migrated those documented foregrounds across 69 files (real
+      // net-positive), but axe still finds many other contrast
+      // violations across surfaces — language toggles, role badges,
+      // .btn-primary, .tab-bar buttons, gradient text, etc. Closing
+      // those is a design-system pass that's larger than row 11 and
+      // is tracked as v1.0.0 GA polish (docs/ui/accessibility.md §10
+      // carry-forward gaps). Keeping the suppression so we can still
+      // catch NEW a11y regressions on this PR — without it the gate
+      // would fail on pre-existing debt.
       'color-contrast',
     ])
     .analyze();
@@ -135,21 +148,14 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     await runAxe(page, '/my-medications');
   });
 
-  // v1.0 roadmap row 11 — WEST-AFRICAN clinical-flow widening
-  // (reception, nurse-station, prescriptions, pharmacy/dispensing)
-  // was attempted in this PR but reverted because those screens
-  // carry pre-existing serious/critical axe violations that haven't
-  // been addressed yet (per-screen audits are the row 11 follow-up
-  // PRs). Adding the routes here would have failed CI on debt this
-  // PR doesn't own. Re-add the four tests below as each per-screen
-  // audit PR lands — each audit closes the violations for ITS route
-  // and then re-adds ONLY its route to the axe smoke:
-  //   - /reception           (per-screen audit follow-up)
-  //   - /nurse-station       (per-screen audit follow-up)
-  //   - /prescriptions       (per-screen audit follow-up)
-  //   - /pharmacy/dispensing (per-screen audit follow-up)
-  // See docs/sonar-pr-queue.md / docs/ui/accessibility.md for the
-  // tracking.
+  // v1.0 row 11 widening (/reception, /nurse-station, /prescriptions,
+  // /pharmacy/dispensing) was attempted in the row 11 finish PR but
+  // reverted. The row 11 finish closed the §10 keyboard gaps (sidebar
+  // Alt+Arrow reorder, roving tabindex on vitals/tracker/in-basket)
+  // and the documented forbidden grey foregrounds, but the wider
+  // color-contrast debt that those routes also carry exceeds row 11's
+  // scope. Add each route here as its per-screen contrast + structural
+  // audit lands.
 });
 
 test.describe('a11y smoke (axe-core) — unauthenticated /login', () => {
