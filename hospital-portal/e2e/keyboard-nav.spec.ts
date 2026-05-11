@@ -154,8 +154,11 @@ test.describe('keyboard navigation — sidebar Alt+Arrow reorder (row 11 finish)
     // Alt+ArrowDown should swap items 0 and 1.
     await page.keyboard.press('Alt+ArrowDown');
 
-    // Wait for the queueMicrotask in shell.onNavKeydown to flush so
-    // the focus restoration completes before we read state.
+    // Wait for the async reorder + focus restoration in
+    // shell.onNavKeydown to complete before we read DOM state. The
+    // exact mechanism (currently requestAnimationFrame) is an
+    // implementation detail of the handler — polling for the swapped
+    // order is what we actually need to be deterministic about.
     await page.waitForFunction(
       (originalFirstHref) => {
         const els = Array.from(

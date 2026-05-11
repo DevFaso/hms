@@ -7,8 +7,6 @@ import {
   OnDestroy,
   ElementRef,
   ViewChild,
-  ViewChildren,
-  QueryList,
   AfterViewInit,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
@@ -63,14 +61,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * docs/ui/accessibility.md §4.
    */
   @ViewChild('mainContent') protected mainContent?: ElementRef<HTMLElement>;
-  /**
-   * v1.0 row 11 finish: handles to each rendered sidebar nav `<a>` so
-   * the Alt+ArrowUp/Down keyboard reorder can refocus the moved item
-   * after the @for re-renders. See docs/ui/accessibility.md §10.
-   */
-  @ViewChildren('navItemRef') private readonly navItemRefs?: QueryList<
-    ElementRef<HTMLAnchorElement>
-  >;
   private routerSub?: Subscription;
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionService);

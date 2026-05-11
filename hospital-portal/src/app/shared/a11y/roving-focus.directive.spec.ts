@@ -12,14 +12,20 @@ import { RovingFocusDirective } from './roving-focus.directive';
  * by the three production callers (vitals grid, patient-tracker rows,
  * in-basket panel).
  */
+// Note: items intentionally have NO explicit tabindex attribute. The
+// directive's contract is "items with an explicit tabindex are
+// author-controlled and opt out of the roving group", so the directive
+// only manages items that are tabindex-naked at mount. To make the
+// items focusable in the test we rely on the directive setting
+// tabindex itself in ngAfterViewInit.
 @Component({
   standalone: true,
   imports: [RovingFocusDirective],
   template: `
     <ul appRovingFocus="li.item" [orientation]="orientation" [modifier]="modifier" [wrap]="wrap">
-      <li class="item" data-id="0" tabindex="0">a</li>
-      <li class="item" data-id="1" tabindex="-1">b</li>
-      <li class="item" data-id="2" tabindex="-1">c</li>
+      <li class="item" data-id="0">a</li>
+      <li class="item" data-id="1">b</li>
+      <li class="item" data-id="2">c</li>
     </ul>
   `,
 })

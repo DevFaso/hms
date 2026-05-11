@@ -12,11 +12,13 @@ import {
  * v1.0 row 11 finish — roving-tabindex pattern (WAI-ARIA Authoring
  * Practices §6.6) wrapped as a single directive.
  *
- * Apply to a container element. The directive queries descendants
- * matching `[appRovingFocus]` (a CSS selector string), then makes
- * exactly one of them keyboard-tabbable at a time. ArrowUp/ArrowDown
- * (and ArrowLeft/ArrowRight when `orientation === 'horizontal'` or
- * `'both'`) walk between items; Tab leaves the group entirely.
+ * Apply to a container element. The value of the `appRovingFocus`
+ * input is a CSS selector string (e.g. `"li.row"`, `"button.tab"`);
+ * the directive runs `host.querySelectorAll(selector)` to find the
+ * focusable descendants, then makes exactly one of them keyboard-
+ * tabbable at a time. ArrowUp/ArrowDown (and ArrowLeft/ArrowRight
+ * when `orientation === 'horizontal'` or `'both'`) walk between
+ * items; Tab leaves the group entirely.
  *
  * Used by:
  * - Nurse-station triage vitals grid (vital input cells)
@@ -41,9 +43,17 @@ import {
  * - The first matching descendant gets `tabindex="0"`; the rest get
  *   `tabindex="-1"`. After arrow-key activation, the active item
  *   gets `tabindex="0"` and receives focus.
+ * - Items that already carry an explicit `tabindex` attribute when
+ *   the directive mounts are left alone — the directive marks the
+ *   ones it manages with `data-rf-managed="true"` and only mutates
+ *   tabindex on those. This lets a page author opt an item out of
+ *   the roving group (focus-trap sentinel, externally-Tab-reachable
+ *   input, etc.) by pre-setting its tabindex.
  * - We re-query items on every keystroke so dynamically added rows
- *   participate without an explicit `refresh()` call. That's O(n)
- *   but n is human-scale here (≤ ~50 items per surface).
+ *   participate without an explicit `refresh()` call. New rows
+ *   without an explicit tabindex become managed at the next
+ *   `applyTabindex` call. That's O(n) but n is human-scale here
+ *   (≤ ~50 items per surface).
  * - The directive does not emit selection — pressing Enter / Space
  *   on the focused item lets the native or component-level handler
  *   take over, exactly as if the user had clicked.
@@ -97,19 +107,33 @@ export class RovingFocusDirective implements AfterViewInit, OnDestroy {
   @Input() modifier: 'none' | 'alt' | 'ctrl' = 'none';
 
   ngAfterViewInit(): void {
-    // Initialize tabindex on all matching items: first is `0`, rest are
-    // `-1`. Any item that already has an explicit tabindex (e.g. an
-    // input that the page-author needs reachable from elsewhere) is
-    // left alone — we only manage indices we authored.
-    this.applyTabindex(0);
+    // Initialize tabindex on the items WE manage: the first managed
+    // item gets `0`, the rest `-1`. Items that already carry an
+    // explicit `tabindex` attribute when the directive mounts are
+    // left alone — they're considered author-controlled (e.g. an
+    // input that needs to be reachable via Tab from outside the
+    // group, or a focus-trap sentinel) and stay out of the roving
+    // group entirely. We tag managed items with `data-rf-managed`
+    // so subsequent reapply / navigation can identify them without
+    // re-checking the original tabindex.
+    const items = this.items();
+    const managed = items.filter((el) => !el.hasAttribute('tabindex'));
+    for (const el of managed) {
+      el.dataset['rfManaged'] = 'true';
+    }
+    managed.forEach((el, i) => {
+      el.setAttribute('tabindex', i === 0 ? '0' : '-1');
+    });
   }
 
   ngOnDestroy(): void {
-    // Restore items so the next mount of this template doesn't inherit
-    // stale data attributes from a recycled DOM. Defensive only —
-    // standalone components are usually torn down with their DOM.
-    for (const item of this.items()) {
+    // Restore items so the next mount of this template doesn't
+    // inherit stale tabindex / data attributes from a recycled DOM.
+    // Defensive only — standalone components are usually torn down
+    // with their DOM.
+    for (const item of this.managedItems()) {
       delete item.dataset['rfManaged'];
+      item.removeAttribute('tabindex');
     }
   }
 
@@ -119,13 +143,16 @@ export class RovingFocusDirective implements AfterViewInit, OnDestroy {
     const direction = this.directionFor(event.key);
     if (direction === 0) return;
 
-    const items = this.items();
-    if (items.length === 0) return;
+    // Navigate over managed items only. Author-tabindexed items in
+    // the same group don't participate in arrow walking — they were
+    // intentionally opted out at init time.
+    const managed = this.managedItems();
+    if (managed.length === 0) return;
 
-    const currentIndex = this.activeIndex(items);
+    const currentIndex = this.activeIndex(managed);
     let nextIndex = currentIndex + direction;
-    if (nextIndex < 0) nextIndex = this.wrap ? items.length - 1 : 0;
-    if (nextIndex >= items.length) nextIndex = this.wrap ? 0 : items.length - 1;
+    if (nextIndex < 0) nextIndex = this.wrap ? managed.length - 1 : 0;
+    if (nextIndex >= managed.length) nextIndex = this.wrap ? 0 : managed.length - 1;
     if (nextIndex === currentIndex) {
       // Clamped at boundary — preventDefault still, so the page
       // doesn't scroll while the user holds the arrow.
@@ -135,8 +162,8 @@ export class RovingFocusDirective implements AfterViewInit, OnDestroy {
 
     event.preventDefault();
     event.stopPropagation();
-    this.applyTabindex(nextIndex);
-    items[nextIndex].focus({ preventScroll: false });
+    this.applyTabindex(managed, nextIndex);
+    managed[nextIndex].focus({ preventScroll: false });
   }
 
   private modifierMatches(event: KeyboardEvent): boolean {
@@ -169,23 +196,32 @@ export class RovingFocusDirective implements AfterViewInit, OnDestroy {
     return Array.from(list);
   }
 
-  private activeIndex(items: HTMLElement[]): number {
+  /**
+   * Items the directive currently owns the tabindex of — i.e. those
+   * that didn't have an explicit tabindex when the group mounted.
+   * Re-queried on every call so dynamically-added rows participate
+   * (they get marked managed by the next applyTabindex on a keystroke,
+   * since they have no pre-existing tabindex either).
+   */
+  private managedItems(): HTMLElement[] {
+    return this.items().filter((el) => el.dataset['rfManaged'] === 'true');
+  }
+
+  private activeIndex(managed: HTMLElement[]): number {
     const focused = document.activeElement as HTMLElement | null;
     if (focused) {
-      const i = items.indexOf(focused);
+      const i = managed.indexOf(focused);
       if (i >= 0) return i;
     }
     // Fall back to whichever item we marked tabindex="0" — covers the
     // case where the user just Tab-entered the group from outside.
-    const tabbable = items.findIndex((el) => el.getAttribute('tabindex') === '0');
+    const tabbable = managed.findIndex((el) => el.getAttribute('tabindex') === '0');
     return Math.max(tabbable, 0);
   }
 
-  private applyTabindex(activeIndex: number): void {
-    const items = this.items();
-    items.forEach((el, i) => {
+  private applyTabindex(managed: HTMLElement[], activeIndex: number): void {
+    managed.forEach((el, i) => {
       el.setAttribute('tabindex', i === activeIndex ? '0' : '-1');
-      el.dataset['rfManaged'] = 'true';
     });
   }
 }

@@ -32,7 +32,6 @@
     <nav class="sidebar-nav" aria-label="Primary navigation">
       @for (item of navItems(); track item.route; let i = $index) {
         <a
-          #navItemRef
           class="nav-item"
           [class.dragging]="dragIndex() === i"
           [class.drag-over]="dragOverIndex() === i && dragIndex() !== i"
