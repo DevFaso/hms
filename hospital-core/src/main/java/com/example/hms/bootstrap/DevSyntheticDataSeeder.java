@@ -1286,8 +1286,13 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         // ROLE_PATIENT assignments on the same user/hospital across reboots.
         // Mirrors the sibling guard in ensureGlobalAssignment for global
         // (hospital-less) assignments.
+        //
+        // Uses findFirst… (LIMIT 1) rather than the plain finder so this
+        // path stays safe on pre-V96 databases that still hold the duplicate
+        // rows V96 is about to delete; the plain finder would throw
+        // IncorrectResultSizeDataAccessException on >1 match.
         Optional<UserRoleHospitalAssignment> existing =
-            assignmentRepository.findByUserIdAndHospitalIdAndRoleId(
+            assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
                 user.getId(), hospital.getId(), role.getId());
         if (existing.isPresent()) {
             return existing.get();

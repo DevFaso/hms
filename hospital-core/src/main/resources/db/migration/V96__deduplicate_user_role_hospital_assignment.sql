@@ -20,7 +20,9 @@
 --   3. Add partial unique indexes that catch both hospital-scoped and
 --      global (hospital_id IS NULL) duplicates. Partial indexes are used
 --      instead of NULLS NOT DISTINCT so this migration works on any
---      Postgres version ≥ 9.2 (NULLS NOT DISTINCT requires PG15+).
+--      Postgres version ≥ 9.5 (NULLS NOT DISTINCT requires PG15+;
+--      CREATE INDEX IF NOT EXISTS requires PG9.5+). Project deployments
+--      run Postgres 16, so this is comfortably below the floor.
 --
 -- Idempotency: the WHERE rn > 1 clauses are no-ops once data is clean,
 --   and CREATE UNIQUE INDEX IF NOT EXISTS won't recreate existing

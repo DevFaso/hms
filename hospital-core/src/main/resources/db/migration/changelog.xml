@@ -1384,7 +1384,9 @@
          have no DB-level FK on assignment_id) and adds partial unique
          indexes covering both hospital-scoped and global assignments.
          Pure DDL + DELETE on dev-discovered drift; splitStatements
-         true so each step commits independently.
+         true so the SQL file is executed as separate statements
+         (Liquibase still runs the whole changeSet in one transaction
+         unless runInTransaction="false").
          ================================================================= -->
     <changeSet id="V96-deduplicate-user-role-hospital-assignment" author="hms-team" runOnChange="false">
         <sqlFile path="V96__deduplicate_user_role_hospital_assignment.sql"
