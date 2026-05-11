@@ -573,12 +573,12 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             Encounter enc = summary.getEncounter();
             if (enc == null) continue;
 
-            // Enrich hospitalCourse from encounter notes if missing
-            if (summary.getHospitalCourse() == null || summary.getHospitalCourse().isBlank()) {
-                if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
-                    summary.setHospitalCourse(enc.getNotes());
-                    changed = true;
-                }
+            // Enrich hospitalCourse from encounter notes if missing.
+            // Sonar S1066 — nested ifs merged into a single guarded condition.
+            if ((summary.getHospitalCourse() == null || summary.getHospitalCourse().isBlank())
+                    && enc.getNotes() != null && !enc.getNotes().isBlank()) {
+                summary.setHospitalCourse(enc.getNotes());
+                changed = true;
             }
 
             // Enrich medications from prescriptions if missing

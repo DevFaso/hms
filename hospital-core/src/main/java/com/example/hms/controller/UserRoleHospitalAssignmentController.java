@@ -194,6 +194,14 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Hard-deletes an assignment row by ID.
+     *
+     * @deprecated since 1.1 — hard delete erases audit history. Prefer
+     *             {@code PATCH /api/user-role-hospital-assignments/{id}/deactivate}
+     *             which preserves the row with a deactivation timestamp.
+     *             Removal target: v2.0.
+     */
     @Operation(
         summary = "Delete an assignment by ID",
         description = "⚠️ DEPRECATED — hard-deletes the assignment row. " +

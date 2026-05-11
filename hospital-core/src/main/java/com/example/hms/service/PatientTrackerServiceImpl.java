@@ -121,10 +121,8 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
         if (enc.getStatus() == null || TERMINAL_STATUSES.contains(enc.getStatus())) {
             return false;
         }
-        if (departmentId != null
-                && (enc.getDepartment() == null || !departmentId.equals(enc.getDepartment().getId()))) {
-            return false;
-        }
-        return true;
+        // Sonar S1126 — return the boolean expression directly instead of wrapping in if/then/else.
+        return departmentId == null
+                || (enc.getDepartment() != null && departmentId.equals(enc.getDepartment().getId()));
     }
 }

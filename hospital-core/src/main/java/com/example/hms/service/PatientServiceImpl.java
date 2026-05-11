@@ -244,13 +244,11 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientResponseDTO> getAllPatients(UUID hospitalId, Locale locale) {
-        // SECURITY: Never return unscoped patient data. hospitalId is mandatory for non-superadmin.
-        if (hospitalId == null) {
-            // Only super-admin can list all patients (caller must have already verified role)
-            if (!roleValidator.isSuperAdminFromAuth()) {
-                throw new com.example.hms.exception.BusinessException(
-                    "Hospital context required to list patients. Please select an active hospital.");
-            }
+        // SECURITY: Never return unscoped patient data. Only super-admin can list all patients
+        // (caller must have already verified role). Sonar S1066 — merged nested if.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
+            throw new com.example.hms.exception.BusinessException(
+                "Hospital context required to list patients. Please select an active hospital.");
         }
 
         List<Patient> patients = (hospitalId != null)
