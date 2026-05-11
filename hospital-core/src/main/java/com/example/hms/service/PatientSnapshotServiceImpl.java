@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientDiagnosis;
+import com.example.hms.model.PatientVitalSign;
 import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
@@ -168,7 +169,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return vitals;
     }
 
-    private String summarizeVitals(com.example.hms.model.PatientVitalSign v) {
+    private String summarizeVitals(PatientVitalSign v) {
         StringBuilder s = new StringBuilder();
         if (v.getTemperatureCelsius() != null) s.append("T:").append(v.getTemperatureCelsius()).append("°C ");
         if (v.getHeartRateBpm() != null) s.append("HR:").append(v.getHeartRateBpm()).append(" ");
@@ -182,8 +183,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId) {
         List<PatientSnapshotDTO.LabItem> labs = new ArrayList<>();
         try {
-            labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-                    .limit(10)
+            // Use the Pageable variant so the limit is applied at the DB
+            // (LabResultRepository#findByLabOrder_Patient_Id(UUID, Pageable))
+            // instead of loading the patient's full lab-result history into
+            // memory and trimming to 10 after the fact.
+            labResultRepository.findByLabOrder_Patient_Id(patientId, PageRequest.of(0, 10))
                     .forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
