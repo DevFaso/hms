@@ -999,7 +999,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // Sonar S3358 (Pattern 8 of docs/SonarQubeInstructions.md):
         // the original implementation packed three nested ternaries
         // across L1002/1005/1007. Extracted into named helpers so each
-        // null-fallback step is independently readable / unit-testable.
+        // null-fallback step is independently readable.
         java.util.UUID providerId = a.getStaff() != null ? a.getStaff().getId() : null;
         String providerName = resolveProviderName(a.getStaff());
         java.util.UUID patientId = a.getPatient() != null ? a.getPatient().getId() : null;
@@ -1026,8 +1026,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     /**
      * Prefer the staff's full name; fall back to plain name; null if no
      * staff at all. Extracted from {@link #toCalendarEvent} to satisfy
-     * Sonar S3358 (Pattern 8). Behaviour byte-for-byte equivalent to
-     * the original nested ternary.
+     * Sonar S3358 (Pattern 8). Behaviour equivalent to the original
+     * nested ternary.
      */
     private static String resolveProviderName(com.example.hms.model.Staff staff) {
         if (staff == null) {
@@ -1043,8 +1043,8 @@ public class AppointmentServiceImpl implements AppointmentService {
      * Compose a patient's display name from first + last with explicit
      * empty-string fallbacks. Returns null when there is no patient.
      * Extracted from {@link #toCalendarEvent} to satisfy Sonar S3358
-     * (Pattern 8). Behaviour byte-for-byte equivalent to the original
-     * nested ternaries.
+     * (Pattern 8). Behaviour equivalent to the original nested
+     * ternaries.
      */
     private static String resolvePatientName(com.example.hms.model.Patient patient) {
         if (patient == null) {

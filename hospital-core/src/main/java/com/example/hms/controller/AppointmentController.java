@@ -182,7 +182,7 @@ public class AppointmentController {
         // Math.min(Math.max(size, 1), 200) idiom for clarity.
         // Math.max(page, 0) is still needed because page has no upper
         // bound — only a floor.
-        Pageable pageable = PageRequest.of(Math.max(page, 0), (int) Math.clamp(size, 1, 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
         Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
             filter, pageable, locale, getUsername(authentication));
         HttpHeaders headers = new HttpHeaders();
