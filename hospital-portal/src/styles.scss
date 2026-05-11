@@ -9,6 +9,54 @@
   --text-primary: #1e293b;
   --text-secondary: #64748b;
   --border: #e2e8f0;
+
+  // ─── Accessibility tokens (v1.0 roadmap row 11) ───────────────────
+  // `--focus-ring`         — primary-blue, used on light surfaces
+  //                          (#fff / #f1f5f9). WCAG-passing contrast
+  //                          on both: 8.59:1 / 7.42:1.
+  // `--focus-ring-inverse` — amber, used on dark surfaces such as the
+  //                          deep-blue sidebar (#0f172a) where the
+  //                          blue ring disappears.
+  // 2px outline is the WCAG 2.4.7 minimum; the offset gives the ring
+  // a halo so it shows over busy backgrounds. See
+  // docs/ui/accessibility.md §3.
+  --focus-ring: 2px solid #2563eb;
+  --focus-ring-inverse: 2px solid #fbbf24; // for dark surfaces (sidebar)
+  --focus-ring-offset: 2px;
+}
+
+/* ── Global focus-visible indicator ─────────────────────────────────
+   Applied to every focusable element. Browsers that support
+   `:focus-visible` only show the ring for keyboard focus, not mouse
+   clicks. Components may override this locally if they need a
+   different treatment (e.g. the dark sidebar uses the inverse ring).
+   v1.0 roadmap row 11.
+
+   IMPORTANT: we only suppress the default ring for elements that
+   ALSO match `:focus-visible` — i.e. modern browsers that distinguish
+   keyboard from mouse focus. In a browser without `:focus-visible`
+   support (very rare today, but legacy WebViews / kiosk browsers
+   exist) every focus event matches `:focus` but NOT `:focus-visible`,
+   so the `:not(:focus-visible)` clause never fires and the browser`s
+   default focus ring is preserved. Per Copilot review on PR #288.
+   ─────────────────────────────────────────────────────────────────── */
+:focus:not(:focus-visible) {
+  outline: none; // suppress only MOUSE-focus rings on modern browsers
+}
+
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: 4px;
+}
+
+// Form controls get an extra subtle box-shadow halo on top of the
+// outline so it reads against busy form layouts.
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 0;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
 *,

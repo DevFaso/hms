@@ -1,4 +1,7 @@
 {
+  "A11Y": {
+    "SKIP_TO_MAIN": "Skip to main content"
+  },
   "ADMIN": {
     "QUICK_ACCESS": "Quick Access",
     "SUBTITLE": "Admin panel",

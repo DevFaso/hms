@@ -1,9 +1,20 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
+import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_LAB_SCIENTIST;
+import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
+import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
+import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ChatMessageMapper;
 import com.example.hms.model.ChatAttachment;
 import com.example.hms.model.ChatMessage;
+import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.ChatAttachmentDTO;
@@ -56,47 +67,47 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * </ul>
      */
     private static final Map<String, Set<String>> ALLOWED_MESSAGE_TARGETS = Map.ofEntries(
-        Map.entry("ROLE_HOSPITAL_ADMIN", Set.of(
-            "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_HOSPITAL_ADMIN, Set.of(
+            ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_DOCTOR", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_DOCTOR, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_NURSE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_NURSE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_MIDWIFE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_MIDWIFE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_RECEPTIONIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_RECEPTIONIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_LAB_SCIENTIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_LAB_SCIENTIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_STAFF", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_STAFF, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_PATIENT", Set.of(
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE"
+        Map.entry(ROLE_PATIENT, Set.of(
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE
         ))
     );
 
@@ -135,7 +146,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         if (dto.getRecipientId() != null) {
             recipient = userRepository.findById(dto.getRecipientId())
                 .orElseGet(() -> staffRepository.findById(dto.getRecipientId())
-                    .map(staff -> staff.getUser())
+                    .map(Staff::getUser)
                     .orElseThrow(() -> new ResourceNotFoundException("Recipient not found")));
         } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
@@ -148,8 +159,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new SecurityException("Cannot send a chat message to yourself.");
         }
 
-        // Enforce role-based messaging hierarchy
-        validateMessageHierarchy(sender, recipient);
+        // Enforce role-based messaging hierarchy. Sender roles are
+        // read from SecurityContextHolder inside the validator; the
+        // sender User itself is not needed (Sonar S1172 / Pattern 18
+        // in docs/SonarQubeInstructions.md).
+        validateMessageHierarchy(recipient);
 
         // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
         boolean isSuperAdmin = isSuperAdminContext();
@@ -304,7 +318,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
-            .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+            .anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
     }
 
     /**
@@ -312,8 +326,14 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * the hospital role hierarchy. SUPER_ADMIN can message anyone. All other roles
      * must have at least one role that permits messaging at least one of the
      * recipient's roles.
+     *
+     * <p>The sender's roles are read from {@link SecurityContextHolder} (the
+     * authenticated principal), not from a method argument — that's the source of
+     * truth and avoids any drift between the User entity's persisted roles and the
+     * caller's effective authorities. Sonar S1172 / Pattern 18 in
+     * docs/SonarQubeInstructions.md.</p>
      */
-    private void validateMessageHierarchy(User sender, User recipient) {
+    private void validateMessageHierarchy(User recipient) {
         // SUPER_ADMIN bypasses all hierarchy checks
         if (isSuperAdminContext()) {
             return;

@@ -51,6 +51,16 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private static final String STATUS_CHECKED_IN = "CHECKED_IN";
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): these
+    // four status / urgency strings are emitted to the worklist DTO
+    // (frontend contract is String-typed, so we can't switch to the
+    // matching enums without widening the API). One constant per value.
+    // Naming follows the existing STATUS_CHECKED_IN sibling above.
+    private static final String STATUS_SCHEDULED = "SCHEDULED";
+    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String URGENCY_ROUTINE = "ROUTINE";
+
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final AppointmentRepository appointmentRepository;
@@ -182,7 +192,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
             Patient p = appt.getPatient();
             if (p == null || !seenPatients.add(p.getId())) continue;
 
-            String apptStatus = appt.getStatus() != null ? appt.getStatus().name() : "SCHEDULED";
+            String apptStatus = appt.getStatus() != null ? appt.getStatus().name() : STATUS_SCHEDULED;
             String mappedStatus = mapAppointmentStatus(apptStatus);
             if (!matchesStatusFilter(status, mappedStatus)) continue;
 
@@ -223,7 +233,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .age(computeAge(p))
                 .sex(p.getGender())
                 .chiefComplaint(appt.getReason())
-                .urgency("ROUTINE")
+                .urgency(URGENCY_ROUTINE)
                 .encounterStatus(mappedStatus)
                 .updatedAt(appt.getUpdatedAt() != null ? appt.getUpdatedAt() : appt.getCreatedAt())
                 .alerts(Collections.emptyList())
@@ -231,7 +241,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     }
 
     private DoctorWorklistItemDTO buildConsultWorklistItem(Patient p, com.example.hms.model.Consultation consult) {
-        String consultUrgency = consult.getUrgency() != null ? consult.getUrgency().name() : "ROUTINE";
+        String consultUrgency = consult.getUrgency() != null ? consult.getUrgency().name() : URGENCY_ROUTINE;
         UUID consultHospitalId = consult.getHospital() != null ? consult.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
@@ -274,7 +284,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .location(location)
                 .latestVitalsSummary(latestVitalsSummary)
                 .chiefComplaint(enc.getNotes())
-                .urgency(enc.getUrgency() != null ? enc.getUrgency().name() : "ROUTINE")
+                .urgency(enc.getUrgency() != null ? enc.getUrgency().name() : URGENCY_ROUTINE)
                 .encounterStatus(mappedStatus)
                 .waitMinutes(waitMinutes)
                 .updatedAt(enc.getUpdatedAt() != null ? enc.getUpdatedAt() : enc.getCreatedAt())
@@ -319,23 +329,23 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private String mapEncounterStatus(EncounterStatus es) {
         return switch (es) {
             case ARRIVED -> STATUS_CHECKED_IN;
-            case SCHEDULED -> "SCHEDULED";
+            case SCHEDULED -> STATUS_SCHEDULED;
             case TRIAGE -> "TRIAGE";
             case WAITING_FOR_PHYSICIAN -> "WAITING";
-            case IN_PROGRESS -> "IN_PROGRESS";
-            case AWAITING_RESULTS -> "IN_PROGRESS";
-            case READY_FOR_DISCHARGE -> "IN_PROGRESS";
-            case COMPLETED -> "COMPLETED";
+            case IN_PROGRESS -> STATUS_IN_PROGRESS;
+            case AWAITING_RESULTS -> STATUS_IN_PROGRESS;
+            case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
+            case COMPLETED -> STATUS_COMPLETED;
             case CANCELLED -> "CANCELLED";
         };
     }
 
     private String mapAppointmentStatus(String apptStatus) {
         return switch (apptStatus) {
-            case "CONFIRMED", "SCHEDULED" -> STATUS_CHECKED_IN;
-            case "IN_PROGRESS" -> "IN_PROGRESS";
-            case "COMPLETED" -> "COMPLETED";
-            default -> "SCHEDULED";
+            case "CONFIRMED", STATUS_SCHEDULED -> STATUS_CHECKED_IN;
+            case STATUS_IN_PROGRESS -> STATUS_IN_PROGRESS;
+            case STATUS_COMPLETED -> STATUS_COMPLETED;
+            default -> STATUS_SCHEDULED;
         };
     }
 
@@ -344,7 +354,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return switch (urgency.toUpperCase()) {
             case "EMERGENT", "EMERGENCY", "STAT" -> 4;
             case "URGENT" -> 3;
-            case "ROUTINE" -> 2;
+            case URGENCY_ROUTINE -> 2;
             case "LOW" -> 1;
             default -> 0;
         };

@@ -1,5 +1,19 @@
+<!--
+  v1.0 row 11: skip-link MUST be the first focusable element in the shell
+  so a keyboard user's first Tab reveals it. See docs/ui/accessibility.md §6.9.
+-->
+<app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
+
 <div class="shell" [class.collapsed]="sidebarCollapsed()">
-  <!-- Sidebar -->
+  <!--
+    Sidebar.
+    The accessible name belongs on the inner <nav> (the navigation
+    landmark), not the outer <aside>. Per Copilot review on PR #288:
+    `aria-label` on the <aside> labeled the wrong landmark — screen
+    readers announce the <nav> with no name. The aside stays
+    unlabeled; it remains a `complementary` landmark by default, which
+    is the correct ARIA role for a non-primary side region.
+  -->
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo-area">
@@ -15,7 +29,7 @@
       </button>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="Primary navigation">
       @for (item of navItems(); track item.route; let i = $index) {
         <a
           class="nav-item"
@@ -71,7 +85,7 @@
   <!-- Main Content -->
   <div class="main-area">
     <!-- Header -->
-    <header class="topbar">
+    <header class="topbar" role="banner">
       <div class="topbar-left">
         <button class="mobile-toggle" (click)="toggleSidebar()" aria-label="Menu">
           <span class="material-symbols-outlined">menu</span>
@@ -231,8 +245,22 @@
       </div>
     }
 
-    <!-- Page Content -->
-    <main class="content">
+    <!--
+      Page Content.
+      v1.0 row 11: id + tabindex="-1" make this the landing target for
+      the skip-link (docs/ui/accessibility.md §6.9) AND the programmatic
+      focus destination on every NavigationEnd (see shell.ts
+      ngAfterViewInit). aria-label gives screen-reader users a stable
+      landmark name that doesn't depend on the inner page heading.
+    -->
+    <main
+      #mainContent
+      id="main-content"
+      class="content"
+      tabindex="-1"
+      role="main"
+      aria-label="Main content"
+    >
       <app-impersonation-banner />
       <!-- MVP-7b — surfaces the latest /topic/emergency-broadcast frame
            on every authenticated route. Mounted in the shell so a

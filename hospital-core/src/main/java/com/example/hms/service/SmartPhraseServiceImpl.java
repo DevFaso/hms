@@ -348,6 +348,16 @@ public class SmartPhraseServiceImpl implements SmartPhraseService {
                                       UUID hospitalId,
                                       UUID ownerUserId,
                                       User caller) {
+        // Sonar S6884 ("Replace this 'if' statement with a pattern
+        // match guard") flagged the if-then-throw inside the HOSPITAL
+        // and USER branches. The suggestion does NOT apply here:
+        // Java 21 `when` guards only attach to *type patterns* (JEP
+        // 441), not to bare enum constant case labels. Attempting
+        // `case HOSPITAL when ... ->` is a compile error. Keeping the
+        // original shape and tracking this as a Sonar false positive
+        // (Pattern 10 in docs/SonarQubeInstructions.md). To formally
+        // close the finding, mark as "won't fix" in SonarCloud with
+        // a link back to this comment.
         switch (scope) {
             case GLOBAL -> requireSuperAdmin("edit GLOBAL SmartPhrase");
             case HOSPITAL -> {

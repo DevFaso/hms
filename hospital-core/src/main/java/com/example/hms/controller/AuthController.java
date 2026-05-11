@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.payload.dto.credential.VerifyRecoveryContactRequest;
+import com.example.hms.controller.support.AuthControllerProperties;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -46,7 +47,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -97,28 +97,23 @@ public class AuthController {
     private final MfaService mfaService;
     private final WsTicketService wsTicketService;
     private final RefreshTokenCookieService refreshTokenCookieService;
-    private final String frontendBaseUrl;
-    private final List<String> mfaRequiredRoles;
     /**
-     * KC-5 prep — when true, the legacy internal token issuer is sealed
-     * off: POST /auth/login and POST /auth/token/refresh return 410 Gone
-     * so clients migrate to Keycloak (Auth Code + PKCE). Already-issued
-     * tokens continue to validate through {@code JwtAuthenticationFilter}
-     * until they expire naturally, so this is a soft cutover. Default
-     * false preserves today's behaviour; flip via {@code OIDC_REQUIRED=true}
-     * during the Phase 2.6 soak.
+     * Bundles the four {@code @Value}-injected configuration scalars
+     * the controller previously took as separate constructor params:
+     * frontend base URL, MFA-required roles, OIDC-required flag, and
+     * OIDC issuer URI. Aggregation drops the constructor parameter
+     * count from 21 to 18. Sonar S107 ("constructor has too many
+     * parameters") still fires at 18 — the residual is documented as
+     * "won't fix" in docs/SonarQubeInstructions.md §Pattern 7
+     * because full helper-class extraction is a feature-scope refactor
+     * (changes the auth-surface architecture) rather than a
+     * Sonar-cleanup chore.
+     *
+     * <p>Field-level docstrings for the original scalars (KC-5 cutover
+     * gate, RFC-8414 Link header behaviour) moved to the accessor
+     * comments on {@link AuthControllerProperties}.</p>
      */
-    private final boolean oidcRequired;
-
-    /**
-     * Roadmap row 8 — OIDC issuer used to build the {@code Link:
-     * rel="oauth2-issuer"} header (per RFC 8414) on 410 responses, so a
-     * client receiving the runbook copy can self-discover the SSO
-     * endpoint without operator intervention. Empty string means no
-     * Link header is emitted; the JSON {@code message} field is still
-     * returned so humans can read the instruction.
-     */
-    private final String oidcIssuerUri;
+    private final AuthControllerProperties authProps;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
@@ -137,10 +132,7 @@ public class AuthController {
             MfaService mfaService,
             WsTicketService wsTicketService,
             RefreshTokenCookieService refreshTokenCookieService,
-            @Value("${app.frontend.base-url}") String frontendBaseUrl,
-            @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles,
-            @Value("${app.auth.oidc.required:false}") boolean oidcRequired,
-            @Value("${app.auth.oidc.issuer-uri:}") String oidcIssuerUri) {
+            AuthControllerProperties authProps) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.authBootstrapService = authBootstrapService;
@@ -158,10 +150,7 @@ public class AuthController {
         this.mfaService = mfaService;
         this.wsTicketService = wsTicketService;
         this.refreshTokenCookieService = refreshTokenCookieService;
-        this.frontendBaseUrl = frontendBaseUrl;
-        this.mfaRequiredRoles = mfaRequiredRoles;
-        this.oidcRequired = oidcRequired;
-        this.oidcIssuerUri = oidcIssuerUri == null ? "" : oidcIssuerUri.trim();
+        this.authProps = authProps;
 
         // KC-5 cutover signal: surface the gate state in the startup log so the
         // ops on-call running the cutover runbook can confirm the flip took
@@ -169,7 +158,7 @@ public class AuthController {
         // with the /api context-path (server.servlet.context-path=/api), which
         // is what hits the load balancer — the message must match the URL ops
         // are actually curling in their smoke checks.
-        if (oidcRequired) {
+        if (authProps.oidcRequired()) {
             log.info("[OIDC] app.auth.oidc.required=true — legacy POST /api/auth/login + POST /api/auth/token/refresh will return 410 Gone");
         } else {
             log.info("[OIDC] app.auth.oidc.required=false — legacy POST /api/auth/login + POST /api/auth/token/refresh accept username/password");
@@ -220,7 +209,7 @@ public class AuthController {
             HttpServletResponse httpResponse) {
         // KC-5 prep: short-circuit the legacy issuer when the soak flag is on.
         // Callers must migrate to the Keycloak Auth Code + PKCE flow.
-        if (oidcRequired) {
+        if (authProps.oidcRequired()) {
             log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
                     loginRequest.getUsername());
             return legacyIssuerGone(
@@ -493,7 +482,7 @@ public class AuthController {
 
         String activationLink = String.format(
                 "%s/verify?email=%s&token=%s",
-                frontendBaseUrl, user.getEmail(), user.getActivationToken());
+                authProps.frontendBaseUrl(), user.getEmail(), user.getActivationToken());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
             log.info("📧 Resent verification email to '{}'", user.getEmail());
@@ -568,7 +557,7 @@ public class AuthController {
         // minted from refresh tokens either. Existing access tokens keep
         // working until they expire; after that clients must re-authenticate
         // via Keycloak.
-        if (oidcRequired) {
+        if (authProps.oidcRequired()) {
             log.warn("🔄 [REFRESH] Rejected — legacy issuer disabled (app.auth.oidc.required=true)");
             return legacyIssuerGone(
                     "Legacy token refresh is disabled. Sign in via Single Sign-On.");
@@ -1117,10 +1106,11 @@ public class AuthController {
      * Returns the primary hospital (first active assignment) and all permitted hospital IDs.
      */
     private boolean isMfaRequiredForUser(List<String> roles) {
-        if (mfaRequiredRoles == null || mfaRequiredRoles.isEmpty()) {
+        List<String> required = authProps.mfaRequiredRoles();
+        if (required.isEmpty()) {
             return false;
         }
-        return roles.stream().anyMatch(mfaRequiredRoles::contains);
+        return roles.stream().anyMatch(required::contains);
     }
 
     /**
@@ -1134,10 +1124,11 @@ public class AuthController {
      */
     private ResponseEntity<Object> legacyIssuerGone(String userFacingMessage) {
         ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.GONE);
-        if (!oidcIssuerUri.isEmpty()) {
-            String discovery = oidcIssuerUri.endsWith("/")
-                    ? oidcIssuerUri + ".well-known/openid-configuration"
-                    : oidcIssuerUri + "/.well-known/openid-configuration";
+        String issuer = authProps.oidcIssuerUri();
+        if (!issuer.isEmpty()) {
+            String discovery = issuer.endsWith("/")
+                    ? issuer + ".well-known/openid-configuration"
+                    : issuer + "/.well-known/openid-configuration";
             builder = builder.header("Link",
                     "<" + discovery + ">; rel=\"oauth2-issuer\"; type=\"application/json\"");
         }

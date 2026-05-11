@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.ROLE_PREFIX;
+
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EmploymentType;
@@ -466,7 +468,7 @@ public class UserServiceImpl implements UserService {
 
     private Role resolveRoleByName(String name) {
         final String normalized = name == null ? "" : name.trim().toUpperCase(Locale.ROOT);
-        final String code = normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+        final String code = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
         return getRoleByCode(code);
     }
 
@@ -519,7 +521,7 @@ public class UserServiceImpl implements UserService {
     /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
     private static String formatRoleLabel(String roleCode) {
         if (roleCode == null) return "User";
-        String stripped = roleCode.startsWith("ROLE_") ? roleCode.substring(5) : roleCode;
+        String stripped = roleCode.startsWith(ROLE_PREFIX) ? roleCode.substring(ROLE_PREFIX.length()) : roleCode;
         return java.util.Arrays.stream(stripped.split("_"))
             .filter(w -> !w.isEmpty())
             .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())

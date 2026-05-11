@@ -68,7 +68,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User patientUser = userRepository.findByUsername(patientUsername)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
         Patient patient = patientRepository.findByUserId(patientUser.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + patientUsername));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
 
         User currentUser = getUserOrThrow(username);
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
@@ -100,6 +100,10 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private static final Logger log = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): this
+    // error-message prefix appears 3x in this file. Naming follows the
+    // existing USER_NOT_FOUND_PREFIX sibling above.
+    private static final String PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX = "Patient not found for username: ";
     private static final String APPOINTMENT_NOT_FOUND_MESSAGE = "Appointment not found";
     private static final String ROLE_SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
     private static final String ROLE_ADMIN_CODE = "ROLE_ADMIN";
@@ -368,7 +372,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername()))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + request.getPatientUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + request.getPatientUsername()));
         } else if (request.getPatientEmail() != null) {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
@@ -380,7 +384,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + authenticatedUsername));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
@@ -996,15 +1000,14 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private static com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO toCalendarEvent(com.example.hms.model.Appointment a) {
+        // Sonar S3358 (Pattern 8 of docs/SonarQubeInstructions.md):
+        // the original implementation packed three nested ternaries
+        // across L1002/1005/1007. Extracted into named helpers so each
+        // null-fallback step is independently readable.
         java.util.UUID providerId = a.getStaff() != null ? a.getStaff().getId() : null;
-        String providerName = a.getStaff() != null && a.getStaff().getFullName() != null
-            ? a.getStaff().getFullName()
-            : (a.getStaff() != null ? a.getStaff().getName() : null);
+        String providerName = resolveProviderName(a.getStaff());
         java.util.UUID patientId = a.getPatient() != null ? a.getPatient().getId() : null;
-        String patientName = a.getPatient() == null ? null
-            : ((a.getPatient().getFirstName() == null ? "" : a.getPatient().getFirstName())
-                + " "
-                + (a.getPatient().getLastName() == null ? "" : a.getPatient().getLastName())).trim();
+        String patientName = resolvePatientName(a.getPatient());
         java.time.LocalDateTime start = a.getAppointmentDate() == null || a.getStartTime() == null
             ? null : a.getAppointmentDate().atTime(a.getStartTime());
         java.time.LocalDateTime end = a.getAppointmentDate() == null || a.getEndTime() == null
@@ -1022,5 +1025,37 @@ public class AppointmentServiceImpl implements AppointmentService {
             a.getStatus() == null ? null : a.getStatus().name(),
             a.getReason()
         );
+    }
+
+    /**
+     * Prefer the staff's full name; fall back to plain name; null if no
+     * staff at all. Extracted from {@link #toCalendarEvent} to satisfy
+     * Sonar S3358 (Pattern 8). Behaviour equivalent to the original
+     * nested ternary.
+     */
+    private static String resolveProviderName(com.example.hms.model.Staff staff) {
+        if (staff == null) {
+            return null;
+        }
+        if (staff.getFullName() != null) {
+            return staff.getFullName();
+        }
+        return staff.getName();
+    }
+
+    /**
+     * Compose a patient's display name from first + last with explicit
+     * empty-string fallbacks. Returns null when there is no patient.
+     * Extracted from {@link #toCalendarEvent} to satisfy Sonar S3358
+     * (Pattern 8). Behaviour equivalent to the original nested
+     * ternaries.
+     */
+    private static String resolvePatientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        String first = patient.getFirstName() == null ? "" : patient.getFirstName();
+        String last = patient.getLastName() == null ? "" : patient.getLastName();
+        return (first + " " + last).trim();
     }
 }

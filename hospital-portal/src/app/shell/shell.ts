@@ -1,7 +1,17 @@
-import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+  OnInit,
+  OnDestroy,
+  ElementRef,
+  ViewChild,
+  AfterViewInit,
+} from '@angular/core';
+import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, filter } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -15,6 +25,7 @@ import { ImpersonationService } from '../services/impersonation.service';
 import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadcast-banner';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { NavOrderService } from './nav-order.service';
+import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 
 interface NavItem {
   icon: string;
@@ -37,11 +48,20 @@ interface NavItem {
     ImpersonationBannerComponent,
     EmergencyBroadcastBannerComponent,
     TranslateModule,
+    SkipLinkComponent,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
-export class ShellComponent implements OnInit, OnDestroy {
+export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+  /**
+   * v1.0 row 11: target for the skip-link and the programmatic focus
+   * landing on every route change. Carries tabindex="-1" so it can
+   * accept focus without polluting Tab order. See
+   * docs/ui/accessibility.md §4.
+   */
+  @ViewChild('mainContent') protected mainContent?: ElementRef<HTMLElement>;
+  private routerSub?: Subscription;
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
@@ -721,9 +741,28 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * v1.0 row 11: on every successful navigation, move focus to the
+   * `<main id="main-content">` element. Without this, keyboard and
+   * screen-reader users stay on whatever they clicked (a sidebar nav
+   * link, a button in a list) and lose context. Angular does NOT do
+   * this by default. See docs/ui/accessibility.md §4.
+   */
+  ngAfterViewInit(): void {
+    this.routerSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        // queueMicrotask defers until after the new component has
+        // rendered into the outlet so focus actually lands on the
+        // freshly painted <main>, not the previous one.
+        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+      });
+  }
+
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
+    this.routerSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
     // MVP-7b — release the emergency-broadcast STOMP socket on shell teardown.
     this.emergencyBroadcast.disconnect();
