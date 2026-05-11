@@ -10,7 +10,7 @@ v1.0,2026-06-23,Operations,DR runbook,"docs/runbooks/disaster-recovery.md coveri
 v1.0,2026-06-23,Accessibility,axe-core/playwright smoke,"Fail PR on any new a11y violation across login, doctor dashboard, patient tracker, AVS",—,S,Frontend,completed,#h1.exit
 v1.0,2026-06-23,Accessibility,Keyboard navigation pass,All clinical-flow screens reachable + actionable via keyboard; documented in docs/ui/accessibility.md,axe-core/playwright smoke,M,Frontend,completed,#h1.exit
 v1.0,2026-06-23,i18n,FR completeness gate,Tooling extracts all *.json keys; CI fails when any locale is < 99% of EN; enforced in frontend-ci.yml,—,S,Frontend,completed,#h1.exit
-v1.0,2026-06-23,Releases,v1.0.0-rc1 cut,"Tag, signed release notes from CHANGELOG.md, freeze feat/* for 1 week, only fix/* allowed during soak",All v1.0 items,S,Platform,started,#h1.exit
+v1.0,2026-06-23,Releases,v1.0.0-rc1 cut,"Tag, signed release notes from CHANGELOG.md, pre-pilot soak (one overnight CI run + one DR rehearsal, ~24-36h); 7-day feat/* freeze + fix/*-only policy kicks in for v1.1.0 onward (first pilot deploy)",All v1.0 items,S,Platform,started,#h1.exit
 v1.1,2026-10-01,Interop FHIR,FHIR write API,"POST/PUT for Patient, Encounter, Observation; conditional create via If-None-Exist; metadata updated to advertise write capabilities",FHIR read API (done),L,Backend,not-started,#h2.exit
 v1.1,2026-10-01,Interop FHIR,FHIR Bulk Data Access ($export),Bulk export for Patient and Group; output to S3-compatible bucket; documented in docs/fhir-bulk.md,FHIR write API,M,Backend,not-started,#h2.exit
 v1.1,2026-10-01,Interop FHIR,FHIR $everything operation,Patient compartment export; required by most HIE handshakes,FHIR write API,M,Backend,not-started,#h2.exit

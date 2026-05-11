@@ -1,18 +1,54 @@
 # Release soak protocol
 
-> Roadmap row 13 deliverable: "freeze `feat/*` for 1 week, only
-> `fix/*` allowed during soak". This runbook is the policy that
-> phrase points at — what's frozen, what's allowed, who can
-> override, how the soak ends.
+> Roadmap row 13 deliverable references "freeze `feat/*` for 1 week,
+> only `fix/*` allowed during soak". This runbook is the policy that
+> phrase points at — what's frozen, what's allowed, who can override,
+> how the soak ends. The 1-week window is the **post-pilot default**;
+> see "Pre-pilot variant" below for the reduced window that applies
+> until the first hospital pilot deploys against a tagged release.
 >
 > Pair this with [docs/releases/v1.0.0-rc1.md](../releases/v1.0.0-rc1.md)
 > (the rc1 cut) and [scripts/cut-rc1.sh](../../scripts/cut-rc1.sh)
 > (the helper script that pushes the tag).
 
-## When the soak begins
+## Pre-pilot variant (current, applies to v1.0.0-rc1)
+
+The system has no production deploys yet — no hospital pilot is
+consuming a tagged release. The 7-day calendar freeze exists to
+protect customers from new behavior landing between the cut and
+the production deploy; with no customers there is no behavior to
+protect, and a multi-day calendar window is policy theater.
+
+**While the system is pre-pilot**, the soak collapses to:
+
+- **One overnight CI run** against the tagged ref (CI on `main`
+  runs on every push; one full nightly cycle still catches
+  flake / leak / OOM signatures that don't surface in a single
+  on-demand run).
+- **One DR rehearsal** following
+  [docs/runbooks/disaster-recovery.md](disaster-recovery.md). The
+  rehearsal is one-shot regardless of soak length and is the
+  cheap insurance for a runbook nobody's exercised yet.
+- **No `feat/*` freeze on the release branch.** With no
+  production blast radius, the freeze costs more (slows v1.1
+  work) than it buys.
+
+Both deliverables can complete in 24–36 hours. `rc1` may be
+promoted to `v1.0.0` GA the morning after both a green overnight
+CI run and a passed DR rehearsal — typically same-week as the
+cut, often the day after.
+
+The pre-pilot variant ENDS the moment a hospital pilot starts
+consuming a tagged release. The release manager flips the project
+to the post-pilot 7-day soak in the same PR that records the first
+pilot deployment in [docs/runbooks/](.).
+
+## Post-pilot soak (default after first pilot deploy)
+
+### When the soak begins
 
 The soak begins the moment a release-candidate tag is pushed
-(e.g. `v1.0.0-rc1`). The release manager records the cut time +
+(e.g. `v1.1.0-rc1`). The release manager records the cut time +
 the planned soak-end time in the GitHub release body and pins it
 to the top of the team channel.
 

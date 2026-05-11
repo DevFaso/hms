@@ -34,9 +34,13 @@ of [docs/roadmap.csv](docs/roadmap.csv)):
 - i18n: FR completeness gate (CI-enforced ≥ 99% parity)
 
 The full release notes live in
-[docs/releases/v1.0.0-rc1.md](docs/releases/v1.0.0-rc1.md). The
-freeze policy that begins the moment the tag is pushed lives in
-[docs/runbooks/release-soak-protocol.md](docs/runbooks/release-soak-protocol.md).
+[docs/releases/v1.0.0-rc1.md](docs/releases/v1.0.0-rc1.md). v1.0.0-rc1
+runs the **pre-pilot soak variant** (one overnight CI run + one DR
+rehearsal, ~24–36h, no `feat/*` freeze) because the system has no
+production deploys yet — see
+[docs/runbooks/release-soak-protocol.md §Pre-pilot variant](docs/runbooks/release-soak-protocol.md#pre-pilot-variant-current-applies-to-v100-rc1).
+The 7-day post-pilot soak kicks in for v1.1.0 onward, in the same
+PR that records the first hospital pilot deployment.
 
 This heading sits above the migration-keyed entries below because
 SemVer release tags and the migration high-water mark live at
