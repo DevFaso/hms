@@ -6,8 +6,12 @@ on:
   push:
     branches: [main, develop, uat]
 
-permissions:
-  contents: read
+# SonarCloud row 11 / Sonar S6396: permissions declared at the workflow
+# level inherit to every job (and to every callable workflow this file
+# triggers). Per principle-of-least-privilege we declare permissions on
+# the job that actually needs them — reusable callable workflows
+# (`backend-tests`, `frontend-tests`, `agent-lint`) carry their own.
+# Removed: `permissions: contents: read` at workflow level.
 
 concurrency:
   group: project-quality-${{ github.event.pull_request.number || github.ref }}
@@ -18,30 +22,38 @@ jobs:
     name: Backend (JUnit, Jacoco)
     uses: ./.github/workflows/backend-ci.yml
     secrets: inherit
+    # backend-ci.yml declares its own permissions; nothing inherited here.
 
   frontend-tests:
     name: Frontend (Jest, Playwright)
     uses: ./.github/workflows/frontend-ci.yml
     secrets: inherit
+    # frontend-ci.yml declares its own permissions; nothing inherited here.
 
   agent-lint:
     name: Agent Lint & Prompt Tests
     uses: ./.github/workflows/agent-lint.yml
     secrets: inherit
+    # agent-lint.yml declares its own (`contents: read`) at workflow level
+    # for the callable trigger; that satisfies the S6396 rule for the
+    # callable's own scope.
 
   lint-docker-yaml:
     name: Lint Dockerfiles & YAML
     runs-on: ubuntu-latest
+    # Per-job least-privilege: only contents:read needed to fetch sources.
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Lint Dockerfiles
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
         with:
           recursive: true
 
       - name: Lint YAML files
-        uses: ibiqlik/action-yamllint@v3
+        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
         with:
           file_or_dir: '.'
           config_file: '.yamllint.yml'
@@ -49,6 +61,9 @@ jobs:
   require-all-pass:
     name: Require All Jobs Pass
     runs-on: ubuntu-latest
+    # require-all-pass only reads the result of `needs:` — no repo /
+    # write permissions required, so omit the block entirely (defaults
+    # to empty under the new GitHub default-permissions model).
     needs:
       - backend-tests
       - frontend-tests

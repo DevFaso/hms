@@ -12,10 +12,14 @@ jobs:
     name: Lint AGENT files
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
+      # SonarCloud row 11 / Sonar S6321: pin the resolved package
+      # version so a malicious or accidentally-broken release upstream
+      # cannot land in our CI without a deliberate bump in this file.
+      # Refresh cadence: monthly, or whenever Renovate opens a PR.
       - name: Install markdownlint-cli
-        run: npm install -g markdownlint-cli
+        run: npm install -g markdownlint-cli@0.48.0
 
       - name: Lint agent markdown files
         run: markdownlint agent/*.md --config .markdownlint.json
@@ -25,7 +29,7 @@ jobs:
     name: Check forbidden patterns
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Scan for hardcoded secrets
         run: |
@@ -55,7 +59,7 @@ jobs:
     name: Scenario tests (Promptfoo)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Check for scenario files
         id: check_scenarios
@@ -66,14 +70,17 @@ jobs:
             echo "found=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         if: steps.check_scenarios.outputs.found == 'true'
         with:
           node-version: '20'
 
+      # SonarCloud row 11 / Sonar S6321: pin promptfoo to a specific
+      # version so an upstream-malicious release can't run with our
+      # OPENAI_API_KEY in scope. Bump in a dedicated PR.
       - name: Install promptfoo
         if: steps.check_scenarios.outputs.found == 'true'
-        run: npm install -g promptfoo
+        run: npm install -g promptfoo@0.121.11
 
       - name: Run scenario-based tests
         if: steps.check_scenarios.outputs.found == 'true'
