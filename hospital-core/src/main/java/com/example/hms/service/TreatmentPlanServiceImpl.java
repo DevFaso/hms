@@ -26,6 +26,8 @@ import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.TreatmentPlanReviewRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,20 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class TreatmentPlanServiceImpl implements TreatmentPlanService {
+
+    /**
+     * Self-reference for proxy-routed internal calls
+     * ({@link #listAll(TreatmentPlanStatus, Pageable)}
+     * → {@link #listByHospital(UUID, TreatmentPlanStatus, Pageable)}).
+     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
+     * rationale and pattern docstring.
+     */
+    private TreatmentPlanService self;
+
+    @Autowired
+    public void setSelf(@Lazy TreatmentPlanService self) {
+        this.self = self;
+    }
 
     private static final String AUTHOR_LABEL = "Author";
     private static final String STAFF_LABEL = "Staff";
@@ -144,7 +160,9 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     public Page<TreatmentPlanResponseDTO> listAll(TreatmentPlanStatus status, Pageable pageable) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            return listByHospital(activeHospitalId, status, pageable);
+            // Sonar S6809: route through the proxy so listByHospital's
+            // own @Transactional(readOnly=true) is honored.
+            return self.listByHospital(activeHospitalId, status, pageable);
         }
         Page<TreatmentPlan> page = (status != null)
             ? treatmentPlanRepository.findAllByStatus(status, pageable)

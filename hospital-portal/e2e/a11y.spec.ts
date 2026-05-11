@@ -134,6 +134,22 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     // signal.
     await runAxe(page, '/my-medications');
   });
+
+  // v1.0 roadmap row 11 — WEST-AFRICAN clinical-flow widening
+  // (reception, nurse-station, prescriptions, pharmacy/dispensing)
+  // was attempted in this PR but reverted because those screens
+  // carry pre-existing serious/critical axe violations that haven't
+  // been addressed yet (per-screen audits are the row 11 follow-up
+  // PRs). Adding the routes here would have failed CI on debt this
+  // PR doesn't own. Re-add the four tests below as each per-screen
+  // audit PR lands — each audit closes the violations for ITS route
+  // and then re-adds ONLY its route to the axe smoke:
+  //   - /reception           (per-screen audit follow-up)
+  //   - /nurse-station       (per-screen audit follow-up)
+  //   - /prescriptions       (per-screen audit follow-up)
+  //   - /pharmacy/dispensing (per-screen audit follow-up)
+  // See docs/sonar-pr-queue.md / docs/ui/accessibility.md for the
+  // tracking.
 });
 
 test.describe('a11y smoke (axe-core) — unauthenticated /login', () => {

@@ -1,6 +1,14 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  PLATFORM_ID,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { catchError, of } from 'rxjs';
@@ -21,7 +29,17 @@ import { RoleContextService } from '../core/role-context.service';
   templateUrl: './login.html',
   styleUrls: ['./login.scss'],
 })
-export class Login implements OnInit {
+export class Login implements OnInit, AfterViewInit {
+  /**
+   * v1.0 row 11: keyboard-first staff (receptionists, data clerks) land
+   * on /login on every shift change. Programmatic focus on
+   * `#usernameInput` after the view paints — preferred over the HTML
+   * `autofocus` attribute because `autofocus` fires before assistive
+   * tech is ready and can steal focus mid-page-load. See
+   * docs/ui/accessibility.md §6.8.
+   */
+  @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+
   username = '';
   password = '';
   error = '';
@@ -96,6 +114,20 @@ export class Login implements OnInit {
   ngOnInit(): void {
     if (!this.isBrowser) return;
     this.checkBootstrapStatus();
+  }
+
+  /**
+   * v1.0 row 11: focus the username input on initial paint. Skipped
+   * when bootstrap or role-selection modes are active — those modes
+   * render a different first field and we don't want to steal focus
+   * from the field the user actually needs.
+   */
+  ngAfterViewInit(): void {
+    if (!this.isBrowser) return;
+    if (this.bootstrapMode || this.roleSelectionMode) return;
+    // queueMicrotask defers one tick past Angular's first change-
+    // detection cycle so the @ViewChild is populated.
+    queueMicrotask(() => this.usernameInput?.nativeElement.focus({ preventScroll: true }));
   }
 
   /** Check if the system needs initial setup (no users exist) */

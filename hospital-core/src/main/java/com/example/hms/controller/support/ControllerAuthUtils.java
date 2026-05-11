@@ -1,7 +1,6 @@
 package com.example.hms.controller.support;
 
 import com.example.hms.exception.BusinessException;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
