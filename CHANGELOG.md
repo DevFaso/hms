@@ -17,7 +17,10 @@ running deploys.
 prepped on branch `feat/v1.0.0-rc1-materials` (roadmap row 13).
 The signed tag has not yet been pushed; the actual cut is performed
 by the release manager via [scripts/cut-rc1.sh](scripts/cut-rc1.sh).
-This heading takes the cut date when the script runs.
+The `TBD-cut-date` placeholder above is replaced manually by the
+release manager in a `chore/*` PR right after the tag is pushed
+(allowed during soak per the soak protocol). The helper script does
+not mutate this file.
 
 v1.0.0-rc1 is the cumulative SemVer release candidate for HMS v1.0
 GA. It bundles every roadmap row in the v1.0 horizon (rows 2 – 12

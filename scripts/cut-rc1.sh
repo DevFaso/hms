@@ -9,7 +9,9 @@
 #
 # Usage:
 #   scripts/cut-rc1.sh                 # interactive — confirms each step
-#   scripts/cut-rc1.sh --dry-run       # run all checks, do NOT push the tag
+#   scripts/cut-rc1.sh --dry-run       # validate pre-flight + roadmap
+#                                      # consistency only; SKIP build/test
+#                                      # gates and do NOT create/push the tag
 #   TAG=v1.0.0-rc2 scripts/cut-rc1.sh  # cut a re-spin
 #
 # Exits non-zero on any pre-flight failure. The tag is NOT pushed
@@ -173,27 +175,46 @@ else
     && ok "Backend gate green." \
     || { red "Backend gate failed. Tail of /tmp/cut-rc1-backend.log:"; tail -50 /tmp/cut-rc1-backend.log; exit 1; }
 
-  echo "→ Frontend lint + format + unit tests…"
+  echo "→ Frontend lint + format-check + unit tests…"
   (cd hospital-portal && npm run lint > /tmp/cut-rc1-fe-lint.log 2>&1) \
     && ok "Frontend lint green." \
     || { red "Frontend lint failed. Tail of /tmp/cut-rc1-fe-lint.log:"; tail -50 /tmp/cut-rc1-fe-lint.log; exit 1; }
 
-  (cd hospital-portal && npm run format > /tmp/cut-rc1-fe-format.log 2>&1) \
-    && ok "Frontend format clean." \
-    || { red "Frontend format failed. Tail of /tmp/cut-rc1-fe-format.log:"; tail -50 /tmp/cut-rc1-fe-format.log; exit 1; }
+  # `format:check` (prettier --check) instead of `format` (prettier --write).
+  # The pre-flight already asserted a clean tree above; running the
+  # write-mode formatter here would silently mutate files and we would
+  # tag the un-committed diff. format:check fails loudly if any file is
+  # not already formatted.
+  (cd hospital-portal && npm run format:check > /tmp/cut-rc1-fe-format.log 2>&1) \
+    && ok "Frontend format check green." \
+    || { red "Frontend format check failed. Tail of /tmp/cut-rc1-fe-format.log:"; tail -50 /tmp/cut-rc1-fe-format.log; exit 1; }
 
   (cd hospital-portal && npm run test:headless > /tmp/cut-rc1-fe-test.log 2>&1) \
     && ok "Frontend Karma green." \
     || { red "Frontend Karma failed. Tail of /tmp/cut-rc1-fe-test.log:"; tail -100 /tmp/cut-rc1-fe-test.log; exit 1; }
 
+  echo "→ FR / ES i18n parity…"
+  # The release notes + soak protocol both reference the FR completeness
+  # gate (roadmap row 12). The CI workflow runs npm run i18n:check; the
+  # cut script must run the same gate so the tag's verification surface
+  # matches what CI enforces.
+  (cd hospital-portal && npm run i18n:check > /tmp/cut-rc1-fe-i18n.log 2>&1) \
+    && ok "Frontend i18n parity green." \
+    || { red "Frontend i18n parity failed. Tail of /tmp/cut-rc1-fe-i18n.log:"; tail -50 /tmp/cut-rc1-fe-i18n.log; exit 1; }
+
   echo "→ Frontend Playwright (a11y + keyboard-nav)…"
-  (cd hospital-portal && npx playwright test e2e/a11y.spec.ts e2e/keyboard-nav.spec.ts --project=chromium --reporter=line > /tmp/cut-rc1-fe-pw.log 2>&1) \
+  # Local binary, not npx. CI avoids `npx playwright` to keep the pinned
+  # version + skip the install-unverified-releases security hotspot;
+  # the cut script honors the same convention so a release operator
+  # can't accidentally end up on a different version under a stale npx
+  # cache.
+  (cd hospital-portal && ./node_modules/.bin/playwright test e2e/a11y.spec.ts e2e/keyboard-nav.spec.ts --project=chromium --reporter=line > /tmp/cut-rc1-fe-pw.log 2>&1) \
     && ok "Frontend Playwright green." \
     || { red "Frontend Playwright failed. Tail of /tmp/cut-rc1-fe-pw.log:"; tail -50 /tmp/cut-rc1-fe-pw.log; exit 1; }
 
   # Production build — confirms the bundle is shippable.
   echo "→ Frontend production build…"
-  (cd hospital-portal && npx ng build --configuration production > /tmp/cut-rc1-fe-build.log 2>&1) \
+  (cd hospital-portal && ./node_modules/.bin/ng build --configuration production > /tmp/cut-rc1-fe-build.log 2>&1) \
     && ok "Frontend production build succeeded." \
     || { red "Frontend production build failed. Tail of /tmp/cut-rc1-fe-build.log:"; tail -50 /tmp/cut-rc1-fe-build.log; exit 1; }
 fi
@@ -203,7 +224,7 @@ heading "Confirm"
 echo "About to:"
 echo "  1. Cut signed tag: $TAG"
 echo "  2. At commit:      $LOCAL_HEAD ($(git log -1 --format='%s' "$LOCAL_HEAD"))"
-echo "  3. Annotation:     contents of ${RELEASE_NOTES##*/}'s 'What is …?' section + a pointer to the file"
+echo "  3. Annotation:     fixed RC summary + pointers to docs/releases/${TAG}.md and docs/runbooks/release-soak-protocol.md"
 echo "  4. Push to:        origin"
 echo "  5. Begin soak:     per docs/runbooks/release-soak-protocol.md (7 days, fix/* only)"
 

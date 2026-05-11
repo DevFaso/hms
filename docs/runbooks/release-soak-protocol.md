@@ -33,7 +33,7 @@ soak; `uat` if soaking on UAT first per the established
 | `fix/*` | **Allowed** | Bug fixes that need to land before GA. Each requires the post-merge gates below. |
 | `chore/*` | **Allowed** if scope is dependency bumps or cleanup with no behavior change. CHANGELOG entry mandatory. | Some chores (test-only, doc-only) shouldn't gate the cut. |
 | `docs/*` | **Allowed** | Documentation drift discovered during soak. |
-| `revert/*` | **Allowed** with release-manager sign-off | Reverting a `feat/*` that landed before the cut and is mis-behaving. |
+| `revert/*` | **Allowed** with release-manager sign-off | Reverting a `feat/*` that landed before the cut and is misbehaving. |
 | `hotfix/*` | **Allowed**, treated as a `fix/*` with extra urgency | Reserved for production incidents. |
 
 A merge that violates the policy is reverted on sight; the author
