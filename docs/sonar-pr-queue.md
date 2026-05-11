@@ -1,21 +1,20 @@
 # SonarCloud PR Queue — Status
 
-> Tracks what's pushed, what's deferred, and what needs manual
+> Tracks what's merged, what's deferred, and what needs manual
 > action in the SonarCloud UI for the remediation effort kicked off
 > against the snapshot in [docs/copilot-review.md](./copilot-review.md).
 >
-> **How-to-fix** is the per-pattern playbook in `docs/SonarQubeInstructions.md`.
-> That file currently lives on the `feat/v1.0-keyboard-navigation` branch
-> (was created in the same session as this doc) and will land on
-> `develop` when that PR merges; this is a forward reference until then,
-> deliberately written as plain text rather than a relative link so it
-> doesn't render as broken before the playbook reaches `develop`.
+> **How-to-fix** is the per-pattern playbook in
+> [docs/SonarQubeInstructions.md](./SonarQubeInstructions.md).
+> The playbook landed on `develop` via PR #299 (the merge of
+> `chore/sonar-pin-workflow-actions`).
 >
-> This file is the **state** (per-PR pushed/deferred + reasoning) so a
+> This file is the **state** (per-PR merged/deferred + reasoning) so a
 > reviewer doesn't have to re-derive the picture from the playbook +
 > git log.
 >
-> Last refreshed: 2026-05-10.
+> Last refreshed: 2026-05-11 (all 8 chore PRs + the row 11 foundation
+> PR merged to `develop`).
 
 ## Snapshot
 
@@ -24,46 +23,47 @@
 | Vulnerabilities | 4 | **0** ✅ |
 | Critical code smells closed | 0 | **~47** |
 | False positives identified (need won't-fix in UI) | 0 | **5** |
-| PRs pushed (awaiting review / merge) | 0 | **8** |
+| PRs merged to `develop` | 0 | **8** ✅ |
 
-## Pushed (8 PRs — awaiting review and merge)
+## Merged into `develop` (8 PRs)
 
-All branched off `develop@db504cbc`. Each PR's body documents its
-verification — the full backend gate is:
+All branched off `develop@db504cbc` and merged via the GitHub UI
+(PRs #299–#306). Each PR's body documents its verification — the full
+backend gate is:
 
 ```bash
 ./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
 ```
 
-— and lands green on every PR (5179 / 5179 backend tests, JaCoCo 80%
-gate passing). None of these has been merged yet at the time of this
-refresh — they are pushed branches with open PRs awaiting review.
+— and landed green on every PR (5179 / 5179 backend tests, JaCoCo 80%
+gate passing).
 
 > **Note on numbering** — the playbook in `SonarQubeInstructions.md`
 > originally proposed a sequence of 16 PRs. PR **#2** in that sequence
 > ("Move workflow-level permissions to job level") was folded into
 > PR #1 once execution started, since both findings live in the same
 > three workflow files and SHA-pinning + permission relocation are
-> reviewed together cleanly. Hence the numbering below jumps from 1
-> to 3, and PRs #12 + #13 were combined into a single low-risk
-> housekeeping batch.
+> reviewed together cleanly. Hence the playbook-PR numbering below jumps
+> from 1 to 3, and PRs #12 + #13 were combined into a single low-risk
+> housekeeping batch. (The "GH PR #" column on the right is the actual
+> GitHub PR number assigned at merge time.)
 
-| # | Branch | Commit | Pattern | Findings closed | Notes |
+| Playbook # | GH PR | Branch | Pattern | Findings closed | Notes |
 |---|---|---|---|---|---|
-| 1 | `chore/sonar-pin-workflow-actions` | `406446cb` | 1a + 1b + 2 (S6321 + S6396) | 4 vulns + SHA-pinned all third-party actions | Closes every Vulnerability-class finding in the snapshot. Folds in original PR #2 (workflow → job-level perms). |
-| 3 | `chore/sonar-securityconfig-path-constants` | `786e6433` | 5 (S1192) | 4 Critical — path-literal duplications in SecurityConfig | 13 inline literals → 3 new constants + 1 existing |
-| 4 | `chore/sonar-role-literal-constants` | `169e0184` | 5 | ~22 Critical — role-string literals across EncounterController + ChatMessageServiceImpl + UserServiceImpl | Reuses existing `SecurityConstants` + adds `ROLE_PREFIX` |
-| 5 | `chore/sonar-i18n-message-keys` | `50188246` | 5 | 6 Critical — i18n message keys + a non-i18n error prefix across 6 service impls | 25 inline literals → 6 constants |
-| 6 | `chore/sonar-status-enum-literals` | `758e387e` | 5 | 6 Critical — DoctorWorklist / ClinicalDashboard / ResultReview status/urgency strings | 24 inline literals → 6 constants. DTO contract stays String (frontend-facing) so no enum migration. |
-| 7 | `chore/sonar-transactional-self-invocation` | `351d9575` | 6 (S6809) | 5 Critical — `@Transactional` self-invocation in 5 service impls | Setter-injection of `@Lazy <Interface> self` (matches `SuperAdminDashboardServiceImpl` pattern). 3 Mockito unit tests required `service.setSelf(service)` in `@BeforeEach`. |
-| 8 | `chore/sonar-auth-controller-split` | `27963529` | 7 (S107) | **0 directly** — Option C only | 4 `@Value` scalars folded into `AuthControllerProperties`. Constructor 21→18 params; **still above Sonar's 7 threshold**. Residual is intentionally accepted; must be marked won't-fix in UI. |
-| 12+13 | `chore/sonar-modernization-and-housekeeping` | `18844696` | 8, 9, 10, 15, 18 | 8 mixed (lambdas → method refs, `Math.clamp`, nested-ternary extraction, unused imports, unused method param) | Combined as one batch (lower review burden than two separate PRs). One pattern-match-guard attempt (S6884) failed to compile — Java 21 `when` requires type patterns, not enum constants. Reverted with documenting comment. |
+| 1 | [#299](https://github.com/DevFaso/hms/pull/299) | `chore/sonar-pin-workflow-actions` | 1a + 1b + 2 (S6321 + S6396) | 4 vulns + SHA-pinned all third-party actions | Closes every Vulnerability-class finding in the snapshot. Folds in original PR #2 (workflow → job-level perms). |
+| 3 | [#298](https://github.com/DevFaso/hms/pull/298) | `chore/sonar-securityconfig-path-constants` | 5 (S1192) | 4 Critical — path-literal duplications in SecurityConfig | 13 inline literals → 3 new constants + 1 existing |
+| 4 | [#300](https://github.com/DevFaso/hms/pull/300) | `chore/sonar-role-literal-constants` | 5 | ~22 Critical — role-string literals across EncounterController + ChatMessageServiceImpl + UserServiceImpl | Reuses existing `SecurityConstants` + adds `ROLE_PREFIX` |
+| 5 | [#301](https://github.com/DevFaso/hms/pull/301) | `chore/sonar-i18n-message-keys` | 5 | 6 Critical — i18n message keys + a non-i18n error prefix across 6 service impls | 25 inline literals → 6 constants |
+| 6 | [#302](https://github.com/DevFaso/hms/pull/302) | `chore/sonar-status-enum-literals` | 5 | 6 Critical — DoctorWorklist / ClinicalDashboard / ResultReview status/urgency strings | 24 inline literals → 6 constants. DTO contract stays String (frontend-facing) so no enum migration. |
+| 7 | [#303](https://github.com/DevFaso/hms/pull/303) | `chore/sonar-transactional-self-invocation` | 6 (S6809) | 5 Critical — `@Transactional` self-invocation in 5 service impls | Setter-injection of `@Lazy <Interface> self` (matches `SuperAdminDashboardServiceImpl` pattern). 3 Mockito unit tests required `service.setSelf(service)` in `@BeforeEach`. |
+| 8 | [#305](https://github.com/DevFaso/hms/pull/305) | `chore/sonar-auth-controller-split` | 7 (S107) | **0 directly** — Option C only | 4 `@Value` scalars folded into `AuthControllerProperties`. Constructor 21→18 params; **still above Sonar's 7 threshold**. Residual is intentionally accepted; must be marked won't-fix in UI. |
+| 12+13 | [#306](https://github.com/DevFaso/hms/pull/306) | `chore/sonar-modernization-and-housekeeping` | 8, 9, 10, 15, 18 | 8 mixed (lambdas → method refs, `Math.clamp`, nested-ternary extraction, unused imports, unused method param) | Combined as one batch (lower review burden than two separate PRs). One pattern-match-guard attempt (S6884) failed to compile — Java 21 `when` requires type patterns, not enum constants. Reverted with documenting comment. |
 
-### Total via pushed PRs
+### Total via merged PRs
 
 - **4 Vulnerabilities → 0** ✅
-- **~47 Critical code smells closed in pushed branches**
-- **8 PRs pushed; 0 merged at time of this refresh**
+- **~47 Critical code smells closed and merged to `develop`**
+- **All 8 chore PRs merged via the GitHub UI on 2026-05-11**
 
 ## Deferred — remaining playbook PRs
 
@@ -81,18 +81,19 @@ re-evaluated against current bandwidth and reviewer load.
 
 ### Recommended order
 
-1. **Pause first** — let the 8 open PRs collect review before stacking more.
-2. When ready: **PR #16** (lowest risk, 30 min) — quick win that signals
-   activity without adding review burden.
-3. **PR #15** (1h, 1 file but needs caller audit) — clears the
+The first-round 8 chore PRs are now merged. When picking the queue back up:
+
+1. **PR #16** (lowest risk, 30 min) — quick capstone / activity signal
+   without adding review burden.
+2. **PR #15** (1h, 1 file but needs caller audit) — clears the
    Major-class "return empty collection not null" warning.
-4. **PR #11** (3h, 8 files) — case-by-case loop refactors. Be
+3. **PR #11** (3h, 8 files) — case-by-case loop refactors. Be
    prepared to mark some as won't-fix where the loop encodes a
    clinical-rule shape (see §"When NOT to fix" in the playbook).
-5. **PR #10** (2h, 13 methods) before **PR #9** (4h, 2 worst-offender
+4. **PR #10** (2h, 13 methods) before **PR #9** (4h, 2 worst-offender
    methods). Doing the easier cognitive-complexity ones first builds
    reviewer trust in the refactoring style.
-6. **PR #14** last — touches infra config + needs ops coordination.
+5. **PR #14** last — touches infra config + needs ops coordination.
 
 ## False positives — needs "won't fix" in SonarCloud UI
 
@@ -118,31 +119,30 @@ Without that they'll keep generating noise in every future scan.
    in code — see <file>:<line> inline comment or the playbook entry.
    ```
 
-## Won't-fix items embedded in pushed PRs
+## Won't-fix items embedded in merged PRs
 
-PRs #6 (status enum literals) and #8 (AuthController split) made
-explicit "won't fix" calls inside their commit bodies:
+Playbook PRs #6 (GH #302, status enum literals) and #8 (GH #305,
+AuthController split) made explicit "won't fix" calls inside their
+commit bodies:
 
-- **PR #6** — status literals stay as `private static final String`
-  rather than migrate to existing enums (`EncounterStatus`,
-  `EncounterUrgency`, etc.) because the DTO contract is String-typed
-  and the frontend would have to migrate in lockstep. Documented in
-  each affected file's inline comment.
+- **PR #6 (GH #302)** — status literals stay as
+  `private static final String` rather than migrate to existing enums
+  (`EncounterStatus`, `EncounterUrgency`, etc.) because the DTO
+  contract is String-typed and the frontend would have to migrate in
+  lockstep. Documented in each affected file's inline comment.
 
-- **PR #8** — `AuthController` constructor still at 18 params after
-  the `AuthControllerProperties` fold. Full helper extraction was
-  Option A and was deferred as a separate feature-scope refactor.
-  Pattern 7 in the playbook calls this out under §"When NOT to fix".
-  **Action required**: mark the residual S107 + S3776 + Brain Method
-  findings on AuthController as won't-fix in the UI.
+- **PR #8 (GH #305)** — `AuthController` constructor still at 18
+  params after the `AuthControllerProperties` fold. Full helper
+  extraction was Option A and was deferred as a separate feature-scope
+  refactor. Pattern 7 in the playbook calls this out under §"When NOT
+  to fix". **Action required**: mark the residual S107 + S3776 + Brain
+  Method findings on AuthController as won't-fix in the UI.
 
 ## Cross-references
 
-- `docs/SonarQubeInstructions.md` — **how to fix** each pattern +
-  the original 16-PR sequence proposal. Currently on the
-  `feat/v1.0-keyboard-navigation` branch; will land on `develop`
-  when that PR merges. Left as plain text rather than a relative
-  link to avoid a broken link on `develop` until then.
+- [docs/SonarQubeInstructions.md](./SonarQubeInstructions.md) —
+  **how to fix** each pattern + the original 16-PR sequence proposal.
+  Landed on `develop` via PR #299.
 - [docs/copilot-review.md](./copilot-review.md) — raw export of the
   SonarCloud snapshot this campaign is working against
 - [.github/workflows/build.yml](../.github/workflows/build.yml) — the CI
