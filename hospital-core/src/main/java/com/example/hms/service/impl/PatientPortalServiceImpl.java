@@ -170,8 +170,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
-    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
-    private static final String CANCEL_PATH = "/appointments/cancel/";
+    // Sonar S1075 — URL paths externalized via @Value. Defaults preserve the
+    // pre-existing hard-coded values so ops can override per environment
+    // without a code change. AppointmentServiceImpl reads the same keys.
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.reschedule-path:/appointments/reschedule/}")
+    private String reschedulePath;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.cancel-path:/appointments/cancel/}")
+    private String cancelPath;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -1217,8 +1223,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-            String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
-            String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
+            String rescheduleLink = frontendBaseUrl + reschedulePath + appointment.getId();
+            String cancelLink = frontendBaseUrl + cancelPath + appointment.getId();
 
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,

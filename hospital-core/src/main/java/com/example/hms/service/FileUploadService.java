@@ -34,6 +34,16 @@ public class FileUploadService {
     private String uploadDir;
 
     /**
+     * Browser-facing URL prefix for uploaded files. Defaults to {@code /uploads}
+     * which matches the historical hard-coded value and the typical static
+     * resource handler / Nginx alias mapping. Sonar S1075 — externalized so
+     * deployments fronted by a reverse-proxy with a different alias (e.g.
+     * {@code /static/files}) can override without a code change.
+     */
+    @Value("${app.upload.url-prefix:/uploads}")
+    private String uploadUrlPrefix;
+
+    /**
      * Public base URL for file links returned to the browser.
      * <p>
      * Set this to your public-facing domain, e.g.
@@ -353,7 +363,7 @@ public class FileUploadService {
             Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String relativePath = "/uploads/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        String relativePath = uploadUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
         long sizeBytes = Files.size(filePath);
         String checksum = HexFormat.of().formatHex(digest.digest());
 
