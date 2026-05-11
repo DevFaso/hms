@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -84,7 +85,7 @@ public class EncounterController {
         // Enforce hospital scoping
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
-        boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
+        boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, ROLE_RECEPTIONIST);
         if (isReceptionist) {
             if (jwtHospitalId == null) {
                 throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
