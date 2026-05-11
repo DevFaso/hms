@@ -120,6 +120,18 @@ public class SecurityConfig {
     private static final String API_HOSPITALS = "/hospitals";
     private static final String API_HOSPITALS_PATTERN = API_HOSPITALS + "/**";
 
+    // SonarCloud S1192: extracted from L410/418/421/424/427 (5 duplicates),
+    // L434/443/446/449 (4 duplicates), L452/455/458/461 (4 duplicates).
+    // Pattern 5 of docs/SonarQubeInstructions.md.
+    private static final String API_DEPARTMENTS = "/departments";
+    private static final String API_DEPARTMENTS_PATTERN = API_DEPARTMENTS + "/**";
+
+    private static final String API_BILLING_INVOICES = "/billing-invoices";
+    private static final String API_BILLING_INVOICES_PATTERN = API_BILLING_INVOICES + "/**";
+
+    private static final String API_INVOICE_ITEMS = "/invoice-items";
+    private static final String API_INVOICE_ITEMS_PATTERN = API_INVOICE_ITEMS + "/**";
+
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -250,7 +262,7 @@ public class SecurityConfig {
                     new AntPathRequestMatcher("/chat/**"),
                     // Patient portal self-service (native mobile apps use Bearer JWT,
                     // not browser cookies, so CSRF protection is unnecessary)
-                    new AntPathRequestMatcher("/me/patient/**"),
+                    new AntPathRequestMatcher(API_ME_PATIENT_PATTERN),
                     new AntPathRequestMatcher("/me/notifications/**"),
                     new AntPathRequestMatcher("/notifications/**"),
                     new AntPathRequestMatcher("/me/chat/**"),
@@ -407,7 +419,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Departments / Roles --------------------
-                .requestMatchers(HttpMethod.GET, "/departments/**")
+                .requestMatchers(HttpMethod.GET, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
@@ -415,23 +427,23 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
-                .requestMatchers(HttpMethod.POST, "/departments/**")
+                .requestMatchers(HttpMethod.POST, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.PUT, "/departments/**")
+                .requestMatchers(HttpMethod.PUT, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.PATCH, "/departments/**")
+                .requestMatchers(HttpMethod.PATCH, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.DELETE, "/departments/**")
+                .requestMatchers(HttpMethod.DELETE, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Billing --------------------
-                .requestMatchers(HttpMethod.GET, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
 
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/search")
@@ -440,25 +452,25 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/*/email")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.POST, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
 
-                .requestMatchers(HttpMethod.PUT, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.PUT, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.DELETE, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.GET, "/invoice-items/**")
+                .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
 
-                .requestMatchers(HttpMethod.POST, "/invoice-items/**")
+                .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.PUT, "/invoice-items/**")
+                .requestMatchers(HttpMethod.PUT, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.DELETE, "/invoice-items/**")
+                .requestMatchers(HttpMethod.DELETE, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 .requestMatchers("/invoices/*/email", "/invoices/*/send-to")
