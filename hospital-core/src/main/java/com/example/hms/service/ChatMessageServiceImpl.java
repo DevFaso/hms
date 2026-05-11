@@ -1,5 +1,15 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
+import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_LAB_SCIENTIST;
+import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
+import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
+import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ChatMessageMapper;
 import com.example.hms.model.ChatAttachment;
@@ -56,47 +66,47 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * </ul>
      */
     private static final Map<String, Set<String>> ALLOWED_MESSAGE_TARGETS = Map.ofEntries(
-        Map.entry("ROLE_HOSPITAL_ADMIN", Set.of(
-            "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_HOSPITAL_ADMIN, Set.of(
+            ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_DOCTOR", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_DOCTOR, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_NURSE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_NURSE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_MIDWIFE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_MIDWIFE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_RECEPTIONIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_RECEPTIONIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_LAB_SCIENTIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_LAB_SCIENTIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_STAFF", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_STAFF, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_PATIENT", Set.of(
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE"
+        Map.entry(ROLE_PATIENT, Set.of(
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE
         ))
     );
 
@@ -304,7 +314,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
-            .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+            .anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
     }
 
     /**

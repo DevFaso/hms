@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
@@ -81,7 +83,7 @@ public class EncounterController {
     ) {
         // Enforce hospital scoping
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
         if (isReceptionist) {
             if (jwtHospitalId == null) {
@@ -148,7 +150,7 @@ public class EncounterController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         UUID resolvedHospitalId = hospitalId;
 
@@ -252,7 +254,7 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         Authentication auth
     ) {
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
         EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName(), isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
@@ -288,7 +290,7 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         Authentication auth
     ) {
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
         EncounterResponseDTO response = encounterService.completeExamination(
                 encounterId, isSuperAdmin, hospitalId);
@@ -308,7 +310,7 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         Authentication auth
     ) {
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
         EncounterResponseDTO response = encounterService.markReadyForDischarge(
                 encounterId, isSuperAdmin, hospitalId);
