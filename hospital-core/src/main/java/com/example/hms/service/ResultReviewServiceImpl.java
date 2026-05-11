@@ -43,6 +43,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
 
     private static final String URGENCY_NORMAL = "NORMAL";
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // severity / urgency string SEVERITY_CRITICAL appears 3x in this file.
+    // Naming follows the existing URGENCY_NORMAL sibling above.
+    private static final String SEVERITY_CRITICAL = "CRITICAL";
+
     private final StaffRepository staffRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -220,7 +225,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private int abnormalityRank(String flag) {
         if (flag == null) return 0;
         return switch (flag.toUpperCase()) {
-            case "CRITICAL" -> 3;
+            case SEVERITY_CRITICAL -> 3;
             case "ABNORMAL" -> 2;
             case URGENCY_NORMAL -> 1;
             default -> 0;
@@ -230,7 +235,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private int inboxUrgencyRank(String urgency) {
         if (urgency == null) return 0;
         return switch (urgency.toUpperCase()) {
-            case "CRITICAL" -> 4;
+            case SEVERITY_CRITICAL -> 4;
             case "HIGH" -> 3;
             case URGENCY_NORMAL -> 2;
             case "LOW" -> 1;
@@ -240,7 +245,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
 
     private String mapConsultUrgency(String consultUrgency) {
         return switch (consultUrgency) {
-            case "STAT", "EMERGENCY" -> "CRITICAL";
+            case "STAT", "EMERGENCY" -> SEVERITY_CRITICAL;
             case "URGENT" -> "HIGH";
             default -> URGENCY_NORMAL;
         };
