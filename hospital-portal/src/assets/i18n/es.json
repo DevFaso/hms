@@ -1,4 +1,7 @@
 {
+  "A11Y": {
+    "SKIP_TO_MAIN": "Saltar al contenido principal"
+  },
   "ADMIN": {
     "QUICK_ACCESS": "Acceso Rápido",
     "SUBTITLE": "Panel de administración",

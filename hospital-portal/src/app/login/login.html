@@ -303,8 +303,16 @@
                 d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
               />
             </svg>
+            <!--
+              v1.0 row 11: programmatic focus in component.ngAfterViewInit
+              (not the HTML `autofocus` attribute — flagged by
+              @angular-eslint/template/no-autofocus because autofocus can
+              steal focus from screen readers mid-page-load).
+              See docs/ui/accessibility.md §6.8.
+            -->
             <input
               id="username"
+              #usernameInput
               type="text"
               [(ngModel)]="username"
               name="username"
