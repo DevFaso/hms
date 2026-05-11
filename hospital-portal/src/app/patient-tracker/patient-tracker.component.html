@@ -36,7 +36,12 @@
             <h2 class="column-title">{{ col.label | translate }}</h2>
             <span class="column-count">{{ getColumnItems(col.key).length }}</span>
           </div>
-          <ul class="column-body" [attr.aria-label]="(col.label | translate) + ' patients'">
+          <!-- Arrow-key roving (row 11). docs/ui/accessibility.md §6.6 -->
+          <ul
+            class="column-body"
+            [attr.aria-label]="(col.label | translate) + ' patients'"
+            appRovingFocus=".patient-card"
+          >
             @for (item of getColumnItems(col.key); track item.encounterId) {
               <li class="patient-card" [class]="getAcuityClass(item.acuityLevel)">
                 <div class="card-header">

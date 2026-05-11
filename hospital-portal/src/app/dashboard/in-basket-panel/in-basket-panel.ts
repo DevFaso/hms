@@ -10,11 +10,12 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { InBasketService, InBasketItem, InBasketSummary } from '../../services/in-basket.service';
 import { ToastService } from '../../core/toast.service';
+import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 
 @Component({
   selector: 'app-in-basket-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, RovingFocusDirective],
   templateUrl: './in-basket-panel.html',
   styleUrl: './in-basket-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

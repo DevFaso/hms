@@ -12,6 +12,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
+import { NavOrderService } from './nav-order.service';
 
 interface NavItem {
   route: string;
@@ -181,5 +182,147 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/my-documents');
     expect(routes).toContain('/my-notifications');
     expect(routes).not.toContain('/notifications');
+  });
+});
+
+/**
+ * v1.0 row 11 finish — sidebar Alt+ArrowUp/Down keyboard reorder.
+ *
+ * Tests target the pure-data path on `onNavKeydown`: pressing the
+ * shortcut while focused on a nav item swaps that item with its
+ * neighbor and persists the new order. The DOM focus restoration
+ * (queueMicrotask + ViewChildren refocus) is covered end-to-end by
+ * e2e/keyboard-nav.spec.ts; covering it here would require booting
+ * the full ngOnInit (websockets, idle timers) which the existing
+ * baseNavItems tests intentionally avoid.
+ */
+describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
+  interface ShellHandle {
+    onNavKeydown: (event: KeyboardEvent, index: number) => void;
+    navItems: { (): { route: string }[]; set: (v: { route: string }[]) => void };
+  }
+
+  function createShell(): { shell: ShellHandle; persistedOrders: string[][] } {
+    const persistedOrders: string[][] = [];
+    const navOrderStub = {
+      load: () => null,
+      save: (routes: string[]) => persistedOrders.push([...routes]),
+      applyOrder: <T>(items: T[], _saved: string[]) => items,
+    };
+
+    // Minimal wiring — only what the ShellComponent constructor pulls in
+    // before we drive the public method directly. A focused test would
+    // ideally not stand up the full component, but ShellComponent injects
+    // through inject() in field initializers so we need TestBed.
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getUserProfile',
+      'hasAnyRole',
+      'getSubject',
+      'formatRole',
+      'logout',
+    ]);
+    authStub.getUserProfile.and.returnValue(null);
+    authStub.hasAnyRole.and.returnValue(false);
+    authStub.getSubject.and.returnValue(null);
+    authStub.formatRole.and.callFake((r: string) => r);
+    Object.defineProperty(authStub, 'currentProfile', { value: () => null });
+
+    const permStub: Partial<PermissionService> = {
+      hasPermission: () => false,
+      hasAnyPermission: () => false,
+    };
+    const notifStub = jasmine.createSpyObj<NotificationService>('NotificationService', [
+      'connectWebSocket',
+      'disconnectWebSocket',
+      'getNotifications',
+      'getNotificationStream',
+      'getReadStream',
+      'getAllReadStream',
+      'markAsReadAndNotify',
+      'markAllReadAndNotify',
+    ]);
+    notifStub.getNotifications.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 10, number: 0 }),
+    );
+    notifStub.getNotificationStream.and.returnValue(of() as never);
+    notifStub.getReadStream.and.returnValue(of() as never);
+    notifStub.getAllReadStream.and.returnValue(of() as never);
+    const impersonationStub = jasmine.createSpyObj<ImpersonationService>('ImpersonationService', [
+      'refreshActive',
+    ]);
+    impersonationStub.refreshActive.and.returnValue(of(null) as never);
+    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop']);
+
+    TestBed.configureTestingModule({
+      imports: [ShellComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: permStub },
+        { provide: NotificationService, useValue: notifStub },
+        { provide: ImpersonationService, useValue: impersonationStub },
+        { provide: IdleService, useValue: idleStub },
+        // Replace NavOrderService with the in-memory stub so we can
+        // assert on what the shell tries to persist.
+        { provide: NavOrderService, useValue: navOrderStub },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(ShellComponent);
+    const shell = fixture.componentInstance as unknown as ShellHandle;
+    // Seed three nav items directly — bypasses the permission filtering
+    // we don't care about here.
+    shell.navItems.set([
+      { route: '/a' } as never,
+      { route: '/b' } as never,
+      { route: '/c' } as never,
+    ]);
+
+    return { shell, persistedOrders };
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('Alt+ArrowDown swaps the focused item with the one below and persists the new order', () => {
+    const { shell, persistedOrders } = createShell();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true });
+
+    shell.onNavKeydown(event, 0);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual(['/b', '/a', '/c']);
+    expect(persistedOrders.length).toBe(1);
+    expect(persistedOrders[0]).toEqual(['/b', '/a', '/c']);
+  });
+
+  it('Alt+ArrowUp at index 0 is a clamped no-op (no swap, no persistence)', () => {
+    const { shell, persistedOrders } = createShell();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowUp', altKey: true });
+
+    shell.onNavKeydown(event, 0);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual(['/a', '/b', '/c']);
+    expect(persistedOrders).toEqual([]);
+  });
+
+  it('plain ArrowDown without Alt is ignored (no swap)', () => {
+    const { shell, persistedOrders } = createShell();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown' });
+
+    shell.onNavKeydown(event, 0);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual(['/a', '/b', '/c']);
+    expect(persistedOrders).toEqual([]);
+  });
+
+  it('Alt+ArrowDown at the last index is a clamped no-op', () => {
+    const { shell, persistedOrders } = createShell();
+    const event = new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true });
+
+    shell.onNavKeydown(event, 2);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual(['/a', '/b', '/c']);
+    expect(persistedOrders).toEqual([]);
   });
 });

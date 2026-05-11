@@ -43,7 +43,7 @@
   .material-symbols-outlined {
     position: absolute;
     left: 12px;
-    color: #9ca3af;
+    color: #6b7280;
     pointer-events: none;
     font-size: 1.25rem;
   }
@@ -107,7 +107,7 @@
 
 .cell-secondary {
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: #64748b;
   margin-top: 2px;
 }
 
@@ -340,7 +340,7 @@
   border: none;
   cursor: pointer;
   padding: 0.2rem;
-  color: #9ca3af;
+  color: #6b7280;
   display: flex;
   align-items: center;
 
@@ -362,7 +362,7 @@
 .empty-state.compact {
   padding: 1.5rem;
   text-align: center;
-  color: #9ca3af;
+  color: #6b7280;
   font-size: 0.9rem;
 
   .spinner {

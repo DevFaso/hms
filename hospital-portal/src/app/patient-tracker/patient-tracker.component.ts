@@ -17,6 +17,7 @@ import {
   EncounterResponse,
   AfterVisitSummary,
 } from '../services/encounter.service';
+import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -35,7 +36,13 @@ export interface TrackerColumn {
 @Component({
   selector: 'app-patient-tracker',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CheckoutDialogComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CheckoutDialogComponent,
+    RovingFocusDirective,
+  ],
   templateUrl: './patient-tracker.component.html',
   styleUrl: './patient-tracker.component.scss',
 })

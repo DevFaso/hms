@@ -104,7 +104,7 @@
 
 .lock-sub {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #64748b;
   margin: 0 0 1.25rem;
 }
 
@@ -140,7 +140,7 @@
     position: absolute;
     left: 12px;
     font-size: 20px;
-    color: #94a3b8;
+    color: #64748b;
     pointer-events: none;
   }
 
@@ -160,7 +160,7 @@
     }
 
     &::placeholder {
-      color: #94a3b8;
+      color: #64748b;
     }
   }
 
@@ -170,7 +170,7 @@
     background: none;
     border: none;
     cursor: pointer;
-    color: #94a3b8;
+    color: #64748b;
     padding: 4px;
 
     &:hover {
@@ -248,7 +248,7 @@
 
 .footer-hint {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #64748b;
   margin: 0;
 }
 
