@@ -34,7 +34,16 @@ export class SkipLinkComponent {
   /** Label shown when the link is focused. Translation key by convention. */
   @Input() label = 'A11Y.SKIP_TO_MAIN';
 
-  protected onActivate(event: MouseEvent | KeyboardEvent): void {
+  /**
+   * Bound to both `(click)` and `(keydown.enter)` in the template.
+   * The parameter is typed as the base `Event` because Angular's AOT
+   * template type-checker widens `$event` from `(keydown.enter)` to
+   * `Event`, not `KeyboardEvent` — the narrower `MouseEvent |
+   * KeyboardEvent` signature broke the production build on PR #297's
+   * first CI run (TS2345). We only call `preventDefault()` so the
+   * wider type is functionally fine.
+   */
+  protected onActivate(event: Event): void {
     event.preventDefault();
     const el = document.querySelector<HTMLElement>(this.target);
     if (!el) {
