@@ -99,13 +99,18 @@ test.describe('keyboard navigation — shell + skip-link', () => {
 
     await page.keyboard.press('Enter');
 
-    // Wait for the URL change, then for Angular's NavigationEnd → focus
-    // hook (queueMicrotask in shell.ts ngAfterViewInit) to land focus.
+    // Wait for the URL change, then poll the DOM until the shell's
+    // NavigationEnd → focus hook (queueMicrotask in shell.ts
+    // ngAfterViewInit) actually lands focus on <main>. Polling — not
+    // a fixed waitForTimeout — so the test stays deterministic under
+    // CI load. Per Copilot review on PR #288.
     await page.waitForURL('**/patient-tracker', { timeout: 5000 });
-    // Give the queueMicrotask a tick to settle. Playwright's evaluate is
-    // serialized so this is enough.
-    await page.waitForTimeout(50);
-
+    await page.waitForFunction(() => document.activeElement?.id === 'main-content', null, {
+      timeout: 5000,
+      polling: 16, // ~one animation frame
+    });
+    // If we reach this line, the assertion is implicit in waitForFunction —
+    // but make it explicit too so the failure message is readable.
     const mainHasFocus = await page.evaluate(
       () => document.activeElement?.id === 'main-content',
     );
@@ -126,10 +131,13 @@ test.describe('keyboard navigation — login (unauthenticated)', () => {
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#username');
 
-    // autofocus on #username — assert the active element is the
-    // username input. Some browsers race autofocus with our explicit
-    // check, so wait briefly.
-    await page.waitForTimeout(100);
+    // Wait for Login.ngAfterViewInit → queueMicrotask → focus() to
+    // settle on #username. Poll the DOM instead of a fixed sleep so
+    // we don't flake under CI load. Per Copilot review on PR #288.
+    await page.waitForFunction(() => document.activeElement?.id === 'username', null, {
+      timeout: 5000,
+      polling: 16,
+    });
     const focusedId = await page.evaluate(() => document.activeElement?.id ?? '');
     expect(focusedId).toBe('username');
 

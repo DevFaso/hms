@@ -5,8 +5,16 @@
 <app-skip-link target="#main-content" [label]="'A11Y.SKIP_TO_MAIN' | translate" />
 
 <div class="shell" [class.collapsed]="sidebarCollapsed()">
-  <!-- Sidebar -->
-  <aside class="sidebar" aria-label="Primary navigation">
+  <!--
+    Sidebar.
+    The accessible name belongs on the inner <nav> (the navigation
+    landmark), not the outer <aside>. Per Copilot review on PR #288:
+    `aria-label` on the <aside> labeled the wrong landmark — screen
+    readers announce the <nav> with no name. The aside stays
+    unlabeled; it remains a `complementary` landmark by default, which
+    is the correct ARIA role for a non-primary side region.
+  -->
+  <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo-area">
         <span class="material-symbols-outlined logo-icon">local_hospital</span>
@@ -21,7 +29,7 @@
       </button>
     </div>
 
-    <nav class="sidebar-nav">
+    <nav class="sidebar-nav" aria-label="Primary navigation">
       @for (item of navItems(); track item.route; let i = $index) {
         <a
           class="nav-item"

@@ -243,12 +243,22 @@ Before requesting review on any frontend PR that adds or modifies a screen:
 
 The CI gate fails if either of:
 
-1. `e2e/a11y.spec.ts` reports any `serious` or `critical` axe violation on
-   the routes listed there. (The `color-contrast` rule was previously
-   suppressed; row 11 removed that suppression — re-suppressing it must
-   be accompanied by a ticket and a written exception.)
-2. `e2e/keyboard-nav.spec.ts` cannot complete the keyboard-only journey,
-   or finishes with `document.activeElement` on an unexpected element.
+1. `e2e/a11y.spec.ts` reports any `serious` or `critical` axe violation
+   on the routes listed there. The `color-contrast` rule is still
+   suppressed in the current axe smoke (`disableRules(['color-contrast'])`
+   in [`e2e/a11y.spec.ts`](../../hospital-portal/e2e/a11y.spec.ts) §
+   `runAxe`). Row 11's first PR fixed the shared-styles contrast
+   regressions (search-icon `#9ca3af` → `#6b7280`, placeholder
+   `#9ca3af` → `#6b7280`, empty-state `#94a3b8` → `#64748b`), but
+   per-screen contrast remediation across reception / nurse-station /
+   prescriptions / pharmacy still has to land before the suppression
+   can come off. Removing the suppression is tracked as part of the
+   row 11 per-screen audit follow-up; opening up that gate without
+   first cleaning the underlying violations would block every PR on
+   pre-existing debt.
+2. `e2e/keyboard-nav.spec.ts` cannot complete the keyboard-only
+   journey, or finishes with `document.activeElement` on an unexpected
+   element.
 
 Local commands:
 

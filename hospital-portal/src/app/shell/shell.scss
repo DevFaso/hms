@@ -406,14 +406,24 @@ $sidebar-active: #2563eb;
 
   // v1.0 row 11: <main> is the programmatic focus landing on every
   // NavigationEnd (see shell.ts ngAfterViewInit) and the skip-link
-  // target. tabindex="-1" is required for that, but the global
-  // :focus-visible rule would then draw a big blue rectangle around
-  // the whole content area. Suppress it specifically here — the
-  // user's screen-reader still gets the focus event; the visible
-  // ring belongs on the inner first-focusable element on each route.
+  // target. tabindex="-1" is required for that. The global
+  // :focus-visible rule would draw a heavy 2px ring around the whole
+  // content area, which is visually loud, but suppressing the ring
+  // entirely leaves sighted keyboard users with no signal that focus
+  // landed on <main> — that violates WCAG 2.4.7 for the focused
+  // element. Compromise: a subtle inset highlight that says "you are
+  // here" without dominating the layout. Per Copilot review on
+  // PR #288.
   &:focus,
   &:focus-visible {
-    outline: none;
+    outline: none; // suppress the outer ring …
+    // … and substitute a quieter inset edge. 35% alpha primary blue
+    // is perceivable to sighted users (axe / Lighthouse don`t count
+    // box-shadow toward the focus-indicator gate, but the human eye
+    // does) and disappears as soon as the user Tabs to a real child
+    // element, which restores the loud outline on that child.
+    box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.35);
+    border-radius: 4px;
   }
 }
 

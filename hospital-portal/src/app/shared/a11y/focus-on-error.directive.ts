@@ -66,11 +66,24 @@ export class FocusOnErrorDirective {
     // ngSubmit.
     queueMicrotask(() => {
       const target = this.findFirstInvalid(form);
-      if (target) {
-        target.focus({ preventScroll: false });
-        // Scroll into view in case the form is taller than the viewport.
-        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      }
+      if (!target) return;
+      // `preventScroll: true` on focus() — the subsequent
+      // scrollIntoView is responsible for the scroll, so we don`t
+      // want focus() to also scroll (causes a visible double-scroll
+      // on long forms). Per Copilot review on PR #288.
+      target.focus({ preventScroll: true });
+      // Honor `prefers-reduced-motion: reduce` so users sensitive to
+      // motion don`t get a smooth scroll on every form-validation
+      // failure. `auto` is an instant jump which is WCAG 2.3.3 -safe.
+      // The matchMedia call is guarded for the SSR / Node test path
+      // where `window` is undefined.
+      const prefersReducedMotion =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+      target.scrollIntoView({
+        block: 'center',
+        behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
     });
   }
 

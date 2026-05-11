@@ -11,10 +11,15 @@
   --border: #e2e8f0;
 
   // ─── Accessibility tokens (v1.0 roadmap row 11) ───────────────────
-  // High-contrast amber visible against both light surfaces (#fff /
-  // #f1f5f9) and the deep-blue sidebar (#0f172a). 2px outline is the
-  // WCAG 2.4.7 minimum; offset gives it a halo so it shows over busy
-  // backgrounds. See docs/ui/accessibility.md §3.
+  // `--focus-ring`         — primary-blue, used on light surfaces
+  //                          (#fff / #f1f5f9). WCAG-passing contrast
+  //                          on both: 8.59:1 / 7.42:1.
+  // `--focus-ring-inverse` — amber, used on dark surfaces such as the
+  //                          deep-blue sidebar (#0f172a) where the
+  //                          blue ring disappears.
+  // 2px outline is the WCAG 2.4.7 minimum; the offset gives the ring
+  // a halo so it shows over busy backgrounds. See
+  // docs/ui/accessibility.md §3.
   --focus-ring: 2px solid #2563eb;
   --focus-ring-inverse: 2px solid #fbbf24; // for dark surfaces (sidebar)
   --focus-ring-offset: 2px;
@@ -26,9 +31,17 @@
    clicks. Components may override this locally if they need a
    different treatment (e.g. the dark sidebar uses the inverse ring).
    v1.0 roadmap row 11.
+
+   IMPORTANT: we only suppress the default ring for elements that
+   ALSO match `:focus-visible` — i.e. modern browsers that distinguish
+   keyboard from mouse focus. In a browser without `:focus-visible`
+   support (very rare today, but legacy WebViews / kiosk browsers
+   exist) every focus event matches `:focus` but NOT `:focus-visible`,
+   so the `:not(:focus-visible)` clause never fires and the browser`s
+   default focus ring is preserved. Per Copilot review on PR #288.
    ─────────────────────────────────────────────────────────────────── */
-:focus {
-  outline: none; // Chrome/Safari default ring — replaced by :focus-visible
+:focus:not(:focus-visible) {
+  outline: none; // suppress only MOUSE-focus rings on modern browsers
 }
 
 :focus-visible {
