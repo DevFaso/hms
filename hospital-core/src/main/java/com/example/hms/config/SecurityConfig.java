@@ -120,9 +120,8 @@ public class SecurityConfig {
     private static final String API_HOSPITALS = "/hospitals";
     private static final String API_HOSPITALS_PATTERN = API_HOSPITALS + "/**";
 
-    // SonarCloud S1192: extracted from L410/418/421/424/427 (5 duplicates),
-    // L434/443/446/449 (4 duplicates), L452/455/458/461 (4 duplicates).
-    // Pattern 5 of docs/SonarQubeInstructions.md.
+    // Extracted to avoid duplicated string literals (Sonar S1192).
+    // Follows Pattern 5 of docs/SonarQubeInstructions.md.
     private static final String API_DEPARTMENTS = "/departments";
     private static final String API_DEPARTMENTS_PATTERN = API_DEPARTMENTS + "/**";
 
