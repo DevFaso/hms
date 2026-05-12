@@ -1,6 +1,11 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
+# Only rebuild the frontend service on changes that actually affect the
+# Angular bundle. Without this, Railway redeploys the frontend on every
+# push to the watched branch — including backend, Keycloak, docs, or
+# CI-config changes. See PR description.
+watchPatterns = ["hospital-portal/**"]
 # Each Railway service MUST set BUILD_CONFIG as a Service Variable to pick the
 # right Angular environment.ts at build time. Without it the Dockerfile falls
 # back to `production`, which on UAT/dev mis-tags Faro telemetry and routes it

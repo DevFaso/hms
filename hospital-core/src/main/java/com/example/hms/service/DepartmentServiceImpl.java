@@ -188,45 +188,55 @@ public class DepartmentServiceImpl implements DepartmentService {
     public Page<DepartmentResponseDTO> searchDepartments(String query, Pageable pageable, Locale locale) {
         String normalized = normalize(query);
         UUID activeHospitalId = resolveActiveHospitalScope();
-        Page<Department> page;
-        if (normalized == null && activeHospitalId == null) {
-            page = departmentRepository.findAll(pageable);
-        } else {
-            final String likePattern = (normalized != null)
+        Page<Department> page = (normalized == null && activeHospitalId == null)
+                ? departmentRepository.findAll(pageable)
+                : departmentRepository.findAll(buildSearchSpecification(normalized, activeHospitalId), pageable);
+        return page.map(d -> departmentMapper.toDepartmentResponseDTO(d, locale));
+    }
+
+    /**
+     * Sonar S3776 — extracted from {@link #searchDepartments} so the public
+     * entry point stays at low cognitive complexity. Predicate composition is
+     * conditional on the (free-text, hospital-scope) inputs.
+     */
+    private Specification<Department> buildSearchSpecification(String normalized, UUID activeHospitalId) {
+        final String likePattern = (normalized != null)
                 ? "%" + normalized.toLowerCase(Locale.ROOT) + "%"
                 : null;
-            Specification<Department> spec = (root, criteriaQuery, cb) -> {
-                if (criteriaQuery != null) {
-                    criteriaQuery.distinct(true);
-                }
-                Join<Department, Hospital> hospitalJoin = root.join(FIELD_HOSPITAL, JoinType.LEFT);
+        return (root, criteriaQuery, cb) -> {
+            if (criteriaQuery != null) {
+                criteriaQuery.distinct(true);
+            }
+            Join<Department, Hospital> hospitalJoin = root.join(FIELD_HOSPITAL, JoinType.LEFT);
+            List<Predicate> predicates = new ArrayList<>();
+            if (likePattern != null) {
+                predicates.add(buildFreeTextPredicate(root, hospitalJoin, cb, likePattern));
+            }
+            if (activeHospitalId != null) {
+                predicates.add(cb.equal(hospitalJoin.get("id"), activeHospitalId));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
 
-                List<Predicate> predicates = new ArrayList<>();
-                if (likePattern != null) {
-                    Join<Department, Staff> headJoin = root.join(FIELD_HEAD_OF_DEPARTMENT, JoinType.LEFT);
-                    Join<Staff, User> userJoin = headJoin.join("user", JoinType.LEFT);
-                    predicates.add(cb.or(
-                            cb.like(cb.lower(root.get("name")), likePattern),
-                            cb.like(cb.lower(root.get("code")), likePattern),
-                            cb.like(cb.lower(root.get(FIELD_EMAIL)), likePattern),
-                            cb.like(cb.lower(root.get("phoneNumber")), likePattern),
-                            cb.like(cb.lower(hospitalJoin.get("name")), likePattern),
-                            cb.like(cb.lower(hospitalJoin.get("code")), likePattern),
-                            cb.like(cb.lower(hospitalJoin.get("city")), likePattern),
-                            cb.like(cb.lower(userJoin.get(FIELD_EMAIL)), likePattern),
-                            cb.like(cb.lower(userJoin.get("firstName")), likePattern),
-                            cb.like(cb.lower(userJoin.get("lastName")), likePattern)
-                    ));
-                }
-                if (activeHospitalId != null) {
-                    predicates.add(cb.equal(hospitalJoin.get("id"), activeHospitalId));
-                }
-                return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
-            };
-            page = departmentRepository.findAll(spec, pageable);
-        }
-
-        return page.map(d -> departmentMapper.toDepartmentResponseDTO(d, locale));
+    private Predicate buildFreeTextPredicate(jakarta.persistence.criteria.Root<Department> root,
+                                             Join<Department, Hospital> hospitalJoin,
+                                             jakarta.persistence.criteria.CriteriaBuilder cb,
+                                             String likePattern) {
+        Join<Department, Staff> headJoin = root.join(FIELD_HEAD_OF_DEPARTMENT, JoinType.LEFT);
+        Join<Staff, User> userJoin = headJoin.join("user", JoinType.LEFT);
+        return cb.or(
+                cb.like(cb.lower(root.get("name")), likePattern),
+                cb.like(cb.lower(root.get("code")), likePattern),
+                cb.like(cb.lower(root.get(FIELD_EMAIL)), likePattern),
+                cb.like(cb.lower(root.get("phoneNumber")), likePattern),
+                cb.like(cb.lower(hospitalJoin.get("name")), likePattern),
+                cb.like(cb.lower(hospitalJoin.get("code")), likePattern),
+                cb.like(cb.lower(hospitalJoin.get("city")), likePattern),
+                cb.like(cb.lower(userJoin.get(FIELD_EMAIL)), likePattern),
+                cb.like(cb.lower(userJoin.get("firstName")), likePattern),
+                cb.like(cb.lower(userJoin.get("lastName")), likePattern)
+        );
     }
 
     @Override

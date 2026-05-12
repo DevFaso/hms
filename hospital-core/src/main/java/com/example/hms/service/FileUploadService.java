@@ -1,6 +1,8 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.ChatAttachmentKind;
+import com.example.hms.service.support.UrlPathNormalizer;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,42 @@ public class FileUploadService {
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
+
+    /**
+     * Browser-facing URL prefix for <em>patient document</em> uploads only.
+     * Defaults to {@code /uploads} which matches the historical hard-coded
+     * value used by {@link #uploadPatientDocument}. Sonar S1075 — externalized
+     * so deployments fronted by a reverse-proxy with a different static
+     * alias (e.g. {@code /static/files}) can override without a code change.
+     *
+     * <p><b>Scope intentionally limited to patient documents.</b> The other
+     * upload paths in this class (profile images, chat attachments via
+     * {@code CHAT_ATTACHMENT_KEY_PREFIX}, referral/chart attachments via
+     * {@link #relativeUploadPath}) still embed {@code /uploads} literally
+     * because their values double as <b>persisted storage keys</b> on
+     * existing DB rows — flipping them via config would orphan historical
+     * keys. Touching those paths needs a data migration and is out of scope
+     * for the original sonar S1075 cleanup. See PR #315 review notes.
+     *
+     * <p>Normalised at startup ({@link #normalizePatientDocumentUrlPrefix})
+     * so configured values like {@code "uploads"}, {@code "/uploads"},
+     * {@code "/uploads/"} or even {@code "//uploads//"} all produce the
+     * same storage-key shape (single leading slash, no trailing slash).
+     */
+    @Value("${app.upload.patient-document-url-prefix:/uploads}")
+    private String patientDocumentUrlPrefix;
+
+    /**
+     * Sonar S1075 + PR #315 review — normalise the configured prefix so that
+     * downstream concatenation ({@code prefix + "/" + subdir + "/" + filename})
+     * cannot produce {@code //} or a slashless leading char, regardless of
+     * whether ops wrote {@code "uploads"}, {@code "/uploads"}, {@code "/uploads/"},
+     * or even {@code "//uploads//"}. Idempotent.
+     */
+    @PostConstruct
+    void normalizePatientDocumentUrlPrefix() {
+        patientDocumentUrlPrefix = UrlPathNormalizer.prefix(patientDocumentUrlPrefix, "/uploads");
+    }
 
     /**
      * Public base URL for file links returned to the browser.
@@ -353,7 +391,7 @@ public class FileUploadService {
             Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String relativePath = "/uploads/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        String relativePath = patientDocumentUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
         long sizeBytes = Files.size(filePath);
         String checksum = HexFormat.of().formatHex(digest.digest());
 

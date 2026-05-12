@@ -11,6 +11,43 @@ The repo's authoritative roadmap and per-MVP narrative live in
 this file is the migration-keyed quick reference for operators
 running deploys.
 
+## [v1.0.0-rc1] — TBD-cut-date (release candidate)
+
+**Status as of materials landing:** the rc1 cut materials are
+prepped on branch `feat/v1.0.0-rc1-materials` (roadmap row 13).
+The signed tag has not yet been pushed; the actual cut is performed
+by the release manager via [scripts/cut-rc1.sh](scripts/cut-rc1.sh).
+The `TBD-cut-date` placeholder above is replaced manually by the
+release manager in a `chore/*` PR right after the tag is pushed
+(allowed during soak per the soak protocol). The helper script does
+not mutate this file.
+
+v1.0.0-rc1 is the cumulative SemVer release candidate for HMS v1.0
+GA. It bundles every roadmap row in the v1.0 horizon (rows 2 – 12
+of [docs/roadmap.csv](docs/roadmap.csv)):
+
+- Clinical Safety: CDS Hooks expansion + drug-drug interaction check
+- Pharmacy: T-68 offline dispense queue + T-71 Playwright E2E + T-72 perf baseline
+- Security: server-side idle session timeout + Keycloak Phase C cutover
+- Operations: disaster-recovery runbook
+- Accessibility: axe-core / Playwright smoke + keyboard navigation pass (WCAG 2.1 AA)
+- i18n: FR completeness gate (CI-enforced ≥ 99% parity)
+
+The full release notes live in
+[docs/releases/v1.0.0-rc1.md](docs/releases/v1.0.0-rc1.md). v1.0.0-rc1
+runs the **pre-pilot soak variant** (one overnight CI run + one DR
+rehearsal, ~24–36h, no `feat/*` freeze) because the system has no
+production deploys yet — see
+[docs/runbooks/release-soak-protocol.md §Pre-pilot variant](docs/runbooks/release-soak-protocol.md#pre-pilot-variant-current-applies-to-v100-rc1).
+The 7-day post-pilot soak kicks in for v1.1.0 onward, in the same
+PR that records the first hospital pilot deployment.
+
+This heading sits above the migration-keyed entries below because
+SemVer release tags and the migration high-water mark live at
+different layers. v1.0.0-rc1 will be cut at the migration
+high-water mark of `main` at cut time (currently `V96`; `V89`
+joins if the MVP-c3 promote chain lands first).
+
 ## [Unreleased] — MVP-c3 (branch `feature/super-admin-mvp-c3-foot-guns`)
 
 Closes the two pre-launch foot-guns + the platform-config audit gap +

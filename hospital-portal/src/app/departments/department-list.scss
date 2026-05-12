@@ -245,11 +245,11 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
     &:disabled {
       background: #f8fafc;
-      color: #9ca3af;
+      color: #6b7280;
       cursor: not-allowed;
     }
   }
@@ -264,7 +264,7 @@
 .select-placeholder,
 .select-loading {
   font-style: italic;
-  color: #9ca3af !important;
+  color: #6b7280 !important;
 }
 
 .toggle-label {

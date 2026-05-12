@@ -12,25 +12,12 @@ public class PatientDocumentMapper {
         if (doc == null) {
             return null;
         }
-
         User uploader = doc.getUploadedByUser();
-        String uploaderDisplayName = null;
-        if (uploader != null) {
-            String first = uploader.getFirstName();
-            String last = uploader.getLastName();
-            if (first != null || last != null) {
-                uploaderDisplayName = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
-            }
-            if (uploaderDisplayName == null || uploaderDisplayName.isBlank()) {
-                uploaderDisplayName = uploader.getUsername();
-            }
-        }
-
         return PatientDocumentResponseDTO.builder()
                 .id(doc.getId())
                 .patientId(doc.getPatient() != null ? doc.getPatient().getId() : null)
                 .uploadedByUserId(uploader != null ? uploader.getId() : null)
-                .uploadedByDisplayName(uploaderDisplayName)
+                .uploadedByDisplayName(resolveUploaderDisplayName(uploader))
                 .documentType(doc.getDocumentType())
                 .displayName(doc.getDisplayName())
                 .fileUrl(doc.getFileUrl())
@@ -41,5 +28,24 @@ public class PatientDocumentMapper {
                 .notes(doc.getNotes())
                 .createdAt(doc.getCreatedAt())
                 .build();
+    }
+
+    /**
+     * Sonar S3776 — extracted from {@link #toDto} so the mapper's cognitive
+     * complexity drops below 15. Prefers "First Last" (with either side
+     * optional); falls back to {@code username} when both name fields are
+     * blank or null; returns {@code null} when there is no uploader at all.
+     */
+    private String resolveUploaderDisplayName(User uploader) {
+        if (uploader == null) {
+            return null;
+        }
+        String first = uploader.getFirstName();
+        String last = uploader.getLastName();
+        if (first == null && last == null) {
+            return uploader.getUsername();
+        }
+        String combined = ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+        return combined.isBlank() ? uploader.getUsername() : combined;
     }
 }

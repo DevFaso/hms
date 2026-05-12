@@ -91,7 +91,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
     }
 
@@ -137,7 +137,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -159,7 +159,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -200,7 +200,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(List.of(rx)));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -232,7 +232,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -269,7 +269,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -301,7 +301,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(pendingOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -327,7 +327,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(completedOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -354,7 +354,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -390,7 +390,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -426,7 +426,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenThrow(new RuntimeException("DB error"));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -447,7 +447,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -468,7 +468,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenThrow(new RuntimeException("DB error"));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -489,7 +489,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -510,7 +510,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -539,7 +539,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -574,7 +574,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(List.of(labResult)));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -605,7 +605,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(inProgressOrder));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -632,7 +632,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(order));
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -660,7 +660,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -685,7 +685,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -743,7 +743,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -774,7 +774,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
         PatientSnapshotDTO result = service.getSnapshot(patientId, null);
@@ -807,7 +807,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
                 .thenReturn(Collections.emptyList());
 
@@ -840,7 +840,7 @@ class PatientSnapshotServiceImplTest {
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
         when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
-        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any())).thenReturn(new PageImpl<>(Collections.emptyList()));
         when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
                 .thenReturn(Collections.emptyList());
 

@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>The set is small in practice (~tens of orgs total, with a handful in
  * non-active states) so a single-snapshot model is appropriate. Refresh is
- * lazy: callers see a stale snapshot until {@link #cacheTtlMillis} elapses,
+ * lazy: callers see a stale snapshot until {@link #CACHE_TTL_MILLIS} elapses,
  * at which point the next read triggers a DB hit. Lifecycle transitions
  * call {@link #invalidate} to make the next read see the new state immediately.
  */
@@ -35,7 +35,8 @@ public class OrganizationLifecycleStatusServiceImpl implements OrganizationLifec
         OrganizationLifecycleState.PURGED
     );
 
-    private final long cacheTtlMillis = 30_000L;
+    // Sonar S1170 — compile-time constant promoted to static final.
+    private static final long CACHE_TTL_MILLIS = 30_000L;
 
     private final OrganizationRepository organizationRepository;
 
@@ -46,7 +47,7 @@ public class OrganizationLifecycleStatusServiceImpl implements OrganizationLifec
     public Set<UUID> getBlockedOrganizationIds() {
         Snapshot current = snapshot.get();
         long now = System.currentTimeMillis();
-        if (current == null || now - current.loadedAtMillis > cacheTtlMillis) {
+        if (current == null || now - current.loadedAtMillis > CACHE_TTL_MILLIS) {
             current = reload();
         }
         return current.ids;
@@ -68,9 +69,16 @@ public class OrganizationLifecycleStatusServiceImpl implements OrganizationLifec
             // If the DB is unreachable, fall back to a permissive empty set rather
             // than locking every user out. The filter will pass; the spec will
             // pass — we accept the brief gap until the next reload succeeds.
+            //
+            // Also CACHE the failure: with snapshot=null, every subsequent call
+            // re-enters reload() during the outage and slams Postgres with retry
+            // traffic + log spam. Holding the empty Snapshot until the TTL
+            // expires gives the DB ~30s of breathing room between attempts.
             log.warn("[TENANT-LIFECYCLE-STATUS] Cache reload failed, returning empty set: {}",
                 ex.getMessage());
-            return new Snapshot(Set.of(), System.currentTimeMillis());
+            Snapshot empty = new Snapshot(Set.of(), System.currentTimeMillis());
+            snapshot.set(empty);
+            return empty;
         }
     }
 

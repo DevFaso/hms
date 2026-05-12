@@ -41,7 +41,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SplunkHecAppender extends AppenderBase<ILoggingEvent> {
 
-    /** HEC endpoint suffix. Splunk Cloud / Splunk Enterprise both expose this path. */
+    /**
+     * HEC endpoint suffix. Splunk Cloud / Splunk Enterprise both expose this path
+     * and the value is fixed by the Splunk HTTP Event Collector protocol — not
+     * an environment-specific URL. The configurable bit (the host) lives in the
+     * {@link #url} field which is set from {@code logback-spring.xml} /
+     * {@code SplunkLoggingProperties}.
+     */
+    @SuppressWarnings("java:S1075") // Protocol constant, not an environment URI — see field javadoc.
     static final String HEC_PATH = "/services/collector/event";
 
     /** Auth header value prefix per Splunk HEC docs. */

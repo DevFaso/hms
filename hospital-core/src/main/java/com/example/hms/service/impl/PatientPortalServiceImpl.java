@@ -166,12 +166,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.mapper.PatientSurgicalHistoryMapper surgicalHistoryMapper;
     private final com.example.hms.mapper.FamilyHistoryMapper familyHistoryMapper;
     private final com.example.hms.mapper.SocialHistoryMapper socialHistoryMapper;
+    private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
-
-    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
-    private static final String CANCEL_PATH = "/appointments/cancel/";
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -889,83 +887,105 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
+    /**
+     * Sonar S3776 + Brain Method — the previous monolith sat at cognitive
+     * complexity 40 and combined four concerns (input validation, display-name
+     * derivation, recipient collection, dispatch). Split into focused helpers.
+     */
     private void notifyCareTeamForRefillRequest(RefillRequest refill) {
         Prescription prescription = refill.getPrescription();
         Patient patient = refill.getPatient();
         if (prescription == null || patient == null) {
             return;
         }
+        String medicationName = medicationDisplayName(prescription);
+        String patientName = formatPatientName(patient);
 
-        String medicationName = prescription.getMedicationName() != null && !prescription.getMedicationName().isBlank()
-                ? prescription.getMedicationName()
-                : "prescription";
-        String patientName = ((patient.getFirstName() != null ? patient.getFirstName() : "")
-                + " " + (patient.getLastName() != null ? patient.getLastName() : "")).trim();
-        if (patientName.isBlank()) {
-            patientName = "a patient";
-        }
+        Recipients recipients = collectRefillRecipients(prescription);
+        String message = "Medication refill request from " + patientName + " for " + medicationName + ".";
+        dispatchRefillInAppNotifications(recipients.usernames(), message, refill);
+        dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill);
+    }
 
-        Set<String> recipientUsernames = new LinkedHashSet<>();
-        Set<String> recipientEmails = new LinkedHashSet<>();
+    private record Recipients(Set<String> usernames, Set<String> emails) {}
+
+    private String medicationDisplayName(Prescription prescription) {
+        String name = prescription.getMedicationName();
+        return (name != null && !name.isBlank()) ? name : "prescription";
+    }
+
+    private String formatPatientName(Patient patient) {
+        String first = patient.getFirstName() != null ? patient.getFirstName() : "";
+        String last = patient.getLastName() != null ? patient.getLastName() : "";
+        String combined = (first + " " + last).trim();
+        return combined.isBlank() ? "a patient" : combined;
+    }
+
+    private Recipients collectRefillRecipients(Prescription prescription) {
+        Set<String> usernames = new LinkedHashSet<>();
+        Set<String> emails = new LinkedHashSet<>();
 
         Staff prescriber = prescription.getStaff();
-        if (prescriber != null && prescriber.getUser() != null) {
-            String username = prescriber.getUser().getUsername();
-            if (username != null && !username.isBlank()) {
-                recipientUsernames.add(username);
-            }
-            String email = prescriber.getUser().getEmail();
-            if (email != null && !email.isBlank()) {
-                recipientEmails.add(email);
-            }
+        addStaffContact(usernames, emails, prescriber);
+        if (hasResolvableCareTeamScope(prescription, prescriber)) {
+            staffRepository.findActiveProvidersByHospitalAndDepartment(
+                    prescription.getHospital().getId(),
+                    prescriber.getDepartment().getId())
+                .stream()
+                .filter(s -> isDoctorOrNurse(s) && s.getUser() != null)
+                .forEach(s -> addStaffContact(usernames, emails, s));
         }
+        return new Recipients(usernames, emails);
+    }
 
-        if (prescription.getHospital() != null
+    private boolean hasResolvableCareTeamScope(Prescription prescription, Staff prescriber) {
+        return prescription.getHospital() != null
                 && prescription.getHospital().getId() != null
                 && prescriber != null
                 && prescriber.getDepartment() != null
-                && prescriber.getDepartment().getId() != null) {
-            List<Staff> careTeam = staffRepository.findActiveProvidersByHospitalAndDepartment(
-                    prescription.getHospital().getId(),
-                    prescriber.getDepartment().getId());
+                && prescriber.getDepartment().getId() != null;
+    }
 
-            for (Staff staff : careTeam) {
-                if (!isDoctorOrNurse(staff) || staff.getUser() == null) {
-                    continue;
-                }
-                String username = staff.getUser().getUsername();
-                if (username != null && !username.isBlank()) {
-                    recipientUsernames.add(username);
-                }
-                String email = staff.getUser().getEmail();
-                if (email != null && !email.isBlank()) {
-                    recipientEmails.add(email);
-                }
-            }
+    private void addStaffContact(Set<String> usernames, Set<String> emails, Staff staff) {
+        if (staff == null || staff.getUser() == null) {
+            return;
         }
+        String username = staff.getUser().getUsername();
+        if (username != null && !username.isBlank()) {
+            usernames.add(username);
+        }
+        String email = staff.getUser().getEmail();
+        if (email != null && !email.isBlank()) {
+            emails.add(email);
+        }
+    }
 
-        String message = "Medication refill request from " + patientName + " for " + medicationName + ".";
-        for (String username : recipientUsernames) {
+    private void dispatchRefillInAppNotifications(Set<String> usernames, String message, RefillRequest refill) {
+        for (String username : usernames) {
             try {
                 notificationService.createNotification(message, username, MEDICATION_REFILL_NOTIFICATION_TYPE);
             } catch (Exception e) {
                 log.warn("Failed to deliver refill notification to {} for refill {}", username, refill.getId());
             }
         }
+    }
 
-        if (!recipientEmails.isEmpty()) {
-            String subject = "Medication Refill Request Pending Review";
-            String body = """
-                <h2>Medication Refill Request</h2>
-                <p><strong>%s</strong> requested a refill for <strong>%s</strong>.</p>
-                <p>Please review and respond in your HMS dashboard.</p>
-                """.formatted(patientName, medicationName);
-            for (String email : recipientEmails) {
-                try {
-                    emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
-                } catch (Exception e) {
-                    log.warn("Failed to send refill email to {} for refill {}", email, refill.getId());
-                }
+    private void dispatchRefillEmailNotifications(Set<String> emails, String patientName,
+                                                  String medicationName, RefillRequest refill) {
+        if (emails.isEmpty()) {
+            return;
+        }
+        String subject = "Medication Refill Request Pending Review";
+        String body = """
+            <h2>Medication Refill Request</h2>
+            <p><strong>%s</strong> requested a refill for <strong>%s</strong>.</p>
+            <p>Please review and respond in your HMS dashboard.</p>
+            """.formatted(patientName, medicationName);
+        for (String email : emails) {
+            try {
+                emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
+            } catch (Exception e) {
+                log.warn("Failed to send refill email to {} for refill {}", email, refill.getId());
             }
         }
     }
@@ -1217,8 +1237,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-            String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
-            String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
+            String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
+            String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,

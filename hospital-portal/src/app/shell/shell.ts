@@ -808,15 +808,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.resetDrag();
       return;
     }
-
-    this.navItems.update((items) => {
-      const reordered = [...items];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(dropIndex, 0, moved);
-      this.navOrder.save(reordered.map((i) => i.route));
-      return reordered;
-    });
-
+    this.moveNavItem(fromIndex, dropIndex);
     this.resetDrag();
   }
 
@@ -827,6 +819,83 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private resetDrag(): void {
     this.dragIndex.set(null);
     this.dragOverIndex.set(null);
+  }
+
+  /**
+   * Shared reorder primitive used by both the mouse drag-drop and the
+   * Alt+ArrowUp/Down keyboard alternative. Mutates the navItems signal
+   * and persists the new order to localStorage via NavOrderService.
+   * Caller is responsible for any focus restoration.
+   */
+  private moveNavItem(fromIndex: number, toIndex: number): void {
+    this.navItems.update((items) => {
+      const reordered = [...items];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      this.navOrder.save(reordered.map((i) => i.route));
+      return reordered;
+    });
+  }
+
+  /**
+   * v1.0 row 11 finish — keyboard alternative to sidebar drag-reorder.
+   *
+   * `Alt+ArrowUp` swaps the focused nav item with the one above;
+   * `Alt+ArrowDown` swaps it with the one below. The shortcut carries
+   * a modifier so it doesn't collide with AZERTY key positions
+   * (docs/ui/accessibility.md §5). After the swap, focus is restored
+   * to the moved item at its new position so a clinician can keep
+   * pressing the shortcut to walk the item across multiple slots.
+   *
+   * No-op (returns without preventDefault) when:
+   * - Alt is not held — let the browser handle the keystroke normally.
+   * - The arrow direction would push the item past either end —
+   *   silently clamped so the user doesn't get a jarring blocked
+   *   keystroke. Screen readers re-announce on the next focus change.
+   */
+  onNavKeydown(event: KeyboardEvent, index: number): void {
+    if (!event.altKey) return;
+    let toIndex: number | null = null;
+    if (event.key === 'ArrowUp') toIndex = index - 1;
+    else if (event.key === 'ArrowDown') toIndex = index + 1;
+    if (toIndex === null) return;
+
+    const items = this.navItems();
+    if (toIndex < 0 || toIndex >= items.length) {
+      // Clamp at the ends. preventDefault still — we don't want the
+      // browser scrolling the viewport while the user holds Alt+Arrow.
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Capture the moved item's route BEFORE the swap. After the
+    // signal mutation Angular re-renders the @for, but the
+    // ViewChildren QueryList is keyed by encounter order, not DOM
+    // order — reading it post-swap and indexing into `toIndex` lands
+    // on a stale ElementRef whose underlying DOM node is no longer
+    // at that position. Querying by `routerLink` after the next
+    // animation frame is robust to whichever way Angular chooses to
+    // reuse / recreate nodes.
+    const movingItem = this.navItems()[index];
+
+    this.moveNavItem(index, toIndex);
+
+    // requestAnimationFrame defers past Angular's CD pass. queueMicrotask
+    // is too early — the new DOM hasn't been painted yet, and
+    // focus() against a detached node falls back to <body>. The first
+    // attempt of this handler used queueMicrotask + a ViewChildren
+    // index lookup; both were fragile under Angular signals where
+    // change detection isn't synchronous with the signal write.
+    requestAnimationFrame(() => {
+      const escapedRoute = CSS.escape(movingItem.route);
+      const moved = document.querySelector<HTMLAnchorElement>(
+        `.sidebar-nav .nav-item[href$="${escapedRoute}"]`,
+      );
+      moved?.focus({ preventScroll: false });
+    });
   }
 
   // ── Other handlers ───────────────────────────────────────────

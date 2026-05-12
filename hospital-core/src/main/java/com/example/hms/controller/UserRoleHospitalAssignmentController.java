@@ -194,13 +194,21 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Hard-deletes an assignment row by ID.
+     *
+     * @deprecated since 1.1 — hard delete erases audit history. Prefer
+     *             {@code PATCH /api/user-role-hospital-assignments/{id}/deactivate}
+     *             which preserves the row with a deactivation timestamp.
+     *             Removal target: v2.0.
+     */
     @Operation(
         summary = "Delete an assignment by ID",
         description = "⚠️ DEPRECATED — hard-deletes the assignment row. " +
                       "Prefer PATCH /{id}/deactivate to preserve audit history. " +
                       "This endpoint will be removed in a future release.",
         deprecated = true)
-    @Deprecated(since = "1.1", forRemoval = false)
+    @Deprecated(since = "1.1", forRemoval = true)
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAssignment(@PathVariable UUID id) {

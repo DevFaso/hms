@@ -240,7 +240,7 @@
 
 .empty-icon {
   font-size: 48px;
-  color: #cbd5e1;
+  color: #64748b;
   margin-bottom: 0.75rem;
 }
 
@@ -276,7 +276,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 1rem;
-    color: #9ca3af;
+    color: #6b7280;
     pointer-events: none;
   }
 
@@ -574,7 +574,7 @@
 
     &:disabled {
       background: #f8fafc;
-      color: #94a3b8;
+      color: #64748b;
       cursor: not-allowed;
     }
   }
@@ -765,7 +765,7 @@
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #9ca3af;
+      color: #6b7280;
       display: flex;
       align-items: center;
       padding: 2px;
@@ -1035,7 +1035,7 @@
   justify-content: center;
   min-width: 32px;
   height: 32px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.875rem;
   -webkit-user-select: none;
   user-select: none;
@@ -1055,7 +1055,7 @@
 
 .name-sub {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .mrn-code {
