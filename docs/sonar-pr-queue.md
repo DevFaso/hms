@@ -16,7 +16,7 @@
 > Last refreshed: 2026-05-11 (round 2 — three follow-up branches pushed
 > covering the previously-deferred PRs #9, #10, #11, #14, #15, #16. All
 > three branches are green against the backend gate locally; awaiting
-> PR creation + GitHub-UI merge).
+> PR creation + GitHub UI merge).
 
 ## Snapshot
 
@@ -25,7 +25,8 @@
 | Vulnerabilities | 4 | **0** ✅ | **0** ✅ |
 | Critical / Major code smells closed (cumulative) | 0 | ~47 | **~62** |
 | False positives identified (need won't-fix in UI) | 0 | 5 | 5 |
-| Branches/PRs landed on `develop` (cumulative) | 0 | 8 ✅ | **11** (round-2 PRs pending UI merge) |
+| PRs **merged** to `develop` (cumulative) | 0 | **8** ✅ | **8** ✅ |
+| Follow-up branches **prepared / pending PR + merge** | 0 | 0 | **3** |
 
 ## Merged into `develop` (8 PRs)
 
@@ -96,14 +97,20 @@ gate before commit:
 
 ### Round-2 branch summary by playbook PR row
 
-| Playbook # | Status after round 2 | Landed in branch |
-| --- | --- | --- |
-| 9 (worst-offender cognitive) | ✅ Done (both methods refactored) | `refactor/sonar-cognitive-complexity` |
-| 10 (cognitive sweep, 13 methods) | ⚠️ Partial — 3 of 13 done (`AuditEventLog#doLogEvent`, `DepartmentService#searchDepartments`, `PatientDocumentMapper#toDto`); the rest are queued as a residual "PR #10b" | `refactor/sonar-cognitive-complexity` |
-| 11 (loop refactors) | ⚠️ Partial — `ResultReviewServiceImpl#getResultReviewQueue` done; CDS-Hooks classes marked won't-fix; `DoctorWorklistServiceImpl` needs re-baselining | `refactor/sonar-cognitive-complexity` |
-| 14 (externalize URIs) | ✅ Done | `refactor/sonar-null-hygiene-config-uris` |
-| 15 (null → empty collection) | ✅ Done (via `Optional<>` for semantic preservation) | `refactor/sonar-null-hygiene-config-uris` |
-| 16 (misc housekeeping) | ✅ Done | `chore/sonar-housekeeping-modernization` |
+> Two-stage status: **Implemented on branch** is what the local commit
+> actually contains (verified by the backend gate); **Merged to develop**
+> only flips after the GitHub PR is reviewed and merged. None of these
+> are merged yet, so the right-hand column stays at ⏳ until the
+> per-PR ✅ tick replaces it.
+
+| Playbook # | Implemented on branch | Merged to `develop` | Branch |
+| --- | --- | --- | --- |
+| 9 (worst-offender cognitive) | ✅ Both methods refactored | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 10 (cognitive sweep, 13 methods) | ⚠️ Partial — 3 of 13 done (`AuditEventLog#doLogEvent`, `DepartmentService#searchDepartments`, `PatientDocumentMapper#toDto`); the rest are queued as a residual "PR #10b" | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 11 (loop refactors) | ⚠️ Partial — `ResultReviewServiceImpl#getResultReviewQueue` done; CDS-Hooks classes marked won't-fix; `DoctorWorklistServiceImpl` needs re-baselining | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 14 (externalize URIs) | ✅ Done | ⏳ Pending PR review | `refactor/sonar-null-hygiene-config-uris` |
+| 15 (null → empty collection) | ✅ Done (via `Optional<>` for semantic preservation) | ⏳ Pending PR review | `refactor/sonar-null-hygiene-config-uris` |
+| 16 (misc housekeeping) | ✅ Done | ⏳ Pending PR review | `chore/sonar-housekeeping-modernization` |
 
 ### Suggested merge order on GitHub
 
