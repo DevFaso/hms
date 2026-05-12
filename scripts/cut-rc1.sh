@@ -21,8 +21,12 @@
 #   - Promote develop → uat → main (use your normal PR + merge flow).
 #   - Create the GitHub release object (push the tag, then run
 #     `gh release create $TAG --notes-file docs/releases/$TAG.md`).
-#   - Manage your GPG key (configure once: `git config --global
-#     user.signingkey <KEY-ID>`).
+#   - Manage your signing key. Configure once, either:
+#       GPG: `git config --global user.signingkey <KEY-ID>`
+#       SSH: `git config user.signingkey <path-to-pubkey>` plus
+#            `git config gpg.format ssh` and a populated
+#            `gpg.ssh.allowedSignersFile`. v1.0.0-rc1 was cut with
+#            an SSH signing key per the post-cut chore PR.
 
 set -euo pipefail
 
@@ -107,18 +111,48 @@ if [ ! -f "$SOAK_DOC" ]; then
 fi
 ok "Soak protocol present: $SOAK_DOC"
 
-# 9. GPG signing key configured
+# 9. Signing key configured. Works for both gpg.format=openpgp (the git
+#    default) and gpg.format=ssh (modern git ≥ 2.34, what v1.0.0-rc1
+#    used). The error messages branch on which format is selected so
+#    the operator gets actionable instructions, not a generic GPG hint.
 SIGNING_KEY="$(git config --get user.signingkey || true)"
+SIGNING_FORMAT="$(git config --get gpg.format || echo openpgp)"
 if [ -z "$SIGNING_KEY" ]; then
-  fail "git config user.signingkey is not set. Configure your GPG key (git config --global user.signingkey <KEY-ID>) before signing tags."
+  if [ "$SIGNING_FORMAT" = "ssh" ]; then
+    fail "git config user.signingkey is not set. For SSH signing: git config user.signingkey <path-to-pubkey>"
+  else
+    fail "git config user.signingkey is not set. For GPG signing: git config --global user.signingkey <KEY-ID>"
+  fi
 fi
-ok "Signing key configured: $SIGNING_KEY"
+ok "Signing key configured: $SIGNING_KEY (format=$SIGNING_FORMAT)"
 
-# 10. GPG can actually sign right now (catches expired key / locked agent)
-if ! echo test | gpg --batch --clearsign --local-user "$SIGNING_KEY" >/dev/null 2>&1; then
-  fail "GPG cannot sign with key $SIGNING_KEY right now (expired? agent locked? wrong key?). Run: gpg --list-secret-keys"
-fi
-ok "GPG signing works."
+# 10. The configured signing tool can actually sign right now. Catches
+#     expired key / locked GPG agent / unreadable SSH private half.
+case "$SIGNING_FORMAT" in
+  ssh)
+    # SSH signing: ssh-keygen -Y sign on a temp file using the
+    # configured key. If the private half is unreadable or the
+    # public-key path is wrong, this fails before we tag anything.
+    PRIVKEY_PATH="${SIGNING_KEY%.pub}"
+    if [ ! -r "$PRIVKEY_PATH" ]; then
+      fail "SSH signing key configured ($SIGNING_KEY) but private half ($PRIVKEY_PATH) is missing or unreadable."
+    fi
+    SSH_TEST_TMP="$(mktemp)"
+    echo test > "$SSH_TEST_TMP"
+    if ! ssh-keygen -Y sign -f "$PRIVKEY_PATH" -n git "$SSH_TEST_TMP" >/dev/null 2>&1; then
+      rm -f "$SSH_TEST_TMP" "${SSH_TEST_TMP}.sig"
+      fail "ssh-keygen -Y sign failed with $PRIVKEY_PATH (passphrase-locked? wrong key?). Verify manually: ssh-keygen -Y sign -f $PRIVKEY_PATH -n git <(echo test)"
+    fi
+    rm -f "$SSH_TEST_TMP" "${SSH_TEST_TMP}.sig"
+    ok "SSH signing works."
+    ;;
+  openpgp|*)
+    if ! echo test | gpg --batch --clearsign --local-user "$SIGNING_KEY" >/dev/null 2>&1; then
+      fail "GPG cannot sign with key $SIGNING_KEY right now (expired? agent locked? wrong key?). Run: gpg --list-secret-keys"
+    fi
+    ok "GPG signing works."
+    ;;
+esac
 
 # ── Roadmap consistency ───────────────────────────────────────────────────────
 heading "Roadmap consistency"
