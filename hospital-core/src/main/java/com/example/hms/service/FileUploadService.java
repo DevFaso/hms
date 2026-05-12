@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.ChatAttachmentKind;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -34,14 +35,64 @@ public class FileUploadService {
     private String uploadDir;
 
     /**
-     * Browser-facing URL prefix for uploaded files. Defaults to {@code /uploads}
-     * which matches the historical hard-coded value and the typical static
-     * resource handler / Nginx alias mapping. Sonar S1075 — externalized so
-     * deployments fronted by a reverse-proxy with a different alias (e.g.
-     * {@code /static/files}) can override without a code change.
+     * Browser-facing URL prefix for <em>patient document</em> uploads only.
+     * Defaults to {@code /uploads} which matches the historical hard-coded
+     * value used by {@link #uploadPatientDocument}. Sonar S1075 — externalized
+     * so deployments fronted by a reverse-proxy with a different static
+     * alias (e.g. {@code /static/files}) can override without a code change.
+     *
+     * <p><b>Scope intentionally limited to patient documents.</b> The other
+     * upload paths in this class (profile images, chat attachments via
+     * {@code CHAT_ATTACHMENT_KEY_PREFIX}, referral/chart attachments via
+     * {@link #relativeUploadPath}) still embed {@code /uploads} literally
+     * because their values double as <b>persisted storage keys</b> on
+     * existing DB rows — flipping them via config would orphan historical
+     * keys. Touching those paths needs a data migration and is out of scope
+     * for the original sonar S1075 cleanup. See PR #315 review notes.
+     *
+     * <p>Normalised at startup ({@link #normalizePatientDocumentUrlPrefix})
+     * so configured values like {@code "uploads"}, {@code "/uploads"},
+     * {@code "/uploads/"} or even {@code "//uploads//"} all produce the
+     * same storage-key shape (single leading slash, no trailing slash).
      */
-    @Value("${app.upload.url-prefix:/uploads}")
-    private String uploadUrlPrefix;
+    @Value("${app.upload.patient-document-url-prefix:/uploads}")
+    private String patientDocumentUrlPrefix;
+
+    /**
+     * Sonar S1075 + PR #315 review — normalise the configured prefix so that
+     * downstream concatenation ({@code prefix + "/" + subdir + "/" + filename})
+     * cannot produce {@code //} or a slashless leading char, regardless of
+     * whether ops wrote {@code "uploads"}, {@code "/uploads"}, {@code "/uploads/"},
+     * or even {@code "//uploads//"}. Idempotent.
+     */
+    @PostConstruct
+    void normalizePatientDocumentUrlPrefix() {
+        patientDocumentUrlPrefix = normalizeUrlPathPrefix(patientDocumentUrlPrefix, "/uploads");
+    }
+
+    /**
+     * Returns {@code raw} with exactly one leading slash and no trailing slash.
+     * Falls back to {@code fallback} (already in the desired shape) when the
+     * raw value is null/blank.
+     */
+    static String normalizeUrlPathPrefix(String raw, String fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        String p = raw.trim();
+        // Collapse repeated leading slashes to a single one.
+        while (p.startsWith("//")) {
+            p = p.substring(1);
+        }
+        // Strip ALL trailing slashes — concatenation supplies the separator.
+        while (p.length() > 1 && p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
+        if (!p.startsWith("/")) {
+            p = "/" + p;
+        }
+        return p;
+    }
 
     /**
      * Public base URL for file links returned to the browser.
@@ -363,7 +414,7 @@ public class FileUploadService {
             Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String relativePath = uploadUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        String relativePath = patientDocumentUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
         long sizeBytes = Files.size(filePath);
         String checksum = HexFormat.of().formatHex(digest.digest());
 

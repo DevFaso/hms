@@ -29,6 +29,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -95,11 +96,47 @@ public class AppointmentServiceImpl implements AppointmentService {
     // Sonar S1075 — URL paths externalized via @Value. Defaults preserve the
     // pre-existing hard-coded values so ops can override per environment
     // without a code change. PatientPortalServiceImpl reads the same keys.
+    // Both are normalized at startup (see {@link #normalizeAppointmentLinkPaths})
+    // so ops can write the value with or without surrounding slashes.
     @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.reschedule-path:/appointments/reschedule/}")
     private String reschedulePath;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.cancel-path:/appointments/cancel/}")
     private String cancelPath;
+
+    /**
+     * PR #315 review — both link fragments are concatenated as
+     * {@code frontendBaseUrl + path + appointmentId}; a missing leading or
+     * trailing slash silently generates a broken link in every confirmation
+     * email. Normalise once at startup so the rest of the file can assume
+     * the shape {@code "/.../"}. Idempotent.
+     */
+    @PostConstruct
+    void normalizeAppointmentLinkPaths() {
+        reschedulePath = normalizeUrlPathFragment(reschedulePath, "/appointments/reschedule/");
+        cancelPath = normalizeUrlPathFragment(cancelPath, "/appointments/cancel/");
+    }
+
+    /**
+     * Returns {@code raw} with exactly one leading {@code /} and one trailing
+     * {@code /}. Falls back to {@code fallback} when {@code raw} is null/blank.
+     */
+    static String normalizeUrlPathFragment(String raw, String fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        String p = raw.trim();
+        while (p.startsWith("//")) {
+            p = p.substring(1);
+        }
+        if (!p.startsWith("/")) {
+            p = "/" + p;
+        }
+        if (!p.endsWith("/")) {
+            p = p + "/";
+        }
+        return p;
+    }
 
     @PersistenceContext
     private EntityManager entityManager;
