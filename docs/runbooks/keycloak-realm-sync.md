@@ -24,6 +24,36 @@ So an edit merged into `realm-export.json` lands in:
 
 That third bullet is the entire failure mode.
 
+## Quick verification (no admin token needed)
+
+Before walking through the procedure below, run the public-surface
+verification script to see whether anything is *already* drifting:
+
+```bash
+scripts/keycloak/env-sync-verify.sh
+```
+
+This does not need credentials. It checks per env that OIDC
+discovery is reachable, that the discovery's `issuer` claim
+matches the configured Keycloak hostname, that all OAuth endpoints
+are HTTPS, and that the matching frontend `environment.<env>.ts`
+agrees with the discovery issuer. It also runs repo-side
+cross-checks (branch divergence, redirect-URI coverage in the
+realm export, frontend env files pointing at distinct hosts).
+Output is a per-check pass/fail/skip table; exit 0 if all green,
+exit 1 on any failure.
+
+Add `--full` to additionally diff the *live realm* against
+`realm-export.json` (live `hms-portal` redirect URIs vs export,
+live realm role count vs export's `.roles.realm`, presence of
+`dev.*` users in uat/prod). `--full` prompts for an admin password
+per env and reads it from stdin (never argv) — see the script's
+docstring for the full check list.
+
+The script is also CI-friendly via `--json`. Wire it into a
+weekly cron + Slack/Discord webhook to get drift alerts before
+the next outage finds them.
+
 ## When to follow this runbook
 
 After **any** PR that modifies [`keycloak/realm-export.json`](../../keycloak/realm-export.json),
