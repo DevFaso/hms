@@ -73,36 +73,28 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
         List<DoctorResultQueueItemDTO> queue = new ArrayList<>();
 
-        for (LabOrder order : completedOrders) {
-            if (order.getStatus() != LabOrderStatus.COMPLETED) continue;
-            if (order.getPatient() == null) continue;
-
-            // Get results for this order
-            List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
-            for (LabResult result : results) {
-                String testName = order.getLabTestDefinition() != null
-                        ? order.getLabTestDefinition().getName()
-                        : "Lab Test";
-
-                String abnormalFlag;
-                if (result.getAbnormalFlag() != null) {
-                    abnormalFlag = result.getAbnormalFlag().name();
-                } else {
-                    abnormalFlag = result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name();
-                }
-
-                queue.add(DoctorResultQueueItemDTO.builder()
-                        .id(result.getId())
-                        .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
-                        .patientId(order.getPatient().getId())
-                        .testName(testName)
-                        .resultValue(result.getResultValue())
-                        .abnormalFlag(abnormalFlag)
-                        .resultedAt(result.getResultDate())
-                        .orderingContext(order.getClinicalIndication())
-                        .build());
-            }
-        }
+        // Sonar S135 — replaced the outer for-loop (which had two `continue`
+        // statements) with a stream filter chain. The inner result loop still
+        // iterates over every LabResult row for each retained order, but it
+        // contains no jump statements (no break/continue), so it does not
+        // re-trigger S135.
+        //
+        // KNOWN PRE-EXISTING N+1: `findByLabOrder_Id` runs once per retained
+        // order. Predates this refactor (the original for-loop had the same
+        // call site). Fixing requires a bulk repo method (e.g. `findByLabOrder_IdIn`
+        // or a JOIN FETCH on LabOrder + ordering staff) plus tests; scoped out
+        // of this PR. Tracked for a follow-up "perf: bulk-fetch result queue"
+        // commit. For a single physician's queue this stays bounded by the
+        // staff-scoped completed-order count, which is small in practice.
+        completedOrders.stream()
+                .filter(order -> order.getStatus() == LabOrderStatus.COMPLETED)
+                .filter(order -> order.getPatient() != null)
+                .forEach(order -> {
+                    List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
+                    for (LabResult result : results) {
+                        queue.add(toQueueItem(order, result));
+                    }
+                });
 
         // Sort: CRITICAL → ABNORMAL → NORMAL, then by date desc
         queue.sort(Comparator
@@ -220,6 +212,25 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .thenComparing(i -> i.getTimestamp() != null ? i.getTimestamp() : LocalDateTime.MIN, Comparator.reverseOrder()));
 
         return items;
+    }
+
+    private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result) {
+        String testName = order.getLabTestDefinition() != null
+                ? order.getLabTestDefinition().getName()
+                : "Lab Test";
+        String abnormalFlag = result.getAbnormalFlag() != null
+                ? result.getAbnormalFlag().name()
+                : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
+        return DoctorResultQueueItemDTO.builder()
+                .id(result.getId())
+                .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
+                .patientId(order.getPatient().getId())
+                .testName(testName)
+                .resultValue(result.getResultValue())
+                .abnormalFlag(abnormalFlag)
+                .resultedAt(result.getResultDate())
+                .orderingContext(order.getClinicalIndication())
+                .build();
     }
 
     private int abnormalityRank(String flag) {
