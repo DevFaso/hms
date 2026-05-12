@@ -7,6 +7,7 @@
 > nothing on the codebase side enforces them.
 >
 > Companion to:
+>
 > - [railway-services.md](railway-services.md) — per-service Railway
 >   dashboard config (Root Directory, Dockerfile Path, watchPatterns).
 > - [keycloak-env-sync-audit-2026-05-12.md](keycloak-env-sync-audit-2026-05-12.md)
@@ -18,28 +19,42 @@
 ## Project structure
 
 The `MediHub` Railway project is organised as **one project × three
-environments × N services per environment**:
+environments × per-env service names**:
 
 ```text
 MediHub (project)
 ├── dev       (environment)   ◄─ tracks branch `develop`
-│   ├── hms-keycloak              + hms-keycloak-dev-db (Postgres)
-│   ├── hms-backend (hospital-core) + hms-db-dev (Postgres)
-│   └── hospital-portal
+│   ├── hms-keycloak-dev          + hms-keycloak-dev-db (Postgres)
+│   ├── hms-backend-dev           + hms-db-dev (Postgres)
+│   └── hospital-portal-dev
 ├── uat       (environment)   ◄─ tracks branch `uat`
-│   ├── hms-keycloak              + hms-keycloak-uat-db
-│   ├── hms-backend                 + hms-db-uat
-│   └── hospital-portal
+│   ├── hms-keycloak-uat          + hms-keycloak-uat-db
+│   ├── hms-backend-uat           + hms-db-uat
+│   └── hospital-portal-uat
 └── prod      (environment)   ◄─ tracks branch `main`
-    ├── hms-keycloak              + hms-keycloak-prod-db
-    ├── hms-backend                 + hms-db-prod
-    └── hospital-portal
+    ├── hms-keycloak-prod         + hms-keycloak-prod-db
+    ├── hms-backend-prod          + hms-db-prod
+    └── hospital-portal-prod
 ```
 
-Service definitions are shared across environments (single
-`railway.toml` per service); env vars are scoped per-environment via
-Railway's environment-variable UI. That's the intended split: code in
-the repo, secrets and per-env hostnames in Railway.
+> **Why per-env service names** (rather than one shared service name
+> across the three environments, which is Railway's default model
+> for new projects)? The MediHub project predates Railway's
+> environments feature; the original setup was three independent
+> services per app. When the project was consolidated into one
+> project with three environments, the service names were preserved
+> for continuity. The visible tell is the public domain pattern
+> `<service>-<env>.up.railway.app` rendering as
+> `hms-keycloak-dev-dev.up.railway.app` (service `hms-keycloak-dev`
+> in env `dev`) — see [`keycloak/prod/README.md`](../../keycloak/prod/README.md) §1
+> and [keycloak-admin-recovery-2026-05-09.md §3](keycloak-admin-recovery-2026-05-09.md#3-verify-uat-admin-login)
+> for the same naming.
+
+The single `railway.toml` per Dockerfile is shared across all three
+services of the same kind (one `keycloak/prod/railway.toml` referenced
+by `hms-keycloak-{dev,uat,prod}` etc.). Env vars are per-service
+per-environment via Railway's variables UI. That's the intended
+split: code in the repo, secrets and per-env hostnames in Railway.
 
 ## Conventions used in this matrix
 
@@ -58,7 +73,7 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 1. `hms-keycloak` (each env)
+## 1. `hms-keycloak-<env>` (one per environment)
 
 | Variable | Type | dev | uat | prod | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -76,7 +91,7 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 2. `hms-backend` (Spring Boot, `hospital-core`) — each env
+## 2. `hms-backend-<env>` (Spring Boot, `hospital-core`) — one per environment
 
 The whole OIDC posture lives in env vars; there are no per-profile YAML
 defaults. From [`hospital-core/src/main/resources/application.properties`](../../hospital-core/src/main/resources/application.properties):
@@ -89,7 +104,7 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 
 | Variable | Type | dev | uat | prod | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
 | `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
 | `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
 | `JWT_SECRET` | secret | (env-specific) | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
@@ -108,16 +123,16 @@ If the first line is absent in any env, `OIDC_ISSUER_URI` is unset.
 
 ---
 
-## 3. `hospital-portal` (Angular) — each env
+## 3. `hospital-portal-<env>` (Angular) — one per environment
 
 Portal env vars are baked at build time into [`hospital-portal/src/environments/environment.<env>.ts`](../../hospital-portal/src/environments/), so the "matrix" here is what those files
-**must agree with** the matching `hms-keycloak` `KC_HOSTNAME`. There is
+**must agree with** the matching `hms-keycloak-<env>` `KC_HOSTNAME`. There is
 no Railway runtime-var override for the portal — the contract is enforced
 at PR-review time.
 
 | Setting (in `environment.<env>.ts`) | dev | uat | prod | Notes |
 | --- | --- | --- | --- | --- |
-| `oidc.issuer` | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** equal the matching `hms-backend` `OIDC_ISSUER_URI` and the matching `hms-keycloak` `KC_HOSTNAME`+`/realms/hms`. Three-way agreement. |
+| `oidc.issuer` | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** equal the matching `hms-backend-<env>` `OIDC_ISSUER_URI` and the matching `hms-keycloak-<env>` `KC_HOSTNAME`+`/realms/hms`. Three-way agreement. |
 | `oidc.clientId` | `hms-portal` | `hms-portal` | `hms-portal` | Hard-coded; matches the realm-export client. |
 | `oidc.enabled` | `true` (when ready per phase 2.8.B) | `true` (post KC-4) | `false` until Phase 3 cutover | Drives whether the SSO button is rendered. Keep `false` in any env where the realm isn't yet imported / users aren't migrated. |
 
@@ -132,8 +147,8 @@ Railway and should never be hand-edited.
 
 | Service | Used by | DATABASE_URL exposed as |
 | --- | --- | --- |
-| `hms-keycloak-<env>-db` | `hms-keycloak` only | `${{hms-keycloak-<env>-db.DATABASE_URL}}` |
-| `hms-db-<env>` | `hms-backend` only | `${{hms-db-<env>.DATABASE_URL}}` |
+| `hms-keycloak-<env>-db` | `hms-keycloak-<env>` only | `${{hms-keycloak-<env>-db.DATABASE_URL}}` |
+| `hms-db-<env>` | `hms-backend-<env>` only | `${{hms-db-<env>.DATABASE_URL}}` |
 
 **Critical:** these are *separate* DBs. Do not point both services at
 the same DB — Keycloak owns its own schema and account store. Sharing
@@ -148,7 +163,7 @@ To audit the matrix against reality without touching anything:
 ```bash
 # Per env, per service, list configured variables (names only — values stay in Railway)
 for env in dev uat prod; do
-  for svc in hms-keycloak hms-backend hospital-portal; do
+  for svc in hms-keycloak-$env hms-backend-$env hospital-portal-$env; do
     echo "=== $env / $svc ==="
     railway environment $env
     railway service $svc

@@ -47,16 +47,20 @@ For each environment, in order **dev → uat → prod**:
 ### 1. Verify the deployed image carries the change
 
 The Railway service for the env must be on a commit that includes the
-PR. Check from a terminal that has Railway CLI access:
+PR. The MediHub project keeps **per-environment service names** (the
+service in env `dev` is named `hms-keycloak-dev`, not bare `hms-keycloak`
+— this matches [`keycloak/prod/README.md`](../../keycloak/prod/README.md) §1
+and is the reason the public domain has the doubled `-dev-dev` suffix).
+Check from a terminal that has Railway CLI access:
 
 ```bash
-railway environment <env>                  # dev | uat | prod
-railway service hms-keycloak               # the Keycloak service
+railway environment <env>                       # dev | uat | prod
+railway service hms-keycloak-<env>              # hms-keycloak-dev | -uat | -prod
 railway logs --tail 200 | grep -E '(Imported realm|Listening on|hms-keycloak-entrypoint)'
 ```
 
 Or from the Railway UI: project `MediHub` → environment switcher →
-`hms-keycloak` service → **Deployments** tab. The most-recent
+`hms-keycloak-<env>` service → **Deployments** tab. The most-recent
 "Succeeded" deployment must have a commit SHA at-or-after the PR's
 merge commit.
 
@@ -111,11 +115,19 @@ export — its scope is the cutover invariants (see
 realm-content diffs, use:
 
 ```bash
-# Token from the env's named admin (see keycloak-admin-recovery-2026-05-09.md)
-TOKEN=$(curl -sS -X POST \
+# Token from the env's named admin (see keycloak-admin-recovery-2026-05-09.md).
+# Read password into env (no echo), then send via stdin so it never appears
+# in argv / shell history / `ps` output. `--data-urlencode "name@-"` reads
+# the value from stdin.
+read -rsp "Password for $KC_NAMED_ADMIN: " KC_NAMED_ADMIN_PASSWORD && echo
+TOKEN=$(printf '%s' "$KC_NAMED_ADMIN_PASSWORD" | curl -sS -X POST \
   "https://hms-keycloak-<env>-<env>.up.railway.app/realms/master/protocol/openid-connect/token" \
-  -d "grant_type=password&client_id=admin-cli&username=$KC_NAMED_ADMIN&password=$KC_NAMED_ADMIN_PASSWORD" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "client_id=admin-cli" \
+  --data-urlencode "username=$KC_NAMED_ADMIN" \
+  --data-urlencode "password@-" \
   | jq -r .access_token)
+unset KC_NAMED_ADMIN_PASSWORD
 
 # Pull live client config and diff redirect URIs against the export
 curl -sS -H "Authorization: Bearer $TOKEN" \

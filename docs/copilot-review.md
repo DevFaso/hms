@@ -1,267 +1,202 @@
-PR 281 branch name chore/keycloak-verify-script
-scripts/verify-keycloak-admin.ps1
-# error body for each env. dev intentionally omitted — admin user there is
-# `tiego`, not `kc-admin`; verify dev manually via the browser.
+# Copilot review — `investigate/keycloak-env-sync-audit` (2026-05-12)
 
-$ErrorActionPreference = 'SilentlyContinue'
-Copilot commented 11 hours ago
-Copilot
-Copilot
-AI
-11 hours ago
-$ErrorActionPreference is set to 'SilentlyContinue', which can hide non-terminating errors and makes this script behave differently from other PowerShell scripts in this repo (e.g., scripts/kc-inspect.ps1 and scripts/seed-keycloak.ps1 use 'Stop'). Consider switching to 'Stop' (and then selectively using -ErrorAction where needed) so unexpected failures surface immediately.
+Working notes on the Copilot review that landed on the env-sync
+audit PR. Each comment is summarised, then marked ✅ (fixed in this
+branch), ⚠️ (acknowledged with caveat / partial fix), or ❌ (disagree
+— left unchanged with reasoning).
 
-Suggested changeset 1 (1)
-scripts/verify-keycloak-admin.ps1
-Original file line number	Diff line number	Diff line change
- # error body for each env. dev intentionally omitted — admin user there is
- # `tiego`, not `kc-admin`; verify dev manually via the browser.
- $ErrorActionPreference = 'SilentlyContinue'
- $ErrorActionPreference = 'Stop'
- $envs = @(
-   @{
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-scripts/verify-keycloak-admin.ps1
-Comment on lines +47 to +54
-  } catch {
-    $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 'ERR' }
-    $body = if ($_.ErrorDetails) { $_.ErrorDetails.Message } else { $_.Exception.Message }
-    Write-Output "  HTTP $code  $body"
-  }
-}
+---
 
-if ($anyMissing) { exit 2 }
-Copilot commented 11 hours ago
-Copilot
-Copilot
-AI
-11 hours ago
-On failed login/token requests you print the HTTP status/body, but the script still exits 0 as long as the env vars are present. For a "verify" script this makes it hard to use in automation and easy to miss failures; track whether any environment returned an error in the catch block and exit non-zero at the end when any verification fails.
+## ✅ #1 — Service naming: `railway service hms-keycloak` vs `hms-keycloak-<env>` (Medium)
 
+**File:** `docs/runbooks/keycloak-realm-sync.md` lines +52 to +56
+**Copilot:** This runbook assumes Railway uses environments with
+shared service names; other repo docs describe per-env services
+named `hms-keycloak-<env>`. Please align.
 
+**Resolution:** Fixed. The audit doc already used `hms-keycloak-dev/-uat/-prod`
+(matching `keycloak/prod/README.md` §1 and the doubled-suffix Railway
+domain like `hms-keycloak-dev-dev.up.railway.app`); my new realm-sync
+runbook had drifted to bare `hms-keycloak`. Rewrote the CLI examples
+to use `railway service hms-keycloak-<env>` and added a short
+explainer of why the names are per-env (legacy from the
+pre-environments setup, preserved for continuity).
 
+---
 
-PR 283 branch name feat/v1.0-idle-session-timeout
-docs/roadmap.csv
-v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense path: Tier 1 in-house, Tier 2 partner, refill, AMU export",—,S,Frontend,not-started,#h1.exit
-v1.0,2026-06-23,Pharmacy,T-72 perf baseline,k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md,—,S,Platform,not-started,#h1.exit
-v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,not-started,#h1.exit
-v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,started,#h1.exit
-Copilot commented 6 hours ago
-Copilot
-Copilot
-AI
-6 hours ago
-The PR title suggests implementing the idle session timeout feature, but this change only updates the roadmap status. To avoid confusion in history/release notes, either include the actual implementation changes in this PR or rename/scope this PR as a docs/chore update.
+## ❌ #2 — "Tables use `||` row prefix" in audit doc (Medium)
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/roadmap.csv
-Comment on lines +2 to +3
-v1.0,2026-06-23,Clinical Safety,CDS Hooks expansion,Add order-select and medication-prescribe hooks with RxNorm bindings; integration tests against existing prescriptions module,—,M,Backend,completed,#h1.exit
-v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,Extend hms-medication-allergy-check to fire on coexisting prescriptions; warn-card on critical interactions,CDS Hooks expansion,M,Mixed (Backend + UI),completed,#h1.exit
-Copilot commented 6 hours ago
-Copilot
-Copilot
-AI
-6 hours ago
-This PR updates statuses for Clinical Safety items in addition to the idle session timeout entry. If the intent is to track only the idle session timeout work here, consider moving unrelated roadmap status changes to a separate PR to keep changesets focused and easier to audit.
+**File:** `docs/runbooks/keycloak-env-sync-audit-2026-05-12.md` lines +29-33, also +55, +90
+**Copilot:** Tables start with `||` so GitHub renders an extra empty
+column. Replace `||` with `|`.
 
+**Resolution:** Disagree — false positive. Verified with
+`grep -nF '||' docs/runbooks/keycloak-env-sync-audit-2026-05-12.md`:
+zero matches. The on-disk tables use single pipes consistently.
+Whatever Copilot saw in its rendered preview was not `||` in the
+source. **Did not change** — the tables render correctly on GitHub
+when viewed manually.
 
-hospital-core/.../java/com/example/hms/security/IdleSessionGate.java
-Remove this method and declare a constant for this value.
+> Sanity check anyone can run from the repo root:
+> `grep -nF '||' docs/runbooks/keycloak-env-sync-audit-2026-05-12.md` → empty.
 
-Intentionality
-Maintainability
+---
 
+## ❌ #3 — Same "double pipe" claim on the `OIDC_REQUIRED` table (Medium)
 
-3
-Low
-confusing
-Open
-Not assigned
-L103
-5min effort
-6 hours ago
-Code Smell
-Minor
-Use "Arrays.copyOf", "Arrays.asList", "Collections.addAll" or "System.arraycopy" instead.
+**File:** `docs/keycloak-implementation-gaps.md` lines +348-352
+**Copilot:** The `OIDC_REQUIRED` intent table starts with `||`.
 
-Intentionality
-Maintainability
+**Resolution:** Disagree — same false positive as #2. Same grep
+applied to `docs/keycloak-implementation-gaps.md` returns zero `||`
+matches. **Did not change.**
 
+---
 
-3
-Low
-clumsy
-Open
-Not assigned
-L130
-5min effort
-6 hours ago
-Code Smell
-Minor
-hospital-core/.../com/example/hms/security/oidc/KeycloakHospitalContextFilter.java
-Complete the task associated to this TODO comment.
+## ✅ #4 — Snapshots may contain secrets, but runbook says "check them in" (HIGH)
 
-Intentionality
-Maintainability
+**File:** `docs/runbooks/keycloak-env-sync-remediation.md` lines +62-70
+**Copilot:** Realm exports can include `clients[].secret`, SMTP
+creds, signing keys. Runbook recommended committing them. Add
+sanitization or avoid committing.
 
+**Resolution:** Fixed. This was the most important comment and the
+original wording was straightforwardly wrong. Restructured Step 1
+into a two-tier flow:
 
-
-Info
-cwe
-Open
-Not assigned
-L79
-0min effort
-6 hours ago
-Code Smell
-Info
-hospital-core/.../java/com/example/hms/security/InMemoryIdleSessionTrackerTest.java
-Remove this use of "Thread.sleep()".
+1. **Raw exports** are written to `docs/snapshots/keycloak/raw/`
+   which is **gitignored** (the runbook now creates the gitignore
+   alongside the directory in §1a). These carry the live secrets
+   and stay on the operator's laptop.
+2. **Redacted exports** are produced by a `jq` filter that strips
+   every known secret-bearing field (`secret`, `password`,
+   `privateKey`, `certificate`, `trustStorePassword`, `smtpServer`,
+   `credentials`) and written to `docs/snapshots/keycloak/` as
+   `*.redacted.json`. Only these are committed.
+3. A **verification loop** runs after redaction and prints any
+   leaked field name; the runbook gates the commit on that loop
+   producing zero output.
+4. The §"After all three steps" commit invocation now uses
+   `git status --short` to confirm nothing from `raw/` slipped in.
 
-Intentionality
-Maintainability
+Also added an explicit warning at the top of Step 1 calling out the
+known secret-bearing fields, plus a reminder to extend the redaction
+filter if a future Keycloak release introduces a new one.
 
+---
 
-2
-Medium
-bad-practice
-tests
-Open
-Not assigned
-L38
-20min effort
-6 hours ago
-Code Smell
-Major
-Remove this use of "Thread.sleep()".
+## ✅ #5 — "Full realm export" claim doesn't match what the curl actually fetches (Medium)
 
-Intentionality
-Maintainability
+**File:** `docs/runbooks/keycloak-env-sync-remediation.md` lines +98-106
+**Copilot:** Comment says "Full realm export including roles/scopes/components"
+but procedure only hits `GET /admin/realms/hms` (and later `/clients`).
 
+**Resolution:** Fixed. Copilot was correct — `GET /admin/realms/<realm>`
+returns realm-level config only (no clients, roles, scopes, groups,
+identity providers). Switched to the actual `kc.sh export` API
+equivalent: `POST /admin/realms/hms/partial-export?exportClients=true&exportGroupsAndRoles=true`,
+which is what we want for a full snapshot. Kept the separate
+`/clients` call for per-client detail (operator-friendly attributes
+the partial-export trims). Updated the surrounding prose to match
+what the calls actually produce.
 
-2
-Medium
-bad-practice
-tests
-Open
-Not assigned
-L71
-20min effort
-6 hours ago
-Code Smell
-Major
-hospital-core/.../java/com/example/hms/security/RedisIdleSessionTrackerTest.java
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
+---
 
-Intentionality
-Maintainability
+## ✅ #6 — `memory/keycloak-recovery-2026-05-09.md` does not exist in the repo (Medium)
 
+**File:** `docs/runbooks/keycloak-env-sync-remediation.md` lines +375-379
+**Copilot:** Refers to a `memory/` path that isn't in the repo.
+Update to the actual in-repo doc.
 
-2
-Medium
-junit
-tests
-Open
-Not assigned
-L142
-5min effort
-6 hours ago
-Code Smell
-Major
+**Resolution:** Fixed in two places. The `memory/` path was leaking
+the operator's private notes location (Claude memory directory) and
+is not findable from the repo. Replaced both references with the
+in-repo runbook `docs/runbooks/keycloak-admin-recovery-2026-05-09.md`:
 
+- §5g of the remediation runbook now updates the in-repo
+  admin-recovery doc and includes a short note explaining the
+  earlier draft's bad reference.
+- §3b of the audit doc replaced "Per the memory note ..." with a
+  direct link to `keycloak-admin-recovery-2026-05-09.md` plus a
+  forward link to the remediation runbook §5 that closes the drift.
 
+Verified `find . -name 'keycloak-recovery-2026-05-09*'` returns
+nothing; the canonical file is `keycloak-admin-recovery-...`.
 
-PR 284 branch name feat/v1.0-dr-runbook
-docs/runbooks/disaster-recovery.md
-Comment on lines +63 to +65
-      and confirm `flyway_schema_history` (or `databasechangelog` for
-      Liquibase) ends at the migration that was current at the chosen
-      restore point.
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-The drill checklist references flyway_schema_history, but this repo’s backend uses Liquibase (and Flyway is disabled in configs). This will mislead operators during a drill; suggest removing the Flyway mention and documenting the expected Liquibase table/fields to check instead (e.g., databasechangelog).
+---
 
-Suggested changeset 1 (1)
-docs/runbooks/disaster-recovery.md
-Original file line number	Diff line number	Diff line change
- - [ ] **§ 3.1 Postgres PITR to a fresh database** — restore the
-       production WAL stream into a *new* Railway Postgres instance
-       and confirm `flyway_schema_history` (or `databasechangelog` for
-       Liquibase) ends at the migration that was current at the chosen
-       restore point.
-       and confirm Liquibase `databasechangelog` ends at the changeset
-       that was current at the chosen restore point (verify the latest
-       `id`, `author`, and `filename` values match the expected release).
- - [ ] **§ 4 Service redeploy** — pick the `hms-backend` service in
-       Railway, redeploy the last green build from one week prior, and
-       observe the `HmsErrorBudgetSlowBurn` alert reset within 5 min.
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-3. **Validate the restored DB before cutover.** From a local shell:
-   ```bash
-   psql "$RESTORE_DB_URL" -c "SELECT COUNT(*) FROM clinical.patients WHERE is_deleted = FALSE;"
-   psql "$RESTORE_DB_URL" -c "SELECT id, filename, executed_on FROM databasechangelog ORDER BY executed_on DESC LIMIT 5;"
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-The databasechangelog query uses executed_on, but Liquibase’s tracking table column is typically dateexecuted (or dateExecuted depending on quoting). As written, this command will fail during a restore validation; update the query to use the actual Liquibase column names.
+## ✅ #7 — Token-fetch curl puts admin password on the command line (Medium)
 
-Suggested changeset 1 (1)
-docs/runbooks/disaster-recovery.md
-Original file line number	Diff line number	Diff line change
- 3. **Validate the restored DB before cutover.** From a local shell:
-    ```bash
-    psql "$RESTORE_DB_URL" -c "SELECT COUNT(*) FROM clinical.patients WHERE is_deleted = FALSE;"
-    psql "$RESTORE_DB_URL" -c "SELECT id, filename, executed_on FROM databasechangelog ORDER BY executed_on DESC LIMIT 5;"
-    psql "$RESTORE_DB_URL" -c "SELECT id, filename, dateexecuted FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 5;"
-    ```
-    The `databasechangelog` query confirms Liquibase state. If the most
-    recent entry is the migration *before* the bad one, you're good.
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-Comment on lines +196 to +201
-**Prerequisites** — these must be recoverable from outside Railway:
-- GitHub repo access (`origin = https://github.com/DevFaso/hms.git`).
-- The current production secrets (see § 7 for the inventory).
-- The latest Postgres backup file (§ 3 export-to-file procedure).
-- The latest Keycloak realm export (`keycloak/prod/realm-export.json`
-  in the repo, or the most recent manual export).
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-§5 requires “the latest Postgres backup file” and points to a “§3 export-to-file procedure”, but §3 only covers Railway PITR restore and doesn’t document how to produce/obtain backup.dump outside Railway. For a full project-loss scenario this is a blocking gap—either add an explicit export/download procedure (and where it is stored) or adjust §5 to use Railway’s snapshot export flow (if available) and document that path.
+**File:** `docs/runbooks/keycloak-realm-sync.md` lines +115-119
+**Copilot:** Embeds `password=$KC_NAMED_ADMIN_PASSWORD` in the curl
+command line — leaks via shell history / `ps`. Use `read -rsp`
+and stdin.
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-Comment on lines +250 to +256
-Production runs Grafana Cloud; provisioning is via the
-[`grafana/provisioning/**`](../../grafana/provisioning) tree synced
-through the Grafana Cloud API. Re-sync via:
+**Resolution:** Fixed in both runbooks (the same anti-pattern was
+present in `keycloak-env-sync-remediation.md` Step 1b — Copilot
+flagged only the realm-sync version, but the fix applies to both).
+New shape:
 
 ```bash
-./scripts/grafana-sync.sh   # if the script exists; otherwise re-import via the UI per dashboard
+read -rsp "Password for $ADMIN_USER on $ENV: " ADMIN_PASS && echo
+TOKEN=$(printf '%s' "$ADMIN_PASS" | curl -sS -X POST \
+  "${KC_HOST}/realms/master/protocol/openid-connect/token" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "client_id=admin-cli" \
+  --data-urlencode "username=${ADMIN_USER}" \
+  --data-urlencode "password@-" \
+  | jq -r .access_token)
+unset ADMIN_PASS
 ```
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-This runbook suggests running ./scripts/grafana-sync.sh, but that script doesn’t exist in the repo. Even with the “if the script exists” note, including a non-existent command in a DR runbook can slow recovery; either add the script (and document required env vars) or replace this with the concrete, repo-backed provisioning/import steps used in this project.
 
+The password value comes from stdin via `--data-urlencode "password@-"`
+(curl's stdin form for that flag), so it never appears in `argv`,
+shell history, or `ps` output. `unset ADMIN_PASS` clears the env
+var afterwards.
 
+---
 
-PR 285 branch name feat/v1.0-fr-completeness-gate
+## ✅ #8 — Same naming inconsistency in env-matrix tree diagram + table (Medium)
+
+**File:** `docs/runbooks/railway-env-matrix.md` lines +24-28, +63
+**Copilot:** Tree shows `hms-keycloak` / `hms-backend` / `hospital-portal`
+as services; older docs use per-env names. Standardize.
+
+**Resolution:** Fixed. Same root cause as #1. Updated:
+
+- The tree diagram (§Project structure) to show
+  `hms-keycloak-<env>`, `hms-backend-<env>`, `hospital-portal-<env>`.
+- All three section headers (`## 1. hms-keycloak-<env>`, etc.).
+- Cross-references inside the matrix that previously said "the
+  `hms-keycloak` `KC_HOSTNAME`" now say "the `hms-keycloak-<env>`
+  `KC_HOSTNAME`".
+- The drift-detection loop's `for svc in ...` list now expands
+  `hms-keycloak-$env hms-backend-$env hospital-portal-$env`.
+- Added an explicit § "Why per-env service names" explainer with
+  the same justification as #1's fix (legacy from pre-environments
+  Railway setup, doubled-suffix domain as the visible tell).
+
+Also retroactively updated the audit doc's structure-note paragraph,
+which previously claimed "shared service names across envs" and
+contradicted both the older docs and the screenshot the user
+provided. The audit now cites the env-matrix as the canonical layout.
+
+---
+
+## Net-net
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| HIGH | 1 | ✅ fixed |
+| Medium | 7 | 5 ✅ fixed, 2 ❌ disagreed (false positives on the double-pipe claim — see #2 / #3) |
+
+Files touched in the follow-up commit:
+
+- `docs/runbooks/keycloak-realm-sync.md` (#1, #7)
+- `docs/runbooks/railway-env-matrix.md` (#8)
+- `docs/runbooks/keycloak-env-sync-remediation.md` (#4, #5, #6, #7)
+- `docs/runbooks/keycloak-env-sync-audit-2026-05-12.md` (#6, structure-note correction from #8)
+
+No code changes. The two disagreements (#2, #3) are documented above
+with the grep that proves the `||` claim is false; if Copilot still
+flags them on re-review, the response is "see this section."

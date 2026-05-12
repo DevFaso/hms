@@ -7,6 +7,7 @@
 > therefore cannot be done from a PR alone.
 >
 > Companion to:
+>
 > - [keycloak-realm-sync.md](keycloak-realm-sync.md) — the steady-state
 >   discipline this runbook restores.
 > - [railway-env-matrix.md](railway-env-matrix.md) — the per-env
@@ -44,87 +45,179 @@ acceptance criteria at the end hold, this file can move to an
 
 ## Step 1 — Baseline export per environment
 
-**Goal:** capture the current realm state of each env as JSON in
-`docs/snapshots/` so future drift is *measurable*. Without this
-baseline, every future sync question is "compared to what?".
+**Goal:** capture the current realm state of each env as JSON so
+future drift is *measurable*. Without this baseline, every future
+sync question is "compared to what?".
 
-### 1a. Create the snapshot directory
+> **Snapshots contain secrets.** The Keycloak realm export format
+> can include `clients[].secret` (confidential client secrets, e.g.
+> `hms-backend`), `smtpServer.password`, `components[].config`
+> entries with realm signing private keys, and (if users are
+> exported) credential hashes and TOTP secrets. The split below is:
+>
+> - **Raw exports stay local** — written to a gitignored path
+>   (`docs/snapshots/keycloak/raw/`) so they never enter git history
+>   even by accident.
+> - **Redacted exports get committed** — produced by a `jq` filter
+>   that strips every known secret-bearing field, written to
+>   `docs/snapshots/keycloak/` and used as the diff baseline.
+>
+> If a future Keycloak version introduces a new secret-bearing
+> field, the redaction filter below must be extended *before* the
+> next baseline is taken. Audit the schema if in doubt.
+
+### 1a. Create the snapshot directory + gitignore the raw subdir
 
 ```bash
-mkdir -p docs/snapshots/keycloak
+mkdir -p docs/snapshots/keycloak/raw
 ```
 
-Add a `README.md`:
+Add `docs/snapshots/keycloak/.gitignore`:
+
+```text
+# Raw realm exports contain client secrets, SMTP creds, and signing
+# keys. The redacted siblings (committed) are produced by the jq
+# filter in keycloak-env-sync-remediation.md §1c.
+raw/
+```
+
+Add `docs/snapshots/keycloak/README.md`:
 
 ```markdown
 # Keycloak realm snapshots
 
-Periodic exports of the live `hms` realm from each environment, used
-as the diff baseline for future env-sync audits. Naming:
+Periodic redacted exports of the live `hms` realm from each
+environment, used as the diff baseline for future env-sync audits.
 
-  hms-realm-<env>-<YYYY-MM-DD>.json
+Naming:
+- `hms-realm-<env>-<YYYY-MM-DD>.redacted.json`   (committed)
+- `hms-clients-<env>-<YYYY-MM-DD>.redacted.json` (committed)
+- `raw/hms-*-<env>-<YYYY-MM-DD>.json`            (gitignored — contains
+  secrets; produced first, then fed through the redaction filter)
 
-These snapshots are checked in deliberately — they are NOT secrets
-(redact any password hashes via `kc.sh export --users skip` if a
-future export ever includes them). They go stale fast; refresh
-quarterly or after any realm-export.json PR.
+The redaction filter (in `keycloak-env-sync-remediation.md §1c`)
+strips: `clients[].secret`, `smtpServer.password`, `components[]`
+private-key configs, `users[].credentials` (if present). If a
+future export includes a new secret-bearing field, extend the
+filter before the next baseline.
+
+Snapshots go stale fast; refresh quarterly or after any
+`realm-export.json` PR.
 ```
 
-### 1b. Export each env
+### 1b. Fetch raw exports from each env
 
 The Railway plan does not expose container shell access on the
 `hms-keycloak-<env>` services, so `kc.sh export` cannot be invoked
-inside the running container. Use the Admin REST API instead — it
-returns the full realm JSON in one call.
+inside the running container. Use the Admin REST API instead. The
+correct endpoint for a full realm export is `partial-export` (the
+bare `GET /admin/realms/<realm>` returns realm-level config only —
+no clients, roles, or scopes); `partial-export` is the API
+equivalent of `kc.sh export` and accepts query params for what to
+include.
 
-For each env (`dev`, `uat`, `prod`), get an admin token then export:
+For each env (`dev`, `uat`, `prod`):
 
 ```bash
 ENV=dev   # or uat or prod
 KC_HOST="https://hms-keycloak-${ENV}-${ENV}.up.railway.app"
 ADMIN_USER="<your-named-admin-username>"   # or kc-admin in envs not yet locked down
+
+# Read password into env (no echo). Send via stdin so it never appears
+# in argv / shell history / `ps`. `--data-urlencode "name@-"` reads the
+# value from stdin.
 read -rsp "Password for $ADMIN_USER on $ENV: " ADMIN_PASS && echo
 
-TOKEN=$(curl -sS -X POST \
+TOKEN=$(printf '%s' "$ADMIN_PASS" | curl -sS -X POST \
   "${KC_HOST}/realms/master/protocol/openid-connect/token" \
-  -d "grant_type=password" \
-  -d "client_id=admin-cli" \
-  -d "username=${ADMIN_USER}" \
-  -d "password=${ADMIN_PASS}" \
+  --data-urlencode "grant_type=password" \
+  --data-urlencode "client_id=admin-cli" \
+  --data-urlencode "username=${ADMIN_USER}" \
+  --data-urlencode "password@-" \
   | jq -r .access_token)
+unset ADMIN_PASS
 
-[ "$TOKEN" = "null" ] && { echo "Token fetch failed"; exit 1; }
+[ "$TOKEN" = "null" ] || [ -z "$TOKEN" ] && { echo "Token fetch failed"; exit 1; }
 
-# Full realm export — clients, roles, mappers, scopes, components.
-# Users are NOT exported (the export endpoint returns realm config,
-# not user records — separate endpoint, deliberately not used here).
+# Full realm export — equivalent to `kc.sh export --users skip`.
+# `exportClients=true` includes clients/redirect URIs/web origins/scopes.
+# `exportGroupsAndRoles=true` includes realm + client roles and groups.
+# Users are NOT exported (deliberately — that requires a separate
+# users endpoint and would inflate the snapshot with PII for no
+# diff value).
 curl -sS -H "Authorization: Bearer $TOKEN" \
-  "${KC_HOST}/admin/realms/hms" \
+  -X POST \
+  "${KC_HOST}/admin/realms/hms/partial-export?exportClients=true&exportGroupsAndRoles=true" \
   | jq '.' \
-  > "docs/snapshots/keycloak/hms-realm-${ENV}-$(date +%Y-%m-%d).json"
+  > "docs/snapshots/keycloak/raw/hms-realm-${ENV}-$(date +%Y-%m-%d).json"
 
-# For per-client detail (redirect URIs etc. live here, not in the realm doc above):
+# Per-client detail with full attributes (the partial-export trims
+# some operator-only fields; the /clients endpoint is the canonical
+# source for redirect-URI / web-origin diffing).
 curl -sS -H "Authorization: Bearer $TOKEN" \
   "${KC_HOST}/admin/realms/hms/clients" \
   | jq '.' \
-  > "docs/snapshots/keycloak/hms-clients-${ENV}-$(date +%Y-%m-%d).json"
+  > "docs/snapshots/keycloak/raw/hms-clients-${ENV}-$(date +%Y-%m-%d).json"
 
-unset ADMIN_PASS TOKEN
+unset TOKEN
 ```
 
-Repeat for the remaining two envs. Three pairs of files
-(`hms-realm-{dev,uat,prod}-2026-05-12.json` +
-`hms-clients-{dev,uat,prod}-2026-05-12.json`) end up in
-`docs/snapshots/keycloak/`.
+Repeat for the remaining two envs. Six raw files end up in
+`docs/snapshots/keycloak/raw/` — gitignored.
 
-### 1c. Diff each snapshot against the repo export
+### 1c. Redact + commit the safe siblings
+
+This `jq` filter is the contract for "what is safe to commit":
 
 ```bash
-# Compare client redirect URIs across the three envs and the repo
+# Realm-level redaction filter
+REALM_REDACT='
+  walk(
+    if type == "object" then
+        with_entries(
+            select(
+                .key | test("^(secret|password|privateKey|certificate|trustStorePassword|smtpServer|credentials)$") | not
+            )
+        )
+    else . end
+  )
+'
+
+# Per-client redaction is the same shape — the only secret in clients[]
+# is the `secret` field on confidential clients, but the same filter
+# strips it cleanly.
+for env in dev uat prod; do
+  jq "$REALM_REDACT" \
+    "docs/snapshots/keycloak/raw/hms-realm-${env}-$(date +%Y-%m-%d).json" \
+    > "docs/snapshots/keycloak/hms-realm-${env}-$(date +%Y-%m-%d).redacted.json"
+  jq "$REALM_REDACT" \
+    "docs/snapshots/keycloak/raw/hms-clients-${env}-$(date +%Y-%m-%d).json" \
+    > "docs/snapshots/keycloak/hms-clients-${env}-$(date +%Y-%m-%d).redacted.json"
+done
+
+# Verification — a redacted file MUST NOT contain any of the dropped keys.
+# This loop should print nothing; any output means the filter missed
+# something and the file should not be committed.
+for f in docs/snapshots/keycloak/*.redacted.json; do
+  jq -r 'paths(strings) as $p | $p | select(.[-1] | tostring | test("^(secret|password|privateKey|certificate|trustStorePassword|credentials)$")) | $p | join(".")' "$f" \
+    | sed "s|^|$f: |"
+done
+```
+
+If the verification loop prints anything, **stop** and extend the
+`REALM_REDACT` filter to cover the leaked field name before
+continuing.
+
+### 1d. Diff each redacted snapshot against the repo export
+
+```bash
+# Compare client redirect URIs across the three envs and the repo.
+# Redirect URIs are not secrets, so the redacted snapshots carry the
+# same data we want to diff.
 for env in dev uat prod; do
   echo "=== hms-portal redirectUris in $env ==="
   jq '.[] | select(.clientId=="hms-portal") | .redirectUris' \
-    docs/snapshots/keycloak/hms-clients-${env}-$(date +%Y-%m-%d).json
+    docs/snapshots/keycloak/hms-clients-${env}-$(date +%Y-%m-%d).redacted.json
 done
 echo "=== hms-portal redirectUris in repo (realm-export.json) ==="
 jq '.clients[] | select(.clientId=="hms-portal") | .redirectUris' \
@@ -135,18 +228,27 @@ Record the diffs in the PR description that lands the snapshots —
 this becomes the official "before" picture against which Step 2 is
 measured.
 
-### 1d. Commit the snapshots
+### 1e. Commit the redacted snapshots
 
 ```bash
 git add docs/snapshots/keycloak/
-git commit -m "chore(keycloak): baseline realm snapshots dev/uat/prod 2026-05-12"
+git status --short docs/snapshots/keycloak/   # verify only *.redacted.json + README + .gitignore are staged
+git commit -m "chore(keycloak): baseline realm snapshots dev/uat/prod 2026-05-12 (redacted)"
 ```
 
-### 1e. Acceptance
+The `git status` check is non-negotiable — if anything from `raw/`
+shows up staged, the gitignore in §1a was not applied (most likely
+because the directory was created after `git add` ran). Fix and
+re-stage.
 
-- [ ] Six JSON files exist in `docs/snapshots/keycloak/`.
-- [ ] Each file is non-empty and parses as valid JSON
-      (`jq '.' <file> > /dev/null` returns 0).
+### 1f. Acceptance
+
+- [ ] Six raw files exist in `docs/snapshots/keycloak/raw/` and are
+      **not** tracked by git (`git ls-files` returns nothing for
+      that path).
+- [ ] Six `.redacted.json` siblings exist in
+      `docs/snapshots/keycloak/` and ARE tracked.
+- [ ] The verification loop in §1c prints nothing.
 - [ ] PR description lists the diffs found between each env and the
       repo export (or "no drift detected" — both outcomes are valid
       Step-1 results, the point is the baseline exists).
@@ -164,8 +266,13 @@ window. uat is the soak surface and **must** match the repo.
 ### 2a. Pre-checks (uat only)
 
 - [ ] Step 1's uat snapshot exists at
-      `docs/snapshots/keycloak/hms-clients-uat-2026-05-12.json` —
-      this is the rollback artefact.
+      `docs/snapshots/keycloak/hms-clients-uat-2026-05-12.redacted.json`
+      (committed) and the matching raw file at
+      `docs/snapshots/keycloak/raw/hms-clients-uat-2026-05-12.json`
+      (local, gitignored). The raw file is the rollback artefact —
+      it carries the live client secrets that the redacted version
+      strips, and partial-importing the redacted file with Overwrite
+      would zero out those secrets.
 - [ ] Confirm no active OIDC integration test is running against uat
       (Playwright / Espresso / iOS UI test). Partial-import takes
       ≤ 5 s but during that window, in-flight token requests may see
@@ -223,7 +330,7 @@ just-imported export:
 ENV=uat
 # … (re-export as in Step 1b) …
 diff <(jq -S '.clients[] | select(.clientId=="hms-portal") | { redirectUris, webOrigins }' \
-        docs/snapshots/keycloak/hms-clients-uat-$(date +%Y-%m-%d).json) \
+        docs/snapshots/keycloak/hms-clients-uat-$(date +%Y-%m-%d).redacted.json) \
      <(jq -S '.clients[] | select(.clientId=="hms-portal") | { redirectUris, webOrigins }' \
         keycloak/realm-export.json)
 # expect: empty diff
@@ -372,17 +479,20 @@ retired); uat is still on the `kc-admin` bootstrap account.
    # expect: only your named admin, enabled: true
    ```
 
-### 5g. Update project memory
+### 5g. Mark the admin-recovery runbook complete
 
-Per project convention, update the memory file
-`memory/keycloak-recovery-2026-05-09.md` to mark uat lock-down
-complete:
+Update the in-repo admin-recovery runbook
+[`docs/runbooks/keycloak-admin-recovery-2026-05-09.md`](keycloak-admin-recovery-2026-05-09.md)
+to record that uat lock-down is now done — add a "Status: 2026-MM-DD
+uat completed by `<named-admin-username>`" line near the top, and
+move the runbook to an `archive/` subdirectory once both prod and
+uat are locked down (per its own §"Once executed successfully on
+both envs, this runbook can be retired").
 
-```diff
-- **Prod lock-down DONE** ... uat lock-down still pending.
-+ **Prod and uat lock-down DONE** ... dev intentionally left on
-+ kc-admin (engineering convenience).
-```
+> Earlier drafts of this step referenced a `memory/` directory that
+> does not exist in the repo — it was a leftover from the operator's
+> private notes. The in-repo admin-recovery runbook is the canonical
+> place to record the status change so the next on-call can find it.
 
 ### 5h. Acceptance
 

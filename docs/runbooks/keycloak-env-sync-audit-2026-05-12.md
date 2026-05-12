@@ -5,12 +5,13 @@
 > **Short answer:** The *tracked* Keycloak config is byte-identical across all three branches. The drift is entirely at the **runtime layer** — branch lag on Railway, the one-shot nature of `--import-realm`, opaque per-environment Railway variables, and one-off operator actions (admin lock-down, MFA enrolment, dev-user partial imports). This document enumerates each drift surface and what to check.
 >
 > **Status:** discovery doc (you are here). The remediation is split across:
+>
 > - [keycloak-realm-sync.md](keycloak-realm-sync.md) — the steady-state discipline for any future `realm-export.json` PR.
 > - [railway-env-matrix.md](railway-env-matrix.md) — the per-env Railway variable contract.
 > - [keycloak-env-sync-remediation.md](keycloak-env-sync-remediation.md) — the one-shot operator playbook (baseline export, uat resync, uat lock-down).
 > - [keycloak-implementation-gaps.md §1.1](../keycloak-implementation-gaps.md#11-backend--hospital-core) — now carries the per-env `OIDC_REQUIRED` table.
 >
-> **Railway project structure note (corrected post-screenshot):** the `MediHub` Railway project uses **one project × three environments × N services per environment**, not three independent services as some older docs imply. Each environment (`dev`, `uat`, `prod`) is its own Railway environment within the same project, with the same service definitions and per-environment variables. The drift surfaces below are the same either way; the remediation runbooks above use the correct structure.
+> **Railway project structure (confirmed by screenshot + Copilot review on PR):** the `MediHub` Railway project is **one project × three environments × per-env service names**. Each environment (`dev`, `uat`, `prod`) holds its own services named `hms-keycloak-<env>`, `hms-backend-<env>`, `hospital-portal-<env>`. The doubled `-dev-dev` / `-uat-uat` / `-prod-prod` suffix on the public domains is the visible tell (Railway computes domains as `<service>-<env>.up.railway.app`). This naming matches [`keycloak/prod/README.md`](../../keycloak/prod/README.md) §1; an earlier draft of this doc claimed shared service names across envs, which was wrong — see [railway-env-matrix.md § Project structure](railway-env-matrix.md#project-structure) for the canonical layout.
 
 ---
 
@@ -56,9 +57,9 @@ uat     ←→ main  :  3 / 2      (uat 3 ahead of main, main 2 ahead of uat)
 
 | Service | Branch tracked | Currently HEAD |
 | --- | --- | --- |
-| `hms-keycloak-dev`  | `develop` | trailing both peers |
-| `hms-keycloak-uat`  | `uat`     | unique commits not yet in `main` |
-| `hms-keycloak-prod` | `main`    | unique commits not yet in `uat` |
+| `hms-keycloak-dev` | `develop` | trailing both peers |
+| `hms-keycloak-uat` | `uat` | unique commits not yet in `main` |
+| `hms-keycloak-prod` | `main` | unique commits not yet in `uat` |
 
 **Implication for Keycloak specifically:** because the keycloak/ paths happen to be identical in this snapshot, the `watchPatterns = ["keycloak/**", ".dockerignore"]` filter in `railway.toml` means Railway will **not** rebuild any of the three services on a normal develop→uat or uat→main promote. Good — but the moment a Keycloak change lands, it deploys to the matching env on the next push to that branch *and not before*. There is no "promote Keycloak" pipeline; it rides whatever happens to be in `develop`/`uat`/`main`.
 
@@ -89,7 +90,7 @@ Anything created via the admin console (users, role-assignments, identity provid
 
 Concrete consequences observed historically:
 
-- **Master-realm admin membership.** Per the memory note `keycloak-recovery-2026-05-09.md`, prod has been locked down (named admin + TOTP MFA, `kc-admin` retired) but **uat lock-down is still pending**. So `master` realm membership in uat ≠ prod. This is by-design transitional state, but it is drift.
+- **Master-realm admin membership.** Per [`keycloak-admin-recovery-2026-05-09.md`](keycloak-admin-recovery-2026-05-09.md), prod has been locked down (named admin + TOTP MFA, `kc-admin` retired) but **uat lock-down is still pending**. So `master` realm membership in uat ≠ prod. This is by-design transitional state, but it is drift — closed out by [keycloak-env-sync-remediation.md §5](keycloak-env-sync-remediation.md#step-5--close-out-the-uat-admin-lock-down).
 - **Dev users** (`realm-export.dev-users.json`). The README explicitly forbids importing this in uat/prod. If anyone partial-imported it via the admin console "to test something," `dev.admin` / `dev.doctor` / `dev.patient` would now exist in that env's `hms` realm. Verify with a direct user-search in the uat/prod admin console.
 - **Manually-created users.** Any operator-created users (real engineers, demo accounts) only exist where they were created.
 
@@ -108,8 +109,8 @@ https://hms.bitnesttechs.com/*
 
 | Service | `KC_HOSTNAME` (per provisioning recipe) |
 | --- | --- |
-| `hms-keycloak-dev`  | `https://hms-keycloak-dev.up.railway.app`  (Railway often appends env suffix → `…-dev-dev`) |
-| `hms-keycloak-uat`  | `https://hms-keycloak-uat.up.railway.app`  |
+| `hms-keycloak-dev` | `https://hms-keycloak-dev.up.railway.app` (Railway often appends env suffix → `…-dev-dev`) |
+| `hms-keycloak-uat` | `https://hms-keycloak-uat.up.railway.app` |
 | `hms-keycloak-prod` | `https://hms-keycloak-prod.up.railway.app` |
 
 These are set in Railway's per-service Variables UI and are **not in the repo**. The frontend env files confirm the actual hostnames in use (Railway did append `-dev-dev` / `-uat-uat` / `-prod-prod`):
