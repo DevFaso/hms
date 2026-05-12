@@ -172,26 +172,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
-    // Sonar S1075 — URL paths externalized via @Value. Defaults preserve the
-    // pre-existing hard-coded values so ops can override per environment
-    // without a code change. AppointmentServiceImpl reads the same keys.
-    // Both are normalized at startup (see {@link #normalizeAppointmentLinkPaths})
-    // so ops can write the value with or without surrounding slashes.
     @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.reschedule-path:/appointments/reschedule/}")
     private String reschedulePath;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.cancel-path:/appointments/cancel/}")
     private String cancelPath;
 
-    /**
-     * PR #315 review — both link fragments are concatenated as
-     * {@code frontendBaseUrl + path + appointmentId}; a missing leading or
-     * trailing slash silently generates a broken link in every confirmation
-     * email. Normalise once at startup so the rest of the file can assume
-     * the shape {@code "/.../"}. Idempotent. Mirrors the normalisation in
-     * {@code AppointmentServiceImpl}: both services read the same property
-     * keys, so both must apply the same shape to keep emails consistent.
-     */
     @PostConstruct
     void normalizeAppointmentLinkPaths() {
         reschedulePath = UrlPathNormalizer.fragment(reschedulePath, "/appointments/reschedule/");
