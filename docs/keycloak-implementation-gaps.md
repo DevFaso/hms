@@ -335,6 +335,29 @@ MFA) starts only after the prod soak per
 - `app.auth.oidc.issuer-uri`, `app.auth.oidc.audience`, `app.auth.oidc.required`
   driven from `OIDC_ISSUER_URI` / `OIDC_AUDIENCE` / `OIDC_REQUIRED` env vars in
   [application.properties](../hospital-core/src/main/resources/application.properties).
+  See the per-environment `OIDC_REQUIRED` table below for the intended
+  value (and the why) per env.
+
+#### `OIDC_REQUIRED` per-environment intent
+
+`OIDC_REQUIRED` is the most load-bearing of the three OIDC env vars —
+it controls whether legacy `POST /api/auth/login` and
+`POST /api/auth/token/refresh` return **HTTP 410 Gone**. The intended
+value is **per environment**:
+
+| Env | `OIDC_REQUIRED` | When | Why |
+| --- | --- | --- | --- |
+| **dev** (`hms-backend` in Railway env `dev`) | `true` | After Phase 2.1 ships and dev users are seeded | Forces engineers to exercise the SSO path locally; cheap to roll back via the Railway env-var UI. |
+| **uat** (`hms-backend` in Railway env `uat`) | `true` | After KC-4 user migration is green in uat **and** the OIDC integration suite passes against the uat realm; soak ≥ 5 business days before promoting to prod | This is the soak surface; if it stays `false` in uat, prod cutover has zero pre-production validation. |
+| **prod** (`hms-backend` in Railway env `prod`) | `false` until Phase 3 cutover window; `true` after | Per the announced maintenance window in the cutover runbook; do not flip on a Friday | The flip itself is reversible (legacy auth stack still wired); the *user comms* around it are the long-pole, hence the explicit window. |
+
+This intent is **not enforced by anything in the repo** — it lives
+purely in the Railway service-variable UI per env. To audit current
+vs. intended, follow [runbooks/railway-env-matrix.md §2](runbooks/railway-env-matrix.md#2-hms-backend-spring-boot-hospital-core--each-env)
+and grep the boot logs of each `hms-backend-<env>` for the
+`[OIDC] app.auth.oidc.required=` line, which `AuthController` emits
+on startup.
+
 - `KeycloakJwtAuthenticationConverter` extracts realm + client roles into
   Spring authorities.
 - Legacy auth gate: `/api/auth/login` and `/api/auth/token/refresh` return
