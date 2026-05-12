@@ -24,7 +24,10 @@
 #   --full — additionally prompts for an admin password per env and runs:
 #     A1. Live realm's hms-portal redirect URIs match realm-export.json
 #     A2. Live realm role count matches realm-export.json (currently 26)
-#     A3. No dev users (dev.admin/dev.doctor/dev.patient) exist in uat or prod
+#     A3. dev.* user policy per keycloak/README.md § Policy:
+#           hosted dev  — dev.admin FORBIDDEN, dev.doctor/dev.patient OK
+#           hosted uat  — all three FORBIDDEN
+#           hosted prod — all three FORBIDDEN
 #
 # Exit codes:
 #   0 — all checks passed
@@ -342,26 +345,42 @@ run_authenticated_env_checks() {
     fail_count=$((fail_count + 1))
   fi
 
-  # A3. dev users not present in uat/prod
-  if [[ "$env" == "dev" ]]; then
-    record SKIP "$env" A3 "skipped: dev users may legitimately exist in dev"
-    skip_count=$((skip_count + 1))
-  else
-    local stray=""
-    for u in dev.admin dev.doctor dev.patient; do
-      local hits
-      hits=$(curl -fsSL --max-time 10 -H "Authorization: Bearer $token" \
-        "${host}/admin/realms/hms/users?username=${u}&exact=true" 2>/dev/null \
-        | jq 'length' 2>/dev/null || echo "0")
-      [[ "$hits" -gt 0 ]] && stray+="${u} "
-    done
-    if [[ -z "$stray" ]]; then
-      record PASS "$env" A3 "no dev.* users in ${env} realm"
-      pass_count=$((pass_count + 1))
+  # A3. dev.* user policy (per keycloak/README.md § "Policy — which dev
+  # users are OK on which environment"):
+  #   hosted dev  — dev.doctor + dev.patient ALLOWED, dev.admin FORBIDDEN
+  #   hosted uat  — all three FORBIDDEN
+  #   hosted prod — all three FORBIDDEN
+  local present=""
+  for u in dev.admin dev.doctor dev.patient; do
+    local hits
+    hits=$(curl -fsSL --max-time 10 -H "Authorization: Bearer $token" \
+      "${host}/admin/realms/hms/users?username=${u}&exact=true" 2>/dev/null \
+      | jq 'length' 2>/dev/null || echo "0")
+    [[ "$hits" -gt 0 ]] && present+="${u} "
+  done
+
+  local violations=""
+  case "$env" in
+    dev)
+      # dev.admin is the only forbidden one on hosted dev.
+      [[ "$present" == *"dev.admin"* ]] && violations="dev.admin"
+      ;;
+    uat|prod)
+      # All three are forbidden.
+      violations="$present"
+      ;;
+  esac
+
+  if [[ -z "$violations" ]]; then
+    if [[ -n "$present" ]]; then
+      record PASS "$env" A3 "policy-allowed dev users present in ${env}: ${present}"
     else
-      record FAIL "$env" A3 "stray dev user(s) in ${env}: ${stray}— delete via admin console"
-      fail_count=$((fail_count + 1))
+      record PASS "$env" A3 "no dev.* users in ${env} realm"
     fi
+    pass_count=$((pass_count + 1))
+  else
+    record FAIL "$env" A3 "POLICY violation in ${env} — forbidden dev user(s) present: ${violations}— delete via admin console (see keycloak/README.md § Policy)"
+    fail_count=$((fail_count + 1))
   fi
 
   unset token
