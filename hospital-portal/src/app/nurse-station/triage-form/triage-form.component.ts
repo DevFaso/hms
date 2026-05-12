@@ -9,11 +9,12 @@ import {
   TriageSubmissionResponse,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
   templateUrl: './triage-form.component.html',
   styleUrl: './triage-form.component.scss',
 })

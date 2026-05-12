@@ -507,7 +507,7 @@ $sidebar-active: #2563eb;
   background: none;
   border: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: #64748b;
 
   &:hover {
     color: #475569;
@@ -521,7 +521,7 @@ $sidebar-active: #2563eb;
 
 .empty-msg {
   text-align: center;
-  color: #94a3b8;
+  color: #64748b;
   padding: 2rem;
   font-size: 0.875rem;
 }
@@ -570,7 +570,7 @@ $sidebar-active: #2563eb;
 
 .notif-time {
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .notif-unread-dot {

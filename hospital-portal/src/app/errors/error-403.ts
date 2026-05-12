@@ -44,7 +44,7 @@ import { RouterLink } from '@angular/router';
       margin: 0.5rem 0;
     }
     p {
-      color: #94a3b8;
+      color: #64748b;
       margin: 0 0 2rem;
     }
     .back-link {

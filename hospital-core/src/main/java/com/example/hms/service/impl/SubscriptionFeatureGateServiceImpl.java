@@ -37,14 +37,14 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
             // Blank key passes through so callers don't have to short-circuit.
             return true;
         }
-        Set<String> allowed = loadAllowedKeysForOrg(organizationId);
-        if (allowed == null) {
+        Optional<Set<String>> allowed = loadAllowedKeysForOrg(organizationId);
+        if (allowed.isEmpty()) {
             // No active subscription, or active plan has empty featureKeys —
             // both treated as "no plan-tier gating yet". See interface
             // docstring for rationale.
             return true;
         }
-        return allowed.contains(normalize(featureKey));
+        return allowed.get().contains(normalize(featureKey));
     }
 
     @Override
@@ -55,33 +55,42 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
         if (organizationId == null) {
             return keys;
         }
-        Set<String> allowed = loadAllowedKeysForOrg(organizationId);
-        if (allowed == null) {
+        Optional<Set<String>> allowed = loadAllowedKeysForOrg(organizationId);
+        if (allowed.isEmpty()) {
             return keys;
         }
+        Set<String> allowedSet = allowed.get();
         // Preserve input ordering — callers (FeatureFlagServiceImpl) merge
         // the result back into a LinkedHashMap and a stable order keeps
         // the response deterministic for cache-busting.
         return keys.stream()
-            .filter(key -> key != null && allowed.contains(normalize(key)))
+            .filter(key -> key != null && allowedSet.contains(normalize(key)))
             .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     /**
-     * @return null when the org has no active subscription or the active
-     *     plan exposes no feature keys; an immutable lower-cased set
-     *     otherwise.
+     * Sonar S1168 — returning {@code null} from a method whose return type is a
+     * collection is a smell because callers commonly forget the null-check.
+     * Here {@code null} did not mean "empty allow-list" (which would gate
+     * everything OUT); it meant "no plan-tier gating yet — pass through". An
+     * empty {@code Set} would silently invert that semantic. The safe fix is
+     * {@link Optional}: {@code empty()} = ungated/passthrough, {@code present}
+     * = the explicit allow-list to enforce.
+     *
+     * @return an empty Optional when the org has no active subscription or the
+     *     active plan exposes no feature keys (treat as ungated); a present
+     *     Optional wrapping an immutable lower-cased set otherwise.
      */
-    private Set<String> loadAllowedKeysForOrg(UUID organizationId) {
+    private Optional<Set<String>> loadAllowedKeysForOrg(UUID organizationId) {
         Optional<OrganizationSubscription> active = subscriptionRepository
             .findByOrganizationIdAndStatus(organizationId, OrganizationSubscription.Status.ACTIVE);
         if (active.isEmpty()) {
-            return null;
+            return Optional.empty();
         }
         SubscriptionPlan plan = active.get().getPlan();
         if (plan == null) {
             log.warn("[FEATURE-GATE] Active subscription for org {} has no plan attached", organizationId);
-            return null;
+            return Optional.empty();
         }
         // MVP-6c: prefer the jsonb mirror when populated. Fall back to the
         // legacy comma-separated TEXT column so older plan rows that were
@@ -89,16 +98,16 @@ public class SubscriptionFeatureGateServiceImpl implements SubscriptionFeatureGa
         // the prior schema) keep working.
         Set<String> fromJsonb = parseJsonbKeys(plan.getFeatureKeysJson());
         if (!fromJsonb.isEmpty()) {
-            return fromJsonb;
+            return Optional.of(fromJsonb);
         }
         String featureKeys = plan.getFeatureKeys();
         if (featureKeys == null || featureKeys.isBlank()) {
-            return null;
+            return Optional.empty();
         }
-        return Arrays.stream(featureKeys.split(","))
+        return Optional.of(Arrays.stream(featureKeys.split(","))
             .map(this::normalize)
             .filter(s -> !s.isEmpty())
-            .collect(Collectors.toUnmodifiableSet());
+            .collect(Collectors.toUnmodifiableSet()));
     }
 
     private Set<String> parseJsonbKeys(String json) {

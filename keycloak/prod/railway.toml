@@ -9,6 +9,16 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "keycloak/prod/Dockerfile"
+# Only rebuild Keycloak on changes under keycloak/ plus the repo-root
+# .dockerignore (which affects every Docker build context — if it ever
+# starts excluding keycloak/realm-export.json or similar, the resulting
+# image would silently differ from what's running). Without this filter,
+# Railway redeploys all three hms-keycloak-{dev,uat,prod} services on
+# every push to the watched branch — including pure backend or frontend
+# PRs — which burns build minutes and rolls Keycloak unnecessarily
+# (visible in logs as a fresh ~8s startup right after every backend
+# merge).
+watchPatterns = ["keycloak/**", ".dockerignore"]
 
 [deploy]
 # Keycloak 26 serves /health/ready on the management interface (port 9000),
