@@ -11,16 +11,14 @@ The repo's authoritative roadmap and per-MVP narrative live in
 this file is the migration-keyed quick reference for operators
 running deploys.
 
-## [v1.0.0-rc1] — TBD-cut-date (release candidate)
+## [v1.0.0-rc1] — 2026-05-12 (release candidate)
 
-**Status as of materials landing:** the rc1 cut materials are
-prepped on branch `feat/v1.0.0-rc1-materials` (roadmap row 13).
-The signed tag has not yet been pushed; the actual cut is performed
-by the release manager via [scripts/cut-rc1.sh](scripts/cut-rc1.sh).
-The `TBD-cut-date` placeholder above is replaced manually by the
-release manager in a `chore/*` PR right after the tag is pushed
-(allowed during soak per the soak protocol). The helper script does
-not mutate this file.
+**Cut performed.** The signed tag `v1.0.0-rc1` was pushed at
+`2026-05-12 11:07:32 -0400` on `main` HEAD `936f5261` (the merge
+of PR 317 — `promote(develop→main) 2026-05-12: sonar sweep +
+v1.0.0-rc1 materials`). The GitHub release is at
+<https://github.com/DevFaso/hms/releases/tag/v1.0.0-rc1>. Tag
+signed via SSH (ed25519); `git verify-tag v1.0.0-rc1` is green.
 
 v1.0.0-rc1 is the cumulative SemVer release candidate for HMS v1.0
 GA. It bundles every roadmap row in the v1.0 horizon (rows 2 – 12
