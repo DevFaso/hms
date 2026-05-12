@@ -35,8 +35,9 @@ class AppointmentCalendarServiceTest {
 
     private AppointmentServiceImpl service() {
         // The impl is @RequiredArgsConstructor; field declaration order is
-        // emailService first, then appointmentRepository, then 9 other
-        // collaborators we don't touch in this test.
+        // emailService first, then appointmentRepository, then collaborators
+        // we don't touch in this test, then the AppointmentLinkProperties
+        // bean added in PR #315.
         return new AppointmentServiceImpl(
             null,                       // emailService
             appointmentRepository,      // appointmentRepository
@@ -48,7 +49,8 @@ class AppointmentCalendarServiceTest {
             null,                       // messageSource
             null,                       // userRepository
             null,                       // staffAvailabilityService
-            null                        // departmentRepository
+            null,                       // departmentRepository
+            null                        // appointmentLinks (AppointmentLinkProperties, PR #315)
         );
     }
 

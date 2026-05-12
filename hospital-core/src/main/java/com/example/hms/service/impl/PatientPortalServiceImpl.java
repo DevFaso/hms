@@ -166,12 +166,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.mapper.PatientSurgicalHistoryMapper surgicalHistoryMapper;
     private final com.example.hms.mapper.FamilyHistoryMapper familyHistoryMapper;
     private final com.example.hms.mapper.SocialHistoryMapper socialHistoryMapper;
+    private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
-
-    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
-    private static final String CANCEL_PATH = "/appointments/cancel/";
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -1217,8 +1215,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-            String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
-            String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
+            String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
+            String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
