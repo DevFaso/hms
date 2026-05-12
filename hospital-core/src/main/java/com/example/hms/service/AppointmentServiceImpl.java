@@ -28,6 +28,7 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
+import com.example.hms.service.support.UrlPathNormalizer;
 import com.example.hms.specification.AppointmentSpecification;
 import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
@@ -109,33 +110,14 @@ public class AppointmentServiceImpl implements AppointmentService {
      * {@code frontendBaseUrl + path + appointmentId}; a missing leading or
      * trailing slash silently generates a broken link in every confirmation
      * email. Normalise once at startup so the rest of the file can assume
-     * the shape {@code "/.../"}. Idempotent.
+     * the shape {@code "/.../"}. Idempotent. Mirror in
+     * {@code PatientPortalServiceImpl}: both classes read the same property
+     * keys, so both must apply the same shape to keep emails consistent.
      */
     @PostConstruct
     void normalizeAppointmentLinkPaths() {
-        reschedulePath = normalizeUrlPathFragment(reschedulePath, "/appointments/reschedule/");
-        cancelPath = normalizeUrlPathFragment(cancelPath, "/appointments/cancel/");
-    }
-
-    /**
-     * Returns {@code raw} with exactly one leading {@code /} and one trailing
-     * {@code /}. Falls back to {@code fallback} when {@code raw} is null/blank.
-     */
-    static String normalizeUrlPathFragment(String raw, String fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
-        String p = raw.trim();
-        while (p.startsWith("//")) {
-            p = p.substring(1);
-        }
-        if (!p.startsWith("/")) {
-            p = "/" + p;
-        }
-        if (!p.endsWith("/")) {
-            p = p + "/";
-        }
-        return p;
+        reschedulePath = UrlPathNormalizer.fragment(reschedulePath, "/appointments/reschedule/");
+        cancelPath = UrlPathNormalizer.fragment(cancelPath, "/appointments/cancel/");
     }
 
     @PersistenceContext

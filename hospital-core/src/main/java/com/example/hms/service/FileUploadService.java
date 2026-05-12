@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.ChatAttachmentKind;
+import com.example.hms.service.support.UrlPathNormalizer;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,31 +68,7 @@ public class FileUploadService {
      */
     @PostConstruct
     void normalizePatientDocumentUrlPrefix() {
-        patientDocumentUrlPrefix = normalizeUrlPathPrefix(patientDocumentUrlPrefix, "/uploads");
-    }
-
-    /**
-     * Returns {@code raw} with exactly one leading slash and no trailing slash.
-     * Falls back to {@code fallback} (already in the desired shape) when the
-     * raw value is null/blank.
-     */
-    static String normalizeUrlPathPrefix(String raw, String fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
-        }
-        String p = raw.trim();
-        // Collapse repeated leading slashes to a single one.
-        while (p.startsWith("//")) {
-            p = p.substring(1);
-        }
-        // Strip ALL trailing slashes — concatenation supplies the separator.
-        while (p.length() > 1 && p.endsWith("/")) {
-            p = p.substring(0, p.length() - 1);
-        }
-        if (!p.startsWith("/")) {
-            p = "/" + p;
-        }
-        return p;
+        patientDocumentUrlPrefix = UrlPathNormalizer.prefix(patientDocumentUrlPrefix, "/uploads");
     }
 
     /**
