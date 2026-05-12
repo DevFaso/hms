@@ -47,7 +47,11 @@ class UrlPathNormalizerTest {
         // single segment
         "x,                                     /x/",
         // already-trailing slash should remain singular (no double slash)
-        "/x/,                                   /x/"
+        "/x/,                                   /x/",
+        // doubled trailing — must collapse to single trailing
+        "/x//,                                  /x/",
+        // doubled leading AND doubled trailing
+        "//x//,                                 /x/"
     })
     @DisplayName("fragment — normalises configured paths to /.../ shape")
     void fragment_normalisesShape(String raw, String expected) {

@@ -48,6 +48,11 @@ public final class UrlPathNormalizer {
         while (p.startsWith("//")) {
             p = p.substring(1);
         }
+        // Strip ALL trailing slashes first so we can add exactly one back.
+        // (Without this, "//x//" would collapse to "/x//" instead of "/x/".)
+        while (p.length() > 1 && p.endsWith("/")) {
+            p = p.substring(0, p.length() - 1);
+        }
         if (!p.startsWith("/")) {
             p = "/" + p;
         }

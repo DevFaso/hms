@@ -87,8 +87,6 @@ import com.example.hms.service.TreatmentPlanService;
 import com.example.hms.service.EmailService;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.mapper.AppointmentMapper;
-import com.example.hms.service.support.UrlPathNormalizer;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -168,21 +166,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.mapper.PatientSurgicalHistoryMapper surgicalHistoryMapper;
     private final com.example.hms.mapper.FamilyHistoryMapper familyHistoryMapper;
     private final com.example.hms.mapper.SocialHistoryMapper socialHistoryMapper;
+    private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
-
-    @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.reschedule-path:/appointments/reschedule/}")
-    private String reschedulePath;
-
-    @org.springframework.beans.factory.annotation.Value("${app.frontend.appointments.cancel-path:/appointments/cancel/}")
-    private String cancelPath;
-
-    @PostConstruct
-    void normalizeAppointmentLinkPaths() {
-        reschedulePath = UrlPathNormalizer.fragment(reschedulePath, "/appointments/reschedule/");
-        cancelPath = UrlPathNormalizer.fragment(cancelPath, "/appointments/cancel/");
-    }
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -1228,8 +1215,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
-            String rescheduleLink = frontendBaseUrl + reschedulePath + appointment.getId();
-            String cancelLink = frontendBaseUrl + cancelPath + appointment.getId();
+            String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
+            String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
             emailService.sendAppointmentRescheduledEmail(
                     patient.getEmail(), patientName, hospital.getName(), staffName,
