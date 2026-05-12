@@ -13,17 +13,20 @@
 > reviewer doesn't have to re-derive the picture from the playbook +
 > git log.
 >
-> Last refreshed: 2026-05-11 (all 8 chore PRs + the row 11 foundation
-> PR merged to `develop`).
+> Last refreshed: 2026-05-11 (round 2 — three follow-up branches pushed
+> covering the previously-deferred PRs #9, #10, #11, #14, #15, #16. All
+> three branches are green against the backend gate locally; awaiting
+> PR creation + GitHub UI merge).
 
 ## Snapshot
 
-| Metric | Start of campaign | Current |
-|---|---|---|
-| Vulnerabilities | 4 | **0** ✅ |
-| Critical code smells closed | 0 | **~47** |
-| False positives identified (need won't-fix in UI) | 0 | **5** |
-| PRs merged to `develop` | 0 | **8** ✅ |
+| Metric | Start of campaign | After round 1 (8 chore PRs) | After round 2 (3 follow-ups) |
+| --- | --- | --- | --- |
+| Vulnerabilities | 4 | **0** ✅ | **0** ✅ |
+| Critical / Major code smells closed (cumulative) | 0 | ~47 | **~62** |
+| False positives identified (need won't-fix in UI) | 0 | 5 | 5 |
+| PRs **merged** to `develop` (cumulative) | 0 | **8** ✅ | **8** ✅ |
+| Follow-up branches **prepared / pending PR + merge** | 0 | 0 | **3** |
 
 ## Merged into `develop` (8 PRs)
 
@@ -65,35 +68,57 @@ gate passing).
 - **~47 Critical code smells closed and merged to `develop`**
 - **All 8 chore PRs merged via the GitHub UI on 2026-05-11**
 
-## Deferred — remaining playbook PRs
+## Round 2 — three follow-up branches (pushed 2026-05-11, awaiting GH PR + merge)
 
-Ordering follows the playbook's §"Suggested PR sequence" but
-re-evaluated against current bandwidth and reviewer load.
+Round 1 left six deferred playbook rows (PRs #9, #10, #11, #14, #15, #16).
+Rather than push six separate PRs, those rows were grouped into **three
+risk-tiered branches** so reviewers see a clean low → medium → high
+escalation. Every branch was independently verified against the backend
+gate before commit:
 
-| # | Playbook label | Pattern(s) | Effort | Risk | Why deferred |
-|---|---|---|---|---|---|
-| 9 | `refactor(service): reduce cognitive complexity (PatientSnapshot, PatientPortal)` | 3 (S3776) | ~4h | **High** | The two worst offenders: `PatientSnapshotServiceImpl:52` at **65→15** and `PatientPortalServiceImpl:892` at **40→15** + Brain Method. Each requires meaningful method extraction in clinical-data paths; reviewer load is real. Land after the current 8 PRs are reviewed. |
-| 10 | `refactor(service): cognitive complexity sweep (the other 13)` | 3 | ~2h | Medium | 13 methods in the 16–29 cognitive-complexity range. Many follow the same "extract guard-clause" pattern but each one is its own decision. Smaller individual surface than #9. |
-| 11 | `refactor(loops): replace multi-break/continue with stream pipelines` | 4 (S135) | ~3h | Medium | 8 files with loops containing >1 break/continue. Each is its own algorithm — `takeWhile` doesn't always translate cleanly. Some are CDS Hooks rule engines where the loop shape encodes the published clinical rule (qSOFA etc.) — those should be marked won't-fix, not refactored. |
-| 14 | `refactor(config): externalize hard-coded URIs / path delimiters` | 17 (S1075) | ~2h | Medium | Touches SplunkHecAppender + AppointmentServiceImpl + PatientPortalServiceImpl + FileUploadService. Each URL needs an `application.yml` default + per-env override; ops needs to know before the PR lands. |
-| 15 | `refactor(api): return empty collection (not null) from SubscriptionFeatureGate` | 11 | ~1h | Medium | Behaviour change at an API boundary (null → empty list). Every caller needs an audit; if any callers explicitly null-check, an empty list might change downstream logic. Tests required to prove no semantic regression. |
-| 16 | `refactor(misc): merge ifs, single-return, deprecated javadoc, static-final` | 12, 13, 19, 20 | ~30 min | **Low** | Smallest mechanical batch left. Could be done alongside any other PR or as a quick capstone after #9–#11. |
+```bash
+./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
+```
 
-### Recommended order
+— 5179 / 5179 tests pass, JaCoCo 80% gate green on each branch.
 
-The first-round 8 chore PRs are now merged. When picking the queue back up:
+| Branch | Playbook PR rows | Pattern(s) | Files | Risk | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `chore/sonar-housekeeping-modernization` | #16 | 12, 13, 19, 20 | 5 | **Low** | Mechanical sweep: single-return, merge-nested-if, `@deprecated` Javadoc, `static final` promotion. No behaviour change. |
+| `refactor/sonar-null-hygiene-config-uris` | #15, #14 | 11 (S1168), 17 (S1075) | 5 | Medium | `SubscriptionFeatureGateServiceImpl` switched to `Optional<Set<String>>` internally (Set.of() would have **inverted** the gating semantic — `null` here meant "ungated/passthrough", not "no keys"). URI fragments moved to `@Value` with current values as defaults; ops can override per env. |
+| `refactor/sonar-cognitive-complexity` | #9, #10 (partial), #11 (partial) | 3 (S3776), 4 (S135) | 6 | **High** | `PatientSnapshotServiceImpl#getSnapshot` 65→~5 via 8 section helpers; `PatientPortalServiceImpl#notifyCareTeamForRefillRequest` 40→~5 (also clears Brain Method) via 5 extracted helpers + a `Recipients` record. Plus `AuditEventLogServiceImpl#doLogEvent`, `DepartmentServiceImpl#searchDepartments`, `PatientDocumentMapper#toDto`, and `ResultReviewServiceImpl#getResultReviewQueue` (2-continue loop → stream filter). |
 
-1. **PR #16** (lowest risk, 30 min) — quick capstone / activity signal
-   without adding review burden.
-2. **PR #15** (1h, 1 file but needs caller audit) — clears the
-   Major-class "return empty collection not null" warning.
-3. **PR #11** (3h, 8 files) — case-by-case loop refactors. Be
-   prepared to mark some as won't-fix where the loop encodes a
-   clinical-rule shape (see §"When NOT to fix" in the playbook).
-4. **PR #10** (2h, 13 methods) before **PR #9** (4h, 2 worst-offender
-   methods). Doing the easier cognitive-complexity ones first builds
-   reviewer trust in the refactoring style.
-5. **PR #14** last — touches infra config + needs ops coordination.
+### What's intentionally left for a later PR
+
+- **Pattern 14 (useless curly braces)** at `ResultReviewServiceImpl.java:143,180` — team policy keeps braces for single-line `if` to prevent goto-fail-style bugs. Mark won't-fix in SonarCloud UI.
+- **Pattern 4 CDS-Hooks rule classes** — `SepsisQsofaProtocolRule`, `MedicationAllergyCdsService`, `MedicationPrescribeRulesCdsService`, `RxNormCodingExtractor`, `CdsHookContext`. Per playbook §"When NOT to fix" the loop shape encodes the published clinical rule (qSOFA, drug-allergy precedence etc.). Mark won't-fix with a link to the source rule.
+- **Pattern 3 remaining methods** — about 9 of the 13 cognitive-complexity-16–25 methods in PR row #10 plus the AuthController residual (already documented in PR #8 / GH #305) are not in branch 3. They form a clean residual sweep for a follow-up "PR #10b" once the round-2 branches are reviewed.
+- **`DoctorWorklistServiceImpl` loops at L165/181/197 (PR row #11)** — the line numbers in the playbook predate PR #6 (GH #302); those sites were touched during the status-enum-literal extraction and need a fresh look before being refactored.
+
+### Round-2 branch summary by playbook PR row
+
+> Two-stage status: **Implemented on branch** is what the local commit
+> actually contains (verified by the backend gate); **Merged to develop**
+> only flips after the GitHub PR is reviewed and merged. None of these
+> are merged yet, so the right-hand column stays at ⏳ until the
+> per-PR ✅ tick replaces it.
+
+| Playbook # | Implemented on branch | Merged to `develop` | Branch |
+| --- | --- | --- | --- |
+| 9 (worst-offender cognitive) | ✅ Both methods refactored | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 10 (cognitive sweep, 13 methods) | ⚠️ Partial — 3 of 13 done (`AuditEventLog#doLogEvent`, `DepartmentService#searchDepartments`, `PatientDocumentMapper#toDto`); the rest are queued as a residual "PR #10b" | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 11 (loop refactors) | ⚠️ Partial — `ResultReviewServiceImpl#getResultReviewQueue` done; CDS-Hooks classes marked won't-fix; `DoctorWorklistServiceImpl` needs re-baselining | ⏳ Pending PR review | `refactor/sonar-cognitive-complexity` |
+| 14 (externalize URIs) | ✅ Done | ⏳ Pending PR review | `refactor/sonar-null-hygiene-config-uris` |
+| 15 (null → empty collection) | ✅ Done (via `Optional<>` for semantic preservation) | ⏳ Pending PR review | `refactor/sonar-null-hygiene-config-uris` |
+| 16 (misc housekeeping) | ✅ Done | ⏳ Pending PR review | `chore/sonar-housekeeping-modernization` |
+
+### Suggested merge order on GitHub
+
+1. `chore/sonar-housekeeping-modernization` — smallest review surface, low risk, builds reviewer confidence.
+2. `refactor/sonar-null-hygiene-config-uris` — single semantic-preserving refactor + additive config keys (no infra change required because all defaults match prior hard-coded values).
+3. `refactor/sonar-cognitive-complexity` — largest diff, but each extracted helper is independently named and short. Recommend reading file-by-file.
+
+Branches 2 and 3 touch overlapping files (`AppointmentServiceImpl`, `PatientPortalServiceImpl`, `FileUploadService`) — merge in the order above and the second/third will need a trivial rebase against `develop`.
 
 ## False positives — needs "won't fix" in SonarCloud UI
 
