@@ -157,7 +157,7 @@ Per project memory and `docs/keycloak-implementation-gaps.md`, the intended post
 | Branch lag (develop trails uat/main) | ✅ (visible via git) | develop -3 vs uat, -2 vs main; no keycloak delta in arrears | watch on next Keycloak-touching PR |
 | Live realm content (clients, mappers, redirect URIs) | ❌ | unknown — `--import-realm` is one-shot | for each env: admin console → Realm Settings → diff against `realm-export.json` |
 | Master-realm admin membership | ❌ | known-uneven (prod locked, uat pending) | finish uat lock-down per `keycloak-admin-recovery-2026-05-09.md` |
-| Dev users in uat/prod realms | ❌ | unknown | admin console user search for `dev.admin`/`dev.doctor`/`dev.patient` in uat + prod |
+| Dev users in hosted dev / uat / prod | ✅ (policy + check enforced) | hosted dev has `dev.doctor` + `dev.patient` (allowed); `dev.admin` was present 2026-05-12 and deleted by hand; uat/prod assumed clean pending verify-script `--full` run | policy in [`keycloak/README.md` § Policy](../../keycloak/README.md#policy--which-dev-users-are-ok-on-which-environment); check **A3** in [scripts/keycloak/env-sync-verify.sh](../../scripts/keycloak/env-sync-verify.sh) |
 | `KC_HOSTNAME` per service | ❌ | inferred from frontend env files | Railway → each `hms-keycloak-<env>` → Variables; cross-check vs `environment.<env>.ts` |
 | Backend `OIDC_ISSUER_URI` / `OIDC_AUDIENCE` | ❌ | unknown | Railway → each `hms-backend-<env>` → Variables |
 | Backend `OIDC_REQUIRED` flag | ❌ | suspected divergent (per phase plan) | same as above; document the intended per-env value |
