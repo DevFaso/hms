@@ -633,6 +633,8 @@ MediHub n'est pas une promesse — c'est un produit réel, opérationnel en pré
 **Tiego Ouedraogo**
 Fondateur — Direction technique
 ✉️ tiegoouedraogo@gmail.com
+✉️ Contact professionnel : via le site projet ou sur demande
+✉️ Contact professionnel : via le site projet ou sur demande
 
 **Site projet :** https://hms.bitnesttechs.com (en construction publique)
 **Démonstration en pré-production :** sur demande, accès supervisé
