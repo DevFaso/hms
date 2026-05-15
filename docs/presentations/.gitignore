@@ -1,0 +1,4 @@
+# Generated PowerPoint binaries — regenerate from .md via:
+#   npx --yes @marp-team/marp-cli@latest --pptx -o <name>.pptx <name>.md
+*.pptx
+*.pdf
