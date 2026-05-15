@@ -1,4 +1,8 @@
 # Generated PowerPoint binaries — regenerate from .md via:
-#   npx --yes @marp-team/marp-cli@latest --pptx -o <name>.pptx <name>.md
+#   npx --yes @marp-team/marp-cli@4.4.0 --pptx -o <name>.pptx <name>.md
+#
+# Pinned to a specific marp-cli version (not @latest) so future
+# regenerations produce deterministic output. Bump the version
+# intentionally when you want to pull in upstream improvements.
 *.pptx
 *.pdf

@@ -55,7 +55,20 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --full)        MODE="full" ;;
     --public-only) MODE="public-only" ;;
-    --env)         shift; ENV_FILTER="$1" ;;
+    --env)
+      # Defensive: under set -u, a bare `shift; ENV_FILTER="$1"` would crash
+      # with "unbound variable" if --env is the final arg or followed by
+      # another flag. Validate up front and emit a helpful exit-2 message.
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "ERROR: --env requires a value (one of: dev | uat | prod)" >&2
+        exit 2
+      fi
+      shift
+      case "$1" in
+        dev|uat|prod) ENV_FILTER="$1" ;;
+        *) echo "ERROR: --env must be one of dev|uat|prod (got: $1)" >&2; exit 2 ;;
+      esac
+      ;;
     --json)        JSON_OUTPUT=true ;;
     -h|--help)
       sed -n '2,/^set -euo/p' "$0" | sed 's/^# \?//'
@@ -379,7 +392,7 @@ run_authenticated_env_checks() {
     fi
     pass_count=$((pass_count + 1))
   else
-    record FAIL "$env" A3 "POLICY violation in ${env} — forbidden dev user(s) present: ${violations}— delete via admin console (see keycloak/README.md § Policy)"
+    record FAIL "$env" A3 "POLICY violation in ${env} — forbidden dev user(s) present: ${violations} — delete via admin console (see keycloak/README.md § Policy)"
     fail_count=$((fail_count + 1))
   fi
 
