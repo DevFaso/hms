@@ -8,7 +8,12 @@
  * Exits with code 1 on any migration failure so CI jobs fail loudly.
  */
 
-import { Pool } from 'pg';
+// `pg` ships CJS internals; Node ≥24 no longer synthesises named ESM exports
+// for it, so the previous `import { Pool } from 'pg'` throws at module-eval
+// with "does not provide an export named 'Pool'". The CJS-interop pattern
+// below works on Node 20/22/24 and the runtime Pool surface is identical.
+import pg from 'pg';
+const { Pool } = pg;
 import { ConfigError, loadConfig } from './config.ts';
 import { readUsersWithRoles } from './db.ts';
 import { KeycloakAdminClient } from './keycloak.ts';
