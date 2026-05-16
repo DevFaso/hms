@@ -499,17 +499,31 @@ export class ConsultationsComponent implements OnInit {
   }
 
   countByGroup(group: string): number {
+    if (group === 'total') return this.stats()?.total ?? this.consultations().length;
     if (group === 'pending')
-      return this.consultations().filter((c) => c.status === 'REQUESTED').length;
+      return (
+        this.stats()?.requested ??
+        this.consultations().filter((c) => c.status === 'REQUESTED').length
+      );
     if (group === 'active')
-      return this.consultations().filter((c) =>
-        ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
-      ).length;
+      return (
+        this.stats()?.active ??
+        this.consultations().filter((c) =>
+          ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
+        ).length
+      );
     if (group === 'completed')
-      return this.consultations().filter((c) => c.status === 'COMPLETED').length;
+      return (
+        this.stats()?.completed ??
+        this.consultations().filter((c) => c.status === 'COMPLETED').length
+      );
     if (group === 'overdue')
       return this.stats()?.overdue ?? this.consultations().filter((c) => this.isOverdue(c)).length;
     return 0;
+  }
+
+  hasConsultationRowsInScope(): boolean {
+    return (this.stats()?.total ?? this.consultations().length) > 0;
   }
 
   isOverdue(c: ConsultationResponse): boolean {
