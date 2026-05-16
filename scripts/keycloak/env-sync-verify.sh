@@ -98,6 +98,13 @@ for tool in curl jq git; do
   fi
 done
 
+# Wrap jq so its output never carries CR. On Git Bash / MSYS, jq opens stdout in
+# text mode, which translates LF → CRLF. That CR leaks into `read -r` (kept on
+# the line), into `$()` captures used in arithmetic `[[ -gt ]]` context, and
+# into HTTP headers (a token with trailing CR makes `Authorization: Bearer …`
+# malformed and A1/A2/A3 silently fail).
+jq() { command jq "$@" | tr -d '\r'; }
+
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [[ -z "$REPO_ROOT" ]] && { echo "ERROR: not inside a git repo" >&2; exit 2; }
 cd "$REPO_ROOT"
@@ -302,7 +309,16 @@ run_repo_checks() {
 # ─── Authenticated (--full) checks ───────────────────────────────────────────
 
 prompt_admin_token() {
-  # Prints the token on stdout, or empty string + non-zero on failure.
+  # Prints the token on stdout. Exit codes:
+  #   0 — success, token on stdout
+  #   1 — user skipped (empty username at prompt)
+  #   2 — login attempted but failed (wrong creds, user not in master realm, etc.)
+  #
+  # Common rc=2 cause on locked-down envs: admin has TOTP/MFA enrolled.
+  # Keycloak's direct-grant flow returns `invalid_grant` for MFA users —
+  # indistinguishable from bad-password in the error body. For automation
+  # (this script, KC-4 migration) create a short-lived migration-admin in
+  # the master realm without OTP and retire it after the run.
   local env="$1" host="$2" admin_user admin_pass token
   read -rp "[${env}] admin username (Enter to skip --full for this env): " admin_user
   [[ -z "$admin_user" ]] && return 1
@@ -316,46 +332,75 @@ prompt_admin_token() {
     --data-urlencode "password@-" 2>/dev/null \
     | jq -r '.access_token // empty')
   unset admin_pass
-  [[ -z "$token" || "$token" == "null" ]] && return 1
+  [[ -z "$token" || "$token" == "null" ]] && return 2
   printf '%s' "$token"
 }
 
 run_authenticated_env_checks() {
-  local env="$1" host token live_uris export_uris
+  local env="$1" host token live_uris export_uris auth_rc reason
   host="$(kc_host_for "$env")"
 
-  if ! token=$(prompt_admin_token "$env" "$host"); then
-    record SKIP "$env" A1 "skipped: no admin credentials provided for ${env}"
-    record SKIP "$env" A2 "skipped: no admin credentials provided for ${env}"
-    record SKIP "$env" A3 "skipped: no admin credentials provided for ${env}"
+  token=$(prompt_admin_token "$env" "$host"); auth_rc=$?
+  if [[ $auth_rc -eq 1 ]]; then
+    reason="skipped: no admin credentials provided for ${env}"
+    record SKIP "$env" A1 "$reason"
+    record SKIP "$env" A2 "$reason"
+    record SKIP "$env" A3 "$reason"
     skip_count=$((skip_count + 3))
+    return
+  elif [[ $auth_rc -eq 2 ]]; then
+    record FAIL "$env" A1 "login to ${host}/realms/master failed for the username you provided — wrong password, user not in master realm, admin-cli access denied, OR admin has MFA enrolled (direct-grant rejects TOTP users; create a no-OTP migration-admin for automation)"
+    record SKIP "$env" A2 "skipped: depends on A1 admin login"
+    record SKIP "$env" A3 "skipped: depends on A1 admin login"
+    fail_count=$((fail_count + 1))
+    skip_count=$((skip_count + 2))
     return
   fi
 
+  # Helper: GET a Keycloak admin endpoint and return "<http_status>|<body>" so
+  # callers can distinguish HTTP-level failures (auth/perms) from data drift.
+  # Uses -sS instead of -fsSL so the body is returned even on 4xx/5xx.
+  local _kc_resp _kc_status _kc_body
+  kc_admin_get() {
+    _kc_resp=$(curl -sS --max-time 10 -w $'\n__HTTP__%{http_code}' \
+      -H "Authorization: Bearer $token" "$1" 2>&1) || _kc_resp="${_kc_resp}"$'\n__HTTP__000'
+    _kc_status="${_kc_resp##*__HTTP__}"
+    _kc_body="${_kc_resp%$'\n'__HTTP__*}"
+  }
+
   # A1. live hms-portal redirectUris match realm-export
-  live_uris=$(curl -fsSL --max-time 10 -H "Authorization: Bearer $token" \
-    "${host}/admin/realms/hms/clients?clientId=hms-portal" 2>/dev/null \
-    | jq -S '.[0].redirectUris | sort' 2>/dev/null || true)
-  export_uris=$(jq -S '.clients[] | select(.clientId=="hms-portal") | .redirectUris | sort' "$REALM_EXPORT")
-  if [[ "$live_uris" == "$export_uris" ]]; then
-    record PASS "$env" A1 "live hms-portal redirectUris match realm-export.json"
-    pass_count=$((pass_count + 1))
-  else
-    record FAIL "$env" A1 "live hms-portal redirectUris differ from realm-export.json — partial-import per keycloak-realm-sync.md"
+  kc_admin_get "${host}/admin/realms/hms/clients?clientId=hms-portal"
+  if [[ "$_kc_status" != "200" ]]; then
+    record FAIL "$env" A1 "HTTP ${_kc_status} from /admin/realms/hms/clients — admin token lacks realm-management on the hms realm (or realm/path wrong). Body: $(printf '%s' "$_kc_body" | head -c 200)"
     fail_count=$((fail_count + 1))
+  else
+    live_uris=$(printf '%s' "$_kc_body" | jq -S '.[0].redirectUris | sort' 2>/dev/null || true)
+    export_uris=$(jq -S '.clients[] | select(.clientId=="hms-portal") | .redirectUris | sort' "$REALM_EXPORT")
+    if [[ "$live_uris" == "$export_uris" ]]; then
+      record PASS "$env" A1 "live hms-portal redirectUris match realm-export.json"
+      pass_count=$((pass_count + 1))
+    else
+      record FAIL "$env" A1 "live hms-portal redirectUris differ from realm-export.json — partial-import per keycloak-realm-sync.md. Live: $(printf '%s' "$live_uris" | tr -d '\n ' | head -c 200)"
+      fail_count=$((fail_count + 1))
+    fi
   fi
 
   # A2. live realm role count == export role count
   local live_role_count export_role_count
-  live_role_count=$(curl -fsSL --max-time 10 -H "Authorization: Bearer $token" \
-    "${host}/admin/realms/hms/roles" 2>/dev/null | jq 'length' 2>/dev/null || echo "?")
+  kc_admin_get "${host}/admin/realms/hms/roles"
   export_role_count=$(jq '.roles.realm | length' "$REALM_EXPORT")
-  if [[ "$live_role_count" == "$export_role_count" ]]; then
-    record PASS "$env" A2 "realm role count matches export (${live_role_count})"
-    pass_count=$((pass_count + 1))
-  else
-    record FAIL "$env" A2 "realm role count drift — live=${live_role_count}, export=${export_role_count}"
+  if [[ "$_kc_status" != "200" ]]; then
+    record FAIL "$env" A2 "HTTP ${_kc_status} from /admin/realms/hms/roles — same likely cause as A1. Body: $(printf '%s' "$_kc_body" | head -c 200)"
     fail_count=$((fail_count + 1))
+  else
+    live_role_count=$(printf '%s' "$_kc_body" | jq 'length' 2>/dev/null || echo "?")
+    if [[ "$live_role_count" == "$export_role_count" ]]; then
+      record PASS "$env" A2 "realm role count matches export (${live_role_count})"
+      pass_count=$((pass_count + 1))
+    else
+      record FAIL "$env" A2 "realm role count drift — live=${live_role_count}, export=${export_role_count}"
+      fail_count=$((fail_count + 1))
+    fi
   fi
 
   # A3. dev.* user policy (per keycloak/README.md § "Policy — which dev
