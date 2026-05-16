@@ -93,3 +93,127 @@ scrape_configs:
         labels:
           application: 'hms'
           service: 'alloy'
+
+  # ── Blackbox synthetic probes (profile: observability) ──────────────
+  # roadmap row 43: external HTTP probes against HMS public surfaces.
+  # The relabel_configs pattern is the standard Blackbox idiom — Prometheus
+  # scrapes itself, the `target` parameter is rewritten into the scrape URL
+  # so the per-target metrics carry the human-readable target name on the
+  # `instance` label.
+  #
+  # Multi-geo posture for production:
+  #   - Local stack: this single blackbox-exporter container probes
+  #     localhost / internal targets and gets a `geo="local"` label.
+  #   - Production: deploy Blackbox to >=3 cloud regions (e.g. AWS
+  #     eu-west-1, AWS us-east-1, OVH-Africa), each with its own
+  #     `geo=<region>` external_label override and remote_write to
+  #     Grafana Cloud Mimir. The HmsSyntheticProbeFailureRate alert
+  #     aggregates across geos before paging.
+  - job_name: 'blackbox_http'
+    metrics_path: /probe
+    scrape_interval: 30s
+    scrape_timeout: 15s
+    params:
+      module: [http_health_2xx]
+    static_configs:
+      - targets:
+          - http://hms-backend:8080/api/actuator/health/liveness
+        labels:
+          probe_target: 'backend-liveness'
+          probe_module: 'http_health_2xx'
+      - targets:
+          - http://hms-backend:8080/api/actuator/health/readiness
+        labels:
+          probe_target: 'backend-readiness'
+          probe_module: 'http_health_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+      - target_label: geo
+        replacement: 'local'
+
+  - job_name: 'blackbox_fhir_metadata'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_fhir_metadata_2xx]
+    static_configs:
+      - targets:
+          - http://hms-backend:8080/api/fhir/metadata
+        labels:
+          probe_target: 'fhir-capability-statement'
+          probe_module: 'http_fhir_metadata_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+      - target_label: geo
+        replacement: 'local'
+
+  - job_name: 'blackbox_smart_config'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_smart_2xx]
+    static_configs:
+      - targets:
+          - http://hms-backend:8080/api/fhir/.well-known/smart-configuration
+        labels:
+          probe_target: 'smart-on-fhir-discovery'
+          probe_module: 'http_smart_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+      - target_label: geo
+        replacement: 'local'
+
+  - job_name: 'blackbox_cds_discovery'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_cds_discovery_2xx]
+    static_configs:
+      - targets:
+          - http://hms-backend:8080/api/cds-services
+        labels:
+          probe_target: 'cds-hooks-discovery'
+          probe_module: 'http_cds_discovery_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+      - target_label: geo
+        replacement: 'local'
