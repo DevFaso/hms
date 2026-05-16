@@ -49,26 +49,28 @@ public class ReadWriteRoutingDataSource extends AbstractRoutingDataSource {
         WRITE, READ
     }
 
+    /**
+     * @param writeDataSource required; used as both a routing target and the default fallback
+     * @param readDataSource  may be {@code null} only in unit tests that exercise the
+     *                        routing-key derivation in isolation; production wiring always
+     *                        supplies a replica. When {@code null}, the lookup falls
+     *                        through to the write default via {@link #setLenientFallback}.
+     */
     public ReadWriteRoutingDataSource(DataSource writeDataSource, DataSource readDataSource) {
         if (writeDataSource == null) {
             throw new IllegalArgumentException("writeDataSource is required");
         }
-        // readDataSource may be null at construction time only for tests
-        // that exercise the routing-key derivation logic in isolation;
-        // production wiring always passes both. The runtime defends
-        // anyway via the fall-through in determineCurrentLookupKey().
-        Map<Object, Object> targets = new HashMap<>(2);
+        Map<Object, Object> targets = HashMap.newHashMap(2);
         targets.put(Route.WRITE, writeDataSource);
         if (readDataSource != null) {
             targets.put(Route.READ, readDataSource);
         }
         setTargetDataSources(targets);
         setDefaultTargetDataSource(writeDataSource);
-        // Lenient fallback: if the lookup key resolves to a target that
-        // isn't actually registered (e.g. READ requested but replica
-        // bean failed to wire), fall back to the default rather than
-        // blowing up the request. The pool-utilisation MXBean still
-        // surfaces the misrouting.
+        // Lenient fallback so a missing READ target (replica bean failed
+        // to wire) degrades to the write default rather than blowing
+        // up the request; pool-utilisation MXBean still surfaces the
+        // misrouting.
         setLenientFallback(true);
         afterPropertiesSet();
     }

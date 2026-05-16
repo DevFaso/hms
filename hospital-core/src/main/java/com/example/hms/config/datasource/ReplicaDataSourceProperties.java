@@ -120,7 +120,10 @@ public class ReplicaDataSourceProperties {
      */
     public HikariDataSource buildReplicaDataSource() {
         validateForActivation();
-        HikariDataSource ds = (HikariDataSource) DataSourceBuilder.create()
+        // DataSourceBuilder.create().type(HikariDataSource.class) returns a
+        // DataSourceBuilder<HikariDataSource>, so .build() is already typed
+        // as HikariDataSource — no cast required.
+        HikariDataSource ds = DataSourceBuilder.create()
             .type(HikariDataSource.class)
             .driverClassName(driverClassName)
             .url(url)

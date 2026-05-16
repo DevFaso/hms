@@ -19,7 +19,7 @@ class ReplicaDataSourcePropertiesTest {
         assertThat(p.getHikari().getConnectionTimeoutMs()).isEqualTo(5_000L);
         assertThat(p.getHikari().getMaxLifetimeMs()).isEqualTo(1_800_000L);
         assertThat(p.getHikari().getIdleTimeoutMs()).isEqualTo(600_000L);
-        assertThat(p.getHikari().getLeakDetectionThresholdMs()).isEqualTo(0L);
+        assertThat(p.getHikari().getLeakDetectionThresholdMs()).isZero();
         assertThat(p.getHikari().getPoolName()).isEqualTo("hms-replica-pool");
     }
 
