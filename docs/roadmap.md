@@ -9,8 +9,56 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
   auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
   Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
-Last updated: **2026-05-10**. Update both files together when scope moves.
+Last updated: **2026-05-15**. Update both files together when scope moves.
 
+> **2026-05-15 update — v2.0 / Multi-tenancy / Schema-per-tenant
+> migration path foundation pass started.** Row 33 flipped from
+> `not-started` to `started` on `feat/v2.0-schema-per-tenant`. Foundation
+> shipped: `TenantIsolationMode` enum (`ROW_LEVEL` default, `SCHEMA`),
+> `Hospital.isolationMode` + `Hospital.tenantSchemaName` columns
+> (Liquibase `V97__hospital_tenant_isolation_mode.sql` with CHECK
+> constraints binding the two columns and a partial unique index on
+> the schema name), and the application-side plumbing under
+> `hospital-core/src/main/java/com/example/hms/security/tenant/schema/`
+> — `SchemaTenantIdentifierResolver`, `SchemaTenantConnectionProvider`
+> (strict identifier allow-list, `SET search_path` per tenant),
+> `TenantSchemaLookup` (JDBC-only to avoid resolver recursion, 5-min
+> cache with manual invalidate), and `SchemaTenancyConfiguration`
+> (Hibernate `multiTenancy=SCHEMA` wired via
+> `HibernatePropertiesCustomizer`). The whole path is gated by
+> `app.tenancy.schema-isolation.enabled` (default `false`) so production
+> behavior is bit-for-bit unchanged. 28 unit tests cover resolver,
+> provider, and lookup. Operational procedure (provision schema, copy
+> rows, flip mode, soak, rollback) documented in
+> [`docs/runbooks/schema-per-tenant-migration.md`](./runbooks/schema-per-tenant-migration.md).
+> Row stays `started` until `scripts/tenancy/provision-schema.sh`,
+> `scripts/tenancy/copy-rows.sh`, the cache-invalidation REST endpoint,
+> and the first end-to-end UAT cutover land in subsequent PRs.
+>
+> **2026-05-15 update — v2.0 / Compliance / SOC 2 Type I → Type II
+> gap analysis pass started.** Row 37 flipped from `not-started` to
+> `started` on `feat/v2.0-soc2-gap-analysis`. Foundation shipped:
+> [`docs/compliance/soc2-gap.md`](./compliance/soc2-gap.md) — full
+> control inventory across CC1–CC9 plus the Availability and
+> Confidentiality Trust Services Categories, grounded in a code-level
+> survey (every claim cites a real file path). Scorecard: **12
+> present / 19 partial / 7 gap** across 38 control points; the
+> technically demanding CC6 / CC7 / CC8 axis is at **71 % weighted**.
+> The roadmap's "~60 % of CC1–CC9" estimate is confirmed conservative
+> — the remaining work is overwhelmingly documentation, policy, and
+> process, not engineering. Companion machine-readable matrix
+> [`docs/compliance/soc2-controls.csv`](./compliance/soc2-controls.csv)
+> (38 rows: ref, criterion, status, owner, priority, effort,
+> evidence/action, target close date) drives the prioritised
+> 24-item remediation backlog: **10 P0** (must close before Type I
+> auditor walkthrough; target 2026-08-15) → **7 P1** (close before
+> observation-window day 1; target 2026-10-15) → **7 P2** (close
+> during observation window; Type II prep). Critical path: P0
+> closes by 2026-08-15 → Type I fieldwork in 2026-11 → 12-month
+> observation window 2026-11..2027-11 → Type II report early 2028.
+> Row stays `started` until the 10 P0 items land and the auditor
+> pre-engagement schedules.
+>
 > **2026-05-10 update — v1.0 finishing line + a11y smoke landed.** Rows 4
 > (T-68 offline dispense queue), 5 (T-71 Playwright E2E), 6 (T-72 perf
 > baseline), 8 (Keycloak Phase C cutover) and 10 (axe-core/playwright

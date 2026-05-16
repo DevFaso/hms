@@ -1395,4 +1395,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V97 — Hospital tenant isolation mode (roadmap row 33, v2.0)
+         Adds isolation_mode + tenant_schema_name to hospital.hospitals
+         so hospitals with strong isolation needs (military, foreign-
+         private) can opt in to schema-per-tenant. Pure metadata; no
+         data movement and no behavior change until
+         app.tenancy.schema-isolation.enabled flips on. The DO-blocks
+         around the CHECK constraints make the migration idempotent
+         (Liquibase keeps a record but the SQL itself can be re-run
+         against a recovered DB without erroring). splitStatements
+         false because the DO $$ ... $$ blocks contain semicolons.
+         ================================================================= -->
+    <changeSet id="V97-hospital-tenant-isolation-mode" author="hms-team" runOnChange="false">
+        <sqlFile path="V97__hospital_tenant_isolation_mode.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
