@@ -153,14 +153,21 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
 
     /**
-     * Look up an existing result by its source HL7 message control id
-     * (MSH-10). Used by {@code MllpInboundLabService} to short-circuit
-     * analyzer retransmissions — if the id already exists we return
-     * ACCEPTED without inserting a duplicate row. Paired with the
-     * partial unique index from V98 so a concurrent retry that wins
-     * the race still cannot insert two rows.
+     * Look up an existing result by the composite
+     * (MSH-3 sending application, MSH-4 sending facility, MSH-10 control id)
+     * idempotency key. Used by {@code MllpInboundLabService} to
+     * short-circuit analyzer retransmissions: a retransmit from the
+     * same analyzer reuses all three values, so we hit and return
+     * ACCEPTED without inserting a duplicate row. The composite scope
+     * is critical because HL7 v2 only guarantees MSH-10 uniqueness
+     * within a sending system — two different analyzers can legitimately
+     * emit the same control id and those must stay as separate rows.
+     * Paired with the partial unique index from V98.
      */
-    Optional<LabResult> findFirstBySourceMessageControlId(String sourceMessageControlId);
+    Optional<LabResult> findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+        String sourceSendingApplication,
+        String sourceSendingFacility,
+        String sourceMessageControlId);
 
     /**
      * Paged unscoped variant used by the chart-review aggregator when no

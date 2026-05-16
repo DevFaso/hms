@@ -4,6 +4,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,6 +53,7 @@ class OruR01VendorSampleIngestionTest {
     @Mock private MllpAllowedSenderService allowlist;
     @Mock private MllpInboundLabService inboundLab;
     @Mock private MllpInboundAdtService inboundAdt;
+    @Mock private IntegrationMessageRecorder messageRecorder;
 
     private Hl7MessageDispatcher dispatcher;
     private Hospital hospital;
@@ -59,7 +61,7 @@ class OruR01VendorSampleIngestionTest {
     @BeforeEach
     void setUp() {
         Hl7v2MessageBuilder builder = new Hl7v2MessageBuilder();
-        dispatcher = new Hl7MessageDispatcher(builder, allowlist, inboundLab, inboundAdt);
+        dispatcher = new Hl7MessageDispatcher(builder, allowlist, inboundLab, inboundAdt, messageRecorder);
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
     }

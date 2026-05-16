@@ -99,14 +99,30 @@ public class LabResult extends BaseEntity {
     private String actorLabel;
 
     /**
+     * MSH-3 (sending application) of the inbound HL7 v2 ORU^R01 that
+     * produced this row. Stored alongside {@link #sourceMessageControlId}
+     * because HL7 v2 only guarantees MSH-10 uniqueness within a single
+     * sending system — two different analyzers can legitimately emit
+     * the same control id, so the dedup key must be the composite
+     * (sending app, sending facility, MSH-10), not MSH-10 alone.
+     */
+    @Column(name = "source_sending_application", length = 255)
+    private String sourceSendingApplication;
+
+    /** MSH-4 (sending facility). Pairs with {@link #sourceSendingApplication}. */
+    @Column(name = "source_sending_facility", length = 255)
+    private String sourceSendingFacility;
+
+    /**
      * MSH-10 (message control id) of the inbound HL7 v2 ORU^R01 that
      * produced this row. Used by {@code MllpInboundLabService} to make
      * ingestion idempotent — analyzers retransmit on lost ACK and we
      * must not duplicate the result row on every retry. {@code null}
      * for USER-actor writes (the clinical UI path) and for any
      * SYSTEM-actor writes whose source does not advertise a control id.
-     * A partial unique index (V98) enforces at-most-one row per non-null
-     * value at the DB layer.
+     * Uniqueness is enforced via the composite partial index from V98
+     * over ({@link #sourceSendingApplication},
+     * {@link #sourceSendingFacility}, this column).
      */
     @Column(name = "source_message_control_id", length = 255)
     private String sourceMessageControlId;

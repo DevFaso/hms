@@ -70,18 +70,25 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             return MllpInboundOutcome.REJECTED_INVALID;
         }
 
-        // Idempotency: identical MSH-10 means the analyzer retransmitted
-        // (lost ACK, TCP timeout, restart). We've already persisted this
-        // observation — short-circuit so we don't get duplicate rows on
-        // the lab_result trend.
+        // Idempotency: identical (sendingApp, sendingFacility, MSH-10)
+        // means the analyzer retransmitted (lost ACK, TCP timeout,
+        // restart). Scope by sender — HL7 v2 only guarantees MSH-10
+        // uniqueness within a sending system, so two different
+        // analyzers can legitimately emit the same control id and we
+        // must NOT collapse those. The composite partial unique index
+        // from V98 enforces the same invariant at the DB layer.
         String controlId = StringUtils.hasText(messageControlId) ? messageControlId.trim() : null;
-        if (controlId != null) {
-            Optional<LabResult> existing = labResultRepository.findFirstBySourceMessageControlId(controlId);
+        String senderApp = StringUtils.hasText(sendingApplication) ? sendingApplication.trim() : null;
+        String senderFac = StringUtils.hasText(sendingFacility) ? sendingFacility.trim() : null;
+        if (controlId != null && senderApp != null && senderFac != null) {
+            Optional<LabResult> existing = labResultRepository
+                .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                    senderApp, senderFac, controlId);
             if (existing.isPresent()) {
-                log.info("MLLP ORU^R01 replay — control id {} already persisted as labResult {}; ACCEPTED without re-insert",
-                    controlId, existing.get().getId());
+                log.info("MLLP ORU^R01 replay — sender={}/{} controlId={} already persisted as labResult {}; ACCEPTED without re-insert",
+                    senderApp, senderFac, controlId, existing.get().getId());
                 recordInboundMessage(integrationId, organizationId, rawMessageBody,
-                    IntegrationMessageStatus.RECEIVED, "duplicate MSH-10; replayed");
+                    IntegrationMessageStatus.RECEIVED, "duplicate (sender, MSH-10); replayed");
                 return MllpInboundOutcome.ACCEPTED;
             }
         }
@@ -125,6 +132,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             .resultUnit(observation.resultUnit() == null ? null : observation.resultUnit().trim())
             .resultDate(observation.resultDate() != null ? observation.resultDate() : LocalDateTime.now())
             .abnormalFlag(toAbnormalFlag(observation.abnormalFlag()))
+            .sourceSendingApplication(senderApp)
+            .sourceSendingFacility(senderFac)
             .sourceMessageControlId(controlId)
             .build();
         LabResult saved = labResultRepository.save(result);

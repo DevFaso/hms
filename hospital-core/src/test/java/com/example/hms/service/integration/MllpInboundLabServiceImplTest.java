@@ -71,10 +71,11 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
-    @DisplayName("ACCEPTED — persists LabResult with actorType=SYSTEM, MLLP actorLabel, and MSH-10")
+    @DisplayName("ACCEPTED — persists LabResult with actorType=SYSTEM, MLLP actorLabel, and composite source key")
     void acceptedHappyPath() {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
-        when(labResultRepository.findFirstBySourceMessageControlId("MSG-CTRL-1"))
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "ROCHE_COBAS", "LAB_A", "MSG-CTRL-1"))
             .thenReturn(Optional.empty());
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -93,6 +94,8 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.getActorLabel()).isEqualTo("MLLP:ROCHE_COBAS/LAB_A");
         assertThat(saved.getResultValue()).isEqualTo("5.4");
         assertThat(saved.getResultUnit()).isEqualTo("mmol/L");
+        assertThat(saved.getSourceSendingApplication()).isEqualTo("ROCHE_COBAS");
+        assertThat(saved.getSourceSendingFacility()).isEqualTo("LAB_A");
         assertThat(saved.getSourceMessageControlId()).isEqualTo("MSG-CTRL-1");
 
         verify(messageRecorder).recordMessage(
@@ -108,11 +111,12 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
-    @DisplayName("ACCEPTED but no re-insert — same MSH-10 arrives twice (analyzer retransmit)")
+    @DisplayName("ACCEPTED but no re-insert — same (sender, MSH-10) arrives twice (analyzer retransmit)")
     void replayShortCircuits() {
         LabResult existing = LabResult.builder().build();
         existing.setId(UUID.randomUUID());
-        when(labResultRepository.findFirstBySourceMessageControlId("MSG-REPLAY"))
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "MSG-REPLAY"))
             .thenReturn(Optional.of(existing));
 
         MllpInboundOutcome outcome = service.processOruR01(
@@ -126,6 +130,27 @@ class MllpInboundLabServiceImplTest {
             any(), any(), eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
             any(), eq(IntegrationMessageStatus.RECEIVED), any());
         verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("Two different analyzers reusing the same MSH-10 do NOT collapse")
+    void differentSendersWithSameControlIdDoNotCollapse() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        // The lookup keyed on (MINDRAY, LAB_A, COMMON-ID) returns empty —
+        // a previously-saved row with the same MSH-10 from (SYSMEX, LAB_B,
+        // COMMON-ID) is in a different composite-key bucket and must not
+        // be returned. The service treats this as a fresh write.
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "MINDRAY", "LAB_A", "COMMON-ID"))
+            .thenReturn(Optional.empty());
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            observation("ACC-1", "5.7"), hospital, "MINDRAY", "LAB_A",
+            "COMMON-ID", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(labResultRepository).save(any(LabResult.class));
     }
 
     @Test
@@ -214,9 +239,13 @@ class MllpInboundLabServiceImplTest {
             null, "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
-        verify(labResultRepository, never()).findFirstBySourceMessageControlId(any());
+        verify(labResultRepository, never())
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                any(), any(), any());
         ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
         verify(labResultRepository).save(captor.capture());
         assertThat(captor.getValue().getSourceMessageControlId()).isNull();
+        assertThat(captor.getValue().getSourceSendingApplication()).isEqualTo("APP");
+        assertThat(captor.getValue().getSourceSendingFacility()).isEqualTo("FAC");
     }
 }
