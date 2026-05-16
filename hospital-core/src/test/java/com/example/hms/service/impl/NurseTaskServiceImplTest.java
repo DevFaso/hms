@@ -1403,6 +1403,21 @@ class NurseTaskServiceImplTest {
         assertThat(result.get(0).getMedsDue()).isEqualTo(1L); // one active pending med
     }
 
+    @Test
+    void getWorkboardSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+
+        List<NurseWorkboardPatientDTO> result = service.getWorkboard(UUID.randomUUID(), hospitalId);
+
+        assertThat(result).isEmpty();
+    }
+
     /* ════════════════════════════════════════════════════════════════════
        MVP-12: getPatientFlow
        ════════════════════════════════════════════════════════════════════ */
@@ -1489,6 +1504,28 @@ class NurseTaskServiceImplTest {
 
         assertThat(board.getActive()).hasSize(1);
         assertThat(board.getActive().get(0).getPatientName()).isEqualTo("Dept Pat");
+    }
+
+    @Test
+    void getPatientFlowSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+
+        when(admissionRepository.findFlowBoardAdmissions(
+                eq(hospitalId),
+                argThat(l -> l.containsAll(List.of(AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE)))))
+            .thenReturn(List.of(admission));
+
+        NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, null);
+
+        assertThat(board.getPending()).isEmpty();
+        assertThat(board.getActive()).isEmpty();
+        assertThat(board.getCritical()).isEmpty();
+        assertThat(board.getAwaitingDischarge()).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -1638,6 +1675,24 @@ class NurseTaskServiceImplTest {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(NurseAdmissionSummaryDTO::getPatientName)
             .containsExactly("New Arrival", "Awaiting Discharge");
+    }
+
+    @Test
+    void getPendingAdmissionsSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.PENDING);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusMinutes(30));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(
+            hospitalId, AdmissionStatus.AWAITING_DISCHARGE)).thenReturn(List.of());
+
+        List<NurseAdmissionSummaryDTO> result = service.getPendingAdmissions(hospitalId, null);
+
+        assertThat(result).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════

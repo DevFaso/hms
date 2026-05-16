@@ -11,6 +11,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Admission;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
@@ -45,6 +46,7 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.EncounterRepository;
@@ -118,6 +120,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String DEFAULT_HOSPITAL_SEED = "HOSPITAL";
     private static final String DEFAULT_PATIENT_NAME = "Patient";
     private static final String DEFAULT_ADMINISTRATION_STATUS = "GIVEN";
+    private static final String ADMISSION_OWNER = "Admission";
 
     /** Statuses accepted on the administer endpoint. */
     private static final Set<String> SUPPORTED_ADMINISTRATION_STATUSES = Set.of(
@@ -906,14 +909,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            result.add(toWorkboardCard(a, hospitalId, overdueThreshold, now));
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, overdueThreshold, now);
+            if (card != null) {
+                result.add(card);
+            }
         }
         return result;
     }
 
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId,
                                                      LocalDateTime overdueThreshold, LocalDateTime now) {
-        Patient patient = a.getPatient();
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        if (patient == null) return null;
+
         Optional<LocalDateTime> lastVitals = vitalSignRepository
             .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.getId(), hospitalId)
             .map(PatientVitalSign::getRecordedAt);
@@ -927,9 +936,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .filter(rx -> !STATUS_COMPLETED.equals(resolveMarStatus(rx, now)))
             .count();
 
-        String departmentName = a.getDepartment() != null ? a.getDepartment().getName() : null;
-        String attendingDoctor = a.getAdmittingProvider() != null
-            ? a.getAdmittingProvider().getFullName() : null;
+        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
+        Staff admittingProvider = JpaProxyUtils.safeInit(
+            a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
+        String departmentName = department != null ? department.getName() : null;
+        String attendingDoctor = admittingProvider != null ? admittingProvider.getFullName() : null;
 
         return NurseWorkboardPatientDTO.builder()
             .patientId(patient.getId())
@@ -977,6 +988,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         LocalDateTime now = LocalDateTime.now();
         for (Admission a : all) {
             NurseFlowPatientCardDTO card = toFlowCard(a, now);
+            if (card == null) continue;
             AcuityLevel acuity = a.getAcuityLevel();
             if (a.getStatus() == AdmissionStatus.AWAITING_DISCHARGE) {
                 awaitingDischarge.add(card);
@@ -998,18 +1010,24 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private NurseFlowPatientCardDTO toFlowCard(Admission a, LocalDateTime now) {
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        if (patient == null) return null;
+
+        Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
+        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
         long waitMinutes = a.getAdmissionDateTime() != null
             ? java.time.Duration.between(a.getAdmissionDateTime(), now).toMinutes() : 0;
-        UUID hospId = a.getHospital() != null ? a.getHospital().getId() : null;
+        UUID hospId = hospital != null ? hospital.getId() : null;
         return NurseFlowPatientCardDTO.builder()
-            .patientId(a.getPatient().getId())
-            .patientName(a.getPatient().getFullName())
-            .mrn(hospId != null ? a.getPatient().getMrnForHospital(hospId) : null)
+            .patientId(patient.getId())
+            .patientName(patient.getFullName())
+            .mrn(hospId != null ? patient.getMrnForHospital(hospId) : null)
             .admissionId(a.getId())
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .waitMinutes(waitMinutes)
             .roomBed(a.getRoomBed())
-            .departmentName(a.getDepartment() != null ? a.getDepartment().getName() : null)
+            .departmentName(department != null ? department.getName() : null)
             .admittedAt(a.getAdmissionDateTime())
             .build();
     }
@@ -1128,29 +1146,43 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseAdmissionSummaryDTO> result = new ArrayList<>();
         for (Admission a : newArrivals) {
-            result.add(toAdmissionSummary(a));
+            NurseAdmissionSummaryDTO summary = toAdmissionSummary(a);
+            if (summary != null) {
+                result.add(summary);
+            }
         }
         for (Admission a : awaitingDischarge) {
             // Avoid duplicates if somehow already included
             if (result.stream().noneMatch(r -> a.getId().equals(r.getAdmissionId()))) {
-                result.add(toAdmissionSummary(a));
+                NurseAdmissionSummaryDTO summary = toAdmissionSummary(a);
+                if (summary != null) {
+                    result.add(summary);
+                }
             }
         }
         return result;
     }
 
     private NurseAdmissionSummaryDTO toAdmissionSummary(Admission a) {
-        UUID hospId = a.getHospital() != null ? a.getHospital().getId() : null;
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        if (patient == null) return null;
+
+        Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
+        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
+        Staff admittingProvider = JpaProxyUtils.safeInit(
+            a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
+        UUID hospId = hospital != null ? hospital.getId() : null;
         return NurseAdmissionSummaryDTO.builder()
             .admissionId(a.getId())
-            .patientId(a.getPatient().getId())
-            .patientName(a.getPatient().getFullName())
-            .mrn(hospId != null ? a.getPatient().getMrnForHospital(hospId) : null)
+            .patientId(patient.getId())
+            .patientName(patient.getFullName())
+            .mrn(hospId != null ? patient.getMrnForHospital(hospId) : null)
             .status(a.getStatus() != null ? a.getStatus().name() : null)
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .roomBed(a.getRoomBed())
-            .departmentName(a.getDepartment() != null ? a.getDepartment().getName() : null)
-            .admittingDoctor(a.getAdmittingProvider() != null ? a.getAdmittingProvider().getFullName() : null)
+            .departmentName(department != null ? department.getName() : null)
+            .admittingDoctor(admittingProvider != null ? admittingProvider.getFullName() : null)
             .admissionDateTime(a.getAdmissionDateTime())
             .admissionType(a.getAdmissionType() != null ? a.getAdmissionType().name() : null)
             .build();
