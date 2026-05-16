@@ -8,6 +8,7 @@ import {
   DepartmentUtilization,
   HospitalMetric,
 } from '../services/dashboard.service';
+import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 
 interface StatCard {
   label: string;
@@ -20,7 +21,7 @@ interface StatCard {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, KpiCardsComponent],
   templateUrl: './analytics.html',
   styleUrl: './analytics.scss',
 })
