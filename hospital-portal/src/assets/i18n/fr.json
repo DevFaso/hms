@@ -1299,6 +1299,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
     "ACKNOWLEDGED": "Reçue",
+    "ADJUST_FILTERS": "Ajustez les filtres ou la recherche pour voir les consultations existantes.",
     "NO_DATA_GLOBAL": "Aucune consultation dans aucun de vos hôpitaux.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Notes supplémentaires…",
     "ASSIGN": "Assigner",
@@ -1337,6 +1338,7 @@
     "NEW": "Nouvelle Consultation",
     "NOTE_OPTIONAL": "Note (facultatif)",
     "NO_CONSULTATIONS": "Aucune consultation trouvée",
+    "NO_MATCHING_CONSULTATIONS": "Aucune consultation ne correspond à la vue actuelle.",
     "OVERDUE": "En Retard",
     "OVERDUE_CONSULTATIONS": "Consultations en Retard",
     "REASON": "Motif",

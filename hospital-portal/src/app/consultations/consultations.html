@@ -38,7 +38,7 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
-        <span class="card-value">{{ consultations().length }}</span
+        <span class="card-value">{{ countByGroup('total') }}</span
         ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
       </div>
     </div>
@@ -124,14 +124,17 @@
       <p>{{ 'CONSULTATIONS.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !statsLoading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">forum</span>
       <!-- Cross-tenant: a super-admin in global view who sees zero rows
            must NOT see the generic "no data" message — otherwise they
            can't tell whether scoping is wrong or data is just missing.
            See docs/super-admin-cross-tenant-design.md "Empty-state messaging". -->
-      @if (isSuperAdmin() && globalView()) {
+      @if (hasConsultationRowsInScope()) {
+        <h3>{{ 'CONSULTATIONS.NO_MATCHING_CONSULTATIONS' | translate }}</h3>
+        <p>{{ 'CONSULTATIONS.ADJUST_FILTERS' | translate }}</p>
+      } @else if (isSuperAdmin() && globalView()) {
         <h3>{{ 'CONSULTATIONS.NO_DATA_GLOBAL' | translate }}</h3>
         <p>{{ 'CONSULTATIONS.WILL_APPEAR' | translate }}</p>
       } @else {

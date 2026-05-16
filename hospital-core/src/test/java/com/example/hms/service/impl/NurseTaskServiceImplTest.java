@@ -182,7 +182,7 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksUsesStatusFilterWhenProvided() {
+    void getMedicationTasksReturnsEmptyWhenNoRealMedicationTasksMatchStatus() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
@@ -195,9 +195,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " held ");
 
-        assertThat(tasks)
-            .isNotEmpty()
-            .allMatch(task -> "HELD".equals(task.getStatus()));
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -212,7 +210,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
         verify(nurseDashboardService).getPatientsForNurse(null, hospitalId, null);
     }
 
@@ -254,26 +252,19 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsUsesDefaultHospitalSeedWhenNull() {
+    void getAnnouncementsReturnsEmptyWhenDatabaseIsEmpty() {
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(null, 0);
 
-        assertThat(announcements)
-            .hasSize(1)
-            .first()
-            .extracting(NurseAnnouncementDTO::getText)
-            .asString()
-            .contains("[HOSPITAL]");
+        assertThat(announcements).isEmpty();
     }
 
     @Test
-    void getAnnouncementsAbbreviatesHospitalId() {
+    void getAnnouncementsReturnsEmptyForHospitalWhenDatabaseIsEmpty() {
         UUID hospitalId = UUID.fromString("12345678-1234-5678-1234-567812345678");
 
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(hospitalId, 2);
 
-        assertThat(announcements)
-            .hasSize(2)
-            .allSatisfy(announcement -> assertThat(announcement.getText()).contains("[12345678]"));
+        assertThat(announcements).isEmpty();
     }
 
     @Test
@@ -435,10 +426,10 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksGeneratesDefaultPatientsWhenHospitalMissing() {
+    void getMedicationTasksReturnsEmptyWhenHospitalMissing() {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(UUID.randomUUID(), null, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -603,9 +594,8 @@ class NurseTaskServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
 
-        // Should fall back to synthetic tasks since DRAFT is filtered out
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -1175,7 +1165,7 @@ class NurseTaskServiceImplTest {
             assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isZero();
-            assertThat(summary.getAnnouncements()).isEqualTo(6); // 0 count → default
+            assertThat(summary.getAnnouncements()).isZero();
         }
     }
 
