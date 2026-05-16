@@ -44,14 +44,14 @@ overlap inline so a single remediation PR closes both backlogs.
 | ----------------------------------------- | ------- | ------- | --- | ----- | ---------- |
 | §164.308 Administrative safeguards        | 4       | 6       | 4   | 14    | 50 %       |
 | §164.310 Physical safeguards              | 0       | 2       | 2   | 4     | 25 %       |
-| §164.312 Technical safeguards             | 8       | 3       | 1   | 12    | 79 %       |
+| §164.312 Technical safeguards             | 7       | 4       | 1   | 12    | 75 %       |
 | §164.314 Organizational requirements (BAA)| 0       | 0       | 3   | 3     | 0 %        |
 | §164.316 Policies + procedures            | 1       | 2       | 2   | 5     | 40 %       |
 | Privacy Rule — minimum necessary          | 4       | 1       | 1   | 6     | 75 %       |
 | Privacy Rule — individual rights          | 3       | 2       | 2   | 7     | 57 %       |
-| **Total**                                 | **20**  | **16**  | **15** | **51** | **55 %** |
+| **Total**                                 | **19**  | **17**  | **15** | **51** | **54 %** |
 
-**Headline:** the technical-safeguards axis (§164.312) is at **79 %
+**Headline:** the technical-safeguards axis (§164.312) is at **75 %
 weighted** — the engineering work is largely done. The remaining
 shortfall is concentrated in:
 
@@ -302,12 +302,21 @@ not enforced.
 
 **Action:** add absolute-session-max-age check (P1).
 
-**§164.312(a)(2)(iv) Encryption + Decryption** — `Present`. AES-256-GCM
-field-level encryption for PHI columns via
+**§164.312(a)(2)(iv) Encryption + Decryption** — `Partial`. AES-256-GCM
+field-level encryption is operational via
 [`hospital-core/src/main/java/com/example/hms/security/EncryptedStringConverter.java`](../../hospital-core/src/main/java/com/example/hms/security/EncryptedStringConverter.java),
-key supplied via `APP_ENCRYPTION_KEY` (Base64 of 32 bytes). Wire
-format includes a version prefix (`gcm1:`) so algorithm rotation is
-possible without a destructive migration.
+key supplied via `APP_ENCRYPTION_KEY` (Base64 of 32 bytes). Wire format
+includes a version prefix (`gcm1:`) so algorithm rotation is possible
+without a destructive migration. Coverage today is limited to the
+narrative-PHI columns (10 columns on `Patient`, 3 on `Prescription`,
+1 on `Dispense`; full list in
+[`phi-inventory.md`](./phi-inventory.md)) — the §164.514(b)(2)(i)
+identifier columns (names, phone, email, city/state/zip, MRN aliases,
+insurance policy/group numbers) are plaintext today and rely on
+tenant scoping + platform-level volume encryption.
+
+**Action:** extend `@Convert(EncryptedStringConverter)` to the
+identifier columns (P0 — see remediation backlog item 10).
 
 ### §164.312(b) — Audit Controls
 
@@ -491,9 +500,12 @@ items, target close **2026-09-30**):
 7. Policies index (`docs/compliance/policies-index.md`)
 8. Audit log retention configuration (≥ 6 years on Splunk + DB)
 9. PHI inventory (`docs/compliance/phi-inventory.md`) — this PR
-10. Sanction policy
+10. Extend `EncryptedStringConverter` to the §164.514(b)(2)(i)
+    identifier columns currently in plaintext (names, phone, email,
+    city/state/zip, MRN aliases, insurance policy/group numbers — see
+    [`phi-inventory.md`](./phi-inventory.md))
 
-**P1 — close before observation window** (7 items, target close
+**P1 — close before observation window** (10 items, target close
 **2026-12-31**):
 
 1. Sanction policy (doc-only)
@@ -505,6 +517,8 @@ items, target close **2026-09-30**):
 7. Annual HIPAA self-evaluation cadence
 8. Absolute session max-age enforcement (engineering)
 9. Patient-record-amendment runbook
+10. Encryption key-rotation + crypto-shred runbook
+    (`docs/runbooks/key-rotation.md`, referenced from BAA §4.4)
 
 **P2 — incremental** (7 items, no specific target):
 

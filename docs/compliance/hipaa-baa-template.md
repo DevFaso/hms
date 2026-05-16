@@ -91,16 +91,33 @@ Business Associate may **NOT**:
 Business Associate will:
 
 4.1 **Administrative safeguards** (§164.308). Maintain the controls
-inventoried in [`hipaa-gap.md`](./hipaa-gap.md), including:
+inventoried in [`hipaa-gap.md`](./hipaa-gap.md). The list below is the
+**target state** Business Associate commits to reach on the documented
+P0 critical path (target 2026-09-30, before first BAA execution); items
+marked *(Pending)* are not yet evidenced in the repository as of the
+date this template is signed:
 
-- Named Security Officer + Privacy Officer.
+- Named Security Officer + Privacy Officer. *(Pending — P0 in
+  [`hipaa-gap.md`](./hipaa-gap.md), target 2026-08-31.)*
 - Workforce security policy + termination procedures.
+  *(Pending — P1, target 2026-12-31.)*
 - Annual security-awareness training.
+  *(Pending — P1, target 2026-12-31.)*
 - Quarterly access reviews logged at
   `docs/compliance/access-review-log.md`.
+  *(Pending — P0, target 2026-09-30; log file will be created on the
+  first review.)*
 - HIPAA-specific risk register reviewed annually.
+  *(Pending — P0, target 2026-08-15.)*
 - Incident-response runbook with breach-notification timing
   obligations (see Section 7 of this Agreement).
+  *(Pending — P0, target 2026-09-30.)*
+
+The Business Associate's status on each item must be re-attested by
+Covered Entity at execution time; signature on this Agreement without
+revised pending markers is the Business Associate's confirmation that
+the corresponding artefacts have landed in the repository at the
+referenced paths.
 
 4.2 **Physical safeguards** (§164.310). Inherit from the underlying
 cloud provider. Business Associate maintains and provides on request
@@ -125,9 +142,14 @@ attestation.
 
 4.4 **Encryption key management.** Encryption keys are stored
 separately from the encrypted data (Railway environment variable
-isolated from the database). Keys are rotated at least every
-**twelve (12) months**, with crypto-shred procedure documented at
-`docs/runbooks/key-rotation.md`.
+isolated from the database). Business Associate commits to rotating
+keys at least every **twelve (12) months**. *(Pending — the
+key-rotation + crypto-shred procedure has not yet been authored as a
+runbook. Target: `docs/runbooks/key-rotation.md`, P1 in
+[`hipaa-gap.md`](./hipaa-gap.md), close 2026-12-31. Business Associate
+will not sign this Agreement until the runbook is in place or this
+clause is revised to reflect an interim manual procedure agreed with
+Covered Entity.)*
 
 ## 5. Reporting
 

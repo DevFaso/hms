@@ -36,32 +36,48 @@ file-path citations so a reader can verify.
 
 ## §164.514(b)(2)(i)(A) — Names
 
+**Important:** the current encryption posture for patient names is
+**plaintext** — Copilot review on PR #335 confirmed the entity lacks
+`@Convert(EncryptedStringConverter)` on `firstName` / `lastName` /
+`middleName`. This is listed as a P0 remediation item below (extend
+field-level encryption to the §164.514(b)(2)(i)(A) identifiers).
+
 | Field                              | Persistence                                                                          | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ------------------------------------------------------------------------------------ | ----------- | --------------------- | ------------------------------------------------------ |
-| `Patient.firstName`                | `patient.first_name`                                                                 | Yes (gcm1)  | Clinical roles + self | Encrypted from S-05 hardening pass                     |
-| `Patient.lastName`                 | `patient.last_name`                                                                  | Yes (gcm1)  | Clinical roles + self | Encrypted from S-05 hardening pass                     |
-| `Patient.middleName`               | `patient.middle_name`                                                                | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Users.firstName` / `Users.lastName` | `users.first_name` / `users.last_name`                                            | No          | Self + admin          | Workforce names — not PHI under HIPAA, listed for completeness |
-| `Staff.firstName` / `Staff.lastName` | `staff.first_name` / `staff.last_name`                                            | No          | Self + colleagues     | Workforce names                                        |
-| `PatientAllergy.recordedBy` (display) | derived from `Users` join                                                        | No          | Clinical roles        | Workforce                                              |
+| `Patient.firstName`                | `patient.first_name`                                                                 | No          | Clinical roles + self | **Plaintext today.** Encryption planned (P0 remediation) |
+| `Patient.lastName`                 | `patient.last_name`                                                                  | No          | Clinical roles + self | **Plaintext today.** Encryption planned (P0 remediation) |
+| `Patient.middleName`               | `patient.middle_name`                                                                | No          | Clinical roles + self | **Plaintext today.** Encryption planned (P0 remediation) |
+| `User.firstName` / `User.lastName` | `users.first_name` / `users.last_name`                                               | No          | Self + admin          | Workforce names — not PHI under HIPAA, listed for completeness |
+| Staff names                        | derived via `Staff.user → User.firstName/lastName` join                              | No          | Self + colleagues     | Workforce names (no `first_name`/`last_name` directly on `Staff`) |
+| `PatientAllergy.recordedBy` (display) | derived from `User` join                                                          | No          | Clinical roles        | Workforce                                              |
 
 ## §164.514(b)(2)(i)(B) — Geographic subdivisions
 
 | Field                              | Persistence                  | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
+| `Patient.address` (legacy single-line) | `patient.address`        | Yes (gcm1)  | Clinical roles + self | Encrypted via `EncryptedStringConverter`               |
 | `Patient.addressLine1`             | `patient.address_line1`      | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Patient.city`                     | `patient.city`               | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Patient.state`                    | `patient.state`              | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Patient.zipCode`                  | `patient.zip_code`           | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Patient.country`                  | `patient.country`            | No          | Clinical roles + self | Coarser than ZIP; treated as low-sensitivity            |
-| `Hospital.address`                 | `hospital.address`           | No          | All authenticated     | Hospital location is public information               |
+| `Patient.addressLine2`             | `patient.address_line2`      | Yes (gcm1)  | Clinical roles + self |                                                        |
+| `Patient.city`                     | `patient.city`               | No          | Clinical roles + self | **Plaintext today.** P0 remediation candidate          |
+| `Patient.state`                    | `patient.state`              | No          | Clinical roles + self | **Plaintext today.** P0 remediation candidate          |
+| `Patient.zipCode`                  | `patient.zip_code`           | No          | Clinical roles + self | **Plaintext today.** P0 remediation candidate          |
+| `Patient.country`                  | `patient.country`            | No          | Clinical roles + self | Coarser than ZIP; treated as low-sensitivity           |
+| `Hospital.address`                 | `hospital.address`           | No          | All authenticated     | Hospital location is public information                |
 
 ## §164.514(b)(2)(i)(C) — Dates more specific than year
 
+`@Convert(EncryptedStringConverter)` is a `String → String` JPA
+converter; it cannot be applied to `LocalDate` / `LocalDateTime`
+columns. All clinical timestamps therefore live in plaintext today.
+HIPAA accepts this when the column is protected by row-level tenant
+scoping + role-based access; an alternative posture (server-side
+pseudonymisation of dates by shifting per patient) is P2 — see
+[`hipaa-gap.md`](./hipaa-gap.md).
+
 | Field                              | Persistence                                                                          | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ------------------------------------------------------------------------------------ | ----------- | --------------------- | ------------------------------------------------------ |
-| `Patient.dateOfBirth`              | `patient.date_of_birth`                                                              | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Encounter.encounterDate`          | `clinical.encounters.encounter_date`                                                 | No          | Clinical roles + self | De-identification would coarsen to year for §164.514(b)(2)(i)(C) |
+| `Patient.dateOfBirth`              | `patient.date_of_birth`                                                              | No          | Clinical roles + self | `LocalDate` — JPA converter cannot apply               |
+| `Encounter.encounterDate`          | `clinical.encounters.encounter_date`                                                 | No          | Clinical roles + self |                                                        |
 | `Admission.admissionDateTime`      | `admissions.admission_date_time`                                                     | No          | Clinical roles + self |                                                        |
 | `LabResult.resultDate`             | `lab.lab_results.result_date`                                                        | No          | Clinical roles + self |                                                        |
 | `Prescription.prescribedDate`      | `clinical.prescriptions.prescribed_date`                                             | No          | Clinical roles + self |                                                        |
@@ -73,9 +89,10 @@ file-path citations so a reader can verify.
 
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| `Patient.phoneNumber`              | `patient.phone_number`                   | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Patient.alternatePhoneNumber`     | `patient.alternate_phone_number`         | Yes (gcm1)  | Clinical roles + self |                                                        |
-| `Users.phoneNumber`                | `users.phone_number`                     | No          | Self + admin          | Workforce — not PHI                                    |
+| `Patient.phoneNumberPrimary`       | `patient.phone_number_primary`           | No          | Clinical roles + self | **Plaintext today.** P0 remediation candidate          |
+| `Patient.phoneNumberSecondary`     | `patient.phone_number_secondary`         | No          | Clinical roles + self | **Plaintext today.** P0 remediation candidate          |
+| `Patient.emergencyContactPhone`    | `patient.emergency_contact_phone`        | Yes (gcm1)  | Clinical roles + self | Encrypted via `EncryptedStringConverter`               |
+| `User.phoneNumber`                 | `users.phone_number`                     | No          | Self + admin          | Workforce — not PHI                                    |
 
 ## §164.514(b)(2)(i)(E) — Fax numbers
 
@@ -86,8 +103,8 @@ integrations rely on per-deployment external services.
 
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| `Patient.email`                    | `patient.email`                          | Yes (gcm1)  | Clinical roles + self | Used for activation links + AVS delivery               |
-| `Users.email`                      | `users.email`                            | No          | Self + admin          | Workforce; used for password reset + login flows       |
+| `Patient.email`                    | `patient.email`                          | No          | Clinical roles + self | **Plaintext today.** Used for activation links + AVS delivery. P0 remediation candidate |
+| `User.email`                       | `users.email`                            | No          | Self + admin          | Workforce; used for password reset + login flows       |
 
 ## §164.514(b)(2)(i)(G) — Social Security numbers
 
@@ -96,18 +113,24 @@ country-specific national identifiers; see §164.514(b)(2)(i)(R) below.
 
 ## §164.514(b)(2)(i)(H) — Medical record numbers
 
+The `Patient` entity does **not** carry a dedicated `medical_record_number`
+column today. MRNs are surfaced via two adjacent mechanisms:
+
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| `Patient.medicalRecordNumber` (legacy) | `patient.medical_record_number`      | Yes (gcm1)  | Clinical roles + self | Per-hospital MRN, single-system                        |
-| `EmpiPatientAlias.aliasValue` (MRN)| `empi.empi_patient_aliases.alias_value`  | Yes (gcm1)  | Clinical roles + self | EMPI cross-system MRN aliases (one row per sending system) |
-| `PatientHospitalRegistration.registrationNumber` | `patient_hospital_registrations.registration_number` | No | Clinical roles + self | Internal hospital-scoped ID; not the MRN |
+| `PatientHospitalRegistration.mrn`  | `patient_hospital_registrations.mrn`     | No          | Clinical roles + self | Per-hospital MRN, single-system                        |
+| `EmpiIdentityAlias.aliasValue` (where `aliasType = MRN`) | `empi_identity_aliases.alias_value` | No | Clinical roles + self | EMPI cross-system MRN aliases (one row per sending system) |
+| `EmpiMasterIdentity.mrnSnapshot`   | `empi_master_identities.mrn_snapshot`    | No          | Clinical roles + self | Denormalised snapshot for fast EMPI lookup             |
+
+All three are **plaintext today** and are P0 remediation candidates for
+the encryption-extension work.
 
 ## §164.514(b)(2)(i)(I) — Health plan beneficiary numbers
 
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| `PatientInsurance.policyNumber`    | `patient_insurances.policy_number`       | Yes (gcm1)  | Finance + self        |                                                        |
-| `PatientInsurance.groupNumber`     | `patient_insurances.group_number`        | Yes (gcm1)  | Finance + self        |                                                        |
+| `PatientInsurance.policyNumber`    | `patient_insurances.policy_number`       | No          | Finance + self        | **Plaintext today.** P0 remediation candidate          |
+| `PatientInsurance.groupNumber`     | `patient_insurances.group_number`        | No          | Finance + self        | **Plaintext today.** P0 remediation candidate          |
 
 ## §164.514(b)(2)(i)(J) — Account numbers
 
@@ -149,9 +172,9 @@ itself — see §164.316(b)(2)(i) in the gap analysis.
 
 ## §164.514(b)(2)(i)(P) — Biometric identifiers
 
-| Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
-| ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| MFA TOTP secret                    | `users.totp_secret` (encrypted via `TotpSecretEncryptor`) | Yes (custom) | Self            | Not strictly a biometric, but listed for the auth-factor inventory |
+| Field                              | Persistence                                                              | At-rest enc | Roles with read | Notes                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------ | ----------- | --------------- | ------------------------------------------------------ |
+| MFA TOTP secret                    | `user_mfa_enrollments.totp_secret` (encrypted via `TotpSecretEncryptor`) | Yes (custom) | Self           | Not strictly a biometric, but listed for the auth-factor inventory |
 
 No fingerprint / face / iris / voice data is collected.
 
@@ -159,22 +182,28 @@ No fingerprint / face / iris / voice data is collected.
 
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
-| `Users.profileImageUrl`            | `users.profile_image_url`                | No          | Self + colleagues     | Workforce profile photos — stored as object-storage URLs |
-| `Patient.profileImageUrl`          | `patient.profile_image_url`              | No          | Clinical roles + self | Patient profile photos; stored as object-storage URLs  |
+| `User.profileImageUrl`             | `users.profile_image_url`                | No          | Self + colleagues     | Workforce profile photos — stored as object-storage URLs |
 | `PatientUploadedDocument.fileKey`  | `patient_uploaded_documents.file_key`    | No          | Clinical roles + self | May contain medical images / referral letters         |
 
-**Note:** the underlying file content sits on Railway-managed object
-storage (or the platform-equivalent). Object-storage encryption-at-rest
-is inherited from the platform. The file metadata (key, name, MIME
-type) lives in the relational DB; the file body does not.
+**Note:** `Patient` does not carry a profile-image column in this
+release; patient self-uploaded photos live in
+`patient_uploaded_documents`. The underlying file content sits on
+Railway-managed object storage (or the platform-equivalent).
+Object-storage encryption-at-rest is inherited from the platform. The
+file metadata (key, name, MIME type) lives in the relational DB; the
+file body does not.
 
 ## §164.514(b)(2)(i)(R) — Any other unique identifying number, characteristic, or code
+
+The `Patient` entity does **not** carry a dedicated
+`national_id_number` column today. Country-specific national
+identifiers are surfaced via the EMPI alias table (one row per
+alias type, keyed by `EmpiAliasType`):
 
 | Field                              | Persistence                              | At-rest enc | Roles with read       | Notes                                                  |
 | ---------------------------------- | ---------------------------------------- | ----------- | --------------------- | ------------------------------------------------------ |
 | `Patient.id` (UUID)                | `patient.id`                             | N/A         | Clinical roles + self | Re-identification is feasible if combined with names + DOB; per HIPAA, the UUID alone is a §164.514(b)(2)(i)(R) "other unique characteristic" |
-| `Patient.nationalIdNumber`         | `patient.national_id_number`             | Yes (gcm1)  | Clinical roles + self | Country-specific national identifier (e.g. Burkinabé CNIB) |
-| EMPI alias values (other than MRN) | `empi.empi_patient_aliases.alias_value`  | Yes (gcm1)  | Clinical roles + self | National ID + insurance-payer IDs                      |
+| `EmpiIdentityAlias.aliasValue` (where `aliasType` ∈ `{NATIONAL_ID, …}`) | `empi_identity_aliases.alias_value` | No | Clinical roles + self | **Plaintext today.** P0 remediation candidate (covers national IDs, payer IDs, foreign-system MRNs alongside the MRN entries surfaced under §164.514(b)(2)(i)(H)) |
 
 ---
 
@@ -202,17 +231,43 @@ follow; the schema reference is the canonical source of truth
 | `consent`                                                                            | PatientConsent records              | No (structural)               | Consent flags for marked records                       |
 | `clinical.patient_uploaded_documents`                                                | Patient-provided documents          | No (metadata)                 | File body on object storage; not in DB                 |
 
-**Encryption coverage strategy.** Columns containing the §164.514(b)(2)
-identifiers are AES-256-GCM-encrypted. Wide-coverage columns (vitals,
-encounter timestamps, ICD codes) are NOT encrypted because:
+**Encryption coverage today (audited against `@Convert(EncryptedStringConverter)`
+usages in the JPA model).** A grep of the entity layer
+(`hospital-core/src/main/java/com/example/hms/model/**/*.java`) shows
+`EncryptedStringConverter` applied to **14 columns** across 3 entities:
 
-1. They are typically queried in bulk (dashboards, BPA rules, KPI
-   aggregations) and column-level encryption would force a load-then-
-   decrypt round-trip per row.
-2. They are protected by per-row tenant scoping and role-based access
-   control — the threat model assumes attacker access to the DB requires
-   an exploit of either the application or the Railway control plane,
-   both of which are mitigated by the encryption-at-rest of identifiers.
+| Entity         | Encrypted columns                                                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `Patient`      | `address`, `address_line1`, `address_line2`, `emergency_contact_name`, `emergency_contact_phone`, `emergency_contact_relationship`, `allergies`, `medical_history_summary`, `care_team_notes`, `chronic_conditions` |
+| `Prescription` | 3 narrative columns (sig / instructions / notes)                                                                                    |
+| `Dispense`     | 1 narrative column                                                                                                                  |
+
+Plus the bespoke TOTP encryption on `user_mfa_enrollments.totp_secret`
+via `TotpSecretEncryptor` (separate converter, separate key derivation).
+
+**Gap vs HIPAA expectations.** The §164.514(b)(2)(i) identifier columns
+that a typical HIPAA-equivalent posture would encrypt-at-rest — names,
+phone numbers, email, city/state/zip, DOB-as-string, MRNs, national
+IDs, insurance policy / group numbers — are **plaintext today**. The
+threat model accepts this because:
+
+1. The columns are protected by per-row tenant scoping
+   (`TenantAwareJpaRepository`) and role-based access control
+   (`PermissionCatalog` + `@PreAuthorize`).
+2. Railway managed-Postgres provides transparent at-rest encryption on
+   the volume (platform-level AES). Field-level encryption is a defence
+   in depth on top of that.
+3. Wide-coverage columns (vitals, encounter timestamps, ICD codes) are
+   queried in bulk by dashboards and BPA rules; column-level encryption
+   would force a load-then-decrypt round-trip per row.
+
+The plaintext-identifier columns are **P0 remediation candidates** in
+[`hipaa-gap.md`](./hipaa-gap.md) — the encryption-extension work is
+scoped under §164.312(a)(2)(iv) (Encryption + Decryption). The current
+"Present" rating on that control reflects the existence of an
+operating field-level encryption mechanism on the narrative columns,
+not full coverage of the 18-identifier surface; that distinction is
+made explicit on the gap document's scorecard.
 
 The boundary is reviewed annually as part of the §164.308(a)(8)
 periodic evaluation cadence (currently a P1 item in

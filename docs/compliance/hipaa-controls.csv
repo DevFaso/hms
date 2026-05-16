@@ -29,7 +29,8 @@ ref,family,criterion,status,owner,priority,effort,evidence_or_action,target_clos
 164.312(a)(2)(i),Technical,Unique User Identification,present,Backend,—,—,Users.id UUID + Keycloak unique username,—
 164.312(a)(2)(ii),Technical,Emergency Access Procedure,present,Backend,—,—,Break-glass pattern with BREAK_GLASS_ACCESS audit event + super-admin recovery runbook,—
 164.312(a)(2)(iii),Technical,Automatic Logoff,partial,Backend,P1,S,Add absolute session max-age check (engineering),2026-12-31
-164.312(a)(2)(iv),Technical,Encryption + Decryption (at rest),present,Backend,—,—,AES-256-GCM via EncryptedStringConverter with versioned wire format,—
+164.312(a)(2)(iv),Technical,Encryption + Decryption (at rest),partial,Backend,P0,M,"AES-256-GCM operational on 14 narrative columns (Patient/Prescription/Dispense) + UserMfaEnrollment.totp_secret; identifier columns (names/phone/email/city/state/zip/MRN aliases/insurance numbers) plaintext today. Extend @Convert(EncryptedStringConverter) coverage.",2026-09-30
+164.312(a)(2)(iv),Technical,Encryption key management — rotation + crypto-shred runbook,gap,Platform,P1,S,Author docs/runbooks/key-rotation.md covering 12-month rotation + crypto-shred procedure (referenced from BAA template §4.4),2026-12-31
 164.312(b),Technical,Audit Controls,present,Backend,—,—,AuditEventLog + 80+ event types + Splunk HEC + CrossTenantReadAudit,—
 164.312(c)(2),Technical,Integrity — authenticate ePHI,present,Backend,—,—,DB constraints + JPA @Version optimistic locking + Liquibase versioning,—
 164.312(d),Technical,Person or Entity Authentication,present,Backend,—,—,Keycloak OIDC + per-role MFA + RS256 signing (Phase 6),—
