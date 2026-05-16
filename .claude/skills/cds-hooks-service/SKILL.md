@@ -87,15 +87,59 @@ keyed on `rxnorm_code` with a partial index (see V93).
 
 ## Discovery + tests
 
-The discovery endpoint must validate against Cerner + Epic CDS Hooks
-sandboxes — this is roadmap row 27. When adding a new service:
+Row 27 foundation pass (`feat/v1.1-cds-hooks-public-discovery`) hardens
+the public discovery endpoint for Cerner / Epic / SMART App Launcher
+sandbox compatibility. The discovery endpoint itself was already
+public (per the spec); the row-27 work was about machine-validateable
+shape + CORS allowlist + prefetch templates.
+
+### Sandbox CORS allowlist
+
+`SecurityConfig` honors three groups of origins on `/**`:
+
+1. Local dev defaults (`http://localhost:*`, `https://*.bitnesttechs.com`).
+2. `APP_CORS_ALLOWED_ORIGINS` (comma-separated, operator-supplied).
+3. **CDS Hooks sandbox origins**: gated by
+   `app.cors.cds-hooks-sandbox.enabled=true` (default), supplied via
+   `app.cors.cds-hooks-sandbox.origins`. Defaults cover:
+   `https://fhir.epic.com`, `https://*.epic.com`,
+   `https://fhir-ehr-code.cerner.com`, `https://sandbox.cerner.com`,
+   `https://*.cerner.com`, `https://launcher.smarthealthit.org`,
+   `https://*.smarthealthit.org`.
+
+Set `APP_CORS_CDS_HOOKS_SANDBOX_ENABLED=false` for closed-network
+deployments. Sandbox origins do not carry PHI.
+
+### Prefetch templates
+
+The two `patient-view` services declare prefetch templates so partner
+EHRs pre-resolve the FHIR queries and ship the bundles inline:
+
+- `PatientViewCdsService`: `patient`, `allergies` (active),
+  `problems` (active).
+- `BpaProtocolsCdsService`: `patient`, `vitals` (last 20 sorted
+  desc), `problems` (active), `medications` (active).
+
+The four CDS services on `order-sign` / `order-select` /
+`medication-prescribe` hooks intentionally declare **no** prefetch —
+those services receive the resources to act on directly in the
+hook context.
+
+### When adding a new service
 
 1. Register descriptor with a stable `id` (kebab-case, prefix `hms-`).
-2. Add unit tests for empty-chart + at-least-one-card + critical-card
+2. If the hook is `patient-view` and the service reads patient data,
+   declare prefetch templates so Cerner/Epic can pre-resolve.
+3. Add unit tests for empty-chart + at-least-one-card + critical-card
    paths.
-3. Test the rendered card detail contains the expected typed annotations.
-4. If the service depends on a code-lookup helper, add a defence-in-depth
-   test that every seed entry passes the global regex.
+4. Test the rendered card detail contains the expected typed
+   annotations.
+5. If the service depends on a code-lookup helper, add a defence-in-
+   depth test that every seed entry passes the global regex.
+6. The `CdsHooksDiscoveryIT.registeredServicesMatchExpectedInventory`
+   assertion is **load-bearing** — removing or renaming a registered
+   service must fail this test before it fails the downstream EHR
+   integration.
 
 ## Reference files
 
@@ -110,3 +154,6 @@ sandboxes — this is roadmap row 27. When adding a new service:
 - `hospital-core/src/main/java/com/example/hms/cdshooks/terminology/ProblemLoincBindings.java`
 - `hospital-core/src/main/java/com/example/hms/cdshooks/terminology/RxNormCodingExtractor.java`
 - `hospital-core/src/main/java/com/example/hms/terminology/TerminologyCodes.java`
+- `hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java` — CDS Hooks sandbox CORS allowlist
+- `hospital-core/src/test/java/com/example/hms/cdshooks/CdsHooksDiscoveryIT.java` — five-case discovery contract
+- `docs/runbooks/cds-hooks-sandbox-validation.md` — sandbox validation playbook

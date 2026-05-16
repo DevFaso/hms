@@ -126,4 +126,5 @@ Before opening a PR with a new migration:
 - `hospital-core/src/main/resources/db/migration/V98__lab_result_source_message_control_id.sql` — clean reference
 - `hospital-core/src/main/resources/db/migration/V99__adt_external_visit_reconciliation.sql`
 - `hospital-core/src/main/resources/db/migration/V100__patient_problem_loinc_binding.sql`
+- `hospital-core/src/main/resources/db/migration/V101__fhir_write_patient_idempotency.sql` — partial unique idx for FHIR conditional-create (row 20)
 - `hospital-core/src/main/resources/db/migration/V93__cds_rxnorm_bindings.sql` — DO-block pattern for CHECK constraint

@@ -92,6 +92,23 @@ For raw `@Query` JPQL/native queries, you have two options:
 Never write a query that returns clinical rows across hospitals without
 an explicit unscoped-justification comment and an audit emission.
 
+## Aggregate / dashboard queries
+
+For aggregate rollups that never expose patient-level rows (e.g. the
+row-32 KPI dashboard — `KpiDashboardServiceImpl`), the contract is:
+
+1. Read `HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`
+   inside the service. **Don't** thread `hospitalId` through the
+   controller signature — the dashboard is an implicit-context
+   endpoint by design.
+2. When `activeHospitalId` is `null` (super-admin without an explicit
+   hospital pin), return an empty rollup with sample-sizes at zero.
+   Don't compute cross-tenant aggregates by default — that would
+   silently expand the data surface.
+3. The aggregate output (counts, averages, ratios) is exempt from the
+   `PATIENT_ACCESS` audit emission requirement because no patient-
+   level row escapes the service. Standard request logging applies.
+
 ## Reference files
 
 - `hospital-core/src/main/java/com/example/hms/security/context/HospitalContext.java`

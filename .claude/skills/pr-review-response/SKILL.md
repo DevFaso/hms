@@ -182,5 +182,18 @@ version in the tag reflects the actual model used.
 - `feat/v1.1-adt-admission-encounter-sync` — foundation-pass + Copilot
   fix commit + a CI-failure repair commit.
 - `feat/v2.0-hipaa-posture` — docs-only foundation pass + Copilot fix.
+- `feat/v1.1-fhir-write-api` — Patient PUT + conditional POST
+  foundation; Encounter + Observation explicitly deferred in the
+  cell text (row 20).
+- `feat/v1.1-cds-hooks-public-discovery` — sandbox CORS allowlist +
+  prefetch templates + five-case discovery IT (row 27).
+- `feat/v2.0-synthetic-monitoring` — Blackbox-exporter + alert rules
+  + runbook; multi-geo rollout explicitly deferred in the cell text
+  (row 43).
+- `feat/v1.1-kpi-dashboard-service` — KpiDashboardService + Controller
+  + Angular sub-component shell; materialized-view conversion
+  explicitly deferred (row 32).
 - `chore/roadmap-sync-post-overnight` — batched roadmap sync after
   multiple merges.
+- `chore/skills-update-post-4-picks` — repo-wide skills file refresh
+  after four feature foundation passes (this branch's commit).
