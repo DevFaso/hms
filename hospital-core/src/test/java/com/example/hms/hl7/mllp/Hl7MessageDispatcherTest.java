@@ -1,9 +1,12 @@
 package com.example.hms.hl7.mllp;
 
+import com.example.hms.enums.integration.IntegrationMessageDirection;
+import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,7 +21,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
@@ -30,11 +35,12 @@ class Hl7MessageDispatcherTest {
     @Mock private MllpAllowedSenderService allowlist;
     @Mock private MllpInboundLabService inboundLab;
     @Mock private MllpInboundAdtService inboundAdt;
+    @Mock private IntegrationMessageRecorder messageRecorder;
 
     // The dispatcher is constructed manually rather than via @InjectMocks
     // because we want to inject the real Hl7v2MessageBuilder (its parsing
     // logic is covered by its own unit tests) alongside Mockito mocks for
-    // the three other collaborators.
+    // the other collaborators.
     private Hl7MessageDispatcher dispatcher;
 
     private Hospital hospital;
@@ -45,7 +51,8 @@ class Hl7MessageDispatcherTest {
             new Hl7v2MessageBuilder(),
             allowlist,
             inboundLab,
-            inboundAdt
+            inboundAdt,
+            messageRecorder
         );
 
         hospital = new Hospital();
@@ -78,7 +85,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void acceptedOruR01EmitsAa() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-42|P|2.5.1\r"
@@ -89,14 +96,15 @@ class Hl7MessageDispatcherTest {
         String ack = dispatcher.dispatch(oru, "10.0.0.42:54321");
 
         assertThat(ack).contains("MSA|AA|MSG-42");
-        verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"));
+        verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"),
+            eq("MSG-42"), anyString());
         verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString());
     }
 
     @Test
     void mapsLabRejectedNotFoundToAe() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-7|P|2.5.1\r"
@@ -112,7 +120,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void mapsLabRejectedCrossTenantToAr() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
@@ -148,7 +156,8 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(adt, "10.0.0.50:1024")).contains("MSA|AA|CTRL-9");
         verify(inboundAdt).processAdt(any(), eq(hospital), eq("REGISTRATION"), eq("HOSP1"));
-        verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString());
+        verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString(),
+            any(), anyString());
     }
 
     @Test
@@ -192,5 +201,103 @@ class Hl7MessageDispatcherTest {
             .contains("MSA|AR|")
             .contains("Invalid MSH");
         verifyNoInteractions(allowlist, inboundLab, inboundAdt);
+    }
+
+    // ── Pre-service reject paths must reach the recorder ─────────────
+    // Before this PR the IntegrationMessageRecorder was only called
+    // from inside MllpInboundLabService, so dispatcher-level rejects
+    // (invalid MSH, allowlist miss, unparseable ORU, unsupported type,
+    // unparseable ADT) never appeared in the DLQ/replay surface.
+    // These four assertions lock that contract in place.
+
+    @Test
+    void recorderInvokedOnInvalidMshReject() {
+        String bad = "GARBAGE|||";
+        dispatcher.dispatch(bad, "10.0.0.99:1");
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:?/?"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("UNKNOWN"),
+            eq(bad),
+            eq(IntegrationMessageStatus.FAILED),
+            contains("Invalid MSH"));
+    }
+
+    @Test
+    void recorderInvokedOnAllowlistReject() {
+        when(allowlist.resolveHospital(anyString(), anyString())).thenReturn(Optional.empty());
+        String oru = "MSH|^~\\&|ROGUE|UNKNOWN|HMS|HOSP1|20260428073000||ORU^R01|MSG-42|P|2.5.1\r"
+                   + "PID|1||abc\rOBR|1|ACC-1||GLU|||20260428073000\r"
+                   + "OBX|1|NM|GLU||5.6|mmol/L|||N\r";
+        dispatcher.dispatch(oru, "10.0.0.1:1");
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:ROGUE/UNKNOWN"), isNull(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ORU^R01"),
+            eq(oru),
+            eq(IntegrationMessageStatus.FAILED),
+            contains("not allowlisted"));
+    }
+
+    @Test
+    void recorderInvokedOnUnparseableOru() {
+        allowSender();
+        String malformedOru = "MSH|^~\\&|S|F|HMS|HOSP|20260428||ORU^R01|MSG-9|P|2.5\r"
+                            + "PID|1||p\r";
+        dispatcher.dispatch(malformedOru, "10.0.0.10:1");
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:S/F"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ORU^R01"),
+            eq(malformedOru),
+            eq(IntegrationMessageStatus.FAILED),
+            contains("unparseable"));
+    }
+
+    @Test
+    void recorderInvokedOnUnsupportedMessageType() {
+        allowSender();
+        String unknown = "MSH|^~\\&|X|Y|HMS|HOSP1|20260428073000||ZZZ^Z99|C-1|P|2.5\r";
+        dispatcher.dispatch(unknown, "10.0.0.51:1");
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:X/Y"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ZZZ^Z99"),
+            eq(unknown),
+            eq(IntegrationMessageStatus.FAILED),
+            contains("unsupported message type"));
+    }
+
+    @Test
+    void recorderInvokedOnUnparseableAdt() {
+        allowSender();
+        String adtNoPid = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A01|CTRL-X|P|2.5\r";
+        dispatcher.dispatch(adtNoPid, "10.0.0.51:1");
+        verify(messageRecorder).recordMessage(
+            eq("MLLP:REGISTRATION/HOSP1"), any(),
+            eq(IntegrationMessageDirection.INBOUND),
+            eq("ADT^A01"),
+            eq(adtNoPid),
+            eq(IntegrationMessageStatus.FAILED),
+            contains("unparseable"));
+    }
+
+    @Test
+    void recorderNotInvokedOnAcceptedOru_serviceOwnsThatRecord() {
+        allowSender();
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(),
+                any(), anyString()))
+            .thenReturn(MllpInboundOutcome.ACCEPTED);
+
+        String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-OK|P|2.5.1\r"
+                   + "PID|1||p\r"
+                   + "OBR|1|ACC-1||GLU||20260428073000\r"
+                   + "OBX|1|NM|GLU||5.6|mmol/L|||N\r";
+        dispatcher.dispatch(oru, "10.0.0.1:1");
+
+        // The accepted path's record is the service's responsibility —
+        // recording at both layers would double-count successful
+        // ingestions in the DLQ surface.
+        verifyNoInteractions(messageRecorder);
     }
 }

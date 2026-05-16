@@ -1,9 +1,12 @@
 package com.example.hms.hl7.mllp;
 
+import com.example.hms.enums.integration.IntegrationMessageDirection;
+import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
+import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
 import com.example.hms.utility.Hl7v2MessageBuilder;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
@@ -14,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Routes an inbound HL7 v2 message to the right domain handler and
@@ -51,15 +55,18 @@ public class Hl7MessageDispatcher {
     private final MllpAllowedSenderService allowlist;
     private final MllpInboundLabService inboundLab;
     private final MllpInboundAdtService inboundAdt;
+    private final IntegrationMessageRecorder messageRecorder;
 
     public Hl7MessageDispatcher(Hl7v2MessageBuilder messageBuilder,
                                 MllpAllowedSenderService allowlist,
                                 MllpInboundLabService inboundLab,
-                                MllpInboundAdtService inboundAdt) {
+                                MllpInboundAdtService inboundAdt,
+                                IntegrationMessageRecorder messageRecorder) {
         this.messageBuilder = messageBuilder;
         this.allowlist = allowlist;
         this.inboundLab = inboundLab;
         this.inboundAdt = inboundAdt;
+        this.messageRecorder = messageRecorder;
     }
 
     public String dispatch(String hl7Body, String remoteAddress) {
@@ -68,6 +75,11 @@ public class Hl7MessageDispatcher {
             header = Hl7MessageInspector.parseHeader(hl7Body);
         } catch (MllpProtocolException ex) {
             log.warn("[MLLP {}] Rejecting message — invalid MSH: {}", remoteAddress, ex.getMessage());
+            // No parsed header — record under a sentinel integration id
+            // so the DLQ surface still shows the failure. The fallback
+            // header is what we send back as the ACK envelope.
+            recordReject("MLLP:?/?", null, "UNKNOWN", hl7Body,
+                "Invalid MSH: " + ex.getMessage());
             Hl7MessageHeader fallback = new Hl7MessageHeader(
                 "|", "^~\\&", "?", "?", "HMS", "HMS", "", "ACK", "?", "P", "2.5"
             );
@@ -82,6 +94,10 @@ public class Hl7MessageDispatcher {
             log.warn("[MLLP {}] AR — sender {}/{} not allowlisted (msgType={})",
                 remoteAddress, header.sendingApplication(), header.sendingFacility(),
                 header.messageType());
+            recordReject(integrationIdFor(header), null,
+                header.messageType(), hl7Body,
+                "sender " + header.sendingApplication() + "/" + header.sendingFacility()
+                    + " not allowlisted");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
                 "Sender not authorised");
         }
@@ -99,6 +115,9 @@ public class Hl7MessageDispatcher {
         log.warn("[MLLP {}] Unsupported message type {} from {}/{}",
             remoteAddress, header.messageType(),
             header.sendingApplication(), header.sendingFacility());
+        recordReject(integrationIdFor(header), organizationIdOf(hospital.get()),
+            header.messageType(), hl7Body,
+            "unsupported message type " + header.messageType());
         return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AR,
             "Unsupported message type " + header.messageType());
     }
@@ -109,11 +128,19 @@ public class Hl7MessageDispatcher {
         if (obs == null) {
             log.warn("[MLLP {}] ORU^R01 from {}/{} unparseable",
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
+            // Service was never invoked, so record here. The successful
+            // and post-service-reject paths are recorded inside the
+            // service itself so the integration row carries the
+            // domain-level error message.
+            recordReject(integrationIdFor(header), organizationIdOf(hospital),
+                "ORU^R01", hl7Body,
+                "unparseable ORU^R01 OBX segment");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable ORU^R01 OBX segment");
         }
         MllpInboundOutcome outcome = inboundLab.processOruR01(
-            obs, hospital, header.sendingApplication(), header.sendingFacility());
+            obs, hospital, header.sendingApplication(), header.sendingFacility(),
+            header.messageControlId(), hl7Body);
         return ackForOutcome(header, outcome, "ORU^R01");
     }
 
@@ -124,12 +151,52 @@ public class Hl7MessageDispatcher {
             log.warn("[MLLP {}] {} from {}/{} unparseable (missing PID-3 / segments)",
                 remoteAddress, header.messageType(),
                 header.sendingApplication(), header.sendingFacility());
+            recordReject(integrationIdFor(header), organizationIdOf(hospital),
+                header.messageType(), hl7Body,
+                "unparseable " + header.messageType() + " — missing PID-3 or required segments");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
             parsed, hospital, header.sendingApplication(), header.sendingFacility());
         return ackForOutcome(header, outcome, header.messageType());
+    }
+
+    /**
+     * Best-effort FAILED record for a pre-service reject. The recorder
+     * itself runs in REQUIRES_NEW and swallows its own exceptions; the
+     * extra try-catch here is belt-and-braces so a recorder bean
+     * failure can never poison the ACK we send back.
+     */
+    private void recordReject(String integrationId, UUID organizationId,
+                              String messageType, String rawBody, String reason) {
+        try {
+            messageRecorder.recordMessage(
+                integrationId, organizationId,
+                IntegrationMessageDirection.INBOUND,
+                messageType == null ? "UNKNOWN" : messageType,
+                rawBody,
+                IntegrationMessageStatus.FAILED,
+                reason);
+        } catch (RuntimeException ex) {
+            log.warn("Dispatcher recorder threw for integration={} type={} reason={}",
+                integrationId, messageType, reason, ex);
+        }
+    }
+
+    private static String integrationIdFor(Hl7MessageHeader header) {
+        String app = header.sendingApplication() == null || header.sendingApplication().isBlank()
+            ? "?" : header.sendingApplication();
+        String fac = header.sendingFacility() == null || header.sendingFacility().isBlank()
+            ? "?" : header.sendingFacility();
+        return "MLLP:" + app + "/" + fac;
+    }
+
+    private static UUID organizationIdOf(Hospital hospital) {
+        if (hospital == null || hospital.getOrganization() == null) {
+            return null;
+        }
+        return hospital.getOrganization().getId();
     }
 
     private String ackForOutcome(Hl7MessageHeader header, MllpInboundOutcome outcome, String label) {
