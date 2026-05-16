@@ -67,12 +67,6 @@ cd "$REPO_ROOT"
 REALM_EXPORT="keycloak/realm-export.json"
 [[ -f "$REALM_EXPORT" ]] || { echo "ERROR: $REALM_EXPORT not found at repo root" >&2; exit 2; }
 
-# Per-run temp file for the PUT response body. Unique path prevents clobber
-# across concurrent runs; trap guarantees cleanup on any exit path (success,
-# error, signal). mktemp is in coreutils so it's everywhere bash + jq are.
-PUT_BODY_FILE="$(mktemp -t fix-hms-portal-uris.body.XXXXXX)"
-trap 'rm -f "$PUT_BODY_FILE"' EXIT INT TERM
-
 case "$ENV_FILTER" in
   dev)  HOST="https://hms-keycloak-dev-dev.up.railway.app" ;;
   uat)  HOST="https://hms-keycloak-uat-uat.up.railway.app" ;;
@@ -190,11 +184,6 @@ if [[ "$DRY_RUN" == "true" ]]; then
 fi
 
 # ─── Apply ───────────────────────────────────────────────────────────────────
-# Use mktemp so concurrent runs don't clobber each other's response body.
-# Trap ensures the temp file is removed on any exit path.
-PUT_BODY_FILE=$(mktemp -t fix-hms-portal-uris.XXXXXX.body)
-trap 'rm -f "$PUT_BODY_FILE"' EXIT
-
 echo "Applying PUT to /admin/realms/hms/clients/${CLIENT_UUID} ..."
 PUT_STATUS=$(printf '%s' "$NEW_OBJ" | curl -sS -X PUT \
   --connect-timeout 10 --max-time 30 \
