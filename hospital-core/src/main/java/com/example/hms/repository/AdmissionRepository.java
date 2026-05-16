@@ -154,4 +154,18 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
      */
     @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByHospitalIdAndRoomBedContainingIgnoreCaseOrderByRoomBed(UUID hospitalId, String roomBedSearch);
+
+    /**
+     * Look up an admission by the HL7 v2 reconciliation key
+     * (MSH-3, MSH-4, PV1-19, hospital). Backed by the partial
+     * unique index {@code uk_admission_external_visit} added in V99.
+     * Used by the ADT visit-sync projection to apply A08 updates to
+     * the right Admission row without scanning by patient.
+     */
+    Optional<Admission> findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+        String externalSendingApplication,
+        String externalSendingFacility,
+        String externalVisitNumber,
+        UUID hospitalId
+    );
 }

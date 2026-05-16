@@ -8,6 +8,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.MllpInboundAdtService;
+import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 
@@ -27,6 +28,7 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
     private final EmpiService empiService;
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final MllpInboundAdtVisitProjectionService visitProjection;
 
     @Override
     @Transactional
@@ -34,6 +36,16 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                                          Hospital receivingHospital,
                                          String sendingApplication,
                                          String sendingFacility) {
+        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility, null);
+    }
+
+    @Override
+    @Transactional
+    public MllpInboundOutcome processAdt(ParsedAdtMessage parsed,
+                                         Hospital receivingHospital,
+                                         String sendingApplication,
+                                         String sendingFacility,
+                                         String messageControlId) {
         if (parsed == null || !StringUtils.hasText(parsed.mrn())) {
             log.warn("MLLP ADT rejected — missing PID-3 MRN (sender={}/{} hospital={})",
                 sendingApplication, sendingFacility,
@@ -98,6 +110,30 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 patient.getId(), mrn, parsed.triggerEvent(),
                 sendingApplication, sendingFacility, receivingHospital.getId());
         }
+
+        // Visit-sync projection runs AFTER the demographic write but
+        // BEFORE the outer @Transactional commits. The projection
+        // implementation uses REQUIRES_NEW and swallows its own
+        // failures so it can never roll back the demographic write —
+        // see the conflict-resolution runbook for the precedence
+        // rationale. Guarded here as belt-and-braces in case the
+        // projection bean throws before reaching its own
+        // try/transaction boundary.
+        try {
+            visitProjection.projectVisit(
+                parsed, patient, receivingHospital,
+                sendingApplication, sendingFacility, messageControlId);
+        } catch (RuntimeException ex) {
+            // Note: at this point demographics have been WRITTEN to
+            // the JDBC connection but the outer @Transactional commit
+            // happens after this method returns. The ACK we send back
+            // reflects that the outer transaction is expected to
+            // commit — the projection failure does not block that.
+            log.warn("ADT visit-sync projection threw for patient={} hospital={} event={} sender={}/{} — demographics already written; ACK will still be sent",
+                patient.getId(), receivingHospital.getId(), parsed.triggerEvent(),
+                sendingApplication, sendingFacility, ex);
+        }
+
         return MllpInboundOutcome.ACCEPTED;
     }
 
