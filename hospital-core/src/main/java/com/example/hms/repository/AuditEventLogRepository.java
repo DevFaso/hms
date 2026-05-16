@@ -56,6 +56,25 @@ public interface AuditEventLogRepository
     @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a GROUP BY a.eventType")
     List<Object[]> countByEventType();
 
+    /**
+     * Per-hospital audit-event count over a date window. Roadmap row 44
+     * (per-tenant cost observability) foundation pass. Grouped by the
+     * denormalized {@code hospitalName} snapshot so the rollup can
+     * render without joining hospital.hospitals back in. Rows whose
+     * snapshot is null (SYSTEM-actor writes with no hospital
+     * assignment) are excluded — those belong to a separate
+     * platform-shared bucket the row-44 follow-on will surface.
+     */
+    @Query("SELECT a.hospitalName AS hospitalName, COUNT(a) AS cnt "
+           + "FROM AuditEventLog a "
+           + "WHERE a.hospitalName IS NOT NULL "
+           + "AND a.eventTimestamp >= :from "
+           + "AND a.eventTimestamp <= :to "
+           + "GROUP BY a.hospitalName "
+           + "ORDER BY a.hospitalName ASC")
+    List<Object[]> countByHospitalBetween(@Param("from") LocalDateTime from,
+                                          @Param("to") LocalDateTime to);
+
     /** Hospital-scoped audit events, ordered by timestamp descending. */
     Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
 
