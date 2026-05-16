@@ -333,9 +333,15 @@ prompt_admin_token() {
   # (this script, KC-4 migration) create a short-lived migration-admin in
   # the master realm without OTP and retire it after the run.
   local env="$1" host="$2" admin_user admin_pass token
+  # Prompts are written via `read -rp/-rsp` to stderr by bash, which is
+  # invisible to `token=$(prompt_admin_token …)` callers. The trailing
+  # `echo >&2` after the password read continues that pattern — using a
+  # bare `echo` would emit a newline to STDOUT, get captured into $token,
+  # and produce a header like `Authorization: Bearer \n<jwt>` that Vert.x
+  # rejects with a plain-text "400 Bad Request".
   read -rp "[${env}] admin username (Enter to skip --full for this env): " admin_user
   [[ -z "$admin_user" ]] && return 1
-  read -rsp "[${env}] password for ${admin_user}: " admin_pass; echo
+  read -rsp "[${env}] password for ${admin_user}: " admin_pass; echo >&2
 
   token=$(printf '%s' "$admin_pass" | curl -fsSL --max-time 10 -X POST \
     "${host}/realms/master/protocol/openid-connect/token" \

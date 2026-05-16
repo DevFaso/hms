@@ -166,8 +166,12 @@ NEW_OBJ=$(printf '%s' "$LIVE_OBJ" | jq \
 ')
 
 # ─── Diff ────────────────────────────────────────────────────────────────────
-LIVE_TRIPLE=$(printf '%s' "$LIVE_OBJ" | jq -S '{redirectUris, webOrigins, postLogout: .attributes["post.logout.redirect.uris"]}')
-NEW_TRIPLE=$(printf '%s' "$NEW_OBJ"  | jq -S '{redirectUris, webOrigins, postLogout: .attributes["post.logout.redirect.uris"]}')
+# Sort the URI arrays before comparison — Keycloak stores them as sets and
+# returns them in arbitrary order, so a strict list comparison would never
+# match even after a successful PUT. `jq -S` sorts object keys, not array
+# values, so the array sort has to be explicit.
+LIVE_TRIPLE=$(printf '%s' "$LIVE_OBJ" | jq -S '{redirectUris: (.redirectUris | sort), webOrigins: (.webOrigins | sort), postLogout: .attributes["post.logout.redirect.uris"]}')
+NEW_TRIPLE=$(printf '%s' "$NEW_OBJ"  | jq -S '{redirectUris: (.redirectUris | sort), webOrigins: (.webOrigins | sort), postLogout: .attributes["post.logout.redirect.uris"]}')
 
 if [[ "$LIVE_TRIPLE" == "$NEW_TRIPLE" ]]; then
   echo "  ✓ live hms-portal already matches realm-export.json — no change needed"
@@ -212,7 +216,7 @@ echo "  ✓ PUT 204"
 sleep 1
 VERIFY_OBJ=$(curl -sS -H "Authorization: Bearer $TOKEN" \
   "${HOST}/admin/realms/hms/clients?clientId=hms-portal" | jq '.[0]')
-VERIFY_TRIPLE=$(printf '%s' "$VERIFY_OBJ" | jq -S '{redirectUris, webOrigins, postLogout: .attributes["post.logout.redirect.uris"]}')
+VERIFY_TRIPLE=$(printf '%s' "$VERIFY_OBJ" | jq -S '{redirectUris: (.redirectUris | sort), webOrigins: (.webOrigins | sort), postLogout: .attributes["post.logout.redirect.uris"]}')
 
 if [[ "$VERIFY_TRIPLE" == "$NEW_TRIPLE" ]]; then
   echo "  ✓ verified: live hms-portal now matches realm-export.json"
