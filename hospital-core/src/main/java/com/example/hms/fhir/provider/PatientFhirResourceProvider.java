@@ -13,6 +13,7 @@ import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
@@ -147,6 +148,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @IdParam IdType id,
         @ResourceParam org.hl7.fhir.r4.model.Patient resource
     ) {
+        // Flag-first ordering (PR #343 Copilot review): when the write
+        // API is disabled, return 405 BEFORE any request-shape
+        // validation runs. Without this, flag-off requests with a
+        // mismatched body id would return 422 — contradicting the
+        // documented flag-off contract.
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
         UUID uuid = parseUuid(id);
         if (resource == null) {
             throw unprocessable(
@@ -179,6 +190,13 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @ResourceParam org.hl7.fhir.r4.model.Patient resource,
         @ConditionalUrlParam String conditionalUrl
     ) {
+        // Flag-first ordering: mirror the @Update fix. PR #343 Copilot
+        // review noted the same gap on @Create.
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
         if (resource == null) {
             throw unprocessable(
                 "POST /Patient requires a Patient resource body.",
