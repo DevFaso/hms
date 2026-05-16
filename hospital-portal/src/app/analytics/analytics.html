@@ -19,6 +19,9 @@
   }
 
   @if (!loading() && analytics()) {
+    <!-- Operational KPIs (row 32) -->
+    <app-kpi-cards></app-kpi-cards>
+
     <!-- Stat Cards -->
     <div class="stat-grid">
       @for (card of statCards(); track card.label) {

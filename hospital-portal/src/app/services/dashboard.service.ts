@@ -485,6 +485,34 @@ export interface QualityManagerDashboard {
   ordersToday: number;
 }
 
+/* ── KPI Dashboard DTOs (roadmap row 32) ── */
+
+export interface KpiDashboard {
+  hospitalId?: string;
+  from: string;
+  to: string;
+  doorToDoctor: KpiDoorToDoctor;
+  dispenseLeadTime: KpiDispenseLeadTime;
+  noShowRate: KpiNoShowRate;
+}
+
+export interface KpiDoorToDoctor {
+  sampleSize: number;
+  averageMinutes?: number;
+  medianMinutesEstimate?: number;
+}
+
+export interface KpiDispenseLeadTime {
+  sampleSize: number;
+  averageMinutes?: number;
+}
+
+export interface KpiNoShowRate {
+  totalAppointments: number;
+  noShowCount: number;
+  rate?: number;
+}
+
 /* ── Platform Analytics DTOs ── */
 
 export interface PlatformAnalytics {
@@ -710,6 +738,19 @@ export class DashboardService {
     return this.http
       .get<PlatformAnalytics>('/api/super-admin/analytics', { params })
       .pipe(catchError(() => of({} as PlatformAnalytics)));
+  }
+
+  /* ── Operational KPI dashboard (row 32) ── */
+
+  /**
+   * Door-to-doctor + dispense lead time + no-show rate for the current
+   * hospital context (resolved server-side from the JWT
+   * `hospital_id` claim). Returns an empty rollup when the caller has
+   * no active hospital pin (e.g. raw SUPER_ADMIN session).
+   */
+  getKpiDashboard(from: string, to: string): Observable<KpiDashboard> {
+    const params = new HttpParams().set('from', from).set('to', to);
+    return this.http.get<KpiDashboard>('/api/kpi/dashboard', { params });
   }
 
   /* ── Hospital Admin Summary ── */

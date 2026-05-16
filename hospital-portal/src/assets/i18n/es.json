@@ -820,7 +820,14 @@
     "PATIENTS": "Pacientes",
     "STAFF": "Personal",
     "SUBTITLE": "Métricas de rendimiento hospitalario",
-    "TITLE": "Analítica"
+    "TITLE": "Analítica",
+    "KPI": {
+      "SECTION_HEADING": "Indicadores operativos",
+      "LOADING": "Cargando indicadores…",
+      "DOOR_TO_DOCTOR_LABEL": "Tiempo recepción-médico",
+      "DISPENSE_LEAD_TIME_LABEL": "Tiempo de dispensación",
+      "NO_SHOW_RATE_LABEL": "Tasa de inasistencia"
+    }
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Crear",
