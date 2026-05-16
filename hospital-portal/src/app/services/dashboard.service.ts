@@ -750,9 +750,7 @@ export class DashboardService {
    */
   getKpiDashboard(from: string, to: string): Observable<KpiDashboard> {
     const params = new HttpParams().set('from', from).set('to', to);
-    return this.http
-      .get<KpiDashboard>('/api/kpi/dashboard', { params })
-      .pipe(catchError(() => of({} as KpiDashboard)));
+    return this.http.get<KpiDashboard>('/api/kpi/dashboard', { params });
   }
 
   /* ── Hospital Admin Summary ── */

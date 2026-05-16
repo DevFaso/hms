@@ -49,7 +49,12 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
         }
 
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        UUID hospitalId = ctx.getActiveHospitalId();
+        // For super-admins the JWT-derived primary hospital is global context, not
+        // a scoped view. Only an explicit X-Hospital-Id header (headerOverridden=true)
+        // establishes a pinned hospital scope. Without the pin, return an empty rollup.
+        UUID hospitalId = (ctx.isSuperAdmin() && !ctx.isHeaderOverridden())
+            ? null
+            : ctx.getActiveHospitalId();
         if (hospitalId == null) {
             // Super-admin without an explicit hospital pin: return an
             // empty rollup. The dashboard must be opened inside a

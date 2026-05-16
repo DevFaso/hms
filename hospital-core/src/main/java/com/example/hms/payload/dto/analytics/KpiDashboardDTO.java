@@ -16,8 +16,8 @@ import java.util.UUID;
  *       and triage column set;</li>
  *   <li>dispense lead time — average minutes between a prescription's
  *       creation and its first dispense event;</li>
- *   <li>no-show rate — fraction of completed appointments whose
- *       status is {@code NO_SHOW}.</li>
+ *   <li>no-show rate — fraction of appointments in the requested
+ *       window whose status is {@code NO_SHOW}.</li>
  * </ul>
  *
  * <p>All three KPIs are tenant-scoped via

@@ -80,10 +80,13 @@ The follow-on PR converts each `computeX` method to point at a `mv_<kpi>` materi
 
 ```powershell
 # Authenticate as a hospital-admin user (assumes a local seed user).
+# Read the password from your local secret store or environment variable —
+# do not commit credentials in plain text.
+$creds = ConvertFrom-Json $Env:HMS_LOCAL_CREDS  # or: Read-Host -AsSecureString
 $token = Invoke-RestMethod -Method POST `
     -Uri 'http://localhost:8080/api/auth/login' `
     -ContentType 'application/json' `
-    -Body '{"username":"hospital.admin","password":"hospital.admin"}' `
+    -Body "{`"username`":`"$($creds.username)`",`"password`":`"$($creds.password)`"}" `
   | Select-Object -ExpandProperty data | Select-Object -ExpandProperty accessToken
 
 # Fetch the 30-day rollup.
@@ -94,7 +97,7 @@ Invoke-RestMethod `
     -Headers @{ Authorization = "Bearer $token" } | ConvertTo-Json -Depth 5
 ```
 
-A fresh database with no encounters / prescriptions / appointments returns `sampleSize: 0` on each KPI and `rate: null` on no-show. That's the expected idle-state — the frontend renders em-dashes ("—") in the cards.
+A fresh database with no encounters / prescriptions / appointments returns `sampleSize: 0` on each KPI, and the no-show `rate` field is omitted (not returned as `null`) because the DTO uses `@JsonInclude(NON_NULL)`. That's the expected idle-state — the frontend renders em-dashes ("—") in the cards.
 
 ---
 

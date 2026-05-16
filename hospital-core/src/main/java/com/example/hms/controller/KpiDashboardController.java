@@ -53,9 +53,9 @@ public class KpiDashboardController {
         if (to.isBefore(from)) {
             return ResponseEntity.badRequest().build();
         }
-        if (from.plusDays(MAX_WINDOW_DAYS).isBefore(to)) {
-            // Cap at 180 days. Larger ranges go through the analytics
-            // export pipeline, not the live dashboard.
+        if (from.plusDays(MAX_WINDOW_DAYS - 1).isBefore(to)) {
+            // Cap at an inclusive 180-day window. Larger ranges go through
+            // the analytics export pipeline, not the live dashboard.
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(kpiDashboardService.computeDashboard(from, to));
