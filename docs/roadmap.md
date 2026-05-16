@@ -12,8 +12,13 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 Last updated: **2026-05-16**. Update both files together when scope moves.
 
 > **2026-05-16 update — overnight foundation passes for v1.1 + v2.0
-> landed (4 PRs).** Rows 24, 26, 35, 38 all flipped from `not-started`
-> to `started`. Four feature branches merged into develop in sequence:
+> landed (4 PRs).** Four feature branches merged into develop in
+> sequence; this narrative covers all four for context. Row 24's
+> `not-started → started` flip rode along with its own feature PR
+> ([`c07e439e`](https://github.com/DevFaso/hms/commit/c07e439e) on PR
+> #332 — already merged into develop at the time of this sync). Rows
+> 26, 35, and 38 are flipped to `started` in this batched
+> roadmap-sync commit:
 > - **Row 24 (ADT^A01/A04/A08 → Admission/Encounter sync)** —
 >   [`988ef467`](https://github.com/DevFaso/hms/commit/988ef467)
 >   (PR #332 `feat/v1.1-adt-admission-encounter-sync`). V99 migration
