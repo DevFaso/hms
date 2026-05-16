@@ -67,6 +67,12 @@ cd "$REPO_ROOT"
 REALM_EXPORT="keycloak/realm-export.json"
 [[ -f "$REALM_EXPORT" ]] || { echo "ERROR: $REALM_EXPORT not found at repo root" >&2; exit 2; }
 
+# Per-run temp file for the PUT response body. mktemp prevents clobber on
+# concurrent runs; trap guarantees cleanup on EXIT / INT / TERM, including
+# early-exit paths (auth failure, missing client, etc.).
+PUT_BODY_FILE="$(mktemp -t fix-hms-portal-uris.body.XXXXXX)"
+trap 'rm -f "$PUT_BODY_FILE"' EXIT INT TERM
+
 case "$ENV_FILTER" in
   dev)  HOST="https://hms-keycloak-dev-dev.up.railway.app" ;;
   uat)  HOST="https://hms-keycloak-uat-uat.up.railway.app" ;;
