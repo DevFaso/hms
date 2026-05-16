@@ -342,7 +342,7 @@ Quality gates (PR #139): 13/13 GitHub CI checks, SonarCloud gate clean (0 PR iss
 
 # Epic-Alignment P1 — Active queue
 
-Top-down priority. Each item ships as one PR per `agent/coordination.md` (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
+Top-down priority. Each item ships as one PR per the foundation-pass pattern in [`.claude/skills/pr-review-response/SKILL.md`](.claude/skills/pr-review-response/SKILL.md) + [`.claude/skills/liquibase-migration/SKILL.md`](.claude/skills/liquibase-migration/SKILL.md) (backend + tests + Liquibase + frontend in the same PR). West-Africa context lives in `claude/finding-gaps.md`.
 
 - [ ] **P1.1 — Terminology binding** (gap #5)
   - [ ] LOINC on `LabTestDefinition` (column + DTO + Liquibase + UI)
