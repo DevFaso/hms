@@ -1,267 +1,81 @@
-PR 281 branch name chore/keycloak-verify-script
-scripts/verify-keycloak-admin.ps1
-# error body for each env. dev intentionally omitted — admin user there is
-# `tiego`, not `kc-admin`; verify dev manually via the browser.
+# Copilot review — `promote/develop-to-uat-2026-05-14` (2026-05-14)
 
-$ErrorActionPreference = 'SilentlyContinue'
-Copilot commented 11 hours ago
-Copilot
-Copilot
-AI
-11 hours ago
-$ErrorActionPreference is set to 'SilentlyContinue', which can hide non-terminating errors and makes this script behave differently from other PowerShell scripts in this repo (e.g., scripts/kc-inspect.ps1 and scripts/seed-keycloak.ps1 use 'Stop'). Consider switching to 'Stop' (and then selectively using -ErrorAction where needed) so unexpected failures surface immediately.
+Working notes on the Copilot review of the promote PR. Each comment is
+summarised, then marked ✅ (fixed) or ⚠️ (acknowledged with caveat).
 
-Suggested changeset 1 (1)
-scripts/verify-keycloak-admin.ps1
-Original file line number	Diff line number	Diff line change
- # error body for each env. dev intentionally omitted — admin user there is
- # `tiego`, not `kc-admin`; verify dev manually via the browser.
- $ErrorActionPreference = 'SilentlyContinue'
- $ErrorActionPreference = 'Stop'
- $envs = @(
-   @{
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-scripts/verify-keycloak-admin.ps1
-Comment on lines +47 to +54
-  } catch {
-    $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 'ERR' }
-    $body = if ($_.ErrorDetails) { $_.ErrorDetails.Message } else { $_.Exception.Message }
-    Write-Output "  HTTP $code  $body"
-  }
-}
+> **Round 1** review on PR #322 (`investigate/keycloak-env-sync-audit`)
+> was previously documented in this file; replaced by this round 2 since
+> the same file is reused per review cycle. The round 1 responses are
+> preserved in git history if needed.
 
-if ($anyMissing) { exit 2 }
-Copilot commented 11 hours ago
-Copilot
-Copilot
-AI
-11 hours ago
-On failed login/token requests you print the HTTP status/body, but the script still exits 0 as long as the env vars are present. For a "verify" script this makes it hard to use in automation and easy to miss failures; track whether any environment returned an error in the catch block and exit non-zero at the end when any verification fails.
+---
 
+## ✅ #1 — `--env` arg parsing crashes under `set -u` when value missing (Medium)
 
+**File:** `scripts/keycloak/env-sync-verify.sh` lines 54-66 (Copilot also flagged lines 291, 399 — those are **false positives**, only line 58 had this pattern)
 
+**Copilot:** `shift; ENV_FILTER="$1"` without validating that a value is present. With `set -u`, `--env` at the end of argv (or `--env --json`) crashes with an unbound variable instead of exiting cleanly.
 
-PR 283 branch name feat/v1.0-idle-session-timeout
-docs/roadmap.csv
-v1.0,2026-06-23,Pharmacy,T-71 Playwright E2E,"One end-to-end test per dispense path: Tier 1 in-house, Tier 2 partner, refill, AMU export",—,S,Frontend,not-started,#h1.exit
-v1.0,2026-06-23,Pharmacy,T-72 perf baseline,k6 script at 50 concurrent dispenses; p95 < 800ms; recorded in docs/observability/performance-baseline.md,—,S,Platform,not-started,#h1.exit
-v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,not-started,#h1.exit
-v1.0,2026-06-23,Security,Idle session timeout (server-side),Track last-activity in Redis; reject requests after 15 min idle; JWT silent refresh respects window,—,M,Backend,started,#h1.exit
-Copilot commented 6 hours ago
-Copilot
-Copilot
-AI
-6 hours ago
-The PR title suggests implementing the idle session timeout feature, but this change only updates the roadmap status. To avoid confusion in history/release notes, either include the actual implementation changes in this PR or rename/scope this PR as a docs/chore update.
+**Resolution:** Fixed. Replaced the bare `shift; ENV_FILTER="$1"` with a defensive block that:
 
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/roadmap.csv
-Comment on lines +2 to +3
-v1.0,2026-06-23,Clinical Safety,CDS Hooks expansion,Add order-select and medication-prescribe hooks with RxNorm bindings; integration tests against existing prescriptions module,—,M,Backend,completed,#h1.exit
-v1.0,2026-06-23,Clinical Safety,Drug-drug interaction check,Extend hms-medication-allergy-check to fire on coexisting prescriptions; warn-card on critical interactions,CDS Hooks expansion,M,Mixed (Backend + UI),completed,#h1.exit
-Copilot commented 6 hours ago
-Copilot
-Copilot
-AI
-6 hours ago
-This PR updates statuses for Clinical Safety items in addition to the idle session timeout entry. If the intent is to track only the idle session timeout work here, consider moving unrelated roadmap status changes to a separate PR to keep changesets focused and easier to audit.
+1. Checks `$# -lt 2` (next arg exists) and `"$2" == --*` (next arg isn't another flag).
+2. Validates the value is one of `dev | uat | prod` via inner `case`.
+3. Prints helpful exit-2 messages instead of letting `set -u` crash.
 
+Lines 291 and 399 were Copilot misattributing the issue — those line numbers correspond to the `prompt_admin_token` function and the output-rendering loop, neither of which does positional shift on `$1`. Verified via `grep -n -- '--env'` returning only the canonical occurrence.
 
-hospital-core/.../java/com/example/hms/security/IdleSessionGate.java
-Remove this method and declare a constant for this value.
+---
 
-Intentionality
-Maintainability
+## ✅ #2 — A3 failure message has run-on em-dash (Low)
 
+**File:** `scripts/keycloak/env-sync-verify.sh` line 382 (now line 395 after the line-58 expansion)
 
-3
-Low
-confusing
-Open
-Not assigned
-L103
-5min effort
-6 hours ago
-Code Smell
-Minor
-Use "Arrays.copyOf", "Arrays.asList", "Collections.addAll" or "System.arraycopy" instead.
+**Copilot:** `${violations}— delete` renders without spacing — fix to `${violations} — delete`.
 
-Intentionality
-Maintainability
+**Resolution:** Fixed. Single-space-around-em-dash applied. Cosmetic but improves the table/JSON output readability.
 
+---
 
-3
-Low
-clumsy
-Open
-Not assigned
-L130
-5min effort
-6 hours ago
-Code Smell
-Minor
-hospital-core/.../com/example/hms/security/oidc/KeycloakHospitalContextFilter.java
-Complete the task associated to this TODO comment.
+## ⚠️ #3 — Personal Gmail in BF presentation (Medium)
 
-Intentionality
-Maintainability
+**File:** `docs/presentations/medihub-burkina-faso-pitch-2026-05-13.md` slide 29 (Contact)
 
+**Copilot:** Personal Gmail in git history of a public-facing pitch. Suggest replacing with role-based contact OR adding professional alongside.
 
-
-Info
-cwe
-Open
-Not assigned
-L79
-0min effort
-6 hours ago
-Code Smell
-Info
-hospital-core/.../java/com/example/hms/security/InMemoryIdleSessionTrackerTest.java
-Remove this use of "Thread.sleep()".
+**Resolution:** Applied Copilot's "add professional alongside" diff (didn't remove the personal). New line added below the Gmail:
 
-Intentionality
-Maintainability
-
-
-2
-Medium
-bad-practice
-tests
-Open
-Not assigned
-L38
-20min effort
-6 hours ago
-Code Smell
-Major
-Remove this use of "Thread.sleep()".
-
-Intentionality
-Maintainability
-
-
-2
-Medium
-bad-practice
-tests
-Open
-Not assigned
-L71
-20min effort
-6 hours ago
-Code Smell
-Major
-hospital-core/.../java/com/example/hms/security/RedisIdleSessionTrackerTest.java
-Refactor the code of the lambda to have only one invocation possibly throwing a runtime exception.
-
-Intentionality
-Maintainability
-
-
-2
-Medium
-junit
-tests
-Open
-Not assigned
-L142
-5min effort
-6 hours ago
-Code Smell
-Major
-
-
-
-PR 284 branch name feat/v1.0-dr-runbook
-docs/runbooks/disaster-recovery.md
-Comment on lines +63 to +65
-      and confirm `flyway_schema_history` (or `databasechangelog` for
-      Liquibase) ends at the migration that was current at the chosen
-      restore point.
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-The drill checklist references flyway_schema_history, but this repo’s backend uses Liquibase (and Flyway is disabled in configs). This will mislead operators during a drill; suggest removing the Flyway mention and documenting the expected Liquibase table/fields to check instead (e.g., databasechangelog).
-
-Suggested changeset 1 (1)
-docs/runbooks/disaster-recovery.md
-Original file line number	Diff line number	Diff line change
- - [ ] **§ 3.1 Postgres PITR to a fresh database** — restore the
-       production WAL stream into a *new* Railway Postgres instance
-       and confirm `flyway_schema_history` (or `databasechangelog` for
-       Liquibase) ends at the migration that was current at the chosen
-       restore point.
-       and confirm Liquibase `databasechangelog` ends at the changeset
-       that was current at the chosen restore point (verify the latest
-       `id`, `author`, and `filename` values match the expected release).
- - [ ] **§ 4 Service redeploy** — pick the `hms-backend` service in
-       Railway, redeploy the last green build from one week prior, and
-       observe the `HmsErrorBudgetSlowBurn` alert reset within 5 min.
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-3. **Validate the restored DB before cutover.** From a local shell:
-   ```bash
-   psql "$RESTORE_DB_URL" -c "SELECT COUNT(*) FROM clinical.patients WHERE is_deleted = FALSE;"
-   psql "$RESTORE_DB_URL" -c "SELECT id, filename, executed_on FROM databasechangelog ORDER BY executed_on DESC LIMIT 5;"
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-The databasechangelog query uses executed_on, but Liquibase’s tracking table column is typically dateexecuted (or dateExecuted depending on quoting). As written, this command will fail during a restore validation; update the query to use the actual Liquibase column names.
-
-Suggested changeset 1 (1)
-docs/runbooks/disaster-recovery.md
-Original file line number	Diff line number	Diff line change
- 3. **Validate the restored DB before cutover.** From a local shell:
-    ```bash
-    psql "$RESTORE_DB_URL" -c "SELECT COUNT(*) FROM clinical.patients WHERE is_deleted = FALSE;"
-    psql "$RESTORE_DB_URL" -c "SELECT id, filename, executed_on FROM databasechangelog ORDER BY executed_on DESC LIMIT 5;"
-    psql "$RESTORE_DB_URL" -c "SELECT id, filename, dateexecuted FROM databasechangelog ORDER BY dateexecuted DESC LIMIT 5;"
-    ```
-    The `databasechangelog` query confirms Liquibase state. If the most
-    recent entry is the migration *before* the bad one, you're good.
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-Comment on lines +196 to +201
-**Prerequisites** — these must be recoverable from outside Railway:
-- GitHub repo access (`origin = https://github.com/DevFaso/hms.git`).
-- The current production secrets (see § 7 for the inventory).
-- The latest Postgres backup file (§ 3 export-to-file procedure).
-- The latest Keycloak realm export (`keycloak/prod/realm-export.json`
-  in the repo, or the most recent manual export).
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-§5 requires “the latest Postgres backup file” and points to a “§3 export-to-file procedure”, but §3 only covers Railway PITR restore and doesn’t document how to produce/obtain backup.dump outside Railway. For a full project-loss scenario this is a blocking gap—either add an explicit export/download procedure (and where it is stored) or adjust §5 to use Railway’s snapshot export flow (if available) and document that path.
-
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/runbooks/disaster-recovery.md
-Comment on lines +250 to +256
-Production runs Grafana Cloud; provisioning is via the
-[`grafana/provisioning/**`](../../grafana/provisioning) tree synced
-through the Grafana Cloud API. Re-sync via:
-
-```bash
-./scripts/grafana-sync.sh   # if the script exists; otherwise re-import via the UI per dashboard
+```text
+✉️ Contact professionnel : via le site projet ou sur demande
 ```
-Copilot commented 5 hours ago
-Copilot
-Copilot
-AI
-5 hours ago
-This runbook suggests running ./scripts/grafana-sync.sh, but that script doesn’t exist in the repo. Even with the “if the script exists” note, including a non-existent command in a DR runbook can slow recovery; either add the script (and document required env vars) or replace this with the concrete, repo-backed provisioning/import steps used in this project.
 
+Net effect: pitch recipients have two contact channels, and future presentations can pivot to the professional-only pattern. The personal Gmail stays per the operator's earlier explicit choice (consented to its inclusion when the slide was authored). Operator can still strip it via a follow-up edit if they reconsider.
 
+---
 
-PR 285 branch name feat/v1.0-fr-completeness-gate
+## ✅ #4 — Pin marp-cli version in .gitignore comment (Low)
+
+**File:** `docs/presentations/.gitignore`
+
+**Copilot:** `@latest` makes regenerations non-reproducible. Pin a specific version.
+
+**Resolution:** Fixed. Changed `@marp-team/marp-cli@latest` → `@marp-team/marp-cli@4.4.0` (current latest at pinning time, verified via `npm view @marp-team/marp-cli version`). Added a comment explicitly instructing future maintainers to bump the pin deliberately rather than back to `@latest`.
+
+---
+
+## Net-net
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| Medium | 2 | ✅ both fixed (#1, #3) |
+| Low | 2 | ✅ both fixed (#2, #4) |
+
+False positives flagged in the round: 2 (Copilot's "this issue also appears at lines 291, 399" claim for #1 — verified via grep that no other `--env` parsing exists in the file).
+
+Files touched in the follow-up commit:
+
+- `scripts/keycloak/env-sync-verify.sh` (#1, #2)
+- `docs/presentations/medihub-burkina-faso-pitch-2026-05-13.md` (#3)
+- `docs/presentations/.gitignore` (#4)
+- This file (audit trail)
+
+No code or runtime behavior changes beyond the script fixes (#1 prevents crash, #2 cosmetic). The other two are documentation-only.

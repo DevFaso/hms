@@ -76,6 +76,45 @@ password reset. They live in `realm-export.dev-users.json` so they
 cannot accidentally be created in UAT or prod by a `docker compose up`
 in the wrong directory.
 
+## Policy — which dev users are OK on which environment
+
+| User | Local docker-compose | Hosted dev (`hms-keycloak-dev-dev.up.railway.app`) | Hosted uat | Hosted prod |
+| --- | --- | --- | --- | --- |
+| `dev.admin` (`ROLE_SUPER_ADMIN`) | ✅ allowed | ❌ **forbidden** — super-admin via repo-published password is sharp | ❌ forbidden | ❌ forbidden |
+| `dev.doctor` (`ROLE_DOCTOR`, `ROLE_STAFF`) | ✅ allowed | ✅ allowed (engineering convenience for SSO smoke / Playwright runs) | ❌ forbidden | ❌ forbidden |
+| `dev.patient` (`ROLE_PATIENT`) | ✅ allowed | ✅ allowed | ❌ forbidden | ❌ forbidden |
+
+**Why `dev.admin` is forbidden on hosted dev:** `realm-export.dev-users.json`
+is checked into git, so the seed password (`DevAdmin#2026`) and the
+super-admin role assignment are visible to anyone with repo access.
+On a single-developer laptop that's fine — there's nothing to
+attack. On hosted dev, which is shared infrastructure, "anyone with
+git clone has super-admin" is unacceptable. The `temporary: true`
+flag forces a rotation on first login, but only if somebody actually
+logs in — an unrotated `dev.admin` account on hosted dev is a real
+exposure.
+
+**Going forward — importing the safe subset on hosted dev.** When you
+need test fixtures on hosted dev, partial-import only `dev.doctor`
+and `dev.patient` by stripping `dev.admin` from the seed first:
+
+```bash
+jq 'del(.users[] | select(.username == "dev.admin"))' \
+  keycloak/realm-export.dev-users.json \
+  > /tmp/realm-export.dev-users-hosted-safe.json
+# Then partial-import /tmp/realm-export.dev-users-hosted-safe.json
+# via the admin console on hosted dev with strategy "Skip" (don't
+# overwrite anything already there).
+```
+
+The `realm-export.dev-users.json` file itself is left intact so the
+local docker-compose flow is unchanged.
+
+**Enforcement:** `scripts/keycloak/env-sync-verify.sh` check **A3**
+fails on hosted dev if `dev.admin` is present (any role assignment),
+and on hosted uat/prod if any of the three `dev.*` users are present.
+Run `--full` per env to verify.
+
 ## Hooking up the backend
 
 Export the issuer URI and start the backend:
@@ -134,6 +173,7 @@ docker compose --profile keycloak up -d keycloak
 
 **Do not** run this compose service in production. The prod Keycloak
 instance is a managed Railway service with:
+
 - HTTPS + trusted certificate.
 - Admin console restricted to VPN / IP allow-list.
 - Managed Postgres (not the `keycloak-db` container).

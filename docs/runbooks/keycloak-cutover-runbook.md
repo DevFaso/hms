@@ -25,6 +25,14 @@ expire (≤ 15 min) — no in-flight session is killed.
 
 ## Preconditions checklist
 
+- [ ] **Realm in this env matches `keycloak/realm-export.json` HEAD.**
+      `--import-realm` is one-shot per realm lifetime, so any edit to
+      the export merged since this env's first boot lives only in the
+      file unless someone partial-imported it. Run the full procedure
+      in [keycloak-realm-sync.md](keycloak-realm-sync.md) for this env
+      before flipping the flag — a stale realm here is the most common
+      cause of "cutover smoke green, real users get
+      `invalid_redirect_uri`" the next morning.
 - [ ] KC-4 user migration completed in this environment, dry-run +
       live both green (see
       [keycloak-migration-runbook.md](keycloak-migration-runbook.md)).
