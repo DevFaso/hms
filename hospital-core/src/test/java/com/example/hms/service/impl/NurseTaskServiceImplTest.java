@@ -129,7 +129,8 @@ class NurseTaskServiceImplTest {
         lenient().when(marRepository.findByPatient_IdAndHospital_IdAndStatus(any(), any(), any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
-        lenient().when(announcementRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        lenient().when(announcementRepository.findByHospital_IdOrderByDateDesc(any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
     }
@@ -1056,7 +1057,8 @@ class NurseTaskServiceImplTest {
         Announcement a1 = Announcement.builder().id(UUID.randomUUID()).text("Code Blue drill at 14:00").date(now.minusMinutes(30)).build();
         Announcement a2 = Announcement.builder().id(UUID.randomUUID()).text("PPE supply update").date(now.minusHours(1)).build();
 
-        when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(a1, a2)));
+        when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(a1, a2)));
 
         List<NurseAnnouncementDTO> result = service.getAnnouncements(hospitalId, 5);
 
@@ -1101,7 +1103,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(rx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(3L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(3L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1151,7 +1153,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(overdueRx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(0L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);

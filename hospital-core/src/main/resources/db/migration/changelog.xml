@@ -1494,4 +1494,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V102 — Hospital scope for announcements.
+         Adds nullable public.announcement.hospital_id plus a covering
+         (hospital_id, date DESC) index and FK to hospital.hospitals so
+         Nurse Station announcements and counts can be tenant-scoped.
+         The FK guard uses a DO block, so splitStatements is false.
+         ================================================================= -->
+    <changeSet id="V102-announcement-hospital-scope" author="hms-team" runOnChange="false">
+        <sqlFile path="V102__announcement_hospital_scope.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
