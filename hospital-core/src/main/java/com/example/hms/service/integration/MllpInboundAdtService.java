@@ -30,4 +30,24 @@ public interface MllpInboundAdtService {
         String sendingApplication,
         String sendingFacility
     );
+
+    /**
+     * Variant that also carries the inbound MSH-10 message control id.
+     * Stamped onto the reconciled Admission / Encounter row by the
+     * visit-sync projection (gated by
+     * {@code app.hl7.adt.visit-sync.enabled}) so an operator can trace a
+     * row back to the inbound {@code integration_messages} entry that
+     * touched it. The original 4-argument signature stays for callers
+     * that don't have a control id handy; it delegates to this method
+     * with {@code messageControlId = null}.
+     */
+    default MllpInboundOutcome processAdt(
+        ParsedAdtMessage parsed,
+        Hospital receivingHospital,
+        String sendingApplication,
+        String sendingFacility,
+        String messageControlId
+    ) {
+        return processAdt(parsed, receivingHospital, sendingApplication, sendingFacility);
+    }
 }

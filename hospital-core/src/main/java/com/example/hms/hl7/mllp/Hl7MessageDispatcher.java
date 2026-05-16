@@ -158,7 +158,8 @@ public class Hl7MessageDispatcher {
                 "Unparseable " + header.messageType() + " — missing PID-3 or required segments");
         }
         MllpInboundOutcome outcome = inboundAdt.processAdt(
-            parsed, hospital, header.sendingApplication(), header.sendingFacility());
+            parsed, hospital, header.sendingApplication(), header.sendingFacility(),
+            header.messageControlId());
         return ackForOutcome(header, outcome, header.messageType());
     }
 

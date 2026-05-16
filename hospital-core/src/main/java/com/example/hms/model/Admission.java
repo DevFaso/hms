@@ -250,6 +250,37 @@ public class Admission {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
+    /**
+     * HL7 v2 PV1-19 (first component) of the ADT message that created
+     * or last updated this admission. Opaque external identifier used
+     * to reconcile subsequent A08 updates to the same visit. Null for
+     * admissions created via the in-app workflow.
+     */
+    @Column(name = "external_visit_number", length = 255)
+    private String externalVisitNumber;
+
+    /**
+     * HL7 v2 MSH-3 (sending application) — captured alongside
+     * {@link #externalVisitNumber} so the reconciliation key is
+     * scoped per sender. HL7 v2 only guarantees visit-number
+     * uniqueness within a sending system; two different ADT
+     * sources can legitimately reuse the same value.
+     */
+    @Column(name = "external_sending_application", length = 255)
+    private String externalSendingApplication;
+
+    /** HL7 v2 MSH-4 (sending facility). Part of the per-sender scope. */
+    @Column(name = "external_sending_facility", length = 255)
+    private String externalSendingFacility;
+
+    /**
+     * HL7 v2 MSH-10 of the message that LAST touched this admission.
+     * Newest wins — overwritten on each accepted update. Useful for
+     * tracing a row back to the inbound integration_messages entry.
+     */
+    @Column(name = "external_message_control_id", length = 255)
+    private String externalMessageControlId;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -10,6 +10,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.empi.EmpiService;
 import com.example.hms.service.integration.impl.MllpInboundAdtServiceImpl;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,7 @@ class MllpInboundAdtServiceImplTest {
     @Mock private EmpiService empiService;
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private MllpInboundAdtVisitProjectionService visitProjection;
 
     @InjectMocks private MllpInboundAdtServiceImpl service;
 
@@ -169,6 +171,48 @@ class MllpInboundAdtServiceImplTest {
     void rejectedInvalidWhenHospitalNull() {
         assertThat(service.processAdt(adt("MRN-1", "Doe", "Jane", null), null, "REG", "HOSP1"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+    }
+
+    @Test
+    @DisplayName("Visit projection invoked with MSH-10 control id when supplied")
+    void visitProjectionReceivesMessageControlId() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+
+        ParsedAdtMessage parsed = adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1));
+        assertThat(service.processAdt(parsed, hospital, "REG", "HOSP1", "MSG-99"))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+
+        ArgumentCaptor<String> ctrl = ArgumentCaptor.forClass(String.class);
+        verify(visitProjection).projectVisit(
+            org.mockito.ArgumentMatchers.eq(parsed),
+            org.mockito.ArgumentMatchers.eq(patient),
+            org.mockito.ArgumentMatchers.eq(hospital),
+            org.mockito.ArgumentMatchers.eq("REG"),
+            org.mockito.ArgumentMatchers.eq("HOSP1"),
+            ctrl.capture());
+        assertThat(ctrl.getValue()).isEqualTo("MSG-99");
+    }
+
+    @Test
+    @DisplayName("Projection failure does NOT roll back the demographic ACCEPTED outcome")
+    void projectionFailureDoesNotBreakAck() {
+        when(empiService.findIdentityByAlias(EmpiAliasType.MRN, "MRN-1"))
+            .thenReturn(Optional.of(empiHit(patientId)));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospital.getId()))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        org.mockito.Mockito.doThrow(new RuntimeException("projection bean failure"))
+            .when(visitProjection).projectVisit(any(), any(), any(), any(), any(), any());
+
+        assertThat(service.processAdt(
+            adt("MRN-1", "Doe", "Jane", LocalDate.of(1985, 1, 1)),
+            hospital, "REG", "HOSP1", null))
+            .isEqualTo(MllpInboundOutcome.ACCEPTED);
+        verify(patientRepository).save(patient);
     }
 
     @Test
