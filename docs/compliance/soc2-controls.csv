@@ -1,0 +1,39 @@
+ref,category,criterion,status,owner,priority,effort,evidence_or_action,target_close
+CC1.1,Control Environment,Integrity and ethical values,gap,Compliance,P0,S,docs/compliance/policies/code-of-conduct.md,2026-08-15
+CC1.2,Control Environment,Board oversight,gap,Compliance,P0,S,docs/compliance/governance.md (charter + decision log),2026-08-15
+CC1.3,Control Environment,Structures and reporting lines,partial,Compliance,P0,S,docs/compliance/org-structure.md (CODEOWNERS exists),2026-08-15
+CC1.4,Control Environment,Competence,gap,Compliance,P1,S,HRIS link from governance doc,2026-10-15
+CC1.5,Control Environment,Accountability,partial,Compliance,P1,S,Audit log exists; disciplinary process doc,2026-10-15
+CC2.1,Communication & Information,Generates relevant info,present,Backend,—,—,Splunk HEC + Grafana + AuditEventLog,—
+CC2.2,Communication & Information,Internal communication,partial,Compliance,P1,S,Security-comms channel doc,2026-10-15
+CC2.3,Communication & Information,External communication,gap,Platform,P0,S,.well-known/security.txt + vuln-disclosure policy,2026-08-15
+CC3.1,Risk Assessment,Suitable objectives,partial,Compliance,P1,S,Risk-aligned objectives in governance,2026-10-15
+CC3.2,Risk Assessment,Identifies and analyzes risk,partial,Compliance + Backend,P0,S,docs/compliance/risk-register.md (seed from security-hardening-plan.md),2026-08-15
+CC3.3,Risk Assessment,Fraud risk,gap,Compliance,P2,S,Add to risk register,2027-04-01
+CC3.4,Risk Assessment,Assesses changes,partial,Compliance,P1,S,Re-assessment cadence in governance,2026-10-15
+CC4.1,Monitoring Activities,Ongoing/separate evaluations,partial,Compliance,P1,M,Quarterly internal audit cycle,2026-10-15
+CC4.2,Monitoring Activities,Communicates deficiencies,gap,Compliance,P0,S,Control-review log in docs/compliance/,2026-08-15
+CC5.1,Control Activities,Selects and develops controls,present,Compliance,—,—,This document (soc2-gap.md),2026-05-15
+CC5.2,Control Activities,General technology controls,present,Backend,—,—,SecurityConfig + filters + EncryptedStringConverter + audit,—
+CC5.3,Control Activities,Deploys via policies and procedures,partial,Compliance,P0,S,Closes when CC1 policies land,2026-08-15
+CC6.1,Logical Access,Access security software,present,Backend,—,—,Spring Security + JWT + OIDC,—
+CC6.2,Logical Access,Authorized users,present,Backend,—,—,UserController + role-assignment + Keycloak migration,—
+CC6.3,Logical Access,Authorizes/modifies/removes access,partial,Backend,P0,M,Quarterly access review job + report,2026-08-15
+CC6.4,Logical Access,Physical access,present,Platform,—,—,Vendor-delegated (Railway/Splunk/Grafana SOC 2),—
+CC6.5,Logical Access,Disposed asset protection,partial,Backend,P1,M,Automated tenant purge worker (uses Hospital.purgeScheduledFor),2026-10-15
+CC6.6,Logical Access,Perimeter logical access,present,Backend,—,—,TLS + HSTS + CORS + CSP + security headers,—
+CC6.7,Logical Access,Transmission/movement controls,present,Backend,—,—,AES-256-GCM at rest + TLS in transit + CrossTenantReadAudit,—
+CC6.8,Logical Access,Detect unauthorized software,partial,Platform,P2,M,Container runtime IDS (or document vendor-delegated),2027-04-01
+CC7.1,System Operations,Detects config + vulnerability changes,partial,Backend,P0,S,docs/compliance/policies/vulnerability-response.md (Critical 24h/High 7d/Medium 30d),2026-08-15
+CC7.2,System Operations,Monitors for anomalies,partial,Platform,P1,S,Version Grafana alerts + contact points in grafana/provisioning/alerting/,2026-10-15
+CC7.3,System Operations,Evaluates security events,partial,Platform,P0,S,docs/compliance/policies/incident-response-policy.md (severity matrix + escalation),2026-08-15
+CC7.4,System Operations,Responds to incidents,partial,Platform,P1,S,On-call rotation + escalation policy doc,2026-10-15
+CC7.5,System Operations,Recovers from incidents,present,Platform,—,—,DR runbook §3-7 (PITR + redeploy + key rotation),—
+CC8.1,Change Management,Authorizes/develops/tests/approves changes,present,Backend,—,—,GitHub PR workflow + branch protection + CI gates + Liquibase,—
+CC9.1,Risk Mitigation,Mitigation activities,partial,Compliance,P0,S,Combine with risk register (CC3.2),2026-08-15
+CC9.2,Risk Mitigation,Vendor risk management,gap,Compliance,P0,M,docs/compliance/vendor-inventory.md + DPA collection sprint,2026-08-15
+A1.1,Availability,Performance monitoring,present,Platform,—,—,Grafana SLO + Prometheus + OTel,—
+A1.2,Availability,Backup and recovery,present,Platform,—,—,DR runbook + RTO 30min + RPO 24h + hourly snapshots,—
+A1.3,Availability,Tests recovery procedures,partial,Platform,P1,M,Weekly automated restore-test GitHub Action,2026-10-15
+C1.1,Confidentiality,Identifies confidential info,partial,Backend,P0,M,docs/compliance/phi-inventory.md (data-flow + classification),2026-08-15
+C1.2,Confidentiality,Disposes of confidential info,partial,Compliance + Backend,P0,S,docs/compliance/data-retention.md + purge automation,2026-08-15
