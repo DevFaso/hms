@@ -62,12 +62,29 @@ public class HmsCapabilityStatementProvider extends ServerCapabilityStatementPro
     }
 
     private void applyPatientWriteCapabilities(CapabilityStatement cs) {
-        if (writeProperties == null || !writeProperties.isEnabled()) return;
         if (cs.getRest().isEmpty()) return;
         cs.getRestFirstRep().getResource().stream()
             .filter(r -> "Patient".equals(r.getType()))
             .findFirst()
-            .ifPresent(r -> r.setConditionalCreate(true));
+            .ifPresent(r -> {
+                boolean enabled = writeProperties != null && writeProperties.isEnabled();
+                if (enabled) {
+                    r.setConditionalCreate(true);
+                    return;
+                }
+                // Flag off: actively strip the write affordances HAPI auto-
+                // advertises from the @Create / @Update annotations + the
+                // @ConditionalUrlParam, so the CapabilityStatement matches the
+                // runtime behaviour (PatientFhirWriteService throws
+                // MethodNotAllowedException). Without this, HAPI emits
+                // interaction=create / interaction=update / conditionalCreate=true
+                // even when every write call returns 405 — that's a misleading
+                // contract for consumers that probe metadata before invoking.
+                r.setConditionalCreate(false);
+                r.getInteraction().removeIf(i -> i.getCode() != null
+                    && (i.getCode() == CapabilityStatement.TypeRestfulInteraction.CREATE
+                     || i.getCode() == CapabilityStatement.TypeRestfulInteraction.UPDATE));
+            });
     }
 
     private void applySmartSecurity(CapabilityStatement cs, HttpServletRequest request) {
