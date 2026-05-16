@@ -1,8 +1,6 @@
 package com.example.hms.security.tenant.schema;
 
 import org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
@@ -43,12 +41,10 @@ import java.util.stream.Collectors;
 @ConditionalOnProperty(name = "app.tenancy.schema-isolation.enabled", havingValue = "true")
 public class SchemaTenantConnectionProvider implements MultiTenantConnectionProvider<String> {
 
-    private static final Logger log = LoggerFactory.getLogger(SchemaTenantConnectionProvider.class);
-
     /** Strict allow-list — only PG identifier characters, ≤63 chars. */
     private static final Pattern SAFE_IDENTIFIER = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
 
-    private final DataSource dataSource;
+    private final transient DataSource dataSource;
     private final String defaultSearchPath;
     private final List<String> sharedSchemas;
 
@@ -132,8 +128,7 @@ public class SchemaTenantConnectionProvider implements MultiTenantConnectionProv
         try (var stmt = conn.createStatement()) {
             stmt.execute("SET search_path TO " + validatedSearchPath);
         } catch (SQLException ex) {
-            log.error("Failed to set search_path to '{}'", validatedSearchPath, ex);
-            throw ex;
+            throw new SQLException("Failed to set search_path to '" + validatedSearchPath + "'", ex);
         }
     }
 

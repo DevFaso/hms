@@ -106,7 +106,8 @@ class SchemaTenantConnectionProviderTest {
 
         assertThatThrownBy(() -> provider.getAnyConnection())
             .isInstanceOf(SQLException.class)
-            .hasMessage("boom");
+            .hasMessageContaining("Failed to set search_path")
+            .hasCauseInstanceOf(SQLException.class);
 
         verify(connection).close();
     }
@@ -118,7 +119,8 @@ class SchemaTenantConnectionProviderTest {
 
         assertThatThrownBy(() -> provider.getConnection("tenant_beta"))
             .isInstanceOf(SQLException.class)
-            .hasMessage("boom");
+            .hasMessageContaining("Failed to set search_path")
+            .hasCauseInstanceOf(SQLException.class);
 
         verify(connection).close();
     }

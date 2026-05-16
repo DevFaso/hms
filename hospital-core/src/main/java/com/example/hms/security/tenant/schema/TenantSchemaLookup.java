@@ -2,6 +2,7 @@ package com.example.hms.security.tenant.schema;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -52,6 +53,7 @@ public class TenantSchemaLookup {
     private final Duration ttl;
     private final Clock clock;
 
+    @Autowired
     public TenantSchemaLookup(DataSource dataSource) {
         this(new JdbcTemplate(dataSource), DEFAULT_TTL, Clock.systemUTC());
     }

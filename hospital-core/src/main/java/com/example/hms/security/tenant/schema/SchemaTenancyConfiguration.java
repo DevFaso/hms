@@ -1,6 +1,6 @@
 package com.example.hms.security.tenant.schema;
 
-import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.cfg.MultiTenancySettings;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -18,9 +18,9 @@ import java.util.Map;
  * <p>When enabled, the {@link HibernatePropertiesCustomizer} pushes
  * three settings into the entity-manager factory:
  * <ul>
- *   <li>{@link AvailableSettings#MULTI_TENANT_CONNECTION_PROVIDER}
+ *   <li>{@link MultiTenancySettings#MULTI_TENANT_CONNECTION_PROVIDER}
  *       → our {@link SchemaTenantConnectionProvider} instance.</li>
- *   <li>{@link AvailableSettings#MULTI_TENANT_IDENTIFIER_RESOLVER}
+ *   <li>{@link MultiTenancySettings#MULTI_TENANT_IDENTIFIER_RESOLVER}
  *       → our {@link SchemaTenantIdentifierResolver} instance.</li>
  *   <li>{@code hibernate.multiTenancy} → {@code SCHEMA} (Hibernate 6
  *       no longer uses an enum constant for this; the string value
@@ -44,8 +44,8 @@ public class SchemaTenancyConfiguration {
             SchemaTenantConnectionProvider connectionProvider,
             SchemaTenantIdentifierResolver identifierResolver) {
         return properties -> properties.putAll(Map.of(
-            AvailableSettings.MULTI_TENANT_CONNECTION_PROVIDER, connectionProvider,
-            AvailableSettings.MULTI_TENANT_IDENTIFIER_RESOLVER, identifierResolver,
+            MultiTenancySettings.MULTI_TENANT_CONNECTION_PROVIDER, connectionProvider,
+            MultiTenancySettings.MULTI_TENANT_IDENTIFIER_RESOLVER, identifierResolver,
             "hibernate.multiTenancy", "SCHEMA"
         ));
     }
