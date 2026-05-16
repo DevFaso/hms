@@ -215,4 +215,18 @@ public interface EncounterRepository
         ORDER BY e.checkoutTimestamp DESC
     """)
     List<Encounter> findCompletedWithoutDischargeSummary(@Param("patientId") UUID patientId);
+
+    /**
+     * Look up an encounter by the HL7 v2 reconciliation key
+     * (MSH-3, MSH-4, PV1-19, hospital). Backed by the partial
+     * unique index {@code uk_encounter_external_visit} added in V99.
+     * Used by the ADT visit-sync projection to apply A08 updates to
+     * the right Encounter row without scanning by patient.
+     */
+    Optional<Encounter> findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
+        String externalSendingApplication,
+        String externalSendingFacility,
+        String externalVisitNumber,
+        UUID hospitalId
+    );
 }
