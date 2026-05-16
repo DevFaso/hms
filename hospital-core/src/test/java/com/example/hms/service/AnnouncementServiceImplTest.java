@@ -1,10 +1,15 @@
 package com.example.hms.service;
 
 import com.example.hms.model.Announcement;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -13,6 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,6 +44,9 @@ class AnnouncementServiceImplTest {
     private AnnouncementRepository announcementRepository;
 
     @Mock
+    private HospitalRepository hospitalRepository;
+
+    @Mock
     private NotificationService notificationService;
 
     @Mock
@@ -43,6 +54,11 @@ class AnnouncementServiceImplTest {
 
     @InjectMocks
     private AnnouncementServiceImpl service;
+
+    @AfterEach
+    void clearHospitalContext() {
+        HospitalContextHolder.clear();
+    }
 
     // ───────────── helpers ─────────────
 
@@ -97,6 +113,22 @@ class AnnouncementServiceImplTest {
 
             assertEquals(1, result.size());
             assertEquals("Only one", result.get(0).getText());
+        }
+
+        @Test
+        @DisplayName("uses hospital-scoped repository when context has active hospital")
+        void usesHospitalScopeWhenPresent() {
+            UUID hospitalId = UUID.randomUUID();
+            Announcement a = buildAnnouncement(UUID.randomUUID(), "Scoped", LocalDateTime.now());
+            HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
+            when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(a)));
+
+            List<AnnouncementResponseDTO> result = service.getAnnouncements(5);
+
+            assertEquals(1, result.size());
+            assertEquals("Scoped", result.get(0).getText());
+            verify(announcementRepository).findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class));
         }
     }
 
@@ -167,6 +199,30 @@ class AnnouncementServiceImplTest {
                 () -> assertEquals(savedId, dto.getId()),
                 () -> assertEquals("New policy", dto.getText())
             );
+        }
+
+        @Test
+        @DisplayName("assigns current hospital when context has active hospital")
+        void assignsCurrentHospital() {
+            UUID hospitalId = UUID.randomUUID();
+            UUID savedId = UUID.randomUUID();
+            Hospital hospital = Hospital.builder().build();
+            hospital.setId(hospitalId);
+            ArgumentCaptor<Announcement> captor = ArgumentCaptor.forClass(Announcement.class);
+
+            HospitalContextHolder.setContext(HospitalContext.builder().activeHospitalId(hospitalId).build());
+            when(hospitalRepository.getReferenceById(hospitalId)).thenReturn(hospital);
+            when(announcementRepository.save(any(Announcement.class))).thenAnswer(inv -> {
+                Announcement a = inv.getArgument(0);
+                a.setId(savedId);
+                return a;
+            });
+            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of());
+
+            service.createAnnouncement("Scoped policy");
+
+            verify(announcementRepository).save(captor.capture());
+            assertEquals(hospitalId, captor.getValue().getHospital().getId());
         }
     }
 

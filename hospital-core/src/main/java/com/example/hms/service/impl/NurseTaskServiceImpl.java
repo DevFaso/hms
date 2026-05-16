@@ -11,6 +11,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Admission;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
@@ -45,6 +46,7 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.EncounterRepository;
@@ -91,8 +93,8 @@ import java.util.stream.IntStream;
  * MVP-1 implementation of NurseTaskService.
  * <p>
  * Wires <b>Medication Administration</b>, <b>Vitals</b>, and <b>Announcements</b>
- * to real database tables while keeping Orders and Handoffs as enriched synthetic
- * data until their backing entities are created in later MVPs.
+ * to real database tables while keeping Orders and Handoffs as derived queue
+ * entries over real patient assignments until their backing entities arrive.
  */
 @Slf4j
 @Service
@@ -102,7 +104,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /* ── Constants ────────────────────────────────────────────────────── */
 
-    private static final String SAMPLE_PATIENT_NAME = "Sample Patient";
     private static final Duration DEFAULT_WINDOW = Duration.ofHours(2);
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
@@ -114,12 +115,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String MSG_PATIENT_NOT_FOUND = "Patient not found: ";
     private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
     private static final String SEED_PATIENT = "PATIENT";
-    private static final String SEED_VITAL = "VITAL";
     private static final String SEED_ORDER = "ORDER";
     private static final String SEED_HANDOFF = "HANDOFF";
     private static final String DEFAULT_HOSPITAL_SEED = "HOSPITAL";
     private static final String DEFAULT_PATIENT_NAME = "Patient";
     private static final String DEFAULT_ADMINISTRATION_STATUS = "GIVEN";
+    private static final String ADMISSION_OWNER = "Admission";
+    private static final String ASSOCIATION_PATIENT = "patient";
+    private static final String ASSOCIATION_DEPARTMENT = "department";
 
     /** Statuses accepted on the administer endpoint. */
     private static final Set<String> SUPPORTED_ADMINISTRATION_STATUSES = Set.of(
@@ -202,11 +205,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
 
-        // If no real tasks generated, produce a single synthetic placeholder
-        if (tasks.isEmpty()) {
-            tasks.add(createSyntheticVitalTask(patients, hospitalId, now));
-        }
-
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
         return tasks.stream().limit(MAX_LIMIT).toList();
     }
@@ -223,11 +221,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<NurseMedicationTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
             tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now));
-        }
-
-        // Fall back to synthetic data if no real prescriptions exist
-        if (tasks.isEmpty()) {
-            tasks.addAll(createSyntheticMedicationTasks(patients, hospitalId, now, statusFilter));
         }
 
         return tasks.stream().limit(MAX_LIMIT).toList();
@@ -571,10 +564,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     @Override
     public List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit) {
+        if (hospitalId == null) return List.of();
         int effectiveLimit = clampLimit(limit);
         Pageable page = PageRequest.of(0, effectiveLimit);
 
-        List<Announcement> dbAnnouncements = announcementRepository.findAll(page).getContent();
+        List<Announcement> dbAnnouncements = announcementRepository
+            .findByHospital_IdOrderByDateDesc(hospitalId, page)
+            .getContent();
 
         if (!dbAnnouncements.isEmpty()) {
             return dbAnnouncements.stream()
@@ -589,12 +585,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .toList();
         }
 
-        // Fall back to synthetic announcements when DB is empty
-        LocalDateTime now = LocalDateTime.now();
-        String label = hospitalId != null ? abbreviateHospitalId(hospitalId) : DEFAULT_HOSPITAL_SEED;
-        return IntStream.range(0, effectiveLimit)
-            .mapToObj(i -> createSyntheticAnnouncement(now, label, i))
-            .toList();
+        return List.of();
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -617,7 +608,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long handoffsPending = getHandoffSummaries(nurseUserId, hospitalId, MAX_LIMIT).size();
 
         // Announcement count
-        long announcementCount = announcementRepository.count();
+        long announcementCount = hospitalId != null ? announcementRepository.countByHospital_Id(hospitalId) : 0L;
 
         return NurseDashboardSummaryDTO.builder()
             .assignedPatients(assignedPatients)
@@ -626,7 +617,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medicationsOverdue(medCounts[1])
             .ordersPending(ordersPending)
             .handoffsPending(handoffsPending)
-            .announcements(announcementCount > 0 ? announcementCount : DEFAULT_LIMIT)
+            .announcements(announcementCount)
             .build();
     }
 
@@ -763,45 +754,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /* ═══════════════════════════════════════════════════════════════════
-       Private helpers — synthetic fallbacks
+       Private helpers — derived queue entries
        ═══════════════════════════════════════════════════════════════════ */
-
-    private NurseVitalTaskResponseDTO createSyntheticVitalTask(
-        List<PatientContext> patients, UUID hospitalId, LocalDateTime now
-    ) {
-        PatientContext ctx = patients.isEmpty()
-            ? new PatientContext(null, SAMPLE_PATIENT_NAME) : patients.get(0);
-        return NurseVitalTaskResponseDTO.builder()
-            .id(generateStableId(ctx.displayName(), hospitalId, SEED_VITAL, 0))
-            .patientId(ctx.patientId())
-            .patientName(ctx.displayName())
-            .type(TYPE_ROUTINE)
-            .dueTime(now.plusMinutes(60))
-            .overdue(false)
-            .build();
-    }
-
-    private List<NurseMedicationTaskResponseDTO> createSyntheticMedicationTasks(
-        List<PatientContext> patients, UUID hospitalId, LocalDateTime now, String statusFilter
-    ) {
-        return IntStream.range(0, Math.min(DEFAULT_LIMIT, patients.size()))
-            .mapToObj(i -> {
-                PatientContext ctx = patients.get(i);
-                LocalDateTime dueTime = now.plusMinutes(30L * (i + 1));
-                String status = determineSyntheticMedStatus(statusFilter, dueTime, now, i);
-                return NurseMedicationTaskResponseDTO.builder()
-                    .id(generateStableId(ctx.displayName(), hospitalId, "MEDICATION", i))
-                    .patientId(ctx.patientId())
-                    .patientName(ctx.displayName())
-                    .medication(selectMedication(i))
-                    .dose(selectDosage(i))
-                    .route(i % 2 == 0 ? "IV" : "PO")
-                    .dueTime(dueTime)
-                    .status(status)
-                    .build();
-            })
-            .toList();
-    }
 
     private NurseOrderTaskResponseDTO createOrderTask(
         PatientContext patient, UUID hospitalId, LocalDateTime now, int index
@@ -829,23 +783,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    private NurseAnnouncementDTO createSyntheticAnnouncement(
-        LocalDateTime now, String hospitalLabel, int index
-    ) {
-        return NurseAnnouncementDTO.builder()
-            .id(UUID.randomUUID())
-            .text(index == 0
-                ? String.format("[%s] Safety huddle at 15:00.", hospitalLabel)
-                : String.format("[%s] Operational update %d", hospitalLabel, index + 1))
-            .createdAt(now.minusHours(index))
-            .startsAt(now.minusHours(index))
-            .expiresAt(now.plusHours(6L + index))
-            .category(index % 2 == 0 ? "SHIFT" : "OPERATIONS")
-            .build();
-    }
-
     /* ═══════════════════════════════════════════════════════════════════
-       Private helpers — patient resolution (unchanged from original)
+    Private helpers — patient resolution
        ═══════════════════════════════════════════════════════════════════ */
 
     private Duration normalizeWindow(Duration window) {
@@ -862,13 +801,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private List<PatientContext> resolvePatientContexts(UUID nurseUserId, UUID hospitalId) {
         List<PatientResponseDTO> patients = resolvePatients(nurseUserId, hospitalId);
         if (patients.isEmpty()) {
-            return List.of(new PatientContext(null, SAMPLE_PATIENT_NAME));
+            return List.of();
         }
-        List<PatientContext> contexts = deduplicatePatientContexts(patients);
-        if (contexts.isEmpty()) {
-            contexts.add(new PatientContext(null, SAMPLE_PATIENT_NAME));
-        }
-        return contexts;
+        return deduplicatePatientContexts(patients);
     }
 
     private List<PatientContext> deduplicatePatientContexts(List<PatientResponseDTO> patients) {
@@ -901,24 +836,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private List<PatientResponseDTO> resolvePatients(UUID nurseUserId, UUID hospitalId) {
-        if (hospitalId == null) return List.of(createSyntheticPatient());
+        if (hospitalId == null) return List.of();
         List<PatientResponseDTO> patients = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
         if (patients.isEmpty()) {
             log.warn("No assigned patients found for nurse {}, falling back to all-hospital patient list for hospital {}",
                     nurseUserId, hospitalId);
             patients = nurseDashboardService.getPatientsForNurse(null, hospitalId, null);
         }
-        if (patients.isEmpty()) patients = List.of(createSyntheticPatient());
         return patients;
-    }
-
-    private PatientResponseDTO createSyntheticPatient() {
-        return PatientResponseDTO.builder()
-            .id(UUID.randomUUID())
-            .patientName(SAMPLE_PATIENT_NAME)
-            .displayName(SAMPLE_PATIENT_NAME)
-            .room("—")
-            .build();
     }
 
     private String resolvePatientName(PatientResponseDTO patient) {
@@ -940,12 +865,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return UUID.nameUUIDFromBytes((patientSeed + ':' + hospitalSeed + ':' + suffix + ':' + index).getBytes());
     }
 
-    private String determineSyntheticMedStatus(String filter, LocalDateTime dueTime, LocalDateTime now, int index) {
-        if (filter != null && !filter.isBlank()) return filter.trim().toUpperCase(Locale.ROOT);
-        if (dueTime.isBefore(now)) return STATUS_OVERDUE;
-        return index % 2 == 0 ? STATUS_DUE : STATUS_COMPLETED;
-    }
-
     private String normalizeAdministrationStatus(NurseMedicationAdministrationRequestDTO request) {
         if (request == null || request.getStatus() == null) return DEFAULT_ADMINISTRATION_STATUS;
         String normalized = request.getStatus().trim().toUpperCase(Locale.ROOT);
@@ -956,27 +875,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return normalized;
     }
 
-    private String selectMedication(int index) {
-        return switch (Math.floorMod(index, 5)) {
-            case 0 -> "Lisinopril"; case 1 -> "Metoprolol"; case 2 -> "Ceftriaxone";
-            case 3 -> "Acetaminophen"; default -> "Insulin";
-        };
-    }
-
-    private String selectDosage(int index) {
-        return switch (Math.floorMod(index, 4)) {
-            case 0 -> "10 mg"; case 1 -> "500 mg"; case 2 -> "2 g"; default -> "5 units";
-        };
-    }
-
     private String selectOrderCategory(int index) {
         return switch (Math.floorMod(index, 4)) {
             case 0 -> "Lab"; case 1 -> "Radiology"; case 2 -> "Consult"; default -> "Medication";
         };
-    }
-
-    private String abbreviateHospitalId(UUID hospitalId) {
-        return hospitalId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
     }
 
     private int clampInt(int value, int min, int max) {
@@ -1008,14 +910,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseWorkboardPatientDTO> result = new ArrayList<>();
         for (Admission a : admissions) {
-            result.add(toWorkboardCard(a, hospitalId, overdueThreshold, now));
+            NurseWorkboardPatientDTO card = toWorkboardCard(a, hospitalId, overdueThreshold, now);
+            if (card != null) {
+                result.add(card);
+            }
         }
         return result;
     }
 
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId,
                                                      LocalDateTime overdueThreshold, LocalDateTime now) {
-        Patient patient = a.getPatient();
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
+        if (patient == null) return null;
+
         Optional<LocalDateTime> lastVitals = vitalSignRepository
             .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.getId(), hospitalId)
             .map(PatientVitalSign::getRecordedAt);
@@ -1029,9 +937,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .filter(rx -> !STATUS_COMPLETED.equals(resolveMarStatus(rx, now)))
             .count();
 
-        String departmentName = a.getDepartment() != null ? a.getDepartment().getName() : null;
-        String attendingDoctor = a.getAdmittingProvider() != null
-            ? a.getAdmittingProvider().getFullName() : null;
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
+        Staff admittingProvider = JpaProxyUtils.safeInit(
+            a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
+        String departmentName = department != null ? department.getName() : null;
+        String attendingDoctor = admittingProvider != null ? admittingProvider.getFullName() : null;
 
         return NurseWorkboardPatientDTO.builder()
             .patientId(patient.getId())
@@ -1079,6 +990,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         LocalDateTime now = LocalDateTime.now();
         for (Admission a : all) {
             NurseFlowPatientCardDTO card = toFlowCard(a, now);
+            if (card == null) continue;
             AcuityLevel acuity = a.getAcuityLevel();
             if (a.getStatus() == AdmissionStatus.AWAITING_DISCHARGE) {
                 awaitingDischarge.add(card);
@@ -1100,18 +1012,25 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private NurseFlowPatientCardDTO toFlowCard(Admission a, LocalDateTime now) {
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
+        if (patient == null) return null;
+
+        Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
         long waitMinutes = a.getAdmissionDateTime() != null
             ? java.time.Duration.between(a.getAdmissionDateTime(), now).toMinutes() : 0;
-        UUID hospId = a.getHospital() != null ? a.getHospital().getId() : null;
+        UUID hospId = hospital != null ? hospital.getId() : null;
         return NurseFlowPatientCardDTO.builder()
-            .patientId(a.getPatient().getId())
-            .patientName(a.getPatient().getFullName())
-            .mrn(hospId != null ? a.getPatient().getMrnForHospital(hospId) : null)
+            .patientId(patient.getId())
+            .patientName(patient.getFullName())
+            .mrn(hospId != null ? patient.getMrnForHospital(hospId) : null)
             .admissionId(a.getId())
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .waitMinutes(waitMinutes)
             .roomBed(a.getRoomBed())
-            .departmentName(a.getDepartment() != null ? a.getDepartment().getName() : null)
+            .departmentName(department != null ? department.getName() : null)
             .admittedAt(a.getAdmissionDateTime())
             .build();
     }
@@ -1230,29 +1149,44 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseAdmissionSummaryDTO> result = new ArrayList<>();
         for (Admission a : newArrivals) {
-            result.add(toAdmissionSummary(a));
+            NurseAdmissionSummaryDTO summary = toAdmissionSummary(a);
+            if (summary != null) {
+                result.add(summary);
+            }
         }
         for (Admission a : awaitingDischarge) {
             // Avoid duplicates if somehow already included
             if (result.stream().noneMatch(r -> a.getId().equals(r.getAdmissionId()))) {
-                result.add(toAdmissionSummary(a));
+                NurseAdmissionSummaryDTO summary = toAdmissionSummary(a);
+                if (summary != null) {
+                    result.add(summary);
+                }
             }
         }
         return result;
     }
 
     private NurseAdmissionSummaryDTO toAdmissionSummary(Admission a) {
-        UUID hospId = a.getHospital() != null ? a.getHospital().getId() : null;
+        UUID admissionId = a.getId();
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
+        if (patient == null) return null;
+
+        Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
+        Staff admittingProvider = JpaProxyUtils.safeInit(
+            a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
+        UUID hospId = hospital != null ? hospital.getId() : null;
         return NurseAdmissionSummaryDTO.builder()
             .admissionId(a.getId())
-            .patientId(a.getPatient().getId())
-            .patientName(a.getPatient().getFullName())
-            .mrn(hospId != null ? a.getPatient().getMrnForHospital(hospId) : null)
+            .patientId(patient.getId())
+            .patientName(patient.getFullName())
+            .mrn(hospId != null ? patient.getMrnForHospital(hospId) : null)
             .status(a.getStatus() != null ? a.getStatus().name() : null)
             .acuityLevel(a.getAcuityLevel() != null ? a.getAcuityLevel().name() : null)
             .roomBed(a.getRoomBed())
-            .departmentName(a.getDepartment() != null ? a.getDepartment().getName() : null)
-            .admittingDoctor(a.getAdmittingProvider() != null ? a.getAdmittingProvider().getFullName() : null)
+            .departmentName(department != null ? department.getName() : null)
+            .admittingDoctor(admittingProvider != null ? admittingProvider.getFullName() : null)
             .admissionDateTime(a.getAdmissionDateTime())
             .admissionType(a.getAdmissionType() != null ? a.getAdmissionType().name() : null)
             .build();
