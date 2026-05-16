@@ -1,0 +1,85 @@
+# Blackbox exporter modules for HMS synthetic monitoring
+# (roadmap row 43 — Operations / v2.0).
+#
+# Mounted at /etc/blackbox_exporter/config.yml inside the
+# hms-blackbox container (see docker-compose.yml, profile=observability).
+#
+# Each probe is a Prometheus scrape against the blackbox exporter with a
+# `target` parameter — the exporter resolves the probe and returns
+# `probe_success` (0/1) plus timing metrics. See
+# `grafana/prometheus.yml` for the `blackbox_http` job that drives this
+# config.
+#
+# Module choices:
+#   - http_health_2xx: standard 2xx-only check used for Spring Boot
+#     Actuator health endpoints. Sets TLS verification on (production
+#     domains will be hit over HTTPS).
+#   - http_smart_2xx: identical to http_health_2xx but with a longer
+#     timeout — SMART configuration endpoints have been observed to be
+#     slower behind the Railway proxy on cold starts.
+#   - http_fhir_metadata_2xx: 2xx check that accepts both
+#     `application/fhir+json` and `application/json` content types so
+#     the probe survives a HAPI server-version bump.
+#   - http_cds_discovery_2xx: 2xx check against /cds-services with
+#     `application/json` accept header — paired with row 27.
+
+modules:
+  http_health_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        Accept: application/json
+        User-Agent: hms-blackbox/synthetic
+
+  http_smart_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        Accept: application/json
+        User-Agent: hms-blackbox/synthetic
+
+  http_fhir_metadata_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        Accept: application/fhir+json,application/json;q=0.8
+        User-Agent: hms-blackbox/synthetic
+
+  http_cds_discovery_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        Accept: application/json
+        User-Agent: hms-blackbox/synthetic
