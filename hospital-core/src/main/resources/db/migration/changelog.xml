@@ -1413,4 +1413,27 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V99 — ADT external-visit reconciliation columns
+         (roadmap row 24, v1.1 / Interop HL7).
+         Adds external_visit_number + external_sending_application +
+         external_sending_facility + external_message_control_id (all
+         VARCHAR 255, nullable) on admissions and clinical.encounters,
+         each with a partial composite unique index scoped per
+         (sender app, sender facility, visit number, hospital_id) for
+         rows where the visit number is non-null. Backs the ADT
+         visit-sync projection (MllpInboundAdtVisitProjectionService).
+         JPA mappings on Admission + Encounter reference all four
+         columns from this PR onward, so Liquibase MUST apply the
+         migration on startup or entity load will fail with "column
+         does not exist". Pure DDL: ADD COLUMN IF NOT EXISTS x 8 +
+         CREATE UNIQUE INDEX IF NOT EXISTS x 2; splitStatements true.
+         ================================================================= -->
+    <changeSet id="V99-adt-external-visit-reconciliation" author="hms-team" runOnChange="false">
+        <sqlFile path="V99__adt_external_visit_reconciliation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
