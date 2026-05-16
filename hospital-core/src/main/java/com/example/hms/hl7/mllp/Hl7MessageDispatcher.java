@@ -113,7 +113,8 @@ public class Hl7MessageDispatcher {
                 "Unparseable ORU^R01 OBX segment");
         }
         MllpInboundOutcome outcome = inboundLab.processOruR01(
-            obs, hospital, header.sendingApplication(), header.sendingFacility());
+            obs, hospital, header.sendingApplication(), header.sendingFacility(),
+            header.messageControlId(), hl7Body);
         return ackForOutcome(header, outcome, "ORU^R01");
     }
 

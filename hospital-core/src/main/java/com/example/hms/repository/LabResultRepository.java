@@ -153,6 +153,16 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
 
     /**
+     * Look up an existing result by its source HL7 message control id
+     * (MSH-10). Used by {@code MllpInboundLabService} to short-circuit
+     * analyzer retransmissions — if the id already exists we return
+     * ACCEPTED without inserting a duplicate row. Paired with the
+     * partial unique index from V98 so a concurrent retry that wins
+     * the race still cannot insert two rows.
+     */
+    Optional<LabResult> findFirstBySourceMessageControlId(String sourceMessageControlId);
+
+    /**
      * Paged unscoped variant used by the chart-review aggregator when no
      * hospital scope is supplied. Sort + limit are applied at the DB level
      * via the {@link Pageable} argument so we avoid loading the entire

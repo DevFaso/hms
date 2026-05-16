@@ -9,8 +9,35 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
   auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
   Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
-Last updated: **2026-05-10**. Update both files together when scope moves.
+Last updated: **2026-05-15**. Update both files together when scope moves.
 
+> **2026-05-15 update — v1.1 / Interop HL7 / ORU^R01 → LabResult
+> persistence shipped.** Row 23 flipped from `not-started` to
+> `started` on `feat/v1.1-oru-r01-lab-persistence`. The core
+> ingestion path (`MllpInboundLabServiceImpl` matching
+> `LabSpecimen.accessionNumber` → `LabOrder` → `Encounter`, writing
+> a `SYSTEM`-actor `LabResult` with cross-tenant guard) already
+> existed; this PR adds the three production-readiness pieces the
+> roadmap deliverable still needed: (1) MSH-10 idempotency via
+> `V98__lab_result_source_message_control_id.sql` + a partial
+> unique index, so analyzer retransmits on lost ACK collapse to a
+> single row instead of duplicating the trend; (2)
+> `IntegrationMessageRecorder` wiring on every dispatch path
+> (RECEIVED / FAILED), so inbound traffic is visible in the DLQ /
+> replay surface; (3) `AuditEventType.LAB_RESULT_UPDATED` emission
+> on every accepted ingestion, with audit failures swallowed so
+> they cannot roll back the clinical write. Plus the explicit
+> roadmap deliverable —
+> [`OruR01VendorSampleIngestionTest`](../hospital-core/src/test/java/com/example/hms/hl7/mllp/OruR01VendorSampleIngestionTest.java)
+> exercises full dispatcher → service plumbing with realistic
+> **Mindray BS-240** (LOINC `15074-8` glucose, abnormal `H`) and
+> **Sysmex XN-1000** (three-OBX CBC panel, critical `LL`
+> haemoglobin) sample messages transcribed from manufacturer
+> integration guides, plus a same-MSH-10 retransmit-delegation
+> case. Row stays `started` until follow-on multi-OBX persistence
+> (CBC panels currently only persist first OBX) and a real-traffic
+> soak against the first partner analyzer.
+>
 > **2026-05-10 update — v1.0 finishing line + a11y smoke landed.** Rows 4
 > (T-68 offline dispense queue), 5 (T-71 Playwright E2E), 6 (T-72 perf
 > baseline), 8 (Keycloak Phase C cutover) and 10 (axe-core/playwright

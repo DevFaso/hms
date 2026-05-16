@@ -1395,4 +1395,22 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V98 — Lab result idempotency for inbound ORU^R01 retransmissions
+         (roadmap row 23, v1.1 / Interop HL7).
+         Adds source_message_control_id (MSH-10) + partial unique index
+         so analyzer retransmits (Mindray / Sysmex / cobas) collapse to
+         a single lab_result row instead of duplicating on every
+         retry. V97 is reserved for the schema-per-tenant feature
+         branch — V98 is the next free slot from develop's perspective.
+         splitStatements true; no DO-blocks here, just ALTER + CREATE
+         INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V98-lab-result-source-message-control-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V98__lab_result_source_message_control_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

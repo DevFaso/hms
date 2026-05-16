@@ -98,6 +98,19 @@ public class LabResult extends BaseEntity {
     @Column(name = "actor_label", length = 255)
     private String actorLabel;
 
+    /**
+     * MSH-10 (message control id) of the inbound HL7 v2 ORU^R01 that
+     * produced this row. Used by {@code MllpInboundLabService} to make
+     * ingestion idempotent — analyzers retransmit on lost ACK and we
+     * must not duplicate the result row on every retry. {@code null}
+     * for USER-actor writes (the clinical UI path) and for any
+     * SYSTEM-actor writes whose source does not advertise a control id.
+     * A partial unique index (V98) enforces at-most-one row per non-null
+     * value at the DB layer.
+     */
+    @Column(name = "source_message_control_id", length = 255)
+    private String sourceMessageControlId;
+
     @Builder.Default
     @Column(name = "acknowledged", nullable = false)
     private boolean acknowledged = false;

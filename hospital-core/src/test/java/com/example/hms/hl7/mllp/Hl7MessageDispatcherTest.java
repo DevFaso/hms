@@ -78,7 +78,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void acceptedOruR01EmitsAa() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-42|P|2.5.1\r"
@@ -89,14 +89,15 @@ class Hl7MessageDispatcherTest {
         String ack = dispatcher.dispatch(oru, "10.0.0.42:54321");
 
         assertThat(ack).contains("MSA|AA|MSG-42");
-        verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"));
+        verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"),
+            eq("MSG-42"), anyString());
         verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString());
     }
 
     @Test
     void mapsLabRejectedNotFoundToAe() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-7|P|2.5.1\r"
@@ -112,7 +113,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void mapsLabRejectedCrossTenantToAr() {
         allowSender();
-        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString()))
+        when(inboundLab.processOruR01(any(), eq(hospital), anyString(), anyString(), any(), anyString()))
             .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
 
         String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-8|P|2.5\r"
@@ -148,7 +149,8 @@ class Hl7MessageDispatcherTest {
 
         assertThat(dispatcher.dispatch(adt, "10.0.0.50:1024")).contains("MSA|AA|CTRL-9");
         verify(inboundAdt).processAdt(any(), eq(hospital), eq("REGISTRATION"), eq("HOSP1"));
-        verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString());
+        verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString(),
+            any(), anyString());
     }
 
     @Test

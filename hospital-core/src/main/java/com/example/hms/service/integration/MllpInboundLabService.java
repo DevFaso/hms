@@ -25,6 +25,8 @@ public interface MllpInboundLabService {
         ParsedObservation observation,
         Hospital receivingHospital,
         String sendingApplication,
-        String sendingFacility
+        String sendingFacility,
+        String messageControlId,
+        String rawMessageBody
     );
 }
