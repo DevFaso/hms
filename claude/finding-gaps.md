@@ -94,7 +94,7 @@ These shift the "Epic parity" target. We are not building an Epic clone; we are 
 
 ## Recommended Implementation Sequence
 
-Each numbered item below should ship as one PR, additive only, with backend + frontend + Liquibase + tests in the same PR per `agent/coordination.md`.
+Each numbered item below should ship as one PR, additive only, with backend + frontend + Liquibase + tests in the same PR per the foundation-pass pattern documented in [`.claude/skills/pr-review-response/SKILL.md`](../.claude/skills/pr-review-response/SKILL.md) and [`.claude/skills/liquibase-migration/SKILL.md`](../.claude/skills/liquibase-migration/SKILL.md).
 
 1. **FHIR R4 read API** (Patient, Encounter, Observation, Condition, MedicationRequest, DiagnosticReport, Immunization) + `CapabilityStatement` + Bundle search. HAPI-FHIR plain-server style. *Unlocks #3, #4, #14.*
 2. **LOINC binding on `LabTestDefinition`** + **ICD-10 binding on `PatientProblem`** + **WHO ATC/RxNorm on `MedicationCatalogItem`**. Additive Liquibase migrations + DTO + UI fields. *Unlocks #1's data quality and #3's rules.*
