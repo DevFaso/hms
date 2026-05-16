@@ -149,6 +149,33 @@ public class SecurityConfig {
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
+    /**
+     * CDS Hooks sandbox + SMART App Launcher origins. Honored when
+     * {@code app.cors.cds-hooks-sandbox.enabled=true} (default).
+     * Per the CDS Hooks 1.0 spec the discovery endpoint
+     * ({@code GET /cds-services}) must be reachable from the
+     * partner EHR's browser context; explicit allowlisting these
+     * origins lets the Cerner + Epic + SMART App Launcher
+     * validation pages probe HMS without `*` wildcarding.
+     *
+     * <p>Override with {@code APP_CORS_CDS_HOOKS_SANDBOX_ORIGINS}
+     * to add private validation environments. Leave the default
+     * intact in production — these are public testing sandboxes
+     * and they do not carry PHI.
+     */
+    @Value("${app.cors.cds-hooks-sandbox.enabled:true}")
+    private boolean cdsHooksSandboxOriginsEnabled;
+
+    @Value("${app.cors.cds-hooks-sandbox.origins:"
+        + "https://fhir.epic.com,"
+        + "https://*.epic.com,"
+        + "https://fhir-ehr-code.cerner.com,"
+        + "https://sandbox.cerner.com,"
+        + "https://*.cerner.com,"
+        + "https://launcher.smarthealthit.org,"
+        + "https://*.smarthealthit.org}")
+    private String cdsHooksSandboxOrigins;
+
     // ===== Shared beans =====
 
     @Bean
@@ -203,6 +230,20 @@ public class SecurityConfig {
         ));
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
             for (String origin : allowedOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty() && !patterns.contains(trimmed)) {
+                    patterns.add(trimmed);
+                }
+            }
+        }
+
+        // CDS Hooks sandbox + SMART App Launcher origins (roadmap row 27).
+        // Discovery is public per the spec; explicit allowlisting lets the
+        // partner sandbox UIs probe HMS without `*` wildcarding.
+        if (cdsHooksSandboxOriginsEnabled
+            && cdsHooksSandboxOrigins != null
+            && !cdsHooksSandboxOrigins.isBlank()) {
+            for (String origin : cdsHooksSandboxOrigins.split(",")) {
                 String trimmed = origin.trim();
                 if (!trimmed.isEmpty() && !patterns.contains(trimmed)) {
                     patterns.add(trimmed);

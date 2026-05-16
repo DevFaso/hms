@@ -220,3 +220,65 @@ groups:
         annotations:
           summary: "Backend restarted >2 times in 10 minutes"
           description: "Crash loop suspected. Check `Errors & Warnings` panel and deploy logs."
+
+  # ── Synthetic external probes (roadmap row 43) ─────────────────────
+  # Blackbox-exporter probes hms-backend public surfaces from one or more
+  # geographic vantage points. The deliverable target is >=3 geos; locally
+  # we only run one probe so the alert math is identical regardless of
+  # cardinality — it averages probe_success over the probe_target × geo
+  # window and pages when more than 10% of attempts fail for 5 minutes.
+  #
+  # When extending: do NOT alert per-geo without a geo-aware threshold.
+  # A single misbehaving regional ISP routinely posts >0% probe failure
+  # and would flood pages without aggregation.
+  - name: hms.synthetic
+    rules:
+      - alert: HmsSyntheticProbeFailureRate
+        expr: |
+          (
+            1 - avg by (probe_target) (avg_over_time(probe_success{application="hms",service="synthetic"}[5m]))
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+          slo: external-availability
+        annotations:
+          summary: "Synthetic probe target {{ $labels.probe_target }} failing > 10% for 5m"
+          description: |
+            Blackbox-exporter probes against {{ $labels.probe_target }} have
+            failed in more than 10% of 5-minute windows. Either the public
+            surface is genuinely down or the probe configuration is wrong.
+            Open the Synthetic Probes dashboard, cross-check the
+            corresponding Actuator + access-log signals, and confirm the
+            probe URL still resolves.
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/synthetic-monitoring.md#hmssyntheticprobefailurerate"
+
+      - alert: HmsSyntheticProbeAllGeosFailing
+        expr: |
+          (
+            avg by (probe_target) (probe_success{application="hms",service="synthetic"}) == 0
+          )
+        for: 2m
+        labels:
+          severity: page
+          service: hms-backend
+          slo: external-availability
+        annotations:
+          summary: "Synthetic probe target {{ $labels.probe_target }} returning 0 from every geo"
+          description: |
+            Every Blackbox probe vantage point is failing this target. This
+            is the hard-outage signal — the public surface is unreachable
+            from outside the cluster regardless of which ISP is probing.
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/synthetic-monitoring.md#hmssyntheticprobeallgeosfailing"
+
+      - alert: HmsSyntheticProbeLatencyHigh
+        expr: |
+          probe_duration_seconds{application="hms",service="synthetic"} > 5
+        for: 10m
+        labels:
+          severity: ticket
+          service: hms-backend
+        annotations:
+          summary: "Synthetic probe {{ $labels.probe_target }} duration > 5s for 10m"
+          description: "External probe latency is degraded — investigate gateway / Railway routing."

@@ -90,6 +90,23 @@ try {
 }
 ```
 
+### `entityType` MUST be the canonical UPPER_SNAKE literal
+
+`AuditEventLogServiceImpl` special-cases `entityType` matching the
+literal `"PATIENT"` (case-insensitive against that literal) — when it
+matches, the service runs an extra resolution step that fills in
+`resourceName` + the hospital-scoped audit query path. Passing
+`"Patient"` (Pascal case from the FHIR resource type) silently
+disables that resolution; the audit row goes in but the
+human-readable columns stay null.
+
+Rule: the `entityType` field on every `AuditEventRequestDTO` MUST
+use the **same literal** the rest of the codebase uses for that
+domain — `"PATIENT"`, `"LAB_RESULT"`, `"PRESCRIPTION"`, etc. Mirror
+the prefix of the matching `AuditEventType` enum value. The FHIR
+write path (PR #343) used `"Patient"` and Copilot caught it; do not
+repeat.
+
 ### Event types
 
 The full enum is `AuditEventType` (80+ values). Pick the most specific

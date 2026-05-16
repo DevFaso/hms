@@ -1,18 +1,26 @@
 package com.example.hms.fhir.provider;
 
+import ca.uhn.fhir.rest.annotation.ConditionalUrlParam;
+import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
+import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.annotation.Search;
+import ca.uhn.fhir.rest.annotation.Update;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
+import com.example.hms.fhir.write.PatientFhirWriteService;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
@@ -40,10 +48,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
 
     private final PatientRepository patientRepository;
     private final PatientFhirMapper patientMapper;
+    private final PatientFhirWriteService writeService;
 
-    public PatientFhirResourceProvider(PatientRepository patientRepository, PatientFhirMapper patientMapper) {
+    public PatientFhirResourceProvider(
+        PatientRepository patientRepository,
+        PatientFhirMapper patientMapper,
+        PatientFhirWriteService writeService
+    ) {
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
+        this.writeService = writeService;
     }
 
     @Override
@@ -116,6 +130,75 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         return page.stream()
             .map(patientMapper::toFhir)
             .toList();
+    }
+
+    /**
+     * PUT /Patient/{id}. Updates the FHIR-mutable subset (address +
+     * telecom + active flag) of an existing patient. Identity columns
+     * (name / DOB / gender) are intentionally not honored — those flow
+     * through the registration admin path.
+     *
+     * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
+     * (default) the write service throws {@code MethodNotAllowedException}
+     * → 405.
+     */
+    @Update
+    public MethodOutcome update(
+        @IdParam IdType id,
+        @ResourceParam org.hl7.fhir.r4.model.Patient resource
+    ) {
+        UUID uuid = parseUuid(id);
+        if (resource == null) {
+            throw unprocessable(
+                "PUT /Patient/{id} requires a Patient resource body.",
+                OperationOutcome.IssueType.STRUCTURE
+            );
+        }
+        if (resource.getIdElement() != null && resource.getIdElement().getIdPart() != null
+            && !resource.getIdElement().getIdPart().isBlank()
+            && !resource.getIdElement().getIdPart().equals(uuid.toString())) {
+            throw unprocessable(
+                "Resource.id does not match the URL id; refusing to honor PUT against a mismatched id.",
+                OperationOutcome.IssueType.BUSINESSRULE
+            );
+        }
+        Patient saved = writeService.update(uuid, resource);
+        return new MethodOutcome()
+            .setId(new IdType("Patient", saved.getId().toString()))
+            .setResource(patientMapper.toFhir(saved));
+    }
+
+    /**
+     * POST /Patient. By contract the only honored variant carries an
+     * {@code If-None-Exist=identifier=<mrn-system>|<mrn>} header. Zero
+     * matches → 404 (no auto-provisioning), one match → 200 with the
+     * existing resource, multiple matches → 412.
+     */
+    @Create
+    public MethodOutcome create(
+        @ResourceParam org.hl7.fhir.r4.model.Patient resource,
+        @ConditionalUrlParam String conditionalUrl
+    ) {
+        if (resource == null) {
+            throw unprocessable(
+                "POST /Patient requires a Patient resource body.",
+                OperationOutcome.IssueType.STRUCTURE
+            );
+        }
+        Patient resolved = writeService.conditionalCreate(conditionalUrl, resource);
+        return new MethodOutcome()
+            .setId(new IdType("Patient", resolved.getId().toString()))
+            .setResource(patientMapper.toFhir(resolved))
+            .setCreated(false);
+    }
+
+    private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {
+        OperationOutcome outcome = new OperationOutcome();
+        outcome.addIssue()
+            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+            .setCode(type)
+            .setDiagnostics(message);
+        return new UnprocessableEntityException(message, outcome);
     }
 
     private static String stringPattern(StringParam param) {

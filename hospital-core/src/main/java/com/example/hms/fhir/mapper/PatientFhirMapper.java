@@ -11,21 +11,33 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Maps the internal {@link com.example.hms.model.Patient} JPA entity to a
  * FHIR R4 {@link org.hl7.fhir.r4.model.Patient} resource.
  *
- * <p>The mapping is intentionally one-way (entity → FHIR). Inbound FHIR write
- * support will be added once the read API has been validated against
- * downstream consumers (OpenMRS, DHIS2, OpenHIE).
+ * <p>{@link #toFhir(Patient)} is the read direction (entity → FHIR).
+ * {@link #applyFhirUpdates(Patient, org.hl7.fhir.r4.model.Patient)} is the
+ * write direction (FHIR → existing entity) and is intentionally narrow:
+ * only contact + address fields are honored. Identity columns
+ * (name / DOB / gender / email / phone) are <strong>not</strong> mutated
+ * via FHIR PUT — those changes must flow through the registration admin
+ * flow which carries a stronger audit trail.
  */
 @Component
 public class PatientFhirMapper {
 
     private static final String IDENTIFIER_SYSTEM_INTERNAL_ID = "urn:hms:patient:id";
     private static final String IDENTIFIER_SYSTEM_MRN_PREFIX = "urn:hms:hospital:";
+    private static final String MRN_SYSTEM_SUFFIX = ":mrn";
+    private static final Pattern MRN_SYSTEM_PATTERN = Pattern.compile(
+        "^urn:hms:hospital:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):mrn$"
+    );
 
     public org.hl7.fhir.r4.model.Patient toFhir(Patient src) {
         if (src == null) {
@@ -158,5 +170,131 @@ public class PatientFhirMapper {
     private static boolean anyText(String... s) {
         for (String x : s) if (text(x)) return true;
         return false;
+    }
+
+    /* ===================== Write direction (FHIR → entity) ===================== */
+
+    /**
+     * Result of extracting an MRN identifier from an inbound FHIR Patient or
+     * {@code If-None-Exist} search clause. Carries both the hospital UUID
+     * derived from the identifier system and the raw MRN value.
+     */
+    public record MrnIdentifier(UUID hospitalId, String mrn) {}
+
+    /**
+     * Find an MRN-shaped identifier on an inbound FHIR Patient. Looks for
+     * any identifier whose system matches
+     * {@code urn:hms:hospital:<uuid>:mrn}; returns the first match (FHIR
+     * does not order identifiers but in practice senders emit at most one
+     * MRN per hospital).
+     *
+     * <p>Returns {@code Optional.empty()} when no MRN identifier is
+     * present — the write provider treats that as a policy violation
+     * (no auto-provisioning without an MRN binding).
+     */
+    public Optional<MrnIdentifier> extractMrnIdentifier(org.hl7.fhir.r4.model.Patient src) {
+        if (src == null || src.getIdentifier() == null) return Optional.empty();
+        for (Identifier id : src.getIdentifier()) {
+            Optional<MrnIdentifier> match = matchMrnSystem(id);
+            if (match.isPresent()) return match;
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Parse a FHIR conditional-create token value of the shape
+     * {@code <system>|<value>} (the canonical search-parameter encoding
+     * for {@code identifier=...} clauses). The {@code system} part must
+     * match the MRN system; the {@code value} part is the MRN itself.
+     * Returns empty if the token is missing the pipe separator or the
+     * system does not parse as a hospital-scoped MRN URI.
+     */
+    public Optional<MrnIdentifier> parseMrnSearchToken(String tokenValue) {
+        if (tokenValue == null || tokenValue.isBlank()) return Optional.empty();
+        int pipe = tokenValue.indexOf('|');
+        if (pipe <= 0 || pipe == tokenValue.length() - 1) return Optional.empty();
+        String system = tokenValue.substring(0, pipe).trim();
+        String mrn = tokenValue.substring(pipe + 1).trim();
+        if (mrn.isEmpty()) return Optional.empty();
+        Identifier probe = new Identifier().setSystem(system).setValue(mrn);
+        return matchMrnSystem(probe);
+    }
+
+    private Optional<MrnIdentifier> matchMrnSystem(Identifier id) {
+        if (id == null || id.getSystem() == null || id.getValue() == null) return Optional.empty();
+        if (!id.getSystem().endsWith(MRN_SYSTEM_SUFFIX)) return Optional.empty();
+        Matcher matcher = MRN_SYSTEM_PATTERN.matcher(id.getSystem());
+        if (!matcher.matches()) return Optional.empty();
+        try {
+            UUID hospitalId = UUID.fromString(matcher.group(1));
+            String value = id.getValue().trim();
+            if (value.isEmpty()) return Optional.empty();
+            return Optional.of(new MrnIdentifier(hospitalId, value));
+        } catch (IllegalArgumentException ex) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Apply the FHIR-mutable subset of fields from an inbound FHIR
+     * Patient onto an existing entity. Returns the same entity for
+     * chaining. The caller is responsible for persisting + audit
+     * emission.
+     *
+     * <p><strong>Intentionally narrow:</strong>
+     * <ul>
+     *   <li>Address (single home address)</li>
+     *   <li>Telecom — phone (mobile + home) and email</li>
+     *   <li>Active flag</li>
+     * </ul>
+     * Name, DOB, gender, and identifiers are <strong>not</strong>
+     * overwritten — those flow through the registration admin path.
+     */
+    public Patient applyFhirUpdates(Patient existing, org.hl7.fhir.r4.model.Patient src) {
+        if (existing == null || src == null) return existing;
+        if (src.hasActive()) existing.setActive(src.getActive());
+        applyTelecomUpdates(existing, src);
+        applyAddressUpdates(existing, src);
+        return existing;
+    }
+
+    private void applyTelecomUpdates(Patient out, org.hl7.fhir.r4.model.Patient src) {
+        if (!src.hasTelecom()) return;
+        String mobile = firstTelecom(src, ContactPoint.ContactPointSystem.PHONE, ContactPoint.ContactPointUse.MOBILE);
+        String home = firstTelecom(src, ContactPoint.ContactPointSystem.PHONE, ContactPoint.ContactPointUse.HOME);
+        String email = firstTelecom(src, ContactPoint.ContactPointSystem.EMAIL, null);
+        if (mobile != null) out.setPhoneNumberPrimary(mobile);
+        if (home != null) out.setPhoneNumberSecondary(home);
+        if (email != null) out.setEmail(email);
+    }
+
+    private void applyAddressUpdates(Patient out, org.hl7.fhir.r4.model.Patient src) {
+        if (!src.hasAddress()) return;
+        Address a = src.getAddressFirstRep();
+        if (a == null) return;
+        if (a.hasLine() && !a.getLine().isEmpty()) {
+            out.setAddressLine1(a.getLine().get(0).getValue());
+            if (a.getLine().size() > 1) {
+                out.setAddressLine2(a.getLine().get(1).getValue());
+            }
+        }
+        if (a.hasCity()) out.setCity(a.getCity());
+        if (a.hasState()) out.setState(a.getState());
+        if (a.hasPostalCode()) out.setZipCode(a.getPostalCode());
+        if (a.hasCountry()) out.setCountry(a.getCountry());
+    }
+
+    private static String firstTelecom(
+        org.hl7.fhir.r4.model.Patient src,
+        ContactPoint.ContactPointSystem system,
+        ContactPoint.ContactPointUse use
+    ) {
+        for (ContactPoint cp : src.getTelecom()) {
+            if (cp.getSystem() != system) continue;
+            if (use != null && cp.getUse() != use) continue;
+            if (cp.getValue() == null || cp.getValue().isBlank()) continue;
+            return cp.getValue().trim();
+        }
+        return null;
     }
 }

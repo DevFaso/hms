@@ -820,7 +820,14 @@
     "PATIENTS": "Patients",
     "STAFF": "Staff",
     "SUBTITLE": "Hospital performance metrics",
-    "TITLE": "Analytics"
+    "TITLE": "Analytics",
+    "KPI": {
+      "SECTION_HEADING": "Operational KPIs",
+      "LOADING": "Loading KPIs...",
+      "DOOR_TO_DOCTOR_LABEL": "Door-to-doctor",
+      "DISPENSE_LEAD_TIME_LABEL": "Dispense lead time",
+      "NO_SHOW_RATE_LABEL": "No-show rate"
+    }
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Create",

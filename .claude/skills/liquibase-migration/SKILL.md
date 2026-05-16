@@ -109,6 +109,22 @@ dedup columns are NULL — they stay outside the constraint. See
 `uk_lab_result_source_message` (V98), `uk_admission_external_visit` /
 `uk_encounter_external_visit` (V99).
 
+**Exclude whitespace-only values, not just empty strings.** A
+predicate like `WHERE mrn <> ''` still includes `'   '` (three
+spaces). Use `WHERE btrim(mrn) <> ''` so the index truly excludes
+"blank" values and legacy whitespace-only rows don't trip uniqueness
+collisions during migration. V101 shipped with `mrn <> ''` and was
+Copilot-flagged (PR #343); the corrective form is:
+
+```sql
+WHERE is_active = true
+  AND mrn IS NOT NULL
+  AND btrim(mrn) <> '';
+```
+
+The same shape applies to any other text column where "blank" means
+"not assigned yet" rather than "intentionally empty".
+
 ## Migration validation gates
 
 Before opening a PR with a new migration:
@@ -126,4 +142,5 @@ Before opening a PR with a new migration:
 - `hospital-core/src/main/resources/db/migration/V98__lab_result_source_message_control_id.sql` — clean reference
 - `hospital-core/src/main/resources/db/migration/V99__adt_external_visit_reconciliation.sql`
 - `hospital-core/src/main/resources/db/migration/V100__patient_problem_loinc_binding.sql`
+- `hospital-core/src/main/resources/db/migration/V101__fhir_write_patient_idempotency.sql` — partial unique idx for FHIR conditional-create (row 20)
 - `hospital-core/src/main/resources/db/migration/V93__cds_rxnorm_bindings.sql` — DO-block pattern for CHECK constraint
