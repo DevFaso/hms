@@ -51,12 +51,23 @@ public class PatientViewCdsService implements CdsHookService {
 
     @Override
     public CdsServiceDescriptor descriptor() {
+        // CDS Hooks 1.0 prefetch templates — partner EHRs (Cerner, Epic,
+        // SMART App Launcher) can pre-resolve these FHIR queries and ship
+        // the bundles inside the invocation request so the service avoids
+        // a round-trip back to the EHR's FHIR server. Each value uses the
+        // {{context.<key>}} substitution defined by the spec; the keys
+        // mirror the FHIR resource names this service consults today.
+        java.util.Map<String, String> prefetch = java.util.Map.of(
+            "patient", "Patient/{{context.patientId}}",
+            "allergies", "AllergyIntolerance?patient={{context.patientId}}&clinical-status=active",
+            "problems", "Condition?patient={{context.patientId}}&clinical-status=active"
+        );
         return new CdsServiceDescriptor(
             "patient-view",
             ID,
             "Patient summary",
             "Active allergies and active problems for the patient being opened.",
-            null
+            prefetch
         );
     }
 
