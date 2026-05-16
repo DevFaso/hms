@@ -404,20 +404,34 @@ run_authenticated_env_checks() {
     fi
   fi
 
-  # A2. live realm role count == export role count
-  local live_role_count export_role_count
+  # A2. live realm role NAMES match export, ignoring Keycloak's auto-created
+  # built-ins. Counting alone produced a known false-FAIL of "live=29, export=26"
+  # on a clean uat realm — the 3 extras were always Keycloak's defaults that
+  # every realm gets regardless of the import (verified 2026-05-15 on uat).
+  # Comparing name-sets catches real drift (a missing custom role, or extras
+  # beyond the known built-ins) and ignores the noise.
   kc_admin_get "${host}/admin/realms/hms/roles"
-  export_role_count=$(jq '.roles.realm | length' "$REALM_EXPORT")
   if [[ "$_kc_status" != "200" ]]; then
     record FAIL "$env" A2 "HTTP ${_kc_status} from /admin/realms/hms/roles — same likely cause as A1. Body: $(printf '%s' "$_kc_body" | head -c 200)"
     fail_count=$((fail_count + 1))
   else
-    live_role_count=$(printf '%s' "$_kc_body" | jq 'length' 2>/dev/null || echo "?")
-    if [[ "$live_role_count" == "$export_role_count" ]]; then
-      record PASS "$env" A2 "realm role count matches export (${live_role_count})"
+    local kc_builtins='["default-roles-hms","offline_access","uma_authorization"]'
+    local live_role_names export_role_names missing extras
+    live_role_names=$(printf '%s' "$_kc_body" \
+      | jq --argjson b "$kc_builtins" -r '[.[].name] - $b | sort | .[]')
+    export_role_names=$(jq -r '.roles.realm[].name' "$REALM_EXPORT" | sort)
+    missing=$(comm -23 <(printf '%s\n' "$export_role_names") <(printf '%s\n' "$live_role_names"))
+    extras=$(comm -13 <(printf '%s\n' "$export_role_names") <(printf '%s\n' "$live_role_names"))
+    if [[ -z "$missing" && -z "$extras" ]]; then
+      local n
+      n=$(printf '%s' "$export_role_names" | grep -c '^' || echo 0)
+      record PASS "$env" A2 "all ${n} custom realm roles match export (ignoring Keycloak built-ins: default-roles-hms, offline_access, uma_authorization)"
       pass_count=$((pass_count + 1))
     else
-      record FAIL "$env" A2 "realm role count drift — live=${live_role_count}, export=${export_role_count}"
+      local msg=""
+      [[ -n "$missing" ]] && msg+="missing on live: ${missing//$'\n'/, }. "
+      [[ -n "$extras" ]]  && msg+="extras on live beyond built-ins: ${extras//$'\n'/, }."
+      record FAIL "$env" A2 "realm role name drift — ${msg}"
       fail_count=$((fail_count + 1))
     fi
   fi
