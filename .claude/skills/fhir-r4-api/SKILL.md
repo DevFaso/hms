@@ -5,10 +5,12 @@ description: Use when adding or modifying FHIR R4 resource mappers, providers, C
 
 # FHIR R4 API
 
-HMS exposes a FHIR R4 read-only API today; row 20 of the roadmap adds
-POST/PUT (write). The base URL is derived from the incoming request
-(honoring `X-Forwarded-*` headers behind Railway/nginx) unless
-`FHIR_SERVER_BASE_URL` env var is set to an absolute HTTPS URL.
+HMS exposes a FHIR R4 read API and a narrow write API on Patient
+(row 20 foundation pass shipped on
+`feat/v1.1-fhir-write-api`). The base URL is derived from the
+incoming request (honoring `X-Forwarded-*` headers behind
+Railway/nginx) unless `FHIR_SERVER_BASE_URL` env var is set to an
+absolute HTTPS URL.
 
 ## Resource mapper conventions
 
@@ -71,10 +73,122 @@ Lives in `fhir/provider/`. When adding a new resource type or operation:
 
 ## SMART-on-FHIR
 
-Discovery scaffolding lives under `fhir/smart/`. Today read-only; row
-20 (FHIR write API) is what unlocks the full SMART app launch flow.
-When extending, keep `.well-known/smart-configuration` aligned with the
-Keycloak OIDC issuer (`app.auth.oidc.issuer-uri`).
+Discovery scaffolding lives under `fhir/smart/`. Patient write is now
+on (feature-flagged); Encounter + Observation write are the remaining
+pieces that unlock the full SMART app launch flow. When extending,
+keep `.well-known/smart-configuration` aligned with the Keycloak OIDC
+issuer (`app.auth.oidc.issuer-uri`).
+
+## FHIR write API (Patient — row 20 foundation)
+
+Gated by `app.fhir.write.enabled` (env `FHIR_WRITE_ENABLED`,
+default `false`). When off, `@Create` + `@Update` return 405. The
+flag is also surfaced in the `CapabilityStatement` —
+`Patient.conditionalCreate=true` is advertised only when on.
+
+### PUT /Patient/{id}
+
+`PatientFhirWriteService.update()` applies the **FHIR-mutable subset
+only**: address (line/city/state/postalCode/country), telecom
+(phone-mobile, phone-home, email), and `active`. **Never** overwrites
+name, DOB, gender, or identifiers — those flow through the
+registration admin path which carries the deeper audit trail. The
+honored-field set is encoded in `PatientFhirMapper.applyFhirUpdates`.
+
+Emits `AuditEventType.PATIENT_UPDATE`.
+
+### POST /Patient (conditional-create)
+
+**Never auto-provisions a new Patient row** — same trust boundary as
+HL7 ADT inbound (see the `empi-identity` skill: "Never auto-create a
+Patient from an unknown EMPI alias"). Honored response shape:
+
+| Matches on the `If-None-Exist` MRN | HTTP |
+| --- | --- |
+| 0 | `404 Not Found` + OperationOutcome (NOTFOUND) |
+| 1 | `200 OK` with the existing Patient resource |
+| >1 | `412 Precondition Failed` + OperationOutcome (MULTIPLEMATCHES) |
+| missing / non-MRN `If-None-Exist` | `422` + OperationOutcome (BUSINESSRULE / NOTSUPPORTED) |
+
+The `If-None-Exist` parser accepts only
+`identifier=<system>|<value>` where `<system>` matches
+`urn:hms:hospital:<hospitalId>:mrn`. Any other search parameter is
+rejected as 422.
+
+Multi-match is kept unreachable **for the active set** by
+`V101__fhir_write_patient_idempotency.sql` — a partial unique index on
+`(hospital_id, LOWER(mrn))` where `is_active = true AND btrim(mrn) <>
+''`. Inactive registrations and whitespace-only MRNs are excluded
+from that uniqueness scope, so `412 MULTIPLEMATCHES` is still
+reachable if the conditional-create matcher considers active +
+inactive rows together. The current matcher uses
+`PatientHospitalRegistrationRepository.findActiveByHospitalIdAndIdentifier`
+which only returns `r.active = true` rows, so 412 is unreachable in
+practice today; if a future matcher widens this, audit the
+reachability before relying on the 412 branch.
+
+Emits `AuditEventType.PATIENT_ACCESS` on the matched read (no
+`PATIENT_CREATE` — nothing is created).
+
+**Deviation from FHIR R4 spec.** The spec says a conditional-create
+with zero matches should return `201 Created` after provisioning. HMS
+returns `404` instead, by deliberate policy — auto-provisioning would
+silently expand the data surface beyond what the registration desk has
+reviewed (same trust call as the HL7 ADT inbound). Do not "fix" this
+back to the spec default; the `empi-identity` skill is the authority.
+The `422 ⇒ missing If-None-Exist` branch is also an HMS deviation —
+the spec allows POST without `If-None-Exist` to mean "unconditional
+create". HMS forbids that path entirely.
+
+### Feature-flag short-circuit ordering (load-bearing)
+
+When `app.fhir.write.enabled=false`, the provider MUST return 405
+**before** any request-shape validation. The current Patient provider
+validates resource-id consistency before the write service throws
+`MethodNotAllowedException`, which means a flag-off request with a
+mismatched body id returns 422 instead of 405 — contradicting the
+documented contract and breaking the flag-off ITs. The corrective
+pattern:
+
+```java
+@Update
+public MethodOutcome update(@IdParam IdType id, @ResourceParam Patient resource) {
+    if (!writeService.isEnabled()) {
+        throw new MethodNotAllowedException("FHIR write API is disabled.");
+    }
+    // ... request validation + writeService.update(...) ...
+}
+```
+
+Caught in PR #343 Copilot review. The same fix is owed on `@Create`.
+
+### Audit entityType MUST be the canonical PATIENT literal
+
+`AuditEventLogServiceImpl` special-cases `entityType` matching the
+literal `"PATIENT"` (case-insensitive). The Patient FHIR write code
+initially used `"Patient"` (Pascal case from the FHIR resource type),
+which silently disabled the patient-resolution path —
+resource-name + id derived columns on the audit row stayed null.
+Always use `"PATIENT"`, the same literal `AuditEventType.PATIENT_*`
+implies. Caught in PR #343 Copilot review.
+
+### Conditional-URL parameter parser is strict
+
+`PatientFhirWriteService.extractIdentifierToken()` must enforce
+exactly **one** `identifier=` parameter and **no other** search
+parameters. A relaxed parser that accepts
+`identifier=...&active=true&_count=10` contradicts the documented
+contract and lets the conditional URL leak fields HMS never agreed
+to honor. Caught in PR #343 Copilot review.
+
+### What's deferred
+
+`Encounter` and `Observation` write paths are deferred to the row-20
+follow-on. Observation is the harder one: the mapper has a 1:N
+PatientVitalSign → 7 Observation expansion, so the write path will
+likely only honor `labresult-{uuid}` namespace and reject
+`vital-{uuid}-{component}` updates. The DTO contract (FHIR Encounter
+/ Observation as the body) stays stable.
 
 ## Read-only routing (row 35 foundation)
 
@@ -88,17 +202,24 @@ read-your-own-write semantics.
 ## Reference files
 
 - `hospital-core/src/main/java/com/example/hms/fhir/FhirConfig.java`
+- `hospital-core/src/main/java/com/example/hms/fhir/FhirWriteProperties.java` — write feature flag
 - `hospital-core/src/main/java/com/example/hms/fhir/ApacheProxyAddressStrategy.java`
 - `hospital-core/src/main/java/com/example/hms/fhir/mapper/ObservationFhirMapper.java`
+- `hospital-core/src/main/java/com/example/hms/fhir/mapper/PatientFhirMapper.java` — read + `applyFhirUpdates` (write)
 - `hospital-core/src/main/java/com/example/hms/fhir/provider/` — resource providers + CapabilityStatement
 - `hospital-core/src/main/java/com/example/hms/fhir/smart/` — SMART discovery
+- `hospital-core/src/main/java/com/example/hms/fhir/write/PatientFhirWriteService.java` — Patient PUT + conditional POST
 - `hospital-core/src/main/java/com/example/hms/terminology/TerminologyCodes.java`
+- `docs/runbooks/fhir-write-api.md` — operational runbook
 
 ## Roadmap context
 
-- Row 20: FHIR write API (Patient, Encounter, Observation + `If-None-Exist` conditional create)
+- Row 20: FHIR write API (Patient PUT + conditional POST shipped on
+  `feat/v1.1-fhir-write-api`; Encounter + Observation deferred to
+  the row-20 follow-on)
 - Row 21: Bulk Data Access (`$export`) → S3-compatible bucket
 - Row 22: `$everything` (Patient compartment export)
 
-Build the write API before the bulk / `$everything` operations — they
-both depend on write semantics being well-defined.
+Build the rest of the write API (Encounter + Observation) before the
+bulk / `$everything` operations — they both depend on write semantics
+being well-defined.

@@ -92,6 +92,35 @@ For raw `@Query` JPQL/native queries, you have two options:
 Never write a query that returns clinical rows across hospitals without
 an explicit unscoped-justification comment and an audit emission.
 
+## Aggregate / dashboard queries
+
+For aggregate rollups that never expose patient-level rows (e.g. the
+row-32 KPI dashboard — `KpiDashboardServiceImpl`), the contract is:
+
+1. Resolve the active hospital via
+   `RoleValidator.requireActiveHospitalId()` (or its empty-rollup
+   variant), **not** raw
+   `HospitalContextHolder.getContextOrEmpty().getActiveHospitalId()`.
+   For a real super-admin in global view, the raw context can still
+   carry a JWT-derived primary hospital — only `RoleValidator`
+   explicitly drops that value when no `X-Hospital-Id` override was
+   sent. The row-32 foundation pass read the raw context and Copilot
+   flagged it (PR #341 Medium severity): an unpinned super-admin
+   would receive one hospital's KPIs instead of the documented
+   empty rollup. Fix this before flipping row 32 to `completed`.
+2. **Don't** thread `hospitalId` through the controller signature —
+   the dashboard is an implicit-context endpoint by design. Clients
+   set the hospital via `X-Hospital-Id` (or via the JWT for normal
+   users), not via a query param.
+3. When the resolved hospital id is `null` (super-admin without an
+   explicit hospital pin), return an empty rollup with sample-sizes
+   at zero. Don't compute cross-tenant aggregates by default — that
+   would silently expand the data surface.
+4. The aggregate output (counts, averages, ratios) is exempt from
+   the `PATIENT_ACCESS` audit emission requirement because no
+   patient-level row escapes the service. Standard request logging
+   applies.
+
 ## Reference files
 
 - `hospital-core/src/main/java/com/example/hms/security/context/HospitalContext.java`

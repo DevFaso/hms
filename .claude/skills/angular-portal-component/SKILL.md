@@ -50,12 +50,27 @@ When you add a translatable string:
 1. Add the key + EN value to `src/assets/i18n/en.json`.
 2. Add the FR + ES translations in the matching files. If you don't
    speak FR/ES, ask the user to provide — **do not invent**.
-3. Use the `transloco` pipe (`{{ 'key' | transloco }}`) or
-   `TranslocoDirective` in the template; never hard-code clinical
-   strings.
+3. Use the `ngx-translate` `| translate` pipe or the matching
+   `TranslateDirective` in the template; never hard-code clinical
+   strings. The portal uses **ngx-translate**, not Transloco — keep
+   pipe and directive references on the same library (an earlier
+   draft of this skill mixed the two and Copilot rightly flagged it
+   on PR #340).
 
-Keys are kebab-case and namespaced by feature:
-`appointments.list.empty-state.title`, etc.
+**i18n key convention** — the codebase uses `UPPER_CASE_SCREAMING`
+nested keys (e.g. `ANALYTICS.KPI.DOOR_TO_DOCTOR_LABEL`), not the
+kebab-case variant some earlier docs imply. Mirror the existing
+feature-name conventions when adding keys: open the EN file, find the
+nearest feature block, extend it. Adding a sibling kebab-case block
+alongside an UPPER_CASE block multiplies maintenance burden and
+breaks the at-a-glance scan of the JSON.
+
+**i18n the units, not just the labels.** Strings like `"27 min"` or
+`"7.5 %"` inside `formatMinutes()` / `formatPercent()` helpers are
+just as translatable as the surrounding labels. Don't hard-code `"min"`
+in the TS file — pass the value to a translation key that injects the
+unit, or use Angular's number/percent pipes with locale support.
+Caught in PR #341 Copilot review on `kpi-cards.component.ts`.
 
 ## Accessibility — the axe smoke gate is non-negotiable
 
@@ -121,6 +136,27 @@ route.
   user-actionable surfaces (404 = "not found" toast, 5xx = "service
   unavailable" toast).
 
+**Do NOT swallow errors as empty-data.** A pattern like
+`pipe(catchError(() => of({} as T)))` collapses 401 / 403 / 500 into
+"no data" cards, which makes outages and authorization problems
+indistinguishable from a genuinely empty window — operators can't
+tell whether to escalate or dismiss. Either let the error propagate
+to the component (and render an explicit error state) or return a
+typed `Loaded<T> | Failed<E>` discriminated union. Caught in PR #341
+Copilot review on `dashboard.service.ts`.
+
+## Component reachability must match the backend's @PreAuthorize
+
+When embedding a new component, verify that the **route guard** on the
+page that hosts it matches the **`@PreAuthorize` roles** on the
+backing controller. The row-32 KPI cards were embedded inside the
+analytics page (`ROLE_SUPER_ADMIN` route guard), but the backing
+endpoint allows `SUPER_ADMIN / HOSPITAL_ADMIN / DOCTOR / NURSE /
+STAFF` — so the new UI is unreachable for four of its five intended
+users. Either widen the guard or place the component on a route whose
+guard matches. Caught in PR #341 Copilot review on
+`analytics.html`.
+
 ## Build + test commands
 
 ```bash
@@ -137,9 +173,37 @@ The pre-commit hook in `.claude/settings.json` runs `format:check + lint`
 on every git commit. If it fails, **fix the underlying issue**; never
 `git commit --no-verify`.
 
+## Sub-component pattern for feature add-ons
+
+When a feature module gains a discrete sub-rollup (e.g. the row-32
+`<app-kpi-cards>` added inside `analytics/`), put it under a child
+directory named for the sub-component:
+
+```
+src/app/<feature>/
+  ├── <feature>.ts            ← top-level standalone component
+  ├── <feature>.html / .scss
+  └── <sub-component>/
+        ├── <sub-component>.component.ts
+        ├── <sub-component>.component.html
+        └── <sub-component>.component.scss
+```
+
+The parent imports the child via `imports: [..., ChildComponent]`
+inside its `@Component`. The child stays standalone, gets its own
+`DashboardService` (or feature-service) injection, and renders
+independently — the parent should never reach into the child's
+signals.
+
+This is the pattern used by the row-32 KPI dashboard
+(`analytics/kpi-cards/`); reuse it for follow-on KPIs (median P50
+door-to-doctor, sparkline trend) so each rollup is one file diff
+not a re-render of the whole parent template.
+
 ## Reference files
 
 - `hospital-portal/src/app/` — feature modules
+- `hospital-portal/src/app/analytics/kpi-cards/` — reference sub-component pattern
 - `hospital-portal/src/app/shared/a11y/` — accessibility primitives
 - `hospital-portal/src/app/auth/` — interceptors + guards
 - `hospital-portal/src/assets/i18n/` — translation files
