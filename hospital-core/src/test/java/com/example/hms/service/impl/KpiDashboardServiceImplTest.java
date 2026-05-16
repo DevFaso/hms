@@ -44,9 +44,9 @@ class KpiDashboardServiceImplTest {
 
     private KpiDashboardServiceImpl service;
 
-    private final UUID HOSPITAL_ID = UUID.randomUUID();
-    private final LocalDate FROM = LocalDate.of(2026, 4, 1);
-    private final LocalDate TO   = LocalDate.of(2026, 4, 30);
+    private final UUID hospitalId = UUID.randomUUID();
+    private final LocalDate from = LocalDate.of(2026, 4, 1);
+    private final LocalDate to   = LocalDate.of(2026, 4, 30);
 
     @BeforeEach
     void setUp() {
@@ -64,7 +64,7 @@ class KpiDashboardServiceImplTest {
     @Test
     @DisplayName("null fromInclusive throws NullPointerException")
     void nullFrom_throwsNpe() {
-        assertThatThrownBy(() -> service.computeDashboard(null, TO))
+        assertThatThrownBy(() -> service.computeDashboard(null, to))
             .isInstanceOf(NullPointerException.class);
         verify(entityManager, never()).createNativeQuery(anyString());
     }
@@ -72,7 +72,7 @@ class KpiDashboardServiceImplTest {
     @Test
     @DisplayName("null toInclusive throws NullPointerException")
     void nullTo_throwsNpe() {
-        assertThatThrownBy(() -> service.computeDashboard(FROM, null))
+        assertThatThrownBy(() -> service.computeDashboard(from, null))
             .isInstanceOf(NullPointerException.class);
         verify(entityManager, never()).createNativeQuery(anyString());
     }
@@ -80,7 +80,7 @@ class KpiDashboardServiceImplTest {
     @Test
     @DisplayName("toInclusive before fromInclusive throws IllegalArgumentException")
     void reversedDates_throwsIllegalArgument() {
-        assertThatThrownBy(() -> service.computeDashboard(TO, FROM))
+        assertThatThrownBy(() -> service.computeDashboard(to, from))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("toInclusive");
         verify(entityManager, never()).createNativeQuery(anyString());
@@ -92,7 +92,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("no hospital context (empty) returns empty rollup without querying DB")
     void noContext_returnsEmptyRollup() {
         // HospitalContextHolder is empty — getContextOrEmpty() returns HospitalContext.empty()
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
         assertThat(result.hospitalId()).isNull();
         assertThat(result.doorToDoctor().sampleSize()).isZero();
@@ -106,12 +106,12 @@ class KpiDashboardServiceImplTest {
     @DisplayName("super-admin without header pin (JWT-only hospitalId) returns empty rollup")
     void superAdminWithoutPin_returnsEmptyRollup() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID) // JWT-derived — not an explicit header pin
+            .activeHospitalId(hospitalId) // JWT-derived — not an explicit header pin
             .superAdmin(true)
             .headerOverridden(false)
             .build());
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
         assertThat(result.hospitalId()).isNull();
         assertThat(result.doorToDoctor().sampleSize()).isZero();
@@ -122,7 +122,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("super-admin with explicit X-Hospital-Id pin computes KPIs for that hospital")
     void superAdminWithPin_computesKpis() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID)
+            .activeHospitalId(hospitalId)
             .superAdmin(true)
             .headerOverridden(true)
             .build());
@@ -133,9 +133,9 @@ class KpiDashboardServiceImplTest {
             new Object[]{10L, 1L}       // noShow: 10 total, 1 no-show
         );
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
-        assertThat(result.hospitalId()).isEqualTo(HOSPITAL_ID);
+        assertThat(result.hospitalId()).isEqualTo(hospitalId);
         assertThat(result.doorToDoctor().sampleSize()).isEqualTo(5L);
         assertThat(result.doorToDoctor().averageMinutes()).isEqualTo(15.0);
     }
@@ -146,7 +146,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("computeDashboard returns correct KPI values for non-empty window")
     void computeDashboard_nonEmptyWindow_correctValues() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID)
+            .activeHospitalId(hospitalId)
             .build());
 
         stubThreeQueries(
@@ -155,11 +155,11 @@ class KpiDashboardServiceImplTest {
             new Object[]{100L, 7L}      // noShow: 100 total, 7 no-show → 0.07
         );
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
-        assertThat(result.hospitalId()).isEqualTo(HOSPITAL_ID);
-        assertThat(result.from()).isEqualTo(FROM);
-        assertThat(result.to()).isEqualTo(TO);
+        assertThat(result.hospitalId()).isEqualTo(hospitalId);
+        assertThat(result.from()).isEqualTo(from);
+        assertThat(result.to()).isEqualTo(to);
 
         assertThat(result.doorToDoctor().sampleSize()).isEqualTo(20L);
         assertThat(result.doorToDoctor().averageMinutes()).isEqualTo(27.0);
@@ -176,7 +176,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("zero encounters returns null averageMinutes for door-to-doctor")
     void zeroDoorToDoctorSamples_returnsNullAverage() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID)
+            .activeHospitalId(hospitalId)
             .build());
 
         stubThreeQueries(
@@ -185,7 +185,7 @@ class KpiDashboardServiceImplTest {
             new Object[]{0L, 0L}        // noShow: no appointments
         );
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
         assertThat(result.doorToDoctor().sampleSize()).isZero();
         assertThat(result.doorToDoctor().averageMinutes()).isNull();
@@ -199,7 +199,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("no-show rate is calculated as noShow / total appointments")
     void noShowRate_computesCorrectRatio() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID)
+            .activeHospitalId(hospitalId)
             .build());
 
         stubThreeQueries(
@@ -208,7 +208,7 @@ class KpiDashboardServiceImplTest {
             new Object[]{40L, 10L}      // 10/40 = 0.25
         );
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, TO);
+        KpiDashboardDTO result = service.computeDashboard(from, to);
 
         assertThat(result.noShowRate().rate())
             .as("no-show rate = noShow / total")
@@ -219,7 +219,7 @@ class KpiDashboardServiceImplTest {
     @DisplayName("same from and to date (single-day window) is accepted")
     void singleDayWindow_accepted() {
         HospitalContextHolder.setContext(HospitalContext.builder()
-            .activeHospitalId(HOSPITAL_ID)
+            .activeHospitalId(hospitalId)
             .build());
 
         stubThreeQueries(
@@ -228,7 +228,7 @@ class KpiDashboardServiceImplTest {
             new Object[]{5L, 0L}
         );
 
-        KpiDashboardDTO result = service.computeDashboard(FROM, FROM);
+        KpiDashboardDTO result = service.computeDashboard(from, from);
 
         assertThat(result.doorToDoctor().sampleSize()).isEqualTo(2L);
     }

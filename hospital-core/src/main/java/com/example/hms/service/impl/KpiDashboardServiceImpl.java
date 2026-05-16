@@ -37,6 +37,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class KpiDashboardServiceImpl implements KpiDashboardService {
 
+    private static final String PARAM_HOSPITAL_ID = "hospitalId";
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -96,7 +98,7 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
               AND e.triage_timestamp <  :windowEnd
               AND e.triage_timestamp >  e.arrival_timestamp
             """)
-            .setParameter("hospitalId", hospitalId)
+            .setParameter(PARAM_HOSPITAL_ID, hospitalId)
             .setParameter("windowStart", from)
             .setParameter("windowEnd", to)
             .getSingleResult();
@@ -124,7 +126,7 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
               AND d.dispensed_at <  :windowEnd
               AND d.dispensed_at >  p.created_at
             """)
-            .setParameter("hospitalId", hospitalId)
+            .setParameter(PARAM_HOSPITAL_ID, hospitalId)
             .setParameter("windowStart", from)
             .setParameter("windowEnd", to)
             .getSingleResult();
@@ -147,7 +149,7 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
               AND a.appointment_date >= :fromInclusive
               AND a.appointment_date <  :toExclusive
             """)
-            .setParameter("hospitalId", hospitalId)
+            .setParameter(PARAM_HOSPITAL_ID, hospitalId)
             .setParameter("fromInclusive", fromInclusive)
             .setParameter("toExclusive", toExclusive)
             .getSingleResult();
