@@ -279,6 +279,29 @@ services:
     volumes:
       - /:/host:ro,rslave
 
+  # ── blackbox-exporter (profile: observability) ─────────────
+  # Synthetic HTTP probes against HMS public surfaces (roadmap row 43).
+  # Modules are defined in grafana/blackbox.yml; the probe targets are
+  # listed under the `blackbox_http` scrape job in grafana/prometheus.yml.
+  #
+  # Locally this runs alongside the rest of the observability stack and
+  # probes the bare-stack endpoints. In production the same module file
+  # is reused but the targets list points at the public Railway domains,
+  # and the goal is to run Blackbox in three cloud regions (or use
+  # Grafana k6 cloud — see docs/runbooks/synthetic-monitoring.md) so the
+  # >10% probe-failure alert can distinguish a regional ISP problem
+  # from an actual HMS outage.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: hms-blackbox-exporter
+    profiles: ["observability"]
+    ports:
+      - "9115:9115"
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    volumes:
+      - ./grafana/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+
   # ── Grafana ────────────────────────────────────────────────
   grafana:
     image: grafana/grafana:11.1.0

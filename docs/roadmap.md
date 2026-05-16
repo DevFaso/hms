@@ -11,6 +11,74 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-16**. Update both files together when scope moves.
 
+> **2026-05-16 update — daytime foundation passes flip rows 20, 27,
+> 32, and 43 to `started`.** Four feature branches landed in the
+> daytime session against `origin/develop`. Each follows the
+> foundation-pass discipline (`not-started → started`, NOT
+> `→ completed`); follow-on scope is explicitly named in each cell.
+> The companion skills refresh ships on
+> `chore/skills-update-post-4-picks`.
+>
+> - **Row 20 (FHIR write API)** — `feat/v1.1-fhir-write-api`. V101
+>   adds the partial unique index
+>   `uk_patient_hospital_registration_active_mrn` on
+>   `(hospital_id, LOWER(mrn)) WHERE is_active = true` so FHIR
+>   conditional-create multi-match (412) stays unreachable in
+>   practice. `PatientFhirWriteService` ships PUT `/Patient/{id}`
+>   updating the FHIR-mutable subset only
+>   (address / telecom / active — identity columns flow through the
+>   registration admin path) and POST `/Patient` with
+>   `If-None-Exist` per the `empi-identity` policy (0 → 404, 1 →
+>   200 with existing, >1 → 412, missing/non-MRN → 422 — never
+>   auto-provisions). Gated by `app.fhir.write.enabled` (default
+>   `false`); the `CapabilityStatement` advertises
+>   `Patient.conditionalCreate=true` only when on. 6 IT cases across
+>   `PatientFhirWriteIT` + `PatientFhirWriteEnabledIT`. Encounter +
+>   Observation write paths deferred to the row-20 follow-on.
+>   Runbook:
+>   [`docs/runbooks/fhir-write-api.md`](./runbooks/fhir-write-api.md).
+> - **Row 27 (CDS Hooks public discovery)** —
+>   `feat/v1.1-cds-hooks-public-discovery`. `SecurityConfig` adds an
+>   explicit `app.cors.cds-hooks-sandbox.*` allowlist with sensible
+>   defaults for the Cerner / Epic / SMART App Launcher sandbox
+>   origins so partner UIs can probe HMS without wildcarding.
+>   `PatientViewCdsService` and `BpaProtocolsCdsService` declare
+>   prefetch templates so Cerner/Epic can pre-resolve the FHIR
+>   queries inline. `CdsHooksDiscoveryIT` replaces the single-case
+>   shape check with five spec-grounded assertions including a CORS
+>   preflight from `https://launcher.smarthealthit.org`. Row stays
+>   `started` until clean discovery + invocation pairs are recorded
+>   against all three external sandboxes. Runbook:
+>   [`docs/runbooks/cds-hooks-sandbox-validation.md`](./runbooks/cds-hooks-sandbox-validation.md).
+> - **Row 32 (KPI dashboard service)** —
+>   `feat/v1.1-kpi-dashboard-service`. New
+>   `GET /api/kpi/dashboard?from&to` (180-day cap; `SUPER_ADMIN /
+>   HOSPITAL_ADMIN / DOCTOR / NURSE / STAFF` access). The three KPIs
+>   (door-to-doctor, dispense lead time, no-show rate) compute
+>   on-demand via native SQL against `clinical.encounters`,
+>   `clinical.dispenses ⋈ clinical.prescriptions`, and
+>   `clinical.appointments` — tenant scope from
+>   `HospitalContextHolder.getActiveHospitalId()` (super-admin
+>   without an explicit pin returns an empty rollup). New
+>   `<app-kpi-cards>` sub-component embedded inside `analytics/`
+>   with `ANALYTICS.KPI.*` keys across en/fr/es. Materialized-view
+>   backing deferred (premature given current query volume + H2 MV
+>   gap); P50 median, sparkline, and seeded E2E axe-smoke follow-on.
+>   Runbook:
+>   [`docs/runbooks/kpi-dashboard.md`](./runbooks/kpi-dashboard.md).
+> - **Row 43 (Synthetic monitoring)** —
+>   `feat/v2.0-synthetic-monitoring`. Blackbox-exporter added to
+>   the existing `observability` docker-compose profile; four probe
+>   modules in `grafana/blackbox.yml` + four scrape jobs in
+>   `grafana/prometheus.yml` against the public Actuator / FHIR /
+>   SMART config / CDS discovery surfaces; three alert rules in
+>   `grafana/rules/alerts.yml` group `hms.synthetic`, including the
+>   deliverable's `> 10% probe failure for 5 min` page. Multi-geo
+>   rollout itself (Option A: 3 Blackbox regions; Option B: k6
+>   cloud canary from 3 default load zones) is operational and
+>   deferred to the row-43 follow-on. Runbook:
+>   [`docs/runbooks/synthetic-monitoring.md`](./runbooks/synthetic-monitoring.md).
+
 > **2026-05-16 update — overnight foundation passes for v1.1 + v2.0
 > landed (4 PRs).** Four feature branches merged into develop in
 > sequence; this narrative covers all four for context. Row 24's

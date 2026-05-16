@@ -820,7 +820,14 @@
     "PATIENTS": "Patients",
     "STAFF": "Personnel",
     "SUBTITLE": "Indicateurs de performance hospitalière",
-    "TITLE": "Analytique"
+    "TITLE": "Analytique",
+    "KPI": {
+      "SECTION_HEADING": "Indicateurs opérationnels",
+      "LOADING": "Chargement des indicateurs…",
+      "DOOR_TO_DOCTOR_LABEL": "Délai accueil-médecin",
+      "DISPENSE_LEAD_TIME_LABEL": "Délai de dispensation",
+      "NO_SHOW_RATE_LABEL": "Taux d'absentéisme"
+    }
   },
   "ANNOUNCEMENTS": {
     "CREATE": "Créer",
