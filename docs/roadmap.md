@@ -13,7 +13,7 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
-> develop and were promoted through uat to main on 2026-05-16. Each
+> develop and were promoted through UAT to main on 2026-05-16. Each
 > follows the foundation-pass discipline (`not-started → started`,
 > NOT `→ completed`); follow-on scope is explicitly named in each
 > cell. The companion skills refresh shipped on
