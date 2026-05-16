@@ -1,6 +1,7 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.HospitalPlatformServiceLink;
@@ -163,6 +164,24 @@ public class Hospital extends BaseEntity {
 
     @Column(name = "purged_at")
     private Instant purgedAt;
+
+    // ── Tenant isolation mode (roadmap row 33, v2.0) ─────────────────
+    // ROW_LEVEL: shared schema, hospital_id filtering (default for all
+    // hospitals today). SCHEMA: dedicated PG schema named by
+    // tenantSchemaName, routed via SchemaTenantConnectionProvider when
+    // app.tenancy.schema-isolation.enabled=true. Flipping the field on
+    // a live hospital requires the schema to exist first — see
+    // docs/runbooks/schema-per-tenant-migration.md.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "isolation_mode", nullable = false, length = 16)
+    private TenantIsolationMode isolationMode = TenantIsolationMode.ROW_LEVEL;
+
+    @Pattern(regexp = "^[a-z][a-z0-9_]{0,62}$",
+        message = "tenantSchemaName must be a valid PostgreSQL identifier (lowercase, "
+            + "starts with a letter, ≤ 63 chars, [a-z0-9_])")
+    @Column(name = "tenant_schema_name", length = 63)
+    private String tenantSchemaName;
 
     @Builder.Default
     @OneToMany(mappedBy = "hospital", fetch = FetchType.LAZY,

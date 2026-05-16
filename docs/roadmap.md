@@ -11,6 +11,30 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-15**. Update both files together when scope moves.
 
+> **2026-05-15 update — v2.0 / Multi-tenancy / Schema-per-tenant
+> migration path foundation pass started.** Row 33 flipped from
+> `not-started` to `started` on `feat/v2.0-schema-per-tenant`. Foundation
+> shipped: `TenantIsolationMode` enum (`ROW_LEVEL` default, `SCHEMA`),
+> `Hospital.isolationMode` + `Hospital.tenantSchemaName` columns
+> (Liquibase `V97__hospital_tenant_isolation_mode.sql` with CHECK
+> constraints binding the two columns and a partial unique index on
+> the schema name), and the application-side plumbing under
+> `hospital-core/src/main/java/com/example/hms/security/tenant/schema/`
+> — `SchemaTenantIdentifierResolver`, `SchemaTenantConnectionProvider`
+> (strict identifier allow-list, `SET search_path` per tenant),
+> `TenantSchemaLookup` (JDBC-only to avoid resolver recursion, 5-min
+> cache with manual invalidate), and `SchemaTenancyConfiguration`
+> (Hibernate `multiTenancy=SCHEMA` wired via
+> `HibernatePropertiesCustomizer`). The whole path is gated by
+> `app.tenancy.schema-isolation.enabled` (default `false`) so production
+> behavior is bit-for-bit unchanged. 28 unit tests cover resolver,
+> provider, and lookup. Operational procedure (provision schema, copy
+> rows, flip mode, soak, rollback) documented in
+> [`docs/runbooks/schema-per-tenant-migration.md`](./runbooks/schema-per-tenant-migration.md).
+> Row stays `started` until `scripts/tenancy/provision-schema.sh`,
+> `scripts/tenancy/copy-rows.sh`, the cache-invalidation REST endpoint,
+> and the first end-to-end UAT cutover land in subsequent PRs.
+>
 > **2026-05-15 update — v2.0 / Compliance / SOC 2 Type I → Type II
 > gap analysis pass started.** Row 37 flipped from `not-started` to
 > `started` on `feat/v2.0-soc2-gap-analysis`. Foundation shipped:
