@@ -121,6 +121,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String DEFAULT_PATIENT_NAME = "Patient";
     private static final String DEFAULT_ADMINISTRATION_STATUS = "GIVEN";
     private static final String ADMISSION_OWNER = "Admission";
+    private static final String ASSOCIATION_PATIENT = "patient";
+    private static final String ASSOCIATION_DEPARTMENT = "department";
 
     /** Statuses accepted on the administer endpoint. */
     private static final Set<String> SUPPORTED_ADMINISTRATION_STATUSES = Set.of(
@@ -879,10 +881,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         };
     }
 
-    private String abbreviateHospitalId(UUID hospitalId) {
-        return hospitalId.toString().substring(0, 8).toUpperCase(Locale.ROOT);
-    }
-
     private int clampInt(int value, int min, int max) {
         return Math.clamp(value, min, max);
     }
@@ -923,7 +921,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private NurseWorkboardPatientDTO toWorkboardCard(Admission a, UUID hospitalId,
                                                      LocalDateTime overdueThreshold, LocalDateTime now) {
         UUID admissionId = a.getId();
-        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
 
         Optional<LocalDateTime> lastVitals = vitalSignRepository
@@ -939,7 +937,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .filter(rx -> !STATUS_COMPLETED.equals(resolveMarStatus(rx, now)))
             .count();
 
-        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
         Staff admittingProvider = JpaProxyUtils.safeInit(
             a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
         String departmentName = department != null ? department.getName() : null;
@@ -1014,11 +1013,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseFlowPatientCardDTO toFlowCard(Admission a, LocalDateTime now) {
         UUID admissionId = a.getId();
-        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
 
         Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
-        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
         long waitMinutes = a.getAdmissionDateTime() != null
             ? java.time.Duration.between(a.getAdmissionDateTime(), now).toMinutes() : 0;
         UUID hospId = hospital != null ? hospital.getId() : null;
@@ -1168,11 +1168,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseAdmissionSummaryDTO toAdmissionSummary(Admission a) {
         UUID admissionId = a.getId();
-        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, "patient");
+        Patient patient = JpaProxyUtils.safeInit(a.getPatient(), ADMISSION_OWNER, admissionId, ASSOCIATION_PATIENT);
         if (patient == null) return null;
 
         Hospital hospital = JpaProxyUtils.safeInit(a.getHospital(), ADMISSION_OWNER, admissionId, "hospital");
-        Department department = JpaProxyUtils.safeInit(a.getDepartment(), ADMISSION_OWNER, admissionId, "department");
+        Department department = JpaProxyUtils.safeInit(
+            a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
         Staff admittingProvider = JpaProxyUtils.safeInit(
             a.getAdmittingProvider(), ADMISSION_OWNER, admissionId, "admittingProvider");
         UUID hospId = hospital != null ? hospital.getId() : null;
