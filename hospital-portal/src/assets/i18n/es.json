@@ -1300,6 +1300,7 @@
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
     "ACKNOWLEDGED": "Acknowledged",
+    "ADJUST_FILTERS": "Ajuste los filtros o la búsqueda para ver las consultas existentes.",
     "NO_DATA_GLOBAL": "No hay consultas en ninguno de sus hospitales.",
     "ADDITIONAL_NOTES_PLACEHOLDER": "Additional notes...",
     "ASSIGN": "Assign",
@@ -1338,6 +1339,7 @@
     "NEW": "New Consultation",
     "NOTE_OPTIONAL": "Note (optional)",
     "NO_CONSULTATIONS": "No consultations found",
+    "NO_MATCHING_CONSULTATIONS": "No hay consultas que coincidan con la vista actual.",
     "OVERDUE": "Overdue",
     "OVERDUE_CONSULTATIONS": "Overdue Consultations",
     "REASON": "Reason",

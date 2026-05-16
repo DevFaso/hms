@@ -1,12 +1,17 @@
 package com.example.hms.service;
 
 import com.example.hms.model.Announcement;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,15 +24,26 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AnnouncementServiceImpl implements AnnouncementService {
     private final AnnouncementRepository announcementRepository;
+    private final HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
     public List<AnnouncementResponseDTO> getAnnouncements(int limit) {
-        return announcementRepository.findAll().stream()
-            .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
-            .limit(limit)
+        int effectiveLimit = Math.clamp(limit, 1, 100);
+        UUID hospitalId = currentHospitalId();
+        List<Announcement> announcements = hospitalId != null
+            ? announcementRepository.findByHospital_IdOrderByDateDesc(
+                hospitalId,
+                PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "date"))
+            ).getContent()
+            : announcementRepository.findAll().stream()
+                .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
+                .limit(effectiveLimit)
+                .toList();
+
+        return announcements.stream()
             .map(this::toDTO)
             .toList();
     }
@@ -43,9 +59,12 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional
     public AnnouncementResponseDTO createAnnouncement(String text) {
+        UUID hospitalId = currentHospitalId();
+        Hospital hospital = hospitalId != null ? hospitalRepository.getReferenceById(hospitalId) : null;
         Announcement announcement = Announcement.builder()
             .text(text)
             .date(LocalDateTime.now())
+            .hospital(hospital)
             .build();
         AnnouncementResponseDTO saved = toDTO(announcementRepository.save(announcement));
 
@@ -92,5 +111,9 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             announcement.getText(),
             announcement.getDate()
         );
+    }
+
+    private UUID currentHospitalId() {
+        return HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
     }
 }

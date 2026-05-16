@@ -129,7 +129,8 @@ class NurseTaskServiceImplTest {
         lenient().when(marRepository.findByPatient_IdAndHospital_IdAndStatus(any(), any(), any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
-        lenient().when(announcementRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        lenient().when(announcementRepository.findByHospital_IdOrderByDateDesc(any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
     }
@@ -182,7 +183,7 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksUsesStatusFilterWhenProvided() {
+    void getMedicationTasksReturnsEmptyWhenNoRealMedicationTasksMatchStatus() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
@@ -195,9 +196,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " held ");
 
-        assertThat(tasks)
-            .isNotEmpty()
-            .allMatch(task -> "HELD".equals(task.getStatus()));
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -212,7 +211,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
         verify(nurseDashboardService).getPatientsForNurse(null, hospitalId, null);
     }
 
@@ -254,26 +253,19 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsUsesDefaultHospitalSeedWhenNull() {
+    void getAnnouncementsReturnsEmptyWhenDatabaseIsEmpty() {
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(null, 0);
 
-        assertThat(announcements)
-            .hasSize(1)
-            .first()
-            .extracting(NurseAnnouncementDTO::getText)
-            .asString()
-            .contains("[HOSPITAL]");
+        assertThat(announcements).isEmpty();
     }
 
     @Test
-    void getAnnouncementsAbbreviatesHospitalId() {
+    void getAnnouncementsReturnsEmptyForHospitalWhenDatabaseIsEmpty() {
         UUID hospitalId = UUID.fromString("12345678-1234-5678-1234-567812345678");
 
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(hospitalId, 2);
 
-        assertThat(announcements)
-            .hasSize(2)
-            .allSatisfy(announcement -> assertThat(announcement.getText()).contains("[12345678]"));
+        assertThat(announcements).isEmpty();
     }
 
     @Test
@@ -435,10 +427,10 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksGeneratesDefaultPatientsWhenHospitalMissing() {
+    void getMedicationTasksReturnsEmptyWhenHospitalMissing() {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(UUID.randomUUID(), null, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -603,9 +595,8 @@ class NurseTaskServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
 
-        // Should fall back to synthetic tasks since DRAFT is filtered out
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -1066,7 +1057,8 @@ class NurseTaskServiceImplTest {
         Announcement a1 = Announcement.builder().id(UUID.randomUUID()).text("Code Blue drill at 14:00").date(now.minusMinutes(30)).build();
         Announcement a2 = Announcement.builder().id(UUID.randomUUID()).text("PPE supply update").date(now.minusHours(1)).build();
 
-        when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(a1, a2)));
+        when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(a1, a2)));
 
         List<NurseAnnouncementDTO> result = service.getAnnouncements(hospitalId, 5);
 
@@ -1111,7 +1103,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(rx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(3L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(3L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1161,7 +1153,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(overdueRx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(0L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1175,7 +1167,7 @@ class NurseTaskServiceImplTest {
             assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isZero();
-            assertThat(summary.getAnnouncements()).isEqualTo(6); // 0 count → default
+            assertThat(summary.getAnnouncements()).isZero();
         }
     }
 
@@ -1413,6 +1405,21 @@ class NurseTaskServiceImplTest {
         assertThat(result.get(0).getMedsDue()).isEqualTo(1L); // one active pending med
     }
 
+    @Test
+    void getWorkboardSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+
+        List<NurseWorkboardPatientDTO> result = service.getWorkboard(UUID.randomUUID(), hospitalId);
+
+        assertThat(result).isEmpty();
+    }
+
     /* ════════════════════════════════════════════════════════════════════
        MVP-12: getPatientFlow
        ════════════════════════════════════════════════════════════════════ */
@@ -1499,6 +1506,28 @@ class NurseTaskServiceImplTest {
 
         assertThat(board.getActive()).hasSize(1);
         assertThat(board.getActive().get(0).getPatientName()).isEqualTo("Dept Pat");
+    }
+
+    @Test
+    void getPatientFlowSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+
+        when(admissionRepository.findFlowBoardAdmissions(
+                eq(hospitalId),
+                argThat(l -> l.containsAll(List.of(AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE)))))
+            .thenReturn(List.of(admission));
+
+        NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, null);
+
+        assertThat(board.getPending()).isEmpty();
+        assertThat(board.getActive()).isEmpty();
+        assertThat(board.getCritical()).isEmpty();
+        assertThat(board.getAwaitingDischarge()).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -1648,6 +1677,24 @@ class NurseTaskServiceImplTest {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(NurseAdmissionSummaryDTO::getPatientName)
             .containsExactly("New Arrival", "Awaiting Discharge");
+    }
+
+    @Test
+    void getPendingAdmissionsSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.PENDING);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusMinutes(30));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(
+            hospitalId, AdmissionStatus.AWAITING_DISCHARGE)).thenReturn(List.of());
+
+        List<NurseAdmissionSummaryDTO> result = service.getPendingAdmissions(hospitalId, null);
+
+        assertThat(result).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════

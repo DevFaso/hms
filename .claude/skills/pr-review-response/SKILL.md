@@ -112,6 +112,11 @@ Common review-comment categories the team has seen:
   `.isEqualTo(true)` → `.isTrue()`, etc.
 - **HashMap initial capacity** — prefer `HashMap.newHashMap(n)` over
   `new HashMap<>(n)` (Java 19+).
+- **Repeated association literals / unused helpers** — when touching a
+  service with `JpaProxyUtils.safeInit(...)`, promote association names
+  that appear 3+ times (for example `"patient"`, `"department"`) to
+  private constants near the other local constants, and remove stale
+  private helpers in the same pass.
 
 ## Off-scope comments — when to defer
 
