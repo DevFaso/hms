@@ -27,7 +27,7 @@ Last updated: **2026-05-15**. Update both files together when scope moves.
 > (Hibernate `multiTenancy=SCHEMA` wired via
 > `HibernatePropertiesCustomizer`). The whole path is gated by
 > `app.tenancy.schema-isolation.enabled` (default `false`) so production
-> behavior is bit-for-bit unchanged. 19 unit tests cover resolver,
+> behavior is bit-for-bit unchanged. 28 unit tests cover resolver,
 > provider, and lookup. Operational procedure (provision schema, copy
 > rows, flip mode, soak, rollback) documented in
 > [`docs/runbooks/schema-per-tenant-migration.md`](./runbooks/schema-per-tenant-migration.md).

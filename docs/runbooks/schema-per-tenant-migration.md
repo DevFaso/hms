@@ -277,7 +277,7 @@ permanent.
 | `SchemaTenantConnectionProvider` | ✅ this PR | `SET search_path` with strict identifier allow-list |
 | `TenantSchemaLookup` (JDBC, 5-min cache, manual invalidate) | ✅ this PR | Bypasses JPA to avoid resolver recursion |
 | Hibernate `multiTenancy=SCHEMA` wiring behind feature flag | ✅ this PR | `app.tenancy.schema-isolation.enabled=false` by default |
-| Unit tests for resolver + provider + lookup | ✅ this PR | 19 tests across the three classes |
+| Unit tests for resolver + provider + lookup | ✅ this PR | 28 tests across the three classes |
 | `scripts/tenancy/provision-schema.sh` (Step 1 automation) | ⏳ next PR | Liquibase contexts split + per-schema bootstrap |
 | `scripts/tenancy/copy-rows.sh` (Step 2 automation) | ⏳ next PR | Idempotent + verification SQL bundled |
 | Cache-invalidation endpoint (Step 4 automation) | ⏳ next PR | Super-admin REST endpoint, audited |

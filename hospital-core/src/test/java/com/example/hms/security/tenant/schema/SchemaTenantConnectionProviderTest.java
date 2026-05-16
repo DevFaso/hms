@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 
@@ -54,6 +55,16 @@ class SchemaTenantConnectionProviderTest {
     }
 
     @Test
+    void rejectsTenantIdentifierWithSearchPathInjectionAttempt() {
+        assertThatThrownBy(() -> provider.searchPathFor("tenant_alpha, public"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unsafe schema identifier");
+        assertThatThrownBy(() -> provider.searchPathFor("tenant_alpha\""))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("unsafe schema identifier");
+    }
+
+    @Test
     void rejectsTenantIdentifierWithUppercaseOrLeadingDigit() {
         assertThatThrownBy(() -> provider.searchPathFor("Tenant_alpha"))
             .isInstanceOf(IllegalArgumentException.class);
@@ -85,6 +96,31 @@ class SchemaTenantConnectionProviderTest {
 
         ArgumentCaptorAssertion.assertOneSearchPathSet(statement,
             "hospital, clinical, billing, lab, reference, platform, security, support, public");
+    }
+
+    @Test
+    void getAnyConnectionClosesConnectionWhenSearchPathFails() throws Exception {
+        when(statement.execute("SET search_path TO "
+            + "hospital, clinical, billing, lab, reference, platform, security, support, public"))
+            .thenThrow(new SQLException("boom"));
+
+        assertThatThrownBy(() -> provider.getAnyConnection())
+            .isInstanceOf(SQLException.class)
+            .hasMessage("boom");
+
+        verify(connection).close();
+    }
+
+    @Test
+    void getConnectionClosesConnectionWhenTenantSearchPathFails() throws Exception {
+        when(statement.execute("SET search_path TO tenant_beta, reference, platform, security, support, public"))
+            .thenThrow(new SQLException("boom"));
+
+        assertThatThrownBy(() -> provider.getConnection("tenant_beta"))
+            .isInstanceOf(SQLException.class)
+            .hasMessage("boom");
+
+        verify(connection).close();
     }
 
     @Test
@@ -132,6 +168,15 @@ class SchemaTenantConnectionProviderTest {
     void rejectsConfiguredDefaultPathWithUnsafeSchema() {
         SchemaTenancyProperties bad = new SchemaTenancyProperties();
         bad.setDefaultSearchPath(List.of("hospital", "DROP TABLE x"));
+
+        assertThatThrownBy(() -> new SchemaTenantConnectionProvider(dataSource, bad))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsConfiguredSharedPathWithUnsafeSchema() {
+        SchemaTenancyProperties bad = new SchemaTenancyProperties();
+        bad.setSharedSchemas(List.of("reference", "public, malicious"));
 
         assertThatThrownBy(() -> new SchemaTenantConnectionProvider(dataSource, bad))
             .isInstanceOf(IllegalArgumentException.class);

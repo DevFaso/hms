@@ -6,7 +6,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 import java.sql.ResultSet;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -90,17 +92,15 @@ class TenantSchemaLookupTest {
     @Test
     void expiresAfterTtl() throws Exception {
         UUID id = UUID.randomUUID();
-        TenantSchemaLookup shortTtl = new TenantSchemaLookup(jdbc, Duration.ofNanos(1));
+        MutableClock clock = new MutableClock(Instant.parse("2026-05-15T00:00:00Z"));
+        TenantSchemaLookup shortTtl = new TenantSchemaLookup(jdbc, Duration.ofMinutes(5), clock);
         stubRow(id, "SCHEMA", "tenant_delta");
 
         shortTtl.schemaFor(id);
-        // Yield + spin to let the 1-ns TTL expire — Instant.now() granularity is finer than this anyway
-        for (int i = 0; i < 100; i++) {
-            Thread.onSpinWait();
-        }
+        clock.advance(Duration.ofMinutes(5).plusMillis(1));
         shortTtl.schemaFor(id);
 
-        verify(jdbc, atLeastOnce()).queryForObject(anyString(), any(RowMapper.class), eq(id));
+        verify(jdbc, times(2)).queryForObject(anyString(), any(RowMapper.class), eq(id));
     }
 
     @SuppressWarnings("unchecked")
@@ -113,5 +113,32 @@ class TenantSchemaLookupTest {
                 RowMapper<Object> mapper = inv.getArgument(1);
                 return mapper.mapRow(rs, 0);
             });
+    }
+
+    private static final class MutableClock extends Clock {
+        private Instant instant;
+
+        private MutableClock(Instant instant) {
+            this.instant = instant;
+        }
+
+        void advance(Duration duration) {
+            instant = instant.plus(duration);
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZoneId.of("UTC");
+        }
+
+        @Override
+        public Clock withZone(ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant;
+        }
     }
 }

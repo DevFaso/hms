@@ -64,9 +64,7 @@ public class SchemaTenantConnectionProvider implements MultiTenantConnectionProv
 
     @Override
     public Connection getAnyConnection() throws SQLException {
-        Connection conn = dataSource.getConnection();
-        applySearchPath(conn, defaultSearchPath);
-        return conn;
+        return connectionWithSearchPath(defaultSearchPath);
     }
 
     @Override
@@ -80,9 +78,7 @@ public class SchemaTenantConnectionProvider implements MultiTenantConnectionProv
 
     @Override
     public Connection getConnection(String tenantIdentifier) throws SQLException {
-        Connection conn = dataSource.getConnection();
-        applySearchPath(conn, searchPathFor(tenantIdentifier));
-        return conn;
+        return connectionWithSearchPath(searchPathFor(tenantIdentifier));
     }
 
     @Override
@@ -127,14 +123,31 @@ public class SchemaTenantConnectionProvider implements MultiTenantConnectionProv
         return sb.toString();
     }
 
-    private static void applySearchPath(Connection conn, String searchPath) throws SQLException {
+    @SuppressWarnings("java:S2077") // Safe: searchPath is assembled only from requireSafe() identifiers.
+    private static void applySearchPath(Connection conn, String validatedSearchPath) throws SQLException {
         // PostgreSQL doesn't accept search_path values as bind parameters,
         // so callers MUST hand us identifiers that already passed
-        // requireSafe() — the regex ensures no SQL injection vector.
+        // requireSafe(). The regex excludes quotes, semicolons, comments,
+        // whitespace, dots, and commas; only this method formats the SQL.
         try (var stmt = conn.createStatement()) {
-            stmt.execute("SET search_path TO " + searchPath);
+            stmt.execute("SET search_path TO " + validatedSearchPath);
         } catch (SQLException ex) {
-            log.error("Failed to set search_path to '{}'", searchPath, ex);
+            log.error("Failed to set search_path to '{}'", validatedSearchPath, ex);
+            throw ex;
+        }
+    }
+
+    private Connection connectionWithSearchPath(String searchPath) throws SQLException {
+        Connection conn = dataSource.getConnection();
+        try {
+            applySearchPath(conn, searchPath);
+            return conn;
+        } catch (SQLException ex) {
+            try {
+                conn.close();
+            } catch (SQLException closeEx) {
+                ex.addSuppressed(closeEx);
+            }
             throw ex;
         }
     }

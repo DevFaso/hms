@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
@@ -49,14 +50,20 @@ public class TenantSchemaLookup {
     private final JdbcTemplate jdbc;
     private final ConcurrentMap<UUID, CachedEntry> cache = new ConcurrentHashMap<>();
     private final Duration ttl;
+    private final Clock clock;
 
     public TenantSchemaLookup(DataSource dataSource) {
-        this(new JdbcTemplate(dataSource), DEFAULT_TTL);
+        this(new JdbcTemplate(dataSource), DEFAULT_TTL, Clock.systemUTC());
     }
 
     TenantSchemaLookup(JdbcTemplate jdbc, Duration ttl) {
+        this(jdbc, ttl, Clock.systemUTC());
+    }
+
+    TenantSchemaLookup(JdbcTemplate jdbc, Duration ttl, Clock clock) {
         this.jdbc = jdbc;
         this.ttl = ttl;
+        this.clock = clock;
     }
 
     /**
@@ -69,7 +76,7 @@ public class TenantSchemaLookup {
             return Optional.empty();
         }
         CachedEntry entry = cache.get(hospitalId);
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         if (entry != null && entry.expiresAt.isAfter(now)) {
             return Optional.ofNullable(entry.schemaName);
         }
@@ -90,7 +97,7 @@ public class TenantSchemaLookup {
     }
 
     /** Test-only: nuke all cached entries. */
-    public void invalidateAll() {
+    void invalidateAll() {
         cache.clear();
     }
 
