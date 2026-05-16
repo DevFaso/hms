@@ -37,9 +37,17 @@ public interface MllpInboundAdtService {
      * visit-sync projection (gated by
      * {@code app.hl7.adt.visit-sync.enabled}) so an operator can trace a
      * row back to the inbound {@code integration_messages} entry that
-     * touched it. The original 4-argument signature stays for callers
-     * that don't have a control id handy; it delegates to this method
-     * with {@code messageControlId = null}.
+     * touched it.
+     *
+     * <p>This {@code default} implementation preserves backwards
+     * compatibility with existing {@link MllpInboundAdtService}
+     * implementations by delegating to the original 4-argument
+     * {@link #processAdt(ParsedAdtMessage, Hospital, String, String)}
+     * — implementers that haven't migrated yet keep working but ignore
+     * {@code messageControlId}. Implementers that want the control id
+     * threaded through the projection layer (e.g.
+     * {@code MllpInboundAdtServiceImpl}) should <strong>override</strong>
+     * this method and stop relying on the 4-arg path.
      */
     default MllpInboundOutcome processAdt(
         ParsedAdtMessage parsed,

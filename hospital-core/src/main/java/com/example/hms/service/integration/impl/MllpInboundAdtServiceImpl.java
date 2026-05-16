@@ -111,18 +111,25 @@ public class MllpInboundAdtServiceImpl implements MllpInboundAdtService {
                 sendingApplication, sendingFacility, receivingHospital.getId());
         }
 
-        // Visit-sync projection runs AFTER demographics succeed.
-        // Implementation uses REQUIRES_NEW + swallows its own failures
-        // so it can never roll back the demographic write — see the
-        // conflict-resolution runbook for the precedence rationale.
-        // Guarded here as belt-and-braces in case the projection bean
-        // throws before it reaches its own try/transaction boundary.
+        // Visit-sync projection runs AFTER the demographic write but
+        // BEFORE the outer @Transactional commits. The projection
+        // implementation uses REQUIRES_NEW and swallows its own
+        // failures so it can never roll back the demographic write —
+        // see the conflict-resolution runbook for the precedence
+        // rationale. Guarded here as belt-and-braces in case the
+        // projection bean throws before reaching its own
+        // try/transaction boundary.
         try {
             visitProjection.projectVisit(
                 parsed, patient, receivingHospital,
                 sendingApplication, sendingFacility, messageControlId);
         } catch (RuntimeException ex) {
-            log.warn("ADT visit-sync projection threw for patient={} hospital={} event={} sender={}/{} — demographics already committed",
+            // Note: at this point demographics have been WRITTEN to
+            // the JDBC connection but the outer @Transactional commit
+            // happens after this method returns. The ACK we send back
+            // reflects that the outer transaction is expected to
+            // commit — the projection failure does not block that.
+            log.warn("ADT visit-sync projection threw for patient={} hospital={} event={} sender={}/{} — demographics already written; ACK will still be sent",
                 patient.getId(), receivingHospital.getId(), parsed.triggerEvent(),
                 sendingApplication, sendingFacility, ex);
         }

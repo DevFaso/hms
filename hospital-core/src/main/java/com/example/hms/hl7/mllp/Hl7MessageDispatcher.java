@@ -185,12 +185,27 @@ public class Hl7MessageDispatcher {
         }
     }
 
+    /**
+     * Recorder column {@code clinical.integration_message_event.integration_id}
+     * is {@code VARCHAR(120)}. Truncate aggressively here so a sender with a
+     * pathological MSH-3 / MSH-4 (HL7 v2.5 permits each up to 180 chars)
+     * cannot push the synthesised id past the column limit and cause the
+     * recorder insert to fail — which would silently drop the DLQ entry for
+     * dispatcher-level rejects.
+     */
+    private static final int RECORDER_INTEGRATION_ID_MAX = 120;
+
     private static String integrationIdFor(Hl7MessageHeader header) {
-        String app = header.sendingApplication() == null || header.sendingApplication().isBlank()
-            ? "?" : header.sendingApplication();
-        String fac = header.sendingFacility() == null || header.sendingFacility().isBlank()
-            ? "?" : header.sendingFacility();
-        return "MLLP:" + app + "/" + fac;
+        String app = blankOrNullToPlaceholder(header.sendingApplication());
+        String fac = blankOrNullToPlaceholder(header.sendingFacility());
+        String raw = "MLLP:" + app + "/" + fac;
+        return raw.length() > RECORDER_INTEGRATION_ID_MAX
+            ? raw.substring(0, RECORDER_INTEGRATION_ID_MAX)
+            : raw;
+    }
+
+    private static String blankOrNullToPlaceholder(String value) {
+        return (value == null || value.isBlank()) ? "?" : value.trim();
     }
 
     private static UUID organizationIdOf(Hospital hospital) {
