@@ -165,6 +165,134 @@ the hook fails:
 3. **Never** `git commit --no-verify`. The hook exists because we got
    burned on inconsistent formatting in the past.
 
+## Mandatory branch CI gate (run BEFORE pushing)
+
+Every feature branch MUST pass the same four gates CI runs, **before
+the PR is opened** — not after. The cost of fixing format / coverage
+locally is seconds; the cost of fixing them via Copilot review +
+re-push cycles is hours of reviewer attention. This is the single
+highest-leverage discipline on the project.
+
+**Frontend (`hospital-portal/`):**
+
+```bash
+cd hospital-portal
+npm run format:check   # prettier --check src/**/*.{ts,html,scss,md,json}
+npm run lint           # eslint src/**/*.{ts,html}
+npm test               # jest unit + spec
+```
+
+If `format:check` fails, run `npm run format` to auto-fix, then
+re-stage. **Do not** push a branch with an unformatted file — the
+frontend-ci.yml workflow will fail and you'll waste a Copilot review
+cycle on a stylistic flag-down (this happened on
+`feat/v1.1-kpi-dashboard-service` — `kpi-cards.component.ts` was
+unformatted and tripped Prettier in CI).
+
+**Backend (`hospital-core/`):**
+
+```bash
+./gradlew :hospital-core:test :hospital-core:jacocoTestReport :hospital-core:jacocoTestCoverageVerification
+```
+
+`jacocoTestCoverageVerification` enforces ≥ 80 % `INSTRUCTION`
+coverage on the application classes — the threshold is hard-coded in
+`build.gradle` (`limit { counter = 'INSTRUCTION'; minimum = 0.80 }`)
+and the task fails the build if the new code drops the ratio.
+Exclusions live in the same file (`**/bootstrap/**`, `**/seed/**`,
+`**/config/**`, `**/model/**`, `**/payload/**`, `**/exception/**`,
+`**/enums/**`, `**/mapper/**`, …) — when adding a class outside those
+packages, you must back it with tests.
+
+If `:hospital-core:test` fails locally, CI will fail the same way —
+the recent foundation-pass batch had failing tests in three of the
+four feature branches (PRs #338, #341, #343) because contributors
+relied on `compileJava` passing rather than the full test task.
+**Compile success is not enough; the full test task is the gate.**
+
+**Quick recipe before every commit on a feature branch:**
+
+```bash
+# From repo root:
+(cd hospital-portal && npm run format:check && npm run lint && npm test) \
+  && ./gradlew :hospital-core:test :hospital-core:jacocoTestCoverageVerification
+```
+
+When that command exits 0, commit. When it doesn't, fix and re-run —
+do not skip past a failure.
+
+## Anti-patterns surfaced by Copilot review (2026-05-16 batch)
+
+These caused real review comments on the four daytime foundation-pass
+PRs (#338, #341, #342, #343). Each is captured in the relevant domain
+skill — this list is for cross-cutting muscle memory.
+
+- **Cross-branch broken doc links.** A `chore/roadmap-sync` PR cannot
+  reference runbooks that live only on a parallel feature branch —
+  Copilot will flag the link as broken on the sync PR's diff base.
+  Either land the runbooks first (squash-merge the feature branches),
+  or open the sync PR against a branch that already includes them.
+  See PR #339.
+- **Feature flag short-circuit ordering.** Provider methods that
+  validate request shape (body, id consistency) before calling the
+  feature-gated service will return 422 even when the flag is off —
+  contradicting the "flag-off ⇒ 405" contract and breaking the
+  flag-off ITs. Always
+  `if (!writeService.isEnabled()) throw MethodNotAllowedException`
+  at the very top of every gated handler. See PR #343.
+- **Global CORS instead of path-scoped.** Adding sandbox / partner
+  origins to the global `CorsConfigurationSource` widens cross-origin
+  access for every PHI-bearing endpoint, not just the one you
+  intended. Register a path-scoped `CorsConfiguration` (e.g. for
+  `/cds-services/**` only) when the new origins are endpoint-specific.
+  See PR #338.
+- **`@Value` defaults vs env override = replace, not append.** When an
+  operator sets `APP_SOMETHING=value`, Spring replaces the entire
+  default list — it does not extend. Runbook and code comments that
+  claim "add" or "extend" are wrong; either rewrite the prose to say
+  "replace" or compose defaults in code so additions truly append.
+  See PR #338.
+- **Tests that only check key presence.**
+  `assertThat(json.has("vitals")).isTrue()` passes even if the FHIR
+  template lost `{{context.patientId}}` or the `_count=2000` filter.
+  When the wire shape IS the contract, assert the values, not just
+  the keys. See PR #338.
+- **Audit `entityType` capitalization.** `AuditEventLogServiceImpl`
+  special-cases `entityType` matching `"PATIENT"` (case-insensitive
+  against that literal), so passing `"Patient"` (Pascal case)
+  silently disables the patient-resolution path. Use the same literal
+  the rest of the codebase uses — `"PATIENT"`. See PR #343.
+- **`mrn <> ''` doesn't exclude whitespace.** Partial unique index
+  predicates that want to skip blank values must `btrim(mrn) <> ''`
+  (or equivalent) — `<> ''` still includes `'   '`. See PR #343.
+- **Catch-all RxJS error swallow.**
+  `pipe(catchError(() => of({} as T)))` in a frontend service renders
+  401 / 403 / 500 as "no data" cards, hiding outages from operators.
+  Either let the error propagate to the component or return a typed
+  error state. See PR #341.
+- **Component reachability mismatch.** Embedding a component inside a
+  route guarded by `ROLE_SUPER_ADMIN` while the backing endpoint is
+  also exposed to `HOSPITAL_ADMIN / DOCTOR / NURSE / STAFF` makes the
+  new UI unreachable for its real users. Place the component on a
+  route whose guard matches the backend's `@PreAuthorize`. See PR #341.
+- **Date-window cap off-by-one.** For an inclusive `[from, to]` window,
+  `from.plusDays(N).isBefore(to)` allows `N+1` days. Use
+  `from.plusDays(N - 1).isBefore(to)` if you mean "at most N inclusive
+  days". See PR #341.
+- **Alert runbook anchors that don't exist.** A `runbook_url` fragment
+  like `#hmssyntheticprobefailurerate` must match a heading in the
+  linked runbook; otherwise responders land on the top of the page
+  instead of on alert-specific guidance. Either add the anchor or drop
+  the fragment. See PR #342.
+- **Wide-open exporter port.** `9115:9115` (or any `:port:port`
+  binding) on a docker-compose service exposes that port on every host
+  interface — for the blackbox exporter specifically, that's an SSRF /
+  scanning primitive on the LAN. Use `127.0.0.1:9115:9115` for
+  local-only ports. See PR #342.
+- **Hard-coded credentials in runbooks.** Even local-smoke `username` /
+  `password` literals get copied into shared environments. Use env
+  placeholders (`$env:HMS_SMOKE_PASSWORD`) instead. See PR #341.
+
 ## Co-author tag
 
 Every commit Claude authors carries:

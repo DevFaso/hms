@@ -110,15 +110,67 @@ shape + CORS allowlist + prefetch templates.
 Set `APP_CORS_CDS_HOOKS_SANDBOX_ENABLED=false` for closed-network
 deployments. Sandbox origins do not carry PHI.
 
+**Known issue (PR #338 review, P0 follow-on):** the row-27 foundation
+pass added the sandbox origins to the **global** `/**` CORS config,
+which broadens cross-origin access for every PHI-bearing endpoint
+under `/api/**`, not just `/cds-services`. The corrective pattern is
+to register a path-scoped `CorsConfiguration` only for the discovery
+endpoint:
+
+```java
+var source = new UrlBasedCorsConfigurationSource();
+source.registerCorsConfiguration("/**", coreCfg);             // existing
+source.registerCorsConfiguration("/cds-services/**", cdsCfg);  // new, narrow
+```
+
+Track this as a P0 follow-on against the row-27 PR; the global-CORS
+shape was Copilot-flagged as High severity.
+
+**`@Value` default-replace trap.** When an operator sets
+`APP_CORS_CDS_HOOKS_SANDBOX_ORIGINS=...`, Spring **replaces** the
+default list — it does not append. Runbook prose that says "extend"
+or "add to the defaults" is wrong; either rewrite the prose to say
+"replaces the default list; include the built-in origins explicitly
+if you want to keep them", or compose defaults in code so additions
+truly append. Caught in PR #338 review on both `SecurityConfig.java`
+and `docs/runbooks/cds-hooks-sandbox-validation.md`.
+
 ### Prefetch templates
 
 The two `patient-view` services declare prefetch templates so partner
 EHRs pre-resolve the FHIR queries and ship the bundles inline:
 
 - `PatientViewCdsService`: `patient`, `allergies` (active),
-  `problems` (active).
-- `BpaProtocolsCdsService`: `patient`, `vitals` (last 20 sorted
-  desc), `problems` (active), `medications` (active).
+  `problems` (active **+ recurrence** — the local service treats
+  both `ACTIVE` and `RECURRENCE` statuses as active when building
+  cards, so the prefetch query must match or recurrent problems get
+  dropped if HMS starts honoring `request.prefetch`).
+- `BpaProtocolsCdsService`: `patient`, `vitals` (`_count=2000`
+  sorted desc — **NOT 20**; `BpaRuleEngine` loads a 24-hour window
+  paging up to 2000 vitals because high-frequency monitoring would
+  otherwise miss older readings that still trigger rules),
+  `problems` (active), `medications` (active).
+
+**Prefetch templates MUST mirror the service-internal queries.** If
+the service reads `problems WHERE status IN (ACTIVE, RECURRENCE)` but
+the prefetch template only fetches `clinical-status=active`, then any
+EHR that ships the prefetch bundle inline (Cerner, Epic) will give
+the service a strict subset of the data it expects, and cards will
+silently disappear. Audit each prefetch template against the
+corresponding repository query before merging — this is the row-27
+follow-on for both `PatientViewCdsService` and `BpaProtocolsCdsService`.
+Caught in PR #338 Copilot review.
+
+**Prefetch contract incompleteness.** The row-27 foundation pass
+advertises prefetch templates in the descriptors but the `evaluate(...)`
+methods still ignore `request.prefetch` entirely — they read patient
+data from local repositories keyed on the HMS UUID extracted from
+`context.patientId`. For sandbox / EHR invocations carrying non-HMS
+FHIR patient ids, the advertised payload is dropped on the floor and
+the cards come back empty. Honoring the prefetch is a row-27 follow-on
+item; in the meantime, advertising it is honest only for invocations
+that also pass a resolvable HMS UUID via `context.patientId`. Caught
+in PR #338 Copilot review.
 
 The four CDS services on `order-sign` / `order-select` /
 `medication-prescribe` hooks intentionally declare **no** prefetch —

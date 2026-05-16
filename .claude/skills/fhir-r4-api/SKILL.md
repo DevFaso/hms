@@ -115,13 +115,71 @@ The `If-None-Exist` parser accepts only
 `urn:hms:hospital:<hospitalId>:mrn`. Any other search parameter is
 rejected as 422.
 
-Multi-match is kept unreachable by
-`V101__fhir_write_patient_idempotency.sql` — a partial unique index
-on `(hospital_id, LOWER(mrn))` where `is_active = true` and `mrn` is
-non-blank. Excludes inactive/legacy rows.
+Multi-match is kept unreachable **for the active set** by
+`V101__fhir_write_patient_idempotency.sql` — a partial unique index on
+`(hospital_id, LOWER(mrn))` where `is_active = true AND btrim(mrn) <>
+''`. Inactive registrations and whitespace-only MRNs are excluded
+from that uniqueness scope, so `412 MULTIPLEMATCHES` is still
+reachable if the conditional-create matcher considers active +
+inactive rows together. The current matcher uses
+`PatientHospitalRegistrationRepository.findActiveByHospitalIdAndIdentifier`
+which only returns `r.active = true` rows, so 412 is unreachable in
+practice today; if a future matcher widens this, audit the
+reachability before relying on the 412 branch.
 
 Emits `AuditEventType.PATIENT_ACCESS` on the matched read (no
 `PATIENT_CREATE` — nothing is created).
+
+**Deviation from FHIR R4 spec.** The spec says a conditional-create
+with zero matches should return `201 Created` after provisioning. HMS
+returns `404` instead, by deliberate policy — auto-provisioning would
+silently expand the data surface beyond what the registration desk has
+reviewed (same trust call as the HL7 ADT inbound). Do not "fix" this
+back to the spec default; the `empi-identity` skill is the authority.
+The `422 ⇒ missing If-None-Exist` branch is also an HMS deviation —
+the spec allows POST without `If-None-Exist` to mean "unconditional
+create". HMS forbids that path entirely.
+
+### Feature-flag short-circuit ordering (load-bearing)
+
+When `app.fhir.write.enabled=false`, the provider MUST return 405
+**before** any request-shape validation. The current Patient provider
+validates resource-id consistency before the write service throws
+`MethodNotAllowedException`, which means a flag-off request with a
+mismatched body id returns 422 instead of 405 — contradicting the
+documented contract and breaking the flag-off ITs. The corrective
+pattern:
+
+```java
+@Update
+public MethodOutcome update(@IdParam IdType id, @ResourceParam Patient resource) {
+    if (!writeService.isEnabled()) {
+        throw new MethodNotAllowedException("FHIR write API is disabled.");
+    }
+    // ... request validation + writeService.update(...) ...
+}
+```
+
+Caught in PR #343 Copilot review. The same fix is owed on `@Create`.
+
+### Audit entityType MUST be the canonical PATIENT literal
+
+`AuditEventLogServiceImpl` special-cases `entityType` matching the
+literal `"PATIENT"` (case-insensitive). The Patient FHIR write code
+initially used `"Patient"` (Pascal case from the FHIR resource type),
+which silently disabled the patient-resolution path —
+resource-name + id derived columns on the audit row stayed null.
+Always use `"PATIENT"`, the same literal `AuditEventType.PATIENT_*`
+implies. Caught in PR #343 Copilot review.
+
+### Conditional-URL parameter parser is strict
+
+`PatientFhirWriteService.extractIdentifierToken()` must enforce
+exactly **one** `identifier=` parameter and **no other** search
+parameters. A relaxed parser that accepts
+`identifier=...&active=true&_count=10` contradicts the documented
+contract and lets the conditional URL leak fields HMS never agreed
+to honor. Caught in PR #343 Copilot review.
 
 ### What's deferred
 
