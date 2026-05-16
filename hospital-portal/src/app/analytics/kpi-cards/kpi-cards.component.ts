@@ -2,10 +2,7 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 
-import {
-  DashboardService,
-  KpiDashboard,
-} from '../../services/dashboard.service';
+import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
 
 interface KpiCard {
   /** Translation key prefix; the template appends ".label" and ".help". */

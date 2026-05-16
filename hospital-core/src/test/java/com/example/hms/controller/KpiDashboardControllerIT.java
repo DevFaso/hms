@@ -45,12 +45,13 @@ class KpiDashboardControllerIT {
         ResponseEntity<String> response = restTemplate.postForEntity(
             "/kpi/dashboard", "{}", String.class
         );
-        // 405 from Spring MVC when method handler exists for the path but
-        // not for POST. The exact status here is 401 (auth) before 405
-        // (method) because Spring Security wraps the dispatcher — accept
-        // either as proof the endpoint is not POST-routable.
+        // /kpi/dashboard is not POST-routable. Spring's filter chain can
+        // surface this as 401 (auth missing), 403 (CSRF token missing on a
+        // state-changing method — the actual response in this test profile),
+        // or 405 (handler exists but not for POST). All three prove the
+        // endpoint is read-only and unreached by POST.
         assertThat(response.getStatusCode().value())
             .as("POST must not reach a handler")
-            .isIn(401, 405);
+            .isIn(401, 403, 405);
     }
 }
