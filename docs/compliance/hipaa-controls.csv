@@ -1,0 +1,54 @@
+ref,family,criterion,status,owner,priority,effort,evidence_or_action,target_close
+164.308(a)(1)(ii)(A),Administrative,Risk Analysis — HIPAA-specific risk register,partial,Compliance,P0,M,Overlaps SOC 2 CC3; author docs/compliance/hipaa-risk-register.md,2026-08-15
+164.308(a)(1)(ii)(B),Administrative,Risk Management — remediation tracker indexed against this gap doc,partial,Compliance,P0,S,Mirror SOC 2 tracker,2026-08-15
+164.308(a)(1)(ii)(C),Administrative,Sanction Policy,gap,HR,P1,S,Draft doc-only policy for workforce sanctions,2026-10-31
+164.308(a)(1)(ii)(D),Administrative,Information System Activity Review,present,Backend,—,—,AuditEventLog + 80+ event types + Splunk HEC export,—
+164.308(a)(2),Administrative,Assigned Security Responsibility (named Officer),gap,Compliance,P0,S,Designate Security Officer + Privacy Officer in BAA + policy,2026-08-31
+164.308(a)(3)(ii)(A),Administrative,Authorization + Supervision,present,Backend,—,—,Role + UserRoleHospitalAssignment + super-admin confirmation flows,—
+164.308(a)(3)(ii)(B),Administrative,Workforce Clearance Procedure,gap,HR,P1,S,Document expectation in BAA — customer-side responsibility,2026-12-31
+164.308(a)(3)(ii)(C),Administrative,Termination Procedures,partial,Backend,P1,S,Add to keycloak runbook or split into its own,2026-12-31
+164.308(a)(4)(ii)(B),Administrative,Access Authorization,present,Backend,—,—,PermissionCatalog + @PreAuthorize / @PostAuthorize across controllers,—
+164.308(a)(4)(ii)(C),Administrative,Access Establishment + Modification,partial,Compliance,P0,M,Define quarterly access-review cadence + log,2026-09-30
+164.308(a)(5)(ii)(A-D),Administrative,Security Awareness + Training,gap,HR,P1,M,Onboarding module + annual refresher,2026-12-31
+164.308(a)(6)(ii),Administrative,Security Incident Response + Reporting,partial,Compliance,P0,M,Author docs/runbooks/hipaa-incident-response.md with breach-notification timer,2026-09-30
+164.308(a)(7)(ii)(A),Administrative,Data Backup Plan,present,Platform,—,—,Railway snapshots + PITR in disaster-recovery.md,—
+164.308(a)(7)(ii)(B),Administrative,Disaster Recovery Plan,present,Platform,—,—,disaster-recovery.md,—
+164.308(a)(7)(ii)(C),Administrative,Emergency Mode Operation Plan,partial,Platform,P1,S,Add emergency-mode section to DR runbook (read-only fallback),2026-12-31
+164.308(a)(7)(ii)(D),Administrative,Testing + Revision (DR drills),partial,Platform,P1,S,Quarterly DR-drill schedule + per-drill log,2026-12-31
+164.308(a)(7)(ii)(E),Administrative,Applications + Data Criticality Analysis,gap,Compliance,P2,M,Add criticality column to phi-inventory.md,—
+164.308(a)(8),Administrative,Periodic Evaluation,partial,Compliance,P1,S,Annual HIPAA self-evaluation cadence pointing at hipaa-gap.md,2026-12-31
+164.308(b),Administrative,Business Associate Contracts,gap,Compliance,P0,M,Publish + execute BAAs from hipaa-baa-template.md,2026-09-30
+164.310(a)(2)(i),Physical,Contingency Operations,partial,Platform,P1,S,Reference Railway provider attestation,2026-12-31
+164.310(a)(2)(ii),Physical,Facility Security Plan,gap,Platform,P0,S,Archive Railway SOC 2 Type II report; reference in this doc,2026-09-30
+164.310(a)(2)(iii),Physical,Access Control + Validation Procedures,gap,Platform,P0,S,Inherit from Railway attestation,2026-09-30
+164.310(a)(2)(iv),Physical,Maintenance Records,partial,Platform,—,—,Inherited from Railway; no HMS-side log needed,—
+164.310(b),Physical,Workstation Use,N/A,Compliance,—,—,Customer responsibility — documented in BAA template,—
+164.310(c),Physical,Workstation Security,N/A,Compliance,—,—,Customer responsibility — documented in BAA template,—
+164.310(d)(2)(i),Physical,Disposal,partial,Backend,—,—,Soft-delete tombstones on key entities; media destruction inherited from Railway,—
+164.310(d)(2)(iv),Physical,Data Backup + Storage,present,Platform,—,—,Railway snapshots + PITR,—
+164.312(a)(2)(i),Technical,Unique User Identification,present,Backend,—,—,Users.id UUID + Keycloak unique username,—
+164.312(a)(2)(ii),Technical,Emergency Access Procedure,present,Backend,—,—,Break-glass pattern with BREAK_GLASS_ACCESS audit event + super-admin recovery runbook,—
+164.312(a)(2)(iii),Technical,Automatic Logoff,partial,Backend,P1,S,Add absolute session max-age check (engineering),2026-12-31
+164.312(a)(2)(iv),Technical,Encryption + Decryption (at rest),present,Backend,—,—,AES-256-GCM via EncryptedStringConverter with versioned wire format,—
+164.312(b),Technical,Audit Controls,present,Backend,—,—,AuditEventLog + 80+ event types + Splunk HEC + CrossTenantReadAudit,—
+164.312(c)(2),Technical,Integrity — authenticate ePHI,present,Backend,—,—,DB constraints + JPA @Version optimistic locking + Liquibase versioning,—
+164.312(d),Technical,Person or Entity Authentication,present,Backend,—,—,Keycloak OIDC + per-role MFA + RS256 signing (Phase 6),—
+164.312(e)(2)(i),Technical,Integrity Controls (in transit),present,Platform,—,—,TLS 1.2+ on all public endpoints; per-protocol auth on inter-service,—
+164.312(e)(2)(ii),Technical,Encryption (in transit),present,Platform,—,—,TLS 1.2+ Railway-terminated,—
+164.312(e)(2)(ii) MLLP,Technical,MLLP-over-TLS topology,partial,Platform,P2,S,Document operator-side mTLS termination,—
+164.314(a)(1),Organizational,BAA — template,gap,Compliance,P0,M,Publish hipaa-baa-template.md (this PR provides draft),2026-09-30
+164.314(a)(1),Organizational,BAA — executed contracts,gap,Compliance,P0,M,Sign first international BAA from template,2026-10-15
+164.314(a)(1),Organizational,BAA — subcontractor agreements,gap,Compliance,P0,M,Sub-BAA template (Railway etc.),2026-10-15
+164.316(a),Documentation,Policies + Procedures,partial,Compliance,P0,M,Add docs/compliance/policies-index.md,2026-09-30
+164.316(b)(1),Documentation,Documented policies,partial,Compliance,P1,M,Formalise the policies that runbooks imply,2026-12-31
+164.316(b)(2)(i),Documentation,6-year retention,gap,Platform,P0,S,Configure Splunk index retention + DB cold-storage archival,2026-09-30
+164.316(b)(2)(ii),Documentation,Availability to ops + patients,partial,Backend,P2,M,Patient-facing disclosures endpoint,—
+164.316(b)(2)(iii),Documentation,Annual update cadence,partial,Compliance,P1,S,Add quarterly review cadence to policies index,2026-12-31
+Privacy.502(b),Privacy,Minimum Necessary,present,Backend,—,—,Role-permission matrix + hospital-context scoping; TenantAwareJpaRepository,—
+Privacy.502(b),Privacy,Minimum Necessary — written policy,partial,Compliance,P1,S,Add written policy to policies index,2026-12-31
+Privacy.524,Privacy,Right of Access,present,Backend,—,—,Patient portal + mobile apps expose encounters/prescriptions/labs/allergies/problems,—
+Privacy.526,Privacy,Right to Amend,partial,Compliance,P1,M,Author docs/runbooks/patient-record-amendment.md,2026-12-31
+Privacy.528,Privacy,Right to Accounting of Disclosures,partial,Backend,P2,M,Build GET /api/patient/me/disclosures endpoint + portal screen,—
+Privacy.508,Privacy,Authorization for use/disclosure,present,Backend,—,—,PatientConsent + ConsentType enum with access-time enforcement,—
+Privacy.510,Privacy,Opt-in / opt-out (directory),gap,Compliance,P2,L,Scope decision pending — many international deployments don't have an analogous concept,—
+Privacy.512,Privacy,Permitted uses / disclosures w/o authz,partial,Compliance,P2,M,Doc-level allowlist of treatment/payment/operations carve-outs,—
