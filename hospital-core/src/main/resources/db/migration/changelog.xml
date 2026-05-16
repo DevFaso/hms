@@ -1432,7 +1432,7 @@
                  stripComments="true"/>
     </changeSet>
 
-    <!-- =================================================================
+     <!-- =================================================================
          V99 — ADT external-visit reconciliation columns
          (roadmap row 24, v1.1 / Interop HL7).
          Adds external_visit_number + external_sending_application +
@@ -1450,6 +1450,26 @@
          ================================================================= -->
     <changeSet id="V99-adt-external-visit-reconciliation" author="hms-team" runOnChange="false">
         <sqlFile path="V99__adt_external_visit_reconciliation.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="true"
+                     stripComments="true"/>
+     </changeSet>
+
+     <!-- =================================================================
+         V100 — LOINC binding for hms-patient-view CDS Hook
+         (roadmap row 26, v1.1 / Clinical Safety).
+         Adds clinical.patient_problems.loinc_code (VARCHAR 20) and
+         loinc_display (VARCHAR 255), both nullable. The PatientProblem
+         JPA mapping references both columns from this PR onward, so
+         Liquibase MUST apply this migration on startup — otherwise the
+         entity load fails with "column does not exist". V99 is reserved
+         for the ADT^A01/A04/A08 visit-sync feature branch
+         (feat/v1.1-adt-admission-encounter-sync); V100 is the next free
+         slot from this branch's perspective.
+         Pure DDL: ADD COLUMN IF NOT EXISTS x 2; splitStatements true.
+         ================================================================= -->
+    <changeSet id="V100-patient-problem-loinc-binding" author="hms-team" runOnChange="false">
+        <sqlFile path="V100__patient_problem_loinc_binding.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
