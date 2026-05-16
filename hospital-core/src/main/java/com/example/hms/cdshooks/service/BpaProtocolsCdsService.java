@@ -46,6 +46,16 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
     @Override
     public CdsServiceDescriptor descriptor() {
+        // Prefetch templates align with the inputs the BPA rule engine
+        // consumes: patient demographics + recent vitals + active
+        // problems + active medication requests. Partner EHRs (Cerner,
+        // Epic, SMART App Launcher) can ship the bundles inline.
+        java.util.Map<String, String> prefetch = java.util.Map.of(
+            "patient", "Patient/{{context.patientId}}",
+            "vitals", "Observation?patient={{context.patientId}}&category=vital-signs&_count=20&_sort=-date",
+            "problems", "Condition?patient={{context.patientId}}&clinical-status=active",
+            "medications", "MedicationRequest?patient={{context.patientId}}&status=active"
+        );
         return new CdsServiceDescriptor(
             "patient-view",
             ID,
@@ -53,7 +63,7 @@ public class BpaProtocolsCdsService implements CdsHookService {
             "Runs the HMS BPA rule engine (malaria, sepsis qSOFA, OB hemorrhage) "
                 + "against the patient's recent vitals, active problems, and active "
                 + "prescriptions. Cards are advisory only.",
-            null
+            prefetch
         );
     }
 
