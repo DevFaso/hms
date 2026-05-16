@@ -79,6 +79,22 @@ public class PatientProblem extends BaseEntity {
     @Column(name = "icd_version", length = 20)
     private String icdVersion;
 
+    /**
+     * Optional LOINC code paired with this problem (roadmap row 26).
+     * LOINC does not model diagnoses directly, but a problem-list entry
+     * often has a clinically-relevant observation panel (e.g. an HbA1c
+     * for type 2 diabetes, FEV1/FVC for asthma). Surfaced alongside the
+     * ICD coding by the hms-patient-view CDS Hook so external
+     * consumers can act on it. Nullable — when unset the CDS service
+     * falls back to {@code ProblemLoincBindings} for the most common
+     * chronic conditions.
+     */
+    @Column(name = "loinc_code", length = 20)
+    private String loincCode;
+
+    @Column(name = "loinc_display", length = 255)
+    private String loincDisplay;
+
     @Column(name = "onset_date")
     private LocalDate onsetDate;
 

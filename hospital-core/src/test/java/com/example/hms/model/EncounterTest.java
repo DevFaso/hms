@@ -94,6 +94,8 @@ class EncounterTest {
                 null, null, null, null, null,
                 null, null, null, // checkoutTimestamp, followUpInstructions, dischargeDiagnoses (MVP 6)
                 "CODE-1",
+                // HL7 ADT visit-sync columns (V99) — externalVisitNumber, externalSendingApplication, externalSendingFacility, externalMessageControlId
+                null, null, null, null,
                 "admin", "admin2", null, assignment, 1L
         );
         assertThat(e.getPatient()).isEqualTo(patient);

@@ -98,7 +98,7 @@ class Hl7MessageDispatcherTest {
         assertThat(ack).contains("MSA|AA|MSG-42");
         verify(inboundLab).processOruR01(any(), eq(hospital), eq("MINDRAY"), eq("LAB1"),
             eq("MSG-42"), anyString());
-        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString());
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
     }
 
     @Test
@@ -147,7 +147,10 @@ class Hl7MessageDispatcherTest {
     @Test
     void acceptedAdtA01EmitsAa() {
         allowSender();
-        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString()))
+        // Dispatcher now passes MSH-10 control id through the 5-arg
+        // processAdt overload (roadmap row 24 — visit-sync projection
+        // stamps the control id on the reconciled Admission/Encounter).
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
             .thenReturn(MllpInboundOutcome.ACCEPTED);
 
         String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428073000||ADT^A01|CTRL-9|P|2.5\r"
@@ -155,7 +158,8 @@ class Hl7MessageDispatcherTest {
                    + "PV1|1|I|WARD-A\r";
 
         assertThat(dispatcher.dispatch(adt, "10.0.0.50:1024")).contains("MSA|AA|CTRL-9");
-        verify(inboundAdt).processAdt(any(), eq(hospital), eq("REGISTRATION"), eq("HOSP1"));
+        verify(inboundAdt).processAdt(any(), eq(hospital),
+            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-9"));
         verify(inboundLab, never()).processOruR01(any(), any(), anyString(), anyString(),
             any(), anyString());
     }
@@ -163,7 +167,7 @@ class Hl7MessageDispatcherTest {
     @Test
     void mapsAdtRejectedNotFoundToAe() {
         allowSender();
-        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString()))
+        when(inboundAdt.processAdt(any(), eq(hospital), anyString(), anyString(), any()))
             .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
 
         String adt = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260428||ADT^A08|CTRL-N|P|2.5\r"

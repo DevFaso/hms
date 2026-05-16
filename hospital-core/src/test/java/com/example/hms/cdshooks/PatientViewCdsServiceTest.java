@@ -69,6 +69,113 @@ class PatientViewCdsServiceTest {
     }
 
     @Test
+    void problemCardRendersIcdAndLoincFromSeedTable() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+
+        // Hypertension — ICD I10 binds to LOINC 85354-9 via the seed table.
+        PatientProblem p = new PatientProblem();
+        p.setPatient(patient);
+        p.setProblemDisplay("Essential hypertension");
+        p.setProblemCode("I10");
+        p.setIcdVersion("ICD-10");
+        p.setStatus(ProblemStatus.ACTIVE);
+        when(problemRepo.findByPatient_Id(patientId)).thenReturn(List.of(p));
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
+
+        CdsHookRequest req = new CdsHookRequest(
+            "patient-view", "x", null, null, null,
+            Map.of("patientId", patientId.toString()), null
+        );
+
+        CdsCard problem = service.evaluate(req).cards().get(0);
+        assertThat(problem.detail())
+            .contains("Essential hypertension")
+            .contains("[ICD-10: I10]")
+            .contains("[LOINC: 85354-9 Blood pressure panel]");
+    }
+
+    @Test
+    void problemCardEntityLoincOverridesSeedBinding() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+
+        // I10 would normally bind to 85354-9, but the entity carries its own LOINC.
+        PatientProblem p = new PatientProblem();
+        p.setPatient(patient);
+        p.setProblemDisplay("Hypertension");
+        p.setProblemCode("I10");
+        p.setLoincCode("8480-6");
+        p.setLoincDisplay("Systolic blood pressure");
+        p.setStatus(ProblemStatus.ACTIVE);
+        when(problemRepo.findByPatient_Id(patientId)).thenReturn(List.of(p));
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
+
+        CdsHookRequest req = new CdsHookRequest(
+            "patient-view", "x", null, null, null,
+            Map.of("patientId", patientId.toString()), null
+        );
+
+        CdsCard problem = service.evaluate(req).cards().get(0);
+        assertThat(problem.detail())
+            .contains("[LOINC: 8480-6 Systolic blood pressure]");
+        assertThat(problem.detail()).doesNotContain("85354-9");
+    }
+
+    @Test
+    void problemCardSkipsLoincWhenNoBindingAndEntityLacksCode() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+
+        // Z00 (general examination) — intentionally not in the seed table.
+        PatientProblem p = new PatientProblem();
+        p.setPatient(patient);
+        p.setProblemDisplay("General examination");
+        p.setProblemCode("Z00");
+        p.setStatus(ProblemStatus.ACTIVE);
+        when(problemRepo.findByPatient_Id(patientId)).thenReturn(List.of(p));
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
+
+        CdsHookRequest req = new CdsHookRequest(
+            "patient-view", "x", null, null, null,
+            Map.of("patientId", patientId.toString()), null
+        );
+
+        CdsCard problem = service.evaluate(req).cards().get(0);
+        assertThat(problem.detail()).contains("[ICD-10: Z00]");
+        assertThat(problem.detail()).doesNotContain("LOINC:");
+    }
+
+    @Test
+    void malformedIcdAndLoincAreDroppedSilently() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+
+        PatientProblem p = new PatientProblem();
+        p.setPatient(patient);
+        p.setProblemDisplay("Local-system problem");
+        p.setProblemCode("not-icd");        // fails ICD-10 regex
+        p.setLoincCode("99999999-zzz");      // fails LOINC regex
+        p.setStatus(ProblemStatus.ACTIVE);
+        when(problemRepo.findByPatient_Id(patientId)).thenReturn(List.of(p));
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
+
+        CdsHookRequest req = new CdsHookRequest(
+            "patient-view", "x", null, null, null,
+            Map.of("patientId", patientId.toString()), null
+        );
+
+        CdsCard problem = service.evaluate(req).cards().get(0);
+        assertThat(problem.detail()).contains("Local-system problem");
+        assertThat(problem.detail()).doesNotContain("[ICD-10:");
+        assertThat(problem.detail()).doesNotContain("[LOINC:");
+    }
+
+    @Test
     void emptyChartProducesNoCards() {
         UUID patientId = UUID.randomUUID();
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of());
