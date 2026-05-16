@@ -181,7 +181,7 @@ Status legend:
 | C1 — Confidentiality | 0 | 2 | 0 | PHI inventory + retention policy |
 | **Totals** | **12** | **19** | **7** | **38 control points; 31 % present, 50 % partial, 19 % gap** |
 
-The roadmap's "~60 % of CC1–CC9" estimate is conservative. Counting partials at 0.5, the weighted CC1–CC9 coverage is **(8 + 0.5·15) / 30 ≈ 51 %** before CC9.2 vendor work, but the CC6 / CC7 / CC8 axis — the technically demanding part — is at **(8 + 0.5·8) / 17 ≈ 71 %**. The remaining work is overwhelmingly **documentation, policy, and process**, not engineering.
+The roadmap's "~60 % of CC1–CC9" estimate is conservative. Counting partials at 0.5, the weighted CC1–CC9 coverage is **(10 + 0.5·16) / 33 ≈ 55 %** before CC9.2 vendor work, but the CC6 / CC7 / CC8 axis — the technically demanding part — is at **(7 + 0.5·7) / 14 = 75 %**. The remaining work is overwhelmingly **documentation, policy, and process**, not engineering.
 
 ## 5 · Remediation backlog
 
@@ -299,7 +299,7 @@ Code-level controls referenced in the inventory above:
   [`UserMfaEnrollment.java`](../../hospital-core/src/main/java/com/example/hms/model/UserMfaEnrollment.java),
   [`MfaBackupCode.java`](../../hospital-core/src/main/java/com/example/hms/model/MfaBackupCode.java)
 - **RBAC.**
-  [`RoleValidator.java`](../../hospital-core/src/main/java/com/example/hms/security/RoleValidator.java),
+  [`RoleValidator.java`](../../hospital-core/src/main/java/com/example/hms/utility/RoleValidator.java),
   [`Role.java`](../../hospital-core/src/main/java/com/example/hms/enums/Role.java),
   [`UserRoleHospitalAssignment.java`](../../hospital-core/src/main/java/com/example/hms/model/UserRoleHospitalAssignment.java),
   [`PermissionMatrixSnapshot.java`](../../hospital-core/src/main/java/com/example/hms/model/PermissionMatrixSnapshot.java)
