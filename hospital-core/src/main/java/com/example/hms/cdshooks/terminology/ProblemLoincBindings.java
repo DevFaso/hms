@@ -20,9 +20,12 @@ import java.util.Optional;
  * conditions that drive the West-African pilot deployments (hypertension,
  * type 2 diabetes, sickle cell disease, asthma, COPD, malaria,
  * HIV/AIDS, tuberculosis) and the obstetric / pediatric flags that the
- * BPA layer already keys off. Anything not in the table degrades to a
- * project-local URN so the card payload still carries a Coding entry
- * with display text — never silently drops information.
+ * BPA layer already keys off. Codes not in the table return
+ * {@link Optional#empty()} from {@link #bindingFor(String)}; the calling
+ * CDS service ({@link com.example.hms.cdshooks.service.PatientViewCdsService})
+ * then omits the {@code [LOINC: …]} annotation from the rendered card
+ * detail line and continues to surface the ICD coding alone. The card
+ * itself is never dropped — only the optional LOINC annotation.
  *
  * <p>The LOINC codes chosen here are <em>observation-panel</em> codes,
  * not diagnosis codes (LOINC doesn't model diagnoses). They are what
