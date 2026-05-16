@@ -1475,4 +1475,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V101 — FHIR write idempotency index on patient registrations
+         (roadmap row 20, v1.1 / Backend / "FHIR write API").
+         Adds a partial unique index on
+         clinical.patient_hospital_registrations (hospital_id, LOWER(mrn))
+         WHERE is_active = true so FHIR conditional-create
+         (If-None-Exist) and HL7 ADT idempotency can rely on at most
+         one active MRN per hospital. Excludes inactive rows and
+         legacy NULL/blank MRNs. V100 is the prior slot
+         (LOINC binding); V101 is the next free.
+         Pure DDL: CREATE UNIQUE INDEX IF NOT EXISTS x 1.
+         ================================================================= -->
+    <changeSet id="V101-fhir-write-patient-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V101__fhir_write_patient_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

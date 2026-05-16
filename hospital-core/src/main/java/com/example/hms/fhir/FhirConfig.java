@@ -8,6 +8,7 @@ import com.example.hms.fhir.smart.HmsCapabilityStatementProvider;
 import com.example.hms.fhir.smart.SmartConfigurationBuilder;
 import com.example.hms.fhir.smart.SmartConfigurationInterceptor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,6 +35,7 @@ import java.util.List;
  * </ul>
  */
 @Configuration
+@EnableConfigurationProperties(FhirWriteProperties.class)
 public class FhirConfig {
 
     @Bean
@@ -47,21 +49,25 @@ public class FhirConfig {
         List<IResourceProvider> resourceProviders,
         SmartConfigurationInterceptor smartConfigurationInterceptor,
         SmartConfigurationBuilder smartConfigurationBuilder,
+        FhirWriteProperties fhirWriteProperties,
         @Value("${app.fhir.serverBaseUrl:/api/fhir}") String serverBaseUrl
     ) {
         RestfulServer server = new RestfulServer(fhirContext);
         server.setServerName("HMS FHIR R4 Server");
         server.setServerVersion("0.1.0");
         server.setImplementationDescription(
-            "Hospital Management System FHIR R4 façade — read-only "
-                + "Patient/Encounter/Observation/Condition/MedicationRequest/Immunization."
+            "Hospital Management System FHIR R4 façade — read across "
+                + "Patient/Encounter/Observation/Condition/MedicationRequest/Immunization; "
+                + "Patient write (PUT + conditional POST) gated by app.fhir.write.enabled."
         );
         server.setServerAddressStrategy(new ApacheProxyAddressStrategy(serverBaseUrl));
         server.setResourceProviders(resourceProviders);
         server.setDefaultPrettyPrint(true);
         server.registerInterceptor(new ResponseHighlighterInterceptor());
         server.registerInterceptor(smartConfigurationInterceptor);
-        server.setServerConformanceProvider(new HmsCapabilityStatementProvider(server, smartConfigurationBuilder));
+        server.setServerConformanceProvider(
+            new HmsCapabilityStatementProvider(server, smartConfigurationBuilder, fhirWriteProperties)
+        );
 
         ServletRegistrationBean<RestfulServer> reg = new ServletRegistrationBean<>(server, "/fhir/*");
         reg.setName("fhirServlet");
