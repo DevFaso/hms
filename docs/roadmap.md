@@ -9,7 +9,72 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
   auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
   Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
-Last updated: **2026-05-15**. Update both files together when scope moves.
+Last updated: **2026-05-16**. Update both files together when scope moves.
+
+> **2026-05-16 update — overnight foundation passes for v1.1 + v2.0
+> landed (4 PRs).** Rows 24, 26, 35, 38 all flipped from `not-started`
+> to `started`. Four feature branches merged into develop in sequence:
+> - **Row 24 (ADT^A01/A04/A08 → Admission/Encounter sync)** —
+>   [`988ef467`](https://github.com/DevFaso/hms/commit/988ef467)
+>   (PR #332 `feat/v1.1-adt-admission-encounter-sync`). V99 migration
+>   adds `external_visit_number` + `external_sending_application` +
+>   `external_sending_facility` + `external_message_control_id`
+>   (nullable) to `admissions` + `clinical.encounters` with partial
+>   composite unique indexes scoped per `(sender, hospital)`.
+>   `MllpInboundAdtVisitProjectionService` reconciles inbound A01/A04/A08
+>   against existing rows by the HL7 visit-number triplet, `REQUIRES_NEW`
+>   so projection failure cannot roll back the demographic write; gated
+>   behind `app.hl7.adt.visit-sync.enabled` (default `false`).
+>   Conflict-resolution rules + operator playbook in
+>   [`docs/runbooks/hl7-adt-conflict-resolution.md`](./runbooks/hl7-adt-conflict-resolution.md).
+>   Auto-create deferred to a follow-on PR (needs per-hospital
+>   intake-provider config).
+> - **Row 26 (CDS Hooks LOINC binding)** —
+>   [`762cc981`](https://github.com/DevFaso/hms/commit/762cc981)
+>   (PR #333 `feat/v1.1-cds-hooks-loinc-binding`). V100 migration
+>   adds `loinc_code` + `loinc_display` (nullable) to
+>   `clinical.patient_problems`. `ProblemLoincBindings` seed table
+>   (13 entries spanning cardio / endocrine / respiratory / hematology /
+>   malaria / HIV / TB / renal / OB — calibrated to the WHO-EMRO
+>   chronic-care workload). `PatientViewCdsService.renderProblem` now
+>   appends typed `[ICD-10: …]` and `[LOINC: …]` annotations on each
+>   problem line; entity-explicit `loincCode` wins over the seed
+>   fallback. Malformed codes drop silently.
+> - **Row 35 (Read replicas + Hikari tuning)** —
+>   [`dd193f80`](https://github.com/DevFaso/hms/commit/dd193f80)
+>   (PR #334 `feat/v2.0-read-replicas-hikari`). Full Hikari tuning
+>   surface env-overridable via `spring.datasource.hikari.*`;
+>   `ReplicaDataSourceProperties` + `ReadWriteRoutingDataSource`
+>   (`AbstractRoutingDataSource` keyed off Spring's
+>   `isCurrentTransactionReadOnly()`); replica bean is
+>   `@ConditionalOnProperty`-gated on
+>   `app.datasource.replica.enabled`; `DataSourceConfig` composes
+>   (write, optional replica) behind the routing wrapper. Flag-off
+>   behaviour is bit-for-bit unchanged. Activation playbook +
+>   5-business-day UAT soak procedure in
+>   [`docs/runbooks/postgres-pool-replica-sizing.md`](./runbooks/postgres-pool-replica-sizing.md).
+> - **Row 38 (HIPAA-equivalent posture)** —
+>   [`d1419045`](https://github.com/DevFaso/hms/commit/d1419045)
+>   (PR #335 `feat/v2.0-hipaa-posture`). Mirrors the SOC 2 row-37
+>   pattern.
+>   [`docs/compliance/hipaa-gap.md`](./compliance/hipaa-gap.md)
+>   inventories 51 control points across §164 Security Rule
+>   (administrative / physical / technical / organizational / docs) +
+>   Privacy Rule (minimum necessary + individual rights) — scorecard
+>   **19 present / 17 partial / 15 gap = 54 % weighted**;
+>   technical-safeguards axis at **75 %** (§164.312(a)(2)(iv)
+>   Encryption + Decryption rated `partial` — AES-256-GCM operational
+>   on 14 narrative columns via `EncryptedStringConverter`, identifier
+>   columns plaintext today). Companion machine-readable
+>   [`hipaa-controls.csv`](./compliance/hipaa-controls.csv) +
+>   [`hipaa-baa-template.md`](./compliance/hipaa-baa-template.md)
+>   (11-section BAA draft with sub-BAA table for Railway / Splunk /
+>   Grafana / Keycloak host / email + SMS vendors) +
+>   [`phi-inventory.md`](./compliance/phi-inventory.md) (all 18
+>   §164.514(b)(2) identifier categories + clinical-record body,
+>   per-column encryption status, dataflow map). 27-item remediation
+>   backlog (10 P0 / 10 P1 / 7 P2); P0 critical path 2026-09-30
+>   calibrated to land one month after the SOC 2 P0 deadline.
 
 > **2026-05-15 update — v1.1 / Interop HL7 / ORU^R01 → LabResult
 > persistence shipped.** Row 23 flipped from `not-started` to
