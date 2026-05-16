@@ -67,6 +67,12 @@ cd "$REPO_ROOT"
 REALM_EXPORT="keycloak/realm-export.json"
 [[ -f "$REALM_EXPORT" ]] || { echo "ERROR: $REALM_EXPORT not found at repo root" >&2; exit 2; }
 
+# Per-run temp file for the PUT response body. Unique path prevents clobber
+# across concurrent runs; trap guarantees cleanup on any exit path (success,
+# error, signal). mktemp is in coreutils so it's everywhere bash + jq are.
+PUT_BODY_FILE="$(mktemp -t fix-hms-portal-uris.body.XXXXXX)"
+trap 'rm -f "$PUT_BODY_FILE"' EXIT INT TERM
+
 case "$ENV_FILTER" in
   dev)  HOST="https://hms-keycloak-dev-dev.up.railway.app" ;;
   uat)  HOST="https://hms-keycloak-uat-uat.up.railway.app" ;;
@@ -81,17 +87,34 @@ read -rp "[${ENV_FILTER}] master admin username: " ADMIN_USER
 [[ -z "$ADMIN_USER" ]] && { echo "ERROR: username required"; exit 2; }
 read -rsp "[${ENV_FILTER}] password for ${ADMIN_USER}: " ADMIN_PASS; echo
 
-TOKEN=$(printf '%s' "$ADMIN_PASS" | curl -sS -X POST \
+# Capture body + http_code so we can distinguish network/TLS errors (curl exit
+# code) from auth-shaped 4xx (HTTP error body) from a real token. Pass through
+# curl stderr (no 2>/dev/null) so TLS / connect failures surface to the user;
+# the password is on stdin, not in argv, so it doesn't leak.
+TOKEN_RESP=$(printf '%s' "$ADMIN_PASS" | curl -sS -X POST \
+  --connect-timeout 10 --max-time 30 \
+  -w $'\n__HTTP__%{http_code}' \
   "${HOST}/realms/master/protocol/openid-connect/token" \
   --data-urlencode "grant_type=password" \
   --data-urlencode "client_id=admin-cli" \
   --data-urlencode "username=${ADMIN_USER}" \
-  --data-urlencode "password@-" 2>/dev/null \
-  | jq -r '.access_token // empty')
+  --data-urlencode "password@-") || {
+    unset ADMIN_PASS
+    echo "ERROR: token endpoint unreachable (curl exited non-zero) — check network / TLS" >&2
+    exit 2
+  }
 unset ADMIN_PASS
 
+TOKEN_STATUS="${TOKEN_RESP##*__HTTP__}"
+TOKEN_BODY="${TOKEN_RESP%$'\n'__HTTP__*}"
+if [[ "$TOKEN_STATUS" != "200" ]]; then
+  echo "ERROR: admin login failed — HTTP ${TOKEN_STATUS}" >&2
+  echo "Body: $(printf '%s' "$TOKEN_BODY" | head -c 300)" >&2
+  exit 2
+fi
+TOKEN=$(printf '%s' "$TOKEN_BODY" | jq -r '.access_token // empty')
 if [[ -z "$TOKEN" ]]; then
-  echo "ERROR: admin login failed — wrong creds, user not in master realm, or admin has MFA enrolled" >&2
+  echo "ERROR: HTTP 200 but no access_token in body — Keycloak returned an unexpected shape" >&2
   exit 2
 fi
 echo "  ✓ authenticated"
@@ -109,7 +132,13 @@ if [[ "$LIVE_COUNT" != "1" ]]; then
   exit 1
 fi
 
-CLIENT_UUID=$(printf '%s' "$LIVE_CLIENT" | jq -r '.[0].id')
+CLIENT_UUID=$(printf '%s' "$LIVE_CLIENT" | jq -r '.[0].id // empty')
+if [[ -z "$CLIENT_UUID" || "$CLIENT_UUID" == "null" ]]; then
+  echo "ERROR: live hms-portal client response is missing a usable .id — PUT would target /clients/null" >&2
+  echo "Response body (first 500 chars):" >&2
+  printf '%s' "$LIVE_CLIENT" | head -c 500 >&2
+  exit 1
+fi
 LIVE_OBJ=$(printf '%s' "$LIVE_CLIENT" | jq '.[0]')
 echo "  ✓ hms-portal UUID: ${CLIENT_UUID}"
 
@@ -161,9 +190,15 @@ if [[ "$DRY_RUN" == "true" ]]; then
 fi
 
 # ─── Apply ───────────────────────────────────────────────────────────────────
+# Use mktemp so concurrent runs don't clobber each other's response body.
+# Trap ensures the temp file is removed on any exit path.
+PUT_BODY_FILE=$(mktemp -t fix-hms-portal-uris.XXXXXX.body)
+trap 'rm -f "$PUT_BODY_FILE"' EXIT
+
 echo "Applying PUT to /admin/realms/hms/clients/${CLIENT_UUID} ..."
 PUT_STATUS=$(printf '%s' "$NEW_OBJ" | curl -sS -X PUT \
-  -w '%{http_code}' -o /tmp/fix-hms-portal-uris.body \
+  --connect-timeout 10 --max-time 30 \
+  -w '%{http_code}' -o "$PUT_BODY_FILE" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   --data-binary @- \
@@ -172,12 +207,10 @@ PUT_STATUS=$(printf '%s' "$NEW_OBJ" | curl -sS -X PUT \
 if [[ "$PUT_STATUS" != "204" ]]; then
   echo "ERROR: PUT returned HTTP ${PUT_STATUS}" >&2
   echo "Body:" >&2
-  cat /tmp/fix-hms-portal-uris.body >&2 || true
-  rm -f /tmp/fix-hms-portal-uris.body
+  cat "$PUT_BODY_FILE" >&2 || true
   unset TOKEN
   exit 1
 fi
-rm -f /tmp/fix-hms-portal-uris.body
 echo "  ✓ PUT 204"
 
 # ─── Verify ──────────────────────────────────────────────────────────────────

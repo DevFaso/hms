@@ -34,9 +34,7 @@
 #   1 — at least one check failed (printed to stderr with detail)
 #   2 — invocation error (missing tool, bad flag, missing repo file)
 #
-# Required tools: curl, jq, git, python3 (for --full URL-encode of password
-# via stdin — same shape as keycloak-realm-sync.md uses curl --data-urlencode
-# password@-, included here as a portable fallback).
+# Required tools: curl, jq, git.
 #
 # Usage:
 #   scripts/keycloak/env-sync-verify.sh                 # public-only
@@ -245,40 +243,55 @@ run_repo_checks() {
     skip_count=$((skip_count + 1))
   fi
 
-  # R2. realm-export.json's hms-portal carries all four host envs
-  local missing_uris
-  missing_uris=$(jq -r '
-    .clients[] | select(.clientId=="hms-portal") | .redirectUris | sort |
-    (["http://localhost:4200/*",
-      "https://hms.dev.bitnesttechs.com/*",
-      "https://hms.uat.bitnesttechs.com/*",
-      "https://hms.bitnesttechs.com/*"] - .) | .[]
-  ' "$REALM_EXPORT")
-  if [[ -z "$missing_uris" ]]; then
-    record PASS repo R2 "hms-portal redirectUris cover localhost + dev + uat + prod hosts"
-    pass_count=$((pass_count + 1))
+  # Existence guard: every R-check below assumes hms-portal is present in the
+  # realm export. If it's missing, the queries silently produce empty output
+  # and the set-difference / loop would record false PASSes. Fail loud once.
+  local hms_portal_present
+  if jq -e '.clients[] | select(.clientId=="hms-portal")' "$REALM_EXPORT" >/dev/null 2>&1; then
+    hms_portal_present=true
   else
-    record FAIL repo R2 "hms-portal redirectUris missing: ${missing_uris//$'\n'/, }"
-    fail_count=$((fail_count + 1))
+    hms_portal_present=false
+    record FAIL repo R2 "hms-portal client not found in ${REALM_EXPORT}"
+    record FAIL repo R3 "hms-portal client not found in ${REALM_EXPORT}"
+    fail_count=$((fail_count + 2))
   fi
 
-  # R3. redirect-uris.md table mentions every URI in realm-export
-  local rmd="keycloak/redirect-uris.md" missing_in_md
-  if [[ ! -f "$rmd" ]]; then
-    record SKIP repo R3 "skipped: ${rmd} not found"
-    skip_count=$((skip_count + 1))
-  else
-    missing_in_md=""
-    while IFS= read -r uri; do
-      [[ -z "$uri" ]] && continue
-      grep -qF "$uri" "$rmd" || missing_in_md+="${uri} "
-    done < <(jq -r '.clients[] | select(.clientId=="hms-portal") | .redirectUris[]' "$REALM_EXPORT")
-    if [[ -z "$missing_in_md" ]]; then
-      record PASS repo R3 "${rmd} mentions every hms-portal redirect URI"
+  if [[ "$hms_portal_present" == "true" ]]; then
+    # R2. realm-export.json's hms-portal carries all four host envs
+    local missing_uris
+    missing_uris=$(jq -r '
+      .clients[] | select(.clientId=="hms-portal") | .redirectUris | sort |
+      (["http://localhost:4200/*",
+        "https://hms.dev.bitnesttechs.com/*",
+        "https://hms.uat.bitnesttechs.com/*",
+        "https://hms.bitnesttechs.com/*"] - .) | .[]
+    ' "$REALM_EXPORT")
+    if [[ -z "$missing_uris" ]]; then
+      record PASS repo R2 "hms-portal redirectUris cover localhost + dev + uat + prod hosts"
       pass_count=$((pass_count + 1))
     else
-      record FAIL repo R3 "${rmd} is missing: ${missing_in_md}"
+      record FAIL repo R2 "hms-portal redirectUris missing: ${missing_uris//$'\n'/, }"
       fail_count=$((fail_count + 1))
+    fi
+
+    # R3. redirect-uris.md table mentions every URI in realm-export
+    local rmd="keycloak/redirect-uris.md" missing_in_md
+    if [[ ! -f "$rmd" ]]; then
+      record SKIP repo R3 "skipped: ${rmd} not found"
+      skip_count=$((skip_count + 1))
+    else
+      missing_in_md=""
+      while IFS= read -r uri; do
+        [[ -z "$uri" ]] && continue
+        grep -qF "$uri" "$rmd" || missing_in_md+="${uri} "
+      done < <(jq -r '.clients[] | select(.clientId=="hms-portal") | .redirectUris[]' "$REALM_EXPORT")
+      if [[ -z "$missing_in_md" ]]; then
+        record PASS repo R3 "${rmd} mentions every hms-portal redirect URI"
+        pass_count=$((pass_count + 1))
+      else
+        record FAIL repo R3 "${rmd} is missing: ${missing_in_md}"
+        fail_count=$((fail_count + 1))
+      fi
     fi
   fi
 
