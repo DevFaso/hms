@@ -48,7 +48,8 @@ public class KpiDashboardController {
     @Operation(summary = "Compute the door-to-doctor, dispense lead time, and no-show KPIs for a window")
     public ResponseEntity<KpiDashboardDTO> dashboard(
         @RequestParam("from") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-        @RequestParam("to")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+        @RequestParam("to")   @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(value = "withTrends", required = false, defaultValue = "false") boolean withTrends
     ) {
         if (to.isBefore(from)) {
             return ResponseEntity.badRequest().build();
@@ -58,6 +59,6 @@ public class KpiDashboardController {
             // the analytics export pipeline, not the live dashboard.
             return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.ok(kpiDashboardService.computeDashboard(from, to));
+        return ResponseEntity.ok(kpiDashboardService.computeDashboard(from, to, withTrends));
     }
 }

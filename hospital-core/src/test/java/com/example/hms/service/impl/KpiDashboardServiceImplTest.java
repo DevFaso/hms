@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO;
+import com.example.hms.payload.dto.analytics.KpiDashboardDTO.KpiTrendPoint;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import jakarta.persistence.EntityManager;
@@ -14,7 +15,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.sql.Date;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -128,9 +131,9 @@ class KpiDashboardServiceImplTest {
             .build());
 
         stubThreeQueries(
-            new Object[]{5L, 900.0},    // d2d: 5 samples, 900 s = 15 min
-            new Object[]{3L, 480.0},    // lead: 3 samples, 480 s = 8 min
-            new Object[]{10L, 1L}       // noShow: 10 total, 1 no-show
+            new Object[]{5L, 900.0, 720.0},  // d2d: 5 samples, avg 900s = 15min, p50 720s = 12min
+            new Object[]{3L, 480.0},          // lead: 3 samples, 480 s = 8 min
+            new Object[]{10L, 1L}             // noShow: 10 total, 1 no-show
         );
 
         KpiDashboardDTO result = service.computeDashboard(from, to);
@@ -150,9 +153,9 @@ class KpiDashboardServiceImplTest {
             .build());
 
         stubThreeQueries(
-            new Object[]{20L, 1620.0},  // d2d: 20 samples, 1620 s = 27 min
-            new Object[]{8L,  840.0},   // lead: 8 samples, 840 s = 14 min
-            new Object[]{100L, 7L}      // noShow: 100 total, 7 no-show → 0.07
+            new Object[]{20L, 1620.0, 1500.0},  // d2d: 20 samples, avg 1620s=27min, p50 1500s=25min
+            new Object[]{8L,  840.0},            // lead: 8 samples, 840 s = 14 min
+            new Object[]{100L, 7L}               // noShow: 100 total, 7 no-show → 0.07
         );
 
         KpiDashboardDTO result = service.computeDashboard(from, to);
@@ -180,9 +183,9 @@ class KpiDashboardServiceImplTest {
             .build());
 
         stubThreeQueries(
-            new Object[]{0L, null},     // d2d: no encounters
-            new Object[]{0L, null},     // lead: no dispenses
-            new Object[]{0L, 0L}        // noShow: no appointments
+            new Object[]{0L, null, null},  // d2d: no encounters (count + avg + median all null)
+            new Object[]{0L, null},        // lead: no dispenses
+            new Object[]{0L, 0L}           // noShow: no appointments
         );
 
         KpiDashboardDTO result = service.computeDashboard(from, to);
@@ -203,7 +206,7 @@ class KpiDashboardServiceImplTest {
             .build());
 
         stubThreeQueries(
-            new Object[]{1L, 60.0},
+            new Object[]{1L, 60.0, 60.0},
             new Object[]{1L, 60.0},
             new Object[]{40L, 10L}      // 10/40 = 0.25
         );
@@ -223,7 +226,7 @@ class KpiDashboardServiceImplTest {
             .build());
 
         stubThreeQueries(
-            new Object[]{2L, 120.0},
+            new Object[]{2L, 120.0, 120.0},
             new Object[]{1L, 60.0},
             new Object[]{5L, 0L}
         );
@@ -231,6 +234,119 @@ class KpiDashboardServiceImplTest {
         KpiDashboardDTO result = service.computeDashboard(from, from);
 
         assertThat(result.doorToDoctor().sampleSize()).isEqualTo(2L);
+    }
+
+    // ── Follow-on: P50 median door-to-doctor + trend timeseries ──────────
+
+    @Test
+    @DisplayName("door-to-doctor populates medianMinutesEstimate from PERCENTILE_CONT")
+    void doorToDoctor_populatesMedian() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId)
+            .build());
+
+        // 12 samples, avg = 30 min, p50 = 22 min. The median is
+        // typically lower than the average because of the long tail of
+        // overnight-stay outliers — exactly why we want it surfaced.
+        stubThreeQueries(
+            new Object[]{12L, 1800.0, 1320.0},
+            new Object[]{0L, null},
+            new Object[]{0L, 0L}
+        );
+
+        KpiDashboardDTO result = service.computeDashboard(from, to);
+
+        assertThat(result.doorToDoctor().averageMinutes()).isEqualTo(30.0);
+        assertThat(result.doorToDoctor().medianMinutesEstimate()).isEqualTo(22.0);
+        assertThat(result.trend()).isNull();
+    }
+
+    @Test
+    @DisplayName("computeDashboard(withTrends=false) does not run trend group-by queries")
+    void noTrends_skipsTrendQueries() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId)
+            .build());
+
+        stubThreeQueries(
+            new Object[]{1L, 60.0, 60.0},
+            new Object[]{1L, 60.0},
+            new Object[]{1L, 0L}
+        );
+
+        KpiDashboardDTO result = service.computeDashboard(from, to, false);
+
+        assertThat(result.trend()).isNull();
+        // Three queries only — d2d, lead, noShow. Trend queries
+        // would have been a 4th / 5th / 6th createNativeQuery call.
+        verify(entityManager, org.mockito.Mockito.times(3)).createNativeQuery(anyString());
+    }
+
+    @Test
+    @DisplayName("computeDashboard(withTrends=true) merges three daily series into KpiTrendPoints")
+    void withTrends_returnsMergedDailyPoints() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId)
+            .build());
+
+        // 6 sequential queries: d2d-aggregate, lead-aggregate, noShow-aggregate,
+        // then d2d-trend, lead-trend, noShow-trend.
+        Query d2dAgg = buildQueryMock(new Object[]{3L, 1800.0, 1200.0});
+        Query leadAgg = buildQueryMock(new Object[]{2L, 900.0});
+        Query noShowAgg = buildQueryMock(new Object[]{10L, 1L});
+        Query d2dTrend = buildListQueryMock(List.of(
+            new Object[]{Date.valueOf(LocalDate.of(2026, 4, 1)), 1200.0},   // 20 min
+            new Object[]{Date.valueOf(LocalDate.of(2026, 4, 2)), 1800.0}    // 30 min
+        ));
+        Query leadTrend = buildListQueryMock(List.<Object[]>of(
+            new Object[]{Date.valueOf(LocalDate.of(2026, 4, 1)), 600.0}     // 10 min
+        ));
+        Query noShowTrend = buildListQueryMock(List.<Object[]>of(
+            new Object[]{Date.valueOf(LocalDate.of(2026, 4, 2)), 8L, 2L}    // 0.25
+        ));
+        when(entityManager.createNativeQuery(anyString()))
+            .thenReturn(d2dAgg, leadAgg, noShowAgg, d2dTrend, leadTrend, noShowTrend);
+
+        KpiDashboardDTO result = service.computeDashboard(from, to, true);
+
+        assertThat(result.trend()).isNotNull();
+        assertThat(result.trend()).hasSize(2);
+        KpiTrendPoint day1 = result.trend().get(0);
+        KpiTrendPoint day2 = result.trend().get(1);
+        assertThat(day1.date()).isEqualTo(LocalDate.of(2026, 4, 1));
+        assertThat(day1.doorToDoctorAverageMinutes()).isEqualTo(20.0);
+        assertThat(day1.dispenseLeadTimeAverageMinutes()).isEqualTo(10.0);
+        assertThat(day1.noShowRate()).isNull();  // no appointments that day
+        assertThat(day2.date()).isEqualTo(LocalDate.of(2026, 4, 2));
+        assertThat(day2.doorToDoctorAverageMinutes()).isEqualTo(30.0);
+        assertThat(day2.dispenseLeadTimeAverageMinutes()).isNull();  // no dispenses
+        assertThat(day2.noShowRate()).isEqualTo(0.25);
+    }
+
+    @Test
+    @DisplayName("trend drops days that CAST-to-DATE puts outside the requested window")
+    void withTrends_dropsOutOfWindowDays() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId)
+            .build());
+
+        Query d2dAgg = buildQueryMock(new Object[]{1L, 60.0, 60.0});
+        Query leadAgg = buildQueryMock(new Object[]{0L, null});
+        Query noShowAgg = buildQueryMock(new Object[]{0L, 0L});
+        // Drift row: April 1 window starts but DB returns March 31 (UTC vs local).
+        Query d2dTrend = buildListQueryMock(List.of(
+            new Object[]{Date.valueOf(LocalDate.of(2026, 3, 31)), 600.0},
+            new Object[]{Date.valueOf(LocalDate.of(2026, 4, 15)), 1200.0}
+        ));
+        Query leadTrend = buildListQueryMock(List.<Object[]>of());
+        Query noShowTrend = buildListQueryMock(List.<Object[]>of());
+        when(entityManager.createNativeQuery(anyString()))
+            .thenReturn(d2dAgg, leadAgg, noShowAgg, d2dTrend, leadTrend, noShowTrend);
+
+        KpiDashboardDTO result = service.computeDashboard(from, to, true);
+
+        assertThat(result.trend()).hasSize(1);
+        assertThat(result.trend().get(0).date()).isEqualTo(LocalDate.of(2026, 4, 15));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -251,6 +367,13 @@ class KpiDashboardServiceImplTest {
         Query q = mock(Query.class);
         when(q.setParameter(anyString(), any())).thenReturn(q);
         when(q.getSingleResult()).thenReturn(row);
+        return q;
+    }
+
+    private Query buildListQueryMock(List<Object[]> rows) {
+        Query q = mock(Query.class);
+        when(q.setParameter(anyString(), any())).thenReturn(q);
+        when(q.getResultList()).thenReturn(rows);
         return q;
     }
 }

@@ -494,6 +494,13 @@ export interface KpiDashboard {
   doorToDoctor: KpiDoorToDoctor;
   dispenseLeadTime: KpiDispenseLeadTime;
   noShowRate: KpiNoShowRate;
+  /**
+   * Per-day timeseries for sparkline rendering. Only present when the
+   * caller passes `withTrends=true` to `getKpiDashboard`. Days that
+   * lacked samples for a given KPI carry `undefined`/`null` for that
+   * field; the sparkline draws a gap rather than a misleading zero.
+   */
+  trend?: KpiTrendPoint[];
 }
 
 export interface KpiDoorToDoctor {
@@ -511,6 +518,13 @@ export interface KpiNoShowRate {
   totalAppointments: number;
   noShowCount: number;
   rate?: number;
+}
+
+export interface KpiTrendPoint {
+  date: string;
+  doorToDoctorAverageMinutes?: number;
+  dispenseLeadTimeAverageMinutes?: number;
+  noShowRate?: number;
 }
 
 /* ── Platform Analytics DTOs ── */
@@ -748,8 +762,11 @@ export class DashboardService {
    * `hospital_id` claim). Returns an empty rollup when the caller has
    * no active hospital pin (e.g. raw SUPER_ADMIN session).
    */
-  getKpiDashboard(from: string, to: string): Observable<KpiDashboard> {
-    const params = new HttpParams().set('from', from).set('to', to);
+  getKpiDashboard(from: string, to: string, withTrends = false): Observable<KpiDashboard> {
+    let params = new HttpParams().set('from', from).set('to', to);
+    if (withTrends) {
+      params = params.set('withTrends', 'true');
+    }
     return this.http.get<KpiDashboard>('/api/kpi/dashboard', { params });
   }
 
