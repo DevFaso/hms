@@ -603,6 +603,147 @@ reflects the snapshot the INSERT read, not a fresh post-commit
 read. The runbook narrative leads with **why** the order matters
 so the next operator doesn't reorder it back.
 
+### SonarQube — Quality Gate fails at >3% duplication on new code
+
+**Caught:** PR A04 round 1 (`feat/v1.1-adt-auto-create-encounter`)
+SonarQube Quality Gate: "4.7% Duplication on New Code (required
+≤ 3%)". Single-file drill-down showed
+`MllpInboundAdtVisitProjectionServiceImpl` at 9.2% / 16 duplicated
+lines — `tryAutoCreateAdmission` and `tryAutoCreateEncounter`
+each carried the same ~10-line gate-and-resolve preamble.
+
+**Pattern to follow:** when you ship a foundation pass with a
+single "branch" (e.g. A01 Admission auto-create) AND the next
+follow-on adds a parallel branch (e.g. A04 Encounter auto-create),
+the parallel branch is the natural moment to extract the shared
+preamble into a resolver helper. Don't copy-paste-and-modify the
+first method to bootstrap the second — that's how the duplication
+gate fails on the follow-on PR.
+
+The mechanical recipe:
+
+1. Identify the common preamble — flag checks, repository lookups,
+   cross-tenant guards, resolved entities that both branches need.
+2. Extract a `resolveX(ctx)` helper returning
+   `Optional<ResolvedContext>` where `ResolvedContext` is a private
+   inner record carrying the resolved entities.
+3. Each branch starts with its own type-specific gate (trigger
+   event, message type, etc.), then calls the resolver, then does
+   its own write path. Each helper stays under ~15 lines.
+
+**Trade-off to acknowledge in the PR:** moving the shared resolve
+in front of any branch-specific early-exit gate costs N extra DB
+lookups per "would-have-bailed-early" message. For ADT-class
+traffic (a few messages per second) that's fine; for hot loops
+(per-request middleware) it's not — that's the dividing line. If
+the per-message DB-call count matters, accept the duplication and
+add a `// duplication accepted — see PR #N` comment near each
+copy so a future reviewer doesn't reflexively dedupe.
+
+**Test-side consequence:** the shared resolve runs more
+repositories than the old early-exit path. Tests that asserted
+`verifyNoInteractions(<repo>)` on the "branch-specific gate fails"
+path will fail after the refactor. Relax those assertions to the
+load-bearing ones (no write to the type-specific table, no audit
+emission); leave a comment explaining the relaxation references
+the duplication-gate refactor so the next reader knows why.
+
+### SonarQube — duplicate-literal threshold counts ANY string at 3 occurrences
+
+**Caught:** PR A04 round 2 Sonar Critical "Define a constant
+instead of duplicating this literal `<null>` 3 times" on
+`MllpInboundAdtVisitProjectionServiceImpl`. The literal in
+question wasn't a SQL parameter name (the row-32 case) — it was a
+WARN-log placeholder rendered into three `resolve*` helpers'
+cross-tenant guards (`provider.getHospital() == null ? "<null>"
+: ...`).
+
+**Pattern to follow:** SonarQube's `S1192` duplicate-literal rule
+fires on **any** string repeated 3 times — log placeholders,
+error-message fragments, audit-event entity types,
+cross-tenant-guard fallbacks, anything. When you write a third
+copy-paste of the same string, extract a `private static final
+String <SCREAMING_SNAKE>` constant near the other class constants
+and give it a one-sentence Javadoc explaining *why* the
+placeholder exists, not what it is.
+
+The previous "fromInclusive" lesson (PR #357) framed this as a
+JPA-named-parameter concern — generalise it: **any** literal string
+with 3 occurrences in new code trips Sonar. Common offenders we've
+seen so far: `setParameter` keys, audit-event `entityType` strings,
+log-placeholder fallbacks, SQL-fragment chunks. When extracting
+helpers/branches that share warn-log shapes (the row-24 `resolve*`
+trio is the canonical example), the helpers very often share
+placeholder strings too. Audit your warn-log strings at the same
+moment you extract the helper.
+
+**Critical-by-default:** the duplicate-literal rule defaults to
+Critical severity. It alone won't fail Sonar's Quality Gate (the
+gate uses `Reliability_Rating`, `Security_Rating`, etc., not
+issue count), but it's visible on every PR diff and contributes
+to the "issues" badge. The lesson: a 2-minute-effort fix shouldn't
+ship as a Critical on a PR.
+
+### Mockito — `eq(...)` is noise when every argument is `eq(...)`
+
+**Caught:** PR A04 round 2 SonarQube — 16 Minor findings of "Remove
+this useless `eq(...)` invocation; pass the values directly" across
+the new test methods.
+
+**Pattern to follow:** `eq(...)` is a Mockito *matcher*. Mockito
+requires matchers only when at least one argument in the call uses
+a matcher — `any()`, `argThat(...)`, `same(...)`, etc. When EVERY
+argument would be `eq(<value>)`, just pass the raw values:
+
+```java
+// Wrong (16 Minor findings):
+when(repo.findByA_AndB_AndC(eq("x"), eq(uuid), eq(true))).thenReturn(...);
+verify(repo).findByA(eq(uuid));
+
+// Right:
+when(repo.findByA_AndB_AndC("x", uuid, true)).thenReturn(...);
+verify(repo).findByA(uuid);
+
+// Still right (mixing matchers — eq() is required here):
+when(repo.findByA_AndB_AndC(eq("x"), any(UUID.class), eq(true))).thenReturn(...);
+```
+
+**Exception:** `eq(null)` stays. Raw `null` in matcher position is
+ambiguous to the stubber (Mockito can't tell whether you mean
+"matches null" or "no matcher passed"), so `eq(null)` is the
+recommended form for null matchers. When `eq(null)` is mixed with
+raw values, every argument needs an explicit matcher form — so the
+other args go back to `eq(...)` too. That's why SonarQube doesn't
+flag the older `blankSenderProceedsWithNullScope` test's
+`eq(null), eq(null), eq("V-3"), eq(hospital.getId())` chain.
+
+When writing the next test against a repository finder, default to
+raw values; reach for `eq()` only when the call genuinely needs
+mixed matchers.
+
+### Mockito — never rely on `Optional`-default for unstubbed methods
+
+**Caught:** PR A04 round 1 Copilot review (High). Test relied on
+Mockito's default return for an unstubbed `Optional<T>`-returning
+repository method. The Copilot comment claimed Mockito returns
+`null` for `Optional` returns; that's incorrect for Mockito 2.x+
+(returns `Optional.empty()` via `RETURNS_DEFAULTS`), and the test
+in fact passed — but the lesson is sound.
+
+**Pattern to follow:** explicit `when(repo.method(...))
+.thenReturn(Optional.empty())` stub plus a
+`verify(repo).method(...)` even when "the default works." Two
+reasons:
+
+1. Future-proofs against Mockito strictness changes
+   (`STRICT_STUBS`, `Mockito.lenient()` shifts, a Spy-default
+   switch).
+2. Makes the test's expected behaviour readable — a future reader
+   shouldn't have to know Mockito's default-answer ladder to
+   understand why the test passes.
+
+The cost is two lines per test. Cheap.
+
 ## Co-author tag
 
 Every commit Claude authors carries:
@@ -643,3 +784,11 @@ version in the tag reflects the actual model used.
   axe-smoke for row 32, with the `T[]`-not-`Array<T>`, aria-label
   i18n, setParameter-constants, and split-aggregation-method
   lessons codified in the follow-up commit (PR #357, 2026-05-17).
+- `feat/v1.1-adt-auto-create` — A01 Admission auto-create for
+  row 24, with the cross-tenant-by-stamping-receiving-hospital,
+  AcuityLevel-enum-values-in-runbook, and PENDING-vs-ACTIVE
+  lessons codified in the follow-up commit (PR #358, 2026-05-17).
+- `feat/v1.1-adt-auto-create-encounter` — A04 Encounter
+  auto-create for row 24, with the SonarQube-duplication-on-new-code
+  and Mockito-explicit-stub lessons codified in the round-1 follow-up
+  commit (PR A04, 2026-05-17).
