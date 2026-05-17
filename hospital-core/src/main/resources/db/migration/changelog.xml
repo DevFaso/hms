@@ -1508,4 +1508,23 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V103 — Per-hospital ADT intake-provider configuration.
+         Roadmap row 24 follow-on. Adds platform.adt_intake_provider_configs
+         (one row per hospital) so MllpInboundAdtVisitProjectionService can
+         auto-create an Admission when an ADT^A01 arrives with an
+         unmatched visit-number triplet. Strictly additive:
+         CREATE TABLE IF NOT EXISTS + two CREATE INDEX IF NOT EXISTS +
+         COMMENT ON. Hard FK on hospital_id only; provider/department
+         UUIDs are application-layer-validated to tolerate staff/dept
+         re-seeds. V102 is the prior slot (announcement hospital scope);
+         V104 is the next free.
+         ================================================================= -->
+    <changeSet id="V103-adt-intake-provider-config" author="hms-team" runOnChange="false">
+        <sqlFile path="V103__adt_intake_provider_config.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

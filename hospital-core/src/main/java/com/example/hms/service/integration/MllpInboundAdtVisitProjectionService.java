@@ -52,7 +52,17 @@ public interface MllpInboundAdtVisitProjectionService {
          * sender+hospital. A WARN is emitted when
          * {@code app.hl7.adt.visit-sync.log-unmatched=true}.
          */
-        NO_MATCH
+        NO_MATCH,
+        /**
+         * No-match resolved by writing a fresh Admission populated from
+         * per-hospital intake-provider config (roadmap row 24 follow-on).
+         * Fires only when ALL of (master flag, auto-create sub-flag,
+         * per-hospital opt-in) are true AND the trigger event is A01 AND
+         * the per-hospital intake config row exists AND the patient is
+         * actively registered at the receiving hospital. Any other
+         * configuration returns {@link #NO_MATCH}.
+         */
+        ADMISSION_AUTOCREATED
     }
 
     /**

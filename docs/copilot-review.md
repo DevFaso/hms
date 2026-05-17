@@ -353,3 +353,98 @@ Files touched in the follow-up:
 - `docs/copilot-review.md`
 - `.claude/skills/angular-portal-component/SKILL.md`
 - `.claude/skills/pr-review-response/SKILL.md`
+
+---
+
+## Copilot review — PR #358 `feat/v1.1-adt-auto-create` (2026-05-17)
+
+### Fixed #16 — Wrong-tenant provider UUID could relocate Admission (High)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+
+**Copilot:** The auto-create path stamped
+`admission.setHospital(provider.getHospital())` from the configured
+`admittingProviderId` Staff row without verifying that the provider's
+hospital matched the receiving hospital. Because
+`adt_intake_provider_configs` deliberately stores raw UUIDs (no FK
+to `hospital.staff`), a misconfigured row could point at a Staff
+member belonging to another tenant — an ADT for hospital A would
+then create an Admission under hospital B despite the cross-tenant
+patient-registration check having been performed for hospital A.
+
+**Resolution:** Extracted a `resolveProvider(config, hospitalId)`
+helper that performs both lookups: row existence AND
+`provider.getHospital().getId().equals(hospitalId)`. Either failure
+returns `Optional.empty()` with a precise log line and the
+auto-create branch bails out. The `ProjectionContext` now carries
+the live `receivingHospital` reference (in addition to the UUID),
+and `buildAdmission` stamps that directly — never the indirected
+`provider.getHospital()` — so even an invariant violation in the
+provider data can't relocate the row. New unit test
+`autoCreateRejectedOnWrongTenantProvider` pins the contract.
+
+### Fixed #17 — Wrong-tenant department UUID could attach (High)
+
+**File:** Same as #16.
+
+**Copilot:** Same class of bug for the optional `departmentId`:
+dereferenced by ID only, then attached to the Admission without
+checking `department.getHospital().getId() == hospitalId`. A stale
+or wrong UUID could attach a department from another hospital.
+
+**Resolution:** Symmetric fix — new `resolveDepartment(config,
+hospitalId)` helper that performs the same hospital-match check,
+returning `Optional.empty()` on mismatch or missing row. The
+caller distinguishes "no department configured" (proceed) from
+"configured but unresolvable" (skip) by checking
+`config.getDepartmentId() != null`. New unit test
+`autoCreateRejectedOnWrongTenantDepartment` pins the contract.
+
+### Fixed #18 — Runbook listed invalid AcuityLevel enum values (Medium)
+
+**File:** `docs/runbooks/hl7-adt-conflict-resolution.md`
+
+**Copilot:** The per-hospital `INSERT` example listed
+`LEVEL_3_HIGH` and `LEVEL_4_CRITICAL`, but the
+`AcuityLevel` enum's actual values are `LEVEL_3_MAJOR`,
+`LEVEL_4_SEVERE`, and `LEVEL_5_CRITICAL`. Operators copy-pasting the
+example would write rows that fail enum mapping when the config is
+read.
+
+**Resolution:** Corrected the comment to match the actual enum:
+`LEVEL_1_MINIMAL, LEVEL_2_MODERATE, LEVEL_3_MAJOR, LEVEL_4_SEVERE,
+LEVEL_5_CRITICAL`. Lesson logged: enum-value strings in runbook
+examples should be verified against the enum class itself, not
+guessed — there's no compile-time check on a documentation string.
+
+### Fixed #19 — Auto-created Admission saved as PENDING, not ACTIVE (Medium)
+
+**File:** Same as #16.
+
+**Copilot:** ADT^A01 is an admit-notification — the patient is
+already physically present at the sending facility. The
+auto-created `Admission` was saved as `AdmissionStatus.PENDING`,
+whose enum documentation says it represents pre-registration. The
+in-app `admitPatient` flow uses `ACTIVE`; ADT-created admissions
+would be misclassified and excluded from active-admission
+workflows.
+
+**Resolution:** Changed the status stamp to
+`AdmissionStatus.ACTIVE` with an in-line comment naming A01's
+semantics so the next reader doesn't revert the change. Updated
+the happy-path test assertion (now `isEqualTo(ACTIVE)` with the
+explanatory comment inline).
+
+### Net result (PR #358)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| High | 2 | Fixed |
+| Medium | 2 | Fixed |
+
+Files touched in the follow-up:
+
+- `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+- `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
+- `docs/runbooks/hl7-adt-conflict-resolution.md`
+- `docs/copilot-review.md`
