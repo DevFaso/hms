@@ -84,14 +84,27 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   conformance soak.
 
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
-> 32, and 43 to `started`.** Four feature branches landed in the
-> daytime session against `origin/develop`. Each follows the
-> foundation-pass discipline (`not-started → started`, NOT
-> `→ completed`); follow-on scope is explicitly named in each cell.
-> The companion skills refresh ships on
-> `chore/skills-update-post-4-picks`.
+> 32, and 43 to `started`.** Four feature branches merged into
+> develop and were promoted through UAT to main on 2026-05-16. Each
+> follows the foundation-pass discipline (`not-started → started`,
+> NOT `→ completed`); follow-on scope is explicitly named in each
+> cell. The companion skills refresh shipped on
+> [`3bf62b29`](https://github.com/DevFaso/hms/commit/3bf62b29) (PR
+> #340); the roadmap-sync flipping each row to `started` shipped on
+> [`401b7d36`](https://github.com/DevFaso/hms/commit/401b7d36) (PR
+> #339). Subsequent code-level review findings raised by Copilot on
+> each feature PR (path-scoped CORS for `/cds-services`, feature-flag
+> short-circuit ordering in the FHIR provider, V101 `btrim(mrn) <> ''`,
+> `entityType = "PATIENT"` in the FHIR audit emitter, `127.0.0.1:9115`
+> for Blackbox, `management.endpoint.health.probes.enabled=true`,
+> Grafana-provisioning alert mirror, `RoleValidator.requireActiveHospitalId()`
+> on the KPI service) are tracked as **follow-on PRs against each
+> row**; the skills update (PR #340) codifies the lessons so future
+> branches don't repeat them.
 >
-> - **Row 20 (FHIR write API)** — `feat/v1.1-fhir-write-api`. V101
+> - **Row 20 (FHIR write API)** —
+>   [`3f2b0c3d`](https://github.com/DevFaso/hms/commit/3f2b0c3d)
+>   (PR #343 `feat/v1.1-fhir-write-api`). V101
 >   adds the partial unique index
 >   `uk_patient_hospital_registration_active_mrn` on
 >   `(hospital_id, LOWER(mrn)) WHERE is_active = true` so FHIR
@@ -110,7 +123,9 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   Runbook:
 >   [`docs/runbooks/fhir-write-api.md`](./runbooks/fhir-write-api.md).
 > - **Row 27 (CDS Hooks public discovery)** —
->   `feat/v1.1-cds-hooks-public-discovery`. `SecurityConfig` adds an
+>   [`1a5cca78`](https://github.com/DevFaso/hms/commit/1a5cca78)
+>   (PR #338 `feat/v1.1-cds-hooks-public-discovery`). `SecurityConfig`
+>   adds an
 >   explicit `app.cors.cds-hooks-sandbox.*` allowlist with sensible
 >   defaults for the Cerner / Epic / SMART App Launcher sandbox
 >   origins so partner UIs can probe HMS without wildcarding.
@@ -123,7 +138,8 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   against all three external sandboxes. Runbook:
 >   [`docs/runbooks/cds-hooks-sandbox-validation.md`](./runbooks/cds-hooks-sandbox-validation.md).
 > - **Row 32 (KPI dashboard service)** —
->   `feat/v1.1-kpi-dashboard-service`. New
+>   [`74abb291`](https://github.com/DevFaso/hms/commit/74abb291)
+>   (PR #341 `feat/v1.1-kpi-dashboard-service`). New
 >   `GET /api/kpi/dashboard?from&to` (180-day cap; `SUPER_ADMIN /
 >   HOSPITAL_ADMIN / DOCTOR / NURSE / STAFF` access). The three KPIs
 >   (door-to-doctor, dispense lead time, no-show rate) compute
@@ -139,7 +155,9 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   Runbook:
 >   [`docs/runbooks/kpi-dashboard.md`](./runbooks/kpi-dashboard.md).
 > - **Row 43 (Synthetic monitoring)** —
->   `feat/v2.0-synthetic-monitoring`. Blackbox-exporter added to
+>   [`638e8d72`](https://github.com/DevFaso/hms/commit/638e8d72)
+>   (PR #342 `feat/v2.0-synthetic-monitoring`). Blackbox-exporter
+>   added to
 >   the existing `observability` docker-compose profile; four probe
 >   modules in `grafana/blackbox.yml` + four scrape jobs in
 >   `grafana/prometheus.yml` against the public Actuator / FHIR /
