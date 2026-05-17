@@ -32,10 +32,14 @@ import java.util.UUID;
  *       and persisted as a {@code LabResult} via
  *       {@link MllpInboundLabService}. The placer order number (OBR-2)
  *       is matched against {@code LabSpecimen.accessionNumber}.</li>
- *   <li>{@code ADT^A01 / A04 / A08} — parsed via
+ *   <li>{@code ADT^A01 / A02 / A03 / A04 / A08} — parsed via
  *       {@link Hl7v2MessageBuilder#parseAdtMessage} and applied to the
  *       existing {@code Patient} demographic record via
- *       {@link MllpInboundAdtService} (no Encounter creation).</li>
+ *       {@link MllpInboundAdtService}. A02 (transfer) updates the
+ *       reconciled Admission's department; A03 (discharge) closes the
+ *       Admission with a {@code DISCHARGED} status. Both are
+ *       reconcile-only — no Admission/Encounter auto-create on the
+ *       lifecycle triggers.</li>
  *   <li>Anything else — AR (Application Reject).</li>
  * </ul>
  *
@@ -49,7 +53,7 @@ public class Hl7MessageDispatcher {
 
     private static final Logger log = LoggerFactory.getLogger(Hl7MessageDispatcher.class);
 
-    private static final Set<String> ACCEPTED_ADT_EVENTS = Set.of("A01", "A04", "A08");
+    private static final Set<String> ACCEPTED_ADT_EVENTS = Set.of("A01", "A02", "A03", "A04", "A08");
 
     private final Hl7v2MessageBuilder messageBuilder;
     private final MllpAllowedSenderService allowlist;

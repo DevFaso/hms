@@ -7,6 +7,45 @@
     "SUBTITLE": "Panneau d'administration",
     "TITLE": "Administration"
   },
+  "ADT_INTAKE": {
+    "TITLE": "Configuration ADT du fournisseur d'admission",
+    "SUBTITLE": "Valeurs par défaut par hôpital, utilisées lorsqu'un message ADT^A01/A04 arrive sans visite correspondante. La création automatique ne se déclenche que si la ligne est activée ET si l'indicateur global app.hl7.adt.visit-sync.auto-create.enabled est activé.",
+    "LOADING": "Chargement des configurations…",
+    "ERROR": "Impossible de charger les configurations.",
+    "EMPTY": "Aucune configuration pour l'instant. Utilisez le formulaire ci-dessous pour en créer une pour un hôpital.",
+    "SAVING": "Enregistrement…",
+    "SAVE": "Enregistrer",
+    "STATE_ENABLED": "Activée",
+    "STATE_DISABLED": "Désactivée",
+    "FORM_CREATE_TITLE": "Créer ou mettre à jour une configuration",
+    "FORM_EDIT_TITLE": "Modifier la configuration",
+    "COL_HOSPITAL": "Hôpital",
+    "COL_ADMISSION_TYPE": "Type d'admission",
+    "COL_ACUITY": "Acuité",
+    "COL_ENCOUNTER_TYPE": "Type de rencontre",
+    "COL_ENABLED": "Activée",
+    "FIELD": {
+      "HOSPITAL_ID": "Identifiant de l'hôpital",
+      "PROVIDER_ID": "Identifiant du médecin admetteur",
+      "DEPARTMENT_ID": "Identifiant du département (facultatif)",
+      "ASSIGNMENT_ID": "Identifiant d'affectation par défaut (requis pour A04)",
+      "ASSIGNMENT_HINT": "Requis uniquement si cet hôpital active la création automatique de rencontres ADT^A04. Laisser vide pour une configuration A01 seulement.",
+      "ADMISSION_TYPE": "Type d'admission par défaut",
+      "ACUITY": "Niveau d'acuité par défaut",
+      "ENCOUNTER_TYPE": "Type de rencontre par défaut",
+      "CHIEF_COMPLAINT": "Motif principal par défaut",
+      "ENABLED": "Activer la création automatique pour cet hôpital"
+    },
+    "VALIDATION": {
+      "REQUIRED": "L'hôpital et le médecin admetteur sont obligatoires."
+    },
+    "TOAST": {
+      "SAVED": "Configuration enregistrée.",
+      "SAVE_FAILED": "Impossible d'enregistrer la configuration.",
+      "DELETED": "Configuration supprimée.",
+      "DELETE_FAILED": "Impossible de supprimer la configuration."
+    }
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Retour aux organisations",
     "LOADING": "Chargement du cycle de vie…",

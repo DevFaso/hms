@@ -7,6 +7,45 @@
     "SUBTITLE": "Admin panel",
     "TITLE": "Administration"
   },
+  "ADT_INTAKE": {
+    "TITLE": "ADT intake provider config",
+    "SUBTITLE": "Per-hospital defaults used when ADT^A01/A04 messages arrive without a matching in-app visit. Auto-create only fires when the row is enabled AND the cluster-wide app.hl7.adt.visit-sync.auto-create.enabled flag is on.",
+    "LOADING": "Loading intake configs…",
+    "ERROR": "Could not load intake configs.",
+    "EMPTY": "No intake configs yet. Use the form below to create one for a hospital.",
+    "SAVING": "Saving…",
+    "SAVE": "Save",
+    "STATE_ENABLED": "Enabled",
+    "STATE_DISABLED": "Disabled",
+    "FORM_CREATE_TITLE": "Create or upsert an intake config",
+    "FORM_EDIT_TITLE": "Edit intake config",
+    "COL_HOSPITAL": "Hospital",
+    "COL_ADMISSION_TYPE": "Admission type",
+    "COL_ACUITY": "Acuity",
+    "COL_ENCOUNTER_TYPE": "Encounter type",
+    "COL_ENABLED": "Enabled",
+    "FIELD": {
+      "HOSPITAL_ID": "Hospital id",
+      "PROVIDER_ID": "Admitting provider id",
+      "DEPARTMENT_ID": "Department id (optional)",
+      "ASSIGNMENT_ID": "Default assignment id (required for A04)",
+      "ASSIGNMENT_HINT": "Required only when this hospital opts into ADT^A04 Encounter auto-create. Leave blank for A01-only setups.",
+      "ADMISSION_TYPE": "Default admission type",
+      "ACUITY": "Default acuity level",
+      "ENCOUNTER_TYPE": "Default encounter type",
+      "CHIEF_COMPLAINT": "Default chief complaint",
+      "ENABLED": "Enable auto-create for this hospital"
+    },
+    "VALIDATION": {
+      "REQUIRED": "Hospital and admitting provider are required."
+    },
+    "TOAST": {
+      "SAVED": "Intake config saved.",
+      "SAVE_FAILED": "Could not save intake config.",
+      "DELETED": "Intake config deleted.",
+      "DELETE_FAILED": "Could not delete intake config."
+    }
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
     "LOADING": "Loading lifecycle…",

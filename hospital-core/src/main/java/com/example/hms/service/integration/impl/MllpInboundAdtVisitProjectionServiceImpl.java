@@ -67,6 +67,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     implements MllpInboundAdtVisitProjectionService {
 
     private static final String TRIGGER_A01 = "A01";
+    private static final String TRIGGER_A02 = "A02";
+    private static final String TRIGGER_A03 = "A03";
     private static final String TRIGGER_A04 = "A04";
     private static final String AUDIT_ENTITY_ADMISSION = "ADMISSION";
     private static final String AUDIT_ENTITY_ENCOUNTER = "ENCOUNTER";
@@ -162,11 +164,157 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         if (admission.isEmpty()) return Optional.empty();
         Admission row = admission.get();
         row.setExternalMessageControlId(ctx.controlId);
+
+        // A02 / A03 piggy-back on the reconcile step — they only update
+        // an existing Admission. The trigger-specific helpers mutate
+        // additional fields on the row (status / discharge timestamp /
+        // department) and emit the matching audit event; both still
+        // count as a reconciliation as far as the outer return value
+        // is concerned, but we surface the more specific result so
+        // observability can see the discharge/transfer separately.
+        VisitProjectionResult result = VisitProjectionResult.ADMISSION_RECONCILED;
+        String trigger = ctx.parsed.triggerEvent();
+        if (TRIGGER_A03.equalsIgnoreCase(trigger)) {
+            result = applyDischarge(row, ctx);
+        } else if (TRIGGER_A02.equalsIgnoreCase(trigger)) {
+            result = applyTransfer(row, ctx);
+        }
+
         admissionRepository.save(row);
-        log.info("ADT visit-sync reconciled — admission={} visit={} sender={}/{} hospital={} event={} msgCtrlId={}",
+        log.info("ADT visit-sync reconciled — admission={} visit={} sender={}/{} hospital={} event={} result={} msgCtrlId={}",
             row.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.parsed.triggerEvent(), ctx.controlId);
-        return Optional.of(VisitProjectionResult.ADMISSION_RECONCILED);
+            ctx.parsed.triggerEvent(), result, ctx.controlId);
+        return Optional.of(result);
+    }
+
+    /**
+     * Apply ADT^A03 (discharge) semantics to a reconciled Admission.
+     * Closes the row with {@link AdmissionStatus#DISCHARGED} and stamps
+     * {@code actualDischargeDateTime} from PV1-45 (falling back to
+     * {@code now()} when the segment was missing). Emits an
+     * {@code ADMISSION_DISCHARGED} audit row on the first transition;
+     * idempotent re-sends update the timestamp but skip the audit when
+     * the row is already in a terminal state.
+     *
+     * <p>Length-of-stay is recomputed via
+     * {@link Admission#calculateLengthOfStay()} so downstream
+     * reporting picks up the closed window without a separate batch
+     * job.
+     */
+    private VisitProjectionResult applyDischarge(Admission row, ProjectionContext ctx) {
+        LocalDateTime dischargeAt = ctx.parsed.dischargeDateTime() != null
+            ? ctx.parsed.dischargeDateTime()
+            : LocalDateTime.now();
+
+        boolean firstTransition = row.getStatus() != AdmissionStatus.DISCHARGED
+            && row.getStatus() != AdmissionStatus.DECEASED;
+
+        row.setStatus(AdmissionStatus.DISCHARGED);
+        row.setActualDischargeDateTime(dischargeAt);
+        row.calculateLengthOfStay();
+
+        if (firstTransition) {
+            emitAdmissionLifecycleAudit(
+                AuditEventType.ADMISSION_DISCHARGED, row, ctx,
+                String.format(
+                    "ADT^A03 discharge — visit=%s sender=%s/%s hospital=%s patient=%s dischargeAt=%s msgCtrlId=%s",
+                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                    ctx.patient.getId(), dischargeAt, ctx.controlId));
+        }
+        return VisitProjectionResult.ADMISSION_DISCHARGED;
+    }
+
+    /**
+     * Apply ADT^A02 (transfer) semantics to a reconciled Admission. The
+     * destination location is parsed from PV1-3 ({@code assignedLocation})
+     * — the first {@code ^}-separated component is treated as the
+     * point-of-care identifier and looked up against
+     * {@link DepartmentRepository#findByHospitalIdAndCodeIgnoreCase}
+     * then {@link DepartmentRepository#findByHospitalIdAndNameIgnoreCase}.
+     *
+     * <p>When the destination resolves we update {@link Admission#setDepartment}
+     * and emit an {@code ADMISSION_TRANSFERRED} audit. When the
+     * destination is blank or unresolvable we still reconcile the
+     * message control id and emit the audit (with the unresolved
+     * destination preserved in the description) — the operator gets
+     * visibility but the in-app department reference stays stable.
+     */
+    private VisitProjectionResult applyTransfer(Admission row, ProjectionContext ctx) {
+        String rawLocation = ctx.parsed.assignedLocation();
+        String destination = firstComponent(rawLocation);
+
+        Department previous = row.getDepartment();
+        Department resolved = resolveTransferDepartment(destination, ctx.hospitalId);
+        if (resolved != null) {
+            row.setDepartment(resolved);
+        }
+
+        emitAdmissionLifecycleAudit(
+            AuditEventType.ADMISSION_TRANSFERRED, row, ctx,
+            String.format(
+                "ADT^A02 transfer — visit=%s sender=%s/%s hospital=%s patient=%s destination=%s resolved=%s previous=%s msgCtrlId=%s",
+                ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                ctx.patient.getId(),
+                destination == null ? "" : destination,
+                resolved != null ? resolved.getId() : NULL_HOSPITAL_PLACEHOLDER,
+                previous != null ? previous.getId() : NULL_HOSPITAL_PLACEHOLDER,
+                ctx.controlId));
+        return VisitProjectionResult.ADMISSION_TRANSFERRED;
+    }
+
+    /**
+     * Resolve a transfer destination string to a {@link Department}
+     * scoped to the receiving hospital. Try {@code code} first (the
+     * canonical interop identifier when a sender opts to map their
+     * point-of-care code to ours) then fall back to {@code name}.
+     * Returns {@code null} when blank or unresolvable — the caller
+     * still emits the transfer audit with the unresolved value.
+     */
+    private Department resolveTransferDepartment(String destination, UUID hospitalId) {
+        if (!StringUtils.hasText(destination)) return null;
+        String token = destination.trim();
+        Optional<Department> byCode =
+            departmentRepository.findByHospitalIdAndCodeIgnoreCase(hospitalId, token);
+        if (byCode.isPresent()) return byCode.get();
+        Optional<Department> byName =
+            departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, token);
+        if (byName.isPresent()) return byName.get();
+        log.warn("ADT^A02 transfer destination '{}' could not be resolved at hospital {} — department change skipped",
+            token, hospitalId);
+        return null;
+    }
+
+    private static String firstComponent(String raw) {
+        if (!StringUtils.hasText(raw)) return null;
+        int idx = raw.indexOf('^');
+        return idx >= 0 ? raw.substring(0, idx).trim() : raw.trim();
+    }
+
+    /**
+     * Shared audit emitter for the A02/A03 lifecycle transitions.
+     * Mirrors {@link #emitAutoCreateAudit} — SYSTEM-actor, wrapped in
+     * try/catch so audit emission can never roll back the clinical
+     * write (the hl7-mllp-integration skill rule).
+     */
+    private void emitAdmissionLifecycleAudit(
+        AuditEventType eventType,
+        Admission row,
+        ProjectionContext ctx,
+        String description
+    ) {
+        try {
+            AuditEventRequestDTO request = AuditEventRequestDTO.builder()
+                .eventType(eventType)
+                .status(AuditStatus.SUCCESS)
+                .entityType(AUDIT_ENTITY_ADMISSION)
+                .resourceId(row.getId() != null ? row.getId().toString() : null)
+                .eventDescription(description)
+                .build();
+            auditEventLogService.logEvent(request);
+        } catch (RuntimeException ex) {
+            log.warn("audit emission failed for ADT {} on admission {}: {}",
+                eventType, row.getId(), ex.toString());
+        }
     }
 
     private Optional<VisitProjectionResult> tryReconcileEncounter(ProjectionContext ctx) {

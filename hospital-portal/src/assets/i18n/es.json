@@ -7,6 +7,45 @@
     "SUBTITLE": "Panel de administración",
     "TITLE": "Administración"
   },
+  "ADT_INTAKE": {
+    "TITLE": "Configuración ADT del proveedor de admisión",
+    "SUBTITLE": "Valores predeterminados por hospital usados cuando llega un mensaje ADT^A01/A04 sin una visita coincidente. La creación automática solo se activa cuando la fila está habilitada Y el indicador global app.hl7.adt.visit-sync.auto-create.enabled está activado.",
+    "LOADING": "Cargando configuraciones…",
+    "ERROR": "No se pudieron cargar las configuraciones.",
+    "EMPTY": "Aún no hay configuraciones. Use el formulario de abajo para crear una para un hospital.",
+    "SAVING": "Guardando…",
+    "SAVE": "Guardar",
+    "STATE_ENABLED": "Habilitada",
+    "STATE_DISABLED": "Deshabilitada",
+    "FORM_CREATE_TITLE": "Crear o actualizar una configuración",
+    "FORM_EDIT_TITLE": "Editar configuración",
+    "COL_HOSPITAL": "Hospital",
+    "COL_ADMISSION_TYPE": "Tipo de admisión",
+    "COL_ACUITY": "Agudeza",
+    "COL_ENCOUNTER_TYPE": "Tipo de encuentro",
+    "COL_ENABLED": "Habilitada",
+    "FIELD": {
+      "HOSPITAL_ID": "Identificador del hospital",
+      "PROVIDER_ID": "Identificador del proveedor admitente",
+      "DEPARTMENT_ID": "Identificador del departamento (opcional)",
+      "ASSIGNMENT_ID": "Identificador de asignación por defecto (requerido para A04)",
+      "ASSIGNMENT_HINT": "Requerido solo si este hospital habilita la creación automática de encuentros ADT^A04. Déjelo en blanco para configuraciones solo A01.",
+      "ADMISSION_TYPE": "Tipo de admisión predeterminado",
+      "ACUITY": "Nivel de agudeza predeterminado",
+      "ENCOUNTER_TYPE": "Tipo de encuentro predeterminado",
+      "CHIEF_COMPLAINT": "Queja principal predeterminada",
+      "ENABLED": "Habilitar la creación automática para este hospital"
+    },
+    "VALIDATION": {
+      "REQUIRED": "Hospital y proveedor admitente son obligatorios."
+    },
+    "TOAST": {
+      "SAVED": "Configuración guardada.",
+      "SAVE_FAILED": "No se pudo guardar la configuración.",
+      "DELETED": "Configuración eliminada.",
+      "DELETE_FAILED": "No se pudo eliminar la configuración."
+    }
+  },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
     "LOADING": "Cargando ciclo de vida…",

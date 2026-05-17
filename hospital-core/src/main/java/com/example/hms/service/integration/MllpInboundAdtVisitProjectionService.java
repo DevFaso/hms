@@ -48,6 +48,28 @@ public interface MllpInboundAdtVisitProjectionService {
         /** PV1-19 matched an existing Encounter; its control id was stamped. */
         ENCOUNTER_RECONCILED,
         /**
+         * ADT^A03 (discharge) reconciled against an existing Admission. The
+         * matched row is transitioned to {@code AdmissionStatus.DISCHARGED}
+         * with {@code actualDischargeDateTime} set from PV1-45 (falling
+         * back to {@code now()} when absent). An {@code ADMISSION_DISCHARGED}
+         * audit event is emitted on success. Idempotent — repeated A03
+         * messages for the same admission re-stamp the discharge timestamp
+         * but do not re-fire the audit when the row is already in a
+         * terminal state.
+         */
+        ADMISSION_DISCHARGED,
+        /**
+         * ADT^A02 (transfer) reconciled against an existing Admission. The
+         * matched row's {@code department} is updated when the parsed
+         * destination location resolves to a known Department at the
+         * receiving hospital. An {@code ADMISSION_TRANSFERRED} audit
+         * event is emitted on success. When the destination cannot be
+         * resolved the message still reconciles the row's message
+         * control id and returns this result — operators see the audit
+         * but the department change is skipped.
+         */
+        ADMISSION_TRANSFERRED,
+        /**
          * PV1-19 did not match any existing Admission or Encounter for the
          * sender+hospital. A WARN is emitted when
          * {@code app.hl7.adt.visit-sync.log-unmatched=true}.
