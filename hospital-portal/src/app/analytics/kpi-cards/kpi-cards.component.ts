@@ -90,9 +90,7 @@ export class KpiCardsComponent implements OnInit {
         bg: '#fef2f2',
         // No-show rate sparkline is plotted as a percent (rate × 100)
         // so its visual range matches the card's main metric.
-        series: trend.map((p) =>
-          p.noShowRate != null ? p.noShowRate * 100 : p.noShowRate,
-        ),
+        series: trend.map((p) => (p.noShowRate != null ? p.noShowRate * 100 : p.noShowRate)),
       },
     ];
   });

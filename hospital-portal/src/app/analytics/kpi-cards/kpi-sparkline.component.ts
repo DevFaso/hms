@@ -57,13 +57,15 @@ import { TranslateService } from '@ngx-translate/core';
       }
     </svg>
   `,
-  styles: [`
-    .kpi-sparkline {
-      width: 100%;
-      height: 32px;
-      display: block;
-    }
-  `],
+  styles: [
+    `
+      .kpi-sparkline {
+        width: 100%;
+        height: 32px;
+        display: block;
+      }
+    `,
+  ],
 })
 export class KpiSparklineComponent {
   private readonly translate = inject(TranslateService);
@@ -147,9 +149,7 @@ export class KpiSparklineComponent {
    * break for FR/ES where "trend" precedes the label.
    */
   ariaLabel = computed<string>(() => {
-    const finite = this.series().filter(
-      (v): v is number => v != null && Number.isFinite(v),
-    );
+    const finite = this.series().filter((v): v is number => v != null && Number.isFinite(v));
     return this.translate.instant('ANALYTICS.KPI.SPARKLINE_ARIA', {
       label: this.label(),
       count: finite.length,
