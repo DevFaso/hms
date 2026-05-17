@@ -1,12 +1,26 @@
 package com.example.hms.service.integration;
 
+import com.example.hms.enums.AcuityLevel;
+import com.example.hms.enums.AdmissionStatus;
+import com.example.hms.enums.AdmissionType;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.EncounterType;
 import com.example.hms.hl7.mllp.AdtVisitSyncProperties;
 import com.example.hms.model.Admission;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.platform.AdtIntakeProviderConfig;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService.VisitProjectionResult;
 import com.example.hms.service.integration.impl.MllpInboundAdtVisitProjectionServiceImpl;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
@@ -29,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,6 +51,11 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
 
     @Mock private AdmissionRepository admissionRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private AdtIntakeProviderConfigRepository intakeConfigRepository;
+    @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private StaffRepository staffRepository;
+    @Mock private DepartmentRepository departmentRepository;
+    @Mock private AuditEventLogService auditEventLogService;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
 
@@ -172,5 +192,163 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
             adt("A01", "V-3"), patient, hospital, " ", "", "MSG-3");
 
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+    }
+
+    // ── Row-24 follow-on: auto-create gates + happy path ─────────────────
+
+    @Test
+    @DisplayName("Auto-create skipped when cluster-wide auto-create flag is off — no extra queries")
+    void autoCreateSkippedWhenSubFlagOff() {
+        // properties.enabled is on (master), but autoCreate.enabled is off (default).
+        stubNoMatchOnReconciliation();
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-1"), patient, hospital, "REG", "HOSP1", "MSG-AC-1");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verifyNoInteractions(intakeConfigRepository);
+        verifyNoInteractions(registrationRepository);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Auto-create skipped when trigger is A04 (registration) — A01-only by design")
+    void autoCreateSkippedForA04() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A04", "V-AC-2"), patient, hospital, "REG", "HOSP1", "MSG-AC-2");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verifyNoInteractions(intakeConfigRepository);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Auto-create skipped when per-hospital intake config row is absent")
+    void autoCreateSkippedWhenIntakeConfigMissing() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.empty());
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-3"), patient, hospital, "REG", "HOSP1", "MSG-AC-3");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verifyNoInteractions(registrationRepository);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Auto-create rejected when patient is not actively registered at receiving hospital (cross-tenant gate)")
+    void autoCreateRejectedOnCrossTenantGate() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(intakeConfig()));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(false);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-4"), patient, hospital, "REG", "HOSP1", "MSG-AC-4");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("Auto-create writes Admission + stamps reconciliation key + emits audit on the A01 happy path")
+    void autoCreateHappyPath() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(eq(config.getDepartmentId())))
+            .thenReturn(Optional.of(department));
+        when(admissionRepository.save(any(Admission.class)))
+            .thenAnswer(invocation -> {
+                Admission a = invocation.getArgument(0);
+                a.setId(UUID.randomUUID());
+                return a;
+            });
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-5"), patient, hospital, "REG", "HOSP1", "MSG-AC-5");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_AUTOCREATED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        Admission row = saved.getValue();
+        assertThat(row.getPatient()).isEqualTo(patient);
+        assertThat(row.getAdmittingProvider()).isEqualTo(provider);
+        assertThat(row.getDepartment()).isEqualTo(department);
+        assertThat(row.getAdmissionType()).isEqualTo(config.getDefaultAdmissionType());
+        assertThat(row.getAcuityLevel()).isEqualTo(config.getDefaultAcuityLevel());
+        assertThat(row.getChiefComplaint()).isEqualTo(config.getDefaultChiefComplaint());
+        assertThat(row.getStatus()).isEqualTo(AdmissionStatus.PENDING);
+        // Reconciliation key — required so the next A08 routes back here.
+        assertThat(row.getExternalVisitNumber()).isEqualTo("V-AC-5");
+        assertThat(row.getExternalSendingApplication()).isEqualTo("REG");
+        assertThat(row.getExternalSendingFacility()).isEqualTo("HOSP1");
+        assertThat(row.getExternalMessageControlId()).isEqualTo("MSG-AC-5");
+
+        ArgumentCaptor<AuditEventRequestDTO> auditCaptor =
+            ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(auditCaptor.capture());
+        AuditEventRequestDTO audit = auditCaptor.getValue();
+        assertThat(audit.getEventType()).isEqualTo(AuditEventType.ADMISSION_AUTOCREATED);
+        assertThat(audit.getEntityType()).isEqualTo("ADMISSION");
+        assertThat(audit.getResourceId()).isEqualTo(row.getId().toString());
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private void stubNoMatchOnReconciliation() {
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.empty());
+        when(encounterRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.empty());
+    }
+
+    private AdtIntakeProviderConfig intakeConfig() {
+        AdtIntakeProviderConfig c = new AdtIntakeProviderConfig();
+        c.setHospital(hospital);
+        c.setAdmittingProviderId(UUID.randomUUID());
+        c.setDepartmentId(UUID.randomUUID());
+        c.setDefaultAdmissionType(AdmissionType.EMERGENCY);
+        c.setDefaultAcuityLevel(AcuityLevel.LEVEL_2_MODERATE);
+        c.setDefaultEncounterType(EncounterType.INPATIENT);
+        c.setDefaultChiefComplaint("Auto-created from ADT^A01");
+        c.setEnabled(true);
+        return c;
+    }
+
+    private Staff staff(UUID id) {
+        Staff s = new Staff();
+        s.setId(id);
+        s.setHospital(hospital);
+        return s;
+    }
+
+    private Department department(UUID id) {
+        Department d = new Department();
+        d.setId(id);
+        return d;
     }
 }

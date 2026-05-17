@@ -45,4 +45,34 @@ public class AdtVisitSyncProperties {
 
     public boolean isLogUnmatched() { return logUnmatched; }
     public void setLogUnmatched(boolean logUnmatched) { this.logUnmatched = logUnmatched; }
+
+    /**
+     * Auto-create sub-config (roadmap row 24 follow-on). Off by default;
+     * gated on top of the master {@link #enabled} flag AND on top of
+     * the per-hospital {@code platform.adt_intake_provider_configs.enabled}
+     * column. All three must be true for the projection service to
+     * actually provision an Admission on an ADT^A01 with an unmatched
+     * visit-number triplet.
+     *
+     * <p>The three-layer gate is deliberate: master flag turns the
+     * whole projection on; the auto-create sub-flag turns auto-create
+     * on cluster-wide; the per-hospital row turns auto-create on for
+     * one tenant. Operators can stage a rollout one hospital at a
+     * time without touching cluster-wide configuration.
+     */
+    private final AutoCreate autoCreate = new AutoCreate();
+
+    public AutoCreate getAutoCreate() { return autoCreate; }
+
+    public static class AutoCreate {
+        /**
+         * Cluster-wide enable. Default false — auto-create is opt-in
+         * even on environments where the master ADT projection
+         * ({@link AdtVisitSyncProperties#enabled}) is on.
+         */
+        private boolean enabled = false;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
 }
