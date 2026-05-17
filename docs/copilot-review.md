@@ -1,11 +1,16 @@
-# Copilot review - PR #329 `feat/v2.0-schema-per-tenant` (2026-05-15)
+# Copilot review notes (HMS)
 
-Working notes for the Copilot review on PR #329. Each item is summarized and
-marked fixed after the follow-up changes on `feat/v2.0-schema-per-tenant`.
+Working notes for Copilot review findings across recent PRs. Each item is
+summarized and marked fixed after the follow-up changes land. New PRs
+append a new H2 section; numbered "Fixed #N" entries are continuous
+across PRs so a finding can be referenced unambiguously in a commit
+message or PR comment.
 
 ---
 
-## Fixed #1 - JDBC connection leak on search_path failure (High)
+## Copilot review — PR #329 `feat/v2.0-schema-per-tenant` (2026-05-15)
+
+### Fixed #1 - JDBC connection leak on search_path failure (High)
 
 **File:** `hospital-core/src/main/java/com/example/hms/security/tenant/schema/SchemaTenantConnectionProvider.java`
 
@@ -23,7 +28,7 @@ connection acquisition failure paths in `SchemaTenantConnectionProviderTest`.
 
 ---
 
-## Fixed #2 - Public test-only cache invalidation API (Medium)
+### Fixed #2 - Public test-only cache invalidation API (Medium)
 
 **File:** `hospital-core/src/main/java/com/example/hms/security/tenant/schema/TenantSchemaLookup.java`
 
@@ -35,7 +40,7 @@ access from the same package without exposing it as public API.
 
 ---
 
-## Fixed #3 - Flaky TTL-expiry test (Medium)
+### Fixed #3 - Flaky TTL-expiry test (Medium)
 
 **File:** `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaLookupTest.java`
 
@@ -49,7 +54,7 @@ verifies exactly two DB lookups after advancing past the TTL.
 
 ---
 
-## Fixed #4 - Stale schema-tenancy test counts (Low)
+### Fixed #4 - Stale schema-tenancy test counts (Low)
 
 **Files:**
 
@@ -65,7 +70,7 @@ across the schema-tenancy resolver, provider, and lookup classes.
 
 ---
 
-## Net result
+### Net result (PR #329)
 
 | Severity | Count | Status |
 | --- | --- | --- |
@@ -83,62 +88,6 @@ Files touched in the follow-up:
 - `docs/roadmap.md`
 - `docs/roadmap.csv`
 - `docs/copilot-review.md`
-docs/roadmap.md
-Comment on lines +48 to +50
-> Six rows left on the active backlog after this archive (rows 8,
-> 18, 19, 21, 22, 25, 36, 39, 41, 42, 44 remain `not-started`; rows
-> 20, 23, 24, 26, 27, 32, 33, 35, 37, 38, 43 remain `started`).
-Copilot commented 18 minutes ago
-Copilot
-Copilot
-AI
-18 minutes ago
-Medium
-The summary sentence says "Six rows left on the active backlog after this archive" but then lists 11 not-started rows (8, 18, 19, 21, 22, 25, 36, 39, 41, 42, 44) and 11 started rows (20, 23, 24, 26, 27, 32, 33, 35, 37, 38, 43) — 22 rows in total, not six. The "Six" appears to be a stale carry-over from the count of rows being archived in this batch. Either the leading number or the parenthetical inventory is wrong and the two will mislead readers about how many items are still pickable.
-
-Suggested changeset 1 (1)
-docs/roadmap.md
-Original file line number	Diff line number	Diff line change
- >   start until v0 lands and soaks. Revisit once EMPI v0 is
- >   `completed`, not just `started`.
- >
- > Six rows left on the active backlog after this archive (rows 8,
- > 18, 19, 21, 22, 25, 36, 39, 41, 42, 44 remain `not-started`; rows
- > 20, 23, 24, 26, 27, 32, 33, 35, 37, 38, 43 remain `started`).
- > Twenty-two rows left on the active backlog after this archive
- > (rows 8, 18, 19, 21, 22, 25, 36, 39, 41, 42, 44 remain
- > `not-started`; rows 20, 23, 24, 26, 27, 32, 33, 35, 37, 38, 43
- > remain `started`).
- > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
- > 32, and 43 to `started`.** Four feature branches merged into
-Copilot uses AI. Check for mistakes.
-@TiegoOuedraogo	Reply...
-docs/roadmap.md
->   down on v1.1 today; the four rows naturally cluster as the next
->   batch once one picks them up. Row 30 was already gated on
->   28/29 mobile parity in the original dependency graph, so it
->   moves with them.
-Copilot commented 18 minutes ago
-Copilot
-Copilot
-AI
-18 minutes ago
-Low
-The narrative bullet for row 30 in the markdown (lines 30-32) says "Row 30 was already gated on 28/29 mobile parity in the original dependency graph", but the CSV row for 30 (Push notifications for lab results) shows the dependency column as Mobile parity (unchanged before/after). However the bullet under row 28 covers "Patient mobile parity (Android)" which is row 28 — fine. The numbering inside the prose ("Rows 28, 29, 30, 31") matches the CSV, but the row that is the "Mobile test coverage uplift" is row 31 while the dependency-graph statement attributes the gating to row 30. Double-check: it's actually row 30 that has the Mobile parity dependency (correct), so OK — but the prose claim about "the four rows naturally cluster" pairs with row 31 having no listed dependency in the CSV. Consider clarifying that row 31's clustering rationale is team/tooling, not a hard dependency, to avoid implying the dependency graph itself gates row 31.
-
-Suggested changeset 1 (1)
-docs/roadmap.md
-Original file line number	Diff line number	Diff line change
- >   down on v1.1 today; the four rows naturally cluster as the next
- >   batch once one picks them up. Row 30 was already gated on
- >   28/29 mobile parity in the original dependency graph, so it
- >   moves with them.
- >   moves with them; row 31 is grouped with the cluster for shared
- >   team/tooling efficiency rather than as a hard dependency-graph
- >   gate.
- > - **Row 34 (Tenant onboarding pipeline)** — horizon `v2.0 → oos`.
- >   Depends on row 33 (`Schema-per-tenant migration path`, currently
- >   `started` after its foundation pass) being substantially further
 
 ---
 
@@ -195,3 +144,213 @@ Files touched in the follow-up:
 
 - `docs/roadmap.md`
 - `docs/copilot-review.md`
+
+---
+
+## Copilot review — PR #356 `feat/v2.0-schema-per-tenant-scripts` (2026-05-17)
+
+### Fixed #7 — PGUSER not validated against SAFE_IDENTIFIER regex (Medium)
+
+**File:** `scripts/tenancy/provision-schema.sh`
+
+**Copilot:** The script interpolates `PGUSER` into SQL identifiers
+(`CREATE SCHEMA … AUTHORIZATION "${PGUSER}"` and
+`ALTER DEFAULT PRIVILEGES FOR ROLE "${PGUSER}"`) but `PGUSER` wasn't
+validated against `SAFE_REGEX` even though the comment claimed all
+identifiers were pre-validated. Could break the SQL or, worst case,
+allow identifier injection if `PGUSER` contained quotes.
+
+**Resolution:** Fixed. Added an explicit `[[ "${PGUSER}" =~ ${SAFE_REGEX} ]]`
+check right after the `PGUSER` env-var assertion, with the same
+"fail-fast on regex mismatch" pattern used for `SCHEMA_NAME` and
+`HMS_APP_ROLE`. The HMS deployment convention is lowercase
+snake_case roles (`hms_app`, `hms_liquibase`) so the existing strict
+allowlist applies cleanly to `PGUSER` too.
+
+### Fixed #8 — invalidate-tenant-cache.sh URL missing /api context path (High)
+
+**File:** `scripts/tenancy/invalidate-tenant-cache.sh`
+
+**Copilot:** The script built `${HMS_BACKEND_BASE_URL}/super-admin/...`
+but the backend is served under `server.servlet.context-path=/api`,
+and the runbook documents the endpoint as `POST /api/super-admin/...`.
+The script would always 404 unless operators happened to include
+`/api` in `HMS_BACKEND_BASE_URL` manually.
+
+**Resolution:** Fixed. The URL builder now normalises the base URL
+(strips trailing `/`, strips trailing `/api` if already present) and
+explicitly appends `/api/super-admin/tenancy/...`. The
+`HMS_BACKEND_BASE_URL` doc-string was updated to document that the
+script accepts both forms (with or without `/api`). Idempotent: an
+operator who already has `/api` in their env var still gets the
+correct single-`/api` URL.
+
+### Fixed #9 — copy-rows.sh src-count drift after commit (High)
+
+**File:** `scripts/tenancy/copy-rows.sh`
+
+**Copilot:** Row-count verification ran AFTER the REPEATABLE READ
+transaction committed, so the source counts were taken from a fresh
+snapshot. Any concurrent writes for the hospital during the copy
+window would make `src != dst` and force a false-failure abort even
+though the copy itself was correct.
+
+**Resolution:** Two-part fix.
+
+1. The verification now runs **inside** the REPEATABLE READ
+   transaction. Each table's INSERT uses a CTE that captures the
+   source `count(*)` and the `RETURNING` count in the same snapshot,
+   emitting a `tbl|src|copied|status` row that bash parses. Any
+   `MISMATCH` aborts before `COMMIT`, so a broken copy never reaches
+   the tenant schema.
+2. The script now **refuses to run** unless the hospital is in
+   `lifecycle_state = 'SUSPENDED'`. This machine-enforces the
+   drain-before-copy ordering (see #10 below) so even a careless
+   operator can't accidentally copy a live tenant.
+
+### Fixed #10 — runbook step ordering: drain before copy (High)
+
+**File:** `docs/runbooks/schema-per-tenant-migration.md`
+
+**Copilot:** The original runbook had `Step 2 (copy)` → `Step 3
+(drain)` → `Step 4 (flip)`. Copying while the hospital was still
+`ACTIVE` allowed concurrent writes against the source tables,
+which is the root cause of the `src != dst` drift in #9.
+
+**Resolution:** Steps reordered. New flow:
+`Step 2 (drain)` → `Step 3 (copy)` → `Step 4 (flip + invalidate)`.
+The drain step now leads with a new section header explaining
+why the order matters, with an explicit pointer to the
+`copy-rows.sh` SUSPENDED-state guard. Step numbers cascaded
+through the rest of the runbook.
+
+### Fixed #11 — CI test failure: TenantSchemaCacheControllerIT expected 401/404 but got 403 (CI)
+
+**File:** `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
+
+**Issue:** The IT was modelled after `ChargebackReportControllerIT`
+and `DicomProxyControllerIT`, which use GET endpoints and stop at
+Spring Security with 401 for unauthenticated requests. This new
+endpoint is POST, so the request hits the CSRF filter first and
+returns **403** instead. The IT failed CI with
+`Expecting 403 to be in [401, 404]`.
+
+**Resolution:** Widened the expected status set to `[401, 403, 404]`
+and documented why all three are valid (401 anonymous, 403 CSRF
+rejection on POST, 404 authenticated SUPER_ADMIN with flag off).
+The DisplayName + Javadoc both call out the POST-vs-GET difference
+explicitly so the next foundation-pass IT doesn't repeat the same
+assumption.
+
+### Net result (PR #356)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| High | 3 | Fixed |
+| Medium | 1 | Fixed |
+| CI (test) | 1 | Fixed |
+
+Files touched in the follow-up:
+
+- `scripts/tenancy/provision-schema.sh`
+- `scripts/tenancy/invalidate-tenant-cache.sh`
+- `scripts/tenancy/copy-rows.sh`
+- `docs/runbooks/schema-per-tenant-migration.md`
+- `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
+- `docs/copilot-review.md`
+
+
+---
+
+## Copilot review — PR #357 `feat/v1.1-kpi-dashboard-follow-on` (2026-05-17)
+
+### Fixed #12 — ESLint `@typescript-eslint/array-type` (7 errors)
+
+**Files:** `kpi-cards.component.ts`, `kpi-sparkline.component.ts`
+
+**Lint:** Seven instances of `Array<T>` triggered
+`@typescript-eslint/array-type`. The project convention (enforced by
+the Angular `eslint:recommended` ruleset) is `T[]` shorthand.
+
+**Resolution:** All seven sites flipped from `Array<T>` to `T[]`:
+the cards `KpiCard.series` field, the sparkline's `input.required<…>`
+generic, the `dots` computed, the local `out` array in `dots()`, and
+both type annotations on the private `dataPoints` helper (parameter
++ return + the inner `finite` accumulator).
+
+### Fixed #13 — Sparkline aria-label hardcoded English (Medium)
+
+**File:** `hospital-portal/src/app/analytics/kpi-cards/kpi-sparkline.component.ts`
+
+**Copilot:** `ariaLabel` was built with a template string
+`` `${this.label()} trend, ${finite.length} data points` `` — the
+words "trend" and "data points" were hardcoded English even though
+this PR adds translated KPI trend labels in FR/ES. French/Spanish
+users would have got mixed-language screen-reader text.
+
+**Resolution:** Sparkline now injects `TranslateService` and resolves
+`ANALYTICS.KPI.SPARKLINE_ARIA` with `{{label}}` and `{{count}}`
+placeholders. The translation file owns the word order, which matters
+because FR/ES put "tendance" / "tendencia" *before* the KPI label,
+not after. New keys added in EN/FR/ES:
+
+- EN: `"{{label}} trend, {{count}} data points"`
+- FR: `"Tendance {{label}}, {{count}} points de données"`
+- ES: `"Tendencia {{label}}, {{count}} puntos de datos"`
+
+### Fixed #14 — SonarQube Critical: duplicate `"fromInclusive"` literal (Code Smell)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+
+**Sonar:** "Define a constant instead of duplicating this literal
+`fromInclusive` 3 times." Same flag fired for `toExclusive`. Both
+strings were used as `setParameter(...)` keys in `computeNoShowRate`
+and in the no-show branch of `computeTrend`.
+
+**Resolution:** Two new static final constants
+(`PARAM_FROM_INCLUSIVE`, `PARAM_TO_EXCLUSIVE`) added next to the
+existing `PARAM_HOSPITAL_ID` / `PARAM_WINDOW_START` /
+`PARAM_WINDOW_END`. Both literal usages replaced; the named-query
+SQL itself still uses `:fromInclusive` / `:toExclusive` since those
+are JPA parameter markers, not string literals.
+
+### Fixed #15 — SonarQube Critical: `computeTrend` cognitive complexity 25 > 15 (Code Smell)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+
+**Sonar:** "Refactor this method to reduce its Cognitive Complexity
+from 25 to the 15 allowed." `computeTrend` orchestrated three
+sequential native-query+merge blocks plus a final emit loop — each
+block by itself was ~6 complexity, summing past the gate.
+
+**Resolution:** Split into orchestrator + four helpers, each well
+under 15:
+
+- `addDoorToDoctorTrend(series, hospitalId, windowStart, windowEnd)`
+- `addDispenseLeadTimeTrend(series, hospitalId, windowStart, windowEnd)`
+- `addNoShowRateTrend(series, hospitalId, fromInclusive, appointmentEndExclusive)`
+- `emitTrendPoints(series, fromInclusive, toInclusive)` — static
+
+`computeTrend` itself drops to ~5 lines: initialise the map, call
+the three adders, return the emit. Same external contract; same
+DTO shape; same per-KPI nan-as-gap semantics.
+
+### Net result (PR #357)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| Critical (Sonar code smell) | 2 | Fixed |
+| Medium (Copilot) | 1 | Fixed |
+| Lint errors | 7 | Fixed |
+
+Files touched in the follow-up:
+
+- `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+- `hospital-portal/src/app/analytics/kpi-cards/kpi-cards.component.ts`
+- `hospital-portal/src/app/analytics/kpi-cards/kpi-sparkline.component.ts`
+- `hospital-portal/src/assets/i18n/en.json`
+- `hospital-portal/src/assets/i18n/fr.json`
+- `hospital-portal/src/assets/i18n/es.json`
+- `docs/copilot-review.md`
+- `.claude/skills/angular-portal-component/SKILL.md`
+- `.claude/skills/pr-review-response/SKILL.md`

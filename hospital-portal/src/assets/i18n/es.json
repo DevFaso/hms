@@ -828,7 +828,8 @@
       "DISPENSE_LEAD_TIME_LABEL": "Tiempo de dispensación",
       "NO_SHOW_RATE_LABEL": "Tasa de inasistencia",
       "MEDIAN_LABEL": "Mediana",
-      "TREND_LABEL": "Tendencia 30 días"
+      "TREND_LABEL": "Tendencia 30 días",
+      "SPARKLINE_ARIA": "Tendencia {{label}}, {{count}} puntos de datos"
     }
   },
   "ANNOUNCEMENTS": {

@@ -45,6 +45,8 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
     private static final String PARAM_HOSPITAL_ID = "hospitalId";
     private static final String PARAM_WINDOW_START = "windowStart";
     private static final String PARAM_WINDOW_END = "windowEnd";
+    private static final String PARAM_FROM_INCLUSIVE = "fromInclusive";
+    private static final String PARAM_TO_EXCLUSIVE = "toExclusive";
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -167,8 +169,8 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
               AND a.appointment_date <  :toExclusive
             """)
             .setParameter(PARAM_HOSPITAL_ID, hospitalId)
-            .setParameter("fromInclusive", fromInclusive)
-            .setParameter("toExclusive", toExclusive)
+            .setParameter(PARAM_FROM_INCLUSIVE, fromInclusive)
+            .setParameter(PARAM_TO_EXCLUSIVE, toExclusive)
             .getSingleResult();
 
         long total = ((Number) row[0]).longValue();
@@ -181,9 +183,13 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
      * Daily timeseries for sparkline rendering. Three separate
      * group-by-day queries (one per KPI) get merged into a single
      * date-indexed list. Days with no samples for a given KPI carry a
-     * {@code null} value for that field; the UI draws a gap. Days with
-     * no samples for ANY KPI are still emitted as a point (all-null)
-     * so the sparkline's x-axis covers the requested window evenly.
+     * {@code null} value for that field; the UI draws a gap.
+     *
+     * <p>Implemented as orchestrator + three per-KPI helpers so each
+     * helper stays under SonarQube's cognitive-complexity limit of 15
+     * (the inlined version triggered Critical "Refactor this method
+     * to reduce its Cognitive Complexity from 25 to the 15 allowed"
+     * on PR #357).
      */
     private List<KpiTrendPoint> computeTrend(
         UUID hospitalId,
@@ -194,10 +200,18 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
         LocalDate appointmentEndExclusive
     ) {
         Map<LocalDate, double[]> series = new TreeMap<>();
+        addDoorToDoctorTrend(series, hospitalId, windowStart, windowEnd);
+        addDispenseLeadTimeTrend(series, hospitalId, windowStart, windowEnd);
+        addNoShowRateTrend(series, hospitalId, fromInclusive, appointmentEndExclusive);
+        return emitTrendPoints(series, fromInclusive, toInclusive);
+    }
 
-        // door-to-doctor trend
+    private void addDoorToDoctorTrend(
+        Map<LocalDate, double[]> series, UUID hospitalId,
+        LocalDateTime windowStart, LocalDateTime windowEnd
+    ) {
         @SuppressWarnings("unchecked")
-        List<Object[]> d2dRows = entityManager.createNativeQuery("""
+        List<Object[]> rows = entityManager.createNativeQuery("""
             SELECT
                 CAST(e.triage_timestamp AS DATE) AS day,
                 AVG(EXTRACT(EPOCH FROM (e.triage_timestamp - e.arrival_timestamp))) AS avg_seconds
@@ -214,15 +228,19 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
             .setParameter(PARAM_WINDOW_START, windowStart)
             .setParameter(PARAM_WINDOW_END, windowEnd)
             .getResultList();
-        for (Object[] r : d2dRows) {
-            LocalDate day = toLocalDate(r[0]);
+        for (Object[] r : rows) {
             Double seconds = r[1] == null ? null : ((Number) r[1]).doubleValue();
-            seriesFor(series, day)[0] = seconds == null ? Double.NaN : seconds / 60.0;
+            seriesFor(series, toLocalDate(r[0]))[0] =
+                seconds == null ? Double.NaN : seconds / 60.0;
         }
+    }
 
-        // dispense lead-time trend
+    private void addDispenseLeadTimeTrend(
+        Map<LocalDate, double[]> series, UUID hospitalId,
+        LocalDateTime windowStart, LocalDateTime windowEnd
+    ) {
         @SuppressWarnings("unchecked")
-        List<Object[]> leadRows = entityManager.createNativeQuery("""
+        List<Object[]> rows = entityManager.createNativeQuery("""
             SELECT
                 CAST(d.dispensed_at AS DATE) AS day,
                 AVG(EXTRACT(EPOCH FROM (d.dispensed_at - p.created_at))) AS avg_seconds
@@ -240,15 +258,19 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
             .setParameter(PARAM_WINDOW_START, windowStart)
             .setParameter(PARAM_WINDOW_END, windowEnd)
             .getResultList();
-        for (Object[] r : leadRows) {
-            LocalDate day = toLocalDate(r[0]);
+        for (Object[] r : rows) {
             Double seconds = r[1] == null ? null : ((Number) r[1]).doubleValue();
-            seriesFor(series, day)[1] = seconds == null ? Double.NaN : seconds / 60.0;
+            seriesFor(series, toLocalDate(r[0]))[1] =
+                seconds == null ? Double.NaN : seconds / 60.0;
         }
+    }
 
-        // no-show rate trend (rate per day = noShow / total)
+    private void addNoShowRateTrend(
+        Map<LocalDate, double[]> series, UUID hospitalId,
+        LocalDate fromInclusive, LocalDate appointmentEndExclusive
+    ) {
         @SuppressWarnings("unchecked")
-        List<Object[]> noShowRows = entityManager.createNativeQuery("""
+        List<Object[]> rows = entityManager.createNativeQuery("""
             SELECT
                 a.appointment_date                                       AS day,
                 COUNT(*)                                                 AS total,
@@ -260,28 +282,33 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
             GROUP BY a.appointment_date
             """)
             .setParameter(PARAM_HOSPITAL_ID, hospitalId)
-            .setParameter("fromInclusive", fromInclusive)
-            .setParameter("toExclusive", appointmentEndExclusive)
+            .setParameter(PARAM_FROM_INCLUSIVE, fromInclusive)
+            .setParameter(PARAM_TO_EXCLUSIVE, appointmentEndExclusive)
             .getResultList();
-        for (Object[] r : noShowRows) {
-            LocalDate day = toLocalDate(r[0]);
+        for (Object[] r : rows) {
             long total = ((Number) r[1]).longValue();
             long noShow = r[2] == null ? 0L : ((Number) r[2]).longValue();
-            double rate = total == 0 ? Double.NaN : (double) noShow / (double) total;
-            seriesFor(series, day)[2] = rate;
+            seriesFor(series, toLocalDate(r[0]))[2] =
+                total == 0 ? Double.NaN : (double) noShow / (double) total;
         }
+    }
 
-        // Emit the day-by-day trend in window order. Days with no data
-        // for any KPI are skipped (a sparkline of all-nulls is just noise).
+    /**
+     * Emit the day-by-day trend in window order. Drops days that
+     * CAST-to-DATE pushed outside the requested {@code [from, to]}
+     * window (which can happen in a non-UTC database). NaN values
+     * for any KPI on a given day surface as {@code null} so the UI
+     * sparkline draws a gap.
+     */
+    private static List<KpiTrendPoint> emitTrendPoints(
+        Map<LocalDate, double[]> series,
+        LocalDate fromInclusive, LocalDate toInclusive
+    ) {
         List<KpiTrendPoint> out = new ArrayList<>(series.size());
         for (Map.Entry<LocalDate, double[]> e : series.entrySet()) {
-            double[] v = e.getValue();
-            // Guard window bounds — a CAST-to-DATE on a timestamp can
-            // edge a row outside the requested [from, to] when the
-            // database is in a non-UTC zone. Drop those rather than
-            // pollute the sparkline.
             LocalDate day = e.getKey();
             if (day.isBefore(fromInclusive) || day.isAfter(toInclusive)) continue;
+            double[] v = e.getValue();
             out.add(new KpiTrendPoint(
                 day,
                 Double.isNaN(v[0]) ? null : v[0],

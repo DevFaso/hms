@@ -828,7 +828,8 @@
       "DISPENSE_LEAD_TIME_LABEL": "Dispense lead time",
       "NO_SHOW_RATE_LABEL": "No-show rate",
       "MEDIAN_LABEL": "Median",
-      "TREND_LABEL": "30-day trend"
+      "TREND_LABEL": "30-day trend",
+      "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points"
     }
   },
   "ANNOUNCEMENTS": {

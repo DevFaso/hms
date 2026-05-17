@@ -828,7 +828,8 @@
       "DISPENSE_LEAD_TIME_LABEL": "Délai de dispensation",
       "NO_SHOW_RATE_LABEL": "Taux d'absentéisme",
       "MEDIAN_LABEL": "Médiane",
-      "TREND_LABEL": "Tendance sur 30 jours"
+      "TREND_LABEL": "Tendance sur 30 jours",
+      "SPARKLINE_ARIA": "Tendance {{label}}, {{count}} points de données"
     }
   },
   "ANNOUNCEMENTS": {

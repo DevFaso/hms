@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateService } from '@ngx-translate/core';
 
 /**
  * Inline-SVG sparkline for one KPI card (roadmap row 32 follow-on).
@@ -12,6 +13,11 @@ import { CommonModule } from '@angular/common';
  * <p>Gaps in the input series (`null` / `undefined` values) split the
  * polyline so a missing day draws nothing rather than collapsing the
  * line to zero. Single-point series collapse to a dot.
+ *
+ * <p>i18n: the accessible name is built from the
+ * {@code ANALYTICS.KPI.SPARKLINE_ARIA} translation key (EN/FR/ES) with
+ * {@code {{label}}} and {@code {{count}}} placeholders, so the
+ * screen-reader announcement stays in the user's locale.
  */
 @Component({
   selector: 'app-kpi-sparkline',
@@ -60,11 +66,13 @@ import { CommonModule } from '@angular/common';
   `],
 })
 export class KpiSparklineComponent {
+  private readonly translate = inject(TranslateService);
+
   /** Series — `null`/`undefined` values mark gaps. */
-  series = input.required<Array<number | null | undefined>>();
+  series = input.required<(number | null | undefined)[]>();
   /** Stroke color (defaults to the card accent). */
   color = input<string>('#3b82f6');
-  /** Accessible label prefix (e.g. "Door-to-doctor trend"). */
+  /** Accessible label prefix (e.g. translated "Door-to-doctor"). */
   label = input<string>('trend');
 
   /** Fixed viewBox so the sparkline scales to the card width. */
@@ -101,11 +109,11 @@ export class KpiSparklineComponent {
   });
 
   /** Single-point runs render as dots so they're visible at all. */
-  dots = computed<Array<{ x: number; y: number }>>(() => {
+  dots = computed<{ x: number; y: number }[]>(() => {
     const data = this.series();
     if (!data || data.length === 0) return [];
     const points = this.dataPoints(data);
-    const out: Array<{ x: number; y: number }> = [];
+    const out: { x: number; y: number }[] = [];
     let runStart = -1;
     let runLen = 0;
     let lastIdx = -2;
@@ -130,11 +138,22 @@ export class KpiSparklineComponent {
     return out;
   });
 
+  /**
+   * Accessible name, built from the `ANALYTICS.KPI.SPARKLINE_ARIA`
+   * translation key with `{{label}}` + `{{count}}` placeholders so
+   * the screen-reader announcement honors the user's locale (caught
+   * on PR #357 Copilot review — Medium). The translation file owns
+   * the word-order; word-by-word concatenation in TypeScript would
+   * break for FR/ES where "trend" precedes the label.
+   */
   ariaLabel = computed<string>(() => {
     const finite = this.series().filter(
       (v): v is number => v != null && Number.isFinite(v),
     );
-    return `${this.label()} trend, ${finite.length} data points`;
+    return this.translate.instant('ANALYTICS.KPI.SPARKLINE_ARIA', {
+      label: this.label(),
+      count: finite.length,
+    });
   });
 
   /**
@@ -142,8 +161,8 @@ export class KpiSparklineComponent {
    * finite range are dropped. The y-axis is normalised against the
    * min/max so the sparkline shows shape, not absolute magnitude.
    */
-  private dataPoints(data: Array<number | null | undefined>): Array<{ idx: number; x: number; y: number }> {
-    const finite: Array<{ idx: number; value: number }> = [];
+  private dataPoints(data: (number | null | undefined)[]): { idx: number; x: number; y: number }[] {
+    const finite: { idx: number; value: number }[] = [];
     data.forEach((v, idx) => {
       if (v != null && Number.isFinite(v)) {
         finite.push({ idx, value: v });

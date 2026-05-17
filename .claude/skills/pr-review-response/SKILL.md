@@ -449,6 +449,160 @@ list is cross-cutting muscle memory.
   prefer `// FOLLOW-ON (row N):` or no comment at all. Caught on
   `EmpiProbabilisticMatcher` + `DicomProxyService` in PR #349.
 
+## Anti-patterns surfaced by Copilot + Sonar (2026-05-17 batch — PRs #356 / #357)
+
+This batch tripped four findings on row-33 (`feat/v2.0-schema-per-tenant-scripts`)
+and four on row-32 (`feat/v1.1-kpi-dashboard-follow-on`). Each is
+the kind of thing easy to repeat — codify before the next PR.
+
+### Backend — duplicate string literals in `setParameter` calls
+
+**Caught:** PR #357 SonarQube Critical
+"Define a constant instead of duplicating this literal `fromInclusive`
+3 times." Same flag fired on `toExclusive`. Both were used as JPA
+named-parameter keys in `KpiDashboardServiceImpl#computeNoShowRate`
+and `#computeTrend`.
+
+**Pattern to follow:** when a class issues 2+ named-parameter JPA
+queries that share a param name, extract a `private static final
+String PARAM_<NAME> = "<paramName>"` constant near the top of the
+class. The pattern is already in use for `PARAM_HOSPITAL_ID` /
+`PARAM_WINDOW_START` / `PARAM_WINDOW_END` — add to it rather than
+inlining. Sonar's threshold for duplication is **3 occurrences**;
+two is fine, three is not. Anywhere you `setParameter("foo", ...)`
+in a second method, ask whether a third call is coming and pre-empt
+with a constant.
+
+The query SQL itself still uses `:fromInclusive` / `:toExclusive`
+as JPA parameter markers — those are not string literals being
+counted; only the Java `String` arguments to `setParameter` trip
+the smell.
+
+### Backend — long aggregation methods trip Cognitive Complexity 25 > 15
+
+**Caught:** PR #357 SonarQube Critical
+"Refactor this method to reduce its Cognitive Complexity from 25
+to the 15 allowed." `KpiDashboardServiceImpl#computeTrend`
+orchestrated three sequential native-query + per-row merge blocks
+plus a final emit loop. Each block was ~6 complexity; the sum
+exceeded the gate.
+
+**Pattern to follow:** when a method runs N similar sub-tasks in
+sequence (per-table, per-KPI, per-section …), split into an
+orchestrator + N narrow helpers from the start. Each helper takes
+the shared accumulator (e.g. `Map<LocalDate, double[]> series`)
+plus its own parameters and mutates the accumulator. The
+orchestrator stays at ~5 lines: initialise → call helpers → emit.
+
+For row 32 the split was:
+
+- `addDoorToDoctorTrend(series, hospitalId, windowStart, windowEnd)`
+- `addDispenseLeadTimeTrend(series, hospitalId, windowStart, windowEnd)`
+- `addNoShowRateTrend(series, hospitalId, fromInclusive, appointmentEndExclusive)`
+- `emitTrendPoints(series, fromInclusive, toInclusive)` — pure, static
+
+Apply the same shape to: per-tenant query loops, per-table copy
+scripts (Java equivalent), per-section report builders, any
+"compute X timeseries / rollup / summary across N independent
+inputs" method.
+
+### Backend — POST controller ITs must accept 401, **403**, and 404
+
+**Caught:** PR #356 CI run on `TenantSchemaCacheControllerIT`. The
+IT was modelled on existing GET-endpoint foundation-pass ITs
+(`ChargebackReportControllerIT`, `DicomProxyControllerIT`) which
+get **401** on anonymous calls and **404** when the feature flag
+is off. POST endpoints hit Spring Security's CSRF filter first and
+return **403** when no CSRF token is present — the previous
+`isIn(401, 404)` assertion failed CI.
+
+**Pattern to follow:** any foundation-pass IT for a POST/PUT/DELETE
+endpoint asserts `isIn(401, 403, 404)`. Document the three states
+in a comment next to the assertion (401 anonymous, 403 CSRF
+rejection on POST, 404 authenticated with flag off). The
+DisplayName should call out the POST vs GET difference so the next
+copy-paste doesn't repeat the mistake. GET endpoints keep the
+`isIn(401, 404)` shape — CSRF doesn't apply.
+
+### Backend — REST scripts MUST include the `/api` context path
+
+**Caught:** PR #356 Copilot review (High) on
+`scripts/tenancy/invalidate-tenant-cache.sh`. The script built
+`${HMS_BACKEND_BASE_URL}/super-admin/...` but every controller is
+mounted under `server.servlet.context-path=/api`
+(`hospital-core/src/main/resources/application.properties` line 3),
+so the URL always 404'd in practice.
+
+**Pattern to follow:** any operator script (or external integration
+doc) that hits the backend MUST append `/api` to the base URL. Use
+the normalise-then-append idiom so the script tolerates both base
+URLs that include `/api` and those that don't:
+
+```bash
+BASE="${HMS_BACKEND_BASE_URL%/}"
+BASE="${BASE%/api}"
+URL="${BASE}/api/<route>"
+```
+
+Document in the env-var doc-string: "with or without the /api
+context path — the script normalises both."
+
+### Bash scripts — every identifier in SQL must be regex-validated
+
+**Caught:** PR #356 Copilot review (Medium) on
+`scripts/tenancy/provision-schema.sh`. `PGUSER` was interpolated
+into `CREATE SCHEMA … AUTHORIZATION "${PGUSER}"` and
+`ALTER DEFAULT PRIVILEGES FOR ROLE "${PGUSER}"` without being
+validated against `SAFE_REGEX`, while every other identifier
+(`SCHEMA_NAME`, `HMS_APP_ROLE`) was.
+
+**Pattern to follow:** every shell variable that gets
+double-quoted into a SQL identifier position (`"${VAR}"` inside
+`AUTHORIZATION`, `OWNER`, `ROLE`, `SCHEMA`, table/column names)
+must pass the project's `SAFE_REGEX = '^[a-z][a-z0-9_]{0,62}$'`
+check **before** SQL is assembled. The check is a one-line
+defensive guard:
+
+```bash
+[[ "${VAR}" =~ ${SAFE_REGEX} ]] || \
+    err "VAR='${VAR}' fails SAFE_IDENTIFIER regex"
+```
+
+The HMS convention is lowercase snake_case roles/schemas
+(`hms_app`, `hms_liquibase`, `tenant_bfq_mil_001`) so the
+strict allowlist applies cleanly to every interpolated identifier.
+PG technically allows quoted mixed-case, but the stricter regex
+matches the application-side
+`SchemaTenantConnectionProvider#SAFE_IDENTIFIER`.
+
+### Operational scripts — drain BEFORE copy, machine-enforce the ordering
+
+**Caught:** PR #356 Copilot review (High × 2) on
+`scripts/tenancy/copy-rows.sh` + the schema-per-tenant migration
+runbook. The original runbook had `copy → drain → flip` ordering;
+copying a live tenant let concurrent writes drift the source-row
+counts during the copy window, so post-commit `src=dst` verification
+false-fails on any in-flight INSERT.
+
+**Pattern to follow:** in any data-cutover procedure, the order is
+**drain first, copy second**. Source-row count verification reads
+from a stable snapshot once writers are quiesced. The cutover
+script should machine-enforce the ordering:
+
+```bash
+LIFECYCLE=$(psql -tAc "SELECT lifecycle_state FROM ... WHERE id = '...'")
+if [[ "${LIFECYCLE}" != "SUSPENDED" ]]; then
+    err "hospital ... is in lifecycle_state='${LIFECYCLE}', not 'SUSPENDED'. Run drain step first."
+fi
+```
+
+Belt + suspenders: capture the source count **inside** the
+REPEATABLE READ transaction (via a `WITH src AS (SELECT count(*) …)`
+CTE that runs alongside the INSERT's `RETURNING`) so the count
+reflects the snapshot the INSERT read, not a fresh post-commit
+read. The runbook narrative leads with **why** the order matters
+so the next operator doesn't reorder it back.
+
 ## Co-author tag
 
 Every commit Claude authors carries:
@@ -481,3 +635,11 @@ version in the tag reflects the actual model used.
   multiple merges.
 - `chore/skills-update-post-4-picks` — repo-wide skills file refresh
   after four feature foundation passes (this branch's commit).
+- `feat/v2.0-schema-per-tenant-scripts` — three operator scripts +
+  cache-invalidate REST surface for the row-33 cutover, with the
+  drain-before-copy + SAFE_REGEX-everywhere lessons codified in the
+  follow-up commit (PR #356, 2026-05-17).
+- `feat/v1.1-kpi-dashboard-follow-on` — P50 median + sparkline +
+  axe-smoke for row 32, with the `T[]`-not-`Array<T>`, aria-label
+  i18n, setParameter-constants, and split-aggregation-method
+  lessons codified in the follow-up commit (PR #357, 2026-05-17).

@@ -38,6 +38,14 @@ Each feature lives in its own folder under `src/app/<feature>/`:
   `<hms-loading-state>` primitives.
 - **OnPush change detection** for any component bound to a large
   observable stream (e.g. patient list, tracker board).
+- **Use `T[]` shorthand, not `Array<T>`.** The project's
+  `@typescript-eslint/array-type` rule blocks the long form and CI
+  fails on `Array<T>` references. Applies everywhere: signal inputs
+  (`input.required<T[]>()`), computed return annotations, local
+  variables, helper parameter and return types. Caught in PR #357
+  Copilot/SonarQube run — seven violations on one PR is too many to
+  let through twice. When adding a sub-component or helper, default
+  to `T[]` from the first keystroke.
 
 ## i18n — the FR completeness gate is non-negotiable
 
@@ -71,6 +79,23 @@ just as translatable as the surrounding labels. Don't hard-code `"min"`
 in the TS file — pass the value to a translation key that injects the
 unit, or use Angular's number/percent pipes with locale support.
 Caught in PR #341 Copilot review on `kpi-cards.component.ts`.
+
+**i18n the aria-labels, not just the visible text.** Strings passed
+to `[attr.aria-label]` or composed inside a `computed()` that
+returns an accessibility name MUST flow through ngx-translate too.
+Pattern that bit PR #357: a sparkline component built its name from
+`` `${label()} trend, ${count} data points` `` — visually fine in
+EN, but screen-readers in FR/ES then announced English words inside
+otherwise-translated text. **Inject `TranslateService` in the
+component and use `translate.instant('KEY', { label, count })`** so
+the translation file owns the word order. Word-by-word
+concatenation in TypeScript breaks for languages where the
+adjective precedes the noun (FR/ES put "tendance" / "tendencia"
+before the label, not after). For pluralisation, accept that
+`"1 data points"` is acceptable in this context — ngx-translate's
+`count` parameter does the substitution without an ICU plural form,
+which is fine for sparse-data sparklines where the count rarely
+hits 1.
 
 ## Accessibility — the axe smoke gate is non-negotiable
 

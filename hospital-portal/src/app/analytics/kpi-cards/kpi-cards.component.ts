@@ -21,7 +21,7 @@ interface KpiCard {
   /** Optional median line shown under the main value (door-to-doctor only today). */
   median?: string;
   /** Sparkline series (one number per day in the window, or undefined for no data). */
-  series: Array<number | null | undefined>;
+  series: (number | null | undefined)[];
 }
 
 /**
