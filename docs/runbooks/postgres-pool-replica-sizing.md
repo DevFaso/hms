@@ -105,7 +105,31 @@ bumping the size.
 `DataSource` bean is the single write Hikari pool, exactly as before
 row 35. Nothing routes anywhere.
 
-### What's left for the activation PR
+### What this follow-on adds
+
+- **`ReadReplicaHealthIndicator`** — `/api/actuator/health/readReplica`
+  consolidates three signals into one health check:
+  routing wiring (`routing=enabled|disabled|missing-wrapper`), the
+  `Route` the wrapper would pick for a `@Transactional(readOnly = true)`
+  query (`routedTo=READ|WRITE`), and per-call replica freshness
+  (`replicaInRecovery`, `replicaLastReplayTimestamp`,
+  `replicaLagSeconds`). `DOWN` iff the operator's flag intent
+  disagrees with the wired bean graph — bit-for-bit baseline with
+  the flag off still reports `UP` with `routing=disabled`. Opt-out per
+  environment via `management.health.readReplica.enabled=false`.
+- **`scripts/db/replica-preflight.sh`** — operator-run preflight that
+  catches drift BEFORE flipping `APP_DATASOURCE_REPLICA_ENABLED=true`.
+  Six checks: env-var presence, primary reachability, replica
+  reachability, `pg_is_in_recovery()=true` (catches "replica DSN
+  points at the primary" — the single fastest way to corrupt
+  data), lag within `REPLICA_LAG_BUDGET_SECONDS` (default 5s)
+  cross-checked against LSN equality (so idle-primary doesn't
+  false-fail), and `pg_read_all_data` membership (or explicit
+  `SELECT` on `hospital.patients` as the Postgres < 14 fallback).
+  Exits non-zero on the first failure so a CI / cutover script can
+  gate on the exit code.
+
+### What's still operational (this PR does not land it)
 
 - Per-deployment Railway replica provision (managed-Postgres "read
   replica" feature on the pilot environments).
@@ -170,10 +194,19 @@ write primary. Tracked in the activation PR.
    ```
    For Postgres < 14, grant SELECT on every schema-level object
    explicitly. Replication will propagate the role automatically.
-3. Verify the replica is up and lagging < 1 s:
-   ```sql
-   SELECT now() - pg_last_xact_replay_timestamp();
+3. Run the preflight script — it bundles every check this runbook
+   used to ask the operator to perform manually:
+   ```bash
+   PRIMARY_URL=postgresql://hms_app:***@primary.host:5432/hospital_db \
+   REPLICA_URL=postgresql://hms_app_ro:***@replica.host:5432/hospital_db \
+     ./scripts/db/replica-preflight.sh
    ```
+   The script exits non-zero on the first failure with a single
+   `[FAIL] ...` line — a wrapped Railway / CI step can simply check
+   the exit code. Pass `REPLICA_LAG_BUDGET_SECONDS=N` to tighten or
+   loosen the 5-second default; set `POSTGRES_VERSION_OVERRIDE=1`
+   to skip the `pg_read_all_data` check on Postgres < 14 deployments
+   where the operator chose explicit per-schema grants.
 
 ### Soak procedure
 
@@ -187,16 +220,25 @@ write primary. Tracked in the activation PR.
 2. Redeploy. Boot logs should contain:
    - `HikariPool-1 — Starting…` for `hms-primary-pool`
    - `HikariPool-2 — Starting…` for `hms-replica-pool`
-3. Verify routing: hit a known-read endpoint (e.g.
-   `GET /api/me`) and confirm the replica pool's
-   `hikaricp_connections_active` increments.
-4. Soak for **5 business days** under representative load. Watch:
+3. Verify routing via `/api/actuator/health/readReplica` — the
+   `ReadReplicaHealthIndicator` payload should show
+   `routing=enabled`, `routedTo=READ`, `replicaInRecovery=true`,
+   `replicaLagSeconds` near zero. A response with `routedTo=WRITE`
+   means lenient fallback engaged (replica bean failed) — fix the
+   wiring before continuing.
+4. Cross-check with `hikaricp_connections_active{pool="hms-replica-pool"}`
+   on the Grafana Postgres dashboard. The metric should increment as
+   read-only endpoints (e.g. `GET /api/me`) are hit.
+5. Soak for **5 business days** under representative load. Watch:
    - Per-pool active connections (Grafana).
    - Replication lag (`pg_last_xact_replay_timestamp`).
    - Application error rate (5xx in nginx / Railway logs).
    - "Cannot execute INSERT in a read-only transaction" Postgres errors
      — these signal a method incorrectly marked `readOnly = true`.
-5. If clean, promote to prod with the same env-var contract.
+   - The `routedTo` value on `/api/actuator/health/readReplica` —
+     should stay `READ` across the soak window. Any flap to `WRITE`
+     points at a transient replica pool failure worth investigating.
+6. If clean, promote to prod with the same env-var contract.
 
 ### Rollback
 
