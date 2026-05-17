@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.actuate.autoconfigure.health.ConditionalOnEnabledHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
+import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -165,11 +166,23 @@ public class ReadReplicaHealthIndicator implements HealthIndicator {
      * served the connection is what we report; the wrapper's
      * {@code lenientFallback=true} means a missing READ target degrades
      * to WRITE silently — that's the misroute the indicator surfaces.
+     *
+     * <p>Connection acquisition goes through
+     * {@link DataSourceUtils#getConnection(javax.sql.DataSource)} so the
+     * connection is bound to the active transaction and released through
+     * Spring's synchronization (no double-close, no leak when the
+     * indicator runs inside an outer transaction context). Caught on
+     * PR Copilot review (Medium) — calling
+     * {@code primaryDataSource.getConnection()} directly bypasses Spring
+     * transaction management; the routing key happens to still work
+     * because {@code AbstractRoutingDataSource.determineCurrentLookupKey()}
+     * reads from {@code TransactionSynchronizationManager} regardless,
+     * but resource management is the load-bearing Spring contract here.
      */
     private Route probeReadRoute() {
         return readOnlyTemplate.execute(status -> {
-            try (Connection conn = primaryDataSource.getConnection();
-                 Statement stmt = conn.createStatement();
+            Connection conn = DataSourceUtils.getConnection(primaryDataSource);
+            try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery("SELECT 1")) {
                 rs.next();
                 String url = conn.getMetaData().getURL();
@@ -187,6 +200,8 @@ public class ReadReplicaHealthIndicator implements HealthIndicator {
             } catch (java.sql.SQLException ex) {
                 throw new IllegalStateException(
                     "read-route SELECT 1 failed: " + ex.getMessage(), ex);
+            } finally {
+                DataSourceUtils.releaseConnection(conn, primaryDataSource);
             }
         });
     }
@@ -205,8 +220,15 @@ public class ReadReplicaHealthIndicator implements HealthIndicator {
      */
     private void addReplicaFreshnessDetails(Health.Builder builder) {
         replicaDataSource.ifPresent(ds -> {
-            try (Connection conn = ds.getConnection();
-                 Statement stmt = conn.createStatement();
+            // DataSourceUtils.getConnection here too — no transaction is
+            // active at this point (the freshness query is intentionally
+            // out-of-band from the read-only probe so it reflects the
+            // replica's own state) so the behaviour is equivalent to
+            // ds.getConnection(), but routing every JDBC acquisition
+            // through DataSourceUtils keeps the resource-management
+            // contract uniform with probeReadRoute.
+            Connection conn = DataSourceUtils.getConnection(ds);
+            try (Statement stmt = conn.createStatement();
                  ResultSet rs = stmt.executeQuery(
                      "SELECT pg_is_in_recovery() AS in_recovery,"
                          + " pg_last_xact_replay_timestamp() AS last_replay,"
@@ -224,6 +246,8 @@ public class ReadReplicaHealthIndicator implements HealthIndicator {
                 builder
                     .withDetail(DETAIL_REPLICA_REACHABLE, false)
                     .withDetail(DETAIL_ERROR, "replica freshness query failed: " + ex.getMessage());
+            } finally {
+                DataSourceUtils.releaseConnection(conn, ds);
             }
         });
     }

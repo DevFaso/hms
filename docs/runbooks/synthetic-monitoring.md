@@ -48,6 +48,8 @@ Per-region copy of the template — substitute these four placeholders:
 | `${HMS_PUBLIC_BASE_URL}` | `https://api.hms.bitnesttechs.com` |
 | `${MIMIR_REMOTE_WRITE_URL}` | The Grafana Cloud Mimir push URL from project → connections |
 
+**Substitution is NOT automatic.** Prometheus does not understand the `${VAR}` / envsubst shape. The placeholders must be resolved at deploy time — either `envsubst < prometheus-multigeo.example.yml > prometheus.yml` in the container entrypoint, or an explicit `sed` pass per the file header. Loading the template as-is parses fine and starts Prometheus, but every probe target becomes the literal string `${HMS_PUBLIC_BASE_URL}/api/...` and every series carries the literal `${GEO_LABEL}` — the failure mode is silent and only visible once you look at the probe output or the Grafana label values.
+
 Cross-region invariants:
 
 - All three remote_write to the **same** Mimir tenant.

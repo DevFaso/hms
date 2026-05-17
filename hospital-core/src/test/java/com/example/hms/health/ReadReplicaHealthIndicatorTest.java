@@ -3,7 +3,6 @@ package com.example.hms.health;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -197,10 +196,5 @@ class ReadReplicaHealthIndicatorTest {
         lenient().when(resultSet.getDouble("lag_seconds")).thenReturn(lagSeconds);
         lenient().when(resultSet.getTimestamp("last_replay"))
             .thenReturn(Timestamp.valueOf(LocalDateTime.of(2026, 5, 17, 16, 0)));
-    }
-
-    @SuppressWarnings("unused")
-    private static DataSource unused(DataSource ds) {
-        return mock(DataSource.class);
     }
 }

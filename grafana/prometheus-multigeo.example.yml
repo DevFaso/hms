@@ -5,11 +5,35 @@
 # Prometheus instance's prometheus.yml and substitute the four
 # placeholders before deploying.
 #
+# IMPORTANT — Prometheus does NOT auto-expand ${...} placeholders.
+# Stock Prometheus only resolves $(ENV_VAR) for a small set of string
+# fields (and only with the `--enable-feature=expand-external-labels`
+# flag for external_labels), and does NOT understand the ${VAR} /
+# envsubst shape. The four placeholders below MUST be substituted
+# BEFORE Prometheus loads the file. Either:
+#
+#     envsubst < prometheus-multigeo.example.yml > prometheus.yml
+#
+# (after exporting the four variables in the shell), or run an
+# explicit sed pass in your container entrypoint / CI step:
+#
+#     sed -e "s|\${GEO_LABEL}|aws-eu-west-1|g" \
+#         -e "s|\${BLACKBOX_HOST}|blackbox-eu-west-1.local:9115|g" \
+#         -e "s|\${HMS_PUBLIC_BASE_URL}|https://api.hms.bitnesttechs.com|g" \
+#         -e "s|\${MIMIR_REMOTE_WRITE_URL}|https://mimir.tenant/api/v1/push|g" \
+#         prometheus-multigeo.example.yml > prometheus.yml
+#
+# If you point Prometheus at this file as-is it WILL load (the YAML
+# parses) but it WILL probe literally `${HMS_PUBLIC_BASE_URL}/api/...`,
+# every probe will fail, and the geo label series will all carry the
+# literal string `${GEO_LABEL}` instead of a region identifier.
+#
 # How to use:
 #   1. Stand up Blackbox-exporter in each region (AWS eu-west-1,
 #      AWS us-east-1, OVH Africa / AWS af-south-1). Each region runs a
 #      Prometheus next to the exporter.
-#   2. Copy this file to that region's prometheus instance and replace:
+#   2. Copy this file to that region's prometheus instance and
+#      sed/envsubst-replace the four placeholders:
 #        ${GEO_LABEL}             — e.g. "aws-eu-west-1"
 #        ${BLACKBOX_HOST}         — e.g. "blackbox-eu-west-1.local:9115"
 #        ${HMS_PUBLIC_BASE_URL}   — e.g. "https://api.hms.bitnesttechs.com"

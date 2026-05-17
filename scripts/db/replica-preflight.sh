@@ -9,7 +9,7 @@
 # operator flips APP_DATASOURCE_REPLICA_ENABLED=true; the health
 # indicator catches drift AFTER.
 #
-# Runs five checks in order, exits non-zero on the first failure:
+# Runs six checks in order, exits non-zero on the first failure:
 #
 #   1. Required env vars present and well-formed.
 #   2. Primary reachable + write-pool role can run SELECT 1.
