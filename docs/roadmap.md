@@ -84,6 +84,82 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   bypasses HMS's surface. 5 new tests (4 unit + 1 IT). Runbook:
 >   [`docs/runbooks/dicom-proxy.md`](./runbooks/dicom-proxy.md).
 
+> **2026-05-16 update (row-20 follow-on) — Encounter + Observation
+> FHIR write paths land.** Row 20 stays at `started`. Shipped on
+> `feat/v1.1-fhir-write-encounter-observation`. Closes the named
+> follow-on from the foundation-pass cell (which already promised
+> "Encounter + Observation write paths deferred to the row-20
+> follow-on (Observation's 1:N PatientVitalSign expansion needs a
+> labresult-only carve-out)") and brings the row's three resources
+> to a uniform PUT contract.
+>
+> - **`PUT /api/fhir/Encounter/{id}`** — `EncounterFhirWriteService`
+>   applies a very narrow subset: `period.end → checkoutTimestamp`
+>   (only when currently null — never overwrite an in-app checkout)
+>   and `reasonCode[0].text → chiefComplaint` (only when currently
+>   blank — never overwrite a clinician's triage note). Status,
+>   class, type, subject, period.start, participants, diagnoses are
+>   not honored — those state-machine transitions belong to the
+>   clinical workflow. Tenant scope from
+>   `HospitalContextHolder.getActiveHospitalId()` via
+>   `EncounterRepository.findByIdAndHospital_Id`, with a
+>   defence-in-depth hospital check on the loaded entity (mismatch
+>   → 403). New `AuditEventType.ENCOUNTER_UPDATE` with
+>   `entityType="ENCOUNTER"`. POST `/Encounter` is deliberately not
+>   exposed (encounter provisioning has staff @ hospital +
+>   assignment @ hospital + appointment-match invariants that the
+>   FHIR sender cannot reliably satisfy).
+> - **`PUT /api/fhir/Observation/labresult-{uuid}`** —
+>   `ObservationFhirWriteService` honors `note[0].text` only,
+>   appending with `" | "` separator if `lab_results.notes` already
+>   contains text (duplicate inbound text is a no-op). Status,
+>   value, code, subject, effective, category are not honored —
+>   release / sign / acknowledge are actor-stamped state-machine
+>   events. `PUT /Observation/vital-*` is rejected `422 BUSINESSRULE`
+>   per the labresult-only carve-out (1:N `PatientVitalSign` →
+>   Observation expansion has no single-row write target). Tenant
+>   scope: lab result's `labOrder.hospital.id` must match the active
+>   hospital (missing or mismatched → 403). Audit
+>   `LAB_RESULT_UPDATED` with `entityType="LAB_RESULT"`.
+> - **`HmsCapabilityStatementProvider`** extended to advertise the
+>   `update` interaction on the `Encounter` and `Observation`
+>   resource entries when `app.fhir.write.enabled=true`, and to
+>   actively strip HAPI's auto-emitted `update` interaction when the
+>   flag is off — so `/fhir/metadata` matches runtime behaviour for
+>   both flag positions (mirrors the Patient pattern from the
+>   foundation pass).
+> - **Flag-first ordering** applied uniformly across all three
+>   providers' write handlers. PR #343 Copilot review caught that
+>   `PatientFhirResourceProvider.@Update` ran resource-shape
+>   validation before the feature-flag short-circuit, returning 422
+>   instead of 405 on flag-off + malformed body; the same gap on
+>   `@Create` was explicitly named in the `fhir-r4-api` skill as
+>   outstanding. Both Patient handlers are now corrected, and the
+>   new `Encounter.@Update` + `Observation.@Update` handlers ship
+>   with the corrective pattern from the start.
+> - **8 new ITs.** `EncounterFhirWriteIT` (2 — flag-off PUT
+>   rejection + flag-off metadata omits `update`),
+>   `EncounterFhirWriteEnabledIT` (1 — flag-on metadata advertises
+>   `update`), `ObservationFhirWriteIT` (3 — flag-off PUT against
+>   `labresult-*` and `vital-*` both rejected + flag-off metadata
+>   omits `update`), `ObservationFhirWriteEnabledIT` (2 — flag-on
+>   metadata advertises `update` + flag-on `vital-*` rejection
+>   reachable via 401-or-422). Same 401-or-handler-status
+>   permissiveness as the existing Patient ITs; once an
+>   authenticated TestRestTemplate is wired, the assertions tighten.
+> - **Runbook**
+>   [`docs/runbooks/fhir-write-api.md`](./runbooks/fhir-write-api.md)
+>   updated with the Encounter + Observation honored-subset tables,
+>   tenant gate description, audit emission, and the explicit
+>   deferred-indefinitely stance on POST `/Encounter` + POST
+>   `/Observation`. The row will move to `completed` once the
+>   conformance soak against SMART App Launcher + Cerner + Epic
+>   sandboxes is recorded.
+>
+> Rows 21 (`$export`) and 22 (`$everything`) remain `not-started` and
+> are now unblocked by this follow-on — they can be picked next
+> without leaving themselves dependency-bound.
+
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
 > develop and were promoted through UAT to main on 2026-05-16. Each

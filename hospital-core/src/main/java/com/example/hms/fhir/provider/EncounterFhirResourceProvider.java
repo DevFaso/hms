@@ -3,15 +3,22 @@ package com.example.hms.fhir.provider;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
+import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.annotation.Search;
+import ca.uhn.fhir.rest.annotation.Update;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import com.example.hms.fhir.mapper.EncounterFhirMapper;
+import com.example.hms.fhir.write.EncounterFhirWriteService;
 import com.example.hms.repository.EncounterRepository;
 import org.hl7.fhir.r4.model.Encounter;
 import org.hl7.fhir.r4.model.IdType;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -23,10 +30,16 @@ public class EncounterFhirResourceProvider implements IResourceProvider {
 
     private final EncounterRepository encounterRepository;
     private final EncounterFhirMapper mapper;
+    private final EncounterFhirWriteService writeService;
 
-    public EncounterFhirResourceProvider(EncounterRepository encounterRepository, EncounterFhirMapper mapper) {
+    public EncounterFhirResourceProvider(
+        EncounterRepository encounterRepository,
+        EncounterFhirMapper mapper,
+        EncounterFhirWriteService writeService
+    ) {
         this.encounterRepository = encounterRepository;
         this.mapper = mapper;
+        this.writeService = writeService;
     }
 
     @Override
@@ -58,5 +71,56 @@ public class EncounterFhirResourceProvider implements IResourceProvider {
         return encounterRepository.findByPatient_Id(patientId).stream()
             .map(mapper::toFhir)
             .toList();
+    }
+
+    /**
+     * PUT /Encounter/{id}. Updates the FHIR-mutable subset
+     * ({@code period.end} + {@code reasonCode[0].text}) of an existing
+     * encounter at the active hospital scope.
+     *
+     * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
+     * (default) the handler returns 405 <strong>before</strong> any
+     * request-shape validation, matching the contract documented in
+     * the {@code fhir-r4-api} skill (caught on the Patient provider
+     * during PR #343 review).
+     */
+    @Update
+    public MethodOutcome update(
+        @IdParam IdType id,
+        @ResourceParam Encounter resource
+    ) {
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
+        if (resource == null) {
+            throw unprocessable(
+                "PUT /Encounter/{id} requires an Encounter resource body.",
+                OperationOutcome.IssueType.STRUCTURE
+            );
+        }
+        UUID uuid = FhirIds.parseOrThrow(id);
+        if (resource.getIdElement() != null && resource.getIdElement().getIdPart() != null
+            && !resource.getIdElement().getIdPart().isBlank()
+            && !resource.getIdElement().getIdPart().equals(uuid.toString())) {
+            throw unprocessable(
+                "Resource.id does not match the URL id; refusing to honor PUT against a mismatched id.",
+                OperationOutcome.IssueType.BUSINESSRULE
+            );
+        }
+        com.example.hms.model.Encounter saved = writeService.update(uuid, resource);
+        return new MethodOutcome()
+            .setId(new IdType("Encounter", saved.getId().toString()))
+            .setResource(mapper.toFhir(saved));
+    }
+
+    private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {
+        OperationOutcome outcome = new OperationOutcome();
+        outcome.addIssue()
+            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+            .setCode(type)
+            .setDiagnostics(message);
+        return new UnprocessableEntityException(message, outcome);
     }
 }

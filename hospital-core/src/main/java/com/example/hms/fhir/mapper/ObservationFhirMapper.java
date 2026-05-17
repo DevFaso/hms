@@ -174,4 +174,41 @@ public class ObservationFhirMapper {
             return null;
         }
     }
+
+    /* ===================== Write direction (FHIR → entity) ===================== */
+
+    /**
+     * Apply the FHIR-mutable subset of fields from an inbound FHIR
+     * Observation onto an existing {@link LabResult}. Returns the same
+     * entity for chaining; the caller is responsible for persisting +
+     * audit emission.
+     *
+     * <p><strong>Intentionally narrow.</strong> Only
+     * {@code Observation.note[0].text} is honored. The mapping appends
+     * the inbound text to the existing {@code notes} column (joined
+     * with {@code " | "}) so external annotations accumulate rather
+     * than overwrite the local note from the clinical UI.
+     *
+     * <p><strong>Not honored:</strong> {@code status}, {@code code},
+     * {@code value}, {@code subject}, {@code effective}, {@code category}.
+     * Release / sign / acknowledge transitions on a lab result mutate
+     * state-machine timestamps + actor stamps that the FHIR PUT path
+     * has no signer for; those flow through the clinical release UI or
+     * the HL7 MLLP ingest path.
+     */
+    public LabResult applyFhirLabResultUpdates(LabResult existing, org.hl7.fhir.r4.model.Observation src) {
+        if (existing == null || src == null) return existing;
+        if (!src.hasNote() || src.getNote().isEmpty()) return existing;
+        String inbound = src.getNoteFirstRep().getText();
+        if (inbound == null || inbound.trim().isEmpty()) return existing;
+        String trimmed = inbound.trim();
+        String current = existing.getNotes();
+        if (current == null || current.isBlank()) {
+            existing.setNotes(trimmed);
+            return existing;
+        }
+        if (current.contains(trimmed)) return existing;
+        existing.setNotes(current + " | " + trimmed);
+        return existing;
+    }
 }

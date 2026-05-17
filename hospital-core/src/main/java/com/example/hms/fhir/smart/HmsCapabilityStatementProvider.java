@@ -57,6 +57,8 @@ public class HmsCapabilityStatementProvider extends ServerCapabilityStatementPro
         if (base instanceof CapabilityStatement cs && theRequest != null) {
             applySmartSecurity(cs, theRequest);
             applyPatientWriteCapabilities(cs);
+            applyEncounterWriteCapabilities(cs);
+            applyObservationWriteCapabilities(cs);
         }
         return (org.hl7.fhir.instance.model.api.IBaseConformance) base;
     }
@@ -81,10 +83,43 @@ public class HmsCapabilityStatementProvider extends ServerCapabilityStatementPro
                 // even when every write call returns 405 — that's a misleading
                 // contract for consumers that probe metadata before invoking.
                 r.setConditionalCreate(false);
-                r.getInteraction().removeIf(i -> i.getCode() != null
-                    && (i.getCode() == CapabilityStatement.TypeRestfulInteraction.CREATE
-                     || i.getCode() == CapabilityStatement.TypeRestfulInteraction.UPDATE));
+                stripCreateAndUpdate(r);
             });
+    }
+
+    private void applyEncounterWriteCapabilities(CapabilityStatement cs) {
+        applyWriteCapabilitiesForResource(cs, "Encounter");
+    }
+
+    private void applyObservationWriteCapabilities(CapabilityStatement cs) {
+        applyWriteCapabilitiesForResource(cs, "Observation");
+    }
+
+    /**
+     * Encounter and Observation expose only a narrow PUT path
+     * (no conditional create, no POST). When the write feature flag is
+     * off, strip the {@code update} interaction HAPI auto-advertises
+     * from the provider's {@code @Update} annotation so the
+     * CapabilityStatement matches runtime behaviour. When on, leave
+     * HAPI's auto-emitted update interaction in place (no
+     * conditionalCreate to set).
+     */
+    private void applyWriteCapabilitiesForResource(CapabilityStatement cs, String type) {
+        if (cs.getRest().isEmpty()) return;
+        cs.getRestFirstRep().getResource().stream()
+            .filter(r -> type.equals(r.getType()))
+            .findFirst()
+            .ifPresent(r -> {
+                boolean enabled = writeProperties != null && writeProperties.isEnabled();
+                if (enabled) return;
+                stripCreateAndUpdate(r);
+            });
+    }
+
+    private static void stripCreateAndUpdate(CapabilityStatement.CapabilityStatementRestResourceComponent r) {
+        r.getInteraction().removeIf(i -> i.getCode() != null
+            && (i.getCode() == CapabilityStatement.TypeRestfulInteraction.CREATE
+             || i.getCode() == CapabilityStatement.TypeRestfulInteraction.UPDATE));
     }
 
     private void applySmartSecurity(CapabilityStatement cs, HttpServletRequest request) {
