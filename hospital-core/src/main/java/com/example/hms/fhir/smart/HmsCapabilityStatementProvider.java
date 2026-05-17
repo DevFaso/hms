@@ -3,6 +3,7 @@ package com.example.hms.fhir.smart;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.provider.ServerCapabilityStatementProvider;
+import com.example.hms.fhir.FhirOperationsProperties;
 import com.example.hms.fhir.FhirWriteProperties;
 import com.example.hms.fhir.smart.SmartConfigurationController.SmartConfiguration;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,15 +39,18 @@ public class HmsCapabilityStatementProvider extends ServerCapabilityStatementPro
 
     private final SmartConfigurationBuilder smartBuilder;
     private final FhirWriteProperties writeProperties;
+    private final FhirOperationsProperties operationsProperties;
 
     public HmsCapabilityStatementProvider(
         RestfulServer server,
         SmartConfigurationBuilder smartBuilder,
-        FhirWriteProperties writeProperties
+        FhirWriteProperties writeProperties,
+        FhirOperationsProperties operationsProperties
     ) {
         super(server);
         this.smartBuilder = smartBuilder;
         this.writeProperties = writeProperties;
+        this.operationsProperties = operationsProperties;
     }
 
     @Override
@@ -59,8 +63,49 @@ public class HmsCapabilityStatementProvider extends ServerCapabilityStatementPro
             applyPatientWriteCapabilities(cs);
             applyEncounterWriteCapabilities(cs);
             applyObservationWriteCapabilities(cs);
+            applyOperationVisibility(cs);
         }
         return (org.hl7.fhir.instance.model.api.IBaseConformance) base;
+    }
+
+    /**
+     * HAPI auto-emits {@code operation} entries for every
+     * {@code @Operation} discovered on a registered provider. The
+     * default emission is unconditional — so {@code $export} and
+     * {@code $everything} would appear in {@code /metadata} even when
+     * their flags are off and every invocation returns 405. This
+     * method strips those entries when the corresponding flag is off
+     * so the published contract matches runtime behaviour.
+     *
+     * <p>HAPI places operations at two levels:
+     * <ul>
+     *   <li>{@code rest[].operation} — system-level operations
+     *       (no {@code type=} on the {@code @Operation} annotation).</li>
+     *   <li>{@code rest[].resource[].operation} — resource-level
+     *       operations ({@code type=Patient.class} on a plain
+     *       provider's {@code $export}, or an {@code @Operation}
+     *       directly on a resource provider for {@code $everything}).</li>
+     * </ul>
+     * Both lists must be visited or the resource-level entries leak
+     * through and contradict the flag-off contract.
+     */
+    private void applyOperationVisibility(CapabilityStatement cs) {
+        if (cs.getRest().isEmpty()) return;
+        boolean bulkOn = operationsProperties != null
+            && operationsProperties.getBulkExport().isEnabled();
+        boolean everythingOn = operationsProperties != null
+            && operationsProperties.getEverything().isEnabled();
+        cs.getRestFirstRep().getOperation().removeIf(op -> shouldStrip(op.getName(), bulkOn, everythingOn));
+        cs.getRestFirstRep().getResource().forEach(r ->
+            r.getOperation().removeIf(op -> shouldStrip(op.getName(), bulkOn, everythingOn))
+        );
+    }
+
+    private static boolean shouldStrip(String operationName, boolean bulkOn, boolean everythingOn) {
+        if (operationName == null) return false;
+        if (!bulkOn && "export".equals(operationName)) return true;
+        if (!everythingOn && "everything".equals(operationName)) return true;
+        return false;
     }
 
     private void applyPatientWriteCapabilities(CapabilityStatement cs) {

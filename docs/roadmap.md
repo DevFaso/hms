@@ -222,6 +222,78 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 >   input + Postgres storage-bytes input + per-deployment currency
 >   cost model + Control Tower panel.
 
+> **2026-05-16 update (FHIR Interop completion batch) — rows 21
+> ($export) + 22 ($everything) flip to `started`.** Shipped on
+> `feat/v1.1-fhir-bulk-and-everything`. Both operations were blocked
+> on the row-20 write API; that's now resolved on its own branch.
+> The two operations are gated by independent flags so an operator
+> can promote `$everything` (synchronous, low-risk) without also
+> enabling `$export` (async, S3-bound, capacity-sensitive).
+>
+> - **Row 21 (FHIR Bulk Data Access $export)** —
+>   `app.fhir.operations.bulk-export.enabled` (default false).
+>   `FhirBulkExportOperationProvider` exposes `POST /api/fhir/$export`
+>   (system level) and `POST /api/fhir/Patient/$export` (type level)
+>   as HAPI plain-provider `@Operation` methods with
+>   `manualResponse=true`; each accepted call returns
+>   `202 Accepted` + `Content-Location: /api/fhir-bulk-status/{jobId}`.
+>   `FhirBulkExportService` holds the job state in an in-memory
+>   `ConcurrentHashMap` (the persistent `fhir_bulk_export_jobs` table
+>   plus JPA repository land with the async runner follow-on); tenant
+>   scope from `HospitalContextHolder.getActiveHospitalId()` pinned
+>   at creation, cross-tenant status / cancel collapses to 404
+>   (invisible rejection — no information leak). Honors `_since`
+>   (ISO-8601) and `_type` (CSV). `FhirBulkExportStatusController`
+>   at `/api/fhir-bulk-status/{jobId}` returns `202` + `Retry-After: 120`
+>   on GET (foundation pass never advances jobs) and `202` on DELETE
+>   drop, `404` on miss / cross-tenant. The poll path is HMS-specific
+>   (sibling to HAPI's `/api/fhir/*` mount) because the FHIR servlet
+>   captures the entire `/api/fhir/*` space; canonical
+>   `$export-poll-status` mounting via a HAPI `manualResponse=true`
+>   operation lands with the async runner. `AuditEventType.DATA_EXPORT`
+>   emitted with `entityType="FHIR_BULK_EXPORT_JOB"` on kickoff +
+>   cancel. Group-level `$export` deferred (needs
+>   `GroupFhirResourceProvider`, not currently modelled). Runbook:
+>   [`docs/fhir-bulk.md`](./fhir-bulk.md).
+> - **Row 22 ($everything operation)** —
+>   `app.fhir.operations.everything.enabled` (default false).
+>   `@Operation(name="$everything", type=Patient.class)` on
+>   `PatientFhirResourceProvider` delegates to
+>   `PatientEverythingService.everythingForPatient(uuid)`. The
+>   service assembles a single FHIR `Bundle` of type `searchset`
+>   containing the Patient plus up to 200 most-recent Encounters,
+>   200 vital-sign rows (each 1:N-expanded into Observation
+>   resources by the existing mapper), 200 lab-result Observations,
+>   all Conditions, and 200 MedicationRequests — every collection
+>   hospital-scoped via the active context. Missing scope → 403;
+>   cross-tenant patient → 404. `AuditEventType.PATIENT_EXPORT` with
+>   entry-count description. Synchronous (no async runner needed for
+>   single-patient compartments).
+> - **`HmsCapabilityStatementProvider`** extended with
+>   `applyOperationVisibility(cs)` that strips HAPI's auto-emitted
+>   `rest[].operation` entry for `export` / `everything` when the
+>   corresponding flag is off, so `/api/fhir/metadata` matches
+>   runtime behaviour for both flag positions (same pattern as
+>   row-20's `Patient.conditionalCreate` strip).
+> - **4 new ITs.** `FhirBulkExportIT` (4 cases — kickoff system,
+>   kickoff Patient, status endpoint, metadata-omit; all rejected
+>   401/405 when flag off), `FhirBulkExportEnabledIT` (1 — flag-on metadata
+>   advertises `export`), `PatientEverythingIT` (2 — flag-off PUT
+>   rejection + metadata omits), `PatientEverythingEnabledIT` (1 —
+>   flag-on metadata advertises `everything`). Authenticated
+>   wire-level Bundle composition assertion deferred to the row-22
+>   follow-on (today's 401-or-handler-status blocks the deeper
+>   check).
+> - **Named follow-on** (row stays `started` until):
+>   for row 21 — persistent `fhir_bulk_export_jobs` table (V103),
+>   `@Scheduled` (or Kafka once row 36 lands) NDJSON runner
+>   streaming to an S3-compatible bucket, output-manifest 200
+>   response, Group-level `$export`, canonical poll-URL mounting
+>   under `/api/fhir/*`, spec-compliant 501-on-flag-off; for row
+>   22 — authenticated end-to-end IT, `_since` / `_type` / page
+>   cursor / start-end params honored, SMART App Launcher
+>   conformance soak.
+
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
 > develop and were promoted through UAT to main on 2026-05-16. Each

@@ -3,6 +3,7 @@ package com.example.hms.fhir.provider;
 import ca.uhn.fhir.rest.annotation.ConditionalUrlParam;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -16,10 +17,12 @@ import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.fhir.write.PatientFhirWriteService;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
@@ -50,15 +53,18 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private final PatientRepository patientRepository;
     private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
+    private final PatientEverythingService everythingService;
 
     public PatientFhirResourceProvider(
         PatientRepository patientRepository,
         PatientFhirMapper patientMapper,
-        PatientFhirWriteService writeService
+        PatientFhirWriteService writeService,
+        PatientEverythingService everythingService
     ) {
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
         this.writeService = writeService;
+        this.everythingService = everythingService;
     }
 
     @Override
@@ -208,6 +214,20 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             .setId(new IdType("Patient", resolved.getId().toString()))
             .setResource(patientMapper.toFhir(resolved))
             .setCreated(false);
+    }
+
+    /**
+     * Patient compartment {@code $everything} (roadmap row 22).
+     * Returns a {@link Bundle} containing the requested Patient and the
+     * resources in its compartment (Encounters, Observations,
+     * Conditions, MedicationRequests). Feature-flagged via
+     * {@code app.fhir.operations.everything.enabled} — flag-off
+     * surfaces as 405 from {@link PatientEverythingService#everythingForPatient}.
+     */
+    @Operation(name = "$everything", idempotent = true, type = org.hl7.fhir.r4.model.Patient.class)
+    public Bundle patientEverything(@IdParam IdType id) {
+        UUID uuid = parseUuid(id);
+        return everythingService.everythingForPatient(uuid);
     }
 
     private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {

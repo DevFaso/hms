@@ -4,6 +4,7 @@ import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.RestfulServer;
 import ca.uhn.fhir.rest.server.interceptor.ResponseHighlighterInterceptor;
+import com.example.hms.fhir.bulk.FhirBulkExportOperationProvider;
 import com.example.hms.fhir.smart.HmsCapabilityStatementProvider;
 import com.example.hms.fhir.smart.SmartConfigurationBuilder;
 import com.example.hms.fhir.smart.SmartConfigurationInterceptor;
@@ -35,7 +36,7 @@ import java.util.List;
  * </ul>
  */
 @Configuration
-@EnableConfigurationProperties(FhirWriteProperties.class)
+@EnableConfigurationProperties({FhirWriteProperties.class, FhirOperationsProperties.class})
 public class FhirConfig {
 
     @Bean
@@ -50,6 +51,8 @@ public class FhirConfig {
         SmartConfigurationInterceptor smartConfigurationInterceptor,
         SmartConfigurationBuilder smartConfigurationBuilder,
         FhirWriteProperties fhirWriteProperties,
+        FhirOperationsProperties fhirOperationsProperties,
+        FhirBulkExportOperationProvider fhirBulkExportOperationProvider,
         @Value("${app.fhir.serverBaseUrl:/api/fhir}") String serverBaseUrl
     ) {
         RestfulServer server = new RestfulServer(fhirContext);
@@ -58,15 +61,23 @@ public class FhirConfig {
         server.setImplementationDescription(
             "Hospital Management System FHIR R4 façade — read across "
                 + "Patient/Encounter/Observation/Condition/MedicationRequest/Immunization; "
-                + "Patient write (PUT + conditional POST) gated by app.fhir.write.enabled."
+                + "Patient write (PUT + conditional POST) gated by app.fhir.write.enabled; "
+                + "Bulk Data Access $export + Patient/$everything gated by app.fhir.operations.*."
         );
         server.setServerAddressStrategy(new ApacheProxyAddressStrategy(serverBaseUrl));
         server.setResourceProviders(resourceProviders);
+        // Plain providers carry @Operation methods that aren't bound to
+        // a single resource (system-level $export) or that bind via the
+        // operation's `type` attribute (Patient-type-level $export).
+        // The Patient compartment $everything operation lives on the
+        // PatientFhirResourceProvider itself (resource-level @Operation).
+        server.registerProvider(fhirBulkExportOperationProvider);
         server.setDefaultPrettyPrint(true);
         server.registerInterceptor(new ResponseHighlighterInterceptor());
         server.registerInterceptor(smartConfigurationInterceptor);
         server.setServerConformanceProvider(
-            new HmsCapabilityStatementProvider(server, smartConfigurationBuilder, fhirWriteProperties)
+            new HmsCapabilityStatementProvider(
+                server, smartConfigurationBuilder, fhirWriteProperties, fhirOperationsProperties)
         );
 
         ServletRegistrationBean<RestfulServer> reg = new ServletRegistrationBean<>(server, "/fhir/*");
