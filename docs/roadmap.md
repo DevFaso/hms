@@ -160,6 +160,68 @@ Last updated: **2026-05-16**. Update both files together when scope moves.
 > are now unblocked by this follow-on — they can be picked next
 > without leaving themselves dependency-bound.
 
+> **2026-05-16 update (Keycloak cutover ops + per-tenant cost obs
+> batch) — rows 8 + 18 + 19 + 44 flip to `started`.** Shipped on
+> `chore/v1.0-keycloak-cutover-and-cost-obs`. All four rows had been
+> deferred from earlier batches: rows 8 / 18 / 19 because the
+> cutover sequence required real env-access decisions, and row 44
+> because per-tenant labeling needed downstream context. This pass
+> closes the documentation + scaffolding gap so the actual env
+> operations (rows 8 / 18 / 19) and the chargeback rollout (row 44)
+> can be executed against the existing runbooks.
+>
+> - **Row 18 (KC-4 uat migration)** + **Row 19 (KC-4 prod
+>   migration)** + **Row 8 (Keycloak Phase C cutover)** — three
+>   operational rows wrapped into a single conductor playbook
+>   [`docs/runbooks/keycloak-cutover-sequence.md`](./runbooks/keycloak-cutover-sequence.md).
+>   The conductor chains step 1 (row 18 uat migration) → 5-business-
+>   day soak → step 2 (row 19 prod migration) → 24-hour observation
+>   → step 3 (row 8 uat OIDC_REQUIRED=true flip) → 7-calendar-day
+>   soak → step 4 (row 8 prod OIDC_REQUIRED=true flip) → 48-hour
+>   smoke. Each step has a hard go/no-go gate and a rollback
+>   decision tree. The existing component runbooks
+>   ([`keycloak-migration-runbook.md`](./runbooks/keycloak-migration-runbook.md)
+>   for rows 17 / 18 / 19 and
+>   [`keycloak-cutover-runbook.md`](./runbooks/keycloak-cutover-runbook.md)
+>   for row 8) remain the authoritative per-step procedure — the
+>   conductor is the ordering + gating glue. New
+>   `scripts/keycloak/preflight.sh` is the precondition harness that
+>   wraps `env-sync-verify.sh --public-only` (R1-R4 + P1-P4 from
+>   row 14) + OIDC discovery + issuer-match + optional A1-A3
+>   (when `HMS_KC_ADMIN_TOKEN` is set) + optional backend health
+>   (when `HMS_BACKEND_BASE_URL` is set). Exits non-zero on the
+>   first failure; idempotent + safe to re-run. All three rows
+>   stay `started` until the prod cutover smoke is green for 48 h
+>   and the postmortem doc lands.
+> - **Row 44 (Per-tenant cost observability)** — flag
+>   `app.observability.tenant-cost.enabled` (default false). New
+>   `ChargebackReportService.auditEventCountsPerTenant(from, to)`
+>   delegates to the new
+>   `AuditEventLogRepository.countByHospitalBetween` JPQL query
+>   (groups by the denormalized `AuditEventLog.hospitalName` snapshot,
+>   excludes rows without a snapshot — those belong to a future
+>   platform-shared bucket). New `ChargebackReportController` exposes
+>   `GET /api/super-admin/cost/per-tenant?from&to` with
+>   `@PreAuthorize("hasRole('SUPER_ADMIN')")`, default trailing-30-day
+>   window, 92-day cap; the controller returns 404 when the flag is
+>   off so the endpoint shape stays hidden until the rollup is
+>   operationally meaningful. **Splunk tenant labeling is already in
+>   place** via the existing `AuditEventLog.hospitalName` snapshot
+>   that flows through the SplunkHecAppender — no code change needed
+>   for the foundation pass. Grafana per-tenant tagging at the
+>   Micrometer level is the named follow-on (needs a
+>   `MeterFilter` that reads `HospitalContextHolder` at sample time —
+>   non-trivial because Micrometer's tag set is evaluated at meter
+>   registration, not at sample time). 5 new tests:
+>   `ChargebackReportServiceTest` (4 unit cases — flag passthrough +
+>   Object[] row mapping + Integer-count boxing + empty-list) and
+>   `ChargebackReportControllerIT` (1 IT — flag-off 401/404 split).
+>   Runbook:
+>   [`docs/runbooks/per-tenant-cost-observability.md`](./runbooks/per-tenant-cost-observability.md).
+>   Follow-on: Splunk event-count input + Grafana series-cardinality
+>   input + Postgres storage-bytes input + per-deployment currency
+>   cost model + Control Tower panel.
+
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
 > develop and were promoted through UAT to main on 2026-05-16. Each
