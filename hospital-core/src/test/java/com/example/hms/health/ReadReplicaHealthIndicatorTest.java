@@ -94,7 +94,7 @@ class ReadReplicaHealthIndicatorTest {
 
         ReadWriteRoutingDataSource routing = new ReadWriteRoutingDataSource(
             writeOnlyPrimary, replicaDataSource);
-        wireRouteProbe(routing, replicaUrl, /* inRecovery */ true, /* lagSeconds */ 0.42);
+        wireRouteProbe(replicaUrl, /* inRecovery */ true, /* lagSeconds */ 0.42);
 
         ReadReplicaHealthIndicator indicator = new ReadReplicaHealthIndicator(
             properties, routing, replicaDataSource, transactionManager);
@@ -106,9 +106,8 @@ class ReadReplicaHealthIndicatorTest {
             .containsEntry(ReadReplicaHealthIndicator.DETAIL_ROUTING, "enabled")
             .containsEntry(ReadReplicaHealthIndicator.DETAIL_ROUTED_TO, "READ")
             .containsEntry(ReadReplicaHealthIndicator.DETAIL_REPLICA_REACHABLE, true)
-            .containsEntry(ReadReplicaHealthIndicator.DETAIL_REPLICA_IN_RECOVERY, true);
-        assertThat(health.getDetails().get(ReadReplicaHealthIndicator.DETAIL_REPLICA_LAG_SECONDS))
-            .isEqualTo(0.42);
+            .containsEntry(ReadReplicaHealthIndicator.DETAIL_REPLICA_IN_RECOVERY, true)
+            .containsEntry(ReadReplicaHealthIndicator.DETAIL_REPLICA_LAG_SECONDS, 0.42);
     }
 
     @Test
@@ -124,7 +123,7 @@ class ReadReplicaHealthIndicatorTest {
 
         ReadWriteRoutingDataSource routing = new ReadWriteRoutingDataSource(
             writeOnlyPrimary, /* readDataSource */ null);
-        wireRouteProbe(routing,
+        wireRouteProbe(
             "jdbc:postgresql://write.local:5432/hospital_db",
             /* inRecovery */ false, /* lagSeconds */ 0.0);
 
@@ -171,10 +170,13 @@ class ReadReplicaHealthIndicatorTest {
     /**
      * Wires the mock primary + replica + connection + result-set so the
      * routing wrapper's {@code SELECT 1} probe yields a deterministic
-     * URL and the replica freshness query yields the supplied lag.
+     * URL and the replica freshness query yields the supplied lag. The
+     * caller constructs the {@link ReadWriteRoutingDataSource}
+     * separately and passes it to the indicator under test — this
+     * helper only stubs the underlying mock JDBC graph; the routing
+     * wrapper itself isn't an input.
      */
     private void wireRouteProbe(
-        ReadWriteRoutingDataSource routing,
         String probeReportsUrl,
         boolean inRecovery,
         double lagSeconds
