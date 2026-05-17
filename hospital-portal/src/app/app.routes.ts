@@ -1187,6 +1187,19 @@ export const routes: Routes = [
           ),
       },
 
+      // ADT auto-create intake config (roadmap row 24 admin UI)
+      // SUPER_ADMIN only — matches @PreAuthorize on
+      // AdtIntakeProviderConfigController.
+      {
+        path: 'admin/adt-intake-configs',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/adt-intake-config/adt-intake-config.component').then(
+            (m) => m.AdtIntakeConfigComponent,
+          ),
+      },
+
       // DHIS2 ADX export administration (per-hospital config + mappings + manual trigger)
       {
         path: 'admin/integrations/dhis2',
