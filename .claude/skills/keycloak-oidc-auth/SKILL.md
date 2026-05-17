@@ -118,9 +118,57 @@ realm:
 - `scripts/keycloak-migration/` — Python migration tooling
 - `docs/runbooks/keycloak-migration-runbook.md` — full procedure
 - `docs/runbooks/keycloak-cutover-runbook.md` — production cutover
+- `docs/runbooks/keycloak-cutover-sequence.md` — conductor playbook
+  chaining row 18 → 19 → 8(uat) → 8(prod) with soak gates
+  (rolled out on PR #352).
 
 UAT (row 18) and prod (row 19) migrations are still pending; require
 real-env access and a documented soak window.
+
+## Preflight harness (`scripts/keycloak/preflight.sh`)
+
+Wraps every precondition in the migration + cutover runbooks into
+a single command. **Required env vars** (the script fails fast
+without them):
+
+- `HMS_KC_ENV` — `dev` / `uat` / `prod`
+- `OIDC_ISSUER_URI` — e.g. `https://keycloak.uat.example.com/realms/hms`
+
+Optional:
+
+- `HMS_KC_ADMIN_TOKEN` — fires the A1-A3 authenticated checks
+  via `env-sync-verify.sh --full`.
+- `HMS_BACKEND_BASE_URL` — fires the actuator-health probe.
+- `HMS_KC_SMOKE_INBOX_USER` — placeholder for the IMAP roundtrip
+  (manual today).
+
+Runbooks must include both required vars on the example
+invocation:
+
+```bash
+HMS_KC_ENV=uat \
+OIDC_ISSUER_URI=https://keycloak.uat.example.com/realms/hms \
+  ./scripts/keycloak/preflight.sh
+```
+
+Caught on `docs/runbooks/keycloak-cutover-sequence.md` in PR #352
+review.
+
+## Backend context-path: `/api/`
+
+`server.servlet.context-path=/api` is set application-wide. Every
+backend URL — including actuator endpoints — sits under
+`/api/...`:
+
+- Health probe: `${HMS_BACKEND_BASE_URL}/api/actuator/health`
+  (NOT `/actuator/health`)
+- Auth endpoints: `/api/auth/login`, `/api/auth/token/refresh`
+- FHIR: `/api/fhir/*`
+- Super-admin: `/api/super-admin/*`
+
+Smoke scripts and preflight harnesses that probe the bare path
+get 404 against the documented base URL. Caught on
+`scripts/keycloak/preflight.sh` in PR #352 review.
 
 ## Reference files
 

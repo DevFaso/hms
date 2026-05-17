@@ -124,6 +124,61 @@ existing value before adding a new one. Categories:
 When adding a new event type, group it with the matching category in
 the enum file.
 
+### Naming convention: past-tense `_UPDATED`, not `_UPDATE`
+
+The "Care delivery workflow" group uses past-tense for mutation
+events:
+
+- `APPOINTMENT_UPDATED` (not `APPOINTMENT_UPDATE`)
+- `PRESCRIPTION_UPDATED`
+- `LAB_RESULT_UPDATED`
+- `IMAGING_RESULT_UPDATED`
+
+New mutation event types must follow this convention. PR #350
+shipped `ENCOUNTER_UPDATE` (present tense) — it's the open
+follow-on rename in this group. Renaming a constant AFTER it has
+been persisted to audit history is a multi-step migration
+(historical rows still carry the old enum-name string in Splunk
+exports, search filters, and any downstream warehouses), so land
+the rename in a focused PR before the new constant ships in
+production traffic.
+
+### USER-actor audits must carry the user / assignment context
+
+For any endpoint representing **authenticated clinical access**
+(FHIR read / write, DICOM proxy, KPI dashboard, chart-review),
+the `AuditEventRequestDTO` builder MUST include the principal's
+`assignment` (or at minimum `userId` / `userName`). Without those
+fields, `AuditEventLogServiceImpl` resolves the actor as
+`SYSTEM` — which silently mis-attributes clinician access to
+"the system" instead of the actual user, undermining the audit
+trail the endpoint is meant to provide.
+
+Pattern (works because the controller's `@PreAuthorize`
+guarantees an authenticated principal):
+
+```java
+var principal = (HmsPrincipal) SecurityContextHolder.getContext()
+    .getAuthentication().getPrincipal();
+AuditEventRequestDTO request = AuditEventRequestDTO.builder()
+    .eventType(AuditEventType.IMAGING_RESULT_UPDATED)
+    .status(AuditStatus.SUCCESS)
+    .entityType("IMAGING_STUDY")
+    .resourceId(studyUid)
+    .userId(principal.getUserId())
+    .userName(principal.getUsername())
+    .assignment(principal.getActiveAssignment())
+    .eventDescription("DICOM QIDO-RS lookup for study " + studyUid)
+    .build();
+```
+
+SYSTEM-actor writes (MLLP, scheduler, Kafka consumer) stay as-is —
+no principal is available — and supply a hospital snapshot
+explicitly instead.
+
+Caught on `DicomProxyService.emitAudit` in PR #349 (High
+severity).
+
 ### Hospital scope on the audit row
 
 `AuditEventLogService` derives `hospitalName` from `assignment.hospital`
