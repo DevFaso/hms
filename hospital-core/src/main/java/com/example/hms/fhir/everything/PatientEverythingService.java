@@ -15,6 +15,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
@@ -77,6 +78,7 @@ public class PatientEverythingService {
 
     private final FhirOperationsProperties operationsProperties;
     private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository registrationRepository;
     private final EncounterRepository encounterRepository;
     private final PatientVitalSignRepository vitalSignRepository;
     private final LabResultRepository labResultRepository;
@@ -92,6 +94,7 @@ public class PatientEverythingService {
     public PatientEverythingService(
         FhirOperationsProperties operationsProperties,
         PatientRepository patientRepository,
+        PatientHospitalRegistrationRepository registrationRepository,
         EncounterRepository encounterRepository,
         PatientVitalSignRepository vitalSignRepository,
         LabResultRepository labResultRepository,
@@ -106,6 +109,7 @@ public class PatientEverythingService {
     ) {
         this.operationsProperties = operationsProperties;
         this.patientRepository = patientRepository;
+        this.registrationRepository = registrationRepository;
         this.encounterRepository = encounterRepository;
         this.vitalSignRepository = vitalSignRepository;
         this.labResultRepository = labResultRepository;
@@ -139,6 +143,25 @@ public class PatientEverythingService {
                 "Patient/" + patientId + " not found at the active hospital scope.",
                 OperationOutcome.IssueType.NOTFOUND
             ));
+
+        // Tenant gate (PR #352 review — High severity Copilot finding).
+        // PatientRepository.findById is NOT tenant-aware; the per-resource
+        // queries below ARE hospital-scoped, but the Patient resource
+        // itself (name, DOB, address, phone, email — all PHI) would leak
+        // across tenants without this check. The cross-tenant rejection
+        // collapses to "no such patient" so the existence of patients at
+        // other tenants stays invisible — same trust call as the
+        // empi-identity skill's "Never auto-create a Patient from an
+        // unknown EMPI alias".
+        boolean registered = registrationRepository
+            .findByPatientIdAndHospitalId(patientId, hospitalId)
+            .isPresent();
+        if (!registered) {
+            throw notFound(
+                "Patient/" + patientId + " not found at the active hospital scope.",
+                OperationOutcome.IssueType.NOTFOUND
+            );
+        }
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.SEARCHSET);

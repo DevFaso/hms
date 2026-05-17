@@ -2,17 +2,16 @@ package com.example.hms.fhir.bulk;
 
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import com.example.hms.fhir.bulk.FhirBulkExportService.Scope;
 import jakarta.servlet.http.HttpServletResponse;
 import org.hl7.fhir.r4.model.OperationOutcome;
-import org.hl7.fhir.r4.model.Parameters;
 import org.hl7.fhir.r4.model.Patient;
-import org.hl7.fhir.r4.model.StringType;
-import org.hl7.fhir.r4.model.UriType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +52,7 @@ import java.util.List;
 @Component
 public class FhirBulkExportOperationProvider {
 
+    private static final Logger log = LoggerFactory.getLogger(FhirBulkExportOperationProvider.class);
     private static final String CONTENT_LOCATION_HEADER = "Content-Location";
     private static final String STATUS_PATH_PREFIX = "/api/fhir-bulk-status/";
 
@@ -112,12 +112,12 @@ public class FhirBulkExportOperationProvider {
         // implementations return an OperationOutcome or empty body —
         // but emitting the job id makes the foundation pass observable
         // without spec deviation. HAPI's response renderer is not
-        // engaged in manualResponse mode, so we write JSON directly.
+        // engaged in manualResponse mode, so we write JSON directly
+        // (PR #352 Copilot review — dropped the unused
+        // Parameters/StringType/UriType construction that built a
+        // model resource and then discarded it).
         try {
             response.setContentType("application/fhir+json");
-            Parameters params = new Parameters();
-            params.addParameter().setName("jobId").setValue(new StringType(state.getJobId().toString()));
-            params.addParameter().setName("pollUrl").setValue(new UriType(STATUS_PATH_PREFIX + state.getJobId()));
             String body = "{\"resourceType\":\"Parameters\",\"parameter\":["
                 + "{\"name\":\"jobId\",\"valueString\":\"" + state.getJobId() + "\"},"
                 + "{\"name\":\"pollUrl\",\"valueUri\":\"" + STATUS_PATH_PREFIX + state.getJobId() + "\"}"
@@ -127,25 +127,49 @@ public class FhirBulkExportOperationProvider {
         } catch (java.io.IOException ex) {
             // 202 + Content-Location is already on the wire; body emit
             // failure is a logging-only concern.
-            OperationOutcome unused = new OperationOutcome();
-            unused.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.WARNING)
-                .setCode(OperationOutcome.IssueType.PROCESSING)
-                .setDiagnostics("Failed to write kickoff body: " + ex.getMessage());
+            log.warn("Failed to write $export kickoff body for job {}: {}",
+                state.getJobId(), ex.toString());
         }
     }
 
+    /**
+     * Parse the FHIR Bulk Data Access {@code _since} parameter.
+     * Returns {@code null} for blank input (no filter); throws
+     * {@link InvalidRequestException} (HAPI → HTTP 400) for malformed
+     * input. The bulk-data spec requires rejection of malformed
+     * {@code _since} so clients don't believe an incremental window
+     * held when the runner actually fell back to a full export (PR
+     * #352 Copilot review — Medium).
+     */
     private static Instant parseInstant(String raw) {
         if (raw == null || raw.isBlank()) return null;
         try {
             return Instant.parse(raw.trim());
         } catch (RuntimeException ex) {
-            return null;
+            OperationOutcome outcome = new OperationOutcome();
+            outcome.addIssue()
+                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+                .setCode(OperationOutcome.IssueType.VALUE)
+                .setDiagnostics("_since must be an ISO-8601 instant (e.g. 2026-01-01T00:00:00Z); got '"
+                    + raw + "'.");
+            throw new InvalidRequestException(
+                "Invalid _since value: " + raw, outcome
+            );
         }
     }
 
+    /**
+     * Parse the FHIR Bulk Data Access {@code _type} comma-separated
+     * list. Safe form (PR #352 Copilot/Sonar — the previous
+     * {@code split("\s*,\s*")} regex was flagged as
+     * polynomial-backtracking ReDoS): split on the literal comma, then
+     * trim each token and filter empties.
+     */
     private static List<String> parseTypeList(String raw) {
         if (raw == null || raw.isBlank()) return Collections.emptyList();
-        return new ArrayList<>(Arrays.asList(raw.split("\\s*,\\s*")));
+        return Arrays.stream(raw.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .toList();
     }
 }

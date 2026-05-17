@@ -123,8 +123,15 @@ public class FhirBulkExportService {
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
         // Cross-tenant rejection collapses to "no such job" so the
         // existence of jobs belonging to other tenants is invisible.
-        if (state.getHospitalId() != null && hospitalId != null
-            && !state.getHospitalId().equals(hospitalId)) {
+        //
+        // DENY on null context (PR #352 Copilot review — Medium): a
+        // super-admin without an explicit X-Hospital-Id has
+        // activeHospitalId == null. Returning the job in that case
+        // would let any super-admin see any tenant's jobs — the
+        // inverse of the invisible-rejection contract.
+        if (hospitalId == null) return Optional.empty();
+        if (state.getHospitalId() == null
+            || !state.getHospitalId().equals(hospitalId)) {
             return Optional.empty();
         }
         return Optional.of(state);
