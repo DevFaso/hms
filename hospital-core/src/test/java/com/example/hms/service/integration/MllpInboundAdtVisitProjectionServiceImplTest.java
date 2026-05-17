@@ -12,6 +12,7 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AdmissionRepository;
@@ -19,6 +20,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService.VisitProjectionResult;
@@ -55,6 +57,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
@@ -212,17 +215,22 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
-    @DisplayName("Auto-create skipped when trigger is A04 (registration) — A01-only by design")
-    void autoCreateSkippedForA04() {
+    @DisplayName("Auto-create on A04 hits the Encounter branch and only NO_MATCHes when config is absent")
+    void a04ReachesEncounterBranchAndShortCircuitsWithoutConfig() {
+        // A04 no longer terminates at the trigger check — it falls
+        // through to tryAutoCreateEncounter. Without a config row, the
+        // Encounter branch still NO_MATCHes (just via the config-absent
+        // gate instead of the trigger-mismatch gate).
         properties.getAutoCreate().setEnabled(true);
         stubNoMatchOnReconciliation();
+        // intakeConfigRepository returns Optional.empty() by default — no stub needed.
 
         VisitProjectionResult result = service.projectVisit(
             adt("A04", "V-AC-2"), patient, hospital, "REG", "HOSP1", "MSG-AC-2");
 
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
-        verifyNoInteractions(intakeConfigRepository);
         verify(admissionRepository, never()).save(any());
+        verify(encounterRepository, never()).save(any());
     }
 
     @Test
@@ -346,6 +354,126 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verifyNoInteractions(auditEventLogService);
     }
 
+    // ── Row-24 A04 follow-on: Encounter auto-create ─────────────────────
+
+    @Test
+    @DisplayName("A04 auto-create writes Encounter + emits audit when config has default_assignment_id and all hospital invariants hold")
+    void a04HappyPath() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        config.setDefaultAssignmentId(UUID.randomUUID());
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+        UserRoleHospitalAssignment assignment =
+            assignment(config.getDefaultAssignmentId(), hospital);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(eq(config.getDepartmentId())))
+            .thenReturn(Optional.of(department));
+        when(assignmentRepository.findById(eq(config.getDefaultAssignmentId())))
+            .thenReturn(Optional.of(assignment));
+        when(encounterRepository.save(any(Encounter.class)))
+            .thenAnswer(invocation -> {
+                Encounter e = invocation.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A04", "V-A04-OK"), patient, hospital, "REG", "HOSP1", "MSG-A04-OK");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
+        ArgumentCaptor<Encounter> saved = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(saved.capture());
+        Encounter row = saved.getValue();
+        assertThat(row.getPatient()).isEqualTo(patient);
+        assertThat(row.getStaff()).isEqualTo(provider);
+        assertThat(row.getAssignment()).isEqualTo(assignment);
+        assertThat(row.getDepartment()).isEqualTo(department);
+        assertThat(row.getEncounterType()).isEqualTo(config.getDefaultEncounterType());
+        // Hospital stamped from receivingHospital, not from staff or assignment.
+        assertThat(row.getHospital()).isSameAs(hospital);
+        // Reconciliation key — same shape as the Admission path.
+        assertThat(row.getExternalVisitNumber()).isEqualTo("V-A04-OK");
+        assertThat(row.getExternalSendingApplication()).isEqualTo("REG");
+        assertThat(row.getExternalSendingFacility()).isEqualTo("HOSP1");
+        assertThat(row.getExternalMessageControlId()).isEqualTo("MSG-A04-OK");
+
+        ArgumentCaptor<AuditEventRequestDTO> auditCaptor =
+            ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(auditCaptor.capture());
+        AuditEventRequestDTO audit = auditCaptor.getValue();
+        assertThat(audit.getEventType()).isEqualTo(AuditEventType.ENCOUNTER_AUTOCREATED);
+        assertThat(audit.getEntityType()).isEqualTo("ENCOUNTER");
+        assertThat(audit.getResourceId()).isEqualTo(row.getId().toString());
+
+        // Admission path was reached (A01 trigger check failed for A04)
+        // but never wrote a row.
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A04 auto-create skipped when intake config has no default_assignment_id (Encounter requires non-null assignment)")
+    void a04SkippedWhenAssignmentIdMissing() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        // defaultAssignmentId left null — config is otherwise A01-ready.
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A04", "V-A04-NOASS"), patient, hospital, "REG", "HOSP1", "MSG-A04-NOASS");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verifyNoInteractions(registrationRepository);
+        verifyNoInteractions(staffRepository);
+        verifyNoInteractions(assignmentRepository);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A04 auto-create rejected when assignment belongs to a different hospital (defence in depth on Encounter#validate)")
+    void a04RejectedOnWrongTenantAssignment() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        config.setDefaultAssignmentId(UUID.randomUUID());
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment crossTenantAssignment =
+            assignment(config.getDefaultAssignmentId(), otherHospital);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(eq(config.getDepartmentId())))
+            .thenReturn(Optional.of(department));
+        when(assignmentRepository.findById(eq(config.getDefaultAssignmentId())))
+            .thenReturn(Optional.of(crossTenantAssignment));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A04", "V-A04-XT"), patient, hospital, "REG", "HOSP1", "MSG-A04-XT");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(encounterRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
     @Test
     @DisplayName("Auto-create rejected when configured department belongs to a different hospital (PR #358 Copilot High)")
     void autoCreateRejectedOnWrongTenantDepartment() {
@@ -419,6 +547,13 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         d.setId(id);
         d.setHospital(h);
         return d;
+    }
+
+    private UserRoleHospitalAssignment assignment(UUID id, Hospital h) {
+        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+        a.setId(id);
+        a.setHospital(h);
+        return a;
     }
 
     private Staff staffAtOtherHospital(UUID id) {

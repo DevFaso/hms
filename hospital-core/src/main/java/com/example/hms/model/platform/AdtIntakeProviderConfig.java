@@ -87,6 +87,19 @@ public class AdtIntakeProviderConfig extends BaseEntity {
     @Column(name = "department_id")
     private UUID departmentId;
 
+    /**
+     * Nullable. Required only when the hospital enables A04 (Encounter)
+     * auto-create — Encounter's {@code assignment} field is non-null
+     * with a hospital-match invariant ({@code Encounter#validate}), and
+     * ADT doesn't carry an HMS assignment identifier. The service-layer
+     * gate fails closed when the column is null on a hospital that
+     * accepts A04 traffic. Not FK-constrained for the same reason as
+     * {@link #admittingProviderId} — tolerate
+     * {@code security.user_role_hospital_assignment} re-seeds.
+     */
+    @Column(name = "default_assignment_id")
+    private UUID defaultAssignmentId;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "default_admission_type", nullable = false, length = 64)

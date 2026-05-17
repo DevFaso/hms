@@ -10,6 +10,7 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AdmissionRepository;
@@ -17,6 +18,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtVisitProjectionService;
@@ -45,12 +47,18 @@ import org.springframework.util.StringUtils;
  *   <li>{@code platform.adt_intake_provider_configs.enabled} — per-hospital</li>
  * </ol>
  *
- * <p>Auto-create only fires when the trigger event is A01 (admit
- * notification) — A04 (registration) and A08 (update) intentionally
- * stay on the existing reconcile-only path. Adding A04/A08 auto-create
- * is the next named follow-on, because A04 in particular models a
- * registration without an admission and would require an Encounter-only
- * provisioning surface.
+ * <p>Auto-create fires for:
+ * <ul>
+ *   <li>A01 (admit notification) → provisions an Admission</li>
+ *   <li>A04 (patient registration) → provisions an Encounter
+ *       (requires {@code default_assignment_id} populated on the
+ *       intake config, since Encounter has a non-null
+ *       {@code assignment} field with a hospital-match invariant)</li>
+ * </ul>
+ *
+ * <p>A08 (patient update) intentionally stays on the reconcile-only
+ * path — updates with no existing match are visibility-only.
+ * Discharge / transfer triggers are the next named follow-on.
  */
 @Slf4j
 @Service
@@ -59,7 +67,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     implements MllpInboundAdtVisitProjectionService {
 
     private static final String TRIGGER_A01 = "A01";
-    private static final String AUDIT_ENTITY_TYPE = "ADMISSION";
+    private static final String TRIGGER_A04 = "A04";
+    private static final String AUDIT_ENTITY_ADMISSION = "ADMISSION";
+    private static final String AUDIT_ENTITY_ENCOUNTER = "ENCOUNTER";
 
     private final AdmissionRepository admissionRepository;
     private final EncounterRepository encounterRepository;
@@ -70,6 +80,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
+    // Row-24 A04 follow-on additional dependency.
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
 
     /**
@@ -125,6 +137,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         if (reconciled.isPresent()) return reconciled.get();
 
         Optional<VisitProjectionResult> autoCreated = tryAutoCreateAdmission(ctx);
+        if (autoCreated.isPresent()) return autoCreated.get();
+
+        autoCreated = tryAutoCreateEncounter(ctx);
         if (autoCreated.isPresent()) return autoCreated.get();
 
         logUnmatched(ctx);
@@ -314,6 +329,156 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     }
 
     /**
+     * A04 (Encounter-only) auto-create branch. Same three-layer gate
+     * stack as the A01 path, plus:
+     *
+     * <ol>
+     *   <li>Trigger event must be A04</li>
+     *   <li>{@code default_assignment_id} must be populated on the
+     *       intake config row (Encounter requires a non-null
+     *       {@code assignment})</li>
+     *   <li>The resolved {@code Staff}, {@code Department}, and
+     *       {@code UserRoleHospitalAssignment} must all belong to the
+     *       receiving hospital — enforced both by the resolve helpers
+     *       and by {@code Encounter#validate} at write time.</li>
+     * </ol>
+     *
+     * <p>Encounter's {@code @PrePersist} would throw on a mismatched
+     * hospital — service-layer validation is defence-in-depth so the
+     * failure surfaces as a clean WARN + {@code NO_MATCH} instead of
+     * a stack trace in the MLLP worker.
+     */
+    private Optional<VisitProjectionResult> tryAutoCreateEncounter(ProjectionContext ctx) {
+        if (!properties.getAutoCreate().isEnabled()) return Optional.empty();
+        if (!TRIGGER_A04.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
+
+        Optional<AdtIntakeProviderConfig> configOpt =
+            intakeConfigRepository.findByHospital_IdAndEnabledTrue(ctx.hospitalId);
+        if (configOpt.isEmpty()) return Optional.empty();
+        AdtIntakeProviderConfig config = configOpt.get();
+
+        if (config.getDefaultAssignmentId() == null) {
+            // Hospital opted into auto-create cluster-wide but didn't
+            // populate the assignment column required for A04. Visible
+            // soak signal: "you've enabled the path, populate the column."
+            log.warn("ADT A04 auto-create skipped — intake config for hospital {} has no default_assignment_id (required for Encounter.assignment)",
+                ctx.hospitalId);
+            return Optional.empty();
+        }
+
+        if (!registrationRepository.isPatientRegisteredInHospitalFixed(
+            ctx.patient.getId(), ctx.hospitalId)) {
+            log.warn("ADT A04 auto-create skipped — patient {} not actively registered at hospital {} (cross-tenant gate)",
+                ctx.patient.getId(), ctx.hospitalId);
+            return Optional.empty();
+        }
+
+        Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
+        if (providerOpt.isEmpty()) return Optional.empty();
+        Staff provider = providerOpt.get();
+
+        Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
+        if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
+            return Optional.empty();
+        }
+        Department department = departmentOpt.orElse(null);
+
+        Optional<UserRoleHospitalAssignment> assignmentOpt =
+            resolveAssignment(config, ctx.hospitalId);
+        if (assignmentOpt.isEmpty()) return Optional.empty();
+
+        Encounter encounter = buildEncounter(ctx, config, provider, department, assignmentOpt.get());
+        encounter = encounterRepository.save(encounter);
+        emitEncounterAutoCreateAudit(encounter, ctx);
+
+        log.info("ADT A04 auto-created encounter={} visit={} sender={}/{} hospital={} patient={} staff={} msgCtrlId={}",
+            encounter.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+            ctx.patient.getId(), provider.getId(), ctx.controlId);
+        return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
+    }
+
+    /**
+     * Resolve {@link UserRoleHospitalAssignment} and enforce the
+     * cross-tenant invariant. Mirrors {@link #resolveProvider} /
+     * {@link #resolveDepartment} — defence in depth on top of
+     * {@code Encounter#validate}.
+     */
+    private Optional<UserRoleHospitalAssignment> resolveAssignment(
+        AdtIntakeProviderConfig config, UUID hospitalId
+    ) {
+        Optional<UserRoleHospitalAssignment> opt =
+            assignmentRepository.findById(config.getDefaultAssignmentId());
+        if (opt.isEmpty()) {
+            log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} in intake config for hospital {} not found in security.user_role_hospital_assignment",
+                config.getDefaultAssignmentId(), hospitalId);
+            return Optional.empty();
+        }
+        UserRoleHospitalAssignment assignment = opt.get();
+        if (assignment.getHospital() == null
+            || !hospitalId.equals(assignment.getHospital().getId())) {
+            log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
+                assignment.getId(),
+                assignment.getHospital() != null ? assignment.getHospital().getId() : "<null>",
+                hospitalId);
+            return Optional.empty();
+        }
+        return Optional.of(assignment);
+    }
+
+    private Encounter buildEncounter(
+        ProjectionContext ctx,
+        AdtIntakeProviderConfig config,
+        Staff provider,
+        Department department,
+        UserRoleHospitalAssignment assignment
+    ) {
+        Encounter encounter = new Encounter();
+        encounter.setPatient(ctx.patient);
+        // Same load-bearing decision as buildAdmission — stamp the
+        // receiving hospital directly. Encounter#validate verifies
+        // staff/assignment/department all match this hospital.
+        encounter.setHospital(ctx.receivingHospital);
+        encounter.setStaff(provider);
+        encounter.setAssignment(assignment);
+        encounter.setDepartment(department);
+        encounter.setEncounterType(config.getDefaultEncounterType());
+        encounter.setChiefComplaint(config.getDefaultChiefComplaint());
+        encounter.setEncounterDate(
+            ctx.parsed.admitDateTime() != null ? ctx.parsed.admitDateTime() : LocalDateTime.now());
+        // Reconciliation key — same shape as Admission so the next ADT
+        // update (typically an A08) routes back to this row.
+        encounter.setExternalVisitNumber(ctx.visitNumber);
+        encounter.setExternalSendingApplication(ctx.app);
+        encounter.setExternalSendingFacility(ctx.fac);
+        encounter.setExternalMessageControlId(ctx.controlId);
+        return encounter;
+    }
+
+    /**
+     * Emit the ENCOUNTER_AUTOCREATED audit row. Same try/catch +
+     * warn-on-failure pattern as the admission emitter — audit must
+     * never roll back the clinical write.
+     */
+    private void emitEncounterAutoCreateAudit(Encounter encounter, ProjectionContext ctx) {
+        try {
+            AuditEventRequestDTO request = AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.ENCOUNTER_AUTOCREATED)
+                .status(AuditStatus.SUCCESS)
+                .entityType(AUDIT_ENTITY_ENCOUNTER)
+                .resourceId(encounter.getId().toString())
+                .eventDescription(String.format(
+                    "ADT^A04 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
+                    ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
+                    ctx.patient.getId(), ctx.controlId))
+                .build();
+            auditEventLogService.logEvent(request);
+        } catch (RuntimeException ex) {
+            log.warn("audit emission failed for ADT A04 auto-create of encounter {}: {}",
+                encounter.getId(), ex.toString());
+        }
+    }
+
+    /**
      * Emit the ADMISSION_AUTOCREATED audit row. Wrapped in try/catch
      * with warn-on-failure per the hl7-mllp-integration skill rule —
      * audit must never roll back the clinical write.
@@ -323,7 +488,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             AuditEventRequestDTO request = AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.ADMISSION_AUTOCREATED)
                 .status(AuditStatus.SUCCESS)
-                .entityType(AUDIT_ENTITY_TYPE)
+                .entityType(AUDIT_ENTITY_ADMISSION)
                 .resourceId(admission.getId().toString())
                 .eventDescription(String.format(
                     "ADT^A01 auto-create — visit=%s sender=%s/%s hospital=%s patient=%s msgCtrlId=%s",
