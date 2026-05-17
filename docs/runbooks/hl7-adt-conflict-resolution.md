@@ -18,25 +18,88 @@ or registration system claims state HMS disagrees with.
 The reconciliation behaviour described here is **disabled by default**.
 Set both of the following to turn it on:
 
-| Env / property                            | Default | Effect when `true`                                                                 |
-| ----------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
-| `APP_HL7_MLLP_ENABLED`                    | `false` | MLLP TCP listener accepts inbound traffic at all (existing v1.1 flag).             |
-| `APP_HL7_ADT_VISIT_SYNC_ENABLED`          | `false` | Visit-sync projection runs after the demographic upsert (this roadmap row).        |
-| `APP_HL7_ADT_VISIT_SYNC_LOG_UNMATCHED`    | `true`  | Emit a `WARN` for inbound visit numbers that don't match any HMS Admission/Encounter. |
+| Env / property                               | Default | Effect when `true`                                                                    |
+| -------------------------------------------- | ------- | ------------------------------------------------------------------------------------- |
+| `APP_HL7_MLLP_ENABLED`                       | `false` | MLLP TCP listener accepts inbound traffic at all (existing v1.1 flag).                |
+| `APP_HL7_ADT_VISIT_SYNC_ENABLED`             | `false` | Visit-sync projection runs after the demographic upsert (this roadmap row).           |
+| `APP_HL7_ADT_VISIT_SYNC_LOG_UNMATCHED`       | `true`  | Emit a `WARN` for inbound visit numbers that don't match any HMS Admission/Encounter. |
+| `APP_HL7_ADT_VISIT_SYNC_AUTO_CREATE_ENABLED` | `false` | Cluster-wide A01 auto-create (row-24 follow-on). Three-layer gate; see below.         |
 
-When `APP_HL7_ADT_VISIT_SYNC_ENABLED=false` the pre-row-24 demographics-only
-flow is bit-for-bit unchanged. **The schema change in `V99` is strictly
-additive** (nullable columns + partial unique indexes) and runs whether
-or not the flag is on.
+**Three-layer gate for the row-24 auto-create follow-on.** All three
+must be true for the projection service to actually provision an
+Admission on an A01 with an unmatched visit-number triplet:
+
+1. `APP_HL7_ADT_VISIT_SYNC_ENABLED=true` — master ADT projection on.
+2. `APP_HL7_ADT_VISIT_SYNC_AUTO_CREATE_ENABLED=true` — cluster-wide
+   auto-create on.
+3. `platform.adt_intake_provider_configs.enabled = true` for the
+   receiving hospital row — per-tenant opt-in.
+
+Any single layer flipping off short-circuits back to the existing
+`NO_MATCH` log-and-skip flow. Operators can stage a rollout one
+hospital at a time by leaving layers 1+2 on cluster-wide and
+flipping layer 3 per hospital.
+
+When `APP_HL7_ADT_VISIT_SYNC_ENABLED=false` the pre-row-24
+demographics-only flow is bit-for-bit unchanged. **The schema
+changes in `V99` and `V103` are strictly additive** (nullable
+columns + partial unique indexes + new config table) and run
+whether or not any flag is on.
+
+### Per-hospital intake config
+
+Populate one row per hospital that should auto-create from ADT:
+
+```sql
+INSERT INTO platform.adt_intake_provider_configs (
+    id, hospital_id, admitting_provider_id, department_id,
+    default_admission_type, default_acuity_level,
+    default_encounter_type, default_chief_complaint, enabled
+) VALUES (
+    gen_random_uuid(),
+    '<hospital-uuid>',
+    '<staff-uuid — provider on duty for ADT-driven intake>',
+    '<department-uuid OR NULL>',
+    'EMERGENCY',        -- one of: EMERGENCY, ELECTIVE, URGENT, OBSERVATION, ...
+    'LEVEL_2_MODERATE', -- one of: LEVEL_1_MINIMAL, LEVEL_2_MODERATE, LEVEL_3_MAJOR, LEVEL_4_SEVERE, LEVEL_5_CRITICAL
+    'INPATIENT',        -- one of: CONSULTATION, INPATIENT, EMERGENCY, FOLLOW_UP, ...
+    'Auto-created from ADT^A01',
+    true
+);
+```
+
+The `admitting_provider_id` and `department_id` are stored as raw
+UUIDs (no DB FK) so an operator can rebuild `hospital.staff` or
+`hospital.departments` without dropping the config. The
+application-layer lookup dereferences them on each auto-create
+and rejects gracefully (`NO_MATCH` + WARN line) when a referent
+is missing — there's no half-populated Admission failure mode.
 
 ---
 
+## Status — 2026-05-17
+
+| Phase | Status | Branch |
+| --- | --- | --- |
+| Foundation pass — reconcile-only | ✅ Shipped | `feat/v1.1-adt-admission-encounter-sync` (V99) |
+| Follow-on (this revision) — A01 Admission auto-create | ✅ Shipped | `feat/v1.1-adt-auto-create` (V103) |
+| Follow-on — A04 Encounter-only auto-create | ⏳ Next | Needs Encounter `staff` + `assignment` invariant resolved |
+| Follow-on — discharge / transfer triggers | ⏳ Next | Builds on A01 auto-create |
+
+The auto-create path ships behind the three-layer flag stack
+described under "Activation gate". With auto-create off (the
+production default) the runbook below behaves exactly as the
+foundation pass did.
+
 ## Foundation-pass scope
 
-This release is the **foundation pass**. It reconciles inbound ADT
-messages to existing Admission / Encounter rows by the HL7 visit-number
-key. It does **NOT** auto-create new Admissions or Encounters from ADT,
-because:
+The foundation pass reconciles inbound ADT messages to existing
+Admission / Encounter rows by the HL7 visit-number key. The
+auto-create follow-on (this revision) extends that with an
+**A01-only** Admission provisioning path. It does **NOT** yet
+auto-create Encounters — Encounter requires `staff` + `assignment`
+whose `hospital` matches, and that design problem is the next
+follow-on. The foundation-pass constraints listed below still apply:
 
 1. `Encounter` requires `staff` and `assignment` whose `hospital`
    matches the encounter hospital (enforced in `Encounter#validate`).
@@ -70,15 +133,42 @@ auto-provisioning would either invent a SYSTEM-actor placeholder staff
   Admission match, Encounter match, no match, projection bean failure
   does not affect demographic ACK.
 
-**What follow-on PRs deliver:**
+**What the row-24 follow-on (this revision) ships:**
 
-- Per-hospital intake-provider config (`hospital_intake_provider` table
-  or equivalent) — the resolved Staff used when an ADT-driven Admission
-  or Encounter has to be created from scratch.
-- Actual auto-create paths for A01 (Admission), A04 (Encounter), and
-  the discharge / transfer trigger events.
-- An admin UI to manually link an existing in-app Admission/Encounter
-  to an inbound visit number when the auto-resolution cannot.
+- `V103` migration: `platform.adt_intake_provider_configs` (one row
+  per hospital) with `admitting_provider_id`, `department_id`,
+  `default_admission_type`, `default_acuity_level`,
+  `default_encounter_type`, `default_chief_complaint`, and a
+  per-hospital `enabled` opt-in column. Hard FK on `hospital_id`;
+  provider/department UUIDs are app-layer-validated to tolerate
+  staff/dept re-seeds.
+- `AdtIntakeProviderConfig` entity + repository.
+- `AdtVisitSyncProperties.AutoCreate.enabled` sub-flag
+  (`app.hl7.adt.visit-sync.auto-create.enabled`, default `false`).
+- Auto-create branch in `MllpInboundAdtVisitProjectionService`:
+  on an unmatched A01 with all three gate layers on, builds an
+  `Admission` from the per-hospital config defaults, stamps the
+  V99 reconciliation key, emits `AuditEventType.ADMISSION_AUTOCREATED`,
+  returns `VisitProjectionResult.ADMISSION_AUTOCREATED`.
+- Cross-tenant gate via `PatientHospitalRegistration` — patient
+  must be actively registered at the receiving hospital.
+- 5 new unit tests covering: sub-flag-off no-op, A04 no-op,
+  missing intake-config no-op, cross-tenant rejection, and the
+  full happy path (verifies the Admission fields + audit emission).
+
+**What still remains for follow-on PRs:**
+
+- A04 (Encounter-only) auto-create path. Encounter has a stricter
+  validation invariant (`staff.hospital == encounter.hospital`,
+  same for `assignment`) which needs its own design decision —
+  do we pre-populate the assignment from intake config, or do we
+  defer A04 auto-create until a stub-assignment model lands?
+- Discharge / transfer trigger events.
+- An admin UI to populate the intake-config table per hospital
+  (currently a DB-only surface).
+- An admin UI to manually link an existing in-app
+  Admission/Encounter to an inbound visit number when the
+  auto-resolution cannot.
 
 ---
 
