@@ -28,7 +28,7 @@ class EmpiProbabilisticControllerIT {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("POST /api/empi/candidates returns 401 or 404 when flag off")
+    @DisplayName("POST /api/empi/candidates returns 401, 403, or 404 when flag off")
     void candidatesRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);

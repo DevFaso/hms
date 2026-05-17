@@ -1,5 +1,6 @@
 package com.example.hms.imaging.dicom;
 
+import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +25,11 @@ class DicomProxyServiceTest {
     void setUp() {
         properties = new DicomProxyProperties();
         auditService = mock(AuditEventLogService.class);
-        service = new DicomProxyService(properties, auditService);
+        // userRepository is mocked because SecurityUtils.getCurrentUsername()
+        // returns null in this no-context unit test — the audit emission
+        // path short-circuits before any repository call, so the mock
+        // never sees a method invocation.
+        service = new DicomProxyService(properties, auditService, mock(UserRepository.class));
     }
 
     @Test

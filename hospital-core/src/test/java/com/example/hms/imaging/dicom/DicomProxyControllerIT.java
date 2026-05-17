@@ -27,7 +27,7 @@ class DicomProxyControllerIT {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("GET /api/imaging/dicom/{studyUid}/instances returns 401 or 404 when flag off")
+    @DisplayName("GET /api/imaging/dicom/{studyUid}/instances returns 401, 403, or 404 when flag off")
     void instancesRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/json");

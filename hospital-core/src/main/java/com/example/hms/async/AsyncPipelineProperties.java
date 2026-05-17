@@ -12,9 +12,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * (ORU^R01 → LabResult persistence) — the producer plug-in only
  * makes sense once row 23 has soaked against real analyzer traffic.
  *
- * <p>The foundation pass ships only the property + a placeholder
- * consumer wiring class; the actual {@code @KafkaListener} bodies +
- * topic provisioning + DLQ semantics are the named row-36 follow-on.
+ * <p>The foundation pass ships only this configuration-properties
+ * class and the feature flag. The Kafka consumer wiring,
+ * {@code @KafkaListener} bodies, producer-side branches in
+ * {@code MllpInboundLabServiceImpl} / {@code DispenseServiceImpl},
+ * topic provisioning, and DLQ semantics are all the named row-36
+ * follow-on. (Javadoc accuracy fix from PR #349 Copilot review —
+ * the earlier wording referenced a "placeholder consumer wiring
+ * class" that does not exist yet.)
  */
 @ConfigurationProperties(prefix = "app.async.pipeline")
 public class AsyncPipelineProperties {

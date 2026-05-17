@@ -2,7 +2,10 @@ package com.example.hms.imaging.dicom;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,13 +34,16 @@ public class DicomProxyService {
 
     private final DicomProxyProperties properties;
     private final AuditEventLogService auditEventLogService;
+    private final UserRepository userRepository;
 
     public DicomProxyService(
         DicomProxyProperties properties,
-        AuditEventLogService auditEventLogService
+        AuditEventLogService auditEventLogService,
+        UserRepository userRepository
     ) {
         this.properties = properties;
         this.auditEventLogService = auditEventLogService;
+        this.userRepository = userRepository;
     }
 
     public boolean isEnabled() {
@@ -69,16 +75,37 @@ public class DicomProxyService {
 
     private void emitAudit(String studyUid, String description) {
         try {
+            User caller = currentUserOrNull();
             AuditEventRequestDTO request = AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.IMAGING_RESULT_UPDATED)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
                 .resourceId(studyUid)
+                .userId(caller != null ? caller.getId() : null)
+                .userName(caller != null ? caller.getUsername() : null)
                 .eventDescription(description)
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
             log.warn("audit emission failed for DICOM proxy study {}: {}", studyUid, ex.toString());
         }
+    }
+
+    /**
+     * Resolve the authenticated user so the audit row is attributed
+     * to the clinician, not to SYSTEM. Without this, the
+     * {@link AuditEventLogService} resolves the actor as SYSTEM
+     * because the request DTO has no userId / userName — caught on
+     * PR #349 Copilot review (High severity).
+     *
+     * <p>Returns {@code null} for non-authenticated callers (the
+     * controller's {@code @PreAuthorize} should prevent this, but
+     * we keep the audit emission resilient so a security-context
+     * misconfiguration cannot break the clinical read path).
+     */
+    private User currentUserOrNull() {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null || username.isBlank()) return null;
+        return userRepository.findByUsernameIgnoreCase(username).orElse(null);
     }
 }
