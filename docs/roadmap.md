@@ -9,7 +9,51 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
   auto-filter, color-coded horizons + statuses) for stakeholders who prefer Excel /
   Numbers / Sheets. Generated from the CSV; do not hand-edit — re-export instead.
 
-Last updated: **2026-05-16**. Update both files together when scope moves.
+Last updated: **2026-05-17**. Update both files together when scope moves.
+
+> **2026-05-17 update — archive batch: rows 28-31, 34, 40 flipped to
+> `deferred`.** Six rows that had no near-term driver are archived in
+> one bundled roadmap-sync PR — none of them blocks v1.0 GA or the
+> active v1.1 / v2.0 foundation passes, and keeping them on the
+> active backlog was hiding the actual pickable surface. Rows stay
+> in place per the deferred convention; horizon moves to the next
+> bucket so the v1.1 / v2.0 backlog reflects what a contributor can
+> realistically pull next. None of these are dropped — each row
+> documents the explicit unblock condition under which it becomes
+> pickable again.
+>
+> - **Rows 28, 29, 30, 31 (Mobile cluster)** — horizon `v1.1 → v2.0`.
+>   Patient mobile parity (Android + iOS), push notifications for
+>   lab results, and mobile test coverage uplift all share the same
+>   mobile-team domain and tooling. No mobile contributor is heads-
+>   down on v1.1 today; the four rows naturally cluster as the next
+>   batch once one picks them up. Row 30 has a hard CSV dependency
+>   on rows 28/29 (`Mobile parity`) and moves with them. Row 31
+>   has no listed dependency — it's clustered for shared team /
+>   tooling efficiency, not a dependency-graph gate.
+> - **Row 34 (Tenant onboarding pipeline)** — horizon `v2.0 → oos`.
+>   Depends on row 33 (`Schema-per-tenant migration path`, currently
+>   `started` after its foundation pass) being substantially further
+>   along — `scripts/tenancy/provision-schema.sh`,
+>   `scripts/tenancy/copy-rows.sh`, the cache-invalidation REST
+>   endpoint, and the first end-to-end UAT cutover are still
+>   outstanding. Lane and effort preserved on the row so when row 33
+>   completes, the onboarding pipeline scope is unchanged.
+> - **Row 40 (EMPI v1, cross-tenant)** — horizon `v2.0 → oos`.
+>   Depends on row 25 (`EMPI v0, intra-tenant`). PR 3 unblocks the
+>   v0 scorer follow-on, but the cross-tenant national-ID keying +
+>   FHIR `Consent` surface is still substantial work that won't
+>   start until v0 lands and soaks. Revisit once EMPI v0 is
+>   `completed`, not just `started`.
+>
+> Active backlog after this archive (and after merging the
+> intervening 2026-05-16 evening batches into the branch): 22 rows
+> all at `started` (no row remains `not-started` — every active
+> deliverable now sits on a foundation pass with named follow-on).
+> Started rows: 8, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 32, 33,
+> 35, 36, 37, 38, 39, 41, 42, 43, 44. No row is `completed` purely
+> from a foundation pass — `started → completed` requires the row's
+> exit criteria AND no remaining roadmap-listed follow-on.
 
 > **2026-05-16 update (v2.0 foundation batch) — rows 25 + 36 + 39 +
 > 41 + 42 flip to `started`.** Shipped on
