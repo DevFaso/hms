@@ -1,0 +1,172 @@
+# grafana/prometheus-multigeo.example.yml
+#
+# Roadmap row 43 follow-on — Option A: Blackbox-exporter in three cloud
+# regions. This file is a TEMPLATE — copy it to the region-specific
+# Prometheus instance's prometheus.yml and substitute the four
+# placeholders before deploying.
+#
+# IMPORTANT — Prometheus does NOT auto-expand ${...} placeholders.
+# Stock Prometheus only resolves $(ENV_VAR) for a small set of string
+# fields (and only with the `--enable-feature=expand-external-labels`
+# flag for external_labels), and does NOT understand the ${VAR} /
+# envsubst shape. The four placeholders below MUST be substituted
+# BEFORE Prometheus loads the file. Either:
+#
+#     envsubst < prometheus-multigeo.example.yml > prometheus.yml
+#
+# (after exporting the four variables in the shell), or run an
+# explicit sed pass in your container entrypoint / CI step:
+#
+#     sed -e "s|\${GEO_LABEL}|aws-eu-west-1|g" \
+#         -e "s|\${BLACKBOX_HOST}|blackbox-eu-west-1.local:9115|g" \
+#         -e "s|\${HMS_PUBLIC_BASE_URL}|https://api.hms.bitnesttechs.com|g" \
+#         -e "s|\${MIMIR_REMOTE_WRITE_URL}|https://mimir.tenant/api/v1/push|g" \
+#         prometheus-multigeo.example.yml > prometheus.yml
+#
+# If you point Prometheus at this file as-is it WILL load (the YAML
+# parses) but it WILL probe literally `${HMS_PUBLIC_BASE_URL}/api/...`,
+# every probe will fail, and the geo label series will all carry the
+# literal string `${GEO_LABEL}` instead of a region identifier.
+#
+# How to use:
+#   1. Stand up Blackbox-exporter in each region (AWS eu-west-1,
+#      AWS us-east-1, OVH Africa / AWS af-south-1). Each region runs a
+#      Prometheus next to the exporter.
+#   2. Copy this file to that region's prometheus instance and
+#      sed/envsubst-replace the four placeholders:
+#        ${GEO_LABEL}             — e.g. "aws-eu-west-1"
+#        ${BLACKBOX_HOST}         — e.g. "blackbox-eu-west-1.local:9115"
+#        ${HMS_PUBLIC_BASE_URL}   — e.g. "https://api.hms.bitnesttechs.com"
+#        ${MIMIR_REMOTE_WRITE_URL} — Grafana Cloud Mimir push endpoint
+#   3. Remote-write to the same Grafana Cloud Mimir tenant from every
+#      region so the HmsSyntheticProbeFailureRate alert evaluates
+#      across geos.
+#   4. Confirm the per-geo split is visible in Grafana with
+#      `sum by (geo) (rate(probe_success[5m]))` — three series should
+#      appear.
+#
+# Why three regions: the HmsSyntheticProbeAllGeosFailing alert fires
+# only when EVERY geo reports zero — that requires three distinct
+# vantage points to distinguish a global outage from a single-region
+# network blip. AWS-only is fine for v2.0; replace one region with
+# OVH Dakar bare-metal when ECOWAS data-residency lands (row 39).
+#
+# Per-region external_labels.geo is what the alert aggregation keys
+# off — DO NOT replace this with a metric label rewrite at the
+# remote_write side, the alert rule joins on the external label.
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: hms-synthetic
+    environment: prod
+    geo: ${GEO_LABEL}
+
+remote_write:
+  - url: ${MIMIR_REMOTE_WRITE_URL}
+    # Keep this region's identity on every series. Mimir's tenant
+    # federation drops `__replica__` but preserves external_labels.
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'probe_.*|up'
+        action: keep
+
+scrape_configs:
+
+  - job_name: 'blackbox_http'
+    metrics_path: /probe
+    scrape_interval: 30s
+    scrape_timeout: 15s
+    params:
+      module: [http_health_2xx]
+    static_configs:
+      - targets:
+          - ${HMS_PUBLIC_BASE_URL}/api/actuator/health/liveness
+          - ${HMS_PUBLIC_BASE_URL}/api/actuator/health/readiness
+        labels:
+          probe_module: 'http_health_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ${BLACKBOX_HOST}
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+      # NOTE: geo label comes from external_labels above so it survives
+      # remote_write. If you also stamp it here, it would be overridden
+      # by external_labels at write time anyway — keep one source of
+      # truth.
+
+  - job_name: 'blackbox_fhir_metadata'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_fhir_metadata_2xx]
+    static_configs:
+      - targets:
+          - ${HMS_PUBLIC_BASE_URL}/api/fhir/metadata
+        labels:
+          probe_module: 'http_fhir_metadata_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ${BLACKBOX_HOST}
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+
+  - job_name: 'blackbox_smart_config'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_smart_2xx]
+    static_configs:
+      - targets:
+          - ${HMS_PUBLIC_BASE_URL}/api/fhir/.well-known/smart-configuration
+        labels:
+          probe_module: 'http_smart_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ${BLACKBOX_HOST}
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'
+
+  - job_name: 'blackbox_cds_discovery'
+    metrics_path: /probe
+    scrape_interval: 60s
+    scrape_timeout: 15s
+    params:
+      module: [http_cds_discovery_2xx]
+    static_configs:
+      - targets:
+          - ${HMS_PUBLIC_BASE_URL}/api/cds-services
+        labels:
+          probe_module: 'http_cds_discovery_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ${BLACKBOX_HOST}
+      - target_label: application
+        replacement: 'hms'
+      - target_label: service
+        replacement: 'synthetic'

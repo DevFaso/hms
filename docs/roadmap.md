@@ -11,6 +11,64 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-17**. Update both files together when scope moves.
 
+> **2026-05-17 update — rows 35 + 43 follow-on shipped on
+> `feat/v2.0-row-35-43-readreplica-healthindicator-synthetic-multigeo`.**
+> Both rows stay `started`; foundation passes shipped earlier (PR #334
+> for row 35, PR #342 for row 43). This pass closes the named
+> follow-ons that don't depend on external infra provisioning.
+>
+> - **Row 35 (Read replicas + Hikari tuning)** —
+>   `ReadReplicaHealthIndicator` consolidates routing wiring + the
+>   `Route` the wrapper picks for a `@Transactional(readOnly = true)`
+>   query + per-call replica freshness
+>   (`pg_is_in_recovery()` + `pg_last_xact_replay_timestamp()` +
+>   `EXTRACT(EPOCH FROM now() - last_replay)` against the replica
+>   pool directly) into a single
+>   `/api/actuator/health/readReplica` payload. Reports `DOWN` iff
+>   the flag intent disagrees with the wired bean graph — the
+>   wiring-drift signal a Grafana dashboard alone won't catch.
+>   `scripts/db/replica-preflight.sh` runs six checks before the
+>   operator flips `APP_DATASOURCE_REPLICA_ENABLED=true` — the
+>   load-bearing one is `pg_is_in_recovery()=true` because
+>   pointing the replica DSN at the primary by accident is one of
+>   the fastest data-corruption paths in the cutover. 5 new unit
+>   tests on `ReadReplicaHealthIndicatorTest` pin flag-off baseline +
+>   wiring-drift DOWN + READ happy + lenient-fallback WRITE +
+>   probe-failure DOWN. Runbook
+>   [`docs/runbooks/postgres-pool-replica-sizing.md`](./runbooks/postgres-pool-replica-sizing.md)
+>   updated with the new endpoint + script under Activation playbook
+>   step 3 + step 6. Row stays `started` until a hosted environment
+>   actually runs the 5-business-day UAT soak — replica provisioning
+>   is operational.
+> - **Row 43 (Synthetic monitoring multi-geo)** — deployable
+>   templates for both options in the runbook's "pick A or B"
+>   matrix. Option A:
+>   [`grafana/prometheus-multigeo.example.yml`](../grafana/prometheus-multigeo.example.yml)
+>   — per-region copy of the in-cluster Prometheus with four
+>   substitutable placeholders (geo label, blackbox host,
+>   public base URL, Mimir push URL); remote_writes to a shared
+>   Mimir tenant so existing alert rules fire across geos
+>   unchanged. Option B:
+>   [`scripts/perf/synthetic-canary-k6.js`](../scripts/perf/synthetic-canary-k6.js)
+>   — k6 cloud canary distinct from `dispense-baseline.js`
+>   (1 VU per zone, 5 min, no auth, no PHI), distribution block
+>   targets `amazon:us:ashburn` + `amazon:eu:dublin` +
+>   `amazon:af:cape-town`; emits `probe_success` + `probe_duration_seconds`
+>   under the same labels Option A uses so alert rules fire on
+>   identical series shapes. Runbook
+>   [`docs/runbooks/synthetic-monitoring.md`](./runbooks/synthetic-monitoring.md)
+>   rewritten with concrete deployable references for both options,
+>   plus a Choosing-between-A-and-B trade-off matrix. Row stays
+>   `started` until a hosted environment actually deploys one of
+>   the two — cloud-account provisioning is operational.
+>
+> The remaining "started" rows with no near-term foundation-pass PR
+> (23 ORU soak, 26 seed-expand, 27 sandbox-conformance, 37 SOC 2,
+> 38 HIPAA P0 controls) gate on external work — real analyzer
+> traffic, prod usage data, partner sandbox accounts, auditor
+> engagement — and don't have a meaningful next code drop until
+> that external dependency moves.
+
 > **2026-05-17 update — row 24 lifecycle triggers + admin UI shipped
 > on `feat/v1.1-adt-discharge-transfer-and-intake-admin-ui`.** Row 24
 > stays `started`; foundation pass + A01/A04 auto-create + per-hospital
