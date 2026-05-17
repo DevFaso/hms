@@ -45,9 +45,12 @@ Last updated: **2026-05-17**. Update both files together when scope moves.
 >   start until v0 lands and soaks. Revisit once EMPI v0 is
 >   `completed`, not just `started`.
 >
-> Six rows left on the active backlog after this archive (rows 8,
-> 18, 19, 21, 22, 25, 36, 39, 41, 42, 44 remain `not-started`; rows
-> 20, 23, 24, 26, 27, 32, 33, 35, 37, 38, 43 remain `started`).
+> Active backlog after this archive: 22 rows — 11 `not-started`
+> (rows 8, 18, 19, 21, 22, 25, 36, 39, 41, 42, 44) and 11 `started`
+> on foundation passes with named follow-on (rows 20, 23, 24, 26,
+> 27, 32, 33, 35, 37, 38, 43). No row is `completed` purely from a
+> foundation pass — `started → completed` requires the row's exit
+> criteria AND no remaining roadmap-listed follow-on.
 
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
