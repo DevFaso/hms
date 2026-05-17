@@ -451,101 +451,60 @@ Files touched in the follow-up:
 
 ---
 
-## Copilot review — PR A04 (`feat/v1.1-adt-auto-create-encounter`) round 1 (2026-05-17)
+## Copilot review — PR A04 (`feat/v1.1-adt-auto-create-encounter`) round 2 (2026-05-17)
 
-### Fixed #20 — SonarQube Quality Gate: 4.7% duplication on new code (> 3% gate)
+### Fixed #22 — SonarQube Critical: duplicate `"<null>"` literal 3 times
 
 **File:** `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
 
-**Sonar:** "4.7% Duplication on New Code (required ≤ 3%)". The
-projection service file alone was at 9.2% (16 duplicated lines) —
-SonarQube quantifies the gate failure per file as well as the
-overall %, so the cluster came from one place.
+**Sonar:** "Define a constant instead of duplicating this literal
+`<null>` 3 times" (L280, Code Smell, Critical, 8min effort).
 
-**Root cause:** `tryAutoCreateAdmission` and `tryAutoCreateEncounter`
-each contained the same ~10-line gate-and-resolve preamble:
+**Root cause:** the three `resolve*` helpers (`resolveProvider`,
+`resolveDepartment`, `resolveAssignment` — added across PRs #358
+and A04) each log a cross-tenant warning that renders
+{@code provider.getHospital() == null ? "<null>" : ...}. Same
+three-occurrence threshold that bit the row-32 PR (`fromInclusive`
+in `setParameter` calls).
 
-```java
-if (!properties.getAutoCreate().isEnabled()) return Optional.empty();
-// (different trigger-event check per method)
-Optional<AdtIntakeProviderConfig> configOpt =
-    intakeConfigRepository.findByHospital_IdAndEnabledTrue(ctx.hospitalId);
-if (configOpt.isEmpty()) return Optional.empty();
-AdtIntakeProviderConfig config = configOpt.get();
-if (!registrationRepository.isPatientRegisteredInHospitalFixed(
-    ctx.patient.getId(), ctx.hospitalId)) {
-    log.warn(...); return Optional.empty();
-}
-Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
-if (providerOpt.isEmpty()) return Optional.empty();
-Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
-if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
-    return Optional.empty();
-}
-```
+**Resolution:** Extracted
+`private static final String NULL_HOSPITAL_PLACEHOLDER = "<null>"`
+near the other class constants (`TRIGGER_A01`, `AUDIT_ENTITY_*`).
+Javadoc explains *why* the placeholder exists (rare data-rebuild
+case where a referent's `hospital` FK is unset).
 
-The two methods diverged only on the trigger-event check and on the
-type-specific write path.
-
-**Resolution:** Extracted a `resolveAutoCreateContext(ctx)` helper
-that does the full shared gate stack and returns an
-`Optional<AutoCreateContext>` carrying the resolved `(config,
-provider, department)` tuple. Both type-specific methods now start
-with their trigger-event check, call the shared resolver, and then
-do their own write path:
-
-```java
-private Optional<VisitProjectionResult> tryAutoCreateAdmission(ProjectionContext ctx) {
-    if (!TRIGGER_A01.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
-    Optional<AutoCreateContext> resolved = resolveAutoCreateContext(ctx);
-    if (resolved.isEmpty()) return Optional.empty();
-    AutoCreateContext ac = resolved.get();
-    Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
-    // ... save + audit + log
-}
-```
-
-`AutoCreateContext` is a private inner record. `tryAutoCreateEncounter`
-follows the same shape plus its own A04-specific gate (assignment-id
-non-null + assignment resolve).
-
-**Trade-off:** the A04 "no default_assignment_id" early-exit moved
-from before the registration/staff/dept lookups to after them.
-Three extra DB calls per misconfigured A04 message; the ADT path
-processes a handful of messages per second so this isn't a hot
-loop. The
-`a04SkippedWhenAssignmentIdMissing` test dropped its
-`verifyNoInteractions(registrationRepository/staffRepository)`
-ordering assertions — the load-bearing assertions
-(`verifyNoInteractions(assignmentRepository)`, no
-`encounterRepository.save`, no audit) still hold.
-
-### Fixed #21 — Mockito Optional-default in a04ReachesEncounterBranch... test (High)
+### Fixed #23 — SonarQube Minor x 16: useless `eq(...)` invocations in test
 
 **File:** `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
 
-**Copilot:** The test relied on Mockito's default return for an
-unstubbed `Optional`-returning repository method. Copilot's
-comment asserted Mockito returns `null` for `Optional`; the test
-actually passed because Mockito 2.x+ returns `Optional.empty()`
-via `RETURNS_DEFAULTS → ReturnsEmptyValues`. But relying on the
-default is fragile — a future Mockito strictness change or a Spy
-default switch could break it silently.
+**Sonar:** 16 instances of "Remove this useless `eq(...)` invocation;
+pass the values directly" (Code Smell, Minor, 2min effort each)
+across the new A01 + A04 test methods. Mockito's matcher engine
+only requires argument matchers when at least one matcher is in
+use; if every argument is wrapped in `eq()`, the wrappers are pure
+noise — Mockito accepts raw values directly.
 
-**Resolution:** Added an explicit `when(intakeConfigRepository
-.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
-.thenReturn(Optional.empty())` stub and a matching
-`verify(intakeConfigRepository).findByHospital_IdAndEnabledTrue(...)`
-so the contract is now pinned at both ends. Comment in the test
-calls out why explicit stubbing matters here even though the
-implicit default happens to work today.
+**Resolution:** Script-driven cleanup over the 10 test methods
+I added in this PR (and the previous round). Stripped `eq()` from
+every pure-value invocation while preserving `eq(null)` in the
+older `blankSenderProceedsWithNullScope` test — `eq(null)` is the
+recommended matcher form for null comparisons because raw `null`
+in matcher position is ambiguous to the Mockito stubber. 30 lines
+modified, 0 test failures, 16/16 still passing.
 
-### Net result (PR A04 round 1)
+The `eq` static import stays because the older `admissionMatched`
+/ `encounterMatched` / `blankSenderProceedsWithNullScope` tests
+(pre-existing from PR #332) still use it. Those weren't flagged
+because Sonar only counts findings on new-code lines; we left
+them as-is rather than expand this PR's scope to a stylistic
+sweep of unrelated test methods.
+
+### Net result (PR A04 round 2)
 
 | Severity | Count | Status |
 | --- | --- | --- |
-| Sonar Quality Gate (duplication) | 1 | Fixed |
-| Copilot (High) | 1 | Fixed |
+| Sonar Critical | 1 | Fixed |
+| Sonar Minor | 16 | Fixed |
 
 Files touched in the follow-up:
 

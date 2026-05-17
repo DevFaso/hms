@@ -229,14 +229,14 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // strictness change or a Spy-default switch could break that
         // assumption silently — be explicit. Caught on PR A04 round 1
         // Copilot review (High).
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.empty());
 
         VisitProjectionResult result = service.projectVisit(
             adt("A04", "V-AC-2"), patient, hospital, "REG", "HOSP1", "MSG-AC-2");
 
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
-        verify(intakeConfigRepository).findByHospital_IdAndEnabledTrue(eq(hospital.getId()));
+        verify(intakeConfigRepository).findByHospital_IdAndEnabledTrue(hospital.getId());
         verify(admissionRepository, never()).save(any());
         verify(encounterRepository, never()).save(any());
     }
@@ -246,7 +246,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     void autoCreateSkippedWhenIntakeConfigMissing() {
         properties.getAutoCreate().setEnabled(true);
         stubNoMatchOnReconciliation();
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.empty());
 
         VisitProjectionResult result = service.projectVisit(
@@ -262,10 +262,10 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     void autoCreateRejectedOnCrossTenantGate() {
         properties.getAutoCreate().setEnabled(true);
         stubNoMatchOnReconciliation();
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(intakeConfig()));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(false);
+            patient.getId(), hospital.getId())).thenReturn(false);
 
         VisitProjectionResult result = service.projectVisit(
             adt("A01", "V-AC-4"), patient, hospital, "REG", "HOSP1", "MSG-AC-4");
@@ -285,13 +285,13 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff provider = staff(config.getAdmittingProviderId());
         Department department = department(config.getDepartmentId());
 
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(provider));
-        when(departmentRepository.findById(eq(config.getDepartmentId())))
+        when(departmentRepository.findById(config.getDepartmentId()))
             .thenReturn(Optional.of(department));
         when(admissionRepository.save(any(Admission.class)))
             .thenAnswer(invocation -> {
@@ -344,14 +344,14 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         stubNoMatchOnReconciliation();
 
         AdtIntakeProviderConfig config = intakeConfig();
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+            patient.getId(), hospital.getId())).thenReturn(true);
         // The intake-config table stores raw UUIDs (no FK to hospital.staff),
         // so a misconfigured row can point at a Staff member from another
         // tenant. The service must catch this BEFORE saving the Admission.
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(staffAtOtherHospital(config.getAdmittingProviderId())));
 
         VisitProjectionResult result = service.projectVisit(
@@ -377,15 +377,15 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         UserRoleHospitalAssignment assignment =
             assignment(config.getDefaultAssignmentId(), hospital);
 
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(provider));
-        when(departmentRepository.findById(eq(config.getDepartmentId())))
+        when(departmentRepository.findById(config.getDepartmentId()))
             .thenReturn(Optional.of(department));
-        when(assignmentRepository.findById(eq(config.getDefaultAssignmentId())))
+        when(assignmentRepository.findById(config.getDefaultAssignmentId()))
             .thenReturn(Optional.of(assignment));
         when(encounterRepository.save(any(Encounter.class)))
             .thenAnswer(invocation -> {
@@ -437,13 +437,13 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // defaultAssignmentId left null — config is otherwise A01-ready.
         Staff provider = staff(config.getAdmittingProviderId());
         Department department = department(config.getDepartmentId());
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(provider));
-        when(departmentRepository.findById(eq(config.getDepartmentId())))
+        when(departmentRepository.findById(config.getDepartmentId()))
             .thenReturn(Optional.of(department));
 
         VisitProjectionResult result = service.projectVisit(
@@ -478,15 +478,15 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         UserRoleHospitalAssignment crossTenantAssignment =
             assignment(config.getDefaultAssignmentId(), otherHospital);
 
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(provider));
-        when(departmentRepository.findById(eq(config.getDepartmentId())))
+        when(departmentRepository.findById(config.getDepartmentId()))
             .thenReturn(Optional.of(department));
-        when(assignmentRepository.findById(eq(config.getDefaultAssignmentId())))
+        when(assignmentRepository.findById(config.getDefaultAssignmentId()))
             .thenReturn(Optional.of(crossTenantAssignment));
 
         VisitProjectionResult result = service.projectVisit(
@@ -511,13 +511,13 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         otherHospital.setId(UUID.randomUUID());
         Department crossTenantDept = department(config.getDepartmentId(), otherHospital);
 
-        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(
-            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
-        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
             .thenReturn(Optional.of(provider));
-        when(departmentRepository.findById(eq(config.getDepartmentId())))
+        when(departmentRepository.findById(config.getDepartmentId()))
             .thenReturn(Optional.of(crossTenantDept));
 
         VisitProjectionResult result = service.projectVisit(

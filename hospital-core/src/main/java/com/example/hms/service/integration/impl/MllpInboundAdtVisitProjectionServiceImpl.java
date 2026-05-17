@@ -70,6 +70,15 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     private static final String TRIGGER_A04 = "A04";
     private static final String AUDIT_ENTITY_ADMISSION = "ADMISSION";
     private static final String AUDIT_ENTITY_ENCOUNTER = "ENCOUNTER";
+    /**
+     * Placeholder rendered into cross-tenant-guard WARN logs when the
+     * referent entity's {@code hospital} association is null (i.e. the
+     * DB row exists but its FK column is unset — rare, but possible
+     * during data-rebuild windows). Extracted to a constant because
+     * Sonar's duplicate-literal threshold is 3 occurrences and the
+     * three resolve* helpers all need it.
+     */
+    private static final String NULL_HOSPITAL_PLACEHOLDER = "<null>";
 
     private final AdmissionRepository admissionRepository;
     private final EncounterRepository encounterRepository;
@@ -277,7 +286,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             || !hospitalId.equals(provider.getHospital().getId())) {
             log.warn("ADT auto-create skipped — admittingProviderId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
                 provider.getId(),
-                provider.getHospital() != null ? provider.getHospital().getId() : "<null>",
+                provider.getHospital() != null ? provider.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
             return Optional.empty();
         }
@@ -306,7 +315,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             || !hospitalId.equals(department.getHospital().getId())) {
             log.warn("ADT auto-create skipped — departmentId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
                 department.getId(),
-                department.getHospital() != null ? department.getHospital().getId() : "<null>",
+                department.getHospital() != null ? department.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
             return Optional.empty();
         }
@@ -423,7 +432,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             || !hospitalId.equals(assignment.getHospital().getId())) {
             log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
                 assignment.getId(),
-                assignment.getHospital() != null ? assignment.getHospital().getId() : "<null>",
+                assignment.getHospital() != null ? assignment.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
             return Optional.empty();
         }

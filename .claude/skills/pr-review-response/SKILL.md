@@ -648,6 +648,79 @@ load-bearing ones (no write to the type-specific table, no audit
 emission); leave a comment explaining the relaxation references
 the duplication-gate refactor so the next reader knows why.
 
+### SonarQube — duplicate-literal threshold counts ANY string at 3 occurrences
+
+**Caught:** PR A04 round 2 Sonar Critical "Define a constant
+instead of duplicating this literal `<null>` 3 times" on
+`MllpInboundAdtVisitProjectionServiceImpl`. The literal in
+question wasn't a SQL parameter name (the row-32 case) — it was a
+WARN-log placeholder rendered into three `resolve*` helpers'
+cross-tenant guards (`provider.getHospital() == null ? "<null>"
+: ...`).
+
+**Pattern to follow:** SonarQube's `S1192` duplicate-literal rule
+fires on **any** string repeated 3 times — log placeholders,
+error-message fragments, audit-event entity types,
+cross-tenant-guard fallbacks, anything. When you write a third
+copy-paste of the same string, extract a `private static final
+String <SCREAMING_SNAKE>` constant near the other class constants
+and give it a one-sentence Javadoc explaining *why* the
+placeholder exists, not what it is.
+
+The previous "fromInclusive" lesson (PR #357) framed this as a
+JPA-named-parameter concern — generalise it: **any** literal string
+with 3 occurrences in new code trips Sonar. Common offenders we've
+seen so far: `setParameter` keys, audit-event `entityType` strings,
+log-placeholder fallbacks, SQL-fragment chunks. When extracting
+helpers/branches that share warn-log shapes (the row-24 `resolve*`
+trio is the canonical example), the helpers very often share
+placeholder strings too. Audit your warn-log strings at the same
+moment you extract the helper.
+
+**Critical-by-default:** the duplicate-literal rule defaults to
+Critical severity. It alone won't fail Sonar's Quality Gate (the
+gate uses `Reliability_Rating`, `Security_Rating`, etc., not
+issue count), but it's visible on every PR diff and contributes
+to the "issues" badge. The lesson: a 2-minute-effort fix shouldn't
+ship as a Critical on a PR.
+
+### Mockito — `eq(...)` is noise when every argument is `eq(...)`
+
+**Caught:** PR A04 round 2 SonarQube — 16 Minor findings of "Remove
+this useless `eq(...)` invocation; pass the values directly" across
+the new test methods.
+
+**Pattern to follow:** `eq(...)` is a Mockito *matcher*. Mockito
+requires matchers only when at least one argument in the call uses
+a matcher — `any()`, `argThat(...)`, `same(...)`, etc. When EVERY
+argument would be `eq(<value>)`, just pass the raw values:
+
+```java
+// Wrong (16 Minor findings):
+when(repo.findByA_AndB_AndC(eq("x"), eq(uuid), eq(true))).thenReturn(...);
+verify(repo).findByA(eq(uuid));
+
+// Right:
+when(repo.findByA_AndB_AndC("x", uuid, true)).thenReturn(...);
+verify(repo).findByA(uuid);
+
+// Still right (mixing matchers — eq() is required here):
+when(repo.findByA_AndB_AndC(eq("x"), any(UUID.class), eq(true))).thenReturn(...);
+```
+
+**Exception:** `eq(null)` stays. Raw `null` in matcher position is
+ambiguous to the stubber (Mockito can't tell whether you mean
+"matches null" or "no matcher passed"), so `eq(null)` is the
+recommended form for null matchers. When `eq(null)` is mixed with
+raw values, every argument needs an explicit matcher form — so the
+other args go back to `eq(...)` too. That's why SonarQube doesn't
+flag the older `blankSenderProceedsWithNullScope` test's
+`eq(null), eq(null), eq("V-3"), eq(hospital.getId())` chain.
+
+When writing the next test against a repository finder, default to
+raw values; reach for `eq()` only when the call genuinely needs
+mixed matchers.
+
 ### Mockito — never rely on `Optional`-default for unstubbed methods
 
 **Caught:** PR A04 round 1 Copilot review (High). Test relied on
