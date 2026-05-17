@@ -11,6 +11,62 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-17**. Update both files together when scope moves.
 
+> **2026-05-17 update — row 24 lifecycle triggers + admin UI shipped
+> on `feat/v1.1-adt-discharge-transfer-and-intake-admin-ui`.** Row 24
+> stays `started`; foundation pass + A01/A04 auto-create + per-hospital
+> intake config (V103/V104) had already landed across PRs #332 / #358 /
+> A04 round 1+2. This PR closes the lifecycle-trigger gap and ships
+> the operator-facing surface for the intake config.
+>
+> - **Dispatcher accept-list** — `Hl7MessageDispatcher#ACCEPTED_ADT_EVENTS`
+>   extended from `{A01, A04, A08}` to `{A01, A02, A03, A04, A08}` so
+>   discharge / transfer messages route through `handleAdt` instead
+>   of being rejected with AR `Unsupported message type`.
+> - **A03 discharge** — `MllpInboundAdtVisitProjectionService#applyDischarge`
+>   transitions a reconciled `Admission` to `AdmissionStatus.DISCHARGED`,
+>   stamps `actualDischargeDateTime` from PV1-45 (falling back to
+>   `now()` when the segment is missing), recomputes
+>   `lengthOfStayDays`, and emits an `ADMISSION_DISCHARGED` audit on
+>   the first transition only — idempotent re-sends update the
+>   timestamp but skip the audit when the row is already in a
+>   terminal state.
+> - **A02 transfer** — `applyTransfer` resolves PV1-3 (first `^`
+>   component) to a `Department` via
+>   `DepartmentRepository#findByHospitalIdAndCodeIgnoreCase` then
+>   `findByHospitalIdAndNameIgnoreCase`. Unresolved destinations are
+>   still audited with the raw token preserved in the description so
+>   operators see the would-resolve workload; the in-app department
+>   reference stays stable.
+> - **`VisitProjectionResult`** gains `ADMISSION_DISCHARGED` +
+>   `ADMISSION_TRANSFERRED`. `AuditEventType` gains the same two
+>   past-tense constants (following `LAB_RESULT_UPDATED` /
+>   `IMAGING_RESULT_UPDATED` / `APPOINTMENT_UPDATED` convention).
+> - **Admin REST CRUD** —
+>   `AdtIntakeProviderConfigController` (POST upsert / GET list / GET
+>   by id / DELETE) at `/api/admin/adt-intake-configs`, gated on
+>   `ROLE_SUPER_ADMIN`. Upsert is idempotent on `hospitalId` (the
+>   `uk_adt_intake_config_hospital` invariant from V103 enforced at
+>   the service layer). `AdtIntakeProviderConfigService` +
+>   `*ServiceImpl` + request/response DTOs.
+> - **Angular admin UI** — `/admin/adt-intake-configs` standalone
+>   component with list + upsert form, EN/FR/ES `ADT_INTAKE.*` keys,
+>   route guarded by `RoleGuard` with `ROLE_SUPER_ADMIN` to match the
+>   backend `@PreAuthorize`. Raw-UUID inputs for hospital / provider /
+>   department / assignment — hospital picker + department typeahead
+>   are the named follow-on.
+> - **Tests** — 5 new A02 cases + 4 new A03 cases on
+>   `MllpInboundAdtVisitProjectionServiceImplTest`,
+>   `AdtIntakeProviderConfigControllerTest` (7 cases),
+>   `AdtIntakeProviderConfigControllerSecurityTest` (2-case reflection
+>   guard mirroring `MllpAllowedSenderControllerSecurityTest`),
+>   `AdtIntakeConfigComponent` Karma spec (5 cases). Backend test
+>   suite stays green (977 hospital-portal tests pass; full
+>   `hospital-core:test` task passes).
+>
+> Row 24 remains `started` — runbook chapters for A02/A03 + admin-UI
+> hospital picker / department typeahead are the next named
+> follow-ons.
+
 > **2026-05-17 update — archive batch: rows 28-31, 34, 40 flipped to
 > `deferred`.** Six rows that had no near-term driver are archived in
 > one bundled roadmap-sync PR — none of them blocks v1.0 GA or the

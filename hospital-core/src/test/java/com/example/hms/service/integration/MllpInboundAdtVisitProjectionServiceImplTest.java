@@ -37,6 +37,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -80,12 +81,22 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     private ParsedAdtMessage adt(String trigger, String visit) {
+        return adt(trigger, visit, "WARD-A", null, null);
+    }
+
+    private ParsedAdtMessage adt(
+        String trigger,
+        String visit,
+        String assignedLocation,
+        LocalDateTime admit,
+        LocalDateTime discharge
+    ) {
         return new ParsedAdtMessage(
             trigger, "MRN-1", "AUTH",
             "Doe", "Jane", "",
             LocalDate.of(1985, 1, 1), "F",
             "1 Main St", "Ouagadougou", "", "01000", "BF",
-            "I", "WARD-A", visit, null, null);
+            "I", assignedLocation, visit, admit, discharge);
     }
 
     @Test
@@ -526,6 +537,251 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
         verify(admissionRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);
+    }
+
+    // ── A02 / A03 lifecycle triggers (discharge + transfer) ─────────────
+
+    @Test
+    @DisplayName("A03 discharge transitions matched Admission to DISCHARGED and stamps actualDischargeDateTime from PV1-45")
+    void a03DischargesMatchedAdmission() {
+        LocalDateTime dischargeAt = LocalDateTime.of(2026, 5, 17, 14, 30);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                "REG", "HOSP1", "V-A03", hospital.getId()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03", "WARD-A", null, dischargeAt),
+            patient, hospital, "REG", "HOSP1", "MSG-A03");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        Admission updated = saved.getValue();
+        assertThat(updated.getStatus()).isEqualTo(AdmissionStatus.DISCHARGED);
+        assertThat(updated.getActualDischargeDateTime()).isEqualTo(dischargeAt);
+        assertThat(updated.getExternalMessageControlId()).isEqualTo("MSG-A03");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_DISCHARGED);
+        assertThat(audit.getValue().getEntityType()).isEqualTo("ADMISSION");
+    }
+
+    @Test
+    @DisplayName("A03 discharge falls back to now() when PV1-45 is absent and still emits the audit")
+    void a03FallsBackToNowWhenDischargeTimestampMissing() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03B", "WARD-A", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A03B");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getStatus()).isEqualTo(AdmissionStatus.DISCHARGED);
+        assertThat(saved.getValue().getActualDischargeDateTime()).isNotNull();
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("A03 idempotent re-send skips the audit when admission is already DISCHARGED")
+    void a03IdempotentReSendSkipsAudit() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.DISCHARGED);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03C", "WARD-A", null, LocalDateTime.of(2026, 5, 18, 8, 0)),
+            patient, hospital, "REG", "HOSP1", "MSG-A03C");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+        // Discharge timestamp still updated — idempotent re-stamp is fine.
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getActualDischargeDateTime()).isNotNull();
+        // But the audit DOES NOT re-fire — the transition already happened
+        // on the first message and re-emitting would double-count the event.
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("A03 with no matched admission returns NO_MATCH (auto-create stays off for lifecycle triggers)")
+    void a03WithoutMatchReturnsNoMatch() {
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.empty());
+        when(encounterRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.empty());
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03D", "WARD-A", null, LocalDateTime.now()),
+            patient, hospital, "REG", "HOSP1", "MSG-A03D");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("A02 transfer resolves PV1-3 to Department (by code), updates Admission, emits audit")
+    void a02TransferResolvesDepartmentByCode() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        Department destination = department(UUID.randomUUID(), hospital);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "WARD-B"))
+            .thenReturn(Optional.of(destination));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02", "WARD-B^ROOM-3^BED-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        Admission updated = saved.getValue();
+        assertThat(updated.getDepartment()).isSameAs(destination);
+        // Status NOT changed — transfer is a department move, not a
+        // lifecycle transition.
+        assertThat(updated.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        assertThat(updated.getExternalMessageControlId()).isEqualTo("MSG-A02");
+
+        ArgumentCaptor<AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_TRANSFERRED);
+    }
+
+    @Test
+    @DisplayName("A02 transfer falls back to name lookup when code lookup misses")
+    void a02TransferFallsBackToNameLookup() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        Department destination = department(UUID.randomUUID(), hospital);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "Cardiology"))
+            .thenReturn(Optional.empty());
+        when(departmentRepository
+            .findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology"))
+            .thenReturn(Optional.of(destination));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02B", "Cardiology", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02B");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        assertThat(saved.getValue().getDepartment()).isSameAs(destination);
+    }
+
+    @Test
+    @DisplayName("A02 transfer still reconciles and emits audit when destination cannot be resolved (operator visibility)")
+    void a02TransferAuditedWhenDestinationUnresolved() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        Department existing = department(UUID.randomUUID(), hospital);
+        row.setDepartment(existing);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "WARD-UNKNOWN"))
+            .thenReturn(Optional.empty());
+        when(departmentRepository
+            .findByHospitalIdAndNameIgnoreCase(hospital.getId(), "WARD-UNKNOWN"))
+            .thenReturn(Optional.empty());
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02C", "WARD-UNKNOWN", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02C");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Admission> saved = ArgumentCaptor.forClass(Admission.class);
+        verify(admissionRepository).save(saved.capture());
+        // Department reference unchanged — unresolved destinations
+        // preserve the existing in-app link rather than nulling it.
+        assertThat(saved.getValue().getDepartment()).isSameAs(existing);
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("A03 discharge tolerates an audit-emit RuntimeException — clinical write is not rolled back")
+    void a03TolerantOfAuditEmitFailure() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        org.mockito.Mockito.doThrow(new RuntimeException("splunk down"))
+            .when(auditEventLogService).logEvent(any());
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03E", "WARD-A", null, LocalDateTime.of(2026, 5, 19, 10, 0)),
+            patient, hospital, "REG", "HOSP1", "MSG-A03E");
+
+        // Audit emitter swallowed the exception per the hl7-mllp-integration
+        // skill rule; the discharge result still propagates and the
+        // admission save still happens.
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+        verify(admissionRepository).save(any(Admission.class));
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("A02 transfer with blank assignedLocation skips the department lookup but still emits the audit")
+    void a02TransferSkipsLookupOnBlankLocation() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02D", "", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02D");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        verifyNoInteractions(departmentRepository);
+        verify(auditEventLogService).logEvent(any());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
