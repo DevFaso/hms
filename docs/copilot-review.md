@@ -259,7 +259,6 @@ Files touched in the follow-up:
 - `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
 - `docs/copilot-review.md`
 
-
 ---
 
 ## Copilot review — PR #357 `feat/v1.1-kpi-dashboard-follow-on` (2026-05-17)
