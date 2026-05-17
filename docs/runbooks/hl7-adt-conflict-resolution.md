@@ -61,7 +61,7 @@ INSERT INTO platform.adt_intake_provider_configs (
     '<staff-uuid — provider on duty for ADT-driven intake>',
     '<department-uuid OR NULL>',
     'EMERGENCY',        -- one of: EMERGENCY, ELECTIVE, URGENT, OBSERVATION, ...
-    'LEVEL_2_MODERATE', -- one of: LEVEL_1_MINIMAL, LEVEL_2_MODERATE, LEVEL_3_HIGH, LEVEL_4_CRITICAL
+    'LEVEL_2_MODERATE', -- one of: LEVEL_1_MINIMAL, LEVEL_2_MODERATE, LEVEL_3_MAJOR, LEVEL_4_SEVERE, LEVEL_5_CRITICAL
     'INPATIENT',        -- one of: CONSULTATION, INPATIENT, EMERGENCY, FOLLOW_UP, ...
     'Auto-created from ADT^A01',
     true

@@ -110,6 +110,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         ProjectionContext ctx = new ProjectionContext(
             parsed,
             patient,
+            receivingHospital,
             receivingHospital.getId(),
             parsed.visitNumber().trim(),
             trimToNull(sendingApplication),
@@ -170,8 +171,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      *   <li>Trigger event is A01</li>
      *   <li>Per-hospital intake config exists AND is enabled</li>
      *   <li>Patient has an active registration at the receiving hospital</li>
-     *   <li>The Staff (admitting provider) referenced in the config exists</li>
-     *   <li>The Department (if specified) exists</li>
+     *   <li>The Staff (admitting provider) referenced in the config exists
+     *       AND belongs to the receiving hospital</li>
+     *   <li>The Department (if specified) exists AND belongs to the receiving hospital</li>
      * </ol>
      */
     private Optional<VisitProjectionResult> tryAutoCreateAdmission(ProjectionContext ctx) {
@@ -190,24 +192,17 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             return Optional.empty();
         }
 
-        Optional<Staff> providerOpt = staffRepository.findById(config.getAdmittingProviderId());
-        if (providerOpt.isEmpty()) {
-            log.warn("ADT auto-create skipped — admittingProviderId {} in intake config for hospital {} not found in hospital.staff",
-                config.getAdmittingProviderId(), ctx.hospitalId);
-            return Optional.empty();
-        }
+        Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
+        if (providerOpt.isEmpty()) return Optional.empty();
         Staff provider = providerOpt.get();
 
-        Department department = null;
-        if (config.getDepartmentId() != null) {
-            Optional<Department> deptOpt = departmentRepository.findById(config.getDepartmentId());
-            if (deptOpt.isEmpty()) {
-                log.warn("ADT auto-create skipped — departmentId {} in intake config for hospital {} not found in hospital.departments",
-                    config.getDepartmentId(), ctx.hospitalId);
-                return Optional.empty();
-            }
-            department = deptOpt.get();
+        Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
+        if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
+            // Configured but unresolvable (missing row OR cross-tenant). The
+            // helper already logged the precise reason — bail.
+            return Optional.empty();
         }
+        Department department = departmentOpt.orElse(null);
 
         Admission admission = buildAdmission(ctx, config, provider, department);
         admission = admissionRepository.save(admission);
@@ -217,6 +212,66 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
             ctx.patient.getId(), provider.getId(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
+    }
+
+    /**
+     * Resolve the configured admitting-provider Staff and enforce the
+     * cross-tenant invariant. The intake-config table stores the
+     * provider as a raw UUID so an operator can re-seed
+     * {@code hospital.staff} without dropping the config; that
+     * convenience means the service is responsible for verifying the
+     * referent points at the receiving hospital. Caught on PR #358
+     * Copilot review (High): a wrong-tenant provider UUID would
+     * otherwise create an Admission under the provider's hospital
+     * despite the cross-tenant gate having been performed for the
+     * sender's hospital.
+     */
+    private Optional<Staff> resolveProvider(AdtIntakeProviderConfig config, UUID hospitalId) {
+        Optional<Staff> providerOpt = staffRepository.findById(config.getAdmittingProviderId());
+        if (providerOpt.isEmpty()) {
+            log.warn("ADT auto-create skipped — admittingProviderId {} in intake config for hospital {} not found in hospital.staff",
+                config.getAdmittingProviderId(), hospitalId);
+            return Optional.empty();
+        }
+        Staff provider = providerOpt.get();
+        if (provider.getHospital() == null
+            || !hospitalId.equals(provider.getHospital().getId())) {
+            log.warn("ADT auto-create skipped — admittingProviderId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
+                provider.getId(),
+                provider.getHospital() != null ? provider.getHospital().getId() : "<null>",
+                hospitalId);
+            return Optional.empty();
+        }
+        return Optional.of(provider);
+    }
+
+    /**
+     * Resolve the optional department reference. Returns
+     * {@code Optional.empty()} when the config has no department set
+     * AND when the department UUID can't be resolved / is cross-tenant.
+     * The caller distinguishes "no department configured (fine)" from
+     * "configured but unresolvable (skip auto-create)" by checking
+     * {@code config.getDepartmentId() != null}. Caught on PR #358
+     * Copilot review (High).
+     */
+    private Optional<Department> resolveDepartment(AdtIntakeProviderConfig config, UUID hospitalId) {
+        if (config.getDepartmentId() == null) return Optional.empty();
+        Optional<Department> deptOpt = departmentRepository.findById(config.getDepartmentId());
+        if (deptOpt.isEmpty()) {
+            log.warn("ADT auto-create skipped — departmentId {} in intake config for hospital {} not found in hospital.departments",
+                config.getDepartmentId(), hospitalId);
+            return Optional.empty();
+        }
+        Department department = deptOpt.get();
+        if (department.getHospital() == null
+            || !hospitalId.equals(department.getHospital().getId())) {
+            log.warn("ADT auto-create skipped — departmentId {} belongs to hospital {} but receiving hospital is {} (cross-tenant guard)",
+                department.getId(),
+                department.getHospital() != null ? department.getHospital().getId() : "<null>",
+                hospitalId);
+            return Optional.empty();
+        }
+        return Optional.of(department);
     }
 
     private Admission buildAdmission(
@@ -230,7 +285,12 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         // by the demographic layer; reusing the reference avoids a second
         // tenant-scoped lookup the MLLP worker can't satisfy.
         admission.setPatient(ctx.patient);
-        admission.setHospital(provider.getHospital());
+        // Stamp the receiving hospital explicitly — do NOT trust
+        // provider.getHospital() (already validated to match
+        // ctx.hospitalId, but the source of truth for "which hospital
+        // is this admission for" is the allowlisted sender, not the
+        // config's provider lookup). PR #358 Copilot review (High).
+        admission.setHospital(ctx.receivingHospital);
         admission.setAdmittingProvider(provider);
         admission.setDepartment(department);
         admission.setAdmissionType(config.getDefaultAdmissionType());
@@ -238,7 +298,12 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         admission.setChiefComplaint(config.getDefaultChiefComplaint());
         admission.setAdmissionDateTime(
             ctx.parsed.admitDateTime() != null ? ctx.parsed.admitDateTime() : LocalDateTime.now());
-        admission.setStatus(AdmissionStatus.PENDING);
+        // ADT^A01 is an admit-notification, not a pre-registration.
+        // The patient is already physically present at the sending
+        // facility; AdmissionStatus.PENDING (pre-registration
+        // placeholder) would route the row out of active-admission
+        // workflows. PR #358 Copilot review (Medium).
+        admission.setStatus(AdmissionStatus.ACTIVE);
         // Reconciliation key — required so the next ADT update (typically
         // an A08) routes back to this row instead of producing a duplicate.
         admission.setExternalVisitNumber(ctx.visitNumber);
@@ -296,10 +361,20 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      * Bag-of-fields for the orchestrator → helper hand-off. Keeps the
      * helper signatures from sprouting an 8-argument constructor and
      * keeps {@code projectVisit} under the cognitive-complexity gate.
+     *
+     * <p>{@code receivingHospital} is the live Hospital reference
+     * passed in by the caller (the MLLP-allowlist resolution result).
+     * The auto-create branch stamps this directly on the new Admission
+     * — never the {@code Staff#getHospital()} indirection — so a
+     * mis-configured provider UUID can't relocate the Admission to a
+     * different tenant. {@code hospitalId} is the same identity in
+     * UUID form, kept for repository lookups that don't need the
+     * full entity.
      */
     private static final class ProjectionContext {
         final ParsedAdtMessage parsed;
         final Patient patient;
+        final Hospital receivingHospital;
         final UUID hospitalId;
         final String visitNumber;
         final String app;
@@ -309,6 +384,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         ProjectionContext(
             ParsedAdtMessage parsed,
             Patient patient,
+            Hospital receivingHospital,
             UUID hospitalId,
             String visitNumber,
             String app,
@@ -317,6 +393,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         ) {
             this.parsed = parsed;
             this.patient = patient;
+            this.receivingHospital = receivingHospital;
             this.hospitalId = hospitalId;
             this.visitNumber = visitNumber;
             this.app = app;

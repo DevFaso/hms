@@ -297,7 +297,15 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         assertThat(row.getAdmissionType()).isEqualTo(config.getDefaultAdmissionType());
         assertThat(row.getAcuityLevel()).isEqualTo(config.getDefaultAcuityLevel());
         assertThat(row.getChiefComplaint()).isEqualTo(config.getDefaultChiefComplaint());
-        assertThat(row.getStatus()).isEqualTo(AdmissionStatus.PENDING);
+        // ADT^A01 is an admit notification; auto-created Admissions must
+        // land ACTIVE, not PENDING (pre-registration placeholder). Caught
+        // on PR #358 Copilot review (Medium).
+        assertThat(row.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        // Hospital is stamped from the receivingHospital reference, not
+        // dereferenced via provider.getHospital() — defence-in-depth
+        // against a wrong-tenant provider UUID in the intake config. Caught
+        // on PR #358 Copilot review (High).
+        assertThat(row.getHospital()).isSameAs(hospital);
         // Reconciliation key — required so the next A08 routes back here.
         assertThat(row.getExternalVisitNumber()).isEqualTo("V-AC-5");
         assertThat(row.getExternalSendingApplication()).isEqualTo("REG");
@@ -311,6 +319,62 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         assertThat(audit.getEventType()).isEqualTo(AuditEventType.ADMISSION_AUTOCREATED);
         assertThat(audit.getEntityType()).isEqualTo("ADMISSION");
         assertThat(audit.getResourceId()).isEqualTo(row.getId().toString());
+    }
+
+    @Test
+    @DisplayName("Auto-create rejected when configured provider belongs to a different hospital (PR #358 Copilot High)")
+    void autoCreateRejectedOnWrongTenantProvider() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        // The intake-config table stores raw UUIDs (no FK to hospital.staff),
+        // so a misconfigured row can point at a Staff member from another
+        // tenant. The service must catch this BEFORE saving the Admission.
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(staffAtOtherHospital(config.getAdmittingProviderId())));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-XT-P"), patient, hospital, "REG", "HOSP1", "MSG-AC-XT-P");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("Auto-create rejected when configured department belongs to a different hospital (PR #358 Copilot High)")
+    void autoCreateRejectedOnWrongTenantDepartment() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        Staff provider = staff(config.getAdmittingProviderId());
+        // Department UUID points at a department belonging to a different
+        // tenant — same class of bug as the provider one above.
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Department crossTenantDept = department(config.getDepartmentId(), otherHospital);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(eq(config.getDepartmentId())))
+            .thenReturn(Optional.of(crossTenantDept));
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-XT-D"), patient, hospital, "REG", "HOSP1", "MSG-AC-XT-D");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -347,8 +411,22 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     private Department department(UUID id) {
+        return department(id, hospital);
+    }
+
+    private Department department(UUID id, Hospital h) {
         Department d = new Department();
         d.setId(id);
+        d.setHospital(h);
         return d;
+    }
+
+    private Staff staffAtOtherHospital(UUID id) {
+        Staff s = new Staff();
+        s.setId(id);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        s.setHospital(other);
+        return s;
     }
 }
