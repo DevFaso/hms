@@ -1,90 +1,129 @@
-Failed conditions
- 57.7% Coverage on New Code (required ≥ 80%)
-
- Coverage on New Code
-57.7%
-Coverage on New Code
-Uncovered Lines on New Code
-Uncovered Conditions on New Code
-
-hospital-core/src/main/java/com/example/hms/service/platform/impl/AdtIntakeProviderConfigServiceImpl.java
-1.6%
-51
-10
-
-hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java
-94.6%
-3
-2
-
-
-
-hospital-portal/src/app/admin/adt-intake-config/adt-intake-config.component.ts
-Comment on lines +411 to +415
-  protected save(event: Event): void {
-    event.preventDefault();
-    if (!this.form.hospitalId || !this.form.admittingProviderId) {
-      this.toast.error('ADT_INTAKE.VALIDATION.REQUIRED');
-      return;
-Copilot commented 1 minute ago
+hospital-core/src/main/java/com/example/hms/health/ReadReplicaHealthIndicator.java
+Comment on lines +170 to +192
+        return readOnlyTemplate.execute(status -> {
+            try (Connection conn = primaryDataSource.getConnection();
+                 Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT 1")) {
+                rs.next();
+                String url = conn.getMetaData().getURL();
+                // The replica properties' URL is the operator's
+                // declared identity for the replica pool. A match on
+                // the connection's JDBC URL is the most reliable way
+                // to confirm the lenient-fallback didn't engage —
+                // querying pool name via reflection on the Hikari
+                // wrapper is brittle across version bumps.
+                if (properties.getUrl() != null
+                    && properties.getUrl().equalsIgnoreCase(url)) {
+                    return Route.READ;
+                }
+                return Route.WRITE;
+            } catch (java.sql.SQLException ex) {
+                throw new IllegalStateException(
+                    "read-route SELECT 1 failed: " + ex.getMessage(), ex);
+            }
+        });
+    }
+Copilot commented 3 minutes ago
 Copilot
 Copilot
 AI
-1 minute ago
-High
-ToastService stores and renders messages verbatim (shell.html uses {{ t.message }}), so passing translation keys like ADT_INTAKE.TOAST.* / ADT_INTAKE.VALIDATION.REQUIRED will show the raw key to users. Translate the key before calling ToastService (e.g. via TranslateService) or update the toast rendering to apply the translate pipe so these new i18n strings are actually used.
+3 minutes ago
+Medium
+primaryDataSource.getConnection() is called directly inside the TransactionTemplate callback rather than through DataSourceUtils.getConnection(primaryDataSource). The connection acquired this way is not bound to the active Spring transaction, so it bypasses transaction management entirely (no commit/rollback through the transaction manager, no proper resource release through Spring's synchronization). The routing key happens to still work because AbstractRoutingDataSource.determineCurrentLookupKey() reads from TransactionSynchronizationManager.isCurrentTransactionReadOnly() regardless. Using DataSourceUtils.getConnection(primaryDataSource) (and releaseConnection) would be the Spring-idiomatic way to acquire a transaction-bound connection.
+
+This issue also appears on line 175 of the same file.
 
 Copilot uses AI. Check for mistakes.
 @TiegoOuedraogo	Reply...
-.../src/main/java/com/example/hms/service/platform/impl/AdtIntakeProviderConfigServiceImpl.java
-public class AdtIntakeProviderConfigServiceImpl
-    implements AdtIntakeProviderConfigService {
+hospital-core/src/test/java/com/example/hms/health/ReadReplicaHealthIndicatorTest.java
+Comment on lines +201 to +205
 
-    private static final String CONFIG_NOT_FOUND = "adt.intakeconfig.notfound";
-Copilot commented 1 minute ago
+    @SuppressWarnings("unused")
+    private static DataSource unused(DataSource ds) {
+        return mock(DataSource.class);
+    }
+Copilot commented 3 minutes ago
 Copilot
 Copilot
 AI
-1 minute ago
-Medium
-CONFIG_NOT_FOUND uses the i18n key adt.intakeconfig.notfound, but that key does not exist in any messages*.properties. With spring.messages.use-code-as-default-message=true, API callers will see the raw key string. Add the key (and translations) or reuse an existing not-found key pattern.
+3 minutes ago
+Low
+Dead code: the unused static helper is annotated @SuppressWarnings("unused") and is never invoked anywhere in the test. It should be removed.
 
 Suggested changeset 1 (1)
-hospital-core/src/main/java/com/example/hms/service/platform/impl/AdtIntakeProviderConfigServiceImpl.java
+hospital-core/src/test/java/com/example/hms/health/ReadReplicaHealthIndicatorTest.java
 Original file line number	Diff line number	Diff line change
- public class AdtIntakeProviderConfigServiceImpl
-     implements AdtIntakeProviderConfigService {
-     private static final String CONFIG_NOT_FOUND = "adt.intakeconfig.notfound";
-     private static final String CONFIG_NOT_FOUND = "ADT intake provider config not found";
-     private static final String HOSPITAL_NOT_FOUND = "hospital.notfound";
-     private static final String DEFAULT_CHIEF_COMPLAINT = "Auto-created from ADT^A01";
+         lenient().when(resultSet.getTimestamp("last_replay"))
+             .thenReturn(Timestamp.valueOf(LocalDateTime.of(2026, 5, 17, 16, 0)));
+     }
+     @SuppressWarnings("unused")
+     private static DataSource unused(DataSource ds) {
+         return mock(DataSource.class);
+     }
+ }
 Copilot uses AI. Check for mistakes.
 @TiegoOuedraogo	Reply...
-docs/roadmap.csv
-v1.1,2026-10-01,Interop FHIR,FHIR $everything operation,"Patient compartment export; required by most HIE handshakes. Foundation pass shipped on feat/v1.1-fhir-bulk-and-everything: app.fhir.operations.everything.enabled (default false). @Operation(name=""$everything"", type=Patient.class) on PatientFhirResourceProvider delegates to PatientEverythingService.everythingForPatient(uuid). The service assembles a Bundle (type=searchset) of 1 Patient + up to 200 Encounters (hospital-scoped) + up to 200 vital-sign rows (each fan-out 1:N into Observation resources by ObservationFhirMapper) + up to 200 lab-result Observations (hospital-scoped via labOrder.hospital) + all Conditions (problem list) + up to 200 MedicationRequests (hospital-scoped). Tenant scope: missing active hospital -> 403 Forbidden; cross-tenant patient -> 404. AuditEventType.PATIENT_EXPORT emitted with entry-count description. HmsCapabilityStatementProvider strips the everything operation entry when the flag is off. 2 ITs: PatientEverythingIT (flag-off ΓÇö 401/405 + metadata omit) and PatientEverythingEnabledIT (flag-on ΓÇö metadata advertises). Authenticated wire-level Bundle composition assertion + _since / _type / page cursor / start-end date params + SMART App Launcher conformance soak are the named row-22 follow-on.",FHIR write API,M,Backend,started,#h2.exit
-v1.1,2026-10-01,Interop HL7,ORU^R01 â†’ LabResult persistence,"Match by accession number; write to existing lab_result schema; link to encounter; integration tested with Mindray/Sysmex sample messages. Shipped on feat/v1.1-oru-r01-lab-persistence: MllpInboundLabServiceImpl already had core ingestion (LabSpecimen.accessionNumber match -> LabOrder -> Encounter, SYSTEM-actor LabResult write, cross-tenant guard); added (1) MSH-10 idempotency via V98 + LabResult.sourceMessageControlId + partial unique index (analyzer retransmits collapse), (2) IntegrationMessageRecorder wiring for replay/DLQ surface, (3) AuditEventType.LAB_RESULT_UPDATED emission on every accepted ingest, (4) OruR01VendorSampleIngestionTest with realistic Mindray BS-240 (LOINC) + Sysmex XN-1000 (CBC panel, LL critical flag) sample messages plus a retransmit-delegation test.",HL7 MLLP listener (done),M,Backend,started,#h2.exit
-v1.1,2026-10-01,Interop HL7,ADT â†’ Admission/Encounter sync,"ADT^A01/A04/A08 trigger Admission and Encounter sync; conflict-resolution rules documented. Foundation pass shipped on feat/v1.1-adt-admission-encounter-sync (PR #332): V99 migration adds external_visit_number + external_sending_application + external_sending_facility + external_message_control_id (nullable) to admissions and clinical.encounters with partial composite unique indexes scoped per (sender, hospital); MllpInboundAdtVisitProjectionService reconciles inbound A01/A04/A08 against existing rows by the HL7 visit-number triplet, REQUIRES_NEW so projection failure cannot roll back the demographic write; gated behind app.hl7.adt.visit-sync.enabled (default false) so flag-off behaviour is bit-for-bit unchanged. Conflict-resolution rules + operator playbook in docs/runbooks/hl7-adt-conflict-resolution.md. Auto-create deferred to a follow-on PR (needs per-hospital intake-provider config).",HL7 MLLP listener (done),M,Backend,started,#h2.exit
-v1.1,2026-10-01,Interop HL7,ADT â†’ Admission/Encounter sync,"ADT^A01/A02/A03/A04/A08 trigger Admission and Encounter sync; conflict-resolution rules documented. Foundation pass shipped on feat/v1.1-adt-admission-encounter-sync (PR #332). A01 auto-create + A04 Encounter auto-create + per-hospital intake config (V103/V104) shipped on the follow-ons. Discharge / transfer + admin UI shipped on feat/v1.1-adt-discharge-transfer-and-intake-admin-ui: dispatcher accept-list extended to A02 + A03; MllpInboundAdtVisitProjectionService gains applyDischarge (A03 -> AdmissionStatus.DISCHARGED + actualDischargeDateTime from PV1-45 falling back to now(), idempotent re-send skips audit when row is already DISCHARGED, calculateLengthOfStay refreshed) and applyTransfer (A02 -> Department lookup via findByHospitalIdAndCodeIgnoreCase then findByHospitalIdAndNameIgnoreCase, unresolved destination still audits with the raw token preserved); VisitProjectionResult gains ADMISSION_DISCHARGED + ADMISSION_TRANSFERRED; new audit event types ADMISSION_DISCHARGED + ADMISSION_TRANSFERRED follow the past-tense convention. Admin REST CRUD AdtIntakeProviderConfigController POST/GET/DELETE /api/admin/adt-intake-configs gated on ROLE_SUPER_ADMIN, upsert idempotent on hospitalId. Angular admin UI at /admin/adt-intake-configs with EN+FR+ES i18n. 13 new tests (5 A02 + 4 A03 unit cases on MllpInboundAdtVisitProjectionServiceImplTest, AdtIntakeProviderConfigControllerTest 7 cases, AdtIntakeProviderConfigControllerSecurityTest reflection guard, AdtIntakeConfigComponent karma spec 5 cases). Conflict-resolution rules + operator playbook in docs/runbooks/hl7-adt-conflict-resolution.md. Row stays started until the runbook chapters for A02/A03 land + the admin form gains a hospital picker / department typeahead (currently raw-UUID inputs).",HL7 MLLP listener (done),M,Backend,started,#h2.exit
-Copilot commented 1 minute ago
+scripts/db/replica-preflight.sh
+Comment on lines +12 to +20
+# Runs five checks in order, exits non-zero on the first failure:
+#
+#   1. Required env vars present and well-formed.
+#   2. Primary reachable + write-pool role can run SELECT 1.
+#   3. Replica reachable + REPLICA_USER can run SELECT 1.
+#   4. Replica is actually a hot-standby (pg_is_in_recovery()=true).
+#   5. Replication lag is within REPLICA_LAG_BUDGET_SECONDS (default 5s).
+#   6. REPLICA_USER has pg_read_all_data (Postgres >= 14) OR explicit
+#      SELECT grants on every schema HMS reads from.
+Copilot commented 3 minutes ago
 Copilot
 Copilot
 AI
-1 minute ago
-Medium
-docs/roadmap.md states that roadmap.xlsx must be regenerated whenever docs/roadmap.csv changes, but this PR updates the CSV without updating the XLSX. Please re-run scripts/build-roadmap-xlsx.py and commit the updated docs/roadmap.xlsx so the spreadsheet view stays in sync.
+3 minutes ago
+Low
+The header comment says "Runs five checks in order" but six numbered checks follow (1–6). Either re-word to "six checks" or merge the env-var check (1) into the invocation preamble to match. The same inconsistency appears in docs/runbooks/postgres-pool-replica-sizing.md ("Six checks: ...").
+
+This issue also appears on line 32 of the same file.
 
 Copilot uses AI. Check for mistakes.
 @TiegoOuedraogo	Reply...
-hospital-portal/src/app/admin/adt-intake-config/adt-intake-config.component.ts
-Comment on lines +444 to +447
-  protected remove(cfg: AdtIntakeConfig): void {
-    const confirmed = globalThis.confirm(
-      `Delete ADT intake config for ${cfg.hospitalName || cfg.hospitalId}?`,
-    );
-Copilot commented 1 minute ago
+grafana/prometheus-multigeo.example.yml
+Comment on lines +40 to +71
+    geo: ${GEO_LABEL}
+
+remote_write:
+  - url: ${MIMIR_REMOTE_WRITE_URL}
+    # Keep this region's identity on every series. Mimir's tenant
+    # federation drops `__replica__` but preserves external_labels.
+    write_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'probe_.*|up'
+        action: keep
+
+scrape_configs:
+
+  - job_name: 'blackbox_http'
+    metrics_path: /probe
+    scrape_interval: 30s
+    scrape_timeout: 15s
+    params:
+      module: [http_health_2xx]
+    static_configs:
+      - targets:
+          - ${HMS_PUBLIC_BASE_URL}/api/actuator/health/liveness
+          - ${HMS_PUBLIC_BASE_URL}/api/actuator/health/readiness
+        labels:
+          probe_module: 'http_health_2xx'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: ${BLACKBOX_HOST}
+Copilot commented 3 minutes ago
 Copilot
 Copilot
 AI
-1 minute ago
-Medium
-The delete confirmation prompt is hard-coded in English and bypasses the new ADT_INTAKE i18n keys. To keep the admin page consistent and localizable, move this string into the translation files (and translate it before calling confirm).
+3 minutes ago
+Low
+${HMS_PUBLIC_BASE_URL} is used both as the target URL value in static_configs.targets and as a substitution placeholder. Prometheus YAML does not perform shell-style ${VAR} expansion at load time (Prometheus only supports $(VAR) substitution under certain limited paths, and ${...} substitution is not part of stock Prometheus config syntax). Operators copying this template must literally sed-substitute the placeholders before deploying — please call this out more explicitly in the file header (the current wording in the README block says "substitute the four placeholders" but readers familiar with envsubst-style configs may assume Prometheus does the expansion).
