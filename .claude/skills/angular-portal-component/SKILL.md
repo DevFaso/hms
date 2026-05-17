@@ -38,6 +38,14 @@ Each feature lives in its own folder under `src/app/<feature>/`:
   `<hms-loading-state>` primitives.
 - **OnPush change detection** for any component bound to a large
   observable stream (e.g. patient list, tracker board).
+- **Use `T[]` shorthand, not `Array<T>`.** The project's
+  `@typescript-eslint/array-type` rule blocks the long form and CI
+  fails on `Array<T>` references. Applies everywhere: signal inputs
+  (`input.required<T[]>()`), computed return annotations, local
+  variables, helper parameter and return types. Caught in PR #357
+  Copilot/SonarQube run — seven violations on one PR is too many to
+  let through twice. When adding a sub-component or helper, default
+  to `T[]` from the first keystroke.
 
 ## i18n — the FR completeness gate is non-negotiable
 
@@ -71,6 +79,23 @@ just as translatable as the surrounding labels. Don't hard-code `"min"`
 in the TS file — pass the value to a translation key that injects the
 unit, or use Angular's number/percent pipes with locale support.
 Caught in PR #341 Copilot review on `kpi-cards.component.ts`.
+
+**i18n the aria-labels, not just the visible text.** Strings passed
+to `[attr.aria-label]` or composed inside a `computed()` that
+returns an accessibility name MUST flow through ngx-translate too.
+Pattern that bit PR #357: a sparkline component built its name from
+`` `${label()} trend, ${count} data points` `` — visually fine in
+EN, but screen-readers in FR/ES then announced English words inside
+otherwise-translated text. **Inject `TranslateService` in the
+component and use `translate.instant('KEY', { label, count })`** so
+the translation file owns the word order. Word-by-word
+concatenation in TypeScript breaks for languages where the
+adjective precedes the noun (FR/ES put "tendance" / "tendencia"
+before the label, not after). For pluralisation, accept that
+`"1 data points"` is acceptable in this context — ngx-translate's
+`count` parameter does the substitution without an ICU plural form,
+which is fine for sparse-data sparklines where the count rarely
+hits 1.
 
 ## Accessibility — the axe smoke gate is non-negotiable
 
@@ -157,21 +182,80 @@ users. Either widen the guard or place the component on a route whose
 guard matches. Caught in PR #341 Copilot review on
 `analytics.html`.
 
-## Build + test commands
+## Pre-commit gates — mandatory before push (format + lint + test)
+
+**Every Angular change runs these three locally before the commit
+goes to remote — not optional, not "I'll fix it if CI flags."** CI
+runs `format:check + lint + test:ci + build` and fails the PR on
+any one. Catching them locally avoids a CI round-trip that costs
+~6 min and adds a fixup commit + Copilot re-review noise to the PR
+history. PR #357 burned exactly this loop — 7 ESLint `array-type`
+errors + a Prettier-formatting drift, both caught only by CI when
+they should have caught locally.
+
+Run **in order**, from `hospital-portal/`:
 
 ```bash
-cd hospital-portal
-npm install
-npm run lint           # ESLint — passes on every PR (pre-commit hook)
-npm run format:check   # Prettier — passes on every PR (pre-commit hook)
-npm test               # Jest unit + spec
-npm run e2e            # Playwright + axe smoke
-npm run build          # ng build (AOT)
+npm run format          # Prettier --write (mutates) — first so the next two see the formatted code
+npm run lint            # ESLint — must exit 0
+npm run test:headless   # Karma + ChromeHeadless, no watch
 ```
 
-The pre-commit hook in `.claude/settings.json` runs `format:check + lint`
-on every git commit. If it fails, **fix the underlying issue**; never
-`git commit --no-verify`.
+The order matters:
+
+1. **`format` first.** Prettier writes the canonical layout. Many
+   ESLint rules that complain about column-width or quote-style
+   become moot once Prettier has touched the file. Running lint
+   before format means re-running lint after format anyway.
+2. **`lint` second.** Catches the rules Prettier doesn't enforce —
+   `@typescript-eslint/array-type` (`T[]` not `Array<T>`),
+   `no-unused-vars`, `prefer-readonly`, the strict-null fragments
+   the project enables. The gate is `eslint "src/**/*.{ts,html}"`
+   exit-code zero.
+3. **`test:headless` third.** Karma + ChromeHeadless. The
+   `--watch=false` variant is the CI-equivalent — `npm test`
+   alone is the dev-watch loop and never exits, which is the
+   wrong shape for a gate check.
+
+For a new component or service, **also** run `npm run build` once
+before push — the AOT compiler catches Angular-template type
+errors (missing input bindings, wrong pipe arity, unused imports
+flagged by `NG8113`) that `lint` misses. A clean `lint` doesn't
+imply a clean build; AOT is the only ground truth for template
+type-safety.
+
+### Other commands
+
+```bash
+npm install
+npm run format:check   # Prettier — exit-code only, no mutation; CI uses this
+npm run lint:fix       # ESLint with --fix — auto-fixes simple rules
+npm run test:ci        # Karma headless + coverage report; CI uses this
+npm run e2e            # Playwright + axe smoke
+npm run build          # AOT, dev configuration
+```
+
+The pre-commit hook in `.claude/settings.json` runs `format:check
++ lint` on every git commit. If it fails, **fix the underlying
+issue**; never `git commit --no-verify`. The hook does NOT run
+tests (too slow for an interactive commit), so the `test:headless`
+gate is on the developer to run before push.
+
+### Recurring CI failures that are 100% catchable locally
+
+| Failure | Local command that would have caught it | Caught on |
+| --- | --- | --- |
+| Prettier drift (`format:check` non-zero) | `npm run format:check` | PR #357 — 2 files |
+| `@typescript-eslint/array-type` (`Array<T>`) | `npm run lint` | PR #357 — 7 errors |
+| Missing `i18n` key in FR/ES | `npm run format && npm run lint` (the JSON parser catches missing-comma siblings) + manual diff of `assets/i18n/*.json` | PR #340 |
+| Angular template `NG8113: import not used` | `npm run build` | PR #340 |
+| Karma `Component should create` failing on new component | `npm run test:headless` | PR #341 |
+
+The principle: **if a tool exists locally that mirrors the CI
+gate, running it before push is mandatory.** Pushing a PR that
+trivially fails lint or format wastes everyone's review time
+because the comments roll in before the human reviewer can read
+the actual diff.
 
 ## Sub-component pattern for feature add-ons
 

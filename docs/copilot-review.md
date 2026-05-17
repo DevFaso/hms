@@ -258,3 +258,98 @@ Files touched in the follow-up:
 - `docs/runbooks/schema-per-tenant-migration.md`
 - `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
 - `docs/copilot-review.md`
+
+---
+
+## Copilot review — PR #357 `feat/v1.1-kpi-dashboard-follow-on` (2026-05-17)
+
+### Fixed #12 — ESLint `@typescript-eslint/array-type` (7 errors)
+
+**Files:** `kpi-cards.component.ts`, `kpi-sparkline.component.ts`
+
+**Lint:** Seven instances of `Array<T>` triggered
+`@typescript-eslint/array-type`. The project convention (enforced by
+the Angular `eslint:recommended` ruleset) is `T[]` shorthand.
+
+**Resolution:** All seven sites flipped from `Array<T>` to `T[]`:
+the cards `KpiCard.series` field, the sparkline's `input.required<…>`
+generic, the `dots` computed, the local `out` array in `dots()`, and
+both type annotations on the private `dataPoints` helper (parameter
++ return + the inner `finite` accumulator).
+
+### Fixed #13 — Sparkline aria-label hardcoded English (Medium)
+
+**File:** `hospital-portal/src/app/analytics/kpi-cards/kpi-sparkline.component.ts`
+
+**Copilot:** `ariaLabel` was built with a template string
+`` `${this.label()} trend, ${finite.length} data points` `` — the
+words "trend" and "data points" were hardcoded English even though
+this PR adds translated KPI trend labels in FR/ES. French/Spanish
+users would have got mixed-language screen-reader text.
+
+**Resolution:** Sparkline now injects `TranslateService` and resolves
+`ANALYTICS.KPI.SPARKLINE_ARIA` with `{{label}}` and `{{count}}`
+placeholders. The translation file owns the word order, which matters
+because FR/ES put "tendance" / "tendencia" *before* the KPI label,
+not after. New keys added in EN/FR/ES:
+
+- EN: `"{{label}} trend, {{count}} data points"`
+- FR: `"Tendance {{label}}, {{count}} points de données"`
+- ES: `"Tendencia {{label}}, {{count}} puntos de datos"`
+
+### Fixed #14 — SonarQube Critical: duplicate `"fromInclusive"` literal (Code Smell)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+
+**Sonar:** "Define a constant instead of duplicating this literal
+`fromInclusive` 3 times." Same flag fired for `toExclusive`. Both
+strings were used as `setParameter(...)` keys in `computeNoShowRate`
+and in the no-show branch of `computeTrend`.
+
+**Resolution:** Two new static final constants
+(`PARAM_FROM_INCLUSIVE`, `PARAM_TO_EXCLUSIVE`) added next to the
+existing `PARAM_HOSPITAL_ID` / `PARAM_WINDOW_START` /
+`PARAM_WINDOW_END`. Both literal usages replaced; the named-query
+SQL itself still uses `:fromInclusive` / `:toExclusive` since those
+are JPA parameter markers, not string literals.
+
+### Fixed #15 — SonarQube Critical: `computeTrend` cognitive complexity 25 > 15 (Code Smell)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+
+**Sonar:** "Refactor this method to reduce its Cognitive Complexity
+from 25 to the 15 allowed." `computeTrend` orchestrated three
+sequential native-query+merge blocks plus a final emit loop — each
+block by itself was ~6 complexity, summing past the gate.
+
+**Resolution:** Split into orchestrator + four helpers, each well
+under 15:
+
+- `addDoorToDoctorTrend(series, hospitalId, windowStart, windowEnd)`
+- `addDispenseLeadTimeTrend(series, hospitalId, windowStart, windowEnd)`
+- `addNoShowRateTrend(series, hospitalId, fromInclusive, appointmentEndExclusive)`
+- `emitTrendPoints(series, fromInclusive, toInclusive)` — static
+
+`computeTrend` itself drops to ~5 lines: initialise the map, call
+the three adders, return the emit. Same external contract; same
+DTO shape; same per-KPI nan-as-gap semantics.
+
+### Net result (PR #357)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| Critical (Sonar code smell) | 2 | Fixed |
+| Medium (Copilot) | 1 | Fixed |
+| Lint errors | 7 | Fixed |
+
+Files touched in the follow-up:
+
+- `hospital-core/src/main/java/com/example/hms/service/impl/KpiDashboardServiceImpl.java`
+- `hospital-portal/src/app/analytics/kpi-cards/kpi-cards.component.ts`
+- `hospital-portal/src/app/analytics/kpi-cards/kpi-sparkline.component.ts`
+- `hospital-portal/src/assets/i18n/en.json`
+- `hospital-portal/src/assets/i18n/fr.json`
+- `hospital-portal/src/assets/i18n/es.json`
+- `docs/copilot-review.md`
+- `.claude/skills/angular-portal-component/SKILL.md`
+- `.claude/skills/pr-review-response/SKILL.md`

@@ -3,6 +3,7 @@ package com.example.hms.payload.dto.analytics;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -35,8 +36,24 @@ public record KpiDashboardDTO(
     LocalDate to,
     DoorToDoctor doorToDoctor,
     DispenseLeadTime dispenseLeadTime,
-    NoShowRate noShowRate
+    NoShowRate noShowRate,
+    List<KpiTrendPoint> trend
 ) {
+    /**
+     * Daily aggregate of the three KPIs for sparkline rendering in the
+     * analytics UI. Only populated when the caller requests it
+     * ({@code ?withTrends=true} on the controller). Days with zero
+     * samples for a given KPI carry a {@code null} value for that field
+     * so the sparkline can draw a gap rather than a misleading zero.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record KpiTrendPoint(
+        LocalDate date,
+        Double doorToDoctorAverageMinutes,
+        Double dispenseLeadTimeAverageMinutes,
+        Double noShowRate
+    ) { }
+
     /**
      * Average minutes between patient arrival and triage completion
      * for encounters in the requested window.
