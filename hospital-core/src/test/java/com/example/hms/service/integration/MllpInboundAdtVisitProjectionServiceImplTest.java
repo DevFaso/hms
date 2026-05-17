@@ -223,12 +223,20 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // gate instead of the trigger-mismatch gate).
         properties.getAutoCreate().setEnabled(true);
         stubNoMatchOnReconciliation();
-        // intakeConfigRepository returns Optional.empty() by default — no stub needed.
+        // Explicit stub rather than relying on Mockito's default Optional
+        // handling. Mockito 2.x+ returns Optional.empty() for Optional
+        // return types via RETURNS_DEFAULTS, but a future Mockito
+        // strictness change or a Spy-default switch could break that
+        // assumption silently — be explicit. Caught on PR A04 round 1
+        // Copilot review (High).
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+            .thenReturn(Optional.empty());
 
         VisitProjectionResult result = service.projectVisit(
             adt("A04", "V-AC-2"), patient, hospital, "REG", "HOSP1", "MSG-AC-2");
 
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(intakeConfigRepository).findByHospital_IdAndEnabledTrue(eq(hospital.getId()));
         verify(admissionRepository, never()).save(any());
         verify(encounterRepository, never()).save(any());
     }
@@ -427,17 +435,32 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
 
         AdtIntakeProviderConfig config = intakeConfig();
         // defaultAssignmentId left null — config is otherwise A01-ready.
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
         when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
             .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            eq(patient.getId()), eq(hospital.getId()))).thenReturn(true);
+        when(staffRepository.findById(eq(config.getAdmittingProviderId())))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(eq(config.getDepartmentId())))
+            .thenReturn(Optional.of(department));
 
         VisitProjectionResult result = service.projectVisit(
             adt("A04", "V-A04-NOASS"), patient, hospital, "REG", "HOSP1", "MSG-A04-NOASS");
 
         assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
-        verifyNoInteractions(registrationRepository);
-        verifyNoInteractions(staffRepository);
+        // Shared resolveAutoCreateContext runs first (config/registration/
+        // staff/dept), THEN the A04-specific default_assignment_id gate
+        // fires. Earlier revision short-circuited at the assignment-id
+        // gate before the shared resolve; that ordering was lost when
+        // the duplicate code path was extracted to satisfy SonarQube's
+        // 3% duplication cap on new code. The load-bearing assertions —
+        // assignment lookup not performed, no Encounter saved, no audit —
+        // still hold.
         verifyNoInteractions(assignmentRepository);
         verify(encounterRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
     }
 
     @Test

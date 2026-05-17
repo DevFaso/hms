@@ -448,3 +448,108 @@ Files touched in the follow-up:
 - `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
 - `docs/runbooks/hl7-adt-conflict-resolution.md`
 - `docs/copilot-review.md`
+
+---
+
+## Copilot review — PR A04 (`feat/v1.1-adt-auto-create-encounter`) round 1 (2026-05-17)
+
+### Fixed #20 — SonarQube Quality Gate: 4.7% duplication on new code (> 3% gate)
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+
+**Sonar:** "4.7% Duplication on New Code (required ≤ 3%)". The
+projection service file alone was at 9.2% (16 duplicated lines) —
+SonarQube quantifies the gate failure per file as well as the
+overall %, so the cluster came from one place.
+
+**Root cause:** `tryAutoCreateAdmission` and `tryAutoCreateEncounter`
+each contained the same ~10-line gate-and-resolve preamble:
+
+```java
+if (!properties.getAutoCreate().isEnabled()) return Optional.empty();
+// (different trigger-event check per method)
+Optional<AdtIntakeProviderConfig> configOpt =
+    intakeConfigRepository.findByHospital_IdAndEnabledTrue(ctx.hospitalId);
+if (configOpt.isEmpty()) return Optional.empty();
+AdtIntakeProviderConfig config = configOpt.get();
+if (!registrationRepository.isPatientRegisteredInHospitalFixed(
+    ctx.patient.getId(), ctx.hospitalId)) {
+    log.warn(...); return Optional.empty();
+}
+Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
+if (providerOpt.isEmpty()) return Optional.empty();
+Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
+if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
+    return Optional.empty();
+}
+```
+
+The two methods diverged only on the trigger-event check and on the
+type-specific write path.
+
+**Resolution:** Extracted a `resolveAutoCreateContext(ctx)` helper
+that does the full shared gate stack and returns an
+`Optional<AutoCreateContext>` carrying the resolved `(config,
+provider, department)` tuple. Both type-specific methods now start
+with their trigger-event check, call the shared resolver, and then
+do their own write path:
+
+```java
+private Optional<VisitProjectionResult> tryAutoCreateAdmission(ProjectionContext ctx) {
+    if (!TRIGGER_A01.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
+    Optional<AutoCreateContext> resolved = resolveAutoCreateContext(ctx);
+    if (resolved.isEmpty()) return Optional.empty();
+    AutoCreateContext ac = resolved.get();
+    Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
+    // ... save + audit + log
+}
+```
+
+`AutoCreateContext` is a private inner record. `tryAutoCreateEncounter`
+follows the same shape plus its own A04-specific gate (assignment-id
+non-null + assignment resolve).
+
+**Trade-off:** the A04 "no default_assignment_id" early-exit moved
+from before the registration/staff/dept lookups to after them.
+Three extra DB calls per misconfigured A04 message; the ADT path
+processes a handful of messages per second so this isn't a hot
+loop. The
+`a04SkippedWhenAssignmentIdMissing` test dropped its
+`verifyNoInteractions(registrationRepository/staffRepository)`
+ordering assertions — the load-bearing assertions
+(`verifyNoInteractions(assignmentRepository)`, no
+`encounterRepository.save`, no audit) still hold.
+
+### Fixed #21 — Mockito Optional-default in a04ReachesEncounterBranch... test (High)
+
+**File:** `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
+
+**Copilot:** The test relied on Mockito's default return for an
+unstubbed `Optional`-returning repository method. Copilot's
+comment asserted Mockito returns `null` for `Optional`; the test
+actually passed because Mockito 2.x+ returns `Optional.empty()`
+via `RETURNS_DEFAULTS → ReturnsEmptyValues`. But relying on the
+default is fragile — a future Mockito strictness change or a Spy
+default switch could break it silently.
+
+**Resolution:** Added an explicit `when(intakeConfigRepository
+.findByHospital_IdAndEnabledTrue(eq(hospital.getId())))
+.thenReturn(Optional.empty())` stub and a matching
+`verify(intakeConfigRepository).findByHospital_IdAndEnabledTrue(...)`
+so the contract is now pinned at both ends. Comment in the test
+calls out why explicit stubbing matters here even though the
+implicit default happens to work today.
+
+### Net result (PR A04 round 1)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| Sonar Quality Gate (duplication) | 1 | Fixed |
+| Copilot (High) | 1 | Fixed |
+
+Files touched in the follow-up:
+
+- `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+- `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
+- `.claude/skills/pr-review-response/SKILL.md`
+- `docs/copilot-review.md`

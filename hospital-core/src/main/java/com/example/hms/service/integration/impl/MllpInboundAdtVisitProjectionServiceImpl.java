@@ -175,15 +175,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     }
 
     /**
-     * Auto-create branch (roadmap row 24 follow-on). Returns
-     * {@code Optional.empty()} on any gate failure so the caller falls
-     * through to the {@code NO_MATCH} log line — explicit "this is
-     * what we'd auto-create if turned on" visibility.
+     * Resolve the shared auto-create context — flag, config, cross-tenant
+     * registration gate, staff, optional department. Both the A01
+     * (Admission) and A04 (Encounter) auto-create branches share these
+     * gates, so extracting them here keeps the type-specific helpers
+     * focused on their own write paths and keeps SonarQube duplication
+     * on new code under the 3% gate (PR A04 round 1 came in at 9.2%).
      *
      * <p>Gate order (cheapest first):
      * <ol>
      *   <li>Cluster-wide auto-create sub-flag</li>
-     *   <li>Trigger event is A01</li>
      *   <li>Per-hospital intake config exists AND is enabled</li>
      *   <li>Patient has an active registration at the receiving hospital</li>
      *   <li>The Staff (admitting provider) referenced in the config exists
@@ -191,9 +192,8 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      *   <li>The Department (if specified) exists AND belongs to the receiving hospital</li>
      * </ol>
      */
-    private Optional<VisitProjectionResult> tryAutoCreateAdmission(ProjectionContext ctx) {
+    private Optional<AutoCreateContext> resolveAutoCreateContext(ProjectionContext ctx) {
         if (!properties.getAutoCreate().isEnabled()) return Optional.empty();
-        if (!TRIGGER_A01.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
 
         Optional<AdtIntakeProviderConfig> configOpt =
             intakeConfigRepository.findByHospital_IdAndEnabledTrue(ctx.hospitalId);
@@ -209,7 +209,6 @@ public class MllpInboundAdtVisitProjectionServiceImpl
 
         Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
         if (providerOpt.isEmpty()) return Optional.empty();
-        Staff provider = providerOpt.get();
 
         Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
         if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
@@ -217,17 +216,42 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             // helper already logged the precise reason — bail.
             return Optional.empty();
         }
-        Department department = departmentOpt.orElse(null);
 
-        Admission admission = buildAdmission(ctx, config, provider, department);
+        return Optional.of(new AutoCreateContext(
+            config, providerOpt.get(), departmentOpt.orElse(null)));
+    }
+
+    /**
+     * A01 (Admission) auto-create branch. Trigger-event gate + the shared
+     * gate stack from {@link #resolveAutoCreateContext} + the Admission
+     * write path.
+     */
+    private Optional<VisitProjectionResult> tryAutoCreateAdmission(ProjectionContext ctx) {
+        if (!TRIGGER_A01.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
+        Optional<AutoCreateContext> resolved = resolveAutoCreateContext(ctx);
+        if (resolved.isEmpty()) return Optional.empty();
+        AutoCreateContext ac = resolved.get();
+
+        Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
         admission = admissionRepository.save(admission);
         emitAutoCreateAudit(admission, ctx);
 
         log.info("ADT visit-sync auto-created admission={} visit={} sender={}/{} hospital={} patient={} provider={} msgCtrlId={}",
             admission.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), provider.getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ADMISSION_AUTOCREATED);
     }
+
+    /**
+     * Resolved bag of (config, provider, department) returned by
+     * {@link #resolveAutoCreateContext}. Lets the type-specific helpers
+     * pull just the parts they need without re-checking gates.
+     */
+    private record AutoCreateContext(
+        AdtIntakeProviderConfig config,
+        Staff provider,
+        Department department
+    ) { }
 
     /**
      * Resolve the configured admitting-provider Staff and enforce the
@@ -349,15 +373,12 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      * a stack trace in the MLLP worker.
      */
     private Optional<VisitProjectionResult> tryAutoCreateEncounter(ProjectionContext ctx) {
-        if (!properties.getAutoCreate().isEnabled()) return Optional.empty();
         if (!TRIGGER_A04.equalsIgnoreCase(ctx.parsed.triggerEvent())) return Optional.empty();
+        Optional<AutoCreateContext> resolved = resolveAutoCreateContext(ctx);
+        if (resolved.isEmpty()) return Optional.empty();
+        AutoCreateContext ac = resolved.get();
 
-        Optional<AdtIntakeProviderConfig> configOpt =
-            intakeConfigRepository.findByHospital_IdAndEnabledTrue(ctx.hospitalId);
-        if (configOpt.isEmpty()) return Optional.empty();
-        AdtIntakeProviderConfig config = configOpt.get();
-
-        if (config.getDefaultAssignmentId() == null) {
+        if (ac.config().getDefaultAssignmentId() == null) {
             // Hospital opted into auto-create cluster-wide but didn't
             // populate the assignment column required for A04. Visible
             // soak signal: "you've enabled the path, populate the column."
@@ -366,34 +387,18 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             return Optional.empty();
         }
 
-        if (!registrationRepository.isPatientRegisteredInHospitalFixed(
-            ctx.patient.getId(), ctx.hospitalId)) {
-            log.warn("ADT A04 auto-create skipped — patient {} not actively registered at hospital {} (cross-tenant gate)",
-                ctx.patient.getId(), ctx.hospitalId);
-            return Optional.empty();
-        }
-
-        Optional<Staff> providerOpt = resolveProvider(config, ctx.hospitalId);
-        if (providerOpt.isEmpty()) return Optional.empty();
-        Staff provider = providerOpt.get();
-
-        Optional<Department> departmentOpt = resolveDepartment(config, ctx.hospitalId);
-        if (departmentOpt.isEmpty() && config.getDepartmentId() != null) {
-            return Optional.empty();
-        }
-        Department department = departmentOpt.orElse(null);
-
         Optional<UserRoleHospitalAssignment> assignmentOpt =
-            resolveAssignment(config, ctx.hospitalId);
+            resolveAssignment(ac.config(), ctx.hospitalId);
         if (assignmentOpt.isEmpty()) return Optional.empty();
 
-        Encounter encounter = buildEncounter(ctx, config, provider, department, assignmentOpt.get());
+        Encounter encounter = buildEncounter(
+            ctx, ac.config(), ac.provider(), ac.department(), assignmentOpt.get());
         encounter = encounterRepository.save(encounter);
         emitEncounterAutoCreateAudit(encounter, ctx);
 
         log.info("ADT A04 auto-created encounter={} visit={} sender={}/{} hospital={} patient={} staff={} msgCtrlId={}",
             encounter.getId(), ctx.visitNumber, ctx.app, ctx.fac, ctx.hospitalId,
-            ctx.patient.getId(), provider.getId(), ctx.controlId);
+            ctx.patient.getId(), ac.provider().getId(), ctx.controlId);
         return Optional.of(VisitProjectionResult.ENCOUNTER_AUTOCREATED);
     }
 
