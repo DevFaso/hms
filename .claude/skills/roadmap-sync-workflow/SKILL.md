@@ -122,6 +122,32 @@ Pick (1) when the PR is single-row and ready to merge atomically.
 Pick (2) when multiple PRs are in flight or the CSV change deserves
 explicit review.
 
+## Cell text must match the actual implementation
+
+The roadmap cell describing a foundation pass is a contract with
+reviewers: it commits to specific test counts, specific HTTP
+status codes, specific class names. When the implementation drifts
+during PR review (e.g. widening a test's `isIn(401, 404)` to
+`isIn(401, 403, 404)`), the cell text MUST track that drift in the
+same commit. Otherwise Copilot will flag the inconsistency on
+review and the cell becomes misleading reference material for
+later picks.
+
+Common drift surfaces:
+
+- **HTTP status sets in IT descriptions.** Cell says "flag-off
+  401/404 split"; test accepts 401/403/404. Update the cell to
+  "flag-off 401/403/404 split". Caught on row 25 EMPI in PR #349.
+- **Test counts.** Cell says "5 new ITs"; reviewer count is 4 + 1
+  unit = 5. Both wordings are valid, pick one and stick to it.
+- **Class names that change during review.** A rename in
+  response to a Copilot finding must propagate into the cell.
+
+When the drift fix lands in a separate "fix(scope): address
+Copilot review" commit, the cell update can ride along — re-quote
+the CSV cell, regenerate the xlsx, and call out the cell-text
+patch in the commit message body.
+
 ## Reference files
 
 - `docs/roadmap.csv` — source of truth

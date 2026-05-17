@@ -7,6 +7,7 @@ import org.hl7.fhir.r4.model.Period;
 import org.hl7.fhir.r4.model.Reference;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 
@@ -89,5 +90,58 @@ public class EncounterFhirMapper {
             p.setEnd(Date.from(src.getCheckoutTimestamp().atZone(ZoneId.systemDefault()).toInstant()));
         }
         return (p.getStart() == null && p.getEnd() == null) ? null : p;
+    }
+
+    /* ===================== Write direction (FHIR → entity) ===================== */
+
+    /**
+     * Apply the FHIR-mutable subset of fields from an inbound FHIR
+     * Encounter onto an existing entity. Returns the same entity for
+     * chaining. The caller is responsible for persisting + audit
+     * emission.
+     *
+     * <p><strong>Intentionally narrow.</strong> Honored fields:
+     * <ul>
+     *   <li>{@code Encounter.period.end} → {@code checkoutTimestamp}.
+     *       Only applied when the entity does not already carry a
+     *       checkout timestamp; this path is the documented external
+     *       "close the encounter" affordance and must not silently
+     *       overwrite a value the clinical UI already set.</li>
+     *   <li>{@code Encounter.reasonCode[0].text} → {@code chiefComplaint}.
+     *       Only applied when the entity's current value is null or
+     *       blank — chief complaint is captured at triage and external
+     *       systems must not overwrite the clinician's note.</li>
+     * </ul>
+     *
+     * <p><strong>Not honored:</strong> status (the encounter
+     * state-machine fires timestamps + side-effects we do not want to
+     * shortcut), class, type, subject, period.start, participants,
+     * diagnoses, hospitalization. These belong to admin / clinical
+     * workflows that carry their own audit and validation.
+     */
+    public Encounter applyFhirUpdates(Encounter existing, org.hl7.fhir.r4.model.Encounter src) {
+        if (existing == null || src == null) return existing;
+        applyCheckoutFromPeriodEnd(existing, src);
+        applyChiefComplaintFromReasonCode(existing, src);
+        return existing;
+    }
+
+    private static void applyCheckoutFromPeriodEnd(Encounter out, org.hl7.fhir.r4.model.Encounter src) {
+        if (!src.hasPeriod()) return;
+        Period p = src.getPeriod();
+        if (p == null || !p.hasEnd() || p.getEnd() == null) return;
+        if (out.getCheckoutTimestamp() != null) return;
+        LocalDateTime checkout = LocalDateTime.ofInstant(p.getEnd().toInstant(), ZoneId.systemDefault());
+        out.setCheckoutTimestamp(checkout);
+    }
+
+    private static void applyChiefComplaintFromReasonCode(Encounter out, org.hl7.fhir.r4.model.Encounter src) {
+        if (!src.hasReasonCode() || src.getReasonCode().isEmpty()) return;
+        if (out.getChiefComplaint() != null && !out.getChiefComplaint().isBlank()) return;
+        CodeableConcept first = src.getReasonCodeFirstRep();
+        if (first == null || first.getText() == null) return;
+        String text = first.getText().trim();
+        if (text.isEmpty()) return;
+        out.setChiefComplaint(text);
     }
 }

@@ -3,17 +3,25 @@ package com.example.hms.fhir.provider;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
+import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.annotation.Search;
+import ca.uhn.fhir.rest.annotation.Update;
+import ca.uhn.fhir.rest.api.MethodOutcome;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
+import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
 import com.example.hms.fhir.mapper.ObservationFhirMapper;
+import com.example.hms.fhir.write.ObservationFhirWriteService;
+import com.example.hms.model.LabResult;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Observation;
+import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -42,15 +50,18 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
     private final PatientVitalSignRepository vitalsRepository;
     private final LabResultRepository labResultRepository;
     private final ObservationFhirMapper mapper;
+    private final ObservationFhirWriteService writeService;
 
     public ObservationFhirResourceProvider(
         PatientVitalSignRepository vitalsRepository,
         LabResultRepository labResultRepository,
-        ObservationFhirMapper mapper
+        ObservationFhirMapper mapper,
+        ObservationFhirWriteService writeService
     ) {
         this.vitalsRepository = vitalsRepository;
         this.labResultRepository = labResultRepository;
         this.mapper = mapper;
+        this.writeService = writeService;
     }
 
     @Override
@@ -126,5 +137,60 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
         return category.getValuesAsQueryTokens().stream()
             .map(TokenParam::getValue)
             .anyMatch(v -> v != null && v.equalsIgnoreCase(code));
+    }
+
+    /**
+     * PUT /Observation/{id}. Only the {@code labresult-{uuid}} namespace
+     * is writable — {@code vital-*} ids are rejected with 422
+     * BUSINESSRULE (1:N read-side expansion has no single-row write
+     * target). Honored fields are restricted to {@code note[0].text}.
+     *
+     * <p>Feature-flagged: when {@code app.fhir.write.enabled=false}
+     * (default) the handler returns 405 <strong>before</strong> any
+     * id-shape or body validation.
+     */
+    @Update
+    public MethodOutcome update(
+        @IdParam IdType id,
+        @ResourceParam Observation resource
+    ) {
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
+        if (resource == null) {
+            throw unprocessable(
+                "PUT /Observation/{id} requires an Observation resource body.",
+                OperationOutcome.IssueType.STRUCTURE
+            );
+        }
+        if (id == null || id.getIdPart() == null || id.getIdPart().isBlank()) {
+            throw new ResourceNotFoundException(id);
+        }
+        String idPart = id.getIdPart();
+        if (resource.getIdElement() != null && resource.getIdElement().getIdPart() != null
+            && !resource.getIdElement().getIdPart().isBlank()
+            && !resource.getIdElement().getIdPart().equals(idPart)) {
+            throw unprocessable(
+                "Resource.id does not match the URL id; refusing to honor PUT against a mismatched id.",
+                OperationOutcome.IssueType.BUSINESSRULE
+            );
+        }
+        LabResult saved = writeService.updateLabResult(idPart, resource);
+        Observation rendered = mapper.toFhir(saved);
+        return new MethodOutcome()
+            .setId(new IdType("Observation", rendered != null && rendered.getId() != null
+                ? rendered.getId() : idPart))
+            .setResource(rendered);
+    }
+
+    private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {
+        OperationOutcome outcome = new OperationOutcome();
+        outcome.addIssue()
+            .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+            .setCode(type)
+            .setDiagnostics(message);
+        return new UnprocessableEntityException(message, outcome);
     }
 }

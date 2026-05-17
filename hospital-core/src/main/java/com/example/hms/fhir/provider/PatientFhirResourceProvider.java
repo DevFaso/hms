@@ -3,6 +3,7 @@ package com.example.hms.fhir.provider;
 import ca.uhn.fhir.rest.annotation.ConditionalUrlParam;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.IdParam;
+import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -13,12 +14,15 @@ import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.fhir.write.PatientFhirWriteService;
 import com.example.hms.model.Patient;
 import com.example.hms.repository.PatientRepository;
+import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
@@ -49,15 +53,18 @@ public class PatientFhirResourceProvider implements IResourceProvider {
     private final PatientRepository patientRepository;
     private final PatientFhirMapper patientMapper;
     private final PatientFhirWriteService writeService;
+    private final PatientEverythingService everythingService;
 
     public PatientFhirResourceProvider(
         PatientRepository patientRepository,
         PatientFhirMapper patientMapper,
-        PatientFhirWriteService writeService
+        PatientFhirWriteService writeService,
+        PatientEverythingService everythingService
     ) {
         this.patientRepository = patientRepository;
         this.patientMapper = patientMapper;
         this.writeService = writeService;
+        this.everythingService = everythingService;
     }
 
     @Override
@@ -147,6 +154,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @IdParam IdType id,
         @ResourceParam org.hl7.fhir.r4.model.Patient resource
     ) {
+        // Flag-first ordering (PR #343 Copilot review): when the write
+        // API is disabled, return 405 BEFORE any request-shape
+        // validation runs. Without this, flag-off requests with a
+        // mismatched body id would return 422 — contradicting the
+        // documented flag-off contract.
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
         UUID uuid = parseUuid(id);
         if (resource == null) {
             throw unprocessable(
@@ -179,6 +196,13 @@ public class PatientFhirResourceProvider implements IResourceProvider {
         @ResourceParam org.hl7.fhir.r4.model.Patient resource,
         @ConditionalUrlParam String conditionalUrl
     ) {
+        // Flag-first ordering: mirror the @Update fix. PR #343 Copilot
+        // review noted the same gap on @Create.
+        if (!writeService.isEnabled()) {
+            throw new MethodNotAllowedException(
+                "FHIR write API is disabled — set app.fhir.write.enabled=true to opt in."
+            );
+        }
         if (resource == null) {
             throw unprocessable(
                 "POST /Patient requires a Patient resource body.",
@@ -190,6 +214,20 @@ public class PatientFhirResourceProvider implements IResourceProvider {
             .setId(new IdType("Patient", resolved.getId().toString()))
             .setResource(patientMapper.toFhir(resolved))
             .setCreated(false);
+    }
+
+    /**
+     * Patient compartment {@code $everything} (roadmap row 22).
+     * Returns a {@link Bundle} containing the requested Patient and the
+     * resources in its compartment (Encounters, Observations,
+     * Conditions, MedicationRequests). Feature-flagged via
+     * {@code app.fhir.operations.everything.enabled} — flag-off
+     * surfaces as 405 from {@link PatientEverythingService#everythingForPatient}.
+     */
+    @Operation(name = "$everything", idempotent = true, type = org.hl7.fhir.r4.model.Patient.class)
+    public Bundle patientEverything(@IdParam IdType id) {
+        UUID uuid = parseUuid(id);
+        return everythingService.everythingForPatient(uuid);
     }
 
     private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {
