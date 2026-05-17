@@ -121,6 +121,118 @@ row-32 KPI dashboard — `KpiDashboardServiceImpl`), the contract is:
    patient-level row escapes the service. Standard request logging
    applies.
 
+## Cross-tenant pitfalls (2026-05-16 evening batch — PRs #349 / #351 / #352)
+
+Three subtle tenant-leak patterns that slipped through earlier
+review cycles. Each was caught on a foundation-pass branch and is
+now load-bearing reading before any new clinical write or read
+service lands.
+
+### `PatientRepository.findById(uuid)` is NOT tenant-aware
+
+The Javadoc on `PatientFhirResourceProvider` historically said
+"Read is tenant-scoped through `PatientRepository.findById(Object)`
+which already applies hospital-context filters via the
+`tenantContext` bean". That is **wrong**: `PatientRepository`
+extends plain `JpaRepository`, and `findById` returns any patient
+by primary key regardless of `HospitalContextHolder.getActiveHospitalId()`.
+
+A read path that calls `patientRepository.findById(...)` and then
+immediately renders the Patient (Bundle entry, mapper, FHIR
+resource) **leaks PHI** (name, DOB, address, phone, email) across
+tenants whenever the caller holds a Patient UUID for a tenant
+they're not authorised in.
+
+**Correct pattern:**
+
+```java
+Patient patient = patientRepository.findById(patientId)
+    .orElseThrow(() -> notFound("Patient/" + patientId + " not found"));
+boolean registered = registrationRepository
+    .findByPatientIdAndHospitalId(patient.getId(), hospitalId)
+    .isPresent();
+if (!registered) {
+    throw notFound("Patient/" + patientId + " not found at the active hospital scope.");
+}
+// only NOW safe to render
+return patientMapper.toFhir(patient);
+```
+
+The 404 is intentional — cross-tenant rejection collapses to "no
+such patient" so the existence of patients belonging to other
+tenants stays invisible.
+
+Caught on `PatientEverythingService.everythingForPatient` in PR
+#351 (FHIR `$everything`). The same pattern applies to any other
+new read path that takes a patient UUID from the URL.
+
+### Cross-tenant guard must DENY on null/empty active hospital
+
+A super-admin without an explicit `X-Hospital-Id` header has
+`HospitalContextHolder.getActiveHospitalId() == null`. A guard
+written as "reject only when BOTH the stored hospitalId and the
+current context's hospitalId are non-null and unequal" lets any
+super-admin call see any tenant's data — the inverse of the
+intended invisible-cross-tenant-rejection contract.
+
+**Correct pattern:**
+
+```java
+UUID activeHospitalId = HospitalContextHolder.getContextOrEmpty()
+    .getActiveHospitalId();
+if (activeHospitalId == null) {
+    // No tenant pin → deny. Super-admin must set X-Hospital-Id
+    // explicitly per the row-32 KPI pattern.
+    return Optional.empty();  // or throw 403 if write context
+}
+if (!stored.getHospitalId().equals(activeHospitalId)) {
+    return Optional.empty();
+}
+```
+
+Caught on `FhirBulkExportService.getJob` in PR #351. The same
+write-side pattern (throwing 403 instead of 404) lands on
+`EncounterFhirWriteService` and `ObservationFhirWriteService` from
+PR #350 (those rejected on null up-front via
+`HospitalContextHolder.getContextOrEmpty().getActiveHospitalId() == null`
+→ `ForbiddenOperationException`).
+
+The exception: read-only aggregate dashboards (row 32 KPI) where
+the documented behaviour is "super-admin without X-Hospital-Id
+returns an empty rollup". Those flow through
+`RoleValidator.requireActiveHospitalId()` which deliberately
+returns `null` for the empty-rollup case.
+
+### Aggregate queries must group by a stable key, not display name
+
+Hospital names are not unique in the schema (only
+`Hospital.code` carries a `unique = true` constraint). Two
+hospitals can share a name; a hospital rename also splits the
+same tenant's historic data across the old and new
+`hospitalName` snapshots on
+`audit.audit_event_logs.hospital_name`.
+
+**Wrong:**
+
+```java
+@Query("SELECT a.hospitalName, COUNT(a) FROM AuditEventLog a "
+     + "GROUP BY a.hospitalName")
+```
+
+**Right:**
+
+```java
+@Query("SELECT a.assignment.hospital.id, a.assignment.hospital.name, COUNT(a) "
+     + "FROM AuditEventLog a "
+     + "WHERE a.assignment.hospital.id IS NOT NULL "
+     + "GROUP BY a.assignment.hospital.id, a.assignment.hospital.name "
+     + "ORDER BY a.assignment.hospital.name ASC")
+```
+
+Project the display name alongside for the UI, but key by id.
+Caught on `AuditEventLogRepository.countByHospitalBetween` in PR
+#352 (per-tenant cost obs).
+
 ## Reference files
 
 - `hospital-core/src/main/java/com/example/hms/security/context/HospitalContext.java`

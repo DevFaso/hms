@@ -298,6 +298,157 @@ skill — this list is for cross-cutting muscle memory.
   `password` literals get copied into shared environments. Use env
   placeholders (`$env:HMS_SMOKE_PASSWORD`) instead. See PR #341.
 
+## Anti-patterns surfaced by Copilot + Sonar (2026-05-16 evening batch — PRs #349 / #350 / #351 / #352)
+
+Second wave of review findings across the four follow-on PRs that
+landed rows 8 / 18 / 19 / 20-follow-on / 21 / 22 / 25 / 36 / 39 / 41 /
+42 / 44. Each lesson is also captured in its domain skill — this
+list is cross-cutting muscle memory.
+
+- **Spring env-var binding requires an explicit `${ENV:default}`
+  placeholder in `application.properties`.** Runbooks that say
+  "set `FHIR_BULK_EXPORT_ENABLED=true`" or "set `DICOM_PROXY_ENABLED=true`"
+  do NOT work unless `application.properties` carries
+  `app.fhir.operations.bulk-export.enabled=${FHIR_BULK_EXPORT_ENABLED:false}`
+  (and one line per flag). Spring's relaxed binding would otherwise
+  expect `APP_FHIR_OPERATIONS_BULK_EXPORT_ENABLED` — the prose-friendly
+  short var name has no path to the property without the explicit
+  placeholder. **Always either ship the placeholder line in
+  `application.properties` when you author the runbook, or write the
+  runbook against the canonical `APP_*` var name.** Caught on the
+  EMPI / Async-Kafka / DICOM-proxy / tenant-cost runbooks (PRs #349,
+  #352).
+- **`patientRepository.findById(uuid)` is NOT tenant-aware.** The
+  base `JpaRepository` returns any patient by primary key regardless
+  of `HospitalContextHolder`. Code that reads Patient directly +
+  immediately renders it (Bundle entry, mapper, etc.) leaks PHI
+  (name, DOB, address, phone, email) across tenants. Always gate
+  Patient resolution behind
+  `PatientHospitalRegistrationRepository.findByPatientIdAndHospitalId(...).isPresent()`
+  and return 404 otherwise. Caught on `PatientEverythingService` in
+  PR #351; the assumption that "`findById` is tenant-aware" was
+  recorded incorrectly in earlier skills notes.
+- **Cross-tenant guard must DENY on null/empty active hospital
+  context, not allow.** A super-admin without an explicit
+  `X-Hospital-Id` header has `HospitalContextHolder.getActiveHospitalId()
+  == null`. A guard that only rejects when both the stored
+  hospitalId AND the current context's hospitalId are non-null lets
+  any super-admin call see any tenant's data — the inverse of the
+  "invisible cross-tenant rejection" contract. Pattern:
+  `if (activeHospitalId == null) return Optional.empty();` first,
+  then the equality check. Caught on `FhirBulkExportService.getJob`
+  in PR #351.
+- **Aggregate queries must group by a stable key, not display
+  name.** Hospital names are not unique in the schema (only `code`
+  is unique); a rename also splits the same tenant across old/new
+  snapshots. Group by `hospital.id` (or `hospital.code`) and project
+  `hospital_name` from a JOIN if you need the label. Caught on
+  `AuditEventLogRepository.countByHospitalBetween` in PR #352.
+- **AuditEventType naming convention: past-tense `_UPDATED`.** The
+  "Care delivery workflow" group already uses `APPOINTMENT_UPDATED`,
+  `PRESCRIPTION_UPDATED`, `LAB_RESULT_UPDATED`,
+  `IMAGING_RESULT_UPDATED`. New event types must follow suit; renaming
+  a constant AFTER it has been persisted to audit history is a
+  multi-step migration. Caught on `ENCOUNTER_UPDATE` (should have
+  been `ENCOUNTER_UPDATED`) in PR #350.
+- **USER-actor audits MUST carry the user/assignment context.**
+  Building an `AuditEventRequestDTO` with no `userId` /
+  `assignment` makes `AuditEventLogServiceImpl` resolve the actor as
+  `SYSTEM` — which silently mis-attributes clinician access to "the
+  system" instead of the actual user. For any endpoint that
+  represents authenticated clinical access (DICOM proxy, FHIR write,
+  etc.), pull the principal from `SecurityContextHolder` and attach
+  it to the audit DTO. Caught on `DicomProxyService.emitAudit` in
+  PR #349.
+- **Test `@DisplayName` must match the assertion set.** When the
+  assertion accepts `isIn(401, 403, 404)`, the display name must say
+  "401, 403, or 404 when flag off" — not "401 or 404". The test
+  output is operator-facing and drifting between docstring and
+  assertion is a real bug-class (operators read the green dot and
+  trust the docstring). Caught on `EmpiProbabilisticControllerIT` +
+  `DicomProxyControllerIT` in PR #349.
+- **Roadmap cell test-count description must match the actual test
+  assertions.** When the IT widens from `isIn(401, 404)` to
+  `isIn(401, 403, 404)`, the roadmap cell mentioning "1 IT —
+  flag-off 401/404" must update too. Caught on row 25 in PR #349.
+- **Javadoc must not promise behavior the implementation lacks.**
+  `EmpiProbabilisticProperties` Javadoc said "the foundation pass
+  returns ranked candidates for the receptionist UI to review" — but
+  `EmpiProbabilisticMatcher` returns an empty list both flag-off
+  AND flag-on (scorer body deferred). Doc-promises-empty-impl is a
+  worse contract leak than the missing impl itself. Caught on
+  `EmpiProbabilisticProperties` in PR #349.
+- **Properties-class Javadoc must not reference classes that don't
+  exist yet.** `AsyncPipelineProperties` Javadoc said "the foundation
+  pass ships only the property + a placeholder consumer wiring
+  class" — but no such consumer class exists. Either ship the
+  placeholder class (preferred) or rewrite the Javadoc to say "the
+  foundation pass ships only the properties; consumer wiring is the
+  follow-on". Caught on `AsyncPipelineProperties` in PR #349.
+- **`audit_event_logs` lives in the `support` schema, NOT `audit`.**
+  `AuditEventLog` is `@Table(schema = "support")`. Runbooks /
+  ad-hoc SQL that reference `audit.audit_event_logs` will fail with
+  missing-table errors. Same applies to other deceptively-named
+  tables — verify against the entity's `@Table(schema = ...)` before
+  pasting SQL into a runbook. Caught on
+  `per-tenant-cost-observability.md` in PR #352.
+- **Backend health endpoint is `/api/actuator/health`, not
+  `/actuator/health`.** `server.servlet.context-path=/api` is set
+  application-wide. Smoke scripts and preflight harnesses that probe
+  the bare path get 404 against the documented base URL. Caught on
+  `scripts/keycloak/preflight.sh` in PR #352.
+- **Input-validation parsers must 400 on malformed input, not
+  silently default.** A controller that does
+  `LocalDate.parse(raw)` inside `try { ... } catch { return default; }`
+  turns `?from=not-a-date` into a successful report for the wrong
+  window. Reject the bad input with `400 Bad Request` (or use
+  `@DateTimeFormat` + Spring's binding-failure handler). Caught on
+  `ChargebackReportController.parseOrDefault` in PR #352.
+- **FHIR bulk-data spec requires 400 + OperationOutcome on
+  malformed `_since` / `_outputFormat`.** Silently returning `null`
+  from `parseInstant` makes the runner fall back to a full export
+  while the client believes the incremental window held —
+  observable as duplicate-fanout bills the next quarter. Same
+  pattern as the input-validation lesson above, but with the
+  spec-required response shape. Caught on
+  `FhirBulkExportOperationProvider.parseInstant` in PR #351.
+- **Dead-code in operation providers.** Constructing a HAPI
+  `Parameters` resource and then writing a hand-rolled JSON string
+  for the response body is misleading — at first glance it looks
+  like the response is built from the model. Either use HAPI's
+  `IParser.encodeResourceToString(params)` or drop the unused
+  `Parameters` construction. Caught on
+  `FhirBulkExportOperationProvider` in PR #351.
+- **Polynomial-backtracking regex in split / match.** A pattern
+  like `raw.split("\\s*,\\s*")` is a Sonar finding for ReDoS. For
+  comma-separated env input the safe approach is
+  `Arrays.stream(raw.split(",")).map(String::trim)
+  .filter(s -> !s.isEmpty()).toList()`. Caught on
+  `FhirBulkExportOperationProvider.parseTypeList` in PR #351.
+- **Flag-off ITs need an authenticated allowlisted case to pin the
+  contract.** A test that only sends an unauthenticated request and
+  accepts `401/403/404` would still pass if the controller returned
+  200 to an authenticated `SUPER_ADMIN` with the flag off — because
+  Spring Security blocks the unauth call before the flag is
+  reached. To pin the flag-off contract you need (a) the
+  unauthenticated 401/403 check AND (b) an authenticated allowlisted
+  user that asserts 404. Caught on `DicomProxyController` in PR
+  #349; same fix owed on every flag-off IT this batch.
+- **Sonar coverage gate fires at 80% of NEW code.** New classes
+  with no instruction coverage (`EmpiCandidateMatchDTO` at 0%) or
+  thin coverage (29% / 53%) fail the SonarQube quality gate even
+  when the global jacoco gate passes. Either back the new class
+  with tests OR add the package to the jacoco exclusion list in
+  `build.gradle` if it's pure carrier (DTO, properties, config). The
+  fhir/empi/imaging/observability packages may need exclusion
+  review post-PR-349. Caught on PR #349.
+- **`TODO row-N follow-on:` comments are Sonar code-smell
+  Info-level.** They surface as `S1135 — Complete the task
+  associated to this TODO comment`. They're intentional — the
+  comment is the marker for the follow-on PR — but the team may
+  prefer `// FOLLOW-ON (row N):` or no comment at all. Caught on
+  `EmpiProbabilisticMatcher` + `DicomProxyService` in PR #349.
+
 ## Co-author tag
 
 Every commit Claude authors carries:

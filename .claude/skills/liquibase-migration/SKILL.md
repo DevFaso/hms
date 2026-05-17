@@ -84,14 +84,25 @@ PostgreSQL schemas in use:
 - `public` — default; `admissions`, `appointments`, etc.
 - `clinical` — `encounters`, `prescriptions`, `lab_*`, `patient_problems`, `medication_*`, `discharge_summaries`
 - `lab` — `lab_orders`, `lab_results`, `lab_specimens`
-- `audit` — `audit_event_log`
-- `security` — `users`, `user_role_hospital_assignment`, `roles`
+- `support` — `audit_event_logs`, `chat_*`, `frontend_audit_events`, `service_translations` — **NOTE: the audit log table lives here, NOT in an `audit` schema** (it's also the only `*_log` table whose name is plural)
+- `security` — `users`, `user_role_hospital_assignment`, `roles`, `password_reset_tokens`, `permissions`, `roles`, `user_mfa_enrollments`, `security_revocations`
 - `empi` — `empi_master_identities`, `empi_identity_aliases`, `empi_merge_events`
 - `billing` — invoices, payments
 - `tenant` — multi-tenancy bookkeeping
+- `hospital` — `hospitals`, `organizations`, `staff`
+- `governance` — governance metadata
+- `integration` — DHIS2 ADX export configuration, sync state
+- `platform` — `mllp_allowed_senders`, `region_policy`, `subscription_plans`
 
 Always qualify the table with its schema in DDL
 (`ALTER TABLE clinical.patient_problems ADD COLUMN ...`).
+
+The `audit` schema is a **common naming trap** — runbooks and
+ad-hoc SQL that reference `audit.audit_event_logs` will fail with
+missing-table errors. Verify against the entity's
+`@Table(schema = ...)` annotation before pasting SQL into a
+runbook. Caught on `per-tenant-cost-observability.md` in PR #352
+(`AuditEventLog` is `@Table(schema = "support")`).
 
 ## Partial unique indexes (HL7 idempotency pattern)
 
