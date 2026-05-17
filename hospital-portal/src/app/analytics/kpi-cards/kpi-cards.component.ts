@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
+import { KpiSparklineComponent } from './kpi-sparkline.component';
 
 interface KpiCard {
   /** Translation key prefix; the template appends ".label" and ".help". */
@@ -17,24 +18,32 @@ interface KpiCard {
   color: string;
   /** Card pale background. */
   bg: string;
+  /** Optional median line shown under the main value (door-to-doctor only today). */
+  median?: string;
+  /** Sparkline series (one number per day in the window, or undefined for no data). */
+  series: Array<number | null | undefined>;
 }
 
 /**
- * Three-card KPI rollup component for the row-32 dashboard.
+ * Three-card KPI rollup component for the row-32 dashboard (with
+ * follow-on additions).
  *
- * <p>Foundation-pass scope: renders door-to-doctor (avg minutes),
- * dispense lead time (avg minutes), and no-show rate (percent) for
- * the last 30 days against the current hospital context. Charting +
- * trend-over-time visualizations are the row-32 follow-on.
+ * <p>Foundation pass rendered avg/percent only; the row-32 follow-on
+ * adds (a) a P50 median sub-line under door-to-doctor and (b) an
+ * inline-SVG sparkline per card driven by the new `withTrends=true`
+ * service flag. No chart library is introduced — the sparkline lives
+ * in {@code KpiSparklineComponent} as plain SVG.
  *
  * <p>Keyboard contract (per docs/ui/accessibility.md): cards are
  * focusable in source order; the screen-reader name comes from the
- * translation key, the value is announced as the secondary text.
+ * translation key, the value is announced as the secondary text, and
+ * the sparkline announces "<label> trend, N points" via its own
+ * aria-label.
  */
 @Component({
   selector: 'app-kpi-cards',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [CommonModule, TranslateModule, KpiSparklineComponent],
   templateUrl: './kpi-cards.component.html',
   styleUrl: './kpi-cards.component.scss',
 })
@@ -50,6 +59,7 @@ export class KpiCardsComponent implements OnInit {
   cards = computed<KpiCard[]>(() => {
     const d = this.dashboard();
     if (!d) return [];
+    const trend = d.trend ?? [];
 
     return [
       {
@@ -59,6 +69,8 @@ export class KpiCardsComponent implements OnInit {
         icon: 'timer',
         color: '#3b82f6',
         bg: '#eff6ff',
+        median: this.formatMedian(d.doorToDoctor?.medianMinutesEstimate),
+        series: trend.map((p) => p.doorToDoctorAverageMinutes),
       },
       {
         i18nKey: 'ANALYTICS.KPI.DISPENSE_LEAD_TIME',
@@ -67,6 +79,7 @@ export class KpiCardsComponent implements OnInit {
         icon: 'local_pharmacy',
         color: '#8b5cf6',
         bg: '#f5f3ff',
+        series: trend.map((p) => p.dispenseLeadTimeAverageMinutes),
       },
       {
         i18nKey: 'ANALYTICS.KPI.NO_SHOW_RATE',
@@ -75,6 +88,11 @@ export class KpiCardsComponent implements OnInit {
         icon: 'event_busy',
         color: '#ef4444',
         bg: '#fef2f2',
+        // No-show rate sparkline is plotted as a percent (rate × 100)
+        // so its visual range matches the card's main metric.
+        series: trend.map((p) =>
+          p.noShowRate != null ? p.noShowRate * 100 : p.noShowRate,
+        ),
       },
     ];
   });
@@ -87,7 +105,7 @@ export class KpiCardsComponent implements OnInit {
     const from = this.toIsoDate(start);
     const to = this.toIsoDate(today);
 
-    this.dashboardService.getKpiDashboard(from, to).subscribe({
+    this.dashboardService.getKpiDashboard(from, to, true).subscribe({
       next: (d) => {
         this.dashboard.set(d ?? null);
         this.loading.set(false);
@@ -105,6 +123,11 @@ export class KpiCardsComponent implements OnInit {
 
   private formatMinutes(value: number | undefined): string {
     if (value == null || !Number.isFinite(value)) return '—';
+    return `${Math.round(value)} min`;
+  }
+
+  private formatMedian(value: number | undefined): string | undefined {
+    if (value == null || !Number.isFinite(value)) return undefined;
     return `${Math.round(value)} min`;
   }
 

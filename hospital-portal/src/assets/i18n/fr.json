@@ -826,7 +826,9 @@
       "LOADING": "Chargement des indicateurs…",
       "DOOR_TO_DOCTOR_LABEL": "Délai accueil-médecin",
       "DISPENSE_LEAD_TIME_LABEL": "Délai de dispensation",
-      "NO_SHOW_RATE_LABEL": "Taux d'absentéisme"
+      "NO_SHOW_RATE_LABEL": "Taux d'absentéisme",
+      "MEDIAN_LABEL": "Médiane",
+      "TREND_LABEL": "Tendance sur 30 jours"
     }
   },
   "ANNOUNCEMENTS": {

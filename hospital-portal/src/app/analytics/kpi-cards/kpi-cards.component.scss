@@ -63,8 +63,19 @@
     line-height: 1.1;
   }
 
+  &__median {
+    font-size: 0.8rem;
+    color: var(--hms-text-secondary, #6b7280);
+    font-variant-numeric: tabular-nums;
+  }
+
   &__sub {
     font-size: 0.8rem;
     color: var(--hms-text-tertiary, #9ca3af);
+  }
+
+  &__sparkline {
+    margin-top: 0.5rem;
+    width: 100%;
   }
 }
