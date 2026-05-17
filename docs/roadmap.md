@@ -45,12 +45,297 @@ Last updated: **2026-05-17**. Update both files together when scope moves.
 >   start until v0 lands and soaks. Revisit once EMPI v0 is
 >   `completed`, not just `started`.
 >
-> Active backlog after this archive: 22 rows — 11 `not-started`
-> (rows 8, 18, 19, 21, 22, 25, 36, 39, 41, 42, 44) and 11 `started`
-> on foundation passes with named follow-on (rows 20, 23, 24, 26,
-> 27, 32, 33, 35, 37, 38, 43). No row is `completed` purely from a
-> foundation pass — `started → completed` requires the row's exit
-> criteria AND no remaining roadmap-listed follow-on.
+> Active backlog after this archive (and after merging the
+> intervening 2026-05-16 evening batches into the branch): 22 rows
+> all at `started` (no row remains `not-started` — every active
+> deliverable now sits on a foundation pass with named follow-on).
+> Started rows: 8, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 32, 33,
+> 35, 36, 37, 38, 39, 41, 42, 43, 44. No row is `completed` purely
+> from a foundation pass — `started → completed` requires the row's
+> exit criteria AND no remaining roadmap-listed follow-on.
+
+> **2026-05-16 update (v2.0 foundation batch) — rows 25 + 36 + 39 +
+> 41 + 42 flip to `started`.** Shipped on
+> `feat/v2.0-foundation-batch`. Five v2.0-horizon rows that had been
+> deferred in earlier batches for legitimate reasons: row 25
+> oversized + cross-team, row 36 dependent on row 23 soak, row 39
+> blocked on cloud-vendor decision, rows 41 + 42 large + Mixed.
+> This pass lands the minimal foundation (flag-gated skeletons +
+> empty contracts + named follow-ons) so the receptionist UI / Kafka
+> producer / cloud routing / clinical UI work can be sequenced
+> against stable interfaces.
+>
+> - **Row 25 (EMPI v0 — intra-tenant probabilistic match)** —
+>   `app.empi.probabilistic.enabled` (default false). New
+>   `EmpiProbabilisticMatcher.findCandidates(query)` returns an empty
+>   list both flag-off **and** flag-on; the scorer body is
+>   deliberately deferred. Reason: the deliverable target is "≥ 90 %
+>   recall on labelled audit set" and shipping a scorer without the
+>   audit set means tuning the threshold against intuition rather
+>   than data — that's how false-positive merge incidents start.
+>   `POST /api/empi/candidates` (`SUPER_ADMIN / HOSPITAL_ADMIN /
+>   RECEPTIONIST / NURSE / DOCTOR`) returns 404 when off, the
+>   matcher's empty list when on. 5 new tests (4 unit + 1 IT)
+>   pinning the empty contract so a half-implementation cannot ship
+>   silently. Runbook:
+>   [`docs/runbooks/empi-probabilistic-matching.md`](./runbooks/empi-probabilistic-matching.md).
+> - **Row 36 (Async dispense + lab via Kafka)** —
+>   `app.async.pipeline.enabled` (default false) with
+>   env-configurable `oruResultTopic` / `dispenseSettlementTopic` /
+>   `consumerGroup`. **No `@KafkaListener` bodies, no producer-side
+>   branches.** The actual fan-out lands once row 23 has soaked 14
+>   days against real Mindray / Sysmex traffic — switching ORU
+>   persistence to async before that soak entangles
+>   analyzer-retransmit semantics with Kafka-consumer-retry
+>   semantics for the eventual incident triage. Runbook:
+>   [`docs/runbooks/async-kafka-pipeline.md`](./runbooks/async-kafka-pipeline.md).
+> - **Row 39 (ECOWAS data-residency)** — decision-record doc
+>   [`docs/compliance/ecowas-residency-decision-record.md`](./compliance/ecowas-residency-decision-record.md)
+>   capturing per-country residency requirements (Senegal CDP, CI
+>   ARTCI, Ghana DPC, BF CIL, Nigeria NDPR + framework for the rest),
+>   plus the two viable cloud-procurement options (AWS `af-south-1`
+>   managed services vs OVH Dakar bare-metal in-country) and the
+>   decision-criteria matrix. **No code changes** — the existing V82
+>   `Organization.region` column stays as the data plane the
+>   eventual routing layer keys off. The decision blocker is owned
+>   by Sales (which ECOWAS customer signs first + what their counsel
+>   demands), not Engineering. The follow-on routing layer ships
+>   only after that decision lands.
+> - **Row 41 (OB/GYN + pediatrics finish)** — scope-audit doc
+>   [`docs/runbooks/obgyn-pediatrics-finish-scope-audit.md`](./runbooks/obgyn-pediatrics-finish-scope-audit.md)
+>   establishing that the three services already exist as
+>   substantial implementations (~391 + ~422 + ~676 LOC); the
+>   deliverable's "finish" language is misleading. What's actually
+>   missing: cross-service workflow integration (3 new FKs), three
+>   new clinical surfaces (antepartum/partogram, postpartum-hemorrhage
+>   emergency, pediatric EPI scheduler), three frontend completion
+>   gaps, PHI encryption audit on `NewbornAssessment`, cross-service
+>   happy-path IT. **No service code changes** — each gap is sized
+>   for its own foundation-pass PR. Nine follow-on PRs in total.
+> - **Row 42 (DICOM proxy)** —
+>   `app.imaging.dicom-proxy.enabled` (default false) with
+>   `adapter=orthanc|dcm4chee` + env-configurable `baseUrl`.
+>   `DicomProxyService.listInstancesForStudy(studyUid)` emits
+>   `AuditEventType.IMAGING_RESULT_UPDATED` on every flag-on call so
+>   the trail accumulates real-world usage data; the upstream HTTP
+>   call (DICOMweb QIDO-RS / WADO-RS bridge) is the named follow-on.
+>   `GET /api/imaging/dicom/{studyUid}/instances`
+>   (`SUPER_ADMIN / HOSPITAL_ADMIN / DOCTOR / NURSE / RADIOLOGIST`)
+>   returns 404 when off, empty list when on. **Why proxy at all**:
+>   closes the audit / auth / tenant-isolation gaps in the existing
+>   V75 `pacs_viewer_url_template` path where pixel-data access
+>   bypasses HMS's surface. 5 new tests (4 unit + 1 IT). Runbook:
+>   [`docs/runbooks/dicom-proxy.md`](./runbooks/dicom-proxy.md).
+
+> **2026-05-16 update (row-20 follow-on) — Encounter + Observation
+> FHIR write paths land.** Row 20 stays at `started`. Shipped on
+> `feat/v1.1-fhir-write-encounter-observation`. Closes the named
+> follow-on from the foundation-pass cell (which already promised
+> "Encounter + Observation write paths deferred to the row-20
+> follow-on (Observation's 1:N PatientVitalSign expansion needs a
+> labresult-only carve-out)") and brings the row's three resources
+> to a uniform PUT contract.
+>
+> - **`PUT /api/fhir/Encounter/{id}`** — `EncounterFhirWriteService`
+>   applies a very narrow subset: `period.end → checkoutTimestamp`
+>   (only when currently null — never overwrite an in-app checkout)
+>   and `reasonCode[0].text → chiefComplaint` (only when currently
+>   blank — never overwrite a clinician's triage note). Status,
+>   class, type, subject, period.start, participants, diagnoses are
+>   not honored — those state-machine transitions belong to the
+>   clinical workflow. Tenant scope from
+>   `HospitalContextHolder.getActiveHospitalId()` via
+>   `EncounterRepository.findByIdAndHospital_Id`, with a
+>   defence-in-depth hospital check on the loaded entity (mismatch
+>   → 403). New `AuditEventType.ENCOUNTER_UPDATE` with
+>   `entityType="ENCOUNTER"`. POST `/Encounter` is deliberately not
+>   exposed (encounter provisioning has staff @ hospital +
+>   assignment @ hospital + appointment-match invariants that the
+>   FHIR sender cannot reliably satisfy).
+> - **`PUT /api/fhir/Observation/labresult-{uuid}`** —
+>   `ObservationFhirWriteService` honors `note[0].text` only,
+>   appending with `" | "` separator if `lab_results.notes` already
+>   contains text (duplicate inbound text is a no-op). Status,
+>   value, code, subject, effective, category are not honored —
+>   release / sign / acknowledge are actor-stamped state-machine
+>   events. `PUT /Observation/vital-*` is rejected `422 BUSINESSRULE`
+>   per the labresult-only carve-out (1:N `PatientVitalSign` →
+>   Observation expansion has no single-row write target). Tenant
+>   scope: lab result's `labOrder.hospital.id` must match the active
+>   hospital (missing or mismatched → 403). Audit
+>   `LAB_RESULT_UPDATED` with `entityType="LAB_RESULT"`.
+> - **`HmsCapabilityStatementProvider`** extended to advertise the
+>   `update` interaction on the `Encounter` and `Observation`
+>   resource entries when `app.fhir.write.enabled=true`, and to
+>   actively strip HAPI's auto-emitted `update` interaction when the
+>   flag is off — so `/fhir/metadata` matches runtime behaviour for
+>   both flag positions (mirrors the Patient pattern from the
+>   foundation pass).
+> - **Flag-first ordering** applied uniformly across all three
+>   providers' write handlers. PR #343 Copilot review caught that
+>   `PatientFhirResourceProvider.@Update` ran resource-shape
+>   validation before the feature-flag short-circuit, returning 422
+>   instead of 405 on flag-off + malformed body; the same gap on
+>   `@Create` was explicitly named in the `fhir-r4-api` skill as
+>   outstanding. Both Patient handlers are now corrected, and the
+>   new `Encounter.@Update` + `Observation.@Update` handlers ship
+>   with the corrective pattern from the start.
+> - **8 new ITs.** `EncounterFhirWriteIT` (2 — flag-off PUT
+>   rejection + flag-off metadata omits `update`),
+>   `EncounterFhirWriteEnabledIT` (1 — flag-on metadata advertises
+>   `update`), `ObservationFhirWriteIT` (3 — flag-off PUT against
+>   `labresult-*` and `vital-*` both rejected + flag-off metadata
+>   omits `update`), `ObservationFhirWriteEnabledIT` (2 — flag-on
+>   metadata advertises `update` + flag-on `vital-*` rejection
+>   reachable via 401-or-422). Same 401-or-handler-status
+>   permissiveness as the existing Patient ITs; once an
+>   authenticated TestRestTemplate is wired, the assertions tighten.
+> - **Runbook**
+>   [`docs/runbooks/fhir-write-api.md`](./runbooks/fhir-write-api.md)
+>   updated with the Encounter + Observation honored-subset tables,
+>   tenant gate description, audit emission, and the explicit
+>   deferred-indefinitely stance on POST `/Encounter` + POST
+>   `/Observation`. The row will move to `completed` once the
+>   conformance soak against SMART App Launcher + Cerner + Epic
+>   sandboxes is recorded.
+>
+> Rows 21 (`$export`) and 22 (`$everything`) remain `not-started` and
+> are now unblocked by this follow-on — they can be picked next
+> without leaving themselves dependency-bound.
+
+> **2026-05-16 update (Keycloak cutover ops + per-tenant cost obs
+> batch) — rows 8 + 18 + 19 + 44 flip to `started`.** Shipped on
+> `chore/v1.0-keycloak-cutover-and-cost-obs`. All four rows had been
+> deferred from earlier batches: rows 8 / 18 / 19 because the
+> cutover sequence required real env-access decisions, and row 44
+> because per-tenant labeling needed downstream context. This pass
+> closes the documentation + scaffolding gap so the actual env
+> operations (rows 8 / 18 / 19) and the chargeback rollout (row 44)
+> can be executed against the existing runbooks.
+>
+> - **Row 18 (KC-4 uat migration)** + **Row 19 (KC-4 prod
+>   migration)** + **Row 8 (Keycloak Phase C cutover)** — three
+>   operational rows wrapped into a single conductor playbook
+>   [`docs/runbooks/keycloak-cutover-sequence.md`](./runbooks/keycloak-cutover-sequence.md).
+>   The conductor chains step 1 (row 18 uat migration) → 5-business-
+>   day soak → step 2 (row 19 prod migration) → 24-hour observation
+>   → step 3 (row 8 uat OIDC_REQUIRED=true flip) → 7-calendar-day
+>   soak → step 4 (row 8 prod OIDC_REQUIRED=true flip) → 48-hour
+>   smoke. Each step has a hard go/no-go gate and a rollback
+>   decision tree. The existing component runbooks
+>   ([`keycloak-migration-runbook.md`](./runbooks/keycloak-migration-runbook.md)
+>   for rows 17 / 18 / 19 and
+>   [`keycloak-cutover-runbook.md`](./runbooks/keycloak-cutover-runbook.md)
+>   for row 8) remain the authoritative per-step procedure — the
+>   conductor is the ordering + gating glue. New
+>   `scripts/keycloak/preflight.sh` is the precondition harness that
+>   wraps `env-sync-verify.sh --public-only` (R1-R4 + P1-P4 from
+>   row 14) + OIDC discovery + issuer-match + optional A1-A3
+>   (when `HMS_KC_ADMIN_TOKEN` is set) + optional backend health
+>   (when `HMS_BACKEND_BASE_URL` is set). Exits non-zero on the
+>   first failure; idempotent + safe to re-run. All three rows
+>   stay `started` until the prod cutover smoke is green for 48 h
+>   and the postmortem doc lands.
+> - **Row 44 (Per-tenant cost observability)** — flag
+>   `app.observability.tenant-cost.enabled` (default false). New
+>   `ChargebackReportService.auditEventCountsPerTenant(from, to)`
+>   delegates to the new
+>   `AuditEventLogRepository.countByHospitalBetween` JPQL query
+>   (groups by the denormalized `AuditEventLog.hospitalName` snapshot,
+>   excludes rows without a snapshot — those belong to a future
+>   platform-shared bucket). New `ChargebackReportController` exposes
+>   `GET /api/super-admin/cost/per-tenant?from&to` with
+>   `@PreAuthorize("hasRole('SUPER_ADMIN')")`, default trailing-30-day
+>   window, 92-day cap; the controller returns 404 when the flag is
+>   off so the endpoint shape stays hidden until the rollup is
+>   operationally meaningful. **Splunk tenant labeling is already in
+>   place** via the existing `AuditEventLog.hospitalName` snapshot
+>   that flows through the SplunkHecAppender — no code change needed
+>   for the foundation pass. Grafana per-tenant tagging at the
+>   Micrometer level is the named follow-on (needs a
+>   `MeterFilter` that reads `HospitalContextHolder` at sample time —
+>   non-trivial because Micrometer's tag set is evaluated at meter
+>   registration, not at sample time). 5 new tests:
+>   `ChargebackReportServiceTest` (4 unit cases — flag passthrough +
+>   Object[] row mapping + Integer-count boxing + empty-list) and
+>   `ChargebackReportControllerIT` (1 IT — flag-off 401/404 split).
+>   Runbook:
+>   [`docs/runbooks/per-tenant-cost-observability.md`](./runbooks/per-tenant-cost-observability.md).
+>   Follow-on: Splunk event-count input + Grafana series-cardinality
+>   input + Postgres storage-bytes input + per-deployment currency
+>   cost model + Control Tower panel.
+
+> **2026-05-16 update (FHIR Interop completion batch) — rows 21
+> ($export) + 22 ($everything) flip to `started`.** Shipped on
+> `feat/v1.1-fhir-bulk-and-everything`. Both operations were blocked
+> on the row-20 write API; that's now resolved on its own branch.
+> The two operations are gated by independent flags so an operator
+> can promote `$everything` (synchronous, low-risk) without also
+> enabling `$export` (async, S3-bound, capacity-sensitive).
+>
+> - **Row 21 (FHIR Bulk Data Access $export)** —
+>   `app.fhir.operations.bulk-export.enabled` (default false).
+>   `FhirBulkExportOperationProvider` exposes `POST /api/fhir/$export`
+>   (system level) and `POST /api/fhir/Patient/$export` (type level)
+>   as HAPI plain-provider `@Operation` methods with
+>   `manualResponse=true`; each accepted call returns
+>   `202 Accepted` + `Content-Location: /api/fhir-bulk-status/{jobId}`.
+>   `FhirBulkExportService` holds the job state in an in-memory
+>   `ConcurrentHashMap` (the persistent `fhir_bulk_export_jobs` table
+>   plus JPA repository land with the async runner follow-on); tenant
+>   scope from `HospitalContextHolder.getActiveHospitalId()` pinned
+>   at creation, cross-tenant status / cancel collapses to 404
+>   (invisible rejection — no information leak). Honors `_since`
+>   (ISO-8601) and `_type` (CSV). `FhirBulkExportStatusController`
+>   at `/api/fhir-bulk-status/{jobId}` returns `202` + `Retry-After: 120`
+>   on GET (foundation pass never advances jobs) and `202` on DELETE
+>   drop, `404` on miss / cross-tenant. The poll path is HMS-specific
+>   (sibling to HAPI's `/api/fhir/*` mount) because the FHIR servlet
+>   captures the entire `/api/fhir/*` space; canonical
+>   `$export-poll-status` mounting via a HAPI `manualResponse=true`
+>   operation lands with the async runner. `AuditEventType.DATA_EXPORT`
+>   emitted with `entityType="FHIR_BULK_EXPORT_JOB"` on kickoff +
+>   cancel. Group-level `$export` deferred (needs
+>   `GroupFhirResourceProvider`, not currently modelled). Runbook:
+>   [`docs/fhir-bulk.md`](./fhir-bulk.md).
+> - **Row 22 ($everything operation)** —
+>   `app.fhir.operations.everything.enabled` (default false).
+>   `@Operation(name="$everything", type=Patient.class)` on
+>   `PatientFhirResourceProvider` delegates to
+>   `PatientEverythingService.everythingForPatient(uuid)`. The
+>   service assembles a single FHIR `Bundle` of type `searchset`
+>   containing the Patient plus up to 200 most-recent Encounters,
+>   200 vital-sign rows (each 1:N-expanded into Observation
+>   resources by the existing mapper), 200 lab-result Observations,
+>   all Conditions, and 200 MedicationRequests — every collection
+>   hospital-scoped via the active context. Missing scope → 403;
+>   cross-tenant patient → 404. `AuditEventType.PATIENT_EXPORT` with
+>   entry-count description. Synchronous (no async runner needed for
+>   single-patient compartments).
+> - **`HmsCapabilityStatementProvider`** extended with
+>   `applyOperationVisibility(cs)` that strips HAPI's auto-emitted
+>   `rest[].operation` entry for `export` / `everything` when the
+>   corresponding flag is off, so `/api/fhir/metadata` matches
+>   runtime behaviour for both flag positions (same pattern as
+>   row-20's `Patient.conditionalCreate` strip).
+> - **4 new ITs.** `FhirBulkExportIT` (4 cases — kickoff system,
+>   kickoff Patient, status endpoint, metadata-omit; all rejected
+>   401/405 when flag off), `FhirBulkExportEnabledIT` (1 — flag-on metadata
+>   advertises `export`), `PatientEverythingIT` (2 — flag-off PUT
+>   rejection + metadata omits), `PatientEverythingEnabledIT` (1 —
+>   flag-on metadata advertises `everything`). Authenticated
+>   wire-level Bundle composition assertion deferred to the row-22
+>   follow-on (today's 401-or-handler-status blocks the deeper
+>   check).
+> - **Named follow-on** (row stays `started` until):
+>   for row 21 — persistent `fhir_bulk_export_jobs` table (V103),
+>   `@Scheduled` (or Kafka once row 36 lands) NDJSON runner
+>   streaming to an S3-compatible bucket, output-manifest 200
+>   response, Group-level `$export`, canonical poll-URL mounting
+>   under `/api/fhir/*`, spec-compliant 501-on-flag-off; for row
+>   22 — authenticated end-to-end IT, `_since` / `_type` / page
+>   cursor / start-end params honored, SMART App Launcher
+>   conformance soak.
 
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
