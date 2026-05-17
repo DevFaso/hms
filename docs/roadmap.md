@@ -27,9 +27,10 @@ Last updated: **2026-05-17**. Update both files together when scope moves.
 >   lab results, and mobile test coverage uplift all share the same
 >   mobile-team domain and tooling. No mobile contributor is heads-
 >   down on v1.1 today; the four rows naturally cluster as the next
->   batch once one picks them up. Row 30 was already gated on
->   28/29 mobile parity in the original dependency graph, so it
->   moves with them.
+>   batch once one picks them up. Row 30 has a hard CSV dependency
+>   on rows 28/29 (`Mobile parity`) and moves with them. Row 31
+>   has no listed dependency — it's clustered for shared team /
+>   tooling efficiency, not a dependency-graph gate.
 > - **Row 34 (Tenant onboarding pipeline)** — horizon `v2.0 → oos`.
 >   Depends on row 33 (`Schema-per-tenant migration path`, currently
 >   `started` after its foundation pass) being substantially further
