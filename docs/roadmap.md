@@ -11,6 +11,79 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-16**. Update both files together when scope moves.
 
+> **2026-05-16 update (v2.0 foundation batch) — rows 25 + 36 + 39 +
+> 41 + 42 flip to `started`.** Shipped on
+> `feat/v2.0-foundation-batch`. Five v2.0-horizon rows that had been
+> deferred in earlier batches for legitimate reasons: row 25
+> oversized + cross-team, row 36 dependent on row 23 soak, row 39
+> blocked on cloud-vendor decision, rows 41 + 42 large + Mixed.
+> This pass lands the minimal foundation (flag-gated skeletons +
+> empty contracts + named follow-ons) so the receptionist UI / Kafka
+> producer / cloud routing / clinical UI work can be sequenced
+> against stable interfaces.
+>
+> - **Row 25 (EMPI v0 — intra-tenant probabilistic match)** —
+>   `app.empi.probabilistic.enabled` (default false). New
+>   `EmpiProbabilisticMatcher.findCandidates(query)` returns an empty
+>   list both flag-off **and** flag-on; the scorer body is
+>   deliberately deferred. Reason: the deliverable target is "≥ 90 %
+>   recall on labelled audit set" and shipping a scorer without the
+>   audit set means tuning the threshold against intuition rather
+>   than data — that's how false-positive merge incidents start.
+>   `POST /api/empi/candidates` (`SUPER_ADMIN / HOSPITAL_ADMIN /
+>   RECEPTIONIST / NURSE / DOCTOR`) returns 404 when off, the
+>   matcher's empty list when on. 5 new tests (4 unit + 1 IT)
+>   pinning the empty contract so a half-implementation cannot ship
+>   silently. Runbook:
+>   [`docs/runbooks/empi-probabilistic-matching.md`](./runbooks/empi-probabilistic-matching.md).
+> - **Row 36 (Async dispense + lab via Kafka)** —
+>   `app.async.pipeline.enabled` (default false) with
+>   env-configurable `oruResultTopic` / `dispenseSettlementTopic` /
+>   `consumerGroup`. **No `@KafkaListener` bodies, no producer-side
+>   branches.** The actual fan-out lands once row 23 has soaked 14
+>   days against real Mindray / Sysmex traffic — switching ORU
+>   persistence to async before that soak entangles
+>   analyzer-retransmit semantics with Kafka-consumer-retry
+>   semantics for the eventual incident triage. Runbook:
+>   [`docs/runbooks/async-kafka-pipeline.md`](./runbooks/async-kafka-pipeline.md).
+> - **Row 39 (ECOWAS data-residency)** — decision-record doc
+>   [`docs/compliance/ecowas-residency-decision-record.md`](./compliance/ecowas-residency-decision-record.md)
+>   capturing per-country residency requirements (Senegal CDP, CI
+>   ARTCI, Ghana DPC, BF CIL, Nigeria NDPR + framework for the rest),
+>   plus the two viable cloud-procurement options (AWS `af-south-1`
+>   managed services vs OVH Dakar bare-metal in-country) and the
+>   decision-criteria matrix. **No code changes** — the existing V82
+>   `Organization.region` column stays as the data plane the
+>   eventual routing layer keys off. The decision blocker is owned
+>   by Sales (which ECOWAS customer signs first + what their counsel
+>   demands), not Engineering. The follow-on routing layer ships
+>   only after that decision lands.
+> - **Row 41 (OB/GYN + pediatrics finish)** — scope-audit doc
+>   [`docs/runbooks/obgyn-pediatrics-finish-scope-audit.md`](./runbooks/obgyn-pediatrics-finish-scope-audit.md)
+>   establishing that the three services already exist as
+>   substantial implementations (~391 + ~422 + ~676 LOC); the
+>   deliverable's "finish" language is misleading. What's actually
+>   missing: cross-service workflow integration (3 new FKs), three
+>   new clinical surfaces (antepartum/partogram, postpartum-hemorrhage
+>   emergency, pediatric EPI scheduler), three frontend completion
+>   gaps, PHI encryption audit on `NewbornAssessment`, cross-service
+>   happy-path IT. **No service code changes** — each gap is sized
+>   for its own foundation-pass PR. Nine follow-on PRs in total.
+> - **Row 42 (DICOM proxy)** —
+>   `app.imaging.dicom-proxy.enabled` (default false) with
+>   `adapter=orthanc|dcm4chee` + env-configurable `baseUrl`.
+>   `DicomProxyService.listInstancesForStudy(studyUid)` emits
+>   `AuditEventType.IMAGING_RESULT_UPDATED` on every flag-on call so
+>   the trail accumulates real-world usage data; the upstream HTTP
+>   call (DICOMweb QIDO-RS / WADO-RS bridge) is the named follow-on.
+>   `GET /api/imaging/dicom/{studyUid}/instances`
+>   (`SUPER_ADMIN / HOSPITAL_ADMIN / DOCTOR / NURSE / RADIOLOGIST`)
+>   returns 404 when off, empty list when on. **Why proxy at all**:
+>   closes the audit / auth / tenant-isolation gaps in the existing
+>   V75 `pacs_viewer_url_template` path where pixel-data access
+>   bypasses HMS's surface. 5 new tests (4 unit + 1 IT). Runbook:
+>   [`docs/runbooks/dicom-proxy.md`](./runbooks/dicom-proxy.md).
+
 > **2026-05-16 update — daytime foundation passes flip rows 20, 27,
 > 32, and 43 to `started`.** Four feature branches merged into
 > develop and were promoted through UAT to main on 2026-05-16. Each
