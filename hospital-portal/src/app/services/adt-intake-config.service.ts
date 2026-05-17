@@ -8,28 +8,37 @@ import { Observable } from 'rxjs';
  * {@code AdtIntakeProviderConfigController} at
  * {@code /admin/adt-intake-configs}.
  */
+// String unions mirror the backend Java enums verbatim
+// (com.example.hms.enums.AdmissionType / AcuityLevel / EncounterType).
+// Keep these in sync with the Java sources — the admin form submits
+// these as strings; a typo silently 400s on enum parsing.
 export type AdmissionType =
   | 'EMERGENCY'
   | 'ELECTIVE'
   | 'URGENT'
   | 'NEWBORN'
-  | 'TRAUMA'
-  | 'OBSERVATION';
+  | 'TRANSFER'
+  | 'OBSERVATION'
+  | 'DAY_CASE'
+  | 'LABOR_DELIVERY'
+  | 'PSYCHIATRIC';
 
 export type AcuityLevel =
-  | 'LEVEL_1_RESUSCITATION'
+  | 'LEVEL_1_MINIMAL'
   | 'LEVEL_2_MODERATE'
-  | 'LEVEL_3_URGENT'
-  | 'LEVEL_4_NON_URGENT'
-  | 'LEVEL_5_REFERRAL';
+  | 'LEVEL_3_MAJOR'
+  | 'LEVEL_4_SEVERE'
+  | 'LEVEL_5_CRITICAL';
 
 export type EncounterType =
+  | 'CONSULTATION'
+  | 'FOLLOW_UP'
+  | 'EMERGENCY'
+  | 'SURGERY'
+  | 'LAB'
   | 'OUTPATIENT'
   | 'INPATIENT'
-  | 'EMERGENCY'
-  | 'AMBULATORY'
-  | 'HOME_HEALTH'
-  | 'VIRTUAL';
+  | 'TELEHEALTH';
 
 export interface AdtIntakeConfig {
   id: string;

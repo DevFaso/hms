@@ -36,6 +36,7 @@
       "CHIEF_COMPLAINT": "Default chief complaint",
       "ENABLED": "Enable auto-create for this hospital"
     },
+    "CONFIRM_DELETE": "Delete ADT intake config for {{hospital}}?",
     "VALIDATION": {
       "REQUIRED": "Hospital and admitting provider are required."
     },

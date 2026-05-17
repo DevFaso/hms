@@ -36,6 +36,7 @@
       "CHIEF_COMPLAINT": "Queja principal predeterminada",
       "ENABLED": "Habilitar la creación automática para este hospital"
     },
+    "CONFIRM_DELETE": "¿Eliminar la configuración ADT para {{hospital}}?",
     "VALIDATION": {
       "REQUIRED": "Hospital y proveedor admitente son obligatorios."
     },

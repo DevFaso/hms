@@ -740,6 +740,31 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
+    @DisplayName("A03 discharge tolerates an audit-emit RuntimeException — clinical write is not rolled back")
+    void a03TolerantOfAuditEmitFailure() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        org.mockito.Mockito.doThrow(new RuntimeException("splunk down"))
+            .when(auditEventLogService).logEvent(any());
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A03", "V-A03E", "WARD-A", null, LocalDateTime.of(2026, 5, 19, 10, 0)),
+            patient, hospital, "REG", "HOSP1", "MSG-A03E");
+
+        // Audit emitter swallowed the exception per the hl7-mllp-integration
+        // skill rule; the discharge result still propagates and the
+        // admission save still happens.
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_DISCHARGED);
+        verify(admissionRepository).save(any(Admission.class));
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
     @DisplayName("A02 transfer with blank assignedLocation skips the department lookup but still emits the audit")
     void a02TransferSkipsLookupOnBlankLocation() {
         Admission row = new Admission();

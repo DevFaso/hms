@@ -36,6 +36,7 @@
       "CHIEF_COMPLAINT": "Motif principal par défaut",
       "ENABLED": "Activer la création automatique pour cet hôpital"
     },
+    "CONFIRM_DELETE": "Supprimer la configuration ADT pour {{hospital}} ?",
     "VALIDATION": {
       "REQUIRED": "L'hôpital et le médecin admetteur sont obligatoires."
     },

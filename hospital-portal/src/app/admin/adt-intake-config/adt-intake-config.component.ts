@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   AcuityLevel,
@@ -18,25 +18,30 @@ const ADMISSION_TYPES: AdmissionType[] = [
   'ELECTIVE',
   'URGENT',
   'NEWBORN',
-  'TRAUMA',
+  'TRANSFER',
   'OBSERVATION',
+  'DAY_CASE',
+  'LABOR_DELIVERY',
+  'PSYCHIATRIC',
 ];
 
 const ACUITY_LEVELS: AcuityLevel[] = [
-  'LEVEL_1_RESUSCITATION',
+  'LEVEL_1_MINIMAL',
   'LEVEL_2_MODERATE',
-  'LEVEL_3_URGENT',
-  'LEVEL_4_NON_URGENT',
-  'LEVEL_5_REFERRAL',
+  'LEVEL_3_MAJOR',
+  'LEVEL_4_SEVERE',
+  'LEVEL_5_CRITICAL',
 ];
 
 const ENCOUNTER_TYPES: EncounterType[] = [
+  'CONSULTATION',
+  'FOLLOW_UP',
+  'EMERGENCY',
+  'SURGERY',
+  'LAB',
   'OUTPATIENT',
   'INPATIENT',
-  'EMERGENCY',
-  'AMBULATORY',
-  'HOME_HEALTH',
-  'VIRTUAL',
+  'TELEHEALTH',
 ];
 
 interface IntakeFormState {
@@ -379,6 +384,7 @@ export class AdtIntakeConfigComponent implements OnInit {
 
   private readonly service = inject(AdtIntakeConfigService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   ngOnInit(): void {
     this.reload();
@@ -411,7 +417,7 @@ export class AdtIntakeConfigComponent implements OnInit {
   protected save(event: Event): void {
     event.preventDefault();
     if (!this.form.hospitalId || !this.form.admittingProviderId) {
-      this.toast.error('ADT_INTAKE.VALIDATION.REQUIRED');
+      this.toastError('ADT_INTAKE.VALIDATION.REQUIRED');
       return;
     }
     const request: AdtIntakeConfigRequest = {
@@ -430,30 +436,43 @@ export class AdtIntakeConfigComponent implements OnInit {
     this.service.upsert(request).subscribe({
       next: () => {
         this.saving.set(false);
-        this.toast.success('ADT_INTAKE.TOAST.SAVED');
+        this.toastSuccess('ADT_INTAKE.TOAST.SAVED');
         this.resetForm();
         this.reload();
       },
       error: () => {
         this.saving.set(false);
-        this.toast.error('ADT_INTAKE.TOAST.SAVE_FAILED');
+        this.toastError('ADT_INTAKE.TOAST.SAVE_FAILED');
       },
     });
   }
 
   protected remove(cfg: AdtIntakeConfig): void {
-    const confirmed = globalThis.confirm(
-      `Delete ADT intake config for ${cfg.hospitalName || cfg.hospitalId}?`,
-    );
+    // ToastService and globalThis.confirm both render their input
+    // verbatim; resolve the i18n key via TranslateService first so the
+    // admin page stays localizable. Caught on PR #360 Copilot review
+    // (High + Medium).
+    const message = this.translate.instant('ADT_INTAKE.CONFIRM_DELETE', {
+      hospital: cfg.hospitalName || cfg.hospitalId,
+    });
+    const confirmed = globalThis.confirm(message);
     if (!confirmed) return;
     this.service.remove(cfg.id).subscribe({
       next: () => {
-        this.toast.success('ADT_INTAKE.TOAST.DELETED');
+        this.toastSuccess('ADT_INTAKE.TOAST.DELETED');
         if (this.editingId() === cfg.id) this.resetForm();
         this.reload();
       },
-      error: () => this.toast.error('ADT_INTAKE.TOAST.DELETE_FAILED'),
+      error: () => this.toastError('ADT_INTAKE.TOAST.DELETE_FAILED'),
     });
+  }
+
+  private toastSuccess(key: string): void {
+    this.toast.success(this.translate.instant(key));
+  }
+
+  private toastError(key: string): void {
+    this.toast.error(this.translate.instant(key));
   }
 
   private reload(): void {
