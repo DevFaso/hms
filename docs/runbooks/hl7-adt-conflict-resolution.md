@@ -68,12 +68,31 @@ INSERT INTO platform.adt_intake_provider_configs (
 );
 ```
 
-The `admitting_provider_id` and `department_id` are stored as raw
-UUIDs (no DB FK) so an operator can rebuild `hospital.staff` or
-`hospital.departments` without dropping the config. The
-application-layer lookup dereferences them on each auto-create
-and rejects gracefully (`NO_MATCH` + WARN line) when a referent
-is missing — there's no half-populated Admission failure mode.
+For hospitals that also want A04 (Encounter) auto-create, set the
+`default_assignment_id` column from V104:
+
+```sql
+UPDATE platform.adt_intake_provider_configs
+   SET default_assignment_id = '<security.user_role_hospital_assignment.id>'
+ WHERE hospital_id = '<hospital-uuid>';
+```
+
+The chosen assignment row's `hospital_id` MUST equal the config
+row's `hospital_id` — the service-layer guard refuses A04
+auto-create when they diverge (defence in depth on
+`Encounter#validate`, which also rejects the write at JPA
+`@PrePersist`). Hospitals that only want A01 auto-create leave
+this column NULL; an A04 arrival logs WARN + falls through to
+`NO_MATCH`.
+
+The `admitting_provider_id`, `department_id`, and `default_assignment_id`
+are stored as raw UUIDs (no DB FK) so an operator can rebuild
+`hospital.staff`, `hospital.departments`, or
+`security.user_role_hospital_assignment` without dropping the
+config. The application-layer lookup dereferences them on each
+auto-create and rejects gracefully (`NO_MATCH` + WARN line) when
+a referent is missing or belongs to a different hospital — there's
+no half-populated row failure mode.
 
 ---
 
@@ -82,9 +101,9 @@ is missing — there's no half-populated Admission failure mode.
 | Phase | Status | Branch |
 | --- | --- | --- |
 | Foundation pass — reconcile-only | ✅ Shipped | `feat/v1.1-adt-admission-encounter-sync` (V99) |
-| Follow-on (this revision) — A01 Admission auto-create | ✅ Shipped | `feat/v1.1-adt-auto-create` (V103) |
-| Follow-on — A04 Encounter-only auto-create | ⏳ Next | Needs Encounter `staff` + `assignment` invariant resolved |
-| Follow-on — discharge / transfer triggers | ⏳ Next | Builds on A01 auto-create |
+| Follow-on — A01 Admission auto-create | ✅ Shipped | `feat/v1.1-adt-auto-create` (V103) |
+| Follow-on (this revision) — A04 Encounter-only auto-create | ✅ Shipped | `feat/v1.1-adt-auto-create-encounter` (V104) |
+| Follow-on — discharge / transfer triggers (A02, A03) | ⏳ Next | Builds on A01 + A04 |
 
 The auto-create path ships behind the three-layer flag stack
 described under "Activation gate". With auto-create off (the
@@ -94,12 +113,25 @@ foundation pass did.
 ## Foundation-pass scope
 
 The foundation pass reconciles inbound ADT messages to existing
-Admission / Encounter rows by the HL7 visit-number key. The
-auto-create follow-on (this revision) extends that with an
-**A01-only** Admission provisioning path. It does **NOT** yet
-auto-create Encounters — Encounter requires `staff` + `assignment`
-whose `hospital` matches, and that design problem is the next
-follow-on. The foundation-pass constraints listed below still apply:
+Admission / Encounter rows by the HL7 visit-number key. The A01
+follow-on extended that with Admission auto-create. The A04
+follow-on (this revision) extends it further with **Encounter
+auto-create** — the design problem flagged in the foundation-pass
+notes (Encounter's `staff` + `assignment` `hospital`-match
+invariant) is resolved by:
+
+- Carrying the live `receivingHospital` reference on the projection
+  service's internal context, and stamping it directly on the new
+  Encounter (never via `staff.getHospital()` indirection).
+- Validating both `staff.getHospital().getId()` AND
+  `assignment.getHospital().getId()` against the receiving hospital
+  at the service layer before touching `encounterRepository.save`.
+- Treating the `Encounter#validate` `@PrePersist` invariants as
+  defence in depth — failure modes surface as a clean WARN +
+  `NO_MATCH` instead of an `IllegalStateException` in the MLLP
+  worker stack trace.
+
+The foundation-pass constraints listed below still apply:
 
 1. `Encounter` requires `staff` and `assignment` whose `hospital`
    matches the encounter hospital (enforced in `Encounter#validate`).
@@ -156,14 +188,31 @@ auto-provisioning would either invent a SYSTEM-actor placeholder staff
   missing intake-config no-op, cross-tenant rejection, and the
   full happy path (verifies the Admission fields + audit emission).
 
+**What the A04 follow-on (this revision) ships:**
+
+- `V104` migration: `platform.adt_intake_provider_configs.default_assignment_id`
+  (nullable UUID). Strictly additive `ADD COLUMN IF NOT EXISTS`;
+  hospitals that only opted into A01 keep the column NULL.
+- `AdtIntakeProviderConfig.defaultAssignmentId` JPA field.
+- `VisitProjectionResult.ENCOUNTER_AUTOCREATED` enum value.
+- `AuditEventType.ENCOUNTER_AUTOCREATED` audit event type.
+- `tryAutoCreateEncounter` branch in
+  `MllpInboundAdtVisitProjectionService`. Fires on A04 trigger
+  when the same three-layer gate stack is on AND
+  `default_assignment_id` is populated AND the resolved staff /
+  department / assignment all belong to the receiving hospital.
+- `resolveAssignment` defensive helper that mirrors
+  `resolveProvider` / `resolveDepartment` (PR #358 review pattern).
+- 3 new unit tests: A04 happy path with audit verification,
+  A04 skipped when `default_assignment_id` is null, A04 rejected
+  when assignment is cross-tenant.
+
 **What still remains for follow-on PRs:**
 
-- A04 (Encounter-only) auto-create path. Encounter has a stricter
-  validation invariant (`staff.hospital == encounter.hospital`,
-  same for `assignment`) which needs its own design decision —
-  do we pre-populate the assignment from intake config, or do we
-  defer A04 auto-create until a stub-assignment model lands?
-- Discharge / transfer trigger events.
+- Discharge / transfer trigger events (A02, A03). Builds on the
+  A01 + A04 paths — A03 updates an existing Admission with the
+  discharge timestamp/disposition; A02 updates the department/bed
+  reference.
 - An admin UI to populate the intake-config table per hospital
   (currently a DB-only surface).
 - An admin UI to manually link an existing in-app
