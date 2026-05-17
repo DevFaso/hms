@@ -23,14 +23,101 @@ External HTTP probing of HMS public surfaces from multiple geographic vantage po
 
 ---
 
-## What's deferred (operational, not code)
+## Multi-geo rollout — pick Option A OR Option B
 
-The row-43 deliverable is "Grafana k6 cloud OR Blackbox-exporter probes from 3 geos; alert on > 10% probe failure for 5 min". The PR lands the alert + probe **infrastructure**; the three-geo rollout is operational:
+The row-43 deliverable is "Grafana k6 cloud OR Blackbox-exporter probes from 3 geos; alert on > 10% probe failure for 5 min". The original PR landed the alert + probe infrastructure; the follow-on adds **deployable templates for both options** so the operator only needs to provision cloud accounts and substitute placeholders. Pick one before flipping row 43 to `completed`. Both write the same `probe_success` + `probe_duration_seconds` series under `application=hms, service=synthetic` so the existing `HmsSyntheticProbeFailureRate` / `HmsSyntheticProbeAllGeosFailing` alerts evaluate the same way regardless of source.
 
-1. **Option A — Blackbox in 3 cloud regions.** Stand up three Blackbox instances (e.g. AWS eu-west-1, AWS us-east-1, OVH-Africa) each scrape-pointed at the same target list but with their own `external_labels: { geo: <region> }` override. All three remote_write to Grafana Cloud Mimir. The `avg by (probe_target)` aggregation in `HmsSyntheticProbeFailureRate` then absorbs any single-region misbehavior.
-2. **Option B — Grafana k6 cloud.** Reuse the existing `scripts/perf/dispense-baseline.js` script (already wired into `.github/workflows/perf-baseline.yml`) and schedule a smaller "synthetic-canary" k6 script from k6 cloud's three default load zones (`amazon:us:ashburn`, `amazon:eu:dublin`, `amazon:af:cape-town`). The k6-cloud → Grafana metrics integration writes `probe_success_*` series under the same `application=hms,service=synthetic` labels so the same alert rule fires.
+### Option A — Blackbox in 3 cloud regions
 
-Pick one before flipping row 43 to `completed`. Option A is closer to the existing local-stack ergonomics; Option B is closer to the existing perf-baseline CI wiring.
+**Template:** [`grafana/prometheus-multigeo.example.yml`](../../grafana/prometheus-multigeo.example.yml).
+
+Stand up three Blackbox-exporter instances + one Prometheus next to each:
+
+| Region | `geo` external_label | Notes |
+| --- | --- | --- |
+| AWS `eu-west-1` (Dublin) | `aws-eu-west-1` | Closest k6/Blackbox vantage to EU-hosted Railway region. |
+| AWS `us-east-1` (Virginia) | `aws-us-east-1` | Validates the trans-Atlantic path for any partner reading the SMART config. |
+| OVH Dakar bare-metal OR AWS `af-south-1` (Cape Town) | `ovh-dakar` / `aws-af-south-1` | ECOWAS-adjacent vantage. Swap to OVH Dakar when row 39 (`docs/compliance/ecowas-residency-decision-record.md`) lands. |
+
+Per-region copy of the template — substitute these four placeholders:
+
+| Placeholder | Example |
+| --- | --- |
+| `${GEO_LABEL}` | `aws-eu-west-1` |
+| `${BLACKBOX_HOST}` | `blackbox-eu-west-1.local:9115` |
+| `${HMS_PUBLIC_BASE_URL}` | `https://api.hms.bitnesttechs.com` |
+| `${MIMIR_REMOTE_WRITE_URL}` | The Grafana Cloud Mimir push URL from project → connections |
+
+**Substitution is NOT automatic.** Prometheus does not understand the `${VAR}` / envsubst shape. The placeholders must be resolved at deploy time — either `envsubst < prometheus-multigeo.example.yml > prometheus.yml` in the container entrypoint, or an explicit `sed` pass per the file header. Loading the template as-is parses fine and starts Prometheus, but every probe target becomes the literal string `${HMS_PUBLIC_BASE_URL}/api/...` and every series carries the literal `${GEO_LABEL}` — the failure mode is silent and only visible once you look at the probe output or the Grafana label values.
+
+Cross-region invariants:
+
+- All three remote_write to the **same** Mimir tenant.
+- The alert rule `HmsSyntheticProbeAllGeosFailing` requires `count(probe_success == 0) == count(probe_success)` — three geos is the minimum that meaningfully distinguishes "global outage" from "one network blip". Two geos halves the precision; one geo defeats the purpose.
+- Don't stamp `geo` via `relabel_configs` AND `external_labels` — `external_labels` wins at remote_write time, so the two would silently disagree on the Prometheus self-view.
+
+Validate the rollout with:
+
+```promql
+# Three series — one per geo — each near 1.0 on a healthy stack.
+sum by (geo) (rate(probe_success[5m]))
+
+# The page condition exactly: probe success below 90 % anywhere.
+avg by (probe_target) (avg_over_time(probe_success[5m])) < 0.9
+```
+
+### Option B — Grafana k6 cloud canary
+
+**Template:** [`scripts/perf/synthetic-canary-k6.js`](../../scripts/perf/synthetic-canary-k6.js).
+
+Distinct from `scripts/perf/dispense-baseline.js` (which is the performance baseline — 50 VUs, auth, write paths). The canary is intentionally tiny: 1 VU per zone, 5 minutes per run, **only** public no-auth surfaces. Three default k6 cloud zones:
+
+| Zone | Geo |
+| --- | --- |
+| `amazon:us:ashburn` | US-East |
+| `amazon:eu:dublin` | EU-West |
+| `amazon:af:cape-town` | AF-South |
+
+Schedule via k6 cloud → Scheduled tests → every 5 minutes, OR via a GitHub Action workflow_dispatch on a cron:
+
+```yaml
+# .github/workflows/synthetic-canary.yml (example — not committed)
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/k6-action@v0.3.1
+        with:
+          filename: scripts/perf/synthetic-canary-k6.js
+          cloud: true
+        env:
+          K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
+          K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
+          HMS_PUBLIC_BASE_URL: https://api.hms.bitnesttechs.com
+```
+
+The script emits a `probe_success` rate metric and `probe_duration_seconds` trend tagged per probe — k6 cloud's Grafana Cloud integration ships these to the same Mimir tenant the in-cluster Prometheus writes to, so the alert rules fire on identical series shapes.
+
+Validate the rollout with:
+
+- The cloud project dashboard's per-zone p95 panel — three columns, one per zone.
+- The same `sum by (geo) (rate(probe_success[5m]))` query in Grafana — three series should appear with the k6-cloud-supplied geo labels.
+
+### Choosing between A and B
+
+| Concern | Option A — Blackbox | Option B — k6 cloud |
+| --- | --- | --- |
+| **Operational ergonomics** | Native to the existing local stack — copy of `prometheus.yml`, no new vendor. | Vendor lock-in to Grafana Cloud k6, but reuses the perf-baseline runner. |
+| **Cost** | Three small VMs + Mimir ingest. ≈ USD 30/mo at scale. | k6 cloud pay-per-execution; ≈ USD 50/mo at every-5-min cadence. |
+| **Failure modes** | Per-region Blackbox + Prometheus failure surface. | Single vendor outage takes all three zones. |
+| **ECOWAS path** | Replace one region with OVH Dakar bare-metal post-row-39. | k6 cloud Cape Town stays in place; ECOWAS residency is moot for non-PHI probes. |
+
+Default recommendation: **Option A** for any deployment where the in-cluster Prometheus already remote-writes to Mimir, **Option B** for deployments that already have a k6 cloud subscription for perf-baseline. Either satisfies the row-43 deliverable.
 
 ---
 
