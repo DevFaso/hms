@@ -1527,4 +1527,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V104 — ADT auto-create default_assignment_id column.
+         Roadmap row 24 follow-on (A04 Encounter-only auto-create).
+         Adds nullable platform.adt_intake_provider_configs.default_assignment_id
+         so the projection service can stamp Encounter.assignment when
+         provisioning from an A04. Strictly additive (ADD COLUMN IF NOT
+         EXISTS); the new column stays NULL on V103-era rows that only
+         enabled A01 auto-create. V103 is the prior slot; V105 is next free.
+         ================================================================= -->
+    <changeSet id="V104-adt-intake-default-assignment" author="hms-team" runOnChange="false">
+        <sqlFile path="V104__adt_intake_default_assignment.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

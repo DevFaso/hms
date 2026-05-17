@@ -62,7 +62,19 @@ public interface MllpInboundAdtVisitProjectionService {
          * actively registered at the receiving hospital. Any other
          * configuration returns {@link #NO_MATCH}.
          */
-        ADMISSION_AUTOCREATED
+        ADMISSION_AUTOCREATED,
+        /**
+         * No-match resolved by writing a fresh Encounter populated from
+         * per-hospital intake-provider config (roadmap row 24, A04
+         * follow-on). Fires under the same three-layer flag stack as
+         * {@link #ADMISSION_AUTOCREATED}, on A04 (patient registration)
+         * trigger, with the additional requirement that
+         * {@code adt_intake_provider_configs.default_assignment_id} is
+         * populated AND the resolved assignment + staff + department all
+         * belong to the receiving hospital
+         * ({@code Encounter#validate} invariants).
+         */
+        ENCOUNTER_AUTOCREATED
     }
 
     /**

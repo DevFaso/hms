@@ -448,3 +448,67 @@ Files touched in the follow-up:
 - `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
 - `docs/runbooks/hl7-adt-conflict-resolution.md`
 - `docs/copilot-review.md`
+
+---
+
+## Copilot review — PR A04 (`feat/v1.1-adt-auto-create-encounter`) round 2 (2026-05-17)
+
+### Fixed #22 — SonarQube Critical: duplicate `"<null>"` literal 3 times
+
+**File:** `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+
+**Sonar:** "Define a constant instead of duplicating this literal
+`<null>` 3 times" (L280, Code Smell, Critical, 8min effort).
+
+**Root cause:** the three `resolve*` helpers (`resolveProvider`,
+`resolveDepartment`, `resolveAssignment` — added across PRs #358
+and A04) each log a cross-tenant warning that renders
+{@code provider.getHospital() == null ? "<null>" : ...}. Same
+three-occurrence threshold that bit the row-32 PR (`fromInclusive`
+in `setParameter` calls).
+
+**Resolution:** Extracted
+`private static final String NULL_HOSPITAL_PLACEHOLDER = "<null>"`
+near the other class constants (`TRIGGER_A01`, `AUDIT_ENTITY_*`).
+Javadoc explains *why* the placeholder exists (rare data-rebuild
+case where a referent's `hospital` FK is unset).
+
+### Fixed #23 — SonarQube Minor x 16: useless `eq(...)` invocations in test
+
+**File:** `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
+
+**Sonar:** 16 instances of "Remove this useless `eq(...)` invocation;
+pass the values directly" (Code Smell, Minor, 2min effort each)
+across the new A01 + A04 test methods. Mockito's matcher engine
+only requires argument matchers when at least one matcher is in
+use; if every argument is wrapped in `eq()`, the wrappers are pure
+noise — Mockito accepts raw values directly.
+
+**Resolution:** Script-driven cleanup over the 10 test methods
+I added in this PR (and the previous round). Stripped `eq()` from
+every pure-value invocation while preserving `eq(null)` in the
+older `blankSenderProceedsWithNullScope` test — `eq(null)` is the
+recommended matcher form for null comparisons because raw `null`
+in matcher position is ambiguous to the Mockito stubber. 30 lines
+modified, 0 test failures, 16/16 still passing.
+
+The `eq` static import stays because the older `admissionMatched`
+/ `encounterMatched` / `blankSenderProceedsWithNullScope` tests
+(pre-existing from PR #332) still use it. Those weren't flagged
+because Sonar only counts findings on new-code lines; we left
+them as-is rather than expand this PR's scope to a stylistic
+sweep of unrelated test methods.
+
+### Net result (PR A04 round 2)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| Sonar Critical | 1 | Fixed |
+| Sonar Minor | 16 | Fixed |
+
+Files touched in the follow-up:
+
+- `hospital-core/src/main/java/com/example/hms/service/integration/impl/MllpInboundAdtVisitProjectionServiceImpl.java`
+- `hospital-core/src/test/java/com/example/hms/service/integration/MllpInboundAdtVisitProjectionServiceImplTest.java`
+- `.claude/skills/pr-review-response/SKILL.md`
+- `docs/copilot-review.md`
