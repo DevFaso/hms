@@ -5,14 +5,17 @@ runbook is the operator's procedure for **moving one specific hospital** from th
 default row-level multi-tenancy topology into a dedicated PostgreSQL schema, and
 for the rollback when something goes wrong.
 
-> **Status — 2026-05-15.** The application-side foundation has landed
-> (this PR — `feat/v2.0-schema-per-tenant`). The runbook below describes
-> the **target end-to-end flow**; sections marked **(future PR)** are
-> not yet automated and will be operator scripts in the next two follow-up
-> PRs. Until then, the feature flag `app.tenancy.schema-isolation.enabled`
-> stays **off** in every environment and no hospital's `isolation_mode`
-> column changes from `ROW_LEVEL`. Reading the whole runbook now is
-> still useful: it documents the contract the foundation pass commits to.
+> **Status — 2026-05-17.** Foundation pass landed on
+> `feat/v2.0-schema-per-tenant`. Row-33 follow-on shipped on
+> `feat/v2.0-schema-per-tenant-scripts`: `provision-schema.sh`,
+> `copy-rows.sh`, `invalidate-tenant-cache.sh`, and the
+> `POST /api/super-admin/tenancy/schema-cache/invalidate/{hospitalId}`
+> endpoint behind the existing
+> `app.tenancy.schema-isolation.enabled` flag. The per-tenant
+> Liquibase bootstrap (the only step still flagged **(future PR)**)
+> and the first UAT cutover are the remaining row-33 work before
+> the row flips from `started` to `completed`. The feature flag
+> stays **off** in every environment until then.
 
 ## When to use this
 
@@ -113,59 +116,76 @@ Before scheduling a migration window for hospital `<H>`:
 
 ## Procedure
 
-### Step 1 — Provision the empty tenant schema *(future PR)*
+### Step 1 — Provision the empty tenant schema
 
 ```bash
-# scripts/tenancy/provision-schema.sh <hospital-code> <schema-name>
-# (script not yet written — placeholder command shown for shape)
+# Required libpq env: PGHOST PGPORT PGDATABASE PGUSER PGPASSWORD
+# (PGUSER is the DDL role; HMS_APP_ROLE defaults to hms_app)
 
 scripts/tenancy/provision-schema.sh BFQ_MIL_001 tenant_bfq_mil_001
+# preview-only:
+scripts/tenancy/provision-schema.sh --dry-run BFQ_MIL_001 tenant_bfq_mil_001
 ```
 
-What it does:
-1. Connect as the `LIQUIBASE_USERNAME` DDL role (the same role used for
-   versioned migrations — the runtime app role does not have CREATE on
-   the public DB).
-2. `CREATE SCHEMA IF NOT EXISTS tenant_bfq_mil_001 AUTHORIZATION hms_app;`
-3. Run a **Liquibase contexts-filtered** changelog that creates only the
-   clinical / billing / lab tables in the new schema. The current
-   `V1__Initial_Schema.sql` has those tables in the shared `clinical`,
-   `billing`, `lab` schemas; the per-tenant variant points the same DDL
-   at the new schema via `currentSchema=tenant_bfq_mil_001` in the JDBC
-   URL.
-4. Grant `USAGE` on the schema and `SELECT, INSERT, UPDATE, DELETE` on
-   all tables to `hms_app`. The DDL role keeps ownership.
+What it does today (row-33 follow-on scope):
+
+1. Validate the schema name against the same
+   `^[a-z][a-z0-9_]{0,62}$` regex the application enforces in
+   `SchemaTenantConnectionProvider#SAFE_IDENTIFIER`; refuse any of
+   the shared globals (`hospital`, `reference`, `platform`, etc.).
+2. `CREATE SCHEMA IF NOT EXISTS "<schema>" AUTHORIZATION "<PGUSER>";`
+   — idempotent; re-running is a no-op.
+3. `GRANT USAGE ON SCHEMA "<schema>" TO "<HMS_APP_ROLE>";` and
+   default privileges (`SELECT, INSERT, UPDATE, DELETE` on future
+   tables, `USAGE, SELECT` on future sequences) so the runtime app
+   role can use the schema once the per-tenant DDL lands.
+4. Stamp a `COMMENT ON SCHEMA` so the schema's provenance is
+   self-documenting in `psql \dn+`.
+
+What it does **not** do yet:
+
+- **Per-tenant Liquibase bootstrap.** Creating the clinical /
+  billing / lab tables inside the new schema is deliberately deferred
+  to a follow-on PR — splitting the existing `V1__Initial_Schema.sql`
+  into a tenant-scoped Liquibase context is a multi-week migration in
+  its own right. Until that lands, the operator applies the captured
+  tenant-tables DDL by hand:
+
+  ```bash
+  psql -d "${PGDATABASE}" \
+       -c "SET search_path TO tenant_bfq_mil_001, public;" \
+       -f path/to/tenant-tables-bootstrap.sql
+  ```
 
 ### Step 2 — Copy the hospital's clinical rows
 
-```sql
--- Run inside a single REPEATABLE READ transaction so a long copy
--- doesn't see writes from concurrent traffic.
-
-BEGIN ISOLATION LEVEL REPEATABLE READ;
-
--- Lock the hospital row to serialize cutovers
-SELECT * FROM hospital.hospitals WHERE id = '<HOSPITAL_UUID>' FOR UPDATE;
-
--- Each clinical / billing / lab table:
-INSERT INTO tenant_bfq_mil_001.encounters
-SELECT * FROM clinical.encounters WHERE hospital_id = '<HOSPITAL_UUID>';
-
--- ... repeat for every clinical table that has hospital_id ...
-
--- Pause here. Do NOT delete from the source schemas yet.
-COMMIT;
+```bash
+scripts/tenancy/copy-rows.sh <HOSPITAL_UUID> tenant_bfq_mil_001
+# preview-only (prints the discovered table plan + source row counts):
+scripts/tenancy/copy-rows.sh --dry-run <HOSPITAL_UUID> tenant_bfq_mil_001
 ```
 
-**Verification**:
+The script:
 
-```sql
--- For every clinical / billing / lab table, source count must match
--- destination count exactly. Mismatch = abort, drop the schema, restart.
-SELECT
-    (SELECT COUNT(*) FROM clinical.encounters         WHERE hospital_id = '<H>') AS src,
-    (SELECT COUNT(*) FROM tenant_bfq_mil_001.encounters)                          AS dst;
-```
+1. Validates both args (UUID shape + schema-name regex).
+2. Confirms the hospital row exists and the target schema is present
+   (refuses to run if `provision-schema.sh` was skipped).
+3. Discovers every base table in `clinical`, `billing`, `lab` that
+   has a `hospital_id` column — the list is regenerated each run, so
+   new tenant-scoped tables added in future migrations are picked up
+   automatically.
+4. Opens a single `BEGIN ISOLATION LEVEL REPEATABLE READ` transaction,
+   takes `SELECT FOR UPDATE` on the hospital row to serialize against
+   another concurrent cutover, runs one
+   `INSERT INTO tenant.X SELECT ... FROM clinical.X WHERE hospital_id = ...`
+   per discovered table, and `COMMIT`s.
+5. Verifies that source-row-count = destination-row-count for every
+   copied table; any mismatch exits 1 so the runbook's "abort, drop
+   the schema, restart" path triggers immediately.
+
+Source rows are **not** deleted by this script — Step 6 (post-soak)
+runs the explicit `DELETE FROM clinical.X WHERE hospital_id = ...`
+sweep so rollback during the soak window stays trivial.
 
 ### Step 3 — Drain in-flight requests
 
@@ -205,17 +225,33 @@ UPDATE hospital.hospitals
 COMMIT;
 ```
 
-Then **invalidate the application cache** so the next request resolves
-to the new schema:
+Then **invalidate the application cache** so the next request
+resolves to the new schema:
 
 ```bash
-# scripts/tenancy/invalidate-tenant-cache.sh <hospital-uuid>
-# (future PR — stub. Currently: rolling restart of hospital-core pods.)
+# Required env: HMS_BACKEND_BASE_URL, HMS_ADMIN_TOKEN
+scripts/tenancy/invalidate-tenant-cache.sh <HOSPITAL_UUID>
 ```
 
-The current foundation pass has `TenantSchemaLookup` cache the
-isolation mode for 5 minutes, so even without an explicit invalidation
-endpoint, a 5-minute wait is sufficient for the change to propagate.
+The wrapper calls
+`POST /api/super-admin/tenancy/schema-cache/invalidate/{hospitalId}`,
+which drops the one entry from `TenantSchemaLookup`'s 5-minute cache
+and emits a `TENANT_SCHEMA_CACHE_INVALIDATED` audit row attributed
+to the calling super-admin. The endpoint is `@PreAuthorize`-gated on
+the `SUPER_ADMIN` role and is itself flag-gated on
+`app.tenancy.schema-isolation.enabled` — it returns 404 when the
+flag is off, so a rolling pod restart remains the operator's only
+option until the flag flips on in that env.
+
+`TenantSchemaLookup#invalidateAll()` stays package-private (test
+only) — operators target one hospital at a time so a typo on the
+cutover host cannot nuke every cached resolver entry. Recovering
+from a wider problem ("we think the entire resolver cache is wrong")
+is a rolling restart, by design.
+
+If you must skip the endpoint (e.g. backend is on an older build
+that pre-dates this PR), the original "wait 5 min" path still works:
+the cache TTL guarantees propagation within `TenantSchemaLookup#DEFAULT_TTL`.
 
 ### Step 5 — Soak
 
@@ -278,11 +314,13 @@ permanent.
 | `TenantSchemaLookup` (JDBC, 5-min cache, manual invalidate) | ✅ this PR | Bypasses JPA to avoid resolver recursion |
 | Hibernate `multiTenancy=SCHEMA` wiring behind feature flag | ✅ this PR | `app.tenancy.schema-isolation.enabled=false` by default |
 | Unit tests for resolver + provider + lookup | ✅ this PR | 28 tests across the three classes |
-| `scripts/tenancy/provision-schema.sh` (Step 1 automation) | ⏳ next PR | Liquibase contexts split + per-schema bootstrap |
-| `scripts/tenancy/copy-rows.sh` (Step 2 automation) | ⏳ next PR | Idempotent + verification SQL bundled |
-| Cache-invalidation endpoint (Step 4 automation) | ⏳ next PR | Super-admin REST endpoint, audited |
+| `scripts/tenancy/provision-schema.sh` (Step 1 automation) | ✅ row-33 follow-on | Schema + grants only; per-tenant Liquibase still operator-applied |
+| `scripts/tenancy/copy-rows.sh` (Step 2 automation) | ✅ row-33 follow-on | REPEATABLE READ tx, auto table discovery, src=dst count verify |
+| `scripts/tenancy/invalidate-tenant-cache.sh` (Step 4 wrapper) | ✅ row-33 follow-on | Thin curl wrapper around the super-admin endpoint |
+| Cache-invalidation REST endpoint (Step 4) | ✅ row-33 follow-on | `POST /super-admin/tenancy/schema-cache/invalidate/{id}`, SUPER_ADMIN, audited |
+| Per-tenant Liquibase changelog discipline | ⏳ next follow-on | How V98+ migrations apply to schema tenants |
 | Backup / restore drill against an isolated tenant | ⏳ before first prod use | Pairs with `disaster-recovery.md` |
-| Per-tenant Liquibase changelog discipline | ⏳ next PR | How V98+ migrations apply to schema tenants |
+| First end-to-end UAT cutover | ⏳ before row 33 flips to `completed` | Pilot tenant, soak, decision to keep or roll back |
 
 ## Operational notes
 

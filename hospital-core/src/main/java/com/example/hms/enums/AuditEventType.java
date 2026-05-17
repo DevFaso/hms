@@ -136,6 +136,9 @@ public enum AuditEventType {
     TENANT_PURGE_PACKAGED,
     TENANT_PURGE_PACKAGING_FAILED,
 
+    // Schema-per-tenant cache control (roadmap row 33 follow-on)
+    TENANT_SCHEMA_CACHE_INVALIDATED,
+
     OTHER
 }
 
