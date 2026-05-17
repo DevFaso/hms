@@ -24,14 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * invalidation endpoint (roadmap row 33 follow-on, v2.0 /
  * Multi-tenancy).
  *
- * <p>Same 401-or-handler-status pattern as the other foundation-pass
- * ITs (ChargebackReportControllerIT, DicomProxyControllerIT): an
- * authenticated TestRestTemplate is not yet wired, so unauthenticated
- * calls stop at Spring Security with 401 before the controller is
- * reached. With the flag off the controller returns 404, so an
- * authenticated SUPER_ADMIN would land on 404 — either status proves
- * the endpoint is not surfacing cache control under the default
- * row-level topology.
+ * <p>Same gate-status pattern as the other foundation-pass ITs
+ * (ChargebackReportControllerIT, DicomProxyControllerIT). One
+ * difference: this endpoint is POST, so an unauthenticated call hits
+ * Spring Security's CSRF filter first and returns
+ * <strong>403</strong> (not 401 as GET endpoints do — caught on
+ * PR #356 CI). With the flag off the controller returns 404 instead.
+ * Any of 401 / 403 / 404 proves the endpoint is not surfacing cache
+ * control under the default row-level topology.
  */
 @SpringBootTest(classes = HmsApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -43,7 +43,7 @@ class TenantSchemaCacheControllerIT {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("POST /api/super-admin/tenancy/schema-cache/invalidate/{id} returns 401 or 404 when flag off")
+    @DisplayName("POST /api/super-admin/tenancy/schema-cache/invalidate/{id} returns 401/403/404 when flag off")
     void invalidateRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/json");
@@ -54,6 +54,11 @@ class TenantSchemaCacheControllerIT {
             new HttpEntity<>(headers),
             String.class
         );
-        assertThat(response.getStatusCode().value()).isIn(401, 404);
+        // 401 — anonymous (no auth header)
+        // 403 — CSRF rejection on POST without token
+        // 404 — authenticated SUPER_ADMIN, flag off
+        // Any of the three proves the endpoint is not surfacing cache
+        // control under the default row-level topology.
+        assertThat(response.getStatusCode().value()).isIn(401, 403, 404);
     }
 }

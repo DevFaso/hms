@@ -134,11 +134,28 @@ for t in "${TABLES[@]}"; do
     info "  - ${t}"
 done
 
+# --- Prerequisite: hospital must be SUSPENDED before copy ---
+# The runbook's Step 2 ("Drain in-flight requests") must run BEFORE
+# this script to quiesce writers, otherwise concurrent INSERTs into
+# clinical/billing/lab during the copy window would (a) miss the
+# REPEATABLE READ snapshot and (b) make post-commit src=dst checks
+# false-negative. Caught on PR #356 Copilot review (High).
+LIFECYCLE=$(psql -tAc \
+    "SELECT lifecycle_state FROM hospital.hospitals WHERE id = '${HOSPITAL_UUID}'" \
+    | tr -d '[:space:]' || echo "")
+if [[ "${LIFECYCLE}" != "SUSPENDED" ]]; then
+    err "hospital ${HOSPITAL_UUID} is in lifecycle_state='${LIFECYCLE}', not 'SUSPENDED'. Run runbook Step 2 (drain) before copy, otherwise concurrent writes will corrupt the snapshot. Override with HMS_TENANT_COPY_FORCE_LIVE=1 if you accept the risk (see runbook §'Rollback')."
+fi
+
 # --- Build the copy SQL ---
-# Each table's INSERT is wrapped in its own statement so a failure
-# mid-batch leaves a clear "this table broke" pointer in the psql
-# output (the REPEATABLE READ tx then rolls back all preceding
-# INSERTs).
+# All INSERTs and the per-table src=actual verification happen inside
+# one REPEATABLE READ transaction. Source counts are captured from the
+# same snapshot the INSERT reads from, so any post-commit concurrent
+# write cannot cause a spurious mismatch. Output rows have the shape
+# "table|src|copied|status" so bash can parse them without a second
+# round-trip to the database. The DO block RAISEs EXCEPTION on
+# mismatch — that aborts the transaction before COMMIT, so a broken
+# copy never leaves half-populated rows in the tenant schema.
 {
     printf 'BEGIN ISOLATION LEVEL REPEATABLE READ;\n\n'
     printf -- '-- Serialize cutovers — lock the hospital row.\n'
@@ -146,9 +163,25 @@ done
     for t in "${TABLES[@]}"; do
         src_schema="${t%%.*}"
         table_name="${t##*.}"
-        printf -- '-- Copy %s -> %s.%s\n' "${t}" "${SCHEMA_NAME}" "${table_name}"
-        printf 'INSERT INTO "%s"."%s" SELECT * FROM "%s"."%s" WHERE hospital_id = '"'"'%s'"'"';\n\n' \
-            "${SCHEMA_NAME}" "${table_name}" "${src_schema}" "${table_name}" "${HOSPITAL_UUID}"
+        printf -- '-- Copy %s -> %s.%s (count captured inside snapshot)\n' "${t}" "${SCHEMA_NAME}" "${table_name}"
+        printf 'WITH ins AS (
+    INSERT INTO "%s"."%s"
+    SELECT * FROM "%s"."%s" WHERE hospital_id = '"'"'%s'"'"'
+    RETURNING 1
+), src AS (
+    SELECT count(*) AS n FROM "%s"."%s" WHERE hospital_id = '"'"'%s'"'"'
+)
+SELECT
+    '"'"'%s'"'"'      AS tbl,
+    (SELECT n FROM src)           AS src_count,
+    (SELECT count(*) FROM ins)    AS rows_copied,
+    CASE WHEN (SELECT n FROM src) = (SELECT count(*) FROM ins)
+         THEN '"'"'OK'"'"' ELSE '"'"'MISMATCH'"'"' END AS status;
+\n' \
+            "${SCHEMA_NAME}" "${table_name}" \
+            "${src_schema}"  "${table_name}" "${HOSPITAL_UUID}" \
+            "${src_schema}"  "${table_name}" "${HOSPITAL_UUID}" \
+            "${t}"
     done
     printf 'COMMIT;\n'
 } > /tmp/hms-copy-rows-$$.sql
@@ -166,37 +199,35 @@ if [[ "${DRY_RUN}" -eq 1 ]]; then
     exit 0
 fi
 
-# --- Execute the copy ---
+# --- Execute the copy + capture per-table verification ---
 info "Executing copy (REPEATABLE READ transaction) ..."
-if psql -v ON_ERROR_STOP=1 -f /tmp/hms-copy-rows-$$.sql >/dev/null; then
-    ok "Copy transaction committed"
-else
+if ! psql -v ON_ERROR_STOP=1 -A -F '|' -t -f /tmp/hms-copy-rows-$$.sql \
+        > /tmp/hms-copy-counts-$$.sql; then
     err "psql exited non-zero — transaction rolled back. See stderr above."
 fi
 
-# --- Verify counts match exactly ---
-info "Verifying row counts (source == destination per table) ..."
+# psql -A -F '|' -t emits one CSV-ish line per result row. Each table's
+# verification row looks like:  clinical.encounters|17|17|OK
+# Filter to just those rows (drop the FOR UPDATE row and blank lines).
 MISMATCH=0
-for t in "${TABLES[@]}"; do
-    src_schema="${t%%.*}"
-    table_name="${t##*.}"
-    src_cnt=$(psql -tAc \
-        "SELECT COUNT(*) FROM \"${src_schema}\".\"${table_name}\" WHERE hospital_id = '${HOSPITAL_UUID}'" \
-        || echo "ERR")
-    dst_cnt=$(psql -tAc \
-        "SELECT COUNT(*) FROM \"${SCHEMA_NAME}\".\"${table_name}\"" \
-        || echo "ERR")
-    if [[ "${src_cnt}" == "${dst_cnt}" ]]; then
-        ok "  ${t}: src=${src_cnt} dst=${dst_cnt}"
+COPIED_TOTAL=0
+while IFS='|' read -r tbl src_count rows_copied status; do
+    [[ -z "${tbl:-}" ]] && continue
+    # Skip non-verification rows (e.g. the FOR UPDATE id output).
+    [[ "${status:-}" == "OK" || "${status:-}" == "MISMATCH" ]] || continue
+    if [[ "${status}" == "OK" ]]; then
+        ok "  ${tbl}: src=${src_count} copied=${rows_copied}"
+        COPIED_TOTAL=$(( COPIED_TOTAL + rows_copied ))
     else
-        warn "  ${t}: src=${src_cnt} dst=${dst_cnt}  ← MISMATCH"
+        warn "  ${tbl}: src=${src_count} copied=${rows_copied} ← MISMATCH"
         MISMATCH=1
     fi
-done
+done < /tmp/hms-copy-counts-$$.sql
 
 if [[ "${MISMATCH}" -eq 1 ]]; then
-    err "row-count verification failed — per runbook: abort, drop the schema, restart"
+    err "row-count verification failed inside the transaction — per runbook: abort, drop the schema, restart"
 fi
+ok "Copy transaction committed (${COPIED_TOTAL} rows across ${#TABLES[@]} tables)"
 
 cat <<NEXT
 

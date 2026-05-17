@@ -195,3 +195,117 @@ Files touched in the follow-up:
 
 - `docs/roadmap.md`
 - `docs/copilot-review.md`
+
+---
+
+## Copilot review — PR #356 `feat/v2.0-schema-per-tenant-scripts` (2026-05-17)
+
+### Fixed #7 — PGUSER not validated against SAFE_IDENTIFIER regex (Medium)
+
+**File:** `scripts/tenancy/provision-schema.sh`
+
+**Copilot:** The script interpolates `PGUSER` into SQL identifiers
+(`CREATE SCHEMA … AUTHORIZATION "${PGUSER}"` and
+`ALTER DEFAULT PRIVILEGES FOR ROLE "${PGUSER}"`) but `PGUSER` wasn't
+validated against `SAFE_REGEX` even though the comment claimed all
+identifiers were pre-validated. Could break the SQL or, worst case,
+allow identifier injection if `PGUSER` contained quotes.
+
+**Resolution:** Fixed. Added an explicit `[[ "${PGUSER}" =~ ${SAFE_REGEX} ]]`
+check right after the `PGUSER` env-var assertion, with the same
+"fail-fast on regex mismatch" pattern used for `SCHEMA_NAME` and
+`HMS_APP_ROLE`. The HMS deployment convention is lowercase
+snake_case roles (`hms_app`, `hms_liquibase`) so the existing strict
+allowlist applies cleanly to `PGUSER` too.
+
+### Fixed #8 — invalidate-tenant-cache.sh URL missing /api context path (High)
+
+**File:** `scripts/tenancy/invalidate-tenant-cache.sh`
+
+**Copilot:** The script built `${HMS_BACKEND_BASE_URL}/super-admin/...`
+but the backend is served under `server.servlet.context-path=/api`,
+and the runbook documents the endpoint as `POST /api/super-admin/...`.
+The script would always 404 unless operators happened to include
+`/api` in `HMS_BACKEND_BASE_URL` manually.
+
+**Resolution:** Fixed. The URL builder now normalises the base URL
+(strips trailing `/`, strips trailing `/api` if already present) and
+explicitly appends `/api/super-admin/tenancy/...`. The
+`HMS_BACKEND_BASE_URL` doc-string was updated to document that the
+script accepts both forms (with or without `/api`). Idempotent: an
+operator who already has `/api` in their env var still gets the
+correct single-`/api` URL.
+
+### Fixed #9 — copy-rows.sh src-count drift after commit (High)
+
+**File:** `scripts/tenancy/copy-rows.sh`
+
+**Copilot:** Row-count verification ran AFTER the REPEATABLE READ
+transaction committed, so the source counts were taken from a fresh
+snapshot. Any concurrent writes for the hospital during the copy
+window would make `src != dst` and force a false-failure abort even
+though the copy itself was correct.
+
+**Resolution:** Two-part fix.
+
+1. The verification now runs **inside** the REPEATABLE READ
+   transaction. Each table's INSERT uses a CTE that captures the
+   source `count(*)` and the `RETURNING` count in the same snapshot,
+   emitting a `tbl|src|copied|status` row that bash parses. Any
+   `MISMATCH` aborts before `COMMIT`, so a broken copy never reaches
+   the tenant schema.
+2. The script now **refuses to run** unless the hospital is in
+   `lifecycle_state = 'SUSPENDED'`. This machine-enforces the
+   drain-before-copy ordering (see #10 below) so even a careless
+   operator can't accidentally copy a live tenant.
+
+### Fixed #10 — runbook step ordering: drain before copy (High)
+
+**File:** `docs/runbooks/schema-per-tenant-migration.md`
+
+**Copilot:** The original runbook had `Step 2 (copy)` → `Step 3
+(drain)` → `Step 4 (flip)`. Copying while the hospital was still
+`ACTIVE` allowed concurrent writes against the source tables,
+which is the root cause of the `src != dst` drift in #9.
+
+**Resolution:** Steps reordered. New flow:
+`Step 2 (drain)` → `Step 3 (copy)` → `Step 4 (flip + invalidate)`.
+The drain step now leads with a new section header explaining
+why the order matters, with an explicit pointer to the
+`copy-rows.sh` SUSPENDED-state guard. Step numbers cascaded
+through the rest of the runbook.
+
+### Fixed #11 — CI test failure: TenantSchemaCacheControllerIT expected 401/404 but got 403 (CI)
+
+**File:** `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
+
+**Issue:** The IT was modelled after `ChargebackReportControllerIT`
+and `DicomProxyControllerIT`, which use GET endpoints and stop at
+Spring Security with 401 for unauthenticated requests. This new
+endpoint is POST, so the request hits the CSRF filter first and
+returns **403** instead. The IT failed CI with
+`Expecting 403 to be in [401, 404]`.
+
+**Resolution:** Widened the expected status set to `[401, 403, 404]`
+and documented why all three are valid (401 anonymous, 403 CSRF
+rejection on POST, 404 authenticated SUPER_ADMIN with flag off).
+The DisplayName + Javadoc both call out the POST-vs-GET difference
+explicitly so the next foundation-pass IT doesn't repeat the same
+assumption.
+
+### Net result (PR #356)
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| High | 3 | Fixed |
+| Medium | 1 | Fixed |
+| CI (test) | 1 | Fixed |
+
+Files touched in the follow-up:
+
+- `scripts/tenancy/provision-schema.sh`
+- `scripts/tenancy/invalidate-tenant-cache.sh`
+- `scripts/tenancy/copy-rows.sh`
+- `docs/runbooks/schema-per-tenant-migration.md`
+- `hospital-core/src/test/java/com/example/hms/security/tenant/schema/TenantSchemaCacheControllerIT.java`
+- `docs/copilot-review.md`

@@ -112,6 +112,16 @@ HMS_APP_ROLE="${HMS_APP_ROLE:-hms_app}"
 : "${PGDATABASE:?PGDATABASE must be set (libpq variable)}"
 : "${PGUSER:?PGUSER must be set (DDL role, typically LIQUIBASE_USERNAME)}"
 
+# Validate PGUSER against the same allowlist so a typo'd or
+# adversarial DDL-role name cannot break the SQL or inject identifiers
+# via the AUTHORIZATION + DEFAULT PRIVILEGES clauses. PG identifier
+# rules are slightly broader than this regex (e.g. quoted mixed-case),
+# but the HMS deployment convention is lowercase snake_case roles
+# (hms_app, hms_liquibase) so the stricter allowlist is fine and
+# matches the schema-name rule. Caught on PR #356 Copilot review (Medium).
+[[ "${PGUSER}" =~ ${SAFE_REGEX} ]] || \
+    err "PGUSER='${PGUSER}' fails SAFE_IDENTIFIER regex"
+
 info "Tenant provisioning starting"
 info "  hospital code     : ${HOSPITAL_CODE}"
 info "  target schema     : ${SCHEMA_NAME}"

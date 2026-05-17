@@ -157,39 +157,14 @@ What it does **not** do yet:
        -f path/to/tenant-tables-bootstrap.sql
   ```
 
-### Step 2 — Copy the hospital's clinical rows
+### Step 2 — Drain in-flight requests
 
-```bash
-scripts/tenancy/copy-rows.sh <HOSPITAL_UUID> tenant_bfq_mil_001
-# preview-only (prints the discovered table plan + source row counts):
-scripts/tenancy/copy-rows.sh --dry-run <HOSPITAL_UUID> tenant_bfq_mil_001
-```
-
-The script:
-
-1. Validates both args (UUID shape + schema-name regex).
-2. Confirms the hospital row exists and the target schema is present
-   (refuses to run if `provision-schema.sh` was skipped).
-3. Discovers every base table in `clinical`, `billing`, `lab` that
-   has a `hospital_id` column — the list is regenerated each run, so
-   new tenant-scoped tables added in future migrations are picked up
-   automatically.
-4. Opens a single `BEGIN ISOLATION LEVEL REPEATABLE READ` transaction,
-   takes `SELECT FOR UPDATE` on the hospital row to serialize against
-   another concurrent cutover, runs one
-   `INSERT INTO tenant.X SELECT ... FROM clinical.X WHERE hospital_id = ...`
-   per discovered table, and `COMMIT`s.
-5. Verifies that source-row-count = destination-row-count for every
-   copied table; any mismatch exits 1 so the runbook's "abort, drop
-   the schema, restart" path triggers immediately.
-
-Source rows are **not** deleted by this script — Step 6 (post-soak)
-runs the explicit `DELETE FROM clinical.X WHERE hospital_id = ...`
-sweep so rollback during the soak window stays trivial.
-
-### Step 3 — Drain in-flight requests
-
-The hospital briefly goes maintenance:
+The hospital goes into maintenance **before** the copy so concurrent
+INSERTs into `clinical/billing/lab` cannot drift the source-row
+counts during the copy window. Earlier drafts of this runbook had
+drain coming after the copy; that order was flagged on PR #356
+Copilot review (High) because the post-commit `src=dst` verification
+sees a fresh snapshot and can false-fail on any in-flight write.
 
 ```sql
 UPDATE hospital.hospitals
@@ -200,11 +175,49 @@ UPDATE hospital.hospitals
 ```
 
 `JwtAuthenticationFilter` blocks new logins for SUSPENDED hospitals
-(see `docs/super-admin-gaps.md`); already-active sessions drain over the
-session-idle timeout (15 min, set by row 7 of v1.0).
-
-Wait for the request-rate dashboard for this hospital to flatline before
+(see `docs/super-admin-gaps.md`); already-active sessions drain over
+the session-idle timeout (15 min, set by row 7 of v1.0). Wait for the
+request-rate dashboard for this hospital to flatline before
 proceeding. Typical: 30 min.
+
+`copy-rows.sh` (Step 3) refuses to run unless the hospital row is in
+`lifecycle_state = 'SUSPENDED'` — this guard is the machine-enforced
+version of the drain-before-copy ordering.
+
+### Step 3 — Copy the hospital's clinical rows
+
+```bash
+scripts/tenancy/copy-rows.sh <HOSPITAL_UUID> tenant_bfq_mil_001
+# preview-only (prints the discovered table plan + source row counts):
+scripts/tenancy/copy-rows.sh --dry-run <HOSPITAL_UUID> tenant_bfq_mil_001
+```
+
+The script:
+
+1. Validates both args (UUID shape + schema-name regex).
+2. Confirms the hospital row exists, is `SUSPENDED` (see Step 2),
+   and the target schema is present (refuses to run if either
+   `provision-schema.sh` was skipped or the drain step was skipped).
+3. Discovers every base table in `clinical`, `billing`, `lab` that
+   has a `hospital_id` column — the list is regenerated each run, so
+   new tenant-scoped tables added in future migrations are picked up
+   automatically.
+4. Opens a single `BEGIN ISOLATION LEVEL REPEATABLE READ` transaction,
+   takes `SELECT FOR UPDATE` on the hospital row to serialize against
+   another concurrent cutover, runs one
+   `INSERT INTO tenant.X SELECT ... FROM clinical.X WHERE hospital_id = ...`
+   per discovered table, and **captures the per-table source count
+   inside the same snapshot** via a CTE that exposes
+   `(src_count, rows_copied, status)`. Mismatch RAISEs an EXCEPTION
+   which aborts the transaction before `COMMIT`, so a partial copy
+   never reaches the tenant schema.
+5. Parses the per-table verification rows from the psql output; any
+   `MISMATCH` exits 1 so the runbook's "abort, drop the schema,
+   restart" path triggers immediately.
+
+Source rows are **not** deleted by this script — Step 6 (post-soak)
+runs the explicit `DELETE FROM clinical.X WHERE hospital_id = ...`
+sweep so rollback during the soak window stays trivial.
 
 ### Step 4 — Flip the isolation mode
 

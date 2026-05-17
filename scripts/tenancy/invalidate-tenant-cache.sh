@@ -64,10 +64,17 @@ UUID_REGEX='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
     err "hospital UUID '${HOSPITAL_UUID}' is not a well-formed UUID"
 
 command -v curl >/dev/null 2>&1 || err "curl is required"
-: "${HMS_BACKEND_BASE_URL:?HMS_BACKEND_BASE_URL must be set, e.g. https://api.hms.uat.example.com}"
+: "${HMS_BACKEND_BASE_URL:?HMS_BACKEND_BASE_URL must be set, e.g. https://api.hms.uat.example.com (with or without the /api context path; the script normalises both)}"
 : "${HMS_ADMIN_TOKEN:?HMS_ADMIN_TOKEN must be set (super-admin bearer)}"
 
-URL="${HMS_BACKEND_BASE_URL%/}/super-admin/tenancy/schema-cache/invalidate/${HOSPITAL_UUID}"
+# The backend mounts every controller under server.servlet.context-path=/api,
+# so the absolute path is /api/super-admin/.... Append /api here rather
+# than silently relying on operators to embed it in HMS_BACKEND_BASE_URL —
+# the strip-then-append idiom tolerates both bare base URLs and those
+# that already include /api. Caught on PR #356 Copilot review (High).
+BASE="${HMS_BACKEND_BASE_URL%/}"
+BASE="${BASE%/api}"
+URL="${BASE}/api/super-admin/tenancy/schema-cache/invalidate/${HOSPITAL_UUID}"
 
 info "POST ${URL}"
 
