@@ -4,12 +4,18 @@ import { of, throwError } from 'rxjs';
 
 import { AdtIntakeConfigComponent } from './adt-intake-config.component';
 import { AdtIntakeConfig, AdtIntakeConfigService } from '../../services/adt-intake-config.service';
+import { HospitalService } from '../../services/hospital.service';
+import { ReferralService } from '../../services/referral.service';
+import { StaffService } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
 
 describe('AdtIntakeConfigComponent', () => {
   let fixture: ComponentFixture<AdtIntakeConfigComponent>;
   let svc: jasmine.SpyObj<AdtIntakeConfigService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let hospitals: jasmine.SpyObj<HospitalService>;
+  let staff: jasmine.SpyObj<StaffService>;
+  let referrals: jasmine.SpyObj<ReferralService>;
 
   const sample: AdtIntakeConfig = {
     id: 'cfg-1',
@@ -40,11 +46,27 @@ describe('AdtIntakeConfigComponent', () => {
 
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
 
+    // Row 24 follow-on: the component now consumes three services to
+    // power the hospital typeahead + provider/department dropdowns.
+    // Stub them all with empty defaults so tests focused on the list
+    // / form happy paths still pass without exercising the typeahead.
+    hospitals = jasmine.createSpyObj<HospitalService>('HospitalService', ['searchHospitals']);
+    hospitals.searchHospitals.and.returnValue(of([]));
+    staff = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staff.list.and.returnValue(of([]));
+    referrals = jasmine.createSpyObj<ReferralService>('ReferralService', [
+      'getDepartmentsByHospital',
+    ]);
+    referrals.getDepartmentsByHospital.and.returnValue(of([]));
+
     await TestBed.configureTestingModule({
       imports: [AdtIntakeConfigComponent, TranslateModule.forRoot()],
       providers: [
         { provide: AdtIntakeConfigService, useValue: svc },
         { provide: ToastService, useValue: toast },
+        { provide: HospitalService, useValue: hospitals },
+        { provide: StaffService, useValue: staff },
+        { provide: ReferralService, useValue: referrals },
       ],
     }).compileComponents();
 

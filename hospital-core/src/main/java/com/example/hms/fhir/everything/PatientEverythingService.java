@@ -27,10 +27,13 @@ import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -44,13 +47,12 @@ import java.util.UUID;
  * <p>Composition (page-limited per resource type):
  * <ul>
  *   <li>1 {@code Patient}</li>
- *   <li>Up to {@link #ENCOUNTER_LIMIT} most-recent {@code Encounter}s</li>
- *   <li>Up to {@link #VITAL_LIMIT} most-recent vital-sign rows (expanded
- *       1:N into Observation resources by the existing mapper)</li>
- *   <li>Up to {@link #LAB_LIMIT} most-recent lab results (Observation)</li>
- *   <li>All Conditions (problem list)</li>
- *   <li>Up to {@link #PRESCRIPTION_LIMIT} most-recent prescriptions
- *       (MedicationRequest)</li>
+ *   <li>Most-recent {@code Encounter}s (page-size = {@code _count})</li>
+ *   <li>Most-recent vital-sign rows (expanded 1:N into Observation
+ *       resources by the existing mapper)</li>
+ *   <li>Most-recent lab results (Observation)</li>
+ *   <li>Hospital-scoped Conditions (problem list)</li>
+ *   <li>Most-recent prescriptions (MedicationRequest)</li>
  * </ul>
  *
  * <p>Tenant scope: read from {@link HospitalContextHolder}. Missing
@@ -70,11 +72,12 @@ public class PatientEverythingService {
 
     private static final Logger log = LoggerFactory.getLogger(PatientEverythingService.class);
     private static final String AUDIT_ENTITY_TYPE = "PATIENT";
-
-    private static final int ENCOUNTER_LIMIT = 200;
-    private static final int VITAL_LIMIT = 200;
-    private static final int LAB_LIMIT = 200;
-    private static final int PRESCRIPTION_LIMIT = 200;
+    /**
+     * Shared {@code Patient/} resource-id prefix. Extracted as a
+     * constant per Sonar S1192 — previously inlined three times in
+     * this file and once in the audit description.
+     */
+    private static final String PATIENT_PREFIX = "Patient/";
 
     private final FhirOperationsProperties operationsProperties;
     private final PatientRepository patientRepository;
@@ -127,9 +130,58 @@ public class PatientEverythingService {
         return operationsProperties.getEverything().isEnabled();
     }
 
+    /**
+     * Foundation entry-point — equivalent to {@link #everythingForPatient(UUID, PatientEverythingParams)}
+     * with no filters, default count, no cursor. Preserved for callers
+     * that haven't migrated to the params-aware overload yet.
+     */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId) {
+        return doEverythingForPatient(patientId,
+            PatientEverythingParams.of(null, null, null, null));
+    }
+
+    /**
+     * Row-22 follow-on: parameterised $everything supporting
+     * {@code _since} / {@code _type} / {@code _count} / {@code _page}.
+     */
+    @Transactional(readOnly = true)
+    public Bundle everythingForPatient(UUID patientId, PatientEverythingParams params) {
+        return doEverythingForPatient(patientId, params);
+    }
+
+    /**
+     * Shared implementation behind both public overloads. Kept private
+     * so each overload's {@code @Transactional} entry-point goes
+     * through Spring's proxy without self-calling — Sonar S2229.
+     */
+    private Bundle doEverythingForPatient(UUID patientId, PatientEverythingParams params) {
         ensureEnabled();
+        UUID hospitalId = resolveHospitalScopeOrForbid();
+        Patient patient = loadAndVerifyTenantOwnedPatient(patientId, hospitalId);
+
+        SectionContext ctx = SectionContext.forRequest(patientId, hospitalId, params);
+        Bundle bundle = new Bundle();
+        bundle.setType(Bundle.BundleType.SEARCHSET);
+
+        appendPatientSection(bundle, patient, ctx);
+        appendEncounterSection(bundle, ctx);
+        appendObservationSection(bundle, ctx);
+        appendConditionSection(bundle, ctx);
+        appendMedicationRequestSection(bundle, ctx);
+
+        bundle.setTotal(bundle.getEntry().size());
+        if (ctx.hasMore()) {
+            bundle.addLink()
+                .setRelation("next")
+                .setUrl(nextLink(patientId, params, ctx.nextCursor()));
+        }
+
+        emitAudit(patient, describe(patientId, params, bundle.getTotal()));
+        return bundle;
+    }
+
+    private UUID resolveHospitalScopeOrForbid() {
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
         if (hospitalId == null) {
             throw forbidden(
@@ -137,65 +189,126 @@ public class PatientEverythingService {
                     + "supply X-Hospital-Id or authenticate as a hospital-scoped user."
             );
         }
+        return hospitalId;
+    }
 
+    private Patient loadAndVerifyTenantOwnedPatient(UUID patientId, UUID hospitalId) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> notFound(
-                "Patient/" + patientId + " not found at the active hospital scope.",
-                OperationOutcome.IssueType.NOTFOUND
-            ));
-
-        // Tenant gate (PR #352 review — High severity Copilot finding).
-        // PatientRepository.findById is NOT tenant-aware; the per-resource
-        // queries below ARE hospital-scoped, but the Patient resource
-        // itself (name, DOB, address, phone, email — all PHI) would leak
-        // across tenants without this check. The cross-tenant rejection
-        // collapses to "no such patient" so the existence of patients at
-        // other tenants stays invisible — same trust call as the
-        // empi-identity skill's "Never auto-create a Patient from an
-        // unknown EMPI alias".
+            .orElseThrow(() -> notFoundForPatient(patientId));
+        // Tenant gate: PatientRepository.findById is NOT tenant-aware.
+        // The per-resource queries below ARE hospital-scoped, but the
+        // Patient resource itself (PHI) would leak across tenants
+        // without this check. Cross-tenant rejection collapses to
+        // "no such patient" so the existence of patients at other
+        // tenants stays invisible.
         boolean registered = registrationRepository
             .findByPatientIdAndHospitalId(patientId, hospitalId)
             .isPresent();
         if (!registered) {
-            throw notFound(
-                "Patient/" + patientId + " not found at the active hospital scope.",
-                OperationOutcome.IssueType.NOTFOUND
-            );
+            throw notFoundForPatient(patientId);
         }
+        return patient;
+    }
 
-        Bundle bundle = new Bundle();
-        bundle.setType(Bundle.BundleType.SEARCHSET);
-        addEntry(bundle, patientMapper.toFhir(patient));
+    private void appendPatientSection(Bundle bundle, Patient patient, SectionContext ctx) {
+        // Patient itself is always emitted on the first page unless
+        // _type explicitly excludes it; subsequent pages skip the
+        // Patient entry to avoid duplicate emission across cursor
+        // iterations.
+        if (ctx.includes("Patient") && ctx.isFirstPage()
+            && ctx.passesSinceFilter(patient.getUpdatedAt())) {
+            addEntry(bundle, patientMapper.toFhir(patient));
+        }
+    }
 
-        encounterRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId, PageRequest.of(0, ENCOUNTER_LIMIT))
-            .forEach(e -> addEntry(bundle, encounterMapper.toFhir(e)));
+    private void appendEncounterSection(Bundle bundle, SectionContext ctx) {
+        if (!ctx.includes("Encounter")) return;
+        Page<?> page = encounterRepository
+            .findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+        ctx.notePageOverflow(page);
+        page.forEach(e -> {
+            var encounter = (com.example.hms.model.Encounter) e;
+            if (ctx.passesSinceFilter(encounter.getUpdatedAt())) {
+                addEntry(bundle, encounterMapper.toFhir(encounter));
+            }
+        });
+    }
 
-        vitalSignRepository
-            .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId,
-                PageRequest.of(0, VITAL_LIMIT))
-            .forEach(v -> observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o)));
+    private void appendObservationSection(Bundle bundle, SectionContext ctx) {
+        if (!ctx.includes("Observation")) return;
+        Page<com.example.hms.model.PatientVitalSign> vitals = vitalSignRepository
+            .findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
+                ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+        ctx.notePageOverflow(vitals);
+        vitals.forEach(v -> {
+            if (ctx.passesSinceFilter(v.getUpdatedAt())) {
+                observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o));
+            }
+        });
+        Page<com.example.hms.model.LabResult> labResults = labResultRepository
+            .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+        ctx.notePageOverflow(labResults);
+        labResults.forEach(r -> {
+            if (ctx.passesSinceFilter(r.getUpdatedAt())) {
+                addEntry(bundle, observationMapper.toFhir(r));
+            }
+        });
+    }
 
-        labResultRepository
-            .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId,
-                PageRequest.of(0, LAB_LIMIT))
-            .forEach(r -> addEntry(bundle, observationMapper.toFhir(r)));
-
-        patientProblemRepository
-            .findByPatient_Id(patientId)
+    private void appendConditionSection(Bundle bundle, SectionContext ctx) {
+        if (!ctx.includes("Condition")) return;
+        // Hospital-scoped per Copilot review (PR copilot-review) — the
+        // previous findByPatient_Id call could leak problems recorded
+        // at other hospitals for the same patient into a
+        // hospital-scoped $everything response.
+        patientProblemRepository.findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId())
+            .stream()
+            .filter(c -> ctx.passesSinceFilter(c.getUpdatedAt()))
             .forEach(c -> addEntry(bundle, conditionMapper.toFhir(c)));
+    }
 
-        prescriptionRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId,
-                PageRequest.of(0, PRESCRIPTION_LIMIT))
-            .forEach(p -> addEntry(bundle, medicationRequestMapper.toFhir(p)));
+    private void appendMedicationRequestSection(Bundle bundle, SectionContext ctx) {
+        if (!ctx.includes("MedicationRequest")) return;
+        Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
+            .findByPatient_IdAndHospital_Id(ctx.patientId(), ctx.hospitalId(), ctx.pageRequest());
+        ctx.notePageOverflow(prescriptions);
+        prescriptions.forEach(p -> {
+            if (ctx.passesSinceFilter(p.getUpdatedAt())) {
+                addEntry(bundle, medicationRequestMapper.toFhir(p));
+            }
+        });
+    }
 
-        bundle.setTotal(bundle.getEntry().size());
+    private static String nextLink(UUID patientId, PatientEverythingParams params, int nextCursor) {
+        StringBuilder sb = new StringBuilder(PATIENT_PREFIX).append(patientId).append("/$everything?");
+        sb.append("_page=").append(nextCursor);
+        sb.append("&_count=").append(params.count());
+        if (params.since() != null) {
+            sb.append("&_since=").append(params.since().toString());
+        }
+        if (!params.types().isEmpty()) {
+            sb.append("&_type=").append(String.join(",", params.types()));
+        }
+        return sb.toString();
+    }
 
-        emitAudit(patient,
-            "FHIR Patient/" + patientId + "/$everything returned a "
-                + bundle.getTotal() + "-entry Bundle");
-        return bundle;
+    private static String describe(UUID patientId, PatientEverythingParams params, int entryCount) {
+        StringBuilder sb = new StringBuilder("FHIR ")
+            .append(PATIENT_PREFIX)
+            .append(patientId)
+            .append("/$everything returned a ")
+            .append(entryCount)
+            .append("-entry Bundle");
+        if (params.since() != null) {
+            sb.append(" since=").append(params.since());
+        }
+        if (!params.types().isEmpty()) {
+            sb.append(" types=").append(String.join(",", params.types()));
+        }
+        sb.append(" count=").append(params.count())
+            .append(" cursor=").append(params.cursor());
+        return sb.toString();
     }
 
     private static void addEntry(Bundle bundle, Resource resource) {
@@ -217,11 +330,12 @@ public class PatientEverythingService {
         }
     }
 
-    private static ResourceNotFoundException notFound(String message, OperationOutcome.IssueType type) {
+    private static ResourceNotFoundException notFoundForPatient(UUID patientId) {
+        String message = PATIENT_PREFIX + patientId + " not found at the active hospital scope.";
         OperationOutcome outcome = new OperationOutcome();
         outcome.addIssue()
             .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-            .setCode(type)
+            .setCode(OperationOutcome.IssueType.NOTFOUND)
             .setDiagnostics(message);
         return new ResourceNotFoundException(message, outcome);
     }
@@ -246,8 +360,53 @@ public class PatientEverythingService {
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
-            log.warn("audit emission failed for FHIR Patient/{}/$everything: {}",
-                patient.getId(), ex.toString());
+            log.warn("audit emission failed for FHIR {}{}/$everything: {}",
+                PATIENT_PREFIX, patient.getId(), ex.toString());
+        }
+    }
+
+    /**
+     * Per-request state carried across the per-section helpers. Keeps
+     * the orchestrator method below the Sonar cognitive-complexity
+     * limit (S3776) and replaces the original {@code boolean[]{false}}
+     * mutable-holder pattern that triggered the "Brain Method" finding.
+     */
+    private static final class SectionContext {
+        private final UUID patientId;
+        private final UUID hospitalId;
+        private final PatientEverythingParams params;
+        private final PageRequest pageRequest;
+        private boolean hasMore;
+
+        private SectionContext(UUID patientId, UUID hospitalId, PatientEverythingParams params) {
+            this.patientId = patientId;
+            this.hospitalId = hospitalId;
+            this.params = params;
+            this.pageRequest = PageRequest.of(params.cursor(), params.count());
+        }
+
+        static SectionContext forRequest(UUID patientId, UUID hospitalId, PatientEverythingParams params) {
+            return new SectionContext(patientId, hospitalId, params);
+        }
+
+        UUID patientId() { return patientId; }
+        UUID hospitalId() { return hospitalId; }
+        PageRequest pageRequest() { return pageRequest; }
+        boolean isFirstPage() { return params.cursor() == 0; }
+        boolean includes(String type) { return params.includes(type); }
+        boolean hasMore() { return hasMore; }
+        int nextCursor() { return params.cursor() + 1; }
+
+        boolean passesSinceFilter(java.time.LocalDateTime updatedAt) {
+            if (params.since() == null) return true;
+            Instant resolved = updatedAt == null ? null : updatedAt.toInstant(ZoneOffset.UTC);
+            return params.afterSince(resolved);
+        }
+
+        void notePageOverflow(Page<?> page) {
+            if (page != null && page.hasNext()) {
+                this.hasMore = true;
+            }
         }
     }
 }

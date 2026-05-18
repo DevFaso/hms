@@ -25,9 +25,11 @@
     "COL_ENCOUNTER_TYPE": "Encounter type",
     "COL_ENABLED": "Enabled",
     "FIELD": {
-      "HOSPITAL_ID": "Hospital id",
-      "PROVIDER_ID": "Admitting provider id",
-      "DEPARTMENT_ID": "Department id (optional)",
+      "HOSPITAL_PICKER": "Hospital",
+      "PROVIDER": "Admitting provider",
+      "PROVIDER_PLACEHOLDER": "— Select a provider —",
+      "DEPARTMENT": "Department (optional)",
+      "DEPARTMENT_PLACEHOLDER": "— Select a department —",
       "ASSIGNMENT_ID": "Default assignment id (required for A04)",
       "ASSIGNMENT_HINT": "Required only when this hospital opts into ADT^A04 Encounter auto-create. Leave blank for A01-only setups.",
       "ADMISSION_TYPE": "Default admission type",
@@ -37,6 +39,14 @@
       "ENABLED": "Enable auto-create for this hospital"
     },
     "CONFIRM_DELETE": "Delete ADT intake config for {{hospital}}?",
+    "SELECTED_HOSPITAL": "Selected hospital:",
+    "HOSPITAL_SEARCHING": "Searching hospitals…",
+    "HOSPITAL_NO_MATCH": "No hospitals match this search.",
+    "PROVIDER_NO_OPTIONS": "No active staff at this hospital.",
+    "DEPARTMENT_NO_OPTIONS": "No departments at this hospital.",
+    "PLACEHOLDER": {
+      "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…"
+    },
     "VALIDATION": {
       "REQUIRED": "Hospital and admitting provider are required."
     },
@@ -1818,6 +1828,58 @@
       "NOT_FOUND": "Department not found",
       "DELETED": "Department deleted",
       "DELETE_FAILED": "Failed to delete department"
+    }
+  },
+  "COST_PANEL": {
+    "TITLE": "Per-tenant cost rollup",
+    "SUBTITLE": "Chargeback amounts per hospital over the selected window. Splunk / Grafana / storage inputs are zero until the row-44 external-exporter follow-on lands; audit-event count drives the current amount.",
+    "FROM": "From",
+    "TO": "To",
+    "REFRESH": "Refresh",
+    "LOADING": "Loading…",
+    "FEATURE_DISABLED": "Per-tenant cost observability is disabled — set APP_OBSERVABILITY_TENANT_COST_ENABLED=true to opt in.",
+    "ERROR": "Could not load the cost rollup.",
+    "NO_DATA": "No tenant activity in the selected window.",
+    "COL_HOSPITAL": "Hospital",
+    "COL_AUDIT_EVENTS": "Audit events",
+    "COL_SPLUNK": "Splunk events",
+    "COL_GRAFANA": "Grafana series",
+    "COL_STORAGE_GIB": "Storage (GiB)",
+    "COL_AMOUNT": "Chargeback amount"
+  },
+  "EMPI": {
+    "TITLE": "EMPI candidate match",
+    "SUBTITLE": "Search the master patient index by name + DOB + sex + national ID. Confirm the match if the breakdown looks right, or create a new patient if no candidate is the same person.",
+    "SEARCH": "Search candidates",
+    "SEARCHING": "Searching…",
+    "ERROR": "EMPI candidate search failed. The probabilistic match flag may be off — see docs/runbooks/empi-probabilistic-matching.md.",
+    "NO_MATCHES": "No candidates met the configured score threshold.",
+    "NOT_THIS_ONE": "None of the candidates above is the same person?",
+    "CREATE_NEW_PATIENT": "Create a new patient instead",
+    "CONFIRM_MATCH": "Confirm this match",
+    "COL_PATIENT": "Patient",
+    "COL_SCORE": "Score",
+    "COL_BREAKDOWN": "Per-field breakdown",
+    "FIELD": {
+      "FIRST_NAME": "First name",
+      "LAST_NAME": "Last name",
+      "DATE_OF_BIRTH": "Date of birth",
+      "SEX": "Sex",
+      "SEX_PLACEHOLDER": "— Select —",
+      "NATIONAL_ID": "National ID"
+    },
+    "BREAKDOWN": {
+      "NAME": "Name",
+      "DOB": "DOB",
+      "SEX": "Sex",
+      "NATIONAL_ID": "National ID"
+    },
+    "VALIDATION": {
+      "AT_LEAST_ONE_FIELD": "Enter at least one field before searching."
+    },
+    "TOAST": {
+      "CONFIRMED": "Match confirmed: {{name}}.",
+      "NEW_PATIENT_HANDOFF": "Hand-off to new-patient form (follow-on)."
     }
   },
   "ENCOUNTERS": {

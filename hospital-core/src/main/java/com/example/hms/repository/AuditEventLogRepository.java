@@ -75,6 +75,34 @@ public interface AuditEventLogRepository
     List<Object[]> countByHospitalBetween(@Param("from") LocalDateTime from,
                                           @Param("to") LocalDateTime to);
 
+    /**
+     * Stable-key variant of {@link #countByHospitalBetween} (row-44
+     * follow-on). Groups by {@code assignment.hospital.id} so a
+     * hospital rename does not split historic data across old/new
+     * snapshots, AND so two hospitals that happen to share a display
+     * name aren't collapsed into one chargeback row. Hospital name
+     * comes back as a JOIN projection for the UI; the load-bearing
+     * key is the UUID. Caught on the foundation-pass repo query in
+     * PR #352 Copilot review (multi-tenancy-scoping skill — "Aggregate
+     * queries must group by a stable key, not display name").
+     *
+     * <p>Rows without an {@code assignment} (SYSTEM-actor writes —
+     * MLLP / schedulers / Kafka consumers) are excluded — those carry
+     * no per-tenant attribution and roll up under the
+     * platform-shared bucket the follow-on still owes.
+     */
+    @Query("SELECT a.assignment.hospital.id AS hospitalId, "
+           + "       a.assignment.hospital.name AS hospitalName, "
+           + "       COUNT(a) AS cnt "
+           + "FROM AuditEventLog a "
+           + "WHERE a.assignment.hospital.id IS NOT NULL "
+           + "AND a.eventTimestamp >= :from "
+           + "AND a.eventTimestamp <= :to "
+           + "GROUP BY a.assignment.hospital.id, a.assignment.hospital.name "
+           + "ORDER BY a.assignment.hospital.name ASC")
+    List<Object[]> countByHospitalIdBetween(@Param("from") LocalDateTime from,
+                                            @Param("to") LocalDateTime to);
+
     /** Hospital-scoped audit events, ordered by timestamp descending. */
     Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
 
