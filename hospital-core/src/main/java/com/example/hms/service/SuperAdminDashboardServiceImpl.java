@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.mapper.LabOrderMapper;
+import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -82,6 +83,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final GeneralReferralService generalReferralService;
     private final LabOrderMapper labOrderMapper;
     private final AdmissionMapper admissionMapper;
+    private final PrescriptionMapper prescriptionMapper;
 
     /**
      * BaseEntity-mapped property name reused as the tiebreaker / null-safety
@@ -316,7 +318,19 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
         // workflow-stage events that are null for most rows.
         var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
-        return prescriptionService.list(null, null, null, pageable, locale).getContent();
+        // Hit the repository directly rather than going through
+        // PrescriptionService.list — the service enforces
+        // roleValidator.requireActiveHospitalId() and filters to the
+        // active hospital, which produces a count-vs-content mismatch
+        // on the super-admin dashboard (totalPrescriptions counts
+        // system-wide via prescriptionRepository.count() but the
+        // service-filtered list returns 0 when the super-admin has
+        // no hospital pin). The other unscoped getRecent* methods
+        // (getRecentAdmissions, getRecentLabOrders) already use this
+        // direct-repo pattern.
+        return prescriptionRepository.findAll(pageable)
+            .map(prescriptionMapper::toResponseDTO)
+            .getContent();
     }
 
     @Override
