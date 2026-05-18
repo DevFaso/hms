@@ -29,7 +29,11 @@ class DicomProxyServiceTest {
         // returns null in this no-context unit test — the audit emission
         // path short-circuits before any repository call, so the mock
         // never sees a method invocation.
-        service = new DicomProxyService(properties, auditService, mock(UserRepository.class));
+        // Row-42 follow-on: the optional DicomWebClient param is null
+        // here so the test still pins the foundation-pass audit-only
+        // contract (no upstream call attempted, audit row emitted).
+        service = new DicomProxyService(
+            properties, auditService, mock(UserRepository.class), null);
     }
 
     @Test

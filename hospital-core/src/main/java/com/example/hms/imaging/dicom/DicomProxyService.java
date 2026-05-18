@@ -9,22 +9,23 @@ import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Foundation-pass DICOM proxy service (roadmap row 42, v2.0 /
- * Clinical Depth).
+ * DICOM proxy service (roadmap row 42, v2.0 / Clinical Depth).
  *
- * <p>Today the imaging module surfaces reports + an external PACS
- * viewer link (V75 {@code pacs_viewer_url_template}). This service
- * is the entry point for HMS-mediated pixel fetches; the foundation
- * pass wires the flag + audit contract so the receptionist /
- * clinician UI can be built against a stable empty-list response,
- * and the row-42 follow-on plugs in the real Orthanc / dcm4chee
- * HTTP client.
+ * <p>Foundation pass shipped the flag + the audit contract; the
+ * row-42 follow-on adds the upstream DICOMweb bridge via
+ * {@link DicomWebClient}. When the bridge bean is present (flag on +
+ * base-url configured) {@link #listInstancesForStudy} delegates the
+ * QIDO-RS query and {@link #fetchInstanceBytes} delegates the WADO-RS
+ * pixel fetch; when absent, both methods return the foundation-pass
+ * empty-list / null while still emitting the audit row.
  */
 @Service
 public class DicomProxyService {
@@ -35,15 +36,25 @@ public class DicomProxyService {
     private final DicomProxyProperties properties;
     private final AuditEventLogService auditEventLogService;
     private final UserRepository userRepository;
+    /**
+     * Row-42 follow-on: the upstream DICOMweb bridge. Optional —
+     * present only when {@code app.imaging.dicom-proxy.enabled=true}
+     * AND a {@link DicomWebHttpClient} (or test double) is registered.
+     * Absent means the foundation-pass behaviour applies: audit-only,
+     * no upstream call.
+     */
+    private final Optional<DicomWebClient> dicomWebClient;
 
     public DicomProxyService(
         DicomProxyProperties properties,
         AuditEventLogService auditEventLogService,
-        UserRepository userRepository
+        UserRepository userRepository,
+        @Autowired(required = false) DicomWebClient dicomWebClient
     ) {
         this.properties = properties;
         this.auditEventLogService = auditEventLogService;
         this.userRepository = userRepository;
+        this.dicomWebClient = Optional.ofNullable(dicomWebClient);
     }
 
     public boolean isEnabled() {
@@ -52,25 +63,54 @@ public class DicomProxyService {
 
     /**
      * Resolve the list of instance UIDs for a given study UID via the
-     * configured DICOMweb adapter (QIDO-RS).
+     * configured DICOMweb adapter (QIDO-RS). Row-42 follow-on now
+     * delegates to {@link DicomWebClient#qidoListInstances} when the
+     * upstream bridge bean is present; falls back to the foundation-
+     * pass audit-only path when absent.
      *
-     * <p>Foundation pass: returns an empty list unconditionally + emits
-     * the {@code IMAGING_RESULT_UPDATED} audit event so the audit trail
-     * accumulates real-world usage data even before the HTTP client
-     * lands. The row-42 follow-on adds the actual upstream call.
+     * <p>Audit emission stays unconditional on a flag-on call — the
+     * IMAGING_RESULT_UPDATED row carries the operator + study even
+     * when the upstream returns zero instances, so the access pattern
+     * is auditable regardless of the upstream answer.
      */
     public List<String> listInstancesForStudy(String studyUid) {
         if (!properties.isEnabled()) return Collections.emptyList();
         if (studyUid == null || studyUid.isBlank()) return Collections.emptyList();
+
+        List<String> instances = dicomWebClient
+            .map(client -> client.qidoListInstances(studyUid))
+            .orElse(Collections.emptyList());
+
+        String shape = dicomWebClient.isPresent()
+            ? "upstream returned " + instances.size() + " instances"
+            : "audit-only (upstream client not configured)";
         emitAudit(studyUid,
-            "DICOM proxy QIDO-RS lookup for study " + studyUid
-                + " (foundation-pass — upstream call deferred)");
-        // TODO row-42 follow-on: invoke the configured adapter's
-        // DICOMweb QIDO-RS endpoint (Orthanc /dicom-web/studies/{uid}/instances
-        // or dcm4chee equivalent), parse the JSON response, return the
-        // instance UIDs. Add cross-tenant guard against
-        // ImagingOrder.hospital + HospitalContextHolder.getActiveHospitalId().
-        return Collections.emptyList();
+            "DICOM proxy QIDO-RS lookup for study " + studyUid + " — " + shape);
+        return instances;
+    }
+
+    /**
+     * WADO-RS pixel fetch for an individual instance (row-42 follow-on).
+     * Returns {@code null} when the flag is off, the upstream client
+     * isn't configured, the studyUid/instanceUid is blank, or the
+     * upstream responds 404. The controller renders {@code null} as
+     * {@code 404 Not Found}; non-null bytes flow to the client as
+     * {@code application/dicom}.
+     */
+    public byte[] fetchInstanceBytes(String studyUid, String instanceUid) {
+        if (!properties.isEnabled()) return null;
+        if (studyUid == null || studyUid.isBlank()
+            || instanceUid == null || instanceUid.isBlank()) {
+            return null;
+        }
+        byte[] bytes = dicomWebClient
+            .map(client -> client.wadoFetchInstance(studyUid, instanceUid))
+            .orElse(null);
+        emitAudit(studyUid,
+            "DICOM proxy WADO-RS fetch for study " + studyUid
+                + " instance " + instanceUid
+                + " — " + (bytes == null ? "not available" : (bytes.length + " bytes")));
+        return bytes;
     }
 
     private void emitAudit(String studyUid, String description) {
@@ -93,15 +133,8 @@ public class DicomProxyService {
 
     /**
      * Resolve the authenticated user so the audit row is attributed
-     * to the clinician, not to SYSTEM. Without this, the
-     * {@link AuditEventLogService} resolves the actor as SYSTEM
-     * because the request DTO has no userId / userName — caught on
-     * PR #349 Copilot review (High severity).
-     *
-     * <p>Returns {@code null} for non-authenticated callers (the
-     * controller's {@code @PreAuthorize} should prevent this, but
-     * we keep the audit emission resilient so a security-context
-     * misconfiguration cannot break the clinical read path).
+     * to the clinician, not to SYSTEM. Caught on PR #349 Copilot
+     * review (High severity).
      */
     private User currentUserOrNull() {
         String username = SecurityUtils.getCurrentUsername();

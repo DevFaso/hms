@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -11,7 +19,25 @@ import {
   AdtIntakeConfigService,
   EncounterType,
 } from '../../services/adt-intake-config.service';
+import { HospitalResponse, HospitalService } from '../../services/hospital.service';
+import { ReferralService } from '../../services/referral.service';
+import { StaffResponse, StaffService } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
+
+interface HospitalOption {
+  id: string;
+  label: string;
+}
+
+interface DepartmentOption {
+  id: string;
+  name: string;
+}
+
+interface StaffOption {
+  id: string;
+  label: string;
+}
 
 const ADMISSION_TYPES: AdmissionType[] = [
   'EMERGENCY',
@@ -171,40 +197,112 @@ const EMPTY_FORM: IntakeFormState = {
           }}
         </h2>
 
-        <div class="form-row">
-          <label for="adt-hospital">{{ 'ADT_INTAKE.FIELD.HOSPITAL_ID' | translate }}</label>
+        <div class="form-row adt-intake__typeahead">
+          <label for="adt-hospital-search">{{
+            'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate
+          }}</label>
           <input
-            id="adt-hospital"
-            name="hospitalId"
+            id="adt-hospital-search"
+            name="hospitalSearch"
             type="text"
-            required
-            [(ngModel)]="form.hospitalId"
+            autocomplete="off"
+            [attr.aria-label]="'ADT_INTAKE.FIELD.HOSPITAL_PICKER' | translate"
+            [placeholder]="'ADT_INTAKE.PLACEHOLDER.HOSPITAL_SEARCH' | translate"
+            [ngModel]="hospitalSearchTerm()"
+            (ngModelChange)="onHospitalSearchInput($event)"
             [disabled]="!!editingId()"
-            data-testid="adt-intake-hospital"
+            data-testid="adt-intake-hospital-search"
           />
+          <small *ngIf="form.hospitalId" data-testid="adt-intake-hospital-selected">
+            {{ 'ADT_INTAKE.SELECTED_HOSPITAL' | translate }}
+            <code>{{ selectedHospitalLabel() || form.hospitalId }}</code>
+          </small>
+          <small *ngIf="hospitalSearchLoading()" data-testid="adt-intake-hospital-loading">
+            {{ 'ADT_INTAKE.HOSPITAL_SEARCHING' | translate }}
+          </small>
+          <ul
+            *ngIf="hospitalOptions().length > 0"
+            class="adt-intake__suggestions"
+            role="listbox"
+            data-testid="adt-intake-hospital-options"
+          >
+            <li
+              *ngFor="let opt of hospitalOptions(); trackBy: trackHospitalOption"
+              role="option"
+              [attr.aria-selected]="form.hospitalId === opt.id"
+              [attr.data-hospital-id]="opt.id"
+            >
+              <button
+                type="button"
+                class="adt-intake__suggestion-btn"
+                (click)="selectHospital(opt)"
+              >
+                {{ opt.label }}
+              </button>
+            </li>
+          </ul>
+          <small
+            *ngIf="
+              hospitalSearchTerm().trim().length >= 2 &&
+              !hospitalSearchLoading() &&
+              hospitalOptions().length === 0
+            "
+            data-testid="adt-intake-hospital-empty"
+          >
+            {{ 'ADT_INTAKE.HOSPITAL_NO_MATCH' | translate }}
+          </small>
         </div>
 
         <div class="form-row">
-          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER_ID' | translate }}</label>
-          <input
+          <label for="adt-provider">{{ 'ADT_INTAKE.FIELD.PROVIDER' | translate }}</label>
+          <select
             id="adt-provider"
             name="admittingProviderId"
-            type="text"
             required
             [(ngModel)]="form.admittingProviderId"
+            [disabled]="!form.hospitalId"
             data-testid="adt-intake-provider"
-          />
+          >
+            <option value="">
+              {{ 'ADT_INTAKE.FIELD.PROVIDER_PLACEHOLDER' | translate }}
+            </option>
+            <option *ngFor="let s of staffOptions(); trackBy: trackStaffOption" [value]="s.id">
+              {{ s.label }}
+            </option>
+          </select>
+          <small
+            *ngIf="form.hospitalId && !dependentsLoading() && staffOptions().length === 0"
+            data-testid="adt-intake-provider-empty"
+          >
+            {{ 'ADT_INTAKE.PROVIDER_NO_OPTIONS' | translate }}
+          </small>
         </div>
 
         <div class="form-row">
-          <label for="adt-department">{{ 'ADT_INTAKE.FIELD.DEPARTMENT_ID' | translate }}</label>
-          <input
+          <label for="adt-department">{{ 'ADT_INTAKE.FIELD.DEPARTMENT' | translate }}</label>
+          <select
             id="adt-department"
             name="departmentId"
-            type="text"
             [(ngModel)]="form.departmentId"
+            [disabled]="!form.hospitalId"
             data-testid="adt-intake-department"
-          />
+          >
+            <option value="">
+              {{ 'ADT_INTAKE.FIELD.DEPARTMENT_PLACEHOLDER' | translate }}
+            </option>
+            <option
+              *ngFor="let d of departmentOptions(); trackBy: trackDepartmentOption"
+              [value]="d.id"
+            >
+              {{ d.name }}
+            </option>
+          </select>
+          <small
+            *ngIf="form.hospitalId && !dependentsLoading() && departmentOptions().length === 0"
+            data-testid="adt-intake-department-empty"
+          >
+            {{ 'ADT_INTAKE.DEPARTMENT_NO_OPTIONS' | translate }}
+          </small>
         </div>
 
         <div class="form-row">
@@ -369,7 +467,7 @@ const EMPTY_FORM: IntakeFormState = {
     `,
   ],
 })
-export class AdtIntakeConfigComponent implements OnInit {
+export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   protected readonly admissionTypes = ADMISSION_TYPES;
   protected readonly acuityLevels = ACUITY_LEVELS;
   protected readonly encounterTypes = ENCOUNTER_TYPES;
@@ -380,14 +478,124 @@ export class AdtIntakeConfigComponent implements OnInit {
   protected readonly error = signal(false);
   protected readonly editingId = signal<string | null>(null);
 
+  // Hospital typeahead state — typing in the search box debounces a
+  // /super-admin/hospitals/search call; selecting a result populates
+  // form.hospitalId and triggers a fresh staff + department load.
+  protected readonly hospitalSearchTerm = signal('');
+  protected readonly hospitalOptions = signal<HospitalOption[]>([]);
+  protected readonly hospitalSearchLoading = signal(false);
+  protected readonly selectedHospitalLabel = signal('');
+
+  // Dropdown options scoped to the selected hospital. Reloaded on
+  // hospital change. Empty arrays surface the empty-state in the UI
+  // — operator sees a "no staff at this hospital" hint instead of a
+  // silent dropdown.
+  protected readonly staffOptions = signal<StaffOption[]>([]);
+  protected readonly departmentOptions = signal<DepartmentOption[]>([]);
+  protected readonly dependentsLoading = signal(false);
+
   protected form: IntakeFormState = { ...EMPTY_FORM };
 
   private readonly service = inject(AdtIntakeConfigService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly staffService = inject(StaffService);
+  private readonly referralService = inject(ReferralService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
+  private readonly hospitalSearchSubject = new Subject<string>();
+  private hospitalSearchSub?: Subscription;
+
   ngOnInit(): void {
     this.reload();
+    this.hospitalSearchSub = this.hospitalSearchSubject
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        switchMap((term) => {
+          if (term.trim().length < 2) {
+            this.hospitalSearchLoading.set(false);
+            return [];
+          }
+          this.hospitalSearchLoading.set(true);
+          return this.hospitalService.searchHospitals(term.trim(), 20);
+        }),
+      )
+      .subscribe({
+        next: (hospitals) => {
+          this.hospitalOptions.set(
+            (hospitals as HospitalResponse[]).map((h) => ({
+              id: h.id,
+              label: h.code ? `${h.name} (${h.code})` : h.name,
+            })),
+          );
+          this.hospitalSearchLoading.set(false);
+        },
+        error: () => {
+          this.hospitalOptions.set([]);
+          this.hospitalSearchLoading.set(false);
+        },
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.hospitalSearchSub?.unsubscribe();
+  }
+
+  protected onHospitalSearchInput(value: string): void {
+    this.hospitalSearchTerm.set(value);
+    this.hospitalSearchSubject.next(value);
+  }
+
+  protected selectHospital(option: HospitalOption): void {
+    this.form.hospitalId = option.id;
+    this.selectedHospitalLabel.set(option.label);
+    this.hospitalSearchTerm.set(option.label);
+    this.hospitalOptions.set([]);
+    // Selecting a hospital invalidates the staff + department choices —
+    // clear them so a stale provider UUID can't sneak through.
+    this.form.admittingProviderId = '';
+    this.form.departmentId = '';
+    this.loadHospitalDependents(option.id);
+  }
+
+  private loadHospitalDependents(hospitalId: string): void {
+    this.dependentsLoading.set(true);
+    // Two independent loads — fire in parallel; UI reveals dropdowns
+    // as each lands. Errors fall back to empty arrays so the operator
+    // sees the empty-state rather than a stuck spinner.
+    this.staffService.list(hospitalId).subscribe({
+      next: (staff) => {
+        this.staffOptions.set(
+          (staff as StaffResponse[])
+            .filter((s) => !!s.id)
+            .map((s) => ({
+              id: s.id,
+              label: this.staffLabel(s),
+            })),
+        );
+      },
+      error: () => this.staffOptions.set([]),
+    });
+    this.referralService.getDepartmentsByHospital(hospitalId).subscribe({
+      next: (depts) => {
+        this.departmentOptions.set(depts.map((d) => ({ id: d.id, name: d.name })));
+        this.dependentsLoading.set(false);
+      },
+      error: () => {
+        this.departmentOptions.set([]);
+        this.dependentsLoading.set(false);
+      },
+    });
+  }
+
+  private staffLabel(staff: StaffResponse): string {
+    const name = (staff.name ?? '').trim();
+    const role = (staff.roleName ?? staff.jobTitle ?? '').trim();
+    if (name && role) return `${name} — ${role}`;
+    if (name) return name;
+    if (role) return role;
+    return staff.id;
   }
 
   protected trackById(_index: number, cfg: AdtIntakeConfig): string {
@@ -407,11 +615,34 @@ export class AdtIntakeConfigComponent implements OnInit {
       defaultChiefComplaint: cfg.defaultChiefComplaint,
       enabled: cfg.enabled,
     };
+    this.selectedHospitalLabel.set(cfg.hospitalName || cfg.hospitalId);
+    this.hospitalSearchTerm.set(cfg.hospitalName || cfg.hospitalId);
+    // Pre-load the dependents so the provider / department selects
+    // show the configured value as an option rather than the empty
+    // placeholder.
+    this.loadHospitalDependents(cfg.hospitalId);
   }
 
   protected resetForm(): void {
     this.editingId.set(null);
     this.form = { ...EMPTY_FORM };
+    this.selectedHospitalLabel.set('');
+    this.hospitalSearchTerm.set('');
+    this.hospitalOptions.set([]);
+    this.staffOptions.set([]);
+    this.departmentOptions.set([]);
+  }
+
+  protected trackHospitalOption(_index: number, opt: HospitalOption): string {
+    return opt.id;
+  }
+
+  protected trackStaffOption(_index: number, opt: StaffOption): string {
+    return opt.id;
+  }
+
+  protected trackDepartmentOption(_index: number, opt: DepartmentOption): string {
+    return opt.id;
   }
 
   protected save(event: Event): void {

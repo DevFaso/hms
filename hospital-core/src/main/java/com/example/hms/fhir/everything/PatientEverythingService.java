@@ -31,6 +31,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 /**
@@ -70,11 +72,10 @@ public class PatientEverythingService {
 
     private static final Logger log = LoggerFactory.getLogger(PatientEverythingService.class);
     private static final String AUDIT_ENTITY_TYPE = "PATIENT";
-
-    private static final int ENCOUNTER_LIMIT = 200;
-    private static final int VITAL_LIMIT = 200;
-    private static final int LAB_LIMIT = 200;
-    private static final int PRESCRIPTION_LIMIT = 200;
+    // Page sizes are no longer hard-coded — the row-22 follow-on
+    // routes them through PatientEverythingParams.count() so each
+    // request can negotiate via _count. The original 200-per-section
+    // foundation cap is preserved as PatientEverythingParams.DEFAULT_COUNT.
 
     private final FhirOperationsProperties operationsProperties;
     private final PatientRepository patientRepository;
@@ -127,8 +128,32 @@ public class PatientEverythingService {
         return operationsProperties.getEverything().isEnabled();
     }
 
+    /**
+     * Foundation entry-point — equivalent to {@link #everythingForPatient(UUID, PatientEverythingParams)}
+     * with no filters, default count, no cursor. Preserved for callers
+     * that haven't migrated to the params-aware overload yet.
+     */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId) {
+        return everythingForPatient(patientId,
+            PatientEverythingParams.of(null, null, null, null));
+    }
+
+    /**
+     * Row-22 follow-on: parameterised $everything supporting
+     * {@code _since} / {@code _type} / {@code _count} / {@code _page}.
+     * Each per-resource section is gated by {@code params.includes(type)};
+     * resources whose mapped {@code Resource.meta.lastUpdated} is before
+     * {@code params.since} are dropped post-mapping; the per-section
+     * page size is {@code params.count()}; the optional cursor offsets
+     * each per-section page by {@code params.cursor() * params.count()}
+     * entries. When any section returned a full page the resulting
+     * {@link Bundle} carries a {@code link[next]} entry whose URL
+     * advances the cursor by one — same shape FHIR Bulk Data Access
+     * uses for continuation.
+     */
+    @Transactional(readOnly = true)
+    public Bundle everythingForPatient(UUID patientId, PatientEverythingParams params) {
         ensureEnabled();
         UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
         if (hospitalId == null) {
@@ -165,37 +190,130 @@ public class PatientEverythingService {
 
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.SEARCHSET);
-        addEntry(bundle, patientMapper.toFhir(patient));
+        // PageRequest offset = cursor × count, so cursor=0 returns
+        // page-0 entries, cursor=1 returns page-1 entries, etc.
+        int pageSize = params.count();
+        int pageOffset = params.cursor();
+        PageRequest sectionPage = PageRequest.of(pageOffset, pageSize);
+        boolean[] hasMore = new boolean[]{false};
 
-        encounterRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId, PageRequest.of(0, ENCOUNTER_LIMIT))
-            .forEach(e -> addEntry(bundle, encounterMapper.toFhir(e)));
+        // Patient itself is always emitted on the first page unless
+        // _type explicitly excludes it; subsequent pages skip the
+        // Patient entry to avoid duplicate emission across cursor
+        // iterations.
+        if (params.includes("Patient") && pageOffset == 0
+            && passesSinceFilter(params, patient.getUpdatedAt())) {
+            addEntry(bundle, patientMapper.toFhir(patient));
+        }
 
-        vitalSignRepository
-            .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId,
-                PageRequest.of(0, VITAL_LIMIT))
-            .forEach(v -> observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o)));
+        if (params.includes("Encounter")) {
+            var encounters = encounterRepository
+                .findByPatient_IdAndHospital_Id(patientId, hospitalId, sectionPage);
+            if (sectionHasMore(encounters)) hasMore[0] = true;
+            encounters.stream()
+                .filter(e -> passesSinceFilter(params, e.getUpdatedAt()))
+                .forEach(e -> addEntry(bundle, encounterMapper.toFhir(e)));
+        }
 
-        labResultRepository
-            .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId,
-                PageRequest.of(0, LAB_LIMIT))
-            .forEach(r -> addEntry(bundle, observationMapper.toFhir(r)));
+        if (params.includes("Observation")) {
+            var vitals = vitalSignRepository
+                .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, sectionPage);
+            if (sectionHasMore(vitals)) hasMore[0] = true;
+            vitals.stream()
+                .filter(v -> passesSinceFilter(params, v.getUpdatedAt()))
+                .forEach(v -> observationMapper.toFhir(v).forEach(o -> addEntry(bundle, o)));
+            var labResults = labResultRepository
+                .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, sectionPage);
+            if (sectionHasMore(labResults)) hasMore[0] = true;
+            labResults.stream()
+                .filter(r -> passesSinceFilter(params, r.getUpdatedAt()))
+                .forEach(r -> addEntry(bundle, observationMapper.toFhir(r)));
+        }
 
-        patientProblemRepository
-            .findByPatient_Id(patientId)
-            .forEach(c -> addEntry(bundle, conditionMapper.toFhir(c)));
+        if (params.includes("Condition")) {
+            // Conditions are typically a small, stable list — no
+            // pagination on the foundation query. The since filter
+            // still applies.
+            patientProblemRepository.findByPatient_Id(patientId).stream()
+                .filter(c -> passesSinceFilter(params, c.getUpdatedAt()))
+                .forEach(c -> addEntry(bundle, conditionMapper.toFhir(c)));
+        }
 
-        prescriptionRepository
-            .findByPatient_IdAndHospital_Id(patientId, hospitalId,
-                PageRequest.of(0, PRESCRIPTION_LIMIT))
-            .forEach(p -> addEntry(bundle, medicationRequestMapper.toFhir(p)));
+        if (params.includes("MedicationRequest")) {
+            var prescriptions = prescriptionRepository
+                .findByPatient_IdAndHospital_Id(patientId, hospitalId, sectionPage);
+            if (sectionHasMore(prescriptions)) hasMore[0] = true;
+            prescriptions.stream()
+                .filter(p -> passesSinceFilter(params, p.getUpdatedAt()))
+                .forEach(p -> addEntry(bundle, medicationRequestMapper.toFhir(p)));
+        }
 
         bundle.setTotal(bundle.getEntry().size());
 
-        emitAudit(patient,
-            "FHIR Patient/" + patientId + "/$everything returned a "
-                + bundle.getTotal() + "-entry Bundle");
+        if (hasMore[0]) {
+            // FHIR R4 continuation idiom: relative "next" link with
+            // the cursor advanced by 1. The provider is responsible
+            // for prepending the absolute base URL; we ship the
+            // relative shape so the runbook + tests can pin the
+            // exact form.
+            int nextCursor = pageOffset + 1;
+            bundle.addLink()
+                .setRelation("next")
+                .setUrl(nextLink(patientId, params, nextCursor));
+        }
+
+        emitAudit(patient, describe(patientId, params, bundle.getTotal()));
         return bundle;
+    }
+
+    private boolean passesSinceFilter(PatientEverythingParams params, java.time.LocalDateTime updatedAt) {
+        if (params.since() == null) return true;
+        Instant resolved = updatedAt == null ? null : updatedAt.toInstant(ZoneOffset.UTC);
+        return params.afterSince(resolved);
+    }
+
+    /**
+     * Spring Data's {@link org.springframework.data.domain.Page} carries
+     * {@code hasNext()} directly — that's the cleanest indicator that the
+     * underlying query has more rows than what this page returned, and it
+     * doesn't false-fire when a section happens to land exactly on the
+     * page boundary with zero remaining rows.
+     */
+    private static boolean sectionHasMore(Object pageOrList) {
+        if (pageOrList instanceof org.springframework.data.domain.Page<?> page) {
+            return page.hasNext();
+        }
+        return false;
+    }
+
+    private static String nextLink(UUID patientId, PatientEverythingParams params, int nextCursor) {
+        StringBuilder sb = new StringBuilder("Patient/").append(patientId).append("/$everything?");
+        sb.append("_page=").append(nextCursor);
+        sb.append("&_count=").append(params.count());
+        if (params.since() != null) {
+            sb.append("&_since=").append(params.since().toString());
+        }
+        if (!params.types().isEmpty()) {
+            sb.append("&_type=").append(String.join(",", params.types()));
+        }
+        return sb.toString();
+    }
+
+    private static String describe(UUID patientId, PatientEverythingParams params, int entryCount) {
+        StringBuilder sb = new StringBuilder("FHIR Patient/")
+            .append(patientId)
+            .append("/$everything returned a ")
+            .append(entryCount)
+            .append("-entry Bundle");
+        if (params.since() != null) {
+            sb.append(" since=").append(params.since());
+        }
+        if (!params.types().isEmpty()) {
+            sb.append(" types=").append(String.join(",", params.types()));
+        }
+        sb.append(" count=").append(params.count())
+            .append(" cursor=").append(params.cursor());
+        return sb.toString();
     }
 
     private static void addEntry(Bundle bundle, Resource resource) {

@@ -25,9 +25,11 @@
     "COL_ENCOUNTER_TYPE": "Tipo de encuentro",
     "COL_ENABLED": "Habilitada",
     "FIELD": {
-      "HOSPITAL_ID": "Identificador del hospital",
-      "PROVIDER_ID": "Identificador del proveedor admitente",
-      "DEPARTMENT_ID": "Identificador del departamento (opcional)",
+      "HOSPITAL_PICKER": "Hospital",
+      "PROVIDER": "Proveedor admitente",
+      "PROVIDER_PLACEHOLDER": "— Seleccione un proveedor —",
+      "DEPARTMENT": "Departamento (opcional)",
+      "DEPARTMENT_PLACEHOLDER": "— Seleccione un departamento —",
       "ASSIGNMENT_ID": "Identificador de asignación por defecto (requerido para A04)",
       "ASSIGNMENT_HINT": "Requerido solo si este hospital habilita la creación automática de encuentros ADT^A04. Déjelo en blanco para configuraciones solo A01.",
       "ADMISSION_TYPE": "Tipo de admisión predeterminado",
@@ -37,6 +39,14 @@
       "ENABLED": "Habilitar la creación automática para este hospital"
     },
     "CONFIRM_DELETE": "¿Eliminar la configuración ADT para {{hospital}}?",
+    "SELECTED_HOSPITAL": "Hospital seleccionado:",
+    "HOSPITAL_SEARCHING": "Buscando hospitales…",
+    "HOSPITAL_NO_MATCH": "Ningún hospital coincide con esta búsqueda.",
+    "PROVIDER_NO_OPTIONS": "No hay personal activo en este hospital.",
+    "DEPARTMENT_NO_OPTIONS": "No hay departamentos en este hospital.",
+    "PLACEHOLDER": {
+      "HOSPITAL_SEARCH": "Escriba al menos 2 caracteres del nombre o código del hospital…"
+    },
     "VALIDATION": {
       "REQUIRED": "Hospital y proveedor admitente son obligatorios."
     },
@@ -1819,6 +1829,58 @@
       "NOT_FOUND": "Departamento no encontrado",
       "DELETED": "Departamento eliminado",
       "DELETE_FAILED": "Error al eliminar el departamento"
+    }
+  },
+  "COST_PANEL": {
+    "TITLE": "Distribución de costos por tenant",
+    "SUBTITLE": "Montos de cargo retro por hospital en la ventana seleccionada. Las entradas de Splunk / Grafana / almacenamiento son cero hasta que se entregue la continuación de exportadores externos (row-44); el conteo de eventos de auditoría impulsa el monto actual.",
+    "FROM": "Desde",
+    "TO": "Hasta",
+    "REFRESH": "Actualizar",
+    "LOADING": "Cargando…",
+    "FEATURE_DISABLED": "La observabilidad de costos por tenant está desactivada — establezca APP_OBSERVABILITY_TENANT_COST_ENABLED=true para activarla.",
+    "ERROR": "No se pudo cargar la distribución de costos.",
+    "NO_DATA": "Sin actividad de tenants en la ventana seleccionada.",
+    "COL_HOSPITAL": "Hospital",
+    "COL_AUDIT_EVENTS": "Eventos de auditoría",
+    "COL_SPLUNK": "Eventos Splunk",
+    "COL_GRAFANA": "Series Grafana",
+    "COL_STORAGE_GIB": "Almacenamiento (GiB)",
+    "COL_AMOUNT": "Monto a facturar"
+  },
+  "EMPI": {
+    "TITLE": "Coincidencia EMPI",
+    "SUBTITLE": "Buscar en el índice maestro de pacientes por nombre + fecha de nacimiento + sexo + identificación nacional. Confirme la coincidencia si el desglose se ve correcto, o cree un nuevo paciente si ningún candidato corresponde.",
+    "SEARCH": "Buscar candidatos",
+    "SEARCHING": "Buscando…",
+    "ERROR": "La búsqueda EMPI falló. La bandera de coincidencia probabilística puede estar desactivada — consulte docs/runbooks/empi-probabilistic-matching.md.",
+    "NO_MATCHES": "Ningún candidato alcanzó el umbral de puntuación configurado.",
+    "NOT_THIS_ONE": "¿Ninguno de los candidatos anteriores es la misma persona?",
+    "CREATE_NEW_PATIENT": "Crear un nuevo paciente en su lugar",
+    "CONFIRM_MATCH": "Confirmar esta coincidencia",
+    "COL_PATIENT": "Paciente",
+    "COL_SCORE": "Puntuación",
+    "COL_BREAKDOWN": "Desglose por campo",
+    "FIELD": {
+      "FIRST_NAME": "Nombre",
+      "LAST_NAME": "Apellido",
+      "DATE_OF_BIRTH": "Fecha de nacimiento",
+      "SEX": "Sexo",
+      "SEX_PLACEHOLDER": "— Seleccionar —",
+      "NATIONAL_ID": "Identificación nacional"
+    },
+    "BREAKDOWN": {
+      "NAME": "Nombre",
+      "DOB": "Fecha nac.",
+      "SEX": "Sexo",
+      "NATIONAL_ID": "Identificación nacional"
+    },
+    "VALIDATION": {
+      "AT_LEAST_ONE_FIELD": "Ingrese al menos un campo antes de buscar."
+    },
+    "TOAST": {
+      "CONFIRMED": "Coincidencia confirmada: {{name}}.",
+      "NEW_PATIENT_HANDOFF": "Transferencia al formulario de nuevo paciente (próximo)."
     }
   },
   "ENCOUNTERS": {

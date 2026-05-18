@@ -11,6 +11,94 @@ Canonical roadmap for the Hospital Management System project. Source of truth fo
 
 Last updated: **2026-05-17**. Update both files together when scope moves.
 
+> **2026-05-17 update — 9-row foundation-pass batch on
+> `feat/multi-row-foundation-batch-2026-05-17-night`.** All nine rows
+> stay `started` (the foundation-pass convention — see the
+> roadmap-sync-workflow skill); each row's named follow-on is closed
+> by the pass below, with the remaining item explicitly named in the
+> per-row blurb.
+>
+> - **Row 32 (KPI matview tier)** — V105 PostgreSQL-only
+>   `clinical.kpi_*_daily` matviews (preCondition `<dbms type="postgresql"/>`
+>   skips H2-backed tests) + `KpiMaterializedViewProperties` two-flag
+>   gate (enabled + refresh-scheduler-enabled) +
+>   `KpiMaterializedViewRefreshScheduler` (REFRESH CONCURRENTLY with
+>   plain-REFRESH first-tick fallback). `KpiDashboardServiceImpl`
+>   routes to matview helpers when the flag is on; on-the-fly fallback
+>   when off. 3 new unit cases pin the toggle.
+> - **Row 24 (Admin form hospital picker)** — `/admin/adt-intake-configs`
+>   replaces raw-UUID inputs with hospital typeahead (debounced 300 ms
+>   against `/super-admin/hospitals/search`) + provider/department
+>   dropdowns populated from the selected hospital. a11y `aria-selected`
+>   on listbox items per `@angular-eslint/template/role-has-required-aria`.
+>   EN/FR/ES i18n keys added.
+> - **Row 22 (`$everything` params)** — new `PatientEverythingParams`
+>   record (since / types / count / cursor) with ReDoS-safe parseTypeList +
+>   clamp to MAX_COUNT=500. `PatientEverythingService` parameterised
+>   overload routes the four spec params; `Bundle.link[next]` emitted
+>   when any section's Page.hasNext() is true. Provider parses HAPI
+>   `@OperationParam`s; malformed inputs → 400 + `OperationOutcome(VALUE)`.
+>   10 new unit cases.
+> - **Row 20 (Encounter If-Match)** — `EncounterFhirWriteService`
+>   gains version-id parse (W/"123" or "123") + epoch-millis token
+>   from `updatedAt` + 412 PreconditionFailedException on mismatch.
+>   Provider reads If-Match off RequestDetails, stamps response
+>   `meta.versionId` so HAPI renders the ETag header. Foundation
+>   no-arg overload delegates with `null` (last-write-wins preserved).
+>   7 new unit cases.
+> - **Row 44 (Per-tenant cost obs)** — closes the cost-model layer +
+>   the stable-key grouping (Copilot finding from PR #352). New
+>   `TenantCostModelProperties` four-rate model (per-event /
+>   per-Splunk / per-Grafana / per-storage-GiB); new
+>   `countByHospitalIdBetween` JPQL groups by `assignment.hospital.id`;
+>   `chargebackPerTenant` overload returns the v2 row shape +
+>   computed amount; `parseOrDefault` upgraded to 400-on-bad-input
+>   per the PR #352 lesson. 5 new cases.
+> - **Row 41 (OB/GYN cross-service FK)** — V106 adds
+>   `clinical.postpartum_care_plans.newborn_assessment_id` FK +
+>   matching @ManyToOne on `PostpartumCarePlan`. One of three named
+>   cross-service FKs (the other two need a Pregnancy entity that
+>   doesn't exist yet — separate foundation pass).
+> - **Row 25 (EMPI scorer body)** — `EmpiSimilarity` pure-function
+>   per-field math (normalised Levenshtein name / DOB tolerance /
+>   sex exact / national-ID exact) + `EmpiProbabilisticMatcher`
+>   weighted-sum Fellegi-Sunter composite (0.40 name / 0.25 DOB /
+>   0.10 sex / 0.25 nationalId). Candidate generation via existing
+>   `PatientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase`,
+>   with EMPI alias index for the national-ID block. 6 + 10 unit cases pin the math.
+> - **Row 42 (DICOM upstream bridge)** — new `DicomWebClient` interface +
+>   `DicomWebHttpClient` @ConditionalOnProperty(enabled) RestClient
+>   bridge (QIDO-RS list + WADO-RS fetch). `DicomProxyService` gains
+>   `@Autowired(required=false)` + new `fetchInstanceBytes()` method;
+>   audit emits on every flag-on call regardless of upstream outcome.
+>   7 new bridge-delegation cases.
+>
+> - **Row 33 (Schema-per-tenant provisioning wiring)** —
+>   `TenantProvisioningService` + `TenantProvisioningController`
+>   expose `scripts/tenancy/provision-schema.sh` as a REST endpoint
+>   at `POST /api/super-admin/tenancy/provision/{hospitalId}?schemaName=`,
+>   SUPER_ADMIN-gated, so an operator can begin a cutover without SSH
+>   to the DB host. The service mirrors the script's three operations
+>   (CREATE SCHEMA IF NOT EXISTS + GRANT USAGE + ALTER DEFAULT
+>   PRIVILEGES) and validates both the schema name AND the configured
+>   app-role against the same `SAFE_IDENTIFIER` allowlist
+>   `SchemaTenantConnectionProvider` uses (defence in depth on the
+>   operator-set property). Refuses to provision against a hospital
+>   already in `SCHEMA` mode (409 Conflict) so an operator can't
+>   accidentally replace a live tenant's schema with an empty one.
+>   New `TENANT_SCHEMA_PROVISIONED` audit event (past-tense). Gated
+>   independently from the schema-isolation runtime flag via
+>   `app.tenancy.provisioning.enabled`. 8 new unit cases pin
+>   SAFE_IDENTIFIER rejection, unknown-hospital rejection, already-SCHEMA
+>   rejection, happy-path DDL emission, audit-failure tolerance, and
+>   bad-configured-role rejection. The remaining row-33 item — the
+>   first end-to-end UAT cutover — still gates on real Railway / RDS
+>   replica + UAT environment infra and stays operational.
+>
+> Backend `:hospital-core:test` + `jacocoTestCoverageVerification`
+> green; frontend lint + 986/986 Karma green. Schema migrations
+> V105 + V106 land in this batch.
+
 > **2026-05-17 update — rows 35 + 43 follow-on shipped on
 > `feat/v2.0-row-35-43-readreplica-healthindicator-synthetic-multigeo`.**
 > Both rows stay `started`; foundation passes shipped earlier (PR #334

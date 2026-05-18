@@ -1543,4 +1543,51 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V105 — KPI dashboard materialized views.
+         Roadmap row 32 follow-on. Adds three matviews
+         (clinical.kpi_door_to_doctor_daily,
+          clinical.kpi_dispense_lead_time_daily,
+          clinical.kpi_no_show_rate_daily) pre-aggregated per
+         (hospital_id, day) so KpiDashboardServiceImpl can stop
+         re-scanning source tables on every dashboard load. Each view
+         carries a unique (hospital_id, day_bucket) index so
+         REFRESH MATERIALIZED VIEW CONCURRENTLY works for the
+         scheduled refresher. PostgreSQL-only — the
+         <dbms type="postgresql"/> preCondition with
+         onFail="MARK_RAN" skips the changeset entirely on H2
+         (test) so the existing on-the-fly fallback path keeps
+         tests bit-for-bit unchanged. The service prefers the matview
+         when app.analytics.kpi.materialized-views.enabled=true AND
+         the view exists; otherwise it falls back to the existing
+         native SQL path.
+         ================================================================= -->
+    <changeSet id="V105-kpi-dashboard-materialized-views" author="hms-team" runOnChange="false">
+        <preConditions onFail="MARK_RAN">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="V105__kpi_dashboard_materialized_views.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V106 — Cross-service link PostpartumCarePlan → NewbornAssessment.
+         Roadmap row 41 follow-on item (1) "cross-service workflow
+         integration". Adds nullable newborn_assessment_id column to
+         clinical.postpartum_care_plans, FK to clinical.newborn_assessments
+         with NO ACTION on delete (defensive — operator must null the link
+         before deleting an assessment). Strictly additive: ADD COLUMN IF
+         NOT EXISTS + DO-block FK guard + CREATE INDEX IF NOT EXISTS.
+         splitStatements must be false because the FK guard is a PL/pgSQL
+         DO block.
+         ================================================================= -->
+    <changeSet id="V106-postpartum-newborn-assessment-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V106__postpartum_newborn_assessment_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.analytics.KpiMaterializedViewProperties;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO;
 import com.example.hms.payload.dto.analytics.KpiDashboardDTO.KpiTrendPoint;
 import com.example.hms.security.context.HospitalContext;
@@ -375,5 +376,94 @@ class KpiDashboardServiceImplTest {
         when(q.setParameter(anyString(), any())).thenReturn(q);
         when(q.getResultList()).thenReturn(rows);
         return q;
+    }
+
+    // ── Row 32 follow-on: matview path ───────────────────────────────────
+
+    @Test
+    @DisplayName("matview path off → three on-the-fly source-table queries (foundation baseline)")
+    void matviewDisabledRunsSourceQueries() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId).build());
+        KpiMaterializedViewProperties off = new KpiMaterializedViewProperties();
+        off.setEnabled(false);
+        ReflectionTestUtils.setField(service, "matviewProperties", off);
+
+        stubThreeQueries(
+            new Object[]{5L, 600.0, 540.0},
+            new Object[]{3L, 480.0},
+            new Object[]{10L, 1L});
+
+        service.computeDashboard(from, to);
+        // Capture the executed SQL to verify it's the source-table form,
+        // not the matview rollup.
+        org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(entityManager, org.mockito.Mockito.times(3))
+            .createNativeQuery(sql.capture());
+        assertThat(sql.getAllValues())
+            .as("foundation path queries clinical.encounters / dispenses / appointments directly")
+            .anyMatch(s -> s.contains("FROM clinical.encounters"))
+            .anyMatch(s -> s.contains("FROM clinical.dispenses"))
+            .anyMatch(s -> s.contains("FROM clinical.appointments"))
+            .noneMatch(s -> s.contains("kpi_door_to_doctor_daily"));
+    }
+
+    @Test
+    @DisplayName("matview path on → routes the three KPI reads to clinical.kpi_*_daily")
+    void matviewEnabledRunsMatviewQueries() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId).build());
+        KpiMaterializedViewProperties on = new KpiMaterializedViewProperties();
+        on.setEnabled(true);
+        ReflectionTestUtils.setField(service, "matviewProperties", on);
+
+        // Matview rollups: sample_size, weighted-avg seconds, median-proxy seconds.
+        stubThreeQueries(
+            new Object[]{5L, 600.0, 540.0},
+            new Object[]{3L, 480.0},
+            new Object[]{10L, 1L});
+
+        KpiDashboardDTO result = service.computeDashboard(from, to);
+
+        // Same downstream conversion (seconds → minutes), so the headline
+        // values come out the same shape as the on-the-fly path.
+        assertThat(result.doorToDoctor().sampleSize()).isEqualTo(5L);
+        assertThat(result.doorToDoctor().averageMinutes()).isEqualTo(10.0);
+        assertThat(result.dispenseLeadTime().averageMinutes()).isEqualTo(8.0);
+        assertThat(result.noShowRate().rate()).isEqualTo(0.1);
+
+        org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(entityManager, org.mockito.Mockito.times(3))
+            .createNativeQuery(sql.capture());
+        assertThat(sql.getAllValues())
+            .as("matview path reads the pre-aggregated views, not the source tables")
+            .anyMatch(s -> s.contains("clinical.kpi_door_to_doctor_daily"))
+            .anyMatch(s -> s.contains("clinical.kpi_dispense_lead_time_daily"))
+            .anyMatch(s -> s.contains("clinical.kpi_no_show_rate_daily"))
+            .noneMatch(s -> s.contains("FROM clinical.encounters e"));
+    }
+
+    @Test
+    @DisplayName("matview properties bean absent → falls back to source-table queries")
+    void matviewPropertiesNullDegradesToSource() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .activeHospitalId(hospitalId).build());
+        // matviewProperties left null — the @Autowired(required = false)
+        // contract means H2-backed integration tests can keep loading
+        // without registering KpiAnalyticsAutoConfiguration.
+        ReflectionTestUtils.setField(service, "matviewProperties", null);
+
+        stubThreeQueries(
+            new Object[]{1L, 60.0, 60.0},
+            new Object[]{1L, 60.0},
+            new Object[]{1L, 0L});
+
+        service.computeDashboard(from, to);
+
+        org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(entityManager, org.mockito.Mockito.times(3))
+            .createNativeQuery(sql.capture());
+        assertThat(sql.getAllValues())
+            .noneMatch(s -> s.contains("kpi_door_to_doctor_daily"));
     }
 }

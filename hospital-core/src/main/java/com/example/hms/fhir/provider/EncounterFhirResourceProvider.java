@@ -7,6 +7,7 @@ import ca.uhn.fhir.rest.annotation.ResourceParam;
 import ca.uhn.fhir.rest.annotation.Search;
 import ca.uhn.fhir.rest.annotation.Update;
 import ca.uhn.fhir.rest.api.MethodOutcome;
+import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
@@ -87,7 +88,8 @@ public class EncounterFhirResourceProvider implements IResourceProvider {
     @Update
     public MethodOutcome update(
         @IdParam IdType id,
-        @ResourceParam Encounter resource
+        @ResourceParam Encounter resource,
+        RequestDetails requestDetails
     ) {
         if (!writeService.isEnabled()) {
             throw new MethodNotAllowedException(
@@ -109,10 +111,23 @@ public class EncounterFhirResourceProvider implements IResourceProvider {
                 OperationOutcome.IssueType.BUSINESSRULE
             );
         }
-        com.example.hms.model.Encounter saved = writeService.update(uuid, resource);
+        // Row-20 follow-on: read the If-Match header (optional). HAPI
+        // doesn't expose a dedicated parameter binding for this so we
+        // pull it off RequestDetails; absent / blank header skips the
+        // precondition (foundation behaviour: last-write-wins).
+        String ifMatch = requestDetails == null ? null : requestDetails.getHeader("If-Match");
+        com.example.hms.model.Encounter saved = writeService.update(uuid, resource, ifMatch);
+        Encounter responseFhir = mapper.toFhir(saved);
+        // Stamp meta.versionId so HAPI renders an ETag the client can
+        // round-trip on the next If-Match. Same encoding as the service:
+        // updatedAt-epoch-millis. The IdType in the response carries
+        // the version part so client SDKs that read it via
+        // resource.getMeta().getVersionId() get the same value.
+        String versionId = EncounterFhirWriteService.toVersionId(saved.getUpdatedAt());
+        responseFhir.getMeta().setVersionId(versionId);
         return new MethodOutcome()
-            .setId(new IdType("Encounter", saved.getId().toString()))
-            .setResource(mapper.toFhir(saved));
+            .setId(new IdType("Encounter", saved.getId().toString(), versionId))
+            .setResource(responseFhir);
     }
 
     private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {
