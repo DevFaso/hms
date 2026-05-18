@@ -142,6 +142,184 @@ class EmpiProbabilisticMatcherTest {
         assertThat(matches.get(0).score()).isGreaterThan(matches.get(1).score());
     }
 
+    // ── Branch / condition coverage for the row-25 follow-on ─────────────
+
+    @Test
+    @DisplayName("name-prefix block resolves with only firstName provided (lastName blank)")
+    void nameBlockFirstNameOnly() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient p = patient(UUID.randomUUID(), "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("Awa", ""))
+            .thenReturn(List.of(p));
+
+        var q = new EmpiCandidateQueryDTO("Awa", null, null, null, null);
+        assertThat(matcher.findCandidates(q)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("name-prefix block resolves with only lastName provided (firstName blank)")
+    void nameBlockLastNameOnly() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient p = patient(UUID.randomUUID(), "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("", "Diallo"))
+            .thenReturn(List.of(p));
+
+        var q = new EmpiCandidateQueryDTO(null, "Diallo", null, null, null);
+        assertThat(matcher.findCandidates(q)).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("only national-ID provided → alias-block resolves the candidate; name-block is skipped")
+    void nationalIdOnlyPath() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        UUID id = UUID.randomUUID();
+        Patient p = patient(id, "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(empiService.findIdentityByAlias(any(), any()))
+            .thenReturn(Optional.of(identity(id)));
+        when(patientRepository.findById(id)).thenReturn(Optional.of(p));
+
+        var q = new EmpiCandidateQueryDTO(null, null, null, null, "BF999");
+        List<EmpiCandidateMatchDTO> matches = matcher.findCandidates(q);
+
+        assertThat(matches).hasSize(1);
+        assertThat(matches.get(0).patientId()).isEqualTo(id);
+        // The name-prefix block must not be called when both names are blank.
+        org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never())
+            .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any());
+    }
+
+    @Test
+    @DisplayName("national-ID alias resolves to a patient id NOT in the name block → still added to candidates")
+    void nationalIdAliasAddsExtraCandidate() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        UUID byNameId = UUID.randomUUID();
+        UUID byAliasId = UUID.randomUUID();
+        Patient byName = patient(byNameId, "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        Patient byAlias = patient(byAliasId, "Other", "Person", LocalDate.of(1980, 5, 5), "M");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(byName));
+        when(empiService.findIdentityByAlias(any(), any()))
+            .thenReturn(Optional.of(identity(byAliasId)));
+        when(patientRepository.findById(byAliasId)).thenReturn(Optional.of(byAlias));
+
+        List<EmpiCandidateMatchDTO> matches = matcher.findCandidates(sampleQuery());
+
+        assertThat(matches).extracting(EmpiCandidateMatchDTO::patientId)
+            .containsExactlyInAnyOrder(byNameId, byAliasId);
+    }
+
+    @Test
+    @DisplayName("national-ID alias resolution is invoked ONCE per request, not per candidate (N+1 fix)")
+    void aliasLookupHappensOncePerRequest() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient a = patient(UUID.randomUUID(), "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        Patient b = patient(UUID.randomUUID(), "Aua", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        Patient c = patient(UUID.randomUUID(), "Aub", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(a, b, c));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        matcher.findCandidates(sampleQuery());
+
+        // Three candidates, but the alias lookup runs ONCE — the
+        // previous N+1 path (one lookup per candidate inside score)
+        // would fire it three times.
+        org.mockito.Mockito.verify(empiService, org.mockito.Mockito.times(1))
+            .findIdentityByAlias(any(), any());
+    }
+
+    @Test
+    @DisplayName("candidate with a null id is dropped from the name block (defensive)")
+    void candidateWithNullIdIsSkipped() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient nullId = patient(null, "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(nullId));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        assertThat(matcher.findCandidates(sampleQuery())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("display name falls back to id when both first + last are blank")
+    void displayNameFallsBackToId() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        UUID id = UUID.randomUUID();
+        Patient p = patient(id, " ", " ", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(p));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        var matches = matcher.findCandidates(sampleQuery());
+        assertThat(matches).hasSize(1);
+        // Both names blank → display name is the UUID string.
+        assertThat(matches.get(0).displayName()).isEqualTo(id.toString());
+    }
+
+    @Test
+    @DisplayName("display name uses first-only when last is blank")
+    void displayNameFirstOnly() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient p = patient(UUID.randomUUID(), "Awa", "", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(p));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        assertThat(matcher.findCandidates(sampleQuery()).get(0).displayName()).isEqualTo("Awa");
+    }
+
+    @Test
+    @DisplayName("display name uses last-only when first is blank")
+    void displayNameLastOnly() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        Patient p = patient(UUID.randomUUID(), "", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(p));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        assertThat(matcher.findCandidates(sampleQuery()).get(0).displayName()).isEqualTo("Diallo");
+    }
+
+    @Test
+    @DisplayName("maxCandidates = 0 returns an empty list even with high-scoring matches")
+    void zeroMaxCandidatesTruncatesToEmpty() {
+        properties.setEnabled(true);
+        properties.setMinScore(0.0);
+        properties.setMaxCandidates(0);
+        Patient p = patient(UUID.randomUUID(), "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F");
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(p));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+
+        assertThat(matcher.findCandidates(sampleQuery())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("no name + no nationalId → empty (no blocks fire)")
+    void noBlocksMeansEmpty() {
+        properties.setEnabled(true);
+        var q = new EmpiCandidateQueryDTO(null, null, null, null, null);
+        assertThat(matcher.findCandidates(q)).isEmpty();
+    }
+
     private static EmpiCandidateQueryDTO sampleQuery() {
         return new EmpiCandidateQueryDTO(
             "Awa", "Diallo", LocalDate.of(1990, 1, 1), "F", "BF1234567890"

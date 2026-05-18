@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -19,12 +20,15 @@ import java.util.Map;
  * HTTP-based {@link DicomWebClient} bridging HMS to an upstream
  * DICOMweb server (Orthanc or dcm4chee). Roadmap row 42 follow-on.
  *
- * <p>Activated only when {@code app.imaging.dicom-proxy.enabled=true}
- * AND {@code app.imaging.dicom-proxy.base-url} is non-blank — so a
- * deployment that flips the master flag without configuring an
- * upstream gets a clean startup with the foundation-pass "no-op
- * audit-only" path (the {@link DicomProxyService} sees no bean to
- * inject and degrades gracefully).
+ * <p>Activated by {@code app.imaging.dicom-proxy.enabled=true}.
+ * Upstream readiness additionally requires
+ * {@code app.imaging.dicom-proxy.base-url} to be non-blank — that
+ * second condition is enforced at request time by {@link #isReady()}
+ * rather than in the bean activation condition, so a deployment that
+ * flips the master flag without configuring an upstream still starts
+ * cleanly (the bean is created but every QIDO/WADO call short-circuits
+ * to an empty result and {@link DicomProxyService} degrades into the
+ * foundation-pass audit-only path).
  *
  * <p>QIDO-RS responses are parsed for the SOPInstanceUID tag (DICOM
  * group/element 0008,0018). Both Orthanc and dcm4chee return the
@@ -50,22 +54,38 @@ public class DicomWebHttpClient implements DicomWebClient {
     private static final Logger log = LoggerFactory.getLogger(DicomWebHttpClient.class);
     /** DICOM tag for SOPInstanceUID — the per-instance UID QIDO-RS returns. */
     private static final String SOP_INSTANCE_UID_TAG = "00080018";
+    /** Sentinel returned when the upstream has no payload to deliver. */
+    private static final byte[] EMPTY_BYTES = new byte[0];
 
     private final DicomProxyProperties properties;
     private final RestClient restClient;
 
     public DicomWebHttpClient(DicomProxyProperties properties) {
+        this(properties, RestClient.builder().requestFactory(buildRequestFactory()).build());
+    }
+
+    /**
+     * Package-private hook so unit tests can wire in a
+     * {@link RestClient} backed by Spring's
+     * {@code MockRestServiceServer}. Production code goes through
+     * the public constructor and never sees this.
+     */
+    DicomWebHttpClient(DicomProxyProperties properties, RestClient restClient) {
         this.properties = properties;
-        // Per-request timeouts: 5s connect / 30s read. The upstream
-        // PACS can be slow on cold-cache reads of large studies;
-        // 30s is the conservative upper bound the clinical UI
-        // tolerates before the operator gets a "still loading" toast.
-        this.restClient = RestClient.builder()
-            .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory() {{
-                setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
-                setReadTimeout((int) Duration.ofSeconds(30).toMillis());
-            }})
-            .build();
+        this.restClient = restClient;
+    }
+
+    /**
+     * Per-request timeouts: 5s connect / 30s read. The upstream PACS
+     * can be slow on cold-cache reads of large studies; 30s is the
+     * conservative upper bound the clinical UI tolerates before the
+     * operator gets a "still loading" toast.
+     */
+    private static SimpleClientHttpRequestFactory buildRequestFactory() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        factory.setReadTimeout((int) Duration.ofSeconds(30).toMillis());
+        return factory;
     }
 
     @Override
@@ -101,17 +121,17 @@ public class DicomWebHttpClient implements DicomWebClient {
     public byte[] wadoFetchInstance(String studyUid, String instanceUid) {
         if (!isReady() || studyUid == null || studyUid.isBlank()
             || instanceUid == null || instanceUid.isBlank()) {
-            return null;
+            return EMPTY_BYTES;
         }
         String url = baseUrl() + "/studies/" + studyUid + "/instances/" + instanceUid;
         try {
-            return restClient.get()
+            byte[] body = restClient.get()
                 .uri(url)
                 .accept(MediaType.parseMediaType("application/dicom"))
                 .retrieve()
                 .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
                     if (res.getStatusCode().value() == 404) {
-                        // Sentinel — converted to null below via the
+                        // Sentinel — converted to empty below via the
                         // throwing-but-caught path. Cleaner than a
                         // mutable holder.
                         throw new InstanceNotFoundSentinel();
@@ -120,33 +140,41 @@ public class DicomWebHttpClient implements DicomWebClient {
                         "upstream DICOMweb rejected WADO-RS: " + res.getStatusCode());
                 })
                 .body(byte[].class);
+            return body == null ? EMPTY_BYTES : body;
         } catch (InstanceNotFoundSentinel notFound) {
-            return null;
+            return EMPTY_BYTES;
         } catch (RuntimeException ex) {
             log.warn("DICOMweb WADO-RS failed for {}/{}: {}", studyUid, instanceUid, ex.toString());
-            return null;
+            return EMPTY_BYTES;
         }
     }
 
     /**
      * Walks the QIDO-RS JSON array and pulls the SOPInstanceUID
      * {@code Value[0]} from each entry. Defensive against missing
-     * fields — a malformed upstream entry is skipped, not propagated
-     * as an exception that would empty the whole result set.
+     * fields — a malformed upstream entry yields a null which the
+     * caller filters out, so the loop has a single early-exit
+     * (the implicit end-of-iteration) rather than multiple
+     * {@code continue} statements.
      */
     private static List<String> extractInstanceUids(List<Map<String, Object>> body) {
         List<String> out = new ArrayList<>(body.size());
         for (Map<String, Object> entry : body) {
-            Object tagObj = entry.get(SOP_INSTANCE_UID_TAG);
-            if (!(tagObj instanceof Map<?, ?> tag)) continue;
-            Object valueArr = tag.get("Value");
-            if (!(valueArr instanceof List<?> values) || values.isEmpty()) continue;
-            Object first = values.get(0);
-            if (first != null) {
-                out.add(first.toString());
+            String uid = extractInstanceUid(entry);
+            if (uid != null) {
+                out.add(uid);
             }
         }
         return out;
+    }
+
+    private static String extractInstanceUid(Map<String, Object> entry) {
+        Object tagObj = entry.get(SOP_INSTANCE_UID_TAG);
+        if (!(tagObj instanceof Map<?, ?> tag)) return null;
+        Object valueArr = tag.get("Value");
+        if (!(valueArr instanceof List<?> values) || values.isEmpty()) return null;
+        Object first = values.get(0);
+        return first == null ? null : first.toString();
     }
 
     private boolean isReady() {
@@ -166,7 +194,7 @@ public class DicomWebHttpClient implements DicomWebClient {
     /** Marker exception used to short-circuit the WADO-RS 404 path. */
     private static final class InstanceNotFoundSentinel extends RuntimeException {
         InstanceNotFoundSentinel() {
-            super("upstream returned 404", null, /*enableSuppression*/ false, /*writableStackTrace*/ false);
+            super("upstream returned 404", null, false, false);
         }
     }
 }

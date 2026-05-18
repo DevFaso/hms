@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.sql.Date;
@@ -54,8 +55,20 @@ class KpiDashboardServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new KpiDashboardServiceImpl();
+        @SuppressWarnings("unchecked")
+        ObjectProvider<KpiMaterializedViewProperties> propsProvider = mock(ObjectProvider.class);
+        when(propsProvider.getIfAvailable()).thenReturn(null);
+        service = new KpiDashboardServiceImpl(propsProvider);
         ReflectionTestUtils.setField(service, "entityManager", entityManager);
+    }
+
+    /**
+     * Force the matview-presence flag without invoking the @PostConstruct
+     * detection — keeps the existing mock-based query stubs from being
+     * counted off by the presence-check createNativeQuery call.
+     */
+    private void enableMatviewPath(boolean enabled) {
+        ReflectionTestUtils.setField(service, "matviewsPresent", enabled);
     }
 
     @AfterEach
@@ -416,6 +429,7 @@ class KpiDashboardServiceImplTest {
         KpiMaterializedViewProperties on = new KpiMaterializedViewProperties();
         on.setEnabled(true);
         ReflectionTestUtils.setField(service, "matviewProperties", on);
+        enableMatviewPath(true);
 
         // Matview rollups: sample_size, weighted-avg seconds, median-proxy seconds.
         stubThreeQueries(

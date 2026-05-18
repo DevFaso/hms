@@ -9,7 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -513,9 +513,16 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
         debounceTime(300),
         distinctUntilChanged(),
         switchMap((term) => {
+          // Below-threshold queries must clear stale suggestions
+          // (user deletes back to 1 char and the prior list would
+          // otherwise stay visible). Returning of([]) emits an
+          // explicit empty array — a bare [] is an empty iterable
+          // that never fires next, so the subscriber wouldn't run
+          // and hospitalOptions would keep its previous value.
           if (term.trim().length < 2) {
             this.hospitalSearchLoading.set(false);
-            return [];
+            this.hospitalOptions.set([]);
+            return of<HospitalResponse[]>([]);
           }
           this.hospitalSearchLoading.set(true);
           return this.hospitalService.searchHospitals(term.trim(), 20);

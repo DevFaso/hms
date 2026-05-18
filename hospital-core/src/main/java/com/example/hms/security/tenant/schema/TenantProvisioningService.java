@@ -91,19 +91,70 @@ public class TenantProvisioningService {
                     + "provisioning is a pre-flip operation");
         }
 
+        // Re-validate against SAFE_IDENTIFIER and emit as double-quoted
+        // SQL identifiers. The allowlist check above already guarantees
+        // the inputs are safe, but CodeQL traces data flow rather than
+        // validating regex inputs — quoting + revalidation makes the
+        // identifier-only contract visible at the call site, so the
+        // static analyser sees that no user-controlled value reaches
+        // the SQL string unchecked.
+        String sqlSchemaName = toQuotedSqlIdentifier(schemaName, "schemaName");
+        String sqlAppRole = toQuotedSqlIdentifier(appRole, "appRole");
 
         entityManager.createNativeQuery(
-            "CREATE SCHEMA IF NOT EXISTS " + schemaName).executeUpdate();
+            "CREATE SCHEMA IF NOT EXISTS " + sqlSchemaName).executeUpdate();
         entityManager.createNativeQuery(
-            "GRANT USAGE ON SCHEMA " + schemaName + " TO " + appRole).executeUpdate();
+            "GRANT USAGE ON SCHEMA " + sqlSchemaName + " TO " + sqlAppRole).executeUpdate();
         entityManager.createNativeQuery(
-            "ALTER DEFAULT PRIVILEGES IN SCHEMA " + schemaName
-                + " GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO " + appRole)
+            "ALTER DEFAULT PRIVILEGES IN SCHEMA " + sqlSchemaName
+                + " GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO " + sqlAppRole)
             .executeUpdate();
 
         emitAudit(hospital, schemaName);
         log.info("Provisioned schema {} for hospital {} (app-role={})", schemaName, hospitalId, appRole);
         return schemaName;
+    }
+
+    /**
+     * Defence-in-depth identifier quoting. The {@link #SAFE_IDENTIFIER}
+     * allowlist already rejects anything that could be a SQL-injection
+     * payload, but CodeQL's data-flow analysis does not treat a regex
+     * test as a sanitiser, so the returned string still carries the
+     * tainted-source flag if we just concatenate the input. We
+     * therefore (1) validate, (2) reconstruct the identifier
+     * character-by-character from a fixed allowlist into a fresh
+     * {@link StringBuilder}, and (3) wrap it in double-quotes. The
+     * char-by-char rebuild breaks the taint trace because the output
+     * is derived from constant literals in the allowlist branch,
+     * not from the input string itself.
+     *
+     * <p>The output is a SQL identifier per PostgreSQL's quoted
+     * identifier rules ({@code "ident"}). The allowlist already
+     * rejects the {@code "} character so the embedded-escape branch
+     * is dead — but it is enforced explicitly to keep the contract
+     * obvious to a future reader.
+     */
+    private static String toQuotedSqlIdentifier(String identifier, String fieldName) {
+        if (identifier == null || !SAFE_IDENTIFIER.matcher(identifier).matches()) {
+            throw new IllegalArgumentException(
+                fieldName + " fails the SAFE_IDENTIFIER allowlist");
+        }
+        StringBuilder sb = new StringBuilder(identifier.length() + 2);
+        sb.append('"');
+        for (int i = 0; i < identifier.length(); i++) {
+            char c = identifier.charAt(i);
+            if (c == '_'
+                || (c >= 'a' && c <= 'z')
+                || (c >= '0' && c <= '9')) {
+                sb.append(c);
+            } else {
+                // Unreachable — SAFE_IDENTIFIER already rejects this.
+                throw new IllegalArgumentException(
+                    fieldName + " contains a disallowed character");
+            }
+        }
+        sb.append('"');
+        return sb.toString();
     }
 
     private void emitAudit(Hospital hospital, String schemaName) {
@@ -124,8 +175,9 @@ public class TenantProvisioningService {
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {
-            // Audit must never roll back the clinical / platform write;
-            // log + swallow per the phi-encryption-audit skill rule.
+            // Per the phi-encryption-audit skill rule, an audit emission failure
+            // is logged and swallowed rather than rolling back the clinical or
+            // platform write that triggered it.
             log.warn("audit emission failed for schema-provision of hospital {}: {}",
                 hospital.getId(), ex.toString());
         }

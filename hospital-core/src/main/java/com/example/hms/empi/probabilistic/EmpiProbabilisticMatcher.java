@@ -11,7 +11,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -41,6 +40,11 @@ import java.util.UUID;
  * pass keyed on (last-name n-gram + DOB-year) is the named-but-deferred
  * follow-on once the labelled audit set is in place to tune blocking
  * recall.
+ *
+ * <p>National-ID alias is resolved ONCE per inbound request and passed
+ * into {@link #score} — without this single-resolve pattern, a search
+ * over N candidates would trigger N alias lookups (the N+1 path
+ * Copilot flagged in PR copilot-review).
  *
  * <p>Flag-off (default): {@link #findCandidates} returns an empty list
  * immediately — preserves the foundation-pass contract every existing
@@ -76,55 +80,86 @@ public class EmpiProbabilisticMatcher {
     }
 
     public List<EmpiCandidateMatchDTO> findCandidates(EmpiCandidateQueryDTO query) {
-        if (!properties.isEnabled()) return Collections.emptyList();
-        if (query == null) return Collections.emptyList();
+        if (!properties.isEnabled() || query == null) return Collections.emptyList();
 
-        Set<UUID> seen = new HashSet<>();
-        List<Patient> candidates = new ArrayList<>();
-
-        // Block 1: name-prefix candidates. Coarse — the audit-set
-        // follow-on will tighten to last-name n-gram + DOB-year
-        // blocking once ROC analysis is available.
-        if (isPresent(query.firstName()) || isPresent(query.lastName())) {
-            String first = isPresent(query.firstName()) ? query.firstName().trim() : "";
-            String last = isPresent(query.lastName()) ? query.lastName().trim() : "";
-            List<Patient> byName = patientRepository
-                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last);
-            for (Patient p : byName) {
-                if (p.getId() != null && seen.add(p.getId())) {
-                    candidates.add(p);
-                }
-            }
-        }
-
-        // Block 2: exact national-ID match via EMPI alias. Even when the
-        // alias resolves cleanly we still send the patient through the
-        // scorer so the receptionist UI can render the per-field
-        // breakdown (name disagrees → operator sees that and pauses
-        // instead of auto-confirming).
-        if (isPresent(query.nationalId())) {
-            Optional<UUID> patientIdOpt = empiService
-                .findIdentityByAlias(EmpiAliasType.NATIONAL_ID, query.nationalId().trim())
-                .map(id -> id.getPatientId());
-            patientIdOpt.flatMap(patientRepository::findById)
-                .ifPresent(p -> {
-                    if (p.getId() != null && seen.add(p.getId())) {
-                        candidates.add(p);
-                    }
-                });
-        }
-
+        UUID nationalIdMatch = resolveNationalIdAliasOnce(query);
+        List<Patient> candidates = collectCandidates(query, nationalIdMatch);
         if (candidates.isEmpty()) return Collections.emptyList();
 
-        List<EmpiCandidateMatchDTO> scored = new ArrayList<>(candidates.size());
+        return rankCandidates(candidates, query, nationalIdMatch);
+    }
+
+    /**
+     * Resolve {@code query.nationalId()} to a single patient-id via
+     * the EMPI alias index, once per request. Returns null when the
+     * inbound query has no national-id or the alias is unknown.
+     */
+    private UUID resolveNationalIdAliasOnce(EmpiCandidateQueryDTO query) {
+        if (!isPresent(query.nationalId())) return null;
+        return empiService
+            .findIdentityByAlias(EmpiAliasType.NATIONAL_ID, query.nationalId().trim())
+            .map(id -> id.getPatientId())
+            .orElse(null);
+    }
+
+    private List<Patient> collectCandidates(EmpiCandidateQueryDTO query, UUID nationalIdMatch) {
+        Set<UUID> seen = new HashSet<>();
+        List<Patient> candidates = new ArrayList<>();
+        addNamePrefixBlock(query, seen, candidates);
+        addNationalIdAliasBlock(nationalIdMatch, seen, candidates);
+        return candidates;
+    }
+
+    /**
+     * Block 1: name-prefix candidates. Coarse — the audit-set follow-on
+     * will tighten to last-name n-gram + DOB-year blocking once ROC
+     * analysis is available.
+     */
+    private void addNamePrefixBlock(
+        EmpiCandidateQueryDTO query, Set<UUID> seen, List<Patient> candidates
+    ) {
+        if (!isPresent(query.firstName()) && !isPresent(query.lastName())) return;
+        String first = isPresent(query.firstName()) ? query.firstName().trim() : "";
+        String last = isPresent(query.lastName()) ? query.lastName().trim() : "";
+        List<Patient> byName = patientRepository
+            .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last);
+        for (Patient p : byName) {
+            addUnique(p, seen, candidates);
+        }
+    }
+
+    /**
+     * Block 2: exact national-ID match via the pre-resolved alias.
+     * Even when the alias resolves cleanly we still send the patient
+     * through the scorer so the receptionist UI can render the
+     * per-field breakdown (name disagrees → operator sees that and
+     * pauses instead of auto-confirming).
+     */
+    private void addNationalIdAliasBlock(
+        UUID nationalIdMatch, Set<UUID> seen, List<Patient> candidates
+    ) {
+        if (nationalIdMatch == null) return;
+        patientRepository.findById(nationalIdMatch)
+            .ifPresent(p -> addUnique(p, seen, candidates));
+    }
+
+    private static void addUnique(Patient p, Set<UUID> seen, List<Patient> candidates) {
+        if (p != null && p.getId() != null && seen.add(p.getId())) {
+            candidates.add(p);
+        }
+    }
+
+    private List<EmpiCandidateMatchDTO> rankCandidates(
+        List<Patient> candidates, EmpiCandidateQueryDTO query, UUID nationalIdMatch
+    ) {
         double minScore = properties.getMinScore();
+        List<EmpiCandidateMatchDTO> scored = new ArrayList<>(candidates.size());
         for (Patient p : candidates) {
-            EmpiCandidateMatchDTO dto = score(p, query);
+            EmpiCandidateMatchDTO dto = score(p, query, nationalIdMatch);
             if (dto.score() >= minScore) {
                 scored.add(dto);
             }
         }
-
         scored.sort(Comparator.comparingDouble(EmpiCandidateMatchDTO::score).reversed());
         int max = Math.max(0, properties.getMaxCandidates());
         if (scored.size() > max) {
@@ -140,23 +175,19 @@ public class EmpiProbabilisticMatcher {
      * "name agrees, sex disagrees" breakdown. The numeric score is
      * the weighted-sum composite rounded to three decimals.
      */
-    EmpiCandidateMatchDTO score(Patient candidate, EmpiCandidateQueryDTO query) {
+    EmpiCandidateMatchDTO score(Patient candidate, EmpiCandidateQueryDTO query, UUID nationalIdMatch) {
         double name = EmpiSimilarity.combinedNameSimilarity(
             query.firstName(), query.lastName(),
             candidate.getFirstName(), candidate.getLastName());
         double dob = EmpiSimilarity.dobSimilarity(query.dateOfBirth(), candidate.getDateOfBirth());
         double sex = EmpiSimilarity.sexSimilarity(query.sex(), candidate.getGender());
-        // National-ID is sourced from the EMPI alias index — we treat
-        // "candidate has the same NATIONAL_ID alias as the query" as
-        // similarity 1.0; absent alias → 0.0. Keeps the scoring math
-        // out of the alias-store details.
-        double nid = 0.0;
-        if (isPresent(query.nationalId()) && candidate.getId() != null) {
-            nid = empiService
-                .findIdentityByAlias(EmpiAliasType.NATIONAL_ID, query.nationalId().trim())
-                .map(id -> candidate.getId().equals(id.getPatientId()) ? 1.0 : 0.0)
-                .orElse(0.0);
-        }
+        // National-ID similarity uses the alias resolved ONCE per request
+        // (see resolveNationalIdAliasOnce). Same patient id ⇒ 1.0,
+        // otherwise 0.0 — the alias store is the source of truth, not
+        // the per-row similarity math.
+        double nid = (nationalIdMatch != null
+            && candidate.getId() != null
+            && candidate.getId().equals(nationalIdMatch)) ? 1.0 : 0.0;
 
         double composite =
             W_NAME * name + W_DOB * dob + W_SEX * sex + W_NATIONAL_ID * nid;

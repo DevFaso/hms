@@ -94,7 +94,7 @@ public class EncounterFhirWriteService {
      */
     @Transactional
     public Encounter update(UUID encounterId, org.hl7.fhir.r4.model.Encounter fhirIn) {
-        return update(encounterId, fhirIn, null);
+        return doUpdate(encounterId, fhirIn, null);
     }
 
     /**
@@ -116,6 +116,21 @@ public class EncounterFhirWriteService {
      */
     @Transactional
     public Encounter update(
+        UUID encounterId,
+        org.hl7.fhir.r4.model.Encounter fhirIn,
+        String ifMatchHeader
+    ) {
+        return doUpdate(encounterId, fhirIn, ifMatchHeader);
+    }
+
+    /**
+     * Single implementation shared by both public overloads. Kept
+     * private so the two {@code @Transactional} entry-points each
+     * go through Spring's proxy on external invocation without
+     * self-calling each other (which would bypass the proxy and
+     * defeat the transactional boundary — Sonar S2229).
+     */
+    private Encounter doUpdate(
         UUID encounterId,
         org.hl7.fhir.r4.model.Encounter fhirIn,
         String ifMatchHeader

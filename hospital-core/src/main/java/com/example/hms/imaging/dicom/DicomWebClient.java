@@ -37,9 +37,11 @@ public interface DicomWebClient {
     /**
      * WADO-RS: {@code GET <baseUrl>/studies/{studyUid}/instances/{instanceUid}}
      * with {@code Accept: application/dicom} → raw DICOM byte payload.
-     * Returns {@code null} when the upstream returns 404 so the
-     * controller can render the FHIR-equivalent {@code Not Found}
-     * shape rather than letting the exception bubble.
+     * Returns an empty {@code byte[]} (length 0) when the upstream
+     * returns 404 so the controller can render the FHIR-equivalent
+     * {@code Not Found} shape rather than letting the exception
+     * bubble — and Sonar's "return empty array instead of null"
+     * rule (S1168) is satisfied at the contract.
      */
     byte[] wadoFetchInstance(String studyUid, String instanceUid);
 }

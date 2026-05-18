@@ -122,11 +122,11 @@ class EncounterFhirWriteServiceIfMatchTest {
         Encounter stored = newStoredEncounter();
         when(encounterRepository.findByIdAndHospital_Id(encounterId, hospitalId))
             .thenReturn(Optional.of(stored));
+        // 0 != epoch-millis of 2026-05-17T12:00:00Z, so the precondition fails.
+        org.hl7.fhir.r4.model.Encounter fhirIn = new org.hl7.fhir.r4.model.Encounter();
+        String staleIfMatch = "W/\"0\"";
 
-        assertThatThrownBy(() -> service.update(
-                encounterId,
-                new org.hl7.fhir.r4.model.Encounter(),
-                "W/\"0\""))  // 0 != epoch-millis of 2026-05-17T12:00:00Z
+        assertThatThrownBy(() -> service.update(encounterId, fhirIn, staleIfMatch))
             .isInstanceOf(PreconditionFailedException.class)
             .hasMessageContaining("If-Match precondition failed");
 

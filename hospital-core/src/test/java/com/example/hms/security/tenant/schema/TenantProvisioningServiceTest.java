@@ -73,17 +73,28 @@ class TenantProvisioningServiceTest {
     }
 
     @Test
-    @DisplayName("rejects schemaName failing SAFE_IDENTIFIER (security-critical)")
-    void rejectsBadSchemaName() {
+    @DisplayName("rejects schemaName with capital letters")
+    void rejectsBadSchemaNameMixedCase() {
         // Capital letters → fails the [a-z][a-z0-9_]{0,62} allowlist
         assertThatThrownBy(() -> service.provision(hospitalId, "Tenant_BAD"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("SAFE_IDENTIFIER");
-        // SQL-injection attempt with semicolons / quotes
+        verify(entityManager, never()).createNativeQuery(any(String.class));
+    }
+
+    @Test
+    @DisplayName("rejects SQL-injection style schemaName")
+    void rejectsBadSchemaNameInjection() {
         assertThatThrownBy(() -> service.provision(hospitalId, "x; DROP TABLE users;--"))
             .isInstanceOf(IllegalArgumentException.class);
-        // Too long (>63 chars) → also fails the allowlist
-        assertThatThrownBy(() -> service.provision(hospitalId, "a".repeat(64)))
+        verify(entityManager, never()).createNativeQuery(any(String.class));
+    }
+
+    @Test
+    @DisplayName("rejects schemaName exceeding the 63-char allowlist length")
+    void rejectsBadSchemaNameTooLong() {
+        String tooLong = "a".repeat(64);
+        assertThatThrownBy(() -> service.provision(hospitalId, tooLong))
             .isInstanceOf(IllegalArgumentException.class);
         verify(entityManager, never()).createNativeQuery(any(String.class));
     }
@@ -129,16 +140,16 @@ class TenantProvisioningServiceTest {
 
         assertThat(resolved).isEqualTo("tenant_bfq_mil_001");
         // Verify the three DDL statements the script issues are
-        // emitted via createNativeQuery. Capture the SQL so the
-        // assertion proves the allowlisted schema name is what
-        // landed in the statement (the same rationale the shell
-        // script's PR #356 SAFE_REGEX-everywhere lesson encodes).
+        // emitted via createNativeQuery. The identifier-quoting
+        // refactor (PR copilot-review follow-on) wraps schema +
+        // role in double-quotes so CodeQL's data-flow analysis
+        // sees an identifier rather than an unchecked concatenation.
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(entityManager, org.mockito.Mockito.times(3)).createNativeQuery(sql.capture());
         assertThat(sql.getAllValues())
-            .anyMatch(s -> s.contains("CREATE SCHEMA IF NOT EXISTS tenant_bfq_mil_001"))
-            .anyMatch(s -> s.contains("GRANT USAGE ON SCHEMA tenant_bfq_mil_001 TO hms_app"))
-            .anyMatch(s -> s.contains("ALTER DEFAULT PRIVILEGES IN SCHEMA tenant_bfq_mil_001"));
+            .anyMatch(s -> s.contains("CREATE SCHEMA IF NOT EXISTS \"tenant_bfq_mil_001\""))
+            .anyMatch(s -> s.contains("GRANT USAGE ON SCHEMA \"tenant_bfq_mil_001\" TO \"hms_app\""))
+            .anyMatch(s -> s.contains("ALTER DEFAULT PRIVILEGES IN SCHEMA \"tenant_bfq_mil_001\""));
 
         verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
     }

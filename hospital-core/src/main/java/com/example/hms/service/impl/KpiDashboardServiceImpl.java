@@ -9,9 +9,12 @@ import com.example.hms.payload.dto.analytics.KpiDashboardDTO.NoShowRate;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.KpiDashboardService;
+import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +47,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class KpiDashboardServiceImpl implements KpiDashboardService {
 
+    private static final Logger log = LoggerFactory.getLogger(KpiDashboardServiceImpl.class);
+
     private static final String PARAM_HOSPITAL_ID = "hospitalId";
     private static final String PARAM_WINDOW_START = "windowStart";
     private static final String PARAM_WINDOW_END = "windowEnd";
@@ -58,16 +63,64 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
      * three KPI queries read from pre-aggregated matviews
      * {@code clinical.kpi_*_daily}; when disabled (the default), the
      * original on-the-fly native SQL runs against source tables
-     * exactly as the foundation pass shipped. Wired via
-     * {@code @Autowired(required = false)} so the existing H2-backed
-     * test suite that doesn't load
-     * {@link KpiMaterializedViewProperties} continues to work.
+     * exactly as the foundation pass shipped. Resolved through an
+     * {@link ObjectProvider} so the existing H2-backed test suite
+     * that doesn't load {@link KpiMaterializedViewProperties}
+     * continues to work — and Sonar's S6813 (no field injection)
+     * is satisfied because the dependency arrives via the
+     * constructor.
      */
-    @Autowired(required = false)
     private KpiMaterializedViewProperties matviewProperties;
 
+    /**
+     * Cached at startup: true when the three matview relations
+     * actually exist in the connected database. Lets {@link #useMatviews()}
+     * fall back to the on-the-fly path when the flag is enabled but
+     * V105 hasn't been applied (e.g. an environment that flipped
+     * the flag pre-migration, or an H2-backed deployment where the
+     * V105 preCondition skipped the changeset).
+     */
+    private volatile boolean matviewsPresent;
+
+    public KpiDashboardServiceImpl(ObjectProvider<KpiMaterializedViewProperties> matviewPropertiesProvider) {
+        this.matviewProperties = matviewPropertiesProvider.getIfAvailable();
+    }
+
+    @PostConstruct
+    void detectMatviewPresence() {
+        if (matviewProperties == null || !matviewProperties.isEnabled()) {
+            this.matviewsPresent = false;
+            return;
+        }
+        try {
+            Number found = (Number) entityManager.createNativeQuery("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'clinical'
+                  AND table_name IN (
+                    'kpi_door_to_doctor_daily',
+                    'kpi_dispense_lead_time_daily',
+                    'kpi_no_show_rate_daily'
+                  )
+                """).getSingleResult();
+            this.matviewsPresent = found != null && found.intValue() == 3;
+            if (!this.matviewsPresent) {
+                log.info("KPI matview flag is on but the three clinical.kpi_*_daily relations were "
+                    + "not all found in information_schema — falling back to on-the-fly queries");
+            }
+        } catch (RuntimeException ex) {
+            // information_schema is portable to PG/H2; any failure here
+            // means we cannot prove the matviews exist, so degrade
+            // safely to the on-the-fly path rather than letting the
+            // first dashboard request 500.
+            log.warn("KPI matview presence check failed — falling back to on-the-fly queries: {}",
+                ex.toString());
+            this.matviewsPresent = false;
+        }
+    }
+
     private boolean useMatviews() {
-        return matviewProperties != null && matviewProperties.isEnabled();
+        return matviewProperties != null && matviewProperties.isEnabled() && matviewsPresent;
     }
 
     @Override

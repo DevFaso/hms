@@ -242,10 +242,16 @@ public class PatientFhirResourceProvider implements IResourceProvider {
 
     /**
      * Parses the four $everything search-control parameters into the
-     * service-layer record. Malformed inputs (negative _count, negative
-     * _page, blank _type) surface as {@code 400 + OperationOutcome(VALUE)}
-     * via {@link InvalidRequestException} — same shape the bulk-data
-     * spec requires for malformed {@code _since} / {@code _outputFormat}.
+     * service-layer record. Malformed inputs (negative {@code _count},
+     * negative {@code _page}) surface as
+     * {@code 400 + OperationOutcome(VALUE)} via
+     * {@link InvalidRequestException} — same shape the bulk-data spec
+     * requires for malformed {@code _since} / {@code _outputFormat}.
+     *
+     * <p>A blank or whitespace-only {@code _type} is treated as absent
+     * (no type filter) per
+     * {@link PatientEverythingParams#parseTypeList(String)} —
+     * callers can omit the parameter or send "" with the same effect.
      */
     private static PatientEverythingParams parseEverythingParams(
         org.hl7.fhir.r4.model.InstantType since,
