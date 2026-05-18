@@ -1,5 +1,6 @@
 package com.example.hms.analytics;
 
+import com.example.hms.analytics.KpiMaterializedViewRefreshScheduler.MatviewName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,6 @@ import java.sql.Statement;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -28,19 +28,12 @@ import static org.mockito.Mockito.when;
  * <p>The scheduler can't be exercised end-to-end without a real
  * PostgreSQL instance (matviews don't exist on H2), so these tests
  * pin the contract by mocking the {@link DataSource} → {@link Connection}
- * → {@link Statement} chain. Specifically:
+ * → {@link Statement} chain.
  *
- * <ul>
- *   <li>refreshAll() iterates every matview name and survives a
- *       per-view failure;</li>
- *   <li>refreshOne() falls back to non-CONCURRENT REFRESH when the
- *       CONCURRENTLY form throws (first-tick "matview not populated"
- *       path);</li>
- *   <li>refreshOne() forces {@code setAutoCommit(true)} so PostgreSQL
- *       accepts CONCURRENTLY (which rejects in-tx execution);</li>
- *   <li>sanitiseMatviewName() rejects everything outside the
- *       {@code [a-z0-9_.]} allowlist.</li>
- * </ul>
+ * <p>SQL is dispatched via per-matview literal-SQL branches (no
+ * concatenation, no Sonar S2077 surface), so tests assert on the
+ * exact literal strings the production path emits — that way a
+ * future refactor that accidentally drifts the SQL fails loudly here.
  */
 @ExtendWith(MockitoExtension.class)
 class KpiMaterializedViewRefreshSchedulerTest {
@@ -67,13 +60,13 @@ class KpiMaterializedViewRefreshSchedulerTest {
         scheduler.refreshAll();
 
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-        verify(statement, times(KpiMaterializedViewRefreshScheduler.MATVIEW_NAMES.size()))
+        verify(statement, times(KpiMaterializedViewRefreshScheduler.ALL_MATVIEWS.size()))
             .executeUpdate(sql.capture());
-        for (String matview : KpiMaterializedViewRefreshScheduler.MATVIEW_NAMES) {
-            assertThat(sql.getAllValues())
-                .as("CONCURRENTLY refresh emitted for " + matview)
-                .anyMatch(s -> s.equals("REFRESH MATERIALIZED VIEW CONCURRENTLY " + matview));
-        }
+        assertThat(sql.getAllValues())
+            .containsExactlyInAnyOrder(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_door_to_doctor_daily",
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_dispense_lead_time_daily",
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_no_show_rate_daily");
     }
 
     @Test
@@ -82,11 +75,6 @@ class KpiMaterializedViewRefreshSchedulerTest {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getAutoCommit()).thenReturn(true);
         when(connection.createStatement()).thenReturn(statement);
-        // First CONCURRENTLY call blows up; refreshOne wraps it as
-        // UncategorizedSQLException (the actual `catch SQLException`
-        // is at the runConcurrentOrFallback level — see fallback test).
-        // For this test we want a top-level RuntimeException out of
-        // refreshOne so refreshAll's outer catch fires.
         when(statement.executeUpdate(anyString()))
             .thenThrow(new RuntimeException("boom on view #1"))
             .thenReturn(0)
@@ -94,9 +82,7 @@ class KpiMaterializedViewRefreshSchedulerTest {
 
         scheduler.refreshAll();
 
-        // Three matviews → three CONCURRENTLY attempts. The first
-        // throws; the next two succeed.
-        verify(statement, times(KpiMaterializedViewRefreshScheduler.MATVIEW_NAMES.size()))
+        verify(statement, times(KpiMaterializedViewRefreshScheduler.ALL_MATVIEWS.size()))
             .executeUpdate(anyString());
     }
 
@@ -111,7 +97,7 @@ class KpiMaterializedViewRefreshSchedulerTest {
         when(statement.executeUpdate(anyString()))
             .thenThrow(new SQLException("CONCURRENTLY cannot run inside a transaction block"));
 
-        scheduler.refreshOne("clinical.kpi_door_to_doctor_daily");
+        scheduler.refreshOne(MatviewName.DOOR_TO_DOCTOR);
 
         verify(statement).executeUpdate(
             "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_door_to_doctor_daily");
@@ -126,11 +112,9 @@ class KpiMaterializedViewRefreshSchedulerTest {
         when(connection.getAutoCommit()).thenReturn(false);
         when(connection.createStatement()).thenReturn(statement);
 
-        scheduler.refreshOne("clinical.kpi_no_show_rate_daily");
+        scheduler.refreshOne(MatviewName.NO_SHOW_RATE);
 
         verify(connection).setAutoCommit(true);
-        // Restored after the refresh so the connection returned to
-        // the pool keeps the pool's expected default.
         verify(connection).setAutoCommit(false);
     }
 
@@ -140,37 +124,34 @@ class KpiMaterializedViewRefreshSchedulerTest {
         when(dataSource.getConnection())
             .thenThrow(new SQLException("connection pool exhausted"));
 
-        assertThatThrownBy(() -> scheduler.refreshOne("clinical.kpi_no_show_rate_daily"))
+        assertThatThrownBy(() -> scheduler.refreshOne(MatviewName.NO_SHOW_RATE))
             .isInstanceOf(UncategorizedSQLException.class)
             .hasMessageContaining("REFRESH MATERIALIZED VIEW");
     }
 
     @Test
-    @DisplayName("refreshOne rejects a tainted matview name before any JDBC call")
-    void refreshOneRejectsBadIdentifier() throws SQLException {
-        assertThatThrownBy(() -> scheduler.refreshOne("DROP TABLE users; --"))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("SAFE_MATVIEW");
+    @DisplayName("refreshOne rejects a null matview before any JDBC call")
+    void refreshOneRejectsNull() {
         assertThatThrownBy(() -> scheduler.refreshOne(null))
             .isInstanceOf(IllegalArgumentException.class);
-        // Schema-qualified is fine, but un-allowed punctuation isn't.
-        assertThatThrownBy(() -> scheduler.refreshOne("clinical.kpi-bad-dash"))
-            .isInstanceOf(IllegalArgumentException.class);
-        // No JDBC traffic at all — guard fires before borrowing a
-        // connection.
-        verify(dataSource, atLeast(0)).getConnection();
     }
 
     @Test
-    @DisplayName("sanitised identifier is byte-for-byte identical to the input when allowlist passes")
-    void sanitisedIdentifierEqualsInput() throws SQLException {
+    @DisplayName("each MatviewName dispatches to its expected literal-SQL form")
+    void perMatviewLiteralSql() throws SQLException {
         when(dataSource.getConnection()).thenReturn(connection);
         when(connection.getAutoCommit()).thenReturn(true);
         when(connection.createStatement()).thenReturn(statement);
 
-        scheduler.refreshOne("clinical.kpi_dispense_lead_time_daily");
+        scheduler.refreshOne(MatviewName.DOOR_TO_DOCTOR);
+        scheduler.refreshOne(MatviewName.DISPENSE_LEAD_TIME);
+        scheduler.refreshOne(MatviewName.NO_SHOW_RATE);
 
         verify(statement).executeUpdate(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_door_to_doctor_daily");
+        verify(statement).executeUpdate(
             "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_dispense_lead_time_daily");
+        verify(statement).executeUpdate(
+            "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_no_show_rate_daily");
     }
 }

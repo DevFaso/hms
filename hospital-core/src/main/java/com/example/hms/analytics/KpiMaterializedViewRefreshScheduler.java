@@ -14,7 +14,6 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.regex.Pattern;
 
 /**
  * Refreshes the row-32 KPI matviews on a fixed interval.
@@ -39,13 +38,19 @@ import java.util.regex.Pattern;
  * CONCURRENTLY} cannot run inside a transaction block in PostgreSQL.
  * The refresher therefore borrows a JDBC connection from the pool
  * directly (no {@code @Transactional}) and executes each REFRESH
- * with autocommit on. Spring's {@link JdbcTemplate} could be used
- * with the same connection, but using a raw {@link Connection}
- * makes the autocommit guarantee explicit at the call site.
+ * with autocommit on.
  *
  * <p>Per-view try/catch keeps a single-view failure (e.g. a long
  * pg_stat_activity lock against one source table) from cancelling
  * the other refreshes in the same tick.
+ *
+ * <p><b>SQL safety</b>: every {@code executeUpdate} below takes a
+ * compile-time string literal. The dispatch is a switch keyed on the
+ * static {@link MatviewName} enum, so there is no path by which user-
+ * controlled data can reach the SQL string. This is deliberate — an
+ * earlier rev concatenated the matview name into the SQL after an
+ * allowlist check, which CodeQL and Sonar S2077 still flag because a
+ * regex test is not a recognised sanitiser.
  */
 @Slf4j
 @Component
@@ -57,19 +62,28 @@ import java.util.regex.Pattern;
 @Profile("!test")
 public class KpiMaterializedViewRefreshScheduler {
 
-    static final List<String> MATVIEW_NAMES = List.of(
-        "clinical.kpi_door_to_doctor_daily",
-        "clinical.kpi_dispense_lead_time_daily",
-        "clinical.kpi_no_show_rate_daily"
-    );
+    /**
+     * The three KPI matviews V105 ships. The enum is the source of
+     * truth — the SQL strings are inlined in {@link #refreshOne}
+     * so each {@code executeUpdate} sees a compile-time literal.
+     */
+    enum MatviewName {
+        DOOR_TO_DOCTOR("clinical.kpi_door_to_doctor_daily"),
+        DISPENSE_LEAD_TIME("clinical.kpi_dispense_lead_time_daily"),
+        NO_SHOW_RATE("clinical.kpi_no_show_rate_daily");
+
+        private final String qualifiedName;
+
+        MatviewName(String qualifiedName) { this.qualifiedName = qualifiedName; }
+
+        String qualifiedName() { return qualifiedName; }
+    }
 
     /**
-     * Allowlist for the qualified matview identifier. Constants in
-     * {@link #MATVIEW_NAMES} satisfy this, but Sonar / CodeQL trace
-     * data flow rather than constant-folding — re-validating here
-     * keeps the SQL-string concat statically defensible.
+     * Convenience list for {@code refreshAll()} to iterate. Order
+     * doesn't matter — the three views are independent.
      */
-    private static final Pattern SAFE_MATVIEW = Pattern.compile("^[a-z][a-z0-9_]{0,62}(\\.[a-z][a-z0-9_]{0,62})?$");
+    static final List<MatviewName> ALL_MATVIEWS = List.of(MatviewName.values());
 
     private final DataSource dataSource;
 
@@ -83,24 +97,23 @@ public class KpiMaterializedViewRefreshScheduler {
      * (default 5 minutes via the property class). Spring's
      * {@code @Scheduled(fixedRateString = "${...}")} accepts the
      * property at startup; runtime changes require a restart, which
-     * is the right granularity for matview cadence (a hot-reload
-     * pattern here would tempt operators into mid-soak changes).
+     * is the right granularity for matview cadence.
      */
     @Scheduled(fixedRateString = "${app.analytics.kpi.materialized-views.refresh-interval-ms:300000}")
     public void refreshAll() {
         Instant started = Instant.now();
         int succeeded = 0;
-        for (String matview : MATVIEW_NAMES) {
+        for (MatviewName matview : ALL_MATVIEWS) {
             try {
                 refreshOne(matview);
                 succeeded++;
             } catch (RuntimeException ex) {
                 log.warn("KPI matview refresh failed for {} — staleness will grow until next tick: {}",
-                    matview, ex.toString());
+                    matview.qualifiedName(), ex.toString());
             }
         }
         log.info("KPI matview refresh tick — succeeded={}/{}, durationMs={}",
-            succeeded, MATVIEW_NAMES.size(),
+            succeeded, ALL_MATVIEWS.size(),
             Duration.between(started, Instant.now()).toMillis());
     }
 
@@ -116,16 +129,23 @@ public class KpiMaterializedViewRefreshScheduler {
      * {@link DataSource} directly and forcing autocommit on
      * guarantees PostgreSQL accepts the CONCURRENTLY form, which
      * rejects any in-progress transaction block.
+     *
+     * <p>The {@code switch} dispatches to a per-matview branch where
+     * the SQL is a compile-time literal — no string concat, no
+     * Sonar S2077 / CodeQL data-flow surface. Adding a fourth
+     * matview means adding a fourth enum constant + branch.
      */
-    void refreshOne(String matviewName) {
-        String safeName = sanitiseMatviewName(matviewName);
+    void refreshOne(MatviewName matview) {
+        if (matview == null) {
+            throw new IllegalArgumentException("matview is required");
+        }
         try (Connection connection = dataSource.getConnection()) {
             boolean priorAutocommit = connection.getAutoCommit();
             if (!priorAutocommit) {
                 connection.setAutoCommit(true);
             }
             try {
-                runConcurrentOrFallback(connection, safeName);
+                executeRefresh(connection, matview);
             } finally {
                 if (!priorAutocommit) {
                     connection.setAutoCommit(false);
@@ -133,56 +153,66 @@ public class KpiMaterializedViewRefreshScheduler {
             }
         } catch (SQLException ex) {
             throw new UncategorizedSQLException(
-                "REFRESH MATERIALIZED VIEW", safeName, ex);
+                "REFRESH MATERIALIZED VIEW", matview.qualifiedName(), ex);
         }
     }
 
-    private static void runConcurrentOrFallback(Connection connection, String safeName) throws SQLException {
+    private static void executeRefresh(Connection connection, MatviewName matview) throws SQLException {
+        switch (matview) {
+            case DOOR_TO_DOCTOR -> refreshDoorToDoctor(connection);
+            case DISPENSE_LEAD_TIME -> refreshDispenseLeadTime(connection);
+            case NO_SHOW_RATE -> refreshNoShowRate(connection);
+        }
+    }
+
+    private static void refreshDoorToDoctor(Connection connection) throws SQLException {
         try (Statement stmt = connection.createStatement()) {
-            stmt.executeUpdate("REFRESH MATERIALIZED VIEW CONCURRENTLY " + safeName);
+            stmt.executeUpdate(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_door_to_doctor_daily");
         } catch (SQLException concurrentEx) {
-            // First tick after V105 lands populates the matview for
-            // the first time — Postgres requires a non-CONCURRENT
-            // refresh in that case. The same fallback covers a race
-            // where the unique index was dropped post-V105
-            // (operators sometimes regenerate stats); we'll re-try
-            // CONCURRENTLY on the next tick.
-            log.info("CONCURRENT refresh failed for {} — falling back to non-concurrent REFRESH ({})",
-                safeName, concurrentEx.getMessage());
+            logFallback("clinical.kpi_door_to_doctor_daily", concurrentEx);
             try (Statement fallback = connection.createStatement()) {
-                fallback.executeUpdate("REFRESH MATERIALIZED VIEW " + safeName);
+                fallback.executeUpdate(
+                    "REFRESH MATERIALIZED VIEW clinical.kpi_door_to_doctor_daily");
+            }
+        }
+    }
+
+    private static void refreshDispenseLeadTime(Connection connection) throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_dispense_lead_time_daily");
+        } catch (SQLException concurrentEx) {
+            logFallback("clinical.kpi_dispense_lead_time_daily", concurrentEx);
+            try (Statement fallback = connection.createStatement()) {
+                fallback.executeUpdate(
+                    "REFRESH MATERIALIZED VIEW clinical.kpi_dispense_lead_time_daily");
+            }
+        }
+    }
+
+    private static void refreshNoShowRate(Connection connection) throws SQLException {
+        try (Statement stmt = connection.createStatement()) {
+            stmt.executeUpdate(
+                "REFRESH MATERIALIZED VIEW CONCURRENTLY clinical.kpi_no_show_rate_daily");
+        } catch (SQLException concurrentEx) {
+            logFallback("clinical.kpi_no_show_rate_daily", concurrentEx);
+            try (Statement fallback = connection.createStatement()) {
+                fallback.executeUpdate(
+                    "REFRESH MATERIALIZED VIEW clinical.kpi_no_show_rate_daily");
             }
         }
     }
 
     /**
-     * Defence-in-depth: revalidate the matview identifier against the
-     * {@link #SAFE_MATVIEW} allowlist and then rebuild it from the
-     * allowlist character set into a fresh {@link StringBuilder}.
-     * Constants in {@link #MATVIEW_NAMES} already satisfy this, but
-     * the rebuild breaks the data-flow trace CodeQL uses to flag the
-     * downstream SQL concat (a regex test alone is not treated as a
-     * sanitiser).
+     * First tick after V105 lands populates the matview for the
+     * first time — Postgres requires a non-CONCURRENT refresh in
+     * that case. The same fallback covers a race where the unique
+     * index was dropped post-V105 (operators sometimes regenerate
+     * stats); we'll re-try CONCURRENTLY on the next tick.
      */
-    private static String sanitiseMatviewName(String name) {
-        if (name == null || !SAFE_MATVIEW.matcher(name).matches()) {
-            throw new IllegalArgumentException(
-                "matview identifier fails the SAFE_MATVIEW allowlist");
-        }
-        StringBuilder sb = new StringBuilder(name.length());
-        for (int i = 0; i < name.length(); i++) {
-            char c = name.charAt(i);
-            if (c == '_'
-                || c == '.'
-                || (c >= 'a' && c <= 'z')
-                || (c >= '0' && c <= '9')) {
-                sb.append(c);
-            } else {
-                // Unreachable — SAFE_MATVIEW already rejects this.
-                throw new IllegalArgumentException(
-                    "matview identifier contains a disallowed character");
-            }
-        }
-        return sb.toString();
+    private static void logFallback(String name, SQLException concurrentEx) {
+        log.info("CONCURRENT refresh failed for {} — falling back to non-concurrent REFRESH ({})",
+            name, concurrentEx.getMessage());
     }
 }
