@@ -19,6 +19,9 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,6 +74,14 @@ class ConsultationServiceImplTest {
         // Point self at the SUT here so the in-class delegate call
         // doesn't NPE in the unit test.
         service.setSelf(service);
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Tests that populate HospitalContextHolder must clear it so
+        // the thread-local doesn't leak into a sibling test that
+        // expects an empty context.
+        HospitalContextHolder.clear();
     }
 
     private Consultation buildConsultation(ConsultationStatus status) {
@@ -276,6 +289,58 @@ class ConsultationServiceImplTest {
         when(consultationRepository.findAllByOrderByRequestedAtDesc()).thenReturn(List.of());
 
         assertThat(service.getAllConsultations(null)).isEmpty();
+    }
+
+    /**
+     * Super-admin global view (JWT claim set, no X-Hospital-Id header)
+     * takes the new short-circuit branch — bypasses
+     * {@link com.example.hms.utility.RoleValidator#requireActiveHospitalId()}
+     * entirely and goes straight to the unscoped repository read.
+     *
+     * <p>Pinned because the dashboard-tile-vs-list mismatch (count 3 /
+     * list "No consultations across any of your hospitals") that
+     * surfaced on the develop deployment was traced to a path where
+     * {@code requireActiveHospitalId()} would resolve a stale
+     * primary-hospital fallback for a super-admin; the carve-out
+     * fixes that by trusting the JWT claim directly.
+     */
+    @Test void getAllConsultations_superAdminGlobalView_skipsRequireActiveHospitalId() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        when(consultationRepository.findAllByOrderByRequestedAtDesc())
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        // Carve-out fires before requireActiveHospitalId(), so the
+        // RoleValidator gate is never reached.
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(consultationRepository, never()).findByHospital_IdOrderByRequestedAtDesc(any());
+    }
+
+    /**
+     * Super-admin chip-scoped (X-Hospital-Id header set so
+     * headerOverridden=true) MUST fall through to
+     * {@code requireActiveHospitalId()} so the list reflects the chip,
+     * not the system-wide unscoped fetch. Without this, the chip
+     * becomes a visual no-op for super-admins.
+     */
+    @Test void getAllConsultations_superAdminChipScoped_doesNotShortCircuit() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(true)
+            .activeHospitalId(hospitalId)
+            .build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        verify(roleValidator).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
     }
 
     @Test void getConsultationsRequestedBy_scopedToHospital() {

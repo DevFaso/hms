@@ -197,10 +197,17 @@ public class ConsultationServiceImpl implements ConsultationService {
         // hospitals"). Mirrors the SuperAdminDashboardServiceImpl
         // getRecentPrescriptions fix and the
         // ConsultationServiceImpl#getRecentForSuperAdmin pattern.
+        //
+        // We use ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
+        // RoleValidator.isSuperAdminFromAuth(). Authority-based detection
+        // can be true in impersonation / authority-inflation flows where
+        // the principal holds the ROLE_SUPER_ADMIN authority but the JWT
+        // claim isn't set; trusting it for cross-tenant access would
+        // widen the blast radius of a stolen / inflated authority list.
+        // The JWT claim is the load-bearing signal RoleValidator's own
+        // step 1 trusts (Copilot review on PR fix branch).
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
-        boolean superAdminGlobal =
-            (ctx.isSuperAdmin() || roleValidator.isSuperAdminFromAuth())
-            && !ctx.isHeaderOverridden();
+        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
         UUID activeHospitalId = superAdminGlobal
             ? null
             : roleValidator.requireActiveHospitalId();
