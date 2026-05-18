@@ -343,6 +343,51 @@ class ConsultationServiceImplTest {
         verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
     }
 
+    /**
+     * Super-admin global view with an explicit status filter — exercises
+     * the {@code findByStatusOrderByRequestedAtDesc(status)} branch on
+     * the unscoped path (the existing
+     * {@code getAllConsultations_superAdmin_withStatus} hits the same
+     * branch via {@code requireActiveHospitalId()=null}; this one hits
+     * it via the new JWT-claim carve-out so both routes are pinned).
+     */
+    @Test void getAllConsultations_superAdminGlobalView_withStatus_filtersByStatus() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        when(consultationRepository.findByStatusOrderByRequestedAtDesc(ConsultationStatus.IN_PROGRESS))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.IN_PROGRESS)));
+
+        assertThat(service.getAllConsultations(ConsultationStatus.IN_PROGRESS)).hasSize(1);
+
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
+        verify(consultationRepository, never()).findByHospital_IdOrderByRequestedAtDesc(any());
+    }
+
+    /**
+     * Non-superadmin context — defaults to empty {@link HospitalContext}
+     * where {@code isSuperAdmin()} is false. The {@code &&} short-circuits
+     * before {@code isHeaderOverridden()} is evaluated, the carve-out
+     * does NOT fire, and {@code requireActiveHospitalId()} drives the
+     * scope. Pinned so a future refactor that flips operand order
+     * (e.g. {@code !isHeaderOverridden() && isSuperAdmin()}) doesn't
+     * silently widen access for non-superadmins.
+     */
+    @Test void getAllConsultations_nonSuperAdmin_emptyContext_usesRequireActiveHospitalId() {
+        // Don't populate HospitalContextHolder — getContextOrEmpty()
+        // returns the empty context (isSuperAdmin=false everywhere).
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        verify(roleValidator).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
+    }
+
     @Test void getConsultationsRequestedBy_scopedToHospital() {
         UUID otherHospId = UUID.randomUUID();
         Hospital otherHosp = new Hospital(); otherHosp.setId(otherHospId);
