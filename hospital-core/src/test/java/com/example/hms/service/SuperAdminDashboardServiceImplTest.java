@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.mapper.LabOrderMapper;
+import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.model.Admission;
 import com.example.hms.model.AuditEventLog;
@@ -93,6 +94,7 @@ class SuperAdminDashboardServiceImplTest {
     @Mock private GeneralReferralService generalReferralService;
     @Mock private LabOrderMapper labOrderMapper;
     @Mock private AdmissionMapper admissionMapper;
+    @Mock private PrescriptionMapper prescriptionMapper;
 
     @InjectMocks private SuperAdminDashboardServiceImpl service;
 
@@ -244,13 +246,22 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentPrescriptions_delegatesToList() {
-        Page<PrescriptionResponseDTO> page = new PageImpl<>(List.of(new PrescriptionResponseDTO()));
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any(Locale.class)))
-            .thenReturn(page);
+    void getRecentPrescriptions_queriesRepositoryDirectly() {
+        // PR review fix: getRecentPrescriptions now hits the repository
+        // directly (PrescriptionMapper) rather than going through
+        // PrescriptionService.list — the service enforces the active
+        // hospital scope, which produced a count-vs-content mismatch on
+        // the super-admin dashboard (summary count was system-wide via
+        // prescriptionRepository.count(); the list was filtered).
+        com.example.hms.model.Prescription pres = new com.example.hms.model.Prescription();
+        when(prescriptionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(pres)));
+        when(prescriptionMapper.toResponseDTO(pres)).thenReturn(new PrescriptionResponseDTO());
 
         List<PrescriptionResponseDTO> result = service.getRecentPrescriptions(5, Locale.ENGLISH);
         assertThat(result).hasSize(1);
+        org.mockito.Mockito.verify(prescriptionService, org.mockito.Mockito.never())
+            .list(any(), any(), any(), any(Pageable.class), any());
     }
 
     @Test
@@ -441,14 +452,13 @@ class SuperAdminDashboardServiceImplTest {
         // write event for this entity (no separate clinical-time field
         // is universally populated). Lock the choice with a test so a
         // future "consistency" refactor doesn't silently change it.
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
+        when(prescriptionRepository.findAll(any(Pageable.class)))
             .thenReturn(new PageImpl<>(java.util.List.of()));
 
         service.getRecentPrescriptions(5, Locale.ENGLISH);
 
         org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
-        org.mockito.Mockito.verify(prescriptionService)
-            .list(any(), any(), any(), captor.capture(), any());
+        org.mockito.Mockito.verify(prescriptionRepository).findAll(captor.capture());
         assertSortOrdersStartWith(captor.getValue(), "createdAt");
     }
 
@@ -489,10 +499,13 @@ class SuperAdminDashboardServiceImplTest {
             .thenReturn(new PageImpl<>(java.util.List.of(adm)));
         AdmissionResponseDTO admDto = new AdmissionResponseDTO();
         when(admissionMapper.toResponseDTO(adm)).thenReturn(admDto);
-        // Prescriptions
+        // Prescriptions — repository + mapper (post-PR-review fix, see
+        // getRecentPrescriptions_queriesRepositoryDirectly above).
+        com.example.hms.model.Prescription pres = new com.example.hms.model.Prescription();
+        when(prescriptionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(pres)));
         PrescriptionResponseDTO presDto = new PrescriptionResponseDTO();
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
-            .thenReturn(new PageImpl<>(java.util.List.of(presDto)));
+        when(prescriptionMapper.toResponseDTO(pres)).thenReturn(presDto);
         // Treatment plans
         TreatmentPlanResponseDTO planDto = new TreatmentPlanResponseDTO();
         when(treatmentPlanService.listAll(any(), any(Pageable.class)))

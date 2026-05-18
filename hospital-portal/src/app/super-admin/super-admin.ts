@@ -297,8 +297,9 @@ export class SuperAdminComponent implements OnInit {
   ];
 
   readonly selectedActivityRows = computed<ActivityRow[]>(() => {
-    const items = this.recent()[this.selectedActivityTab()] ?? [];
-    return items.map((item) => this.toActivityRow(item));
+    const tab = this.selectedActivityTab();
+    const items = this.recent()[tab] ?? [];
+    return items.map((item) => this.toActivityRow(item, tab));
   });
 
   readonly platformActions = computed<ActionPanel | null>(
@@ -505,20 +506,37 @@ export class SuperAdminComponent implements OnInit {
     return s ? tab.countOf(s) : 0;
   }
 
-  private toActivityRow(item: SuperAdminRecentItem): ActivityRow {
+  /**
+   * Ordered, semantic field list per activity tab. The previous
+   * heuristic ("filter out fields ending in 'id'/'at'/'date' and take
+   * the first 2") drew arbitrary pairs from object-enumeration order,
+   * which on a prescription row produced "Hospital B · DoctorBF DoctorBL"
+   * with no patient name or medication — exactly the bug the super-admin
+   * dashboard surfaced on PR review.
+   *
+   * Each entry names the DTO fields we want to surface, in clinical
+   * priority. {@link #toActivityRow} extracts them in order, skips
+   * blanks, and joins with the bullet separator.
+   */
+  private static readonly ACTIVITY_FIELDS: Record<ActivityKey, string[]> = {
+    consultations: ['patientName', 'specialtyRequested', 'urgency', 'status'],
+    admissions: ['patientName', 'admissionType', 'chiefComplaint', 'status'],
+    prescriptions: ['patientFullName', 'medicationName', 'dosage', 'frequency', 'status'],
+    labOrders: ['patientFullName', 'labTestName', 'status'],
+    labResults: ['patientFullName', 'labTestName', 'resultValue', 'status'],
+    labTestDefinitions: ['name', 'labTestCode', 'category'],
+    treatmentPlans: ['patientName', 'status'],
+    referrals: ['patientName', 'receivingHospitalName', 'referralType', 'status'],
+  };
+
+  private toActivityRow(item: SuperAdminRecentItem, tab: ActivityKey): ActivityRow {
     const idValue = typeof item['id'] === 'string' ? (item['id'] as string) : '';
     const id = idValue ? idValue.slice(0, 8) : '';
-    const stringFields = Object.entries(item)
-      .filter(
-        ([k, v]) =>
-          typeof v === 'string' &&
-          k !== 'id' &&
-          !k.toLowerCase().endsWith('id') &&
-          !k.toLowerCase().endsWith('at') &&
-          !k.toLowerCase().endsWith('date'),
-      )
-      .slice(0, 2)
-      .map(([, v]) => v as string);
+    const ordered = SuperAdminComponent.ACTIVITY_FIELDS[tab] ?? [];
+    const stringFields = ordered
+      .map((field) => item[field])
+      .map((v) => (v == null ? '' : String(v)))
+      .filter((s) => s.length > 0);
     // Activity-row timestamp extractor.
     //
     // Order matches "most clinically meaningful first":
@@ -552,7 +570,7 @@ export class SuperAdminComponent implements OnInit {
       null;
     return {
       id,
-      summary: stringFields.filter((s) => s && s.length > 0).join(' · '),
+      summary: stringFields.join(' · '),
       timestamp,
     };
   }
