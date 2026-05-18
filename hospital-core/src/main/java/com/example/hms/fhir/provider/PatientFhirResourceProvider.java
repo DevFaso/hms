@@ -4,6 +4,7 @@ import ca.uhn.fhir.rest.annotation.ConditionalUrlParam;
 import ca.uhn.fhir.rest.annotation.Create;
 import ca.uhn.fhir.rest.annotation.IdParam;
 import ca.uhn.fhir.rest.annotation.Operation;
+import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.annotation.OptionalParam;
 import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.ResourceParam;
@@ -14,9 +15,11 @@ import ca.uhn.fhir.rest.param.DateParam;
 import ca.uhn.fhir.rest.param.StringParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
+import com.example.hms.fhir.everything.PatientEverythingParams;
 import com.example.hms.fhir.everything.PatientEverythingService;
 import com.example.hms.fhir.mapper.PatientFhirMapper;
 import com.example.hms.fhir.write.PatientFhirWriteService;
@@ -225,9 +228,59 @@ public class PatientFhirResourceProvider implements IResourceProvider {
      * surfaces as 405 from {@link PatientEverythingService#everythingForPatient}.
      */
     @Operation(name = "$everything", idempotent = true, type = org.hl7.fhir.r4.model.Patient.class)
-    public Bundle patientEverything(@IdParam IdType id) {
+    public Bundle patientEverything(
+        @IdParam IdType id,
+        @OperationParam(name = "_since", min = 0, max = 1) org.hl7.fhir.r4.model.InstantType since,
+        @OperationParam(name = "_type", min = 0, max = 1) org.hl7.fhir.r4.model.StringType type,
+        @OperationParam(name = "_count", min = 0, max = 1) org.hl7.fhir.r4.model.IntegerType count,
+        @OperationParam(name = "_page", min = 0, max = 1) org.hl7.fhir.r4.model.IntegerType page
+    ) {
         UUID uuid = parseUuid(id);
-        return everythingService.everythingForPatient(uuid);
+        PatientEverythingParams params = parseEverythingParams(since, type, count, page);
+        return everythingService.everythingForPatient(uuid, params);
+    }
+
+    /**
+     * Parses the four $everything search-control parameters into the
+     * service-layer record. Malformed inputs (negative {@code _count},
+     * negative {@code _page}) surface as
+     * {@code 400 + OperationOutcome(VALUE)} via
+     * {@link InvalidRequestException} — same shape the bulk-data spec
+     * requires for malformed {@code _since} / {@code _outputFormat}.
+     *
+     * <p>A blank or whitespace-only {@code _type} is treated as absent
+     * (no type filter) per
+     * {@link PatientEverythingParams#parseTypeList(String)} —
+     * callers can omit the parameter or send "" with the same effect.
+     */
+    private static PatientEverythingParams parseEverythingParams(
+        org.hl7.fhir.r4.model.InstantType since,
+        org.hl7.fhir.r4.model.StringType type,
+        org.hl7.fhir.r4.model.IntegerType count,
+        org.hl7.fhir.r4.model.IntegerType page
+    ) {
+        try {
+            java.time.Instant sinceInstant = (since == null || since.getValue() == null)
+                ? null
+                : since.getValue().toInstant();
+            var types = (type == null || type.getValue() == null)
+                ? java.util.Set.<String>of()
+                : PatientEverythingParams.parseTypeList(type.getValue());
+            Integer countValue = (count == null || count.getValue() == null)
+                ? null
+                : count.getValue();
+            Integer pageValue = (page == null || page.getValue() == null)
+                ? null
+                : page.getValue();
+            return PatientEverythingParams.of(sinceInstant, types, countValue, pageValue);
+        } catch (IllegalArgumentException ex) {
+            OperationOutcome outcome = new OperationOutcome();
+            outcome.addIssue()
+                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+                .setCode(OperationOutcome.IssueType.VALUE)
+                .setDiagnostics(ex.getMessage());
+            throw new InvalidRequestException(ex.getMessage(), outcome);
+        }
     }
 
     private static UnprocessableEntityException unprocessable(String message, OperationOutcome.IssueType type) {

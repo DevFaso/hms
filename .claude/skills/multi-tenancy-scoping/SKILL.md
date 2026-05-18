@@ -233,6 +233,36 @@ Project the display name alongside for the UI, but key by id.
 Caught on `AuditEventLogRepository.countByHospitalBetween` in PR
 #352 (per-tenant cost obs).
 
+## Aggregate queries on Patient-compartment resources must use hospital-scoped repository methods
+
+**Caught:** Multi-row review on `PatientEverythingService` —
+the Condition section called `patientProblemRepository.findByPatient_Id(patientId)`
+without a hospital filter. `PatientProblem` is hospital-scoped
+(non-null `hospital_id` FK), and the repository already provides
+`findByPatient_IdAndHospital_Id(...)`. The unscoped call leaked
+problems recorded at OTHER hospitals for the same patient into a
+hospital-scoped `$everything` response — same patient registered at
+two facilities, the response carries problems from both, including
+the one the caller has no right to see.
+
+**Pattern to follow:** for any aggregate that pulls clinical data
+for a Patient by `patient_id` alone, audit the repository call against:
+
+1. Is the entity hospital-scoped (`@TenantScoped` / non-null
+   `hospital_id` FK)? If yes, the call MUST be the
+   `findByPatient_IdAndHospital_Id(...)` variant.
+2. Does the entity have a parent that is hospital-scoped (e.g.
+   `LabResult` → `LabOrder.hospital_id`)? Then the call must scope
+   through the parent (`findByLabOrder_Patient_IdAndLabOrder_Hospital_Id`).
+3. If neither, the entity is global/reference data and an unscoped
+   query is fine.
+
+The `findByPatient_Id` shape (no hospital filter) should only exist
+on repositories whose entity has no hospital column. When you're
+tempted to use it on a tenant-scoped entity, add the hospital-scoped
+variant to the repository and use that instead — don't rely on the
+caller to "filter in memory after the fetch."
+
 ## Reference files
 
 - `hospital-core/src/main/java/com/example/hms/security/context/HospitalContext.java`

@@ -142,6 +142,10 @@ public enum AuditEventType {
 
     // Schema-per-tenant cache control (roadmap row 33 follow-on)
     TENANT_SCHEMA_CACHE_INVALIDATED,
+    // Schema-per-tenant provisioning (roadmap row 33 follow-on,
+    // provisioning script wiring). Past-tense — see naming-convention
+    // lesson in the pr-review-response skill.
+    TENANT_SCHEMA_PROVISIONED,
 
     OTHER
 }

@@ -1,6 +1,7 @@
 package com.example.hms.repository;
 
 import com.example.hms.model.PatientVitalSign;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -22,6 +23,16 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
     List<PatientVitalSign> findByPatient_IdOrderByRecordedAtDesc(UUID patientId, Pageable pageable);
 
     List<PatientVitalSign> findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /**
+     * Page-returning variant used by the FHIR {@code $everything}
+     * operation so {@code Page.hasNext()} can drive the
+     * {@code Bundle.link[next]} continuation. The list-returning
+     * sibling above stays in place for callers that don't need
+     * overflow detection.
+     */
+    Page<PatientVitalSign> findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
+        UUID patientId, UUID hospitalId, Pageable pageable);
 
         @Query("""
                 SELECT v FROM PatientVitalSign v

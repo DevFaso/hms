@@ -884,6 +884,31 @@ export const routes: Routes = [
           ),
       },
 
+      // EMPI candidate-match panel (roadmap row 25 follow-on).
+      // Guard mirrors the backend EmpiProbabilisticController which
+      // allows SUPER_ADMIN / HOSPITAL_ADMIN / RECEPTIONIST / NURSE /
+      // DOCTOR (per the cell text + the @PreAuthorize on the
+      // controller). Mismatching the guard would make the UI
+      // unreachable for its intended users — row-32 KPI cards Copilot
+      // lesson on PR #341.
+      {
+        path: 'reception/empi-candidates',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_NURSE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./reception/empi-candidates-panel/empi-candidates-panel.component').then(
+            (m) => m.EmpiCandidatesPanelComponent,
+          ),
+      },
+
       // Pharmacy Module
       {
         path: 'medication-catalog',
@@ -1101,6 +1126,16 @@ export const routes: Routes = [
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () =>
           import('./super-admin/subscriptions/subscriptions').then((m) => m.SubscriptionsComponent),
+      },
+
+      // Per-tenant cost / chargeback panel (roadmap row 44 follow-on).
+      // Mirrors the @PreAuthorize(SUPER_ADMIN) on ChargebackReportController.
+      {
+        path: 'super-admin/cost',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/cost-panel/cost-panel.component').then((m) => m.CostPanelComponent),
       },
 
       // Super-Admin Data Residency / Region Tagging (MVP-9 — see docs/super-admin-gaps.md)

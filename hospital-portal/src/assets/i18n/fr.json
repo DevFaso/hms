@@ -25,9 +25,11 @@
     "COL_ENCOUNTER_TYPE": "Type de rencontre",
     "COL_ENABLED": "Activée",
     "FIELD": {
-      "HOSPITAL_ID": "Identifiant de l'hôpital",
-      "PROVIDER_ID": "Identifiant du médecin admetteur",
-      "DEPARTMENT_ID": "Identifiant du département (facultatif)",
+      "HOSPITAL_PICKER": "Hôpital",
+      "PROVIDER": "Médecin admetteur",
+      "PROVIDER_PLACEHOLDER": "— Sélectionner un médecin —",
+      "DEPARTMENT": "Département (facultatif)",
+      "DEPARTMENT_PLACEHOLDER": "— Sélectionner un département —",
       "ASSIGNMENT_ID": "Identifiant d'affectation par défaut (requis pour A04)",
       "ASSIGNMENT_HINT": "Requis uniquement si cet hôpital active la création automatique de rencontres ADT^A04. Laisser vide pour une configuration A01 seulement.",
       "ADMISSION_TYPE": "Type d'admission par défaut",
@@ -37,6 +39,14 @@
       "ENABLED": "Activer la création automatique pour cet hôpital"
     },
     "CONFIRM_DELETE": "Supprimer la configuration ADT pour {{hospital}} ?",
+    "SELECTED_HOSPITAL": "Hôpital sélectionné :",
+    "HOSPITAL_SEARCHING": "Recherche d'hôpitaux…",
+    "HOSPITAL_NO_MATCH": "Aucun hôpital ne correspond à cette recherche.",
+    "PROVIDER_NO_OPTIONS": "Aucun personnel actif dans cet hôpital.",
+    "DEPARTMENT_NO_OPTIONS": "Aucun département dans cet hôpital.",
+    "PLACEHOLDER": {
+      "HOSPITAL_SEARCH": "Saisissez au moins 2 caractères du nom ou du code de l'hôpital…"
+    },
     "VALIDATION": {
       "REQUIRED": "L'hôpital et le médecin admetteur sont obligatoires."
     },
@@ -1818,6 +1828,58 @@
       "NOT_FOUND": "Département introuvable",
       "DELETED": "Département supprimé",
       "DELETE_FAILED": "Échec de la suppression du département"
+    }
+  },
+  "COST_PANEL": {
+    "TITLE": "Répartition des coûts par tenant",
+    "SUBTITLE": "Montants de refacturation par hôpital pour la période sélectionnée. Les entrées Splunk / Grafana / stockage sont nulles tant que la suite des exportateurs externes (row-44) n'est pas livrée ; le nombre d'événements d'audit pilote le montant actuel.",
+    "FROM": "Du",
+    "TO": "Au",
+    "REFRESH": "Actualiser",
+    "LOADING": "Chargement…",
+    "FEATURE_DISABLED": "L'observabilité des coûts par tenant est désactivée — définissez APP_OBSERVABILITY_TENANT_COST_ENABLED=true pour l'activer.",
+    "ERROR": "Impossible de charger la répartition des coûts.",
+    "NO_DATA": "Aucune activité de tenant dans la période sélectionnée.",
+    "COL_HOSPITAL": "Hôpital",
+    "COL_AUDIT_EVENTS": "Événements d'audit",
+    "COL_SPLUNK": "Événements Splunk",
+    "COL_GRAFANA": "Séries Grafana",
+    "COL_STORAGE_GIB": "Stockage (Gio)",
+    "COL_AMOUNT": "Montant refacturé"
+  },
+  "EMPI": {
+    "TITLE": "Correspondance EMPI",
+    "SUBTITLE": "Rechercher dans l'index principal des patients par nom + date de naissance + sexe + identifiant national. Confirmez la correspondance si la ventilation semble correcte, ou créez un nouveau patient si aucun candidat ne correspond.",
+    "SEARCH": "Rechercher des candidats",
+    "SEARCHING": "Recherche…",
+    "ERROR": "La recherche EMPI a échoué. L'indicateur de correspondance probabiliste est peut-être désactivé — voir docs/runbooks/empi-probabilistic-matching.md.",
+    "NO_MATCHES": "Aucun candidat n'a atteint le seuil de score configuré.",
+    "NOT_THIS_ONE": "Aucun des candidats ci-dessus n'est la même personne ?",
+    "CREATE_NEW_PATIENT": "Créer un nouveau patient à la place",
+    "CONFIRM_MATCH": "Confirmer cette correspondance",
+    "COL_PATIENT": "Patient",
+    "COL_SCORE": "Score",
+    "COL_BREAKDOWN": "Ventilation par champ",
+    "FIELD": {
+      "FIRST_NAME": "Prénom",
+      "LAST_NAME": "Nom",
+      "DATE_OF_BIRTH": "Date de naissance",
+      "SEX": "Sexe",
+      "SEX_PLACEHOLDER": "— Sélectionner —",
+      "NATIONAL_ID": "Identifiant national"
+    },
+    "BREAKDOWN": {
+      "NAME": "Nom",
+      "DOB": "Date naissance",
+      "SEX": "Sexe",
+      "NATIONAL_ID": "Identifiant national"
+    },
+    "VALIDATION": {
+      "AT_LEAST_ONE_FIELD": "Saisissez au moins un champ avant de rechercher."
+    },
+    "TOAST": {
+      "CONFIRMED": "Correspondance confirmée : {{name}}.",
+      "NEW_PATIENT_HANDOFF": "Transfert vers le formulaire nouveau patient (à venir)."
     }
   },
   "ENCOUNTERS": {
