@@ -36,6 +36,8 @@ import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -48,6 +50,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -153,15 +156,51 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long todayAppointmentsCount = appointmentRepository
                 .countByAppointmentDateBetween(LocalDate.now(), LocalDate.now());
 
-        long totalEncounters = encounterRepository.count();
-        long totalConsultations = consultationRepository.count();
-        long totalLabOrders = labOrderRepository.count();
-        long totalLabResults = labResultRepository.count();
+        // ── Chip-aware clinical tile counts ────────────────────────────
+        // When the super-admin has pinned a hospital chip (X-Hospital-Id
+        // header → ctx.isHeaderOverridden=true), the dashboard tile
+        // MUST reflect that scope so it matches the corresponding list
+        // page (e.g. /consultations). Without this, a super-admin chip-
+        // scoped to Hospital D sees tile=3 (system-wide) but list=0
+        // (Hospital D has no consultations) — exactly the symptom the
+        // develop-deployment review surfaced. "All hospitals" view
+        // (no chip / no header) falls back to the system-wide count().
+        //
+        // We trust ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
+        // the authority predicate — see the ConsultationServiceImpl
+        // global-view carve-out for the same security trade-off.
+        // Lab test definitions are reference data (catalog), not
+        // tenant-scoped, so its count is always system-wide.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID chipScope = (ctx.isSuperAdmin() && ctx.isHeaderOverridden())
+            ? ctx.getActiveHospitalId()
+            : null;
+
+        long totalEncounters = (chipScope != null)
+            ? encounterRepository.countByHospital_Id(chipScope)
+            : encounterRepository.count();
+        long totalConsultations = (chipScope != null)
+            ? consultationRepository.countByHospital_Id(chipScope)
+            : consultationRepository.count();
+        long totalLabOrders = (chipScope != null)
+            ? labOrderRepository.countByHospital_Id(chipScope)
+            : labOrderRepository.count();
+        long totalLabResults = (chipScope != null)
+            ? labResultRepository.countByLabOrder_Hospital_Id(chipScope)
+            : labResultRepository.count();
         long totalLabTestDefinitions = labTestDefinitionRepository.count();
-        long totalAdmissions = admissionRepository.count();
-        long totalPrescriptions = prescriptionRepository.count();
-        long totalTreatmentPlans = treatmentPlanRepository.count();
-        long totalReferrals = generalReferralRepository.count();
+        long totalAdmissions = (chipScope != null)
+            ? admissionRepository.countByHospital_Id(chipScope)
+            : admissionRepository.count();
+        long totalPrescriptions = (chipScope != null)
+            ? prescriptionRepository.countByHospital_Id(chipScope)
+            : prescriptionRepository.count();
+        long totalTreatmentPlans = (chipScope != null)
+            ? treatmentPlanRepository.countByHospital_Id(chipScope)
+            : treatmentPlanRepository.count();
+        long totalReferrals = (chipScope != null)
+            ? generalReferralRepository.countByHospital_Id(chipScope)
+            : generalReferralRepository.count();
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));

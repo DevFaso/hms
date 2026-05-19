@@ -131,4 +131,13 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
     List<GeneralReferral> findByReceivingHospitalIdOrderByCreatedAtDesc(UUID receivingHospitalId);
 
     List<GeneralReferral> findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(UUID receivingHospitalId, ReferralStatus status);
+
+    /**
+     * Hospital-scoped tile count for the super-admin dashboard. Scopes
+     * by ORIGINATING hospital (matches
+     * {@link #findByHospitalIdOrderByCreatedAtDesc(UUID)}) — the
+     * dashboard tile reflects "referrals raised here", not "referrals
+     * incoming here".
+     */
+    long countByHospital_Id(UUID hospitalId);
 }
