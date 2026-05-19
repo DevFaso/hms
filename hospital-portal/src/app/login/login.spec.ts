@@ -120,10 +120,14 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       'setUserProfile',
       'getUserProfile',
       'getPermittedHospitalIds',
+      'resolveLandingPath',
+      'formatRole',
     ]);
     authSpy.getRoles.and.returnValue(['ROLE_SUPER_ADMIN']);
     authSpy.getPermittedHospitalIds.and.returnValue([primaryHospitalId, otherHospitalId]);
     authSpy.getUserProfile.and.returnValue(null);
+    authSpy.resolveLandingPath.and.returnValue('/dashboard');
+    authSpy.formatRole.and.callFake((r: string) => r);
 
     TestBed.configureTestingModule({
       imports: [Login, TranslateModule.forRoot()],
@@ -150,37 +154,11 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     // so the assertion below is meaningful.
     expect(roleContext.globalView()).toBeFalse();
 
-    // Drive the password-login form
-    component.username = 'tchico1er';
-    component.password = 'irrelevant';
-
-    // bootstrap-status check fires in ngOnInit. Match-and-flush whatever
-    // URL pattern the component uses, then move on.
-    httpMock
-      .expectOne((req) => req.url.includes('/auth/bootstrap-status'))
-      .flush({
-        allowed: false,
-      });
-
-    component.submit();
-
-    // /auth/login returns a super-admin token
-    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
-    expect(loginReq.request.method).toBe('POST');
-    loginReq.flush({
-      token: 'fake-jwt-super-admin',
-      refreshToken: 'fake-refresh',
-      id: 'user-1',
-      username: 'tchico1er',
-      primaryHospitalId,
-      hospitalIds: [primaryHospitalId, otherHospitalId],
-    });
-
-    // sessionBootstrap() is called via AuthService; stub it to return a
-    // super-admin context with the user's primary hospital. The login
-    // path THEN calls setRoles + setPermittedHospitalIds + activeHospitalId,
-    // and finally markSuperAdminGlobalDefaults — which is what we
-    // assert below.
+    // Stub the bootstrap response BEFORE calling submit — the login
+    // response handler fires synchronously on flush and immediately
+    // calls auth.sessionBootstrap(); a returnValue set up afterward
+    // would resolve to undefined and the .subscribe handler that runs
+    // markSuperAdminGlobalDefaults a SECOND time would never fire.
     const bootstrap: SessionBootstrapResponse = {
       userId: 'user-1',
       username: 'tchico1er',
@@ -197,8 +175,28 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     };
     authSpy.sessionBootstrap.and.returnValue(of(bootstrap));
 
-    // The login subscribe handler fires synchronously after flush.
-    // It then calls markSuperAdminGlobalDefaults() before navigating.
+    // Drive the password-login form
+    component.username = 'tchico1er';
+    component.password = 'irrelevant';
+    component.submit();
+
+    // /auth/login returns a super-admin token. The .subscribe handler
+    // runs synchronously on flush, calling setRoles +
+    // markSuperAdminGlobalDefaults, then immediately triggering
+    // sessionBootstrap() which (since it's stubbed above) also
+    // synchronously runs the bootstrap-response handler that does the
+    // second markSuperAdminGlobalDefaults call.
+    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
+    expect(loginReq.request.method).toBe('POST');
+    loginReq.flush({
+      token: 'fake-jwt-super-admin',
+      refreshToken: 'fake-refresh',
+      id: 'user-1',
+      username: 'tchico1er',
+      primaryHospitalId,
+      hospitalIds: [primaryHospitalId, otherHospitalId],
+    });
+
     expect(roleContext.globalView())
       .withContext('post-login: SUPER_ADMIN MUST land in global view')
       .toBeTrue();
@@ -221,34 +219,6 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     // scoped to their primary hospital on first login.
     authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']); // JWT only
 
-    component.username = 'tchico1er';
-    component.password = 'irrelevant';
-
-    httpMock
-      .expectOne((req) => req.url.includes('/auth/bootstrap-status'))
-      .flush({
-        allowed: false,
-      });
-
-    component.submit();
-
-    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
-    loginReq.flush({
-      token: 'fake-jwt-hospital-admin',
-      refreshToken: 'fake-refresh',
-      id: 'user-1',
-      username: 'tchico1er',
-      primaryHospitalId,
-      hospitalIds: [primaryHospitalId],
-    });
-
-    // After JWT-seed: not super-admin yet, so the first
-    // markSuperAdminGlobalDefaults() is a no-op.
-    expect(roleContext.globalView()).toBeFalse();
-
-    // Bootstrap upgrades the user to SUPER_ADMIN. The login flow's
-    // SECOND markSuperAdminGlobalDefaults() call (after bootstrap
-    // setRoles) is what makes this work.
     const upgradedBootstrap: SessionBootstrapResponse = {
       userId: 'user-1',
       username: 'tchico1er',
@@ -262,6 +232,26 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     };
     authSpy.sessionBootstrap.and.returnValue(of(upgradedBootstrap));
 
+    component.username = 'tchico1er';
+    component.password = 'irrelevant';
+    component.submit();
+
+    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
+    loginReq.flush({
+      token: 'fake-jwt-hospital-admin',
+      refreshToken: 'fake-refresh',
+      id: 'user-1',
+      username: 'tchico1er',
+      primaryHospitalId,
+      hospitalIds: [primaryHospitalId],
+    });
+
+    // After both setRoles + bootstrap-setRoles + the SECOND
+    // markSuperAdminGlobalDefaults call, the upgraded SUPER_ADMIN
+    // MUST be in global view. (The first markSuperAdminGlobalDefaults
+    // call right after setRoles(jwtRoles) is a no-op because the JWT
+    // only carried HOSPITAL_ADMIN — but the SECOND call after
+    // bootstrap-setRoles(bsRoles) sees SUPER_ADMIN and fires.)
     expect(roleContext.globalView())
       .withContext('post-bootstrap: bootstrap-upgraded SUPER_ADMIN MUST land in global view')
       .toBeTrue();
@@ -277,27 +267,6 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     // (existing single-tenant behaviour the regression must preserve).
     authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
 
-    component.username = 'hospital_admin';
-    component.password = 'irrelevant';
-
-    httpMock
-      .expectOne((req) => req.url.includes('/auth/bootstrap-status'))
-      .flush({
-        allowed: false,
-      });
-
-    component.submit();
-
-    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
-    loginReq.flush({
-      token: 'fake-jwt-hospital-admin',
-      refreshToken: 'fake-refresh',
-      id: 'user-2',
-      username: 'hospital_admin',
-      primaryHospitalId,
-      hospitalIds: [primaryHospitalId],
-    });
-
     const hospitalAdminBootstrap: SessionBootstrapResponse = {
       userId: 'user-2',
       username: 'hospital_admin',
@@ -310,6 +279,20 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       permittedHospitalIds: [primaryHospitalId],
     };
     authSpy.sessionBootstrap.and.returnValue(of(hospitalAdminBootstrap));
+
+    component.username = 'hospital_admin';
+    component.password = 'irrelevant';
+    component.submit();
+
+    const loginReq = httpMock.expectOne((req) => req.url.endsWith('/auth/login'));
+    loginReq.flush({
+      token: 'fake-jwt-hospital-admin',
+      refreshToken: 'fake-refresh',
+      id: 'user-2',
+      username: 'hospital_admin',
+      primaryHospitalId,
+      hospitalIds: [primaryHospitalId],
+    });
 
     expect(roleContext.globalView())
       .withContext('hospital-admin login MUST NOT flip globalView')
