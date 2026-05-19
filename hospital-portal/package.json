@@ -49,7 +49,7 @@
     "@angular/material": "20.2.10",
     "@angular/platform-browser": "20.3.19",
     "@angular/platform-browser-dynamic": "20.3.19",
-    "@angular/platform-server": "20.3.19",
+    "@angular/platform-server": "20.3.21",
     "@angular/router": "20.3.19",
     "@angular/ssr": "^20.3.25",
     "@fullcalendar/angular": "^6.1.20",
