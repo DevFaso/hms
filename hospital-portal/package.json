@@ -58,7 +58,7 @@
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
     "@grafana/faro-web-sdk": "^2.3.1",
-    "@grafana/faro-web-tracing": "^2.3.1",
+    "@grafana/faro-web-tracing": "^2.7.1",
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
     "@stomp/stompjs": "7.1.1",
