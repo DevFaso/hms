@@ -29,14 +29,14 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  * with two latent bugs (chopped DO block on internal {@code ;}; missing
  * {@code seed RECORD} declaration) that only surfaced on the dev deploy. This
  * test closes that gap by applying every changeSet against a freshly-spun
- * {@code postgres:16-alpine} container.
+ * {@code postgres:16.14-alpine} container.
  */
 @Testcontainers
 class LiquibaseSchemaIT {
 
     @Container
     @SuppressWarnings("resource")
-    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine")
+    private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16.14-alpine")
         .withDatabaseName("hms_test")
         .withUsername("hms_test_user")
         .withPassword("hms_test_pass");

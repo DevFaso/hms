@@ -3,7 +3,7 @@ version: "3.9"
 services:
   # ── Local PostgreSQL (profile: local) ──────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine
     container_name: hms-postgres
     environment:
       POSTGRES_DB: hospital_db
@@ -21,7 +21,7 @@ services:
 
   # ── Dev PostgreSQL (profile: dev) ──────────────────────────
   postgres-dev:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine
     container_name: hms-postgres-dev
     environment:
       POSTGRES_DB: hms_dev
@@ -39,7 +39,7 @@ services:
 
   # ── UAT PostgreSQL (profile: uat) ──────────────────────────
   postgres-uat:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine
     container_name: hms-postgres-uat
     environment:
       POSTGRES_DB: hms_uat
@@ -77,7 +77,7 @@ services:
   # the HMS application schema. Only reachable from the keycloak service
   # on the docker network (no host port published).
   keycloak-db:
-    image: postgres:16-alpine
+    image: postgres:16.14-alpine
     container_name: hms-keycloak-db
     profiles: ["keycloak"]
     environment:
