@@ -33,11 +33,34 @@ export const consoleLogger: Logger = {
   error: (m, ctx) => console.error(format('ERROR', m, ctx)),
 };
 
+// Migration runs against production user data; emails and phone numbers are
+// PII and must not land in clear text in CI logs or shell scrollback
+// (CodeQL js/clear-text-logging). Redaction keeps enough shape to debug
+// (first character + email domain) without storing the identifier itself.
+const SENSITIVE_KEY_PATTERN = /email|phone/i;
+
+function redactValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactValue);
+  if (typeof value !== 'string') return value == null ? value : '[redacted]';
+  if (value.length === 0) return value;
+  const at = value.indexOf('@');
+  if (at > 0) return `${value[0]}***@${value.slice(at + 1)}`;
+  return `${value[0]}***`;
+}
+
+function redactContext(context: Record<string, unknown>): Record<string, unknown> {
+  const redacted: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(context)) {
+    redacted[key] = SENSITIVE_KEY_PATTERN.test(key) ? redactValue(value) : value;
+  }
+  return redacted;
+}
+
 function format(level: string, message: string, context?: Record<string, unknown>): string {
   if (!context || Object.keys(context).length === 0) {
     return `[${new Date().toISOString()}] ${level.padEnd(5)} ${message}`;
   }
-  return `[${new Date().toISOString()}] ${level.padEnd(5)} ${message} ${JSON.stringify(context)}`;
+  return `[${new Date().toISOString()}] ${level.padEnd(5)} ${message} ${JSON.stringify(redactContext(context))}`;
 }
 
 export function buildUserPayload(
