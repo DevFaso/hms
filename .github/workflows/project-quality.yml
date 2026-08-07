@@ -6,12 +6,12 @@ on:
   push:
     branches: [main, develop, uat]
 
-# SonarCloud row 11 / Sonar S6396: permissions declared at the workflow
-# level inherit to every job (and to every callable workflow this file
-# triggers). Per principle-of-least-privilege we declare permissions on
-# the job that actually needs them — reusable callable workflows
-# (`backend-tests`, `frontend-tests`, `agent-lint`) carry their own.
-# Removed: `permissions: contents: read` at workflow level.
+# SonarCloud row 11 / Sonar S6396 + CodeQL actions/missing-workflow-permissions:
+# permissions are declared per-job (never at workflow level) so each job's
+# GITHUB_TOKEN is capped at least-privilege. For the reusable-workflow jobs
+# the caller cap is the ceiling — the callees (`backend-ci`, `frontend-ci`,
+# `agent-lint`) each declare `contents: read` themselves, so `contents: read`
+# here grants exactly what they need and nothing more.
 
 concurrency:
   group: project-quality-${{ github.event.pull_request.number || github.ref }}
@@ -22,21 +22,22 @@ jobs:
     name: Backend (JUnit, Jacoco)
     uses: ./.github/workflows/backend-ci.yml
     secrets: inherit
-    # backend-ci.yml declares its own permissions; nothing inherited here.
+    permissions:
+      contents: read
 
   frontend-tests:
     name: Frontend (Jest, Playwright)
     uses: ./.github/workflows/frontend-ci.yml
     secrets: inherit
-    # frontend-ci.yml declares its own permissions; nothing inherited here.
+    permissions:
+      contents: read
 
   agent-lint:
     name: Agent Lint & Prompt Tests
     uses: ./.github/workflows/agent-lint.yml
     secrets: inherit
-    # agent-lint.yml declares its own (`contents: read`) at workflow level
-    # for the callable trigger; that satisfies the S6396 rule for the
-    # callable's own scope.
+    permissions:
+      contents: read
 
   lint-docker-yaml:
     name: Lint Dockerfiles & YAML
