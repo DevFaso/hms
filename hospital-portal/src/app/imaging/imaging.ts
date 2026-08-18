@@ -10,12 +10,15 @@ import {
   ImagingModality,
   ImagingPriority,
   ImagingLaterality,
+  ImagingReportResponse,
+  ImagingReportStatus,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { AuthService } from '../auth/auth.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -34,6 +37,8 @@ export class ImagingComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
+  private readonly translate = inject(TranslateService);
 
   orders = signal<ImagingOrderResponse[]>([]);
   filtered = signal<ImagingOrderResponse[]>([]);
@@ -62,6 +67,50 @@ export class ImagingComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingItem = signal<ImagingOrderResponse | null>(null);
   deleting = signal(false);
+
+  /* ── Results state ── */
+  view = signal<'orders' | 'results'>('orders');
+  reports = signal<ImagingReportResponse[]>([]);
+  reportsLoading = signal(false);
+  reportStatusFilter = signal<ImagingReportStatus>('FINAL');
+  reportModalityFilter = signal<ImagingModality | ''>('');
+  criticalOnly = signal(false);
+  selectedReport = signal<ImagingReportResponse | null>(null);
+  reportLoading = signal(false);
+
+  showStatusModal = signal(false);
+  statusForm = { status: 'FINAL' as ImagingReportStatus, statusReason: '' };
+  statusSubmitting = signal(false);
+  acknowledging = signal(false);
+
+  readonly reportStatuses: ImagingReportStatus[] = [
+    'DRAFT',
+    'PRELIMINARY',
+    'FINAL',
+    'ADDENDUM',
+    'CORRECTED',
+    'AMENDED',
+    'CANCELLED',
+  ];
+
+  readonly canSeeResults = this.hasAnyRole([
+    'ROLE_DOCTOR',
+    'ROLE_RADIOLOGIST',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canUpdateReportStatus = this.hasAnyRole([
+    'ROLE_DOCTOR',
+    'ROLE_RADIOLOGIST',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canAckCritical = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+
+  private hasAnyRole(roles: string[]): boolean {
+    const active = this.roleContext.activeRole;
+    if (active) return roles.includes(active);
+    return this.auth.hasAnyRole(roles);
+  }
 
   modalities: ImagingModality[] = [
     'XRAY',
@@ -353,5 +402,165 @@ export class ImagingComponent implements OnInit {
       return this.orders().filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status))
         .length;
     return 0;
+  }
+
+  /* ── Results ── */
+
+  setView(view: 'orders' | 'results'): void {
+    this.view.set(view);
+    if (view === 'results' && this.reports().length === 0) {
+      this.loadReports();
+    }
+  }
+
+  private resultsHospitalId(): string | null {
+    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+  }
+
+  loadReports(): void {
+    const hospitalId = this.resultsHospitalId();
+    if (!hospitalId) return;
+    this.reportsLoading.set(true);
+    this.imagingService
+      .getReportsByHospital(hospitalId, {
+        status: this.reportStatusFilter(),
+        modality: this.reportModalityFilter() || undefined,
+      })
+      .subscribe({
+        next: (list) => {
+          this.reports.set(Array.isArray(list) ? list : []);
+          this.reportsLoading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('IMAGING.RESULTS_LOAD_ERROR'));
+          this.reportsLoading.set(false);
+        },
+      });
+  }
+
+  setReportStatusFilter(status: ImagingReportStatus): void {
+    this.reportStatusFilter.set(status);
+    this.loadReports();
+  }
+
+  onReportModalityChange(modality: string): void {
+    this.reportModalityFilter.set(modality as ImagingModality | '');
+    this.loadReports();
+  }
+
+  toggleCriticalOnly(): void {
+    this.criticalOnly.update((v) => !v);
+  }
+
+  visibleReports(): ImagingReportResponse[] {
+    const list = this.reports();
+    return this.criticalOnly() ? list.filter((r) => this.isCritical(r)) : list;
+  }
+
+  isCritical(report: ImagingReportResponse): boolean {
+    return !!report.criticalResultFlaggedAt;
+  }
+
+  isCriticalUnacked(report: ImagingReportResponse): boolean {
+    return !!report.criticalResultFlaggedAt && !report.criticalResultAcknowledgedAt;
+  }
+
+  openReport(report: ImagingReportResponse): void {
+    this.selectedReport.set(report);
+  }
+
+  closeReport(): void {
+    this.selectedReport.set(null);
+  }
+
+  /** Open the latest report for an order (from the orders table/detail). */
+  viewReportForOrder(order: ImagingOrderResponse): void {
+    this.reportLoading.set(true);
+    this.imagingService.getLatestReportByOrder(order.id).subscribe({
+      next: (report) => {
+        this.reportLoading.set(false);
+        this.selectedOrder.set(null);
+        this.selectedReport.set(report);
+      },
+      error: () => {
+        this.reportLoading.set(false);
+        this.toast.error(this.translate.instant('IMAGING.NO_REPORT_FOR_ORDER'));
+      },
+    });
+  }
+
+  acknowledgeCritical(report: ImagingReportResponse): void {
+    const staffId = this.auth.getUserProfile()?.staffId;
+    if (!staffId) {
+      this.toast.error(this.translate.instant('IMAGING.NO_STAFF_CONTEXT'));
+      return;
+    }
+    this.acknowledging.set(true);
+    this.imagingService.acknowledgeCriticalReport(report.id, staffId).subscribe({
+      next: (updated) => {
+        this.toast.success(this.translate.instant('IMAGING.CRITICAL_ACKED'));
+        this.acknowledging.set(false);
+        this.selectedReport.set(updated);
+        this.loadReports();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'));
+        this.acknowledging.set(false);
+      },
+    });
+  }
+
+  openStatusUpdate(report: ImagingReportResponse): void {
+    this.selectedReport.set(report);
+    this.statusForm = { status: report.reportStatus, statusReason: '' };
+    this.showStatusModal.set(true);
+  }
+
+  closeStatusUpdate(): void {
+    this.showStatusModal.set(false);
+  }
+
+  submitStatusUpdate(): void {
+    const report = this.selectedReport();
+    if (!report) return;
+    this.statusSubmitting.set(true);
+    this.imagingService
+      .updateReportStatus(report.id, {
+        status: this.statusForm.status,
+        statusReason: this.statusForm.statusReason.trim() || undefined,
+        changedByStaffId: this.auth.getUserProfile()?.staffId,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.toast.success(this.translate.instant('IMAGING.STATUS_UPDATED'));
+          this.statusSubmitting.set(false);
+          this.showStatusModal.set(false);
+          this.selectedReport.set(updated);
+          this.loadReports();
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
+          this.statusSubmitting.set(false);
+        },
+      });
+  }
+
+  getReportStatusClass(status: string): string {
+    switch (status) {
+      case 'FINAL':
+      case 'ADDENDUM':
+        return 'status-completed';
+      case 'PRELIMINARY':
+      case 'DRAFT':
+        return 'status-preliminary';
+      case 'CORRECTED':
+      case 'AMENDED':
+        return 'status-progress';
+      case 'CANCELLED':
+      case 'ERROR':
+        return 'status-cancelled';
+      default:
+        return '';
+    }
   }
 }
