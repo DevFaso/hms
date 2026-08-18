@@ -782,7 +782,6 @@
     "PENDING_QA_REVIEW_DESC": "Test definitions are awaiting quality review before proceeding to director approval.",
     "QA_REVIEW_QUEUE": "QA Review Queue",
     "QUALITY_PASS_RATE": "Quality Pass Rate",
-    "REVIEW_NOW": "Review Now",
     "VALIDATION_STUDIES": "Validation Studies",
     "VALIDATION_STUDIES_30D": "Studies (Last 30d)",
     "VALIDATION_STUDIES_PENDING": "Pending Approval"
@@ -1170,7 +1169,7 @@
     "LOADING": "Loading lab results…",
     "SEARCH": "Search by order code, patient, or test…",
     "TOTAL": "Total Results",
-    "RELEASED": "Released",
+    "RELEASED": "Result released",
     "PENDING_RELEASE": "Pending Release",
     "NEW_RESULT": "New Result",
     "EDIT_RESULT": "Edit Result",
@@ -1201,7 +1200,6 @@
     "CREATED": "Lab result created",
     "UPDATED": "Lab result updated",
     "DELETED": "Lab result deleted",
-    "RELEASED": "Result released",
     "RELEASE_ERROR": "Failed to release result",
     "SAVE_ERROR": "Failed to save. Please try again.",
     "DELETE_ERROR": "Failed to delete result. Please try again.",
@@ -1357,7 +1355,16 @@
     "VISIT_SUMMARIES": "Visit Summaries",
     "VITALS": "Vitals",
     "PATIENT_TRACKER": "Patient Tracker",
-    "IN_BASKET": "In-Basket"
+    "IN_BASKET": "In-Basket",
+    "ANALYTICS": "Analytics",
+    "FEATURE_FLAGS": "Feature Flags",
+    "DIGITAL_SIGNATURES": "Digital Signatures",
+    "LAB_STAFF": "Lab Staff",
+    "LAB_INSTRUMENTS": "Lab Instruments",
+    "LAB_INVENTORY": "Lab Inventory",
+    "MY_CARE_TEAM": "My Care Team",
+    "MY_DOCUMENTS": "My Documents",
+    "FAMILY_ACCESS": "Family Access"
   },
   "NOTIFICATIONS": {
     "ALL": "All",

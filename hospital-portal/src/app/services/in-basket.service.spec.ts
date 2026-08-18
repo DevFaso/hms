@@ -31,7 +31,7 @@ describe('InBasketService', () => {
         expect(page.content.length).toBe(0);
       });
 
-      const req = httpMock.expectOne((r) => r.url === '/api/in-basket');
+      const req = httpMock.expectOne((r) => r.url === '/in-basket');
       expect(req.request.method).toBe('GET');
       expect(req.request.params.get('page')).toBe('0');
       expect(req.request.params.get('size')).toBe('20');
@@ -41,7 +41,7 @@ describe('InBasketService', () => {
     it('should pass optional filter params', () => {
       service.getItems('h1', 'RESULT', 'UNREAD', 1, 10).subscribe();
 
-      const req = httpMock.expectOne((r) => r.url === '/api/in-basket');
+      const req = httpMock.expectOne((r) => r.url === '/in-basket');
       expect(req.request.params.get('hospitalId')).toBe('h1');
       expect(req.request.params.get('type')).toBe('RESULT');
       expect(req.request.params.get('status')).toBe('UNREAD');
@@ -66,14 +66,14 @@ describe('InBasketService', () => {
         expect(s.resultUnread).toBe(3);
       });
 
-      const req = httpMock.expectOne('/api/in-basket/summary');
+      const req = httpMock.expectOne('/in-basket/summary');
       expect(req.request.method).toBe('GET');
       req.flush(mockSummary);
     });
 
     it('should pass hospitalId when provided', () => {
       service.getSummary('h1').subscribe();
-      const req = httpMock.expectOne((r) => r.url === '/api/in-basket/summary');
+      const req = httpMock.expectOne((r) => r.url === '/in-basket/summary');
       expect(req.request.params.get('hospitalId')).toBe('h1');
       req.flush({
         totalUnread: 0,
@@ -93,7 +93,7 @@ describe('InBasketService', () => {
         expect(item.status).toBe('READ');
       });
 
-      const req = httpMock.expectOne('/api/in-basket/item-1/read');
+      const req = httpMock.expectOne('/in-basket/item-1/read');
       expect(req.request.method).toBe('PUT');
       req.flush(mockItem);
     });
@@ -107,7 +107,7 @@ describe('InBasketService', () => {
         expect(item.status).toBe('ACKNOWLEDGED');
       });
 
-      const req = httpMock.expectOne('/api/in-basket/item-1/acknowledge');
+      const req = httpMock.expectOne('/in-basket/item-1/acknowledge');
       expect(req.request.method).toBe('PUT');
       req.flush(mockItem);
     });

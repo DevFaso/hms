@@ -119,7 +119,7 @@ export class DigitalSignaturesComponent implements OnInit {
   loadSignatures(): void {
     this.loading.set(true);
     // Load all signatures via provider endpoint (super admin context)
-    this.http.get<SignatureItem[]>('/api/signatures/all').subscribe({
+    this.http.get<SignatureItem[]>('/signatures/all').subscribe({
       next: (data) => {
         this.signatures.set(data ?? []);
         this.loading.set(false);
@@ -136,7 +136,7 @@ export class DigitalSignaturesComponent implements OnInit {
     this.selectedSignature.set(sig);
     this.auditTrail.set([]);
     this.auditLoading.set(true);
-    this.http.get<AuditEntry[]>(`/api/signatures/${sig.id}/audit-trail`).subscribe({
+    this.http.get<AuditEntry[]>(`/signatures/${sig.id}/audit-trail`).subscribe({
       next: (data) => {
         this.auditTrail.set(data ?? []);
         this.auditLoading.set(false);
@@ -163,7 +163,7 @@ export class DigitalSignaturesComponent implements OnInit {
   doVerify(): void {
     this.verifying.set(true);
     this.http
-      .post<{ valid: boolean; message: string; verifiedAt: string }>('/api/signatures/verify', {
+      .post<{ valid: boolean; message: string; verifiedAt: string }>('/signatures/verify', {
         signatureId: this.verifySignatureId(),
         signatureValue: this.verifyValue(),
       })
@@ -196,7 +196,7 @@ export class DigitalSignaturesComponent implements OnInit {
     }
     this.revoking.set(true);
     this.http
-      .post<SignatureItem>(`/api/signatures/${this.revokeSignatureId()}/revoke`, {
+      .post<SignatureItem>(`/signatures/${this.revokeSignatureId()}/revoke`, {
         reason: this.revokeReason().trim(),
       })
       .subscribe({

@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, computed, effect, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
@@ -137,16 +137,34 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/my-visits',
         },
         {
+          icon: 'groups',
+          label: 'My Care Team',
+          translationKey: 'NAV.MY_CARE_TEAM',
+          route: '/my-care-team',
+        },
+        {
           icon: 'folder_shared',
           label: 'My Records',
           translationKey: 'NAV.MY_RECORDS',
           route: '/my-records',
         },
         {
+          icon: 'description',
+          label: 'My Documents',
+          translationKey: 'NAV.MY_DOCUMENTS',
+          route: '/my-documents',
+        },
+        {
           icon: 'share',
           label: 'Record Sharing',
           translationKey: 'NAV.RECORD_SHARING',
           route: '/my-sharing',
+        },
+        {
+          icon: 'family_restroom',
+          label: 'Family Access',
+          translationKey: 'NAV.FAMILY_ACCESS',
+          route: '/my-family-access',
         },
         {
           icon: 'summarize',
@@ -159,7 +177,7 @@ export class ShellComponent implements OnInit, OnDestroy {
           icon: 'notifications',
           label: 'Notifications',
           translationKey: 'NAV.NOTIFICATIONS',
-          route: '/notifications',
+          route: '/my-notifications',
         },
       ];
     }
@@ -384,7 +402,27 @@ export class ShellComponent implements OnInit, OnDestroy {
           translationKey: 'NAV.ADMINISTRATION',
           route: '/admin',
         },
+        {
+          icon: 'query_stats',
+          label: 'Analytics',
+          translationKey: 'NAV.ANALYTICS',
+          route: '/analytics',
+        },
+        {
+          icon: 'toggle_on',
+          label: 'Feature Flags',
+          translationKey: 'NAV.FEATURE_FLAGS',
+          route: '/feature-flags',
+        },
       );
+    }
+    if (this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'draw',
+        label: 'Digital Signatures',
+        translationKey: 'NAV.DIGITAL_SIGNATURES',
+        route: '/digital-signatures',
+      });
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({
@@ -472,6 +510,46 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
     if (
       this.hasAnyRole([
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_LAB_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'badge',
+        label: 'Lab Staff',
+        translationKey: 'NAV.LAB_STAFF',
+        route: '/lab-staff',
+      });
+    }
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push(
+        {
+          icon: 'precision_manufacturing',
+          label: 'Lab Instruments',
+          translationKey: 'NAV.LAB_INSTRUMENTS',
+          route: '/lab-instruments',
+        },
+        {
+          icon: 'inventory_2',
+          label: 'Lab Inventory',
+          translationKey: 'NAV.LAB_INVENTORY',
+          route: '/lab-inventory',
+        },
+      );
+    }
+    if (
+      this.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_ADMIN',
@@ -510,17 +588,22 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   /**
    * User-reordered nav items.
-   * Loaded from localStorage on init, then mutated in-place on each drop.
+   * Rebuilt whenever the permission-filtered base list changes (e.g. when the
+   * backend permission set arrives), with any saved order re-applied on top.
    */
   navItems = signal<NavItem[]>([]);
 
+  constructor() {
+    effect(() => {
+      const base = this.baseNavItems();
+      const saved = this.navOrder.load();
+      this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    });
+  }
+
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
-
-    // Apply any saved order on top of the permission-filtered base list
-    const base = this.baseNavItems();
-    const saved = this.navOrder.load();
-    this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    this.permissions.loadFromBackend();
 
     this.loadNotifications();
     this.idle.start();
@@ -652,6 +735,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    this.permissions.clear();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }
@@ -669,6 +753,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   /** Shared tear-down: stop idle, log out, redirect to login */
   private tearDownAndRedirect(): void {
     this.idle.stop();
+    this.permissions.clear();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }

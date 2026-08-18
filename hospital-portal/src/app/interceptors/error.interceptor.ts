@@ -1,4 +1,5 @@
 import {
+  HttpClient,
   HttpInterceptorFn,
   HttpErrorResponse,
   HttpHandlerFn,
@@ -34,6 +35,35 @@ const SILENT_403_PATTERNS = [
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
+
+/**
+ * URL+method pairs already reported this session — a background GET that keeps
+ * polling a forbidden endpoint must not flood the audit log.
+ */
+const reportedSilent403s = new Set<string>();
+
+/**
+ * A 403 on a SILENT_403_PATTERNS URL skips the /error/403 redirect so
+ * background widgets fail quietly — but the failure must not be invisible.
+ * Report it once per URL to the backend audit sink so authorization drift
+ * shows up in telemetry. (The error itself still propagates to the caller.)
+ */
+function reportSilent403(http: HttpClient, req: HttpRequest<unknown>): void {
+  const key = `${req.method} ${req.urlWithParams}`;
+  if (reportedSilent403s.has(key)) return;
+  reportedSilent403s.add(key);
+  http
+    .post('/frontend-audit', {
+      type: 'SILENT_403',
+      meta: { url: req.urlWithParams, method: req.method },
+      ts: new Date().toISOString(),
+    })
+    .subscribe({
+      error: () => {
+        // Telemetry is best-effort — never surface its own failures.
+      },
+    });
+}
 
 let isRefreshing = false;
 const refreshDone$ = new BehaviorSubject<string | null>(null);
@@ -96,6 +126,7 @@ function tryRefreshAndRetry(
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const auth = inject(AuthService);
+  const http = inject(HttpClient);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -114,10 +145,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           void router.navigate(['/login']);
         }
       } else if (error.status === 403) {
+        // Never redirect (or re-report) when the audit sink itself is forbidden.
+        const isAuditCall = req.url.includes('/frontend-audit');
         const isSilent =
           (req.method === 'GET' || req.method === 'HEAD') &&
           SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url));
-        if (!isSilent) {
+        if (isSilent) {
+          reportSilent403(http, req);
+        } else if (!isAuditCall) {
           void router.navigate(['/error/403']);
         }
       }

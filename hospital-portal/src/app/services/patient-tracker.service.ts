@@ -37,7 +37,7 @@ export interface PatientTrackerBoard {
 @Injectable({ providedIn: 'root' })
 export class PatientTrackerService {
   private readonly http = inject(HttpClient);
-  private readonly base = '/api/patient-tracker';
+  private readonly base = '/patient-tracker';
 
   getTrackerBoard(
     hospitalId: string,

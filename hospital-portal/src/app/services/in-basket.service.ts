@@ -43,7 +43,7 @@ export interface InBasketPage {
 @Injectable({ providedIn: 'root' })
 export class InBasketService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = '/api/in-basket';
+  private readonly baseUrl = '/in-basket';
 
   getItems(
     hospitalId?: string,
