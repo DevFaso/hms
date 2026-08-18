@@ -266,6 +266,19 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'Admit Patients',
       },
       {
+        icon: 'exit_to_app',
+        label: 'Discharge',
+        translationKey: 'NAV.DISCHARGE',
+        route: '/discharge',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'medication',
         label: 'Prescriptions',
         translationKey: 'NAV.PRESCRIPTIONS',

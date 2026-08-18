@@ -1,0 +1,1022 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'DISCHARGE.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'DISCHARGE.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (activeTab() === 'approvals' && canRequest) {
+        <button class="btn-primary" (click)="openRequest()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'DISCHARGE.REQUEST_DISCHARGE' | translate }}
+        </button>
+      }
+      @if (activeTab() === 'summaries' && canEditSummaries) {
+        <button class="btn-primary" (click)="openCreateSummary()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'DISCHARGE.NEW_SUMMARY' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'approvals'"
+        (click)="setTab('approvals')"
+      >
+        {{ 'DISCHARGE.APPROVALS_TAB' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'summaries'"
+        (click)="setTab('summaries')"
+      >
+        {{ 'DISCHARGE.SUMMARIES_TAB' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ Approvals tab ══ -->
+  @if (activeTab() === 'approvals') {
+    <div class="filter-bar">
+      <div class="tabs">
+        @for (f of approvalFilters; track f) {
+          <button
+            class="tab-btn"
+            [class.active]="approvalFilter() === f"
+            (click)="setApprovalFilter(f)"
+          >
+            {{ 'DISCHARGE.STATUS_' + f | translate }}
+          </button>
+        }
+      </div>
+    </div>
+
+    @if (approvalsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!approvalsLoading() && approvals().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">logout</span>
+        <h3>{{ 'DISCHARGE.NO_APPROVALS' | translate }}</h3>
+        <p>{{ 'DISCHARGE.NO_APPROVALS_HINT' | translate }}</p>
+      </div>
+    }
+    @if (!approvalsLoading() && approvals().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.REQUESTED_BY' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.REQUESTED_AT' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of approvals(); track a.id) {
+              <tr>
+                <td>{{ a.patientName }}</td>
+                <td>{{ a.nurseName }}</td>
+                <td>{{ a.requestedAt | date: 'short' }}</td>
+                <td class="truncate-cell">{{ a.nurseSummary || '—' }}</td>
+                <td>
+                  <span class="status-badge" [class]="statusClass(a.status)">
+                    {{ 'DISCHARGE.STATUS_' + a.status | translate }}
+                  </span>
+                </td>
+                <td class="actions-cell">
+                  @if (a.status === 'PENDING' && canDecide) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      (click)="openDecision(a, 'approve')"
+                      [title]="'DISCHARGE.APPROVE' | translate"
+                    >
+                      {{ 'DISCHARGE.APPROVE' | translate }}
+                    </button>
+                    <button
+                      class="btn-danger btn-sm"
+                      (click)="openDecision(a, 'reject')"
+                      [title]="'DISCHARGE.REJECT' | translate"
+                    >
+                      {{ 'DISCHARGE.REJECT' | translate }}
+                    </button>
+                  }
+                  @if (a.status === 'PENDING' && canRequest) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      (click)="openCancel(a)"
+                      [title]="'COMMON.CANCEL' | translate"
+                    >
+                      {{ 'COMMON.CANCEL' | translate }}
+                    </button>
+                  }
+                  @if (a.status === 'REJECTED' && a.rejectionReason) {
+                    <span class="muted" [title]="a.rejectionReason">
+                      {{ 'DISCHARGE.SEE_REASON' | translate }}
+                    </span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Summaries tab ══ -->
+  @if (activeTab() === 'summaries') {
+    <div class="filter-bar">
+      <div class="tabs">
+        <button
+          class="tab-btn"
+          [class.active]="summaryFilter() === 'unfinalized'"
+          (click)="setSummaryFilter('unfinalized')"
+        >
+          {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="summaryFilter() === 'pending-results'"
+          (click)="setSummaryFilter('pending-results')"
+        >
+          {{ 'DISCHARGE.FILTER_PENDING_RESULTS' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="summaryFilter() === 'range'"
+          (click)="setSummaryFilter('range')"
+        >
+          {{ 'DISCHARGE.FILTER_BY_DATE' | translate }}
+        </button>
+      </div>
+      @if (summaryFilter() === 'range') {
+        <div class="range-picker">
+          <input
+            type="date"
+            [(ngModel)]="rangeStart"
+            [attr.aria-label]="'DISCHARGE.START_DATE' | translate"
+          />
+          <span>—</span>
+          <input
+            type="date"
+            [(ngModel)]="rangeEnd"
+            [attr.aria-label]="'DISCHARGE.END_DATE' | translate"
+          />
+          <button class="btn-secondary btn-sm" (click)="loadSummaries()">
+            {{ 'COMMON.APPLY' | translate }}
+          </button>
+        </div>
+      }
+    </div>
+
+    @if (summariesLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!summariesLoading() && summaries().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">summarize</span>
+        <h3>{{ 'DISCHARGE.NO_SUMMARIES' | translate }}</h3>
+        <p>{{ 'DISCHARGE.NO_SUMMARIES_HINT' | translate }}</p>
+      </div>
+    }
+    @if (!summariesLoading() && summaries().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'DISCHARGE.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.DISPOSITION' | translate }}</th>
+              <th scope="col">{{ 'DISCHARGE.PROVIDER' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (s of summaries(); track s.id) {
+              <tr>
+                <td>{{ s.patientName }}</td>
+                <td>{{ s.dischargeDate | date: 'mediumDate' }}</td>
+                <td>{{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}</td>
+                <td>{{ s.dischargingProviderName }}</td>
+                <td>
+                  <span class="finalized-badge" [class.draft]="!s.isFinalized">
+                    {{ (s.isFinalized ? 'DISCHARGE.FINALIZED' : 'DISCHARGE.DRAFT') | translate }}
+                  </span>
+                </td>
+                <td class="actions-cell">
+                  <button
+                    class="btn-secondary btn-sm"
+                    (click)="openView(s)"
+                    [title]="'COMMON.VIEW' | translate"
+                  >
+                    {{ 'COMMON.VIEW' | translate }}
+                  </button>
+                  @if (!s.isFinalized && canEditSummaries) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      (click)="openEditSummary(s)"
+                      [title]="'COMMON.EDIT' | translate"
+                    >
+                      {{ 'COMMON.EDIT' | translate }}
+                    </button>
+                    <button
+                      class="btn-primary btn-sm"
+                      (click)="openFinalize(s)"
+                      [title]="'DISCHARGE.FINALIZE' | translate"
+                    >
+                      {{ 'DISCHARGE.FINALIZE' | translate }}
+                    </button>
+                    <button
+                      class="btn-danger btn-sm"
+                      (click)="openDelete(s)"
+                      [title]="'COMMON.DELETE' | translate"
+                    >
+                      {{ 'COMMON.DELETE' | translate }}
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>
+
+<!-- ══ Decision modal (approve / reject) ══ -->
+@if (showDecisionModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDecision()"
+    (keydown.escape)="closeDecision()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE_TITLE' : 'DISCHARGE.REJECT_TITLE')
+              | translate
+          }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeDecision()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ decisionTarget()?.patientName }}</strong>
+          — {{ decisionTarget()?.nurseSummary || ('DISCHARGE.NO_NURSE_SUMMARY' | translate) }}
+        </p>
+        <div class="field">
+          <label for="decision-note">
+            {{
+              (decisionMode() === 'approve'
+                ? 'DISCHARGE.DOCTOR_NOTE'
+                : 'DISCHARGE.REJECTION_REASON'
+              ) | translate
+            }}
+            @if (decisionMode() === 'reject') {
+              <span>*</span>
+            }
+          </label>
+          <textarea id="decision-note" rows="4" [(ngModel)]="decisionNote"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeDecision()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          [class]="decisionMode() === 'approve' ? 'btn-primary' : 'btn-danger'"
+          [disabled]="decisionSubmitting()"
+          (click)="submitDecision()"
+        >
+          {{
+            (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE' : 'DISCHARGE.REJECT') | translate
+          }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Cancel modal ══ -->
+@if (showCancelModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeCancel()"
+    (keydown.escape)="closeCancel()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeCancel()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ cancelTarget()?.patientName }}</strong>
+        </p>
+        <div class="field">
+          <label for="cancel-reason">{{ 'DISCHARGE.CANCEL_REASON' | translate }}</label>
+          <textarea id="cancel-reason" rows="3" [(ngModel)]="cancelReason"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeCancel()">
+          {{ 'COMMON.BACK' | translate }}
+        </button>
+        <button class="btn-danger" [disabled]="cancelSubmitting()" (click)="submitCancel()">
+          {{ 'DISCHARGE.CONFIRM_CANCEL' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Request discharge modal ══ -->
+@if (showRequestModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeRequest()"
+    (keydown.escape)="closeRequest()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeRequest()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="request-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
+          @if (selectedPatient()) {
+            <div class="picker-chip">
+              <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+              <div class="chip-info">
+                <span class="chip-name"
+                  >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                >
+                <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+              </div>
+              <button
+                type="button"
+                class="chip-clear"
+                (click)="clearPatient()"
+                [title]="'COMMON.CHANGE_PATIENT' | translate"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          } @else {
+            <div class="patient-picker-wrap">
+              <span class="material-symbols-outlined picker-search-icon">person_search</span>
+              <input
+                id="request-patient"
+                class="picker-input"
+                type="text"
+                [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
+                [value]="patientQuery()"
+                (input)="onPatientQueryChange($any($event.target).value)"
+                (blur)="patientDropdownOpen.set(false)"
+                autocomplete="off"
+              />
+              @if (patientDropdownOpen()) {
+                <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
+                  @for (p of patientSuggestions(); track p.id) {
+                    <div
+                      class="picker-option"
+                      role="option"
+                      [attr.aria-selected]="selectedPatient()?.id === p.id"
+                      (mousedown)="selectPatient(p)"
+                    >
+                      <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                      <div class="opt-info">
+                        <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                        <span class="opt-meta">{{ p.email }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="field">
+          <label for="request-summary">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</label>
+          <textarea id="request-summary" rows="4" [(ngModel)]="requestSummaryText"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeRequest()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="!selectedPatient() || requestSubmitting()"
+          (click)="submitRequest()"
+        >
+          {{ 'DISCHARGE.SUBMIT_REQUEST' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Summary create/edit modal ══ -->
+@if (showSummaryModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeSummaryModal()"
+    (keydown.escape)="closeSummaryModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingSummaryId() ? 'DISCHARGE.EDIT_SUMMARY' : 'DISCHARGE.NEW_SUMMARY') | translate
+          }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeSummaryModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editingSummaryId()) {
+          <div class="field">
+            <label for="summary-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                <div class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  [title]="'COMMON.CHANGE_PATIENT' | translate"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            } @else {
+              <div class="patient-picker-wrap">
+                <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                <input
+                  id="summary-patient"
+                  class="picker-input"
+                  type="text"
+                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  autocomplete="off"
+                />
+                @if (patientDropdownOpen()) {
+                  <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <div
+                        class="picker-option"
+                        role="option"
+                        [attr.aria-selected]="selectedPatient()?.id === p.id"
+                        (mousedown)="selectPatient(p)"
+                      >
+                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                        <div class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta">{{ p.email }}</span>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </div>
+          <div class="field">
+            <label for="summary-encounter">{{ 'DISCHARGE.ENCOUNTER' | translate }} *</label>
+            <select id="summary-encounter" [(ngModel)]="summaryForm.encounterId">
+              <option value="">{{ 'DISCHARGE.SELECT_ENCOUNTER' | translate }}</option>
+              @for (e of patientEncounters(); track e.id) {
+                <option [value]="e.id">{{ encounterLabel(e) }}</option>
+              }
+            </select>
+          </div>
+        }
+        <div class="form-row">
+          <div class="field">
+            <label for="summary-date">{{ 'DISCHARGE.DISCHARGE_DATE' | translate }} *</label>
+            <input id="summary-date" type="date" [(ngModel)]="summaryForm.dischargeDate" />
+          </div>
+          <div class="field">
+            <label for="summary-disposition">{{ 'DISCHARGE.DISPOSITION' | translate }} *</label>
+            <select id="summary-disposition" [(ngModel)]="summaryForm.disposition">
+              @for (d of dispositions; track d) {
+                <option [value]="d">{{ 'DISCHARGE.DISPOSITION_' + d | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="summary-diagnosis">{{ 'DISCHARGE.DIAGNOSIS' | translate }} *</label>
+          <textarea
+            id="summary-diagnosis"
+            rows="2"
+            [(ngModel)]="summaryForm.dischargeDiagnosis"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="summary-course">{{ 'DISCHARGE.HOSPITAL_COURSE' | translate }}</label>
+          <textarea
+            id="summary-course"
+            rows="3"
+            [(ngModel)]="summaryForm.hospitalCourse"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="summary-condition">{{ 'DISCHARGE.CONDITION' | translate }}</label>
+            <input
+              id="summary-condition"
+              type="text"
+              [(ngModel)]="summaryForm.dischargeCondition"
+            />
+          </div>
+          <div class="field">
+            <label for="summary-activity">{{
+              'DISCHARGE.ACTIVITY_RESTRICTIONS' | translate
+            }}</label>
+            <input
+              id="summary-activity"
+              type="text"
+              [(ngModel)]="summaryForm.activityRestrictions"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="summary-diet">{{ 'DISCHARGE.DIET' | translate }}</label>
+            <input id="summary-diet" type="text" [(ngModel)]="summaryForm.dietInstructions" />
+          </div>
+          <div class="field">
+            <label for="summary-wound">{{ 'DISCHARGE.WOUND_CARE' | translate }}</label>
+            <input id="summary-wound" type="text" [(ngModel)]="summaryForm.woundCareInstructions" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="summary-followup">{{ 'DISCHARGE.FOLLOW_UP_INSTRUCTIONS' | translate }}</label>
+          <textarea
+            id="summary-followup"
+            rows="2"
+            [(ngModel)]="summaryForm.followUpInstructions"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="summary-warning">{{ 'DISCHARGE.WARNING_SIGNS' | translate }}</label>
+            <input id="summary-warning" type="text" [(ngModel)]="summaryForm.warningSigns" />
+          </div>
+          <div class="field">
+            <label for="summary-education">{{ 'DISCHARGE.EDUCATION' | translate }}</label>
+            <input
+              id="summary-education"
+              type="text"
+              [(ngModel)]="summaryForm.patientEducationProvided"
+            />
+          </div>
+        </div>
+
+        <div class="section-heading">
+          {{ 'DISCHARGE.MEDICATIONS' | translate }}
+          <button type="button" class="btn-add-row" (click)="addMedication()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'DISCHARGE.ADD_MEDICATION' | translate }}
+          </button>
+        </div>
+        <div class="dynamic-rows">
+          @for (m of summaryForm.medicationReconciliation; track $index) {
+            <div class="dynamic-row">
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.MED_NAME' | translate"
+                [(ngModel)]="m.medicationName"
+              />
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.MED_DOSAGE' | translate"
+                [(ngModel)]="m.dosage"
+              />
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.MED_FREQUENCY' | translate"
+                [(ngModel)]="m.frequency"
+              />
+              <select
+                [(ngModel)]="m.reconciliationAction"
+                [attr.aria-label]="'DISCHARGE.MED_ACTION' | translate"
+              >
+                @for (act of medActions; track act) {
+                  <option [value]="act">{{ 'DISCHARGE.MED_ACTION_' + act | translate }}</option>
+                }
+              </select>
+              <label class="row-check">
+                <input type="checkbox" [(ngModel)]="m.continueAtDischarge" />
+                {{ 'DISCHARGE.CONTINUE_AT_DISCHARGE' | translate }}
+              </label>
+              <button
+                type="button"
+                class="btn-icon-danger"
+                (click)="removeMedication($index)"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="section-heading">
+          {{ 'DISCHARGE.PENDING_TESTS' | translate }}
+          <button type="button" class="btn-add-row" (click)="addPendingTest()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'DISCHARGE.ADD_PENDING_TEST' | translate }}
+          </button>
+        </div>
+        <div class="dynamic-rows">
+          @for (t of summaryForm.pendingTestResults; track $index) {
+            <div class="dynamic-row">
+              <select
+                [(ngModel)]="t.testType"
+                [attr.aria-label]="'DISCHARGE.TEST_TYPE' | translate"
+              >
+                <option value="LAB">LAB</option>
+                <option value="IMAGING">IMAGING</option>
+                <option value="PATHOLOGY">PATHOLOGY</option>
+                <option value="CULTURE">CULTURE</option>
+              </select>
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.TEST_NAME' | translate"
+                [(ngModel)]="t.testName"
+              />
+              <input
+                type="date"
+                [(ngModel)]="t.expectedResultDate"
+                [attr.aria-label]="'DISCHARGE.EXPECTED_DATE' | translate"
+              />
+              <label class="row-check">
+                <input type="checkbox" [(ngModel)]="t.isCritical" />
+                {{ 'DISCHARGE.CRITICAL' | translate }}
+              </label>
+              <button
+                type="button"
+                class="btn-icon-danger"
+                (click)="removePendingTest($index)"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="section-heading">
+          {{ 'DISCHARGE.FOLLOW_UPS' | translate }}
+          <button type="button" class="btn-add-row" (click)="addFollowUp()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'DISCHARGE.ADD_FOLLOW_UP' | translate }}
+          </button>
+        </div>
+        <div class="dynamic-rows">
+          @for (f of summaryForm.followUpAppointments; track $index) {
+            <div class="dynamic-row">
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.FOLLOW_UP_TYPE' | translate"
+                [(ngModel)]="f.appointmentType"
+              />
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.PROVIDER' | translate"
+                [(ngModel)]="f.providerName"
+              />
+              <input
+                type="date"
+                [(ngModel)]="f.appointmentDate"
+                [attr.aria-label]="'DISCHARGE.FOLLOW_UP_DATE' | translate"
+              />
+              <input
+                type="text"
+                [placeholder]="'DISCHARGE.LOCATION' | translate"
+                [(ngModel)]="f.location"
+              />
+              <button
+                type="button"
+                class="btn-icon-danger"
+                (click)="removeFollowUp($index)"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="field">
+          <label for="summary-notes">{{ 'DISCHARGE.ADDITIONAL_NOTES' | translate }}</label>
+          <textarea
+            id="summary-notes"
+            rows="2"
+            [(ngModel)]="summaryForm.additionalNotes"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeSummaryModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="summarySaving()" (click)="submitSummary()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ View summary modal ══ -->
+@if (showViewModal() && viewedSummary(); as s) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeView()" (keydown.escape)="closeView()">
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeView()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="view-section">
+          <h4>{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</h4>
+          <p>
+            {{ s.dischargeDate | date: 'mediumDate' }} —
+            {{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}
+            @if (s.isFinalized) {
+              <span class="finalized-badge">{{ 'DISCHARGE.FINALIZED' | translate }}</span>
+            } @else {
+              <span class="finalized-badge draft">{{ 'DISCHARGE.DRAFT' | translate }}</span>
+            }
+          </p>
+        </div>
+        <div class="view-section">
+          <h4>{{ 'DISCHARGE.DIAGNOSIS' | translate }}</h4>
+          <p>{{ s.dischargeDiagnosis }}</p>
+        </div>
+        @if (s.hospitalCourse) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.HOSPITAL_COURSE' | translate }}</h4>
+            <p>{{ s.hospitalCourse }}</p>
+          </div>
+        }
+        @if (s.followUpInstructions) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.FOLLOW_UP_INSTRUCTIONS' | translate }}</h4>
+            <p>{{ s.followUpInstructions }}</p>
+          </div>
+        }
+        @if (s.warningSigns) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.WARNING_SIGNS' | translate }}</h4>
+            <p>{{ s.warningSigns }}</p>
+          </div>
+        }
+        @if (s.medicationReconciliation?.length) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.MEDICATIONS' | translate }}</h4>
+            <ul>
+              @for (m of s.medicationReconciliation; track $index) {
+                <li>
+                  {{ m.medicationName }} {{ m.dosage }} {{ m.frequency }} —
+                  {{ 'DISCHARGE.MED_ACTION_' + m.reconciliationAction | translate }}
+                </li>
+              }
+            </ul>
+          </div>
+        }
+        @if (s.pendingTestResults?.length) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.PENDING_TESTS' | translate }}</h4>
+            <ul>
+              @for (t of s.pendingTestResults; track $index) {
+                <li>
+                  {{ t.testType }}: {{ t.testName }}
+                  @if (t.expectedResultDate) {
+                    ({{ t.expectedResultDate | date: 'mediumDate' }})
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+        @if (s.followUpAppointments?.length) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.FOLLOW_UPS' | translate }}</h4>
+            <ul>
+              @for (f of s.followUpAppointments; track $index) {
+                <li>
+                  {{ f.appointmentType }} — {{ f.providerName }}
+                  @if (f.appointmentDate) {
+                    ({{ f.appointmentDate | date: 'mediumDate' }})
+                  }
+                </li>
+              }
+            </ul>
+          </div>
+        }
+        @if (s.providerSignature) {
+          <div class="view-section">
+            <h4>{{ 'DISCHARGE.SIGNED_BY' | translate }}</h4>
+            <p>{{ s.providerSignature }} — {{ s.finalizedAt | date: 'short' }}</p>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeView()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Finalize modal ══ -->
+@if (showFinalizeModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeFinalize()"
+    (keydown.escape)="closeFinalize()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeFinalize()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>{{ 'DISCHARGE.FINALIZE_WARNING' | translate }}</p>
+        <div class="field">
+          <label for="finalize-signature">{{ 'DISCHARGE.SIGNATURE' | translate }} *</label>
+          <input
+            id="finalize-signature"
+            type="text"
+            [placeholder]="'DISCHARGE.SIGNATURE_PLACEHOLDER' | translate"
+            [(ngModel)]="finalizeSignature"
+          />
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeFinalize()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="finalizeSubmitting()" (click)="submitFinalize()">
+          {{ 'DISCHARGE.FINALIZE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Delete summary confirm ══ -->
+@if (showDeleteModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDelete()"
+    (keydown.escape)="closeDelete()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ 'DISCHARGE.DELETE_CONFIRM' | translate }}
+          <strong>{{ deleteTarget()?.patientName }}</strong>
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-danger" [disabled]="deleteSubmitting()" (click)="submitDelete()">
+          {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
