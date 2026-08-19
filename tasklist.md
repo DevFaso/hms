@@ -87,7 +87,7 @@
 
 - [ ] 12. Maternity module v1: maternal history (+ high-risk board, risk calc, mark-reviewed) and OB/GYN referrals with messaging
 - [ ] 13. Maternity module v2: ultrasound orders/reports/templates, birth plans, prenatal scheduling, postpartum + newborn assessments
-- [ ] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming)
+- [x] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming) — ✅ DONE (History tab: versioned social summary+form, family worklists w/ genetic/screening filters, immunizations w/ client-computed overdue + mark-reminder-sent; roles mirror backend reads exactly)
 - [ ] 15. Pharmacy: medication-history timeline + pharmacy-fill recording (PHARMACIST workspace)
 - [ ] 16. Procedure orders page (order → consent-pending → scheduled → cancel)
 - [ ] 17. Insurance management + multi-hospital registration UI (reception + patient detail)
