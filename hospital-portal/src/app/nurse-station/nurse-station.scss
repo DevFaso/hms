@@ -16,7 +16,7 @@
 
 .last-refreshed {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .refresh-btn {
@@ -69,7 +69,7 @@
 
 .summary-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -80,8 +80,8 @@
   gap: 1rem;
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.25rem;
+  border-radius: 8px;
+  padding: 1rem;
   &.overdue {
     border-color: #fca5a5;
     background: #fef2f2;
@@ -132,19 +132,21 @@
 
 .station-layout {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 1.5rem;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 1.25rem;
 }
 
 .section-tabs {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
 .tab-btn {
-  padding: 0.5rem 1.25rem;
-  border-radius: 20px;
+  min-height: 44px;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
   border: 1px solid #d1d5db;
   background: #fff;
   color: #374151;
@@ -165,7 +167,7 @@
 
 .data-table {
   background: #fff;
-  border-radius: 12px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
   overflow-x: auto;
   table {
@@ -417,7 +419,7 @@
 }
 .handoff-time {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 /* ── Announcements Sidebar ────────────────────────────────── */
@@ -425,8 +427,8 @@
 .announcements-sidebar {
   background: #fff;
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.25rem;
+  border-radius: 8px;
+  padding: 1rem;
   height: fit-content;
   h3 {
     display: flex;
@@ -440,13 +442,15 @@
 }
 .no-announcements {
   font-size: 0.85rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 .announcement-card {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #f3f4f6;
+  padding: 0.75rem;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
   &:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
   }
   p {
     font-size: 0.85rem;
@@ -466,7 +470,7 @@
 }
 .announcement-time {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 /* ── Hold/Refuse Reason Modal ─────────────────────────────── */
@@ -559,9 +563,14 @@
     grid-template-columns: 1fr;
   }
 }
+@media (max-width: 1200px) {
+  .summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 @media (max-width: 768px) {
   .summary-cards {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   .section-tabs {
     flex-wrap: wrap;
@@ -773,7 +782,7 @@
   }
 
   .flow-card-wait {
-    color: #9ca3af;
+    color: #6b7280;
     font-size: 0.72rem;
     margin-top: 0.25rem;
   }
@@ -871,7 +880,7 @@
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
   }
 }
@@ -1090,7 +1099,7 @@
 
 .inbox-time {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .badge-count {

@@ -55,6 +55,61 @@ const MOCK_CLINICAL_DASHBOARD = {
   quickActions: [],
 };
 
+/**
+ * Minimal mock for /api/patient-tracker so the kanban board renders with
+ * at least two cards in a column. The empty `EMPTY_PAGE` catch-all kept
+ * `board()` null, which meant `<div class="tracker-board">` never
+ * rendered and any test waiting on it timed out. Two cards in `triage`
+ * is the smallest fixture that exercises arrow-key roving without
+ * tripping the axe scan (the cards use only text + a button — no
+ * forbidden grey foregrounds, no missing labels).
+ */
+const MOCK_TRACKER_BOARD = {
+  data: {
+    arrived: [],
+    triage: [
+      {
+        patientId: 't-1',
+        patientName: 'Test Patient One',
+        mrn: 'MRN-001',
+        appointmentId: null,
+        encounterId: 'enc-1',
+        currentStatus: 'TRIAGE',
+        roomAssignment: 'A1',
+        assignedProvider: 'Dr Test',
+        departmentName: 'ED',
+        arrivalTimestamp: null,
+        triageTimestamp: null,
+        currentWaitMinutes: 5,
+        acuityLevel: '3',
+        preCheckedIn: false,
+      },
+      {
+        patientId: 't-2',
+        patientName: 'Test Patient Two',
+        mrn: 'MRN-002',
+        appointmentId: null,
+        encounterId: 'enc-2',
+        currentStatus: 'TRIAGE',
+        roomAssignment: 'A2',
+        assignedProvider: 'Dr Test',
+        departmentName: 'ED',
+        arrivalTimestamp: null,
+        triageTimestamp: null,
+        currentWaitMinutes: 10,
+        acuityLevel: '3',
+        preCheckedIn: false,
+      },
+    ],
+    waitingForPhysician: [],
+    inProgress: [],
+    awaitingResults: [],
+    readyForDischarge: [],
+    totalPatients: 2,
+    averageWaitMinutes: 7,
+  },
+};
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Fulfil a Playwright route with a JSON 200 response. */
@@ -124,6 +179,13 @@ async function registerApiMocks(page: Page): Promise<void> {
   await page.route('**/me/critical-alerts**', (r) => jsonOk(r, { data: [] }));
   await page.route('**/me/clinical-dashboard**', (r) => jsonOk(r, MOCK_CLINICAL_DASHBOARD));
   await page.route('**/super-admin/summary**', (r) => jsonOk(r, MOCK_ADMIN_SUMMARY));
+
+  // Patient-tracker board — registered after the catch-all so this
+  // wins via Playwright's LIFO route matching. Without this the
+  // catch-all returns EMPTY_PAGE, the board() signal stays null,
+  // <div class="tracker-board"> never renders, and any test waiting
+  // on it times out (row 11 finish PR added the first such test).
+  await page.route('**/api/patient-tracker**', (r) => jsonOk(r, MOCK_TRACKER_BOARD));
 }
 
 // ─── Fixture types ────────────────────────────────────────────────────────────

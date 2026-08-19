@@ -53,6 +53,9 @@ sonar {
             '**/utility/**',
             '**/specification/**',
             '**/patient/**',
+            '**/fhir/**',
+            '**/hl7/mllp/**',
+            '**/cdshooks/**',
             '**/HmsApplication.java',
             // Infrastructure / integration classes
             '**/EmailServiceImpl.java',
@@ -168,8 +171,25 @@ subprojects {
         useJUnitPlatform()
         systemProperty 'spring.profiles.active', 'test'
 
-        // Prevent OOM on CI runners with limited default heap
-        maxHeapSize = '1024m'
+        // Prevent OOM on CI runners with limited default heap.
+        //
+        // Bumped 1024m -> 2048m (2026-05-17) because the post-#349/#350/
+        // #351/#352 develop snapshot started OOM-ing during
+        // entityManagerFactory bootstrap in the full :hospital-core:test
+        // run on the GitHub Actions ubuntu-latest runner. Root cause: ~16
+        // new @SpringBootTest IT classes (FHIR Encounter+Observation
+        // write, $export, $everything, EMPI probabilistic, DICOM proxy,
+        // chargeback) pushed the resident-context working set past the
+        // 1 GB ceiling. Once the first ApplicationContext load OOMs,
+        // Spring's context cache marks the config as poisoned and every
+        // subsequent test that needs it fails with "ApplicationContext
+        // failure threshold (1) exceeded" — cascading into 39 reported
+        // failures from a single root cause.
+        //
+        // 2 GB is the comfortable margin (Spring Boot test-default
+        // territory). GitHub-hosted ubuntu-latest has 7 GB total so
+        // there's room to grow if entity count keeps climbing.
+        maxHeapSize = '2048m'
         jvmArgs '-XX:+UseG1GC'
 
         // Restart test JVM every 250 classes to prevent metaspace/heap accumulation
@@ -246,6 +266,9 @@ subprojects {
                     '**/utility/**',
                     '**/specification/**',
                     '**/patient/**',
+                    '**/fhir/**',
+                    '**/hl7/mllp/**',
+                    '**/cdshooks/**',
                     '**/HmsApplication*',
                     // Infrastructure / integration classes
                     '**/EmailServiceImpl*',

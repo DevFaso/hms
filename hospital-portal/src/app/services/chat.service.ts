@@ -2,6 +2,20 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+export type ChatAttachmentKind = 'PHOTO' | 'AUDIO';
+
+export interface ChatAttachment {
+  id?: string;
+  storageKey: string;
+  publicUrl?: string;
+  displayName?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  sha256?: string;
+  kind: ChatAttachmentKind;
+  durationSeconds?: number | null;
+}
+
 export interface ChatMessage {
   id: string;
   senderId: string;
@@ -11,6 +25,7 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   read: boolean;
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatConversation {
@@ -23,9 +38,9 @@ export interface ChatConversation {
 }
 
 export interface ChatSendRequest {
-  senderId: string;
   recipientId: string;
   content: string;
+  attachments?: ChatAttachment[];
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,5 +63,24 @@ export class ChatService {
 
   markRead(senderId: string, recipientId: string): Observable<void> {
     return this.http.put<void>(`/chat/mark-read/${senderId}/${recipientId}`, {});
+  }
+
+  /**
+   * Upload a single chat attachment (telehealth low-bandwidth).
+   * Returns the storage descriptor; the caller links it on the next sendMessage().
+   */
+  uploadChatAttachment(
+    file: Blob,
+    kind: ChatAttachmentKind,
+    fileName: string,
+    durationSeconds?: number,
+  ): Observable<ChatAttachment> {
+    const form = new FormData();
+    form.append('file', file, fileName);
+    form.append('kind', kind);
+    if (kind === 'AUDIO' && durationSeconds != null) {
+      form.append('durationSeconds', String(Math.round(durationSeconds)));
+    }
+    return this.http.post<ChatAttachment>('/files/chat-attachments', form);
   }
 }

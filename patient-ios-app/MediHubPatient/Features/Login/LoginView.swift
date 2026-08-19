@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct LoginView: View {
     @StateObject private var vm = LoginViewModel()
@@ -73,6 +74,33 @@ struct LoginView: View {
                             .padding(14)
                             .background(Color.orange.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+
+                        // SSO (Keycloak) button — flag-gated (KC-3). Hidden
+                        // until `FeatureFlags.keycloakSsoEnabled` is true.
+                        if vm.ssoEnabled {
+                            Button(action: {
+                                if let presenter = Self.topViewController() {
+                                    vm.loginWithSSO(presenter: presenter)
+                                }
+                            }) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "key.fill")
+                                        .font(.title3)
+                                    Text("sso_sign_in".localized)
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.white.opacity(0.9))
+                                .foregroundStyle(Color("BrandDarkBlue"))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(Color("BrandBlue"), lineWidth: 1)
+                                )
+                            }
+                            .disabled(vm.isLoading)
                         }
 
                         // Biometric button
@@ -202,6 +230,24 @@ struct LoginView: View {
             }
         }
         .onTapGesture { focusedField = nil }
+    }
+
+    /// Returns the currently presented top `UIViewController` for AppAuth to
+    /// anchor the `SFSafariViewController` / `ASWebAuthenticationSession` flow
+    /// on (KC-3).
+    static func topViewController(
+        base: UIViewController? = {
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first(where: { $0.isKeyWindow })?
+                .rootViewController
+        }()
+    ) -> UIViewController? {
+        if let nav = base as? UINavigationController { return topViewController(base: nav.visibleViewController) }
+        if let tab = base as? UITabBarController { return topViewController(base: tab.selectedViewController) }
+        if let presented = base?.presentedViewController { return topViewController(base: presented) }
+        return base
     }
 }
 

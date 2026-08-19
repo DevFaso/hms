@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,8 @@ class FeatureFlagServiceImplTest {
     private FeatureFlagProperties properties;
     private MockEnvironment environment;
     private FeatureFlagOverrideRepository overrideRepository;
+    private SubscriptionFeatureGateService subscriptionFeatureGate;
+    private AuditEventLogService auditEventLogService;
     private FeatureFlagServiceImpl service;
 
     @BeforeEach
@@ -35,7 +38,14 @@ class FeatureFlagServiceImplTest {
         environment = new MockEnvironment();
         overrideRepository = mock(FeatureFlagOverrideRepository.class);
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
-        service = new FeatureFlagServiceImpl(properties, environment, overrideRepository);
+        subscriptionFeatureGate = mock(SubscriptionFeatureGateService.class);
+        // Default-permissive MVP-6b gate keeps the legacy assertions green.
+        when(subscriptionFeatureGate.isFeatureAllowedForOrg(
+            org.mockito.ArgumentMatchers.any(UUID.class), org.mockito.ArgumentMatchers.anyString()))
+            .thenReturn(true);
+        auditEventLogService = mock(AuditEventLogService.class);
+        service = new FeatureFlagServiceImpl(
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
     }
 
     @Test
@@ -86,7 +96,7 @@ class FeatureFlagServiceImplTest {
     @Test
     void upsertOverrideTrimsKeyAndSanitizesDescription() {
         AtomicReference<FeatureFlagOverride> saved = new AtomicReference<>();
-        when(overrideRepository.findByFlagKeyIgnoreCase("new-feature"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("new-feature", null))
             .thenReturn(Optional.empty());
         when(overrideRepository.save(any())).thenAnswer(invocation -> {
             FeatureFlagOverride entity = invocation.getArgument(0);
@@ -125,7 +135,9 @@ class FeatureFlagServiceImplTest {
             .description("Old")
             .build();
 
-        when(overrideRepository.findByFlagKeyIgnoreCase("existing-flag"))
+        // MVP-7b — impl now resolves via the org-scoped finder
+        // (organizationId null = the legacy global row).
+        when(overrideRepository.findByFlagKeyAndOrganizationId("existing-flag", null))
             .thenReturn(Optional.of(existing));
         when(overrideRepository.save(existing)).thenReturn(existing);
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(existing));
@@ -166,7 +178,7 @@ class FeatureFlagServiceImplTest {
             .enabled(true)
             .build();
 
-        when(overrideRepository.findByFlagKeyIgnoreCase("beta-feature"))
+        when(overrideRepository.findByFlagKeyAndOrganizationId("beta-feature", null))
             .thenReturn(Optional.of(existing));
         when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of());
 

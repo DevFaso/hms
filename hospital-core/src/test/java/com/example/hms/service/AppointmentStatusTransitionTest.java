@@ -55,6 +55,7 @@ class AppointmentStatusTransitionTest {
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EmailService emailService;
+    @Mock private com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @InjectMocks
     private AppointmentServiceImpl appointmentService;

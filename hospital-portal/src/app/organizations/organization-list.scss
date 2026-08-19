@@ -4,6 +4,23 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  text-decoration: none;
+  color: inherit;
+
+  &:hover .org-name {
+    color: #2563eb;
+  }
+}
+
+.lifecycle-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .org-icon {
@@ -194,7 +211,7 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
   }
   textarea {

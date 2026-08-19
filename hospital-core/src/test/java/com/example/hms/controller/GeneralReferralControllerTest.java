@@ -6,7 +6,13 @@ import com.example.hms.enums.ReferralType;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
+import com.example.hms.enums.ReferralEventType;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralExpiryService;
+import com.example.hms.utility.RoleValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -58,9 +65,15 @@ class GeneralReferralControllerTest {
     @Autowired
     private GeneralReferralService referralService;
 
+    @Autowired
+    private ReferralExpiryService referralExpiryService;
+
+    @Autowired
+    private RoleValidator roleValidator;
+
     @AfterEach
     void resetMocks() {
-        Mockito.reset(referralService);
+        Mockito.reset(referralService, referralExpiryService, roleValidator);
     }
 
     @Test
@@ -122,6 +135,122 @@ class GeneralReferralControllerTest {
 
     @Test
     @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_returnsScheduledStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .appointmentTime(LocalDateTime.now().plusDays(3))
+            .location("Clinic 4 — Room 12")
+            .build();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.SCHEDULED);
+        response.setScheduledAppointmentAt(request.getAppointmentTime());
+        response.setAppointmentLocation(request.getLocation());
+
+        when(referralService.scheduleReferral(Mockito.eq(referralId), any(ScheduleReferralRequestDTO.class)))
+            .thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.SCHEDULED.name()))
+            .andExpect(jsonPath("$.appointmentLocation").value("Clinic 4 — Room 12"));
+
+        verify(referralService).scheduleReferral(Mockito.eq(referralId), any(ScheduleReferralRequestDTO.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_missingAppointmentTime_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .location("only location")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void scheduleReferral_pastAppointmentTime_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ScheduleReferralRequestDTO request = ScheduleReferralRequestDTO.builder()
+            .appointmentTime(LocalDateTime.now().minusDays(1))
+            .location("Clinic 4")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/schedule", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void startReferral_returnsInProgressStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.IN_PROGRESS);
+        response.setStartedAt(LocalDateTime.now());
+
+        when(referralService.startReferral(referralId)).thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/start", referralId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.IN_PROGRESS.name()));
+
+        verify(referralService).startReferral(referralId);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void rejectReferral_returnsRejectedStatus() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        RejectReferralRequestDTO request = RejectReferralRequestDTO.builder()
+            .reason("Out of scope for our service")
+            .build();
+        GeneralReferralResponseDTO response = buildResponse(referralId);
+        response.setStatus(ReferralStatus.REJECTED);
+        response.setCancellationReason(request.getReason());
+
+        when(referralService.rejectReferral(Mockito.eq(referralId), any(RejectReferralRequestDTO.class)))
+            .thenReturn(response);
+
+        mockMvc.perform(post("/referrals/{id}/reject", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(ReferralStatus.REJECTED.name()))
+            .andExpect(jsonPath("$.cancellationReason").value(request.getReason()));
+
+        verify(referralService).rejectReferral(Mockito.eq(referralId), any(RejectReferralRequestDTO.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    void rejectReferral_blankReason_returns400() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        RejectReferralRequestDTO request = RejectReferralRequestDTO.builder()
+            .reason("   ")
+            .build();
+
+        mockMvc.perform(post("/referrals/{id}/reject", referralId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andExpect(status().isBadRequest());
+
+        Mockito.verifyNoInteractions(referralService);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
     void cancelReferral_returns204() throws Exception {
         UUID referralId = UUID.randomUUID();
 
@@ -165,6 +294,127 @@ class GeneralReferralControllerTest {
         verify(referralService).getOverdueReferrals();
     }
 
+    @SuppressWarnings("java:S1075")
+    private static final String EXPIRE_OVERDUE_PATH = "/referrals/admin/expire-overdue";
+    private static final String GRACE_HOURS_PARAM = "graceHours";
+    private static final String EXPIRED_FIELD = "$.expired";
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_DOCTOR"})
+    @DisplayName("GET /{id}/events returns the chronological audit trail")
+    void getReferralEventsReturnsTimeline() throws Exception {
+        UUID referralId = UUID.randomUUID();
+        ReferralEventResponseDTO submit = ReferralEventResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(ReferralEventType.SUBMIT)
+            .toStatus(ReferralStatus.SUBMITTED)
+            .actorUsername("dr.amy")
+            .actorLabel("USER")
+            .recordedAt(LocalDateTime.now())
+            .build();
+        ReferralEventResponseDTO expire = ReferralEventResponseDTO.builder()
+            .id(UUID.randomUUID())
+            .referralId(referralId)
+            .eventType(ReferralEventType.EXPIRE)
+            .toStatus(ReferralStatus.EXPIRED)
+            .actorLabel("SYSTEM:scheduler")
+            .recordedAt(LocalDateTime.now().plusHours(1))
+            .build();
+        when(referralService.getReferralEvents(referralId)).thenReturn(List.of(submit, expire));
+
+        mockMvc.perform(get("/referrals/{id}/events", referralId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0].eventType").value("SUBMIT"))
+            .andExpect(jsonPath("$[0].actorLabel").value("USER"))
+            .andExpect(jsonPath("$[1].eventType").value("EXPIRE"))
+            .andExpect(jsonPath("$[1].actorLabel").value("SYSTEM:scheduler"));
+
+        verify(referralService).getReferralEvents(referralId);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue scopes a hospital admin to their active hospital")
+    void expireOverdueReferralsScopesHospitalAdmin() throws Exception {
+        UUID activeHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospital);
+        when(referralExpiryService.expireOverdueReferralsForHospital(any(Duration.class), any(UUID.class)))
+            .thenReturn(7);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param(GRACE_HOURS_PARAM, "6"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath(EXPIRED_FIELD).value(7));
+
+        verify(referralExpiryService).expireOverdueReferralsForHospital(Duration.ofHours(6), activeHospital);
+        verify(referralExpiryService, Mockito.never()).expireOverdueReferrals(any(Duration.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue defaults graceHours to 0 and scopes to active hospital")
+    void expireOverdueReferralsDefaultsGraceToZero() throws Exception {
+        UUID activeHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospital);
+        when(referralExpiryService.expireOverdueReferralsForHospital(any(Duration.class), any(UUID.class)))
+            .thenReturn(0);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath(EXPIRED_FIELD).value(0));
+
+        verify(referralExpiryService).expireOverdueReferralsForHospital(Duration.ZERO, activeHospital);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue clamps negative graceHours to 0")
+    void expireOverdueReferralsClampsNegativeGrace() throws Exception {
+        UUID activeHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospital);
+        when(referralExpiryService.expireOverdueReferralsForHospital(any(Duration.class), any(UUID.class)))
+            .thenReturn(0);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param(GRACE_HOURS_PARAM, "-3"))
+            .andExpect(status().isOk());
+
+        verify(referralExpiryService).expireOverdueReferralsForHospital(Duration.ZERO, activeHospital);
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue?global=true is rejected for a hospital admin")
+    void expireOverdueReferralsRejectsGlobalForHospitalAdmin() throws Exception {
+        // A hospital admin attempting to escalate scope must NOT trigger the unscoped sweep.
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param("global", "true"))
+            .andExpect(status().is4xxClientError());
+
+        verify(referralExpiryService, Mockito.never()).expireOverdueReferrals(any(Duration.class));
+        verify(referralExpiryService, Mockito.never())
+            .expireOverdueReferralsForHospital(any(Duration.class), any(UUID.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_SUPER_ADMIN"})
+    @DisplayName("POST /admin/expire-overdue?global=true is allowed for a super admin")
+    void expireOverdueReferralsAllowsGlobalForSuperAdmin() throws Exception {
+        when(referralExpiryService.expireOverdueReferrals(any(Duration.class))).thenReturn(11);
+
+        mockMvc.perform(post(EXPIRE_OVERDUE_PATH)
+                .param("global", "true")
+                .param(GRACE_HOURS_PARAM, "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath(EXPIRED_FIELD).value(11));
+
+        verify(referralExpiryService).expireOverdueReferrals(Duration.ofHours(2));
+        verify(referralExpiryService, Mockito.never())
+            .expireOverdueReferralsForHospital(any(Duration.class), any(UUID.class));
+    }
+
     private GeneralReferralRequestDTO buildRequest() {
         GeneralReferralRequestDTO request = new GeneralReferralRequestDTO();
         request.setPatientId(UUID.randomUUID());
@@ -200,6 +450,16 @@ class GeneralReferralControllerTest {
         @Bean
         GeneralReferralService referralService() {
             return Mockito.mock(GeneralReferralService.class);
+        }
+
+        @Bean
+        ReferralExpiryService referralExpiryService() {
+            return Mockito.mock(ReferralExpiryService.class);
+        }
+
+        @Bean
+        RoleValidator roleValidator() {
+            return Mockito.mock(RoleValidator.class);
         }
     }
 }

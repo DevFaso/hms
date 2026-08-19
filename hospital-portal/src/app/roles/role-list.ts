@@ -8,7 +8,7 @@ import {
   PermissionResponse,
 } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-role-list',
@@ -20,6 +20,7 @@ import { TranslateModule } from '@ngx-translate/core';
 export class RoleListComponent implements OnInit {
   private readonly roleService = inject(RoleService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   roles = signal<RoleResponse[]>([]);
   loading = signal(true);
@@ -57,7 +58,7 @@ export class RoleListComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load roles');
+        this.toast.error(this.translate.instant('ROLES.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -102,7 +103,7 @@ export class RoleListComponent implements OnInit {
 
   submitCreate(): void {
     if (!this.createForm.name) {
-      this.toast.error('Role name is required');
+      this.toast.error(this.translate.instant('ROLES.TOAST.NAME_REQUIRED'));
       return;
     }
     this.saving.set(true);
@@ -113,14 +114,18 @@ export class RoleListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'Role updated' : 'Role created');
+        this.toast.success(
+          this.translate.instant(existing ? 'ROLES.TOAST.UPDATED' : 'ROLES.TOAST.CREATED'),
+        );
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
         this.loadRoles();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ROLES.TOAST.OPERATION_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -142,14 +147,16 @@ export class RoleListComponent implements OnInit {
     this.deleting.set(true);
     this.roleService.delete(role.id).subscribe({
       next: () => {
-        this.toast.success('Role deleted');
+        this.toast.success(this.translate.instant('ROLES.TOAST.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingRole.set(null);
         this.loadRoles();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete role');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ROLES.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -168,7 +175,7 @@ export class RoleListComponent implements OnInit {
           this.permissionsLoading.set(false);
         },
         error: () => {
-          this.toast.error('Failed to load permissions');
+          this.toast.error(this.translate.instant('ROLES.TOAST.PERMS_LOAD_FAILED'));
           this.permissionsLoading.set(false);
         },
       });
@@ -199,13 +206,13 @@ export class RoleListComponent implements OnInit {
       .assignPermissions(role.id, Array.from(this.selectedPermissionIds()))
       .subscribe({
         next: () => {
-          this.toast.success('Permissions updated');
+          this.toast.success(this.translate.instant('ROLES.TOAST.PERMS_UPDATED'));
           this.showPermissions.set(false);
           this.saving.set(false);
           this.loadRoles();
         },
         error: () => {
-          this.toast.error('Failed to update permissions');
+          this.toast.error(this.translate.instant('ROLES.TOAST.PERMS_UPDATE_FAILED'));
           this.saving.set(false);
         },
       });

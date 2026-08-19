@@ -22,6 +22,7 @@ final class AuthManager: ObservableObject {
 
     private func restoreSession() {
         isAuthenticated = KeychainHelper.shared.accessToken != nil
+            || KeychainHelper.shared.oidcAccessToken != nil
     }
 
     // MARK: - Login
@@ -71,8 +72,19 @@ final class AuthManager: ObservableObject {
         }
         KeychainHelper.shared.accessToken = nil
         KeychainHelper.shared.refreshToken = nil
+        // `KeycloakAuthService.clear()` also clears the OIDC keychain entries;
+        // keep logout delegating through the service so the two paths cannot drift.
+        KeycloakAuthService.shared.clear()
         currentUser = nil
         isAuthenticated = false
+    }
+
+    // MARK: - SSO (KC-3)
+
+    /// Marks the session authenticated after a successful Keycloak login.
+    /// Called by `LoginViewModel` once `KeycloakAuthService.login(...)` resolves.
+    func completeSsoSession() {
+        isAuthenticated = KeychainHelper.shared.oidcAccessToken != nil
     }
 
     // MARK: - Token refresh

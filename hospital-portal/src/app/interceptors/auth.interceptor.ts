@@ -14,8 +14,11 @@ function handleExpiredToken(
   next: HttpHandlerFn,
   expiredToken: string,
 ): Observable<HttpEvent<unknown>> {
-  if (!auth.getRefreshToken()) {
-    // No way to renew — hard logout.
+  if (!auth.getRefreshToken() && !auth.getUserProfile()) {
+    // No legacy refresh token AND no recorded user profile — we have no
+    // evidence of a session, so the cookie won't help either. Hard logout.
+    // (S-01: refresh token now lives in an HttpOnly cookie that JS cannot read,
+    //  so we use the persisted user profile as proof of an active session.)
     auth.logout();
     void router.navigate(['/login']);
     return EMPTY;
@@ -71,7 +74,14 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     if (token && !modified.headers.has('Authorization')) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const hid = roleCtx.activeHospitalId;
+    // Cross-tenant: super-admins in "global view" must NOT send
+    // X-Hospital-Id, otherwise list endpoints filter to one tenant and
+    // the all-hospitals view becomes a single-hospital view in disguise
+    // (this is exactly the bug that
+    //  docs/super-admin-cross-tenant-design.md was written to fix).
+    // For non-super-admins this resolves to their active hospital,
+    // preserving the existing single-tenant behaviour.
+    const hid = roleCtx.effectiveHospitalIdForRequest();
     if (hid) {
       headers['X-Hospital-Id'] = hid;
     }

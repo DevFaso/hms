@@ -6,7 +6,10 @@ import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportReques
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResultDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
+import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.example.hms.service.UserRoleHospitalAssignmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -41,6 +44,35 @@ class UserRoleHospitalAssignmentControllerTest {
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
+
+    @MockitoBean
+    private WsTicketService wsTicketService;
+
+    @MockitoBean
+    private HospitalUserDetailsService hospitalUserDetailsService;
+
+    @MockitoBean
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
+    /** PR #228 review fixup — JwtAuthenticationFilter now depends on
+     *  GlobalSessionRevocationService (MVP-7). The slice context needs a
+     *  mock or autowiring fails. */
+    @MockitoBean
+    private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
+
+    /** MVP-c batch fixup — JwtAuthenticationFilter now also depends on
+     *  HospitalLifecycleStatusService for the per-hospital login block.
+     *  Same posture as the org-level mock above. */
+    @MockitoBean
+    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
+    /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
+     *  IdleSessionGate. Slice context needs a mock or autowiring fails. */
+    @MockitoBean
+    private com.example.hms.security.IdleSessionGate idleSessionGate;
 
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {

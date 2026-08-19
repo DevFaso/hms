@@ -14,6 +14,7 @@
 "sign_in" = "Log In";
 "forgot_password" = "Forgot password?";
 "biometric_sign_in" = "Log in with %@";
+"sso_sign_in" = "Sign in with SSO";
 "use_username" = "Use username instead";
 "use_biometric" = "Use %@ instead";
 
@@ -32,6 +33,7 @@
 "refills" = "Refills";
 "billing" = "Billing";
 "billing_title" = "Billing";
+"pharmacy_invoices" = "Pharmacy Invoices";
 "vitals" = "Vitals";
 "vitals_title" = "Vitals";
 "care_team" = "Care Team";
@@ -181,6 +183,16 @@
 "confirm_payment" = "Confirm Payment";
 "invoice_details" = "Invoice Details";
 "items" = "Items";
+"payments" = "Payments";
+"claims" = "Claims";
+"claim" = "Claim";
+"total_paid" = "Total Paid";
+"total_claimed" = "Total Claimed";
+"no_pharmacy_payments" = "No pharmacy payments";
+"no_pharmacy_payments_desc" = "Medication payment history will appear here.";
+"no_pharmacy_claims" = "No pharmacy claims";
+"no_pharmacy_claims_desc" = "Insurance claim history will appear here.";
+"reference_format" = "Ref: %@";
 
 /* Vitals */
 "record_vitals" = "Record Vitals";
@@ -241,6 +253,15 @@
 "no_immunizations" = "No immunizations";
 "no_treatment_plans" = "No treatment plans";
 "no_referrals" = "No referrals";
+"my_chart" = "My chart";
+"mrn_format" = "MRN %@";
+"dob_format" = "DOB %@";
+"hospital_id_format" = "Hospital ID %@";
+"primary_hospital_format" = "Primary hospital: %@";
+
+/* Pharmacy invoices */
+"pharmacy_payments_load_failed" = "Payments could not be loaded: %@";
+"pharmacy_claims_load_failed" = "Claims could not be loaded: %@";
 
 /* Notifications */
 "no_notifications" = "No notifications";

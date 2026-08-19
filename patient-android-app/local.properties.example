@@ -1,0 +1,51 @@
+## Per-env local.properties template — KC-3 / Phase 2.8.B
+##
+## Copy to `local.properties` and uncomment the env block matching the
+## release build you're producing. The values below are also valid as
+## CI env vars (Gradle reads from both — see `app/build.gradle.kts`).
+## See `docs/keycloak-implementation-gaps.md` Phase 2.8.B for the
+## TestFlight / Play Console release recipe.
+
+## REQUIRED for any build — points Gradle at your local Android SDK.
+## sdk.dir=/Users/<you>/Library/Android/sdk
+
+## --- Local docker-compose dev (default for engineering) -----------
+## Pointed at the Android emulator's host loopback. SSO ON.
+## KEYCLOAK_SSO_ENABLED=true
+## KEYCLOAK_ISSUER=http://10.0.2.2:8081/realms/hms
+## KEYCLOAK_CLIENT_ID=hms-patient-android
+## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
+## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
+
+## --- Release-Dev (`hms-keycloak-dev` Railway service) -------------
+## Internal Testing track, SSO ON for QA against the dev Railway realm.
+## KEYCLOAK_SSO_ENABLED=true
+## KEYCLOAK_ISSUER=https://hms-keycloak-dev.up.railway.app/realms/hms
+## KEYCLOAK_CLIENT_ID=hms-patient-android
+## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
+## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
+
+## --- Release-UAT (`hms-keycloak-uat` Railway service) -------------
+## Internal Testing UAT track, SSO ON for the pre-cutover soak.
+## KEYCLOAK_SSO_ENABLED=true
+## KEYCLOAK_ISSUER=https://hms-keycloak-uat.up.railway.app/realms/hms
+## KEYCLOAK_CLIENT_ID=hms-patient-android
+## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
+## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
+
+## --- Release-Prod (`hms-keycloak-prod` Railway service) -----------
+## Production track. SSO stays OFF until Phase 3 cutover (see
+## docs/keycloak-implementation-gaps.md Phase 2.8.C). The issuer URL
+## is pre-staged so the cutover flip is one local.properties line,
+## not a code edit.
+## KEYCLOAK_SSO_ENABLED=false
+## KEYCLOAK_ISSUER=https://hms-keycloak-prod.up.railway.app/realms/hms
+## KEYCLOAK_CLIENT_ID=hms-patient-android
+## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
+## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
+
+## --- Release signing (required for `bundleRelease`) ---------------
+## STORE_FILE=../upload-keystore.jks
+## STORE_PASSWORD=<keystore password>
+## KEY_ALIAS=upload
+## KEY_PASSWORD=<key password>

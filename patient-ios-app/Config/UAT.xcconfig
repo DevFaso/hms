@@ -1,0 +1,10 @@
+// Per-env Keycloak settings for the `Release-UAT` build configuration.
+//
+// Selected by `xcodebuild -configuration Release-UAT` for the UAT
+// TestFlight track pointing at `hms-keycloak-uat`. SSO is ON in UAT so
+// QA can exercise the full Keycloak flow before prod cutover.
+
+MEDIHUB_KEYCLOAK_ISSUER = https://hms-keycloak-uat.up.railway.app/realms/hms
+MEDIHUB_KEYCLOAK_SSO_ENABLED = 1
+MEDIHUB_KEYCLOAK_CLIENT_ID = hms-patient-ios
+MEDIHUB_KEYCLOAK_REDIRECT_URI = com.bitnesttechs.hms.patient.native:/oauth2redirect

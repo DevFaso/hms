@@ -540,4 +540,1054 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V43a: Password history for security hardening
+         ================================================================= -->
+    <changeSet id="V43-password-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__password_history.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V43b: Pharmacy Module — Phase 1 Foundation
+         ================================================================= -->
+    <changeSet id="V43-pharmacy-module-phase1" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__pharmacy_module_phase1.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V44: MFA TOTP secret and backup codes
+         ================================================================= -->
+    <changeSet id="V44-mfa-totp-backup-codes" author="hms-team" runOnChange="false">
+        <sqlFile path="V44__mfa_totp_backup_codes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V45: Pharmacy medication catalog
+         ================================================================= -->
+    <changeSet id="V45-pharmacy-medication-catalog" author="hms-team" runOnChange="false">
+        <sqlFile path="V45__pharmacy_medication_catalog.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V46: Pharmacy registry
+         ================================================================= -->
+    <changeSet id="V46-pharmacy-registry" author="hms-team" runOnChange="false">
+        <sqlFile path="V46__pharmacy_registry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V47–V49: Reserved for future pharmacy phases (dispense, inventory, claims).
+         Empty SQL files exist but are not included until populated.
+         ================================================================= -->
+
+    <!-- =================================================================
+         V50: Schema fixes (Copilot review)
+         - mfa_backup_codes: add missing updated_at column
+         - Drop orphaned hospital.pharmacies table
+         ================================================================= -->
+    <changeSet id="V50-schema-fixes" author="hms-team" runOnChange="false">
+        <sqlFile path="V50__schema_fixes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V51: Recovery contact verification fields
+         - Add verification_code_hash, verification_code_expires_at,
+           verification_attempts to security.user_recovery_contacts
+         - Reset auto-verified contacts pending proper verification
+         ================================================================= -->
+    <changeSet id="V51-recovery-contact-verification" author="hms-team" runOnChange="false">
+        <sqlFile path="V51__recovery_contact_verification.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V52: Prescription routing decisions (Phase 4b stock-out routing)
+         - Create clinical.prescription_routing_decisions table
+         - Indexes: prescription_id, patient_id, status
+         ================================================================= -->
+    <changeSet id="V52-prescription-routing-decisions" author="hms-team" runOnChange="false">
+        <sqlFile path="V52__prescription_routing_decisions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V53: S-05 Phase 2 (slice 1) — encrypt clinical.dispenses.notes
+         - Widen notes from VARCHAR(1000) to TEXT to fit AES-256-GCM
+           Base64 ciphertext (entity still enforces @Size(max=1000) on
+           plaintext input).
+         ================================================================= -->
+    <changeSet id="V53-encrypt-dispense-notes" author="hms-team" runOnChange="false">
+        <sqlFile path="V53__encrypt_dispense_notes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V54: S-05 Phase 2 (slice 2) — encrypt Prescription PHI fields
+         - Widen notes / override_reason / instructions to TEXT to fit
+           AES-256-GCM Base64 ciphertext (entity still enforces @Size on
+           plaintext input).
+         ================================================================= -->
+    <changeSet id="V54-encrypt-prescription-phi" author="hms-team" runOnChange="false">
+        <sqlFile path="V54__encrypt_prescription_phi.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V55: S-05 Phase 2 (slice 3) — encrypt Patient PHI free-text fields
+         - Widen address, address_line1/2, emergency_contact_*, allergies,
+           medical_history_summary, care_team_notes, chronic_conditions to
+           TEXT to fit AES-256-GCM Base64 ciphertext.
+         - Phone numbers and email are deliberately NOT encrypted because
+           they are used in LIKE / equality lookups, unique constraints, and
+           an index.
+         ================================================================= -->
+    <changeSet id="V55-encrypt-patient-phi" author="hms-team" runOnChange="false">
+        <sqlFile path="V55__encrypt_patient_phi.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V56: Keycloak identity link columns on security.users
+         - keycloak_subject VARCHAR(128) NULL — the KC JWT 'sub' claim.
+           Partial unique index (WHERE keycloak_subject IS NOT NULL) so
+           legacy/unlinked users do not conflict.
+         - keycloak_realm VARCHAR(100) NULL — KC realm name (e.g. 'hms').
+         - auth_source VARCHAR(32) NOT NULL DEFAULT 'internal' — drives
+           which auth path the resource server trusts: 'internal' |
+           'keycloak' | 'saml'.
+         - last_oidc_login_at TIMESTAMPTZ NULL — updated by
+           /auth/session/bootstrap on each OIDC login.
+         ================================================================= -->
+    <changeSet id="V56-keycloak-identity-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V56__keycloak_identity_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V57: P-07 — Pharmacy OTC walk-in sale (header + line items)
+         - clinical.pharmacy_sales: cash transactions not tied to a
+           prescription (anonymous walk-in patient_id is allowed).
+         - clinical.sale_lines: per-medication line items with unit price
+           captured at sale time so catalog price changes do not rewrite
+           historical revenue.
+         ================================================================= -->
+    <changeSet id="V57-pharmacy-sale-sale-line" author="hms-team" runOnChange="false">
+        <sqlFile path="V57__pharmacy_sale_sale_line.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V58: P-09 — Medication Therapy Management (MTM) review record
+         - clinical.mtm_reviews: pharmacist-led chronic disease review
+           with adherence concern flag, polypharmacy alert, intervention
+           summary, recommended actions, and status (DRAFT/COMPLETED/REFERRED).
+         ================================================================= -->
+    <changeSet id="V58-mtm-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V58__mtm_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V59: FU-2 (P-06 backend) — first-class stock RECEIPT columns
+         - Adds lot_number, supplier, po_reference, expiry_date, unit_cost
+           to clinical.stock_transactions so reporting can query these
+           fields directly instead of parsing the free-text `reason`.
+         - Additive only; all columns nullable. Existing rows unchanged.
+         ================================================================= -->
+    <changeSet id="V59-stock-transaction-receipt-fields" author="hms-team" runOnChange="false">
+        <sqlFile path="V59__stock_transaction_receipt_fields.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V60: P1 #1 — Terminology binding (LOINC on lab test definitions)
+         - Adds nullable loinc_code (VARCHAR 20) and loinc_display
+           (VARCHAR 255) to lab.lab_test_definitions plus a partial
+           index on loinc_code (PostgreSQL).
+         - LOINC format is enforced at the application layer via
+           TerminologyCodes#isValidLoinc.
+         - Additive only; ATC + RxNorm + icd_version already exist on
+           clinical.medication_catalog_items / clinical.patient_problems.
+         ================================================================= -->
+    <changeSet id="V60-terminology-binding" author="hms-team" runOnChange="false">
+        <sqlFile path="V60__terminology_binding.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V61: P1 #2a — SYSTEM actor support on lab.lab_results
+         - Mirrors V9's pattern for audit_event_logs.
+         - Makes assignment_id nullable so machine-origin LabResult
+           writes (HL7 v2 MLLP / external LIS in P1 #2b) can persist
+           without a hospital-scoped human assignment.
+         - Adds actor_type (USER|SYSTEM) and actor_label columns.
+         - CHECK constraint ensures USER rows still require an
+           assignment_id, preserving the existing clinical guarantee.
+         ================================================================= -->
+    <changeSet id="V61-system-actor-on-lab-results" author="hms-team" runOnChange="false">
+        <sqlFile path="V61__system_actor_on_lab_results.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V62: P1 #2b — MLLP per-facility allowlist
+         - platform.mllp_allowed_senders maps (sending_application,
+           sending_facility) MSH-3/MSH-4 pairs to a receiving hospital.
+         - The dispatcher uses this to reject unknown senders with AR
+           and to pin accepted messages to the right hospital scope.
+         - Depends on V61 (SYSTEM-actor support on lab_results) so
+           machine-origin LabResult writes can omit assignment_id.
+         - Additive only.
+         ================================================================= -->
+    <changeSet id="V62-mllp-allowed-senders" author="hms-team" runOnChange="false">
+        <sqlFile path="V62__mllp_allowed_senders.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V63: P1 #3 — CDS rule-engine reference data
+         - clinical.drug_interactions: symmetric (rxnorm_a, rxnorm_b)
+           pairs with severity + advice. Seeded with 12 high-impact
+           interactions from WHO Model Formulary / BNF / FDA labels.
+         - clinical.medication_catalog_items.pediatric_max_dose_mg_per_kg:
+           optional weight-based ceiling consulted by PediatricDoseRule.
+         - Additive only; idempotent (CREATE IF NOT EXISTS / ON CONFLICT).
+         ================================================================= -->
+    <changeSet id="V63-cds-drug-interactions" author="hms-team" runOnChange="false">
+        <!--
+            splitStatements MUST be false: V63 contains a `DO $$ ... $$;`
+            anonymous PL/pgSQL block to drive the bidirectional dedupe on
+            the seed insert. With splitStatements=true Liquibase chops on
+            the inner `;` characters and tries to execute fragments such
+            as "DO $$ DECLARE v_now TIMESTAMP WITHOUT TIME ZONE := NOW()"
+            on their own — failing with `Unterminated dollar quote
+            started at position 3 in SQL DO $$`. Same pattern as V9 and
+            V61, both of which use splitStatements=false for the same
+            reason.
+        -->
+        <sqlFile path="V63__cds_drug_interactions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V64: P1 #3b — BPA / protocol-card reference data
+         - clinical.bpa_protocols: catalog of best-practice advisories
+           rendered by BpaRule implementations on the patient-view hook.
+         - Three seeded protocols: MALARIA_FEVER, SEPSIS_QSOFA,
+           OB_HEMORRHAGE. Active-only partial index for rule lookups.
+         - Additive only; idempotent (CREATE IF NOT EXISTS / ON CONFLICT).
+         splitStatements="true" is safe here: V64 has no PL/pgSQL
+         DO blocks, only plain DDL + INSERT … ON CONFLICT statements.
+         ================================================================= -->
+    <changeSet id="V64-bpa-protocol-reference" author="hms-team" runOnChange="false">
+        <sqlFile path="V64__bpa_protocol_reference.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V65: P1 #4 — CPOE order-set version history
+         - admission_order_sets.parent_order_set_id self-FK so each edit
+           can freeze the previous row and append a new active row that
+           points at it (chain forms the version history).
+         - Active-by-(hospital,name) partial index speeds the picker's
+           lookup.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V65-order-set-versioning" author="hms-team" runOnChange="false">
+        <sqlFile path="V65__order_set_versioning.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V66: P1 #8 — Inpatient eMAR five-rights barcode-scan loop
+         - Additive columns on clinical.medication_administration_records:
+           patient_scan_value, medication_scan_value, dose_scan_value,
+           scan_verified_at, five_rights_status, five_rights_overrides
+           (JSONB), override_reason.
+         - Indexes on five_rights_status and scan_verified_at to support
+           the bedside dashboard and audit-by-override-decision queries.
+         - Additive only; no destructive ops.
+         ================================================================= -->
+    <changeSet id="V66-inpatient-emar-five-rights" author="hms-team" runOnChange="false">
+        <sqlFile path="V66__inpatient_emar_five_rights.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V67: P1 #9 — Break-the-glass emergency-access sessions
+         - clinical.break_glass_sessions: short-lived (default 4h)
+           emergency overrides granted to clinicians who need to read a
+           patient's chart without a pre-existing consent.
+         - Every read served under an active session emits a
+           BREAK_GLASS_ACCESS audit event (existing AuditEventType).
+         - Partial indexes target the (user, patient) hot path and the
+           per-patient banner lookup.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V67-break-glass-sessions" author="hms-team" runOnChange="false">
+        <sqlFile path="V67__break_glass_sessions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V68: P1 #11 — DHIS2 ADX (Aggregate Data Exchange) export
+         - integration schema (new) holds four tables: per-facility
+           DHIS2 endpoint config, HMS->DHIS2 dataElement mappings,
+           one row per triggered export run, and the per-value outbox
+           that makes replays idempotent.
+         - hospital.hospitals.dhis2_org_unit_uid binds an HMS facility
+           to its DHIS2 organisation-unit UID.
+         - Auth secrets are NOT stored: auth_secret_env_var holds the
+           env-var name; the value is resolved at push time.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V68-dhis2-adx-export" author="hms-team" runOnChange="false">
+        <sqlFile path="V68__dhis2_adx_export.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V69: P1 #10 — Telehealth low-bandwidth (audio + photo on chat)
+         - support.chat_attachments: per-message attachment rows for
+           PHOTO (≤10 MB JPEG/PNG/WebP) or AUDIO (≤5 MB Opus/AAC/MP3,
+           ≤90 s) so chat threads can carry remote-consult media without
+           introducing WebRTC.
+         - ON DELETE CASCADE keeps orphan rows out when a message is
+           soft/hard-deleted.
+         - Partial CHECK enforces that AUDIO carries duration_seconds
+           and PHOTO does not.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V69-telehealth-chat-attachments" author="hms-team" runOnChange="false">
+        <sqlFile path="V69__telehealth_chat_attachments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V70: P1 #12 — Referral lifecycle (Tier A close-out)
+         - general_referrals.started_at TIMESTAMP NULL captures the
+           IN_PROGRESS transition timestamp (set when the receiving
+           clinician clicks Start). Pairs with the entity's state-machine
+           guards so SCHEDULED → IN_PROGRESS → COMPLETED is observable.
+         - Additive only; pure DDL; nullable column.
+         ================================================================= -->
+    <changeSet id="V70-add-referral-started-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V70__add_referral_started_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V71: P1 #12 follow-up — ReferralEvent audit trail
+         - public.referral_events: one append-only row per state-machine
+           transition on general_referrals (submit / acknowledge /
+           schedule / start / complete / reject / cancel / expire).
+         - referral_id is a raw UUID (no FK) so audit rows outlive
+           hard-deletes of the parent referral, matching the
+           encounter_note_history pattern.
+         - actor_label follows the LabResult system-actor convention:
+           USER for an authenticated principal, SYSTEM:<source> for
+           non-user writers (e.g. the @Scheduled SLA sweep).
+         - Composite index on (referral_id, recorded_at) so the
+           per-referral timeline read is a single index scan.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V71-referral-events" author="hms-team" runOnChange="false">
+        <sqlFile path="V71__referral_events.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V72: P1 #12 follow-up — JPA optimistic-lock version on general_referrals
+         - public.general_referrals.version BIGINT NOT NULL DEFAULT 0
+         - Required by the EXPIRED auto-sweep: without @Version, a
+           concurrent transaction that flips status between the sweep's
+           SELECT and its UPDATE would be silently overwritten (lost
+           update). With @Version, the second writer's flush throws
+           ObjectOptimisticLockingFailureException and the sweep skips
+           the row.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V72-general-referrals-version" author="hms-team" runOnChange="false">
+        <sqlFile path="V72__general_referrals_version.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V73: P1 #12 follow-up #4 — Real-time eligibility / prior-auth API
+         - clinical.eligibility_checks: one row per call to a public-payer
+           scheme (NHIS, NHIA, CNAMGS, mutuelle) or generic private payer.
+         - Most-recent row per (patient_id, scheme, check_type) is the
+           authoritative current state.
+         - @Version (BIGINT NOT NULL DEFAULT 0) protects against the rare
+           race where two clinicians submit a check simultaneously.
+         - Composite (patient_id, scheme, completed_at) drives the "fresh
+           answer?" lookup on the encounter and checkout screens.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V73-eligibility-checks" author="hms-team" runOnChange="false">
+        <sqlFile path="V73__eligibility_checks.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V74: SmartPhrase / dot-phrase macro library (item 6)
+         - clinical.smart_phrases stores the macro library used by the
+           per-section EncounterNote form (item 5). Triggers like ".normexam"
+           expand to a multi-line block when typed in any note section.
+         - Scope precedence USER > HOSPITAL > GLOBAL is enforced in the
+           service; the table just stores the rows.
+         - Composite (scope, hospital_id, owner_user_id, lower(trigger))
+           drives the autocomplete lookup.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V74-smart-phrases" author="hms-team" runOnChange="false">
+        <sqlFile path="V74__smart_phrases.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V75: Gap #23 — DICOM/PACS link
+         - hospital.hospitals.pacs_viewer_url_template VARCHAR(500) NULL
+           holds a per-hospital URL template (e.g.
+           https://orthanc.local/viewer.html?studyUid={studyInstanceUid}).
+           The ImagingReport mapper resolves {studyInstanceUid} and
+           {accessionNumber} placeholders so the imaging detail panel
+           surfaces a "View in PACS" link without per-report URLs.
+         - Optional: hospitals without a template render no link, which
+           preserves the deferred-for-district-level posture.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V75-pacs-viewer-url-template" author="hms-team" runOnChange="false">
+        <sqlFile path="V75__pacs_viewer_url_template.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V76: Gap #18 — BPA / CDS card acknowledgements
+         - clinical.cds_acknowledgements: one row per dismissal or override
+           of a Best-Practice Advisory. Drives suppression on subsequent
+           rule-engine runs (24 h ack TTL, 72 h override TTL — set in the
+           service layer).
+         - Cards are matched by stable cardUuid when present; otherwise
+           by the (summary, indicator) fingerprint scoped to the patient.
+         - updated_at NOT NULL is required because the entity extends
+           BaseEntity which maps both createdAt and updatedAt.
+         - Additive only; pure DDL.
+         ================================================================= -->
+    <changeSet id="V76-cds-acknowledgements" author="hms-team" runOnChange="false">
+        <sqlFile path="V76__cds_acknowledgements.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V77 — Tenant lifecycle (MVP-2)
+         Adds suspend / archive / restore / schedule-purge state machine
+         columns to organizations. Strictly additive; default 'ACTIVE'.
+         ================================================================= -->
+    <changeSet id="V77-tenant-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V77__tenant_lifecycle.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V78 — Integration health snapshots (MVP-3)
+         Adds clinical.integration_health_snapshots so the super-admin
+         Integration Health Console can show last-success / last-failure /
+         24h counts per (integration, organization). Strictly additive.
+         ================================================================= -->
+    <changeSet id="V78-integration-health-snapshots" author="hms-team" runOnChange="false">
+        <sqlFile path="V78__integration_health_snapshots.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V79 — Impersonator stamp on audit events (MVP-4)
+         Adds impersonator_user_id + impersonator_username columns to
+         support.audit_event_logs so every action a super admin takes
+         while impersonating is traceable back to the real human.
+         Strictly additive; pre-existing rows stay at NULL.
+         ================================================================= -->
+    <changeSet id="V79-audit-impersonator" author="hms-team" runOnChange="false">
+        <sqlFile path="V79__audit_impersonator.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V80 — Emergency global controls (MVP-7)
+         Singleton security.security_revocations table. Holds the
+         `global_min_token_iat` timestamp that JwtAuthenticationFilter
+         compares the JWT `iat` claim against. Bumping this value to
+         "now" force-logs-out every active session.
+         Strictly additive; default `epoch` so pre-MVP-7 deployments
+         behave identically.
+         ================================================================= -->
+    <changeSet id="V80-emergency-global-controls" author="hms-team" runOnChange="false">
+        <sqlFile path="V80__emergency_global_controls.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V81 — Subscription plans + organization subscriptions (MVP-6)
+         Two new tables in the platform schema: subscription_plans
+         (catalogue) and organization_subscriptions (per-org assignment).
+         Partial unique index uq_orgsub_active_per_org keeps one ACTIVE
+         subscription per organization while letting CANCELLED / EXPIRED
+         rows accumulate for billing audits. FK back to
+         hospital.organizations(id).
+         Strictly additive; pure DDL.
+         ================================================================= -->
+    <changeSet id="V81-subscription-plans" author="hms-team" runOnChange="false">
+        <sqlFile path="V81__subscription_plans.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V82 — Data-residency / region tagging on Organization (MVP-9)
+         Adds hospital.organizations.region VARCHAR(32) NOT NULL DEFAULT
+         'BF' so the super-admin Control Tower can surface the per-tenant
+         jurisdiction whose data-protection rules apply (BF / CI / SN /
+         GA / CM / EU / etc.). Indexed for the org-grid region filter.
+         Strictly additive; default backfills legacy rows in-line.
+         ================================================================= -->
+    <changeSet id="V82-organization-region" author="hms-team" runOnChange="false">
+        <sqlFile path="V82__organization_region.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V83 — Per-tenant feature-flag overrides (MVP-7b)
+         Adds organization_id NULL to FeatureFlagOverride so a flag key
+         can carry both a global row (org NULL) and per-tenant rows.
+         Replaces the single-column UNIQUE(flag_key) with a composite
+         UNIQUE(flag_key, organization_id) so global + per-tenant rows
+         coexist. Strictly additive; rollback path documented in the
+         SQL file.
+         ================================================================= -->
+    <changeSet id="V83-feature-flag-override-organization" author="hms-team" runOnChange="false">
+        <sqlFile path="V83__feature_flag_override_organization.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V84 — Hospital-level lifecycle (MVP-c batch)
+         Mirrors V77's Organization lifecycle columns onto Hospital so a
+         super admin can suspend / archive / restore / schedule-purge an
+         individual hospital independently of its parent organization.
+         Strictly additive.
+         ================================================================= -->
+    <changeSet id="V84-hospital-lifecycle" author="hms-team" runOnChange="false">
+        <sqlFile path="V84__hospital_lifecycle.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V85 — jsonb feature_keys on subscription_plans (MVP-c batch / MVP-6c)
+         Adds feature_keys_jsonb JSONB and backfills from the legacy
+         comma-separated TEXT column. Legacy column kept one release for
+         rollback safety. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V85-subscription-plan-feature-keys-jsonb" author="hms-team" runOnChange="false">
+        <sqlFile path="V85__subscription_plan_feature_keys_jsonb.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V86 — Per-region policy table (MVP-c batch / MVP-9c)
+         Adds platform.region_policy keyed on OrganizationRegion code
+         with optional retention / export-format / target deployment
+         overrides. Seed row per current region; EU defaults to
+         GDPR_PORTABILITY export. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V86-region-policy" author="hms-team" runOnChange="false">
+        <sqlFile path="V86__region_policy.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V87 — Server-side persisted audit saved searches (MVP-c batch / MVP-8c)
+         Promotes MVP-8b's per-operator localStorage saved searches to a
+         server-side table with cross-device sync + cross-operator
+         sharing via a `shared` flag. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V87-audit-saved-search" author="hms-team" runOnChange="false">
+        <sqlFile path="V87__audit_saved_search.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V88 — Integration health time-series (MVP-c batch / MVP-3b)
+         Adds clinical.integration_health_event so the Integration Health
+         Console can render per-integration 24h sparklines. The existing
+         IntegrationHealthSnapshot powers the inventory view; the event
+         table powers the history drawer. Strictly additive.
+         ================================================================= -->
+    <changeSet id="V88-integration-health-event" author="hms-team" runOnChange="false">
+        <sqlFile path="V88__integration_health_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V89 — Bridges-style per-message log + DLQ (MVP-c3 / Tier 2 #5)
+         Adds clinical.integration_message_event for the operator's
+         message-trace + dead-letter-queue + replay surface. Sibling of
+         V88: V88 records probe outcomes ("is this integration healthy
+         right now?"); V89 records the actual partner-protocol payloads
+         that crossed the wire (HL7, FHIR, X12, proprietary REST).
+         The recorder is best-effort and tolerates the table being
+         absent, so the migration is strictly additive and rollback-safe.
+         ================================================================= -->
+    <changeSet id="V89-integration-message-event" author="hms-team" runOnChange="false">
+        <sqlFile path="V89__integration_message_event.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V90 — Hospital-name search index (super-admin scope-chip typeahead)
+         Adds a functional B-tree index on LOWER(hospital.hospitals.name)
+         to back the GET /api/super-admin/hospitals/search endpoint
+         introduced in docs/super-admin-cross-tenant-design.md.
+         Originally added decoratively for substring queries; F2
+         (2026-05-06) flipped HospitalRepository.searchHospitals to
+         prefix match (LIKE 'memo%'), making this index load-bearing
+         (true B-tree range scan instead of a sequential scan).
+         Strictly additive; CREATE INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V90-hospital-name-search-index" author="hms-team" runOnChange="false">
+        <sqlFile path="V90__hospital_name_search_index.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V91 — (created_at DESC) indexes on the seven clinical parent tables
+         Closes F4 from docs/super-admin-cross-tenant-design.md. Adds
+         dedicated (created_at DESC) B-tree indexes on:
+           - clinical.consultations
+           - clinical.encounters
+           - clinical.prescriptions
+           - clinical.treatment_plans
+           - lab.lab_orders
+           - admissions
+           - general_referrals
+         Lays the groundwork for the cursor/keyset pagination follow-up
+         from design call #2 and gives the cross-tenant `recent-*`
+         endpoints a covering index on their secondary sort key
+         (each entity's clinical-time field is the primary sort, with
+         created_at DESC as the tiebreaker / null-safety fallback —
+         see SuperAdminDashboardServiceImpl.getRecent*).
+         Strictly additive; all CREATE INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V91-clinical-created-at-desc-indexes" author="hms-team" runOnChange="false">
+        <sqlFile path="V91__clinical_created_at_desc_indexes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V92 — 1:1 enforcement between Encounter and DischargeSummary
+         Defensively dedupes any pre-existing duplicate discharge_summaries
+         rows (keeping the original by created_at), then adds a UNIQUE
+         constraint on (encounter_id) so concurrent /me/patient/
+         after-visit-summaries backfills can no longer race-create
+         duplicates. The dedupe + constraint addition share a single DO $$
+         block, so splitStatements MUST be false (same reasoning as V9 /
+         V61 / V63).
+         Originally landed via PR #259 (fix(avs): address Copilot review
+         findings) but the changelog entry was missed; this entry registers
+         the existing migration with Liquibase. The SQL is idempotent —
+         the DO block guards on pg_constraint — so re-applying on
+         deployments that already ran V92 directly is a no-op.
+         ================================================================= -->
+    <changeSet id="V92-discharge-summaries-unique-encounter-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V92__discharge_summaries_unique_encounter_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V93 — v1.0 / Clinical Safety / CDS Hooks expansion (roadmap row 2)
+         Strengthens the RxNorm binding on
+         clinical.medication_catalog_items so the new order-select and
+         medication-prescribe hook services can resolve a catalog row
+         from a FHIR CodeableConcept whose only typed coding is the
+         canonical RxNorm system.
+         Adds (additive, idempotent):
+           1. Pre-flight UPDATE NULL-ing any malformed rxnorm_code so
+              the CHECK constraint can be added safely.
+           2. CHECK constraint chk_med_catalog_rxnorm_format pinning
+              rxnorm_code to ^[0-9]{1,12}$ — same regex
+              TerminologyCodes.RXNORM enforces in Java. Wrapped in a
+              DO $$ + pg_constraint guard so re-running is a no-op.
+           3. Partial index idx_med_catalog_rxnorm_active backing the
+              new MedicationCatalogItemRepository
+              .findActiveByHospitalIdAndRxnormCode lookup used by both
+              new hooks and by the extended hms-medication-allergy-check
+              (drug-drug interaction add-on, roadmap row 3).
+           4. Optional tall_man_name VARCHAR(200) column for ISMP
+              confusable-name pairs surfaced in card detail by
+              MedicationPrescribeRulesCdsService.
+         splitStatements MUST be false because the CHECK-constraint
+         step uses a DO $$ ... $$; block (same reasoning as V9 / V61 /
+         V63 / V92).
+         ================================================================= -->
+    <changeSet id="V93-cds-rxnorm-bindings" author="hms-team" runOnChange="false">
+        <sqlFile path="V93__cds_rxnorm_bindings.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V94: v1.0 / Pharmacy / T-68 offline dispense queue (roadmap row 4)
+         Adds an optional idempotency_key column on clinical.dispenses + a
+         partial UNIQUE index so the offline IndexedDB queue can replay
+         POST /pharmacy/dispense without producing duplicate rows / stock
+         decrements / ready-for-pickup SMS. Pure DDL — splitStatements true;
+         every statement is wrapped IF NOT EXISTS so re-running is a no-op.
+         ================================================================= -->
+    <changeSet id="V94-dispense-idempotency-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V94__dispense_idempotency_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V95: Medication catalog becomes a platform / LNME catalog
+         The original V43 schema modelled medication_catalog_items as
+         strictly hospital-scoped (hospital_id NOT NULL, UNIQUE
+         (hospital_id, code)), forcing every hospital to redundantly
+         insert "Amoxicillin", "Paracétamol", etc.  This migration
+         relaxes hospital_id to optional so a single super-admin can
+         curate the platform catalog (NULL = global / LNME entry visible
+         to every tenant), while leaving the door open for hospital-
+         specific entries.  The single composite UNIQUE constraint is
+         split into two partial unique indexes so the two scopes can't
+         shadow each other (Postgres treats NULLs as distinct in a
+         multi-column UNIQUE, so without the split multiple globals
+         with the same code would silently coexist).
+         Pure DDL; splitStatements true; idempotent (DROP CONSTRAINT IF
+         EXISTS + CREATE UNIQUE INDEX IF NOT EXISTS).
+         ================================================================= -->
+    <changeSet id="V95-medication-catalog-platform-scope" author="hms-team" runOnChange="false">
+        <sqlFile path="V95__medication_catalog_platform_scope.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V96: De-duplicate user_role_hospital_assignment and prevent it
+         from happening again at the schema level. The seeder's
+         createAssignment used to insert unconditionally on every boot,
+         leaving duplicate (user, hospital, role) rows. Cleans up
+         existing duplicates (and their dependent permissions, which
+         have no DB-level FK on assignment_id) and adds partial unique
+         indexes covering both hospital-scoped and global assignments.
+         Pure DDL + DELETE on dev-discovered drift; splitStatements
+         true so the SQL file is executed as separate statements
+         (Liquibase still runs the whole changeSet in one transaction
+         unless runInTransaction="false").
+         ================================================================= -->
+    <changeSet id="V96-deduplicate-user-role-hospital-assignment" author="hms-team" runOnChange="false">
+        <sqlFile path="V96__deduplicate_user_role_hospital_assignment.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+     <!-- =================================================================
+         V97 — Hospital tenant isolation mode (roadmap row 33, v2.0)
+         Adds isolation_mode + tenant_schema_name to hospital.hospitals
+         so hospitals with strong isolation needs (military, foreign-
+         private) can opt in to schema-per-tenant. Pure metadata; no
+         data movement and no behavior change until
+         app.tenancy.schema-isolation.enabled flips on. The DO-blocks
+         around the CHECK constraints make the migration idempotent
+         (Liquibase keeps a record but the SQL itself can be re-run
+         against a recovered DB without erroring). splitStatements
+         false because the DO $$ ... $$ blocks contain semicolons.
+         ================================================================= -->
+    <changeSet id="V97-hospital-tenant-isolation-mode" author="hms-team" runOnChange="false">
+        <sqlFile path="V97__hospital_tenant_isolation_mode.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                     stripComments="true"/>
+     </changeSet>
+
+     <!-- =================================================================
+         V98 — Lab result idempotency for inbound ORU^R01 retransmissions
+         (roadmap row 23, v1.1 / Interop HL7).
+         Adds source_message_control_id (MSH-10) + partial unique index
+         so analyzer retransmits (Mindray / Sysmex / cobas) collapse to
+         a single lab_result row instead of duplicating on every
+         retry. V97 is reserved for the schema-per-tenant feature
+         branch — V98 is the next free slot from develop's perspective.
+         splitStatements true; no DO-blocks here, just ALTER + CREATE
+         INDEX IF NOT EXISTS.
+         ================================================================= -->
+    <changeSet id="V98-lab-result-source-message-control-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V98__lab_result_source_message_control_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+     <!-- =================================================================
+         V99 — ADT external-visit reconciliation columns
+         (roadmap row 24, v1.1 / Interop HL7).
+         Adds external_visit_number + external_sending_application +
+         external_sending_facility + external_message_control_id (all
+         VARCHAR 255, nullable) on admissions and clinical.encounters,
+         each with a partial composite unique index scoped per
+         (sender app, sender facility, visit number, hospital_id) for
+         rows where the visit number is non-null. Backs the ADT
+         visit-sync projection (MllpInboundAdtVisitProjectionService).
+         JPA mappings on Admission + Encounter reference all four
+         columns from this PR onward, so Liquibase MUST apply the
+         migration on startup or entity load will fail with "column
+         does not exist". Pure DDL: ADD COLUMN IF NOT EXISTS x 8 +
+         CREATE UNIQUE INDEX IF NOT EXISTS x 2; splitStatements true.
+         ================================================================= -->
+    <changeSet id="V99-adt-external-visit-reconciliation" author="hms-team" runOnChange="false">
+        <sqlFile path="V99__adt_external_visit_reconciliation.sql"
+                     relativeToChangelogFile="true"
+                     splitStatements="true"
+                     stripComments="true"/>
+     </changeSet>
+
+     <!-- =================================================================
+         V100 — LOINC binding for hms-patient-view CDS Hook
+         (roadmap row 26, v1.1 / Clinical Safety).
+         Adds clinical.patient_problems.loinc_code (VARCHAR 20) and
+         loinc_display (VARCHAR 255), both nullable. The PatientProblem
+         JPA mapping references both columns from this PR onward, so
+         Liquibase MUST apply this migration on startup — otherwise the
+         entity load fails with "column does not exist". V99 is reserved
+         for the ADT^A01/A04/A08 visit-sync feature branch
+         (feat/v1.1-adt-admission-encounter-sync); V100 is the next free
+         slot from this branch's perspective.
+         Pure DDL: ADD COLUMN IF NOT EXISTS x 2; splitStatements true.
+         ================================================================= -->
+    <changeSet id="V100-patient-problem-loinc-binding" author="hms-team" runOnChange="false">
+        <sqlFile path="V100__patient_problem_loinc_binding.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V101 — FHIR write idempotency index on patient registrations
+         (roadmap row 20, v1.1 / Backend / "FHIR write API").
+         Adds a partial unique index on
+         clinical.patient_hospital_registrations (hospital_id, LOWER(mrn))
+         WHERE is_active = true so FHIR conditional-create
+         (If-None-Exist) and HL7 ADT idempotency can rely on at most
+         one active MRN per hospital. Excludes inactive rows and
+         legacy NULL/blank MRNs. V100 is the prior slot
+         (LOINC binding); V101 is the next free.
+         Pure DDL: CREATE UNIQUE INDEX IF NOT EXISTS x 1.
+         ================================================================= -->
+    <changeSet id="V101-fhir-write-patient-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V101__fhir_write_patient_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V102 — Hospital scope for announcements.
+         Adds nullable public.announcement.hospital_id plus a covering
+         (hospital_id, date DESC) index and FK to hospital.hospitals so
+         Nurse Station announcements and counts can be tenant-scoped.
+         The FK guard uses a DO block, so splitStatements is false.
+         ================================================================= -->
+    <changeSet id="V102-announcement-hospital-scope" author="hms-team" runOnChange="false">
+        <sqlFile path="V102__announcement_hospital_scope.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V103 — Per-hospital ADT intake-provider configuration.
+         Roadmap row 24 follow-on. Adds platform.adt_intake_provider_configs
+         (one row per hospital) so MllpInboundAdtVisitProjectionService can
+         auto-create an Admission when an ADT^A01 arrives with an
+         unmatched visit-number triplet. Strictly additive:
+         CREATE TABLE IF NOT EXISTS + two CREATE INDEX IF NOT EXISTS +
+         COMMENT ON. Hard FK on hospital_id only; provider/department
+         UUIDs are application-layer-validated to tolerate staff/dept
+         re-seeds. V102 is the prior slot (announcement hospital scope);
+         V104 is the next free.
+         ================================================================= -->
+    <changeSet id="V103-adt-intake-provider-config" author="hms-team" runOnChange="false">
+        <sqlFile path="V103__adt_intake_provider_config.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V104 — ADT auto-create default_assignment_id column.
+         Roadmap row 24 follow-on (A04 Encounter-only auto-create).
+         Adds nullable platform.adt_intake_provider_configs.default_assignment_id
+         so the projection service can stamp Encounter.assignment when
+         provisioning from an A04. Strictly additive (ADD COLUMN IF NOT
+         EXISTS); the new column stays NULL on V103-era rows that only
+         enabled A01 auto-create. V103 is the prior slot; V105 is next free.
+         ================================================================= -->
+    <changeSet id="V104-adt-intake-default-assignment" author="hms-team" runOnChange="false">
+        <sqlFile path="V104__adt_intake_default_assignment.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V105 — KPI dashboard materialized views.
+         Roadmap row 32 follow-on. Adds three matviews
+         (clinical.kpi_door_to_doctor_daily,
+          clinical.kpi_dispense_lead_time_daily,
+          clinical.kpi_no_show_rate_daily) pre-aggregated per
+         (hospital_id, day) so KpiDashboardServiceImpl can stop
+         re-scanning source tables on every dashboard load. Each view
+         carries a unique (hospital_id, day_bucket) index so
+         REFRESH MATERIALIZED VIEW CONCURRENTLY works for the
+         scheduled refresher. PostgreSQL-only — the
+         <dbms type="postgresql"/> preCondition with
+         onFail="MARK_RAN" skips the changeset entirely on H2
+         (test) so the existing on-the-fly fallback path keeps
+         tests bit-for-bit unchanged. The service prefers the matview
+         when app.analytics.kpi.materialized-views.enabled=true AND
+         the view exists; otherwise it falls back to the existing
+         native SQL path.
+         ================================================================= -->
+    <changeSet id="V105-kpi-dashboard-materialized-views" author="hms-team" runOnChange="false">
+        <preConditions onFail="MARK_RAN">
+            <dbms type="postgresql"/>
+        </preConditions>
+        <sqlFile path="V105__kpi_dashboard_materialized_views.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V106 — Cross-service link PostpartumCarePlan → NewbornAssessment.
+         Roadmap row 41 follow-on item (1) "cross-service workflow
+         integration". Adds nullable newborn_assessment_id column to
+         clinical.postpartum_care_plans, FK to clinical.newborn_assessments
+         with NO ACTION on delete (defensive — operator must null the link
+         before deleting an assessment). Strictly additive: ADD COLUMN IF
+         NOT EXISTS + DO-block FK guard + CREATE INDEX IF NOT EXISTS.
+         splitStatements must be false because the FK guard is a PL/pgSQL
+         DO block.
+         ================================================================= -->
+    <changeSet id="V106-postpartum-newborn-assessment-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V106__postpartum_newborn_assessment_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

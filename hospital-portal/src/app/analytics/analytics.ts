@@ -1,6 +1,5 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   DashboardService,
@@ -9,6 +8,7 @@ import {
   DepartmentUtilization,
   HospitalMetric,
 } from '../services/dashboard.service';
+import { KpiCardsComponent } from './kpi-cards/kpi-cards.component';
 
 interface StatCard {
   label: string;
@@ -21,7 +21,7 @@ interface StatCard {
 @Component({
   selector: 'app-analytics',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [CommonModule, TranslateModule, KpiCardsComponent],
   templateUrl: './analytics.html',
   styleUrl: './analytics.scss',
 })

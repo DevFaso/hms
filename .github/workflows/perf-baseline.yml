@@ -1,0 +1,71 @@
+name: "Pharmacy perf baseline (k6)"
+
+# Manual-only — performance runs are an explicit decision, not an on-push side
+# effect. They consume UAT-environment secrets which must never be exposed in
+# PR runs from forks. See docs/observability/performance-baseline.md.
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: "Environment to load-test (uat | prod)"
+        required: true
+        default: "uat"
+        type: choice
+        options:
+          - uat
+          - prod
+      base_url_override:
+        description: "Optional BASE_URL override (leave blank to use the env default)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  k6:
+    name: "k6 dispense baseline"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The same job runs against either UAT or prod — all secrets come from a
+    # GitHub Environment (configured under Settings → Environments) so prod
+    # access requires a reviewer per the deploy.yml pattern.
+    environment: ${{ inputs.target_environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg \
+              --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" \
+              | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+          k6 version
+
+      - name: Run dispense baseline
+        env:
+          BASE_URL: ${{ inputs.base_url_override || vars.PERF_BASE_URL }}
+          AUTH_TOKEN: ${{ secrets.PERF_PHARMACIST_TOKEN }}
+          PRESCRIPTION_ID: ${{ vars.PERF_PRESCRIPTION_ID }}
+          PATIENT_ID: ${{ vars.PERF_PATIENT_ID }}
+          PHARMACY_ID: ${{ vars.PERF_PHARMACY_ID }}
+          STOCK_LOT_ID: ${{ vars.PERF_STOCK_LOT_ID }}
+          MEDICATION_CATALOG_ITEM_ID: ${{ vars.PERF_MEDICATION_CATALOG_ITEM_ID }}
+        run: |
+          if [ -z "$AUTH_TOKEN" ]; then
+            echo "::error::PERF_PHARMACIST_TOKEN secret not set on the '${{ inputs.target_environment }}' environment"
+            exit 1
+          fi
+          k6 run scripts/perf/dispense-baseline.js
+
+      - name: Upload k6 summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-baseline-summary-${{ inputs.target_environment }}-${{ github.run_number }}
+          path: perf-baseline-summary.json
+          if-no-files-found: warn
+          retention-days: 90

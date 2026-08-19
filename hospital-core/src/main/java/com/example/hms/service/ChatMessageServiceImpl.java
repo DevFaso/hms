@@ -1,13 +1,27 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
+import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_LAB_SCIENTIST;
+import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
+import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
+import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ChatMessageMapper;
+import com.example.hms.model.ChatAttachment;
 import com.example.hms.model.ChatMessage;
+import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.ChatAttachmentDTO;
 import com.example.hms.payload.dto.ChatConversationSummaryDTO;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
+import com.example.hms.repository.ChatAttachmentRepository;
 import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
@@ -26,6 +40,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -50,50 +67,54 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * </ul>
      */
     private static final Map<String, Set<String>> ALLOWED_MESSAGE_TARGETS = Map.ofEntries(
-        Map.entry("ROLE_HOSPITAL_ADMIN", Set.of(
-            "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_HOSPITAL_ADMIN, Set.of(
+            ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_DOCTOR", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_DOCTOR, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_NURSE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_NURSE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_MIDWIFE", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
-            "ROLE_PATIENT"
+        Map.entry(ROLE_MIDWIFE, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
+            ROLE_PATIENT
         )),
-        Map.entry("ROLE_RECEPTIONIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_RECEPTIONIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_LAB_SCIENTIST", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_LAB_SCIENTIST, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_STAFF", Set.of(
-            "ROLE_HOSPITAL_ADMIN",
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
-            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        Map.entry(ROLE_STAFF, Set.of(
+            ROLE_HOSPITAL_ADMIN,
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
         )),
-        Map.entry("ROLE_PATIENT", Set.of(
-            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE"
+        Map.entry(ROLE_PATIENT, Set.of(
+            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE
         ))
     );
 
+
+    private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
+    private static final int MIN_AUDIO_DURATION_SECONDS = 1;
+    private static final int MAX_AUDIO_DURATION_SECONDS = 90;
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
@@ -103,10 +124,18 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
+    private final ChatAttachmentRepository chatAttachmentRepository;
+    private final FileUploadService fileUploadService;
 
     @Override
     @Transactional
     public ChatMessageResponseDTO sendMessage(ChatMessageRequestDTO dto, Locale locale) {
+        boolean hasContent = dto.getContent() != null && !dto.getContent().isBlank();
+        boolean hasAttachments = dto.getAttachments() != null && !dto.getAttachments().isEmpty();
+        if (!hasContent && !hasAttachments) {
+            throw new IllegalArgumentException("A message must carry either content or at least one attachment");
+        }
+
         UUID currentUserId = getCurrentUserId(); // Sender ID
 
         User sender = userRepository.findById(currentUserId)
@@ -117,7 +146,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         if (dto.getRecipientId() != null) {
             recipient = userRepository.findById(dto.getRecipientId())
                 .orElseGet(() -> staffRepository.findById(dto.getRecipientId())
-                    .map(staff -> staff.getUser())
+                    .map(Staff::getUser)
                     .orElseThrow(() -> new ResourceNotFoundException("Recipient not found")));
         } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
@@ -130,8 +159,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             throw new SecurityException("Cannot send a chat message to yourself.");
         }
 
-        // Enforce role-based messaging hierarchy
-        validateMessageHierarchy(sender, recipient);
+        // Enforce role-based messaging hierarchy. Sender roles are
+        // read from SecurityContextHolder inside the validator; the
+        // sender User itself is not needed (Sonar S1172 / Pattern 18
+        // in docs/SonarQubeInstructions.md).
+        validateMessageHierarchy(recipient);
 
         // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
         boolean isSuperAdmin = isSuperAdminContext();
@@ -177,19 +209,116 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         ChatMessage saved = chatMessageRepository.save(message);
 
+        List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
+
         notificationService.createNotification(
             "New message from " + sender.getFirstName() + " " + sender.getLastName(),
             recipient.getUsername()
         );
 
-        return chatMessageMapper.toChatMessageResponseDTO(saved);
+        return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
+    }
+
+    /**
+     * Re-resolve each inbound attachment from its server-assigned storageKey, ignoring all
+     * other client-supplied descriptor fields, and persist a row pointing at it. Client-supplied
+     * publicUrl/displayName/contentType/sizeBytes/sha256 are recomputed from disk by
+     * {@link FileUploadService#resolveChatAttachment}; durationSeconds is preserved only for
+     * AUDIO with a 1..90 s clamp and forced null for PHOTO. The unique storage_key index races
+     * are caught and turned into 400s.
+     * <p>
+     * Bounded by {@link #MAX_ATTACHMENTS_PER_MESSAGE} so a sender can't fan out an arbitrary
+     * number of media rows under one chat send.
+     */
+    private List<ChatAttachment> persistAttachments(ChatMessage message, List<ChatAttachmentDTO> incoming) {
+        if (incoming == null || incoming.isEmpty()) {
+            return List.of();
+        }
+        if (incoming.size() > MAX_ATTACHMENTS_PER_MESSAGE) {
+            throw new IllegalArgumentException(
+                "A chat message may carry at most " + MAX_ATTACHMENTS_PER_MESSAGE + " attachments");
+        }
+
+        List<ChatAttachment> persisted = new ArrayList<>(incoming.size());
+        for (ChatAttachmentDTO dto : incoming) {
+            if (dto == null) {
+                throw new IllegalArgumentException("Attachment payload is required");
+            }
+            if (dto.getKind() == null) {
+                throw new IllegalArgumentException("Attachment kind is required");
+            }
+            FileUploadService.StoredFileDescriptor descriptor;
+            try {
+                descriptor = fileUploadService.resolveChatAttachment(dto.getStorageKey(), dto.getKind());
+            } catch (java.io.IOException ex) {
+                throw new IllegalArgumentException("Failed to resolve chat attachment", ex);
+            }
+            Integer duration = clampAudioDuration(dto.getKind(), dto.getDurationSeconds());
+            if (chatAttachmentRepository.existsByStorageKey(descriptor.storageKey())) {
+                throw new IllegalArgumentException(
+                    "Attachment storageKey already linked to another message");
+            }
+            ChatAttachment attachment = ChatAttachment.builder()
+                .message(message)
+                .kind(dto.getKind())
+                .storageKey(descriptor.storageKey())
+                .publicUrl(descriptor.publicUrl())
+                .displayName(descriptor.displayName())
+                .contentType(descriptor.contentType())
+                .sizeBytes(descriptor.sizeBytes())
+                .sha256(descriptor.sha256())
+                .durationSeconds(duration)
+                .build();
+            try {
+                persisted.add(chatAttachmentRepository.saveAndFlush(attachment));
+            } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+                throw new IllegalArgumentException(
+                    "Attachment storageKey already linked to another message", ex);
+            }
+        }
+        return persisted;
+    }
+
+    private Integer clampAudioDuration(com.example.hms.enums.ChatAttachmentKind kind, Integer durationSeconds) {
+        if (kind == com.example.hms.enums.ChatAttachmentKind.PHOTO) {
+            return null;
+        }
+        if (durationSeconds == null) {
+            throw new IllegalArgumentException("Voice memo duration is required");
+        }
+        if (durationSeconds < MIN_AUDIO_DURATION_SECONDS || durationSeconds > MAX_AUDIO_DURATION_SECONDS) {
+            throw new IllegalArgumentException(
+                "Voice memo duration must be between " + MIN_AUDIO_DURATION_SECONDS
+                    + " and " + MAX_AUDIO_DURATION_SECONDS + " seconds");
+        }
+        return durationSeconds;
+    }
+
+    /** Batch-load attachments for a page of messages so the response avoids N+1. */
+    private Map<UUID, List<ChatAttachment>> loadAttachmentsByMessage(Collection<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = messages.stream()
+            .map(ChatMessage::getId)
+            .filter(java.util.Objects::nonNull)
+            .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<ChatAttachment>> grouped = new HashMap<>();
+        chatAttachmentRepository.findByMessage_IdInOrderByMessage_IdAscCreatedAtAsc(ids)
+            .forEach(att -> grouped
+                .computeIfAbsent(att.getMessage().getId(), k -> new ArrayList<>())
+                .add(att));
+        return grouped;
     }
 
     private boolean isSuperAdminContext() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
-            .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+            .anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
     }
 
     /**
@@ -197,8 +326,14 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * the hospital role hierarchy. SUPER_ADMIN can message anyone. All other roles
      * must have at least one role that permits messaging at least one of the
      * recipient's roles.
+     *
+     * <p>The sender's roles are read from {@link SecurityContextHolder} (the
+     * authenticated principal), not from a method argument — that's the source of
+     * truth and avoids any drift between the User entity's persisted roles and the
+     * caller's effective authorities. Sonar S1172 / Pattern 18 in
+     * docs/SonarQubeInstructions.md.</p>
      */
-    private void validateMessageHierarchy(User sender, User recipient) {
+    private void validateMessageHierarchy(User recipient) {
         // SUPER_ADMIN bypasses all hierarchy checks
         if (isSuperAdminContext()) {
             return;
@@ -274,8 +409,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository.findChatBetweenUsers(user1, user2, pageable);
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 
@@ -301,8 +437,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         Page<ChatMessage> messages = chatMessageRepository
             .searchMessagesBetweenUsers(user1Id, user2Id, keyword, pageable);
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 
@@ -317,8 +454,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             messages = chatMessageRepository.findAllMessagesForUser(userId, pageable);
         }
 
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages.getContent());
         return messages.stream()
-            .map(chatMessageMapper::toChatMessageResponseDTO)
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
 
@@ -361,26 +499,33 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
-public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
-    List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
+        List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
-    List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
+        List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
-    List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
+        List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
+        return mapWithAttachments(messages);
+    }
 
-@Override
-public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
-    List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
-}
+    @Override
+    public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
+        List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
+        return mapWithAttachments(messages);
+    }
+
+    private List<ChatMessageResponseDTO> mapWithAttachments(List<ChatMessage> messages) {
+        Map<UUID, List<ChatAttachment>> attachmentsByMessage = loadAttachmentsByMessage(messages);
+        return messages.stream()
+            .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
+            .toList();
+    }
 }

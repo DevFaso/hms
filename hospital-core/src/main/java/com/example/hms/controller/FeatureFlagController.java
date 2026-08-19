@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.CacheControl;
@@ -44,23 +45,27 @@ public class FeatureFlagController {
 
     @PutMapping("/{flagKey}")
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Override a feature flag")
+    @Operation(summary = "Override a feature flag (optionally scoped to one organization)")
     public ResponseEntity<Map<String, Boolean>> overrideFeatureFlag(
         @PathVariable("flagKey") String flagKey,
         @Valid @RequestBody FeatureFlagOverrideRequestDTO request,
         @RequestParam(name = "env", required = false) String environment,
+        @RequestParam(name = "organizationId", required = false) UUID organizationId,
         Authentication authentication
     ) {
         Locale locale = LocaleContextHolder.getLocale();
         boolean enabled = Boolean.TRUE.equals(request.enabled());
         String description = request.description();
         String updatedBy = authentication != null ? authentication.getName() : "system";
+        // MVP-7b — null organizationId targets the legacy global row;
+        // a non-null id writes a per-tenant row that wins for that org only.
         Map<String, Boolean> payload = featureFlagService.upsertOverride(
             flagKey,
             enabled,
             description,
             updatedBy,
             environment,
+            organizationId,
             locale
         );
         return ResponseEntity.ok()
@@ -70,18 +75,23 @@ public class FeatureFlagController {
 
     @DeleteMapping("/{flagKey}")
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Remove feature flag override")
+    @Operation(summary = "Remove feature flag override (optionally scoped to one organization)")
     public ResponseEntity<Map<String, Boolean>> deleteFeatureFlagOverride(
         @PathVariable("flagKey") String flagKey,
         @RequestParam(name = "env", required = false) String environment,
+        @RequestParam(name = "organizationId", required = false) UUID organizationId,
         Authentication authentication
     ) {
         Locale locale = LocaleContextHolder.getLocale();
         String updatedBy = authentication != null ? authentication.getName() : "system";
+        // MVP-7b — null targets the global row; a non-null id targets the
+        // per-tenant row (the global row is unaffected and other tenants
+        // continue to inherit it).
         Map<String, Boolean> payload = featureFlagService.deleteOverride(
             flagKey,
             updatedBy,
             environment,
+            organizationId,
             locale
         );
         return ResponseEntity.ok()

@@ -1,0 +1,197 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'EMERGENCY.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'EMERGENCY.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'COMMON.BACK_TO_CONTROL_TOWER' | translate }}
+    </a>
+  </div>
+
+  <div class="alert-strip">
+    <span class="material-symbols-outlined">warning</span>
+    <span>{{ 'EMERGENCY.WARNING' | translate }}</span>
+  </div>
+
+  <div class="panel-grid">
+    <!-- Force Logout All -->
+    <section class="action-panel danger">
+      <h2>{{ 'EMERGENCY.FORCE_LOGOUT.TITLE' | translate }}</h2>
+      <p>{{ 'EMERGENCY.FORCE_LOGOUT.DESC' | translate }}</p>
+      <label>
+        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <textarea
+          rows="2"
+          [ngModel]="logoutReason()"
+          (ngModelChange)="logoutReason.set($event)"
+        ></textarea>
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.CONFIRM_TYPED' | translate }}</span>
+        <input
+          type="text"
+          placeholder="{{ 'EMERGENCY.FORCE_LOGOUT.CONFIRM_PLACEHOLDER' | translate }}"
+          [ngModel]="logoutConfirm()"
+          (ngModelChange)="logoutConfirm.set($event)"
+        />
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          [ngModel]="logoutMfa()"
+          (ngModelChange)="logoutMfa.set($event)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn-danger"
+        (click)="forceLogoutAll()"
+        [disabled]="logoutPanel().busy"
+      >
+        {{ 'EMERGENCY.FORCE_LOGOUT.ACTION' | translate }}
+      </button>
+      @if (logoutPanel().error) {
+        <p class="result-error" data-test="logout-error">{{ logoutPanel().error }}</p>
+      }
+      @if (logoutPanel().result; as r) {
+        <p class="result-success" data-test="logout-success">
+          {{ r.message }}
+          <em>({{ r.takenAt | date: 'short' }})</em>
+        </p>
+      }
+    </section>
+
+    <!-- Kill Feature -->
+    <section class="action-panel warn">
+      <h2>{{ 'EMERGENCY.KILL_FEATURE.TITLE' | translate }}</h2>
+      <p>{{ 'EMERGENCY.KILL_FEATURE.DESC' | translate }}</p>
+      <label>
+        <span>{{ 'EMERGENCY.KILL_FEATURE.FLAG_KEY' | translate }}</span>
+        <input type="text" [ngModel]="killFlagKey()" (ngModelChange)="killFlagKey.set($event)" />
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <textarea
+          rows="2"
+          [ngModel]="killReason()"
+          (ngModelChange)="killReason.set($event)"
+        ></textarea>
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          [ngModel]="killMfa()"
+          (ngModelChange)="killMfa.set($event)"
+        />
+      </label>
+      <button type="button" class="btn-warn" (click)="killFeature()" [disabled]="killPanel().busy">
+        {{ 'EMERGENCY.KILL_FEATURE.ACTION' | translate }}
+      </button>
+      @if (killPanel().error) {
+        <p class="result-error">{{ killPanel().error }}</p>
+      }
+      @if (killPanel().result; as r) {
+        <p class="result-success">{{ r.message }}</p>
+      }
+    </section>
+
+    <!-- Force MFA Re-enrol -->
+    <section class="action-panel warn">
+      <h2>{{ 'EMERGENCY.FORCE_MFA.TITLE' | translate }}</h2>
+      <p>{{ 'EMERGENCY.FORCE_MFA.DESC' | translate }}</p>
+      <label>
+        <span>{{ 'EMERGENCY.FORCE_MFA.USER_IDS' | translate }}</span>
+        <input
+          type="text"
+          placeholder="{{ 'EMERGENCY.FORCE_MFA.USER_IDS_PLACEHOLDER' | translate }}"
+          [ngModel]="mfaUserIds()"
+          (ngModelChange)="mfaUserIds.set($event)"
+        />
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.REASON' | translate }}</span>
+        <textarea
+          rows="2"
+          [ngModel]="mfaReason()"
+          (ngModelChange)="mfaReason.set($event)"
+        ></textarea>
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          [ngModel]="mfaMfa()"
+          (ngModelChange)="mfaMfa.set($event)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn-warn"
+        (click)="forceMfaReenrol()"
+        [disabled]="mfaPanel().busy"
+      >
+        {{ 'EMERGENCY.FORCE_MFA.ACTION' | translate }}
+      </button>
+      @if (mfaPanel().error) {
+        <p class="result-error">{{ mfaPanel().error }}</p>
+      }
+      @if (mfaPanel().result; as r) {
+        <p class="result-success">{{ r.message }}</p>
+      }
+    </section>
+
+    <!-- Broadcast -->
+    <section class="action-panel info">
+      <h2>{{ 'EMERGENCY.BROADCAST.TITLE' | translate }}</h2>
+      <p>{{ 'EMERGENCY.BROADCAST.DESC' | translate }}</p>
+      <label>
+        <span>{{ 'EMERGENCY.BROADCAST.MESSAGE' | translate }}</span>
+        <textarea
+          rows="3"
+          [ngModel]="broadcastMessage()"
+          (ngModelChange)="broadcastMessage.set($event)"
+        ></textarea>
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.BROADCAST.SEVERITY' | translate }}</span>
+        <select [ngModel]="broadcastSeverity()" (ngModelChange)="broadcastSeverity.set($event)">
+          <option value="INFO">{{ 'EMERGENCY.BROADCAST.SEVERITY_INFO' | translate }}</option>
+          <option value="WARN">{{ 'EMERGENCY.BROADCAST.SEVERITY_WARN' | translate }}</option>
+          <option value="CRITICAL">
+            {{ 'EMERGENCY.BROADCAST.SEVERITY_CRITICAL' | translate }}
+          </option>
+        </select>
+      </label>
+      <label>
+        <span>{{ 'EMERGENCY.MFA_TOKEN' | translate }}</span>
+        <input
+          type="text"
+          inputmode="numeric"
+          [ngModel]="broadcastMfa()"
+          (ngModelChange)="broadcastMfa.set($event)"
+        />
+      </label>
+      <button
+        type="button"
+        class="btn-primary"
+        (click)="broadcast()"
+        [disabled]="broadcastPanel().busy"
+      >
+        {{ 'EMERGENCY.BROADCAST.ACTION' | translate }}
+      </button>
+      @if (broadcastPanel().error) {
+        <p class="result-error">{{ broadcastPanel().error }}</p>
+      }
+      @if (broadcastPanel().result; as r) {
+        <p class="result-success">{{ r.message }}</p>
+      }
+    </section>
+  </div>
+</div>

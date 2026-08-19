@@ -82,19 +82,29 @@ setup('authenticate as SuperAdmin', async ({ page }) => {
     page.locator('button[type="submit"]').click(),
   ]);
 
-  // Wait for navigation to dashboard (post-login redirect)
-  await page.waitForURL('**/dashboard', { timeout: 15_000 });
+  // Wait for the post-login redirect — AuthService.resolveLandingPath
+  // sends ROLE_SUPER_ADMIN to /super-admin and other roles to /dashboard.
+  // The mock above logs in as ROLE_SUPER_ADMIN, so the actual landing
+  // page in CI is /super-admin, not /dashboard. The original
+  // `**/dashboard` matcher caused all 3 retries of this setup to time
+  // out on the PR #286 a11y-smoke job (page navigated to /super-admin
+  // and the wait never resolved). Match either landing surface — and
+  // any future role-specific landing — by waiting for navigation away
+  // from /login.
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 15_000 });
 
   // Persist storage state BEFORE any UI assertion so the auth file is always
-  // written even when the dashboard is slow to render under parallel load.
+  // written even when the landing page is slow to render under parallel load.
   await page.context().storageState({ path: AUTH_FILE });
 
-  // Soft readiness check — wait for the shell to mount (header or main content)
+  // Soft readiness check — wait for the shell to mount (header or main content).
+  // Includes .super-admin so SuperAdmin's /super-admin landing is also
+  // recognized as "the shell is up".
   await page
-    .locator('.hero-header, main, .dashboard')
+    .locator('.hero-header, main, .dashboard, .super-admin')
     .first()
     .waitFor({ state: 'visible', timeout: 10_000 })
     .catch(() => {
-      // Dashboard may still be loading; auth state is already saved — continue.
+      // Landing page may still be loading; auth state is already saved — continue.
     });
 });

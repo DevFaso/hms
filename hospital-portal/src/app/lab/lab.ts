@@ -18,11 +18,12 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab.html',
   styleUrl: './lab.scss',
 })
@@ -184,7 +185,7 @@ export class LabComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -213,6 +214,13 @@ export class LabComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  onHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.clearPatient();
+    this.patientSuggestions.set([]);
+    this.patientDropdownOpen.set(false);
+  }
+
   clearPatient(): void {
     this.selectedPatient.set(null);
     this.form.patientId = '';
@@ -221,6 +229,10 @@ export class LabComponent implements OnInit {
 
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
   }
 
   openCreate(): void {

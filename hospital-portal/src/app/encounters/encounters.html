@@ -4,10 +4,15 @@
       <h1 class="page-title">{{ 'ENCOUNTERS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'ENCOUNTERS.SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
-    </button>
+    <div class="page-actions">
+      <!-- Cross-tenant scope chip — only renders for super-admin
+           (docs/super-admin-cross-tenant-design.md). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
+      </button>
+    </div>
   </div>
 
   <div class="summary-cards">
@@ -99,7 +104,11 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medical_services</span>
-      <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ENCOUNTERS' | translate }}</h3>
+      } @else {
+        <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+      }
       <p>{{ 'ENCOUNTERS.EMPTY_MSG' | translate }}</p>
     </div>
   }
@@ -109,6 +118,9 @@
       <table>
         <thead>
           <tr>
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
             <th scope="col">{{ 'ENCOUNTERS.PROVIDER' | translate }}</th>
             <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
@@ -121,6 +133,11 @@
         <tbody>
           @for (enc of filtered(); track enc.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ enc.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">{{ enc.patientName || 'Unknown' }}</div>
               </td>
@@ -136,7 +153,9 @@
               </td>
               <td>{{ enc.encounterDate ? (enc.encounterDate | date: 'mediumDate') : '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+                <span class="status-badge {{ getStatusClass(enc.status) }}">{{
+                  enc.status | enumLabel: 'encounterStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">
@@ -195,7 +214,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+              ><span class="status-badge {{ getStatusClass(enc.status) }}">{{
+                enc.status | enumLabel: 'encounterStatus'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
@@ -270,7 +291,7 @@
             </div>
           }
 
-          <div class="detail-section">
+          <div class="detail-section detail-section--actions">
             @if (!showNoteForm()) {
               <button
                 class="btn-secondary"
@@ -280,25 +301,27 @@
                 <span class="material-symbols-outlined">add</span>
                 {{ 'ENCOUNTERS.ADD_NOTE' | translate }}
               </button>
-            } @else {
-              <h3>{{ 'ENCOUNTERS.ADD_NOTE' | translate }}</h3>
-              <textarea
-                class="note-input"
-                [(ngModel)]="noteContent"
-                rows="4"
-                [placeholder]="'ENCOUNTERS.NOTE_PLACEHOLDER' | translate"
-                aria-label="Clinical note"
-              ></textarea>
-              <div class="note-actions">
-                <button class="btn-primary" (click)="addNote()" [disabled]="!noteContent.trim()">
-                  {{ 'COMMON.SAVE' | translate }} {{ 'ENCOUNTERS.NOTES' | translate }}
-                </button>
-                <button class="btn-secondary" (click)="showNoteForm.set(false)">
-                  {{ 'COMMON.CANCEL' | translate }}
-                </button>
-              </div>
             }
+            <button
+              class="btn-secondary"
+              title="Run eligibility / prior-auth check"
+              (click)="openEligibilityDialog()"
+            >
+              <span class="material-symbols-outlined">verified_user</span>
+              Eligibility &amp; prior-auth
+            </button>
           </div>
+
+          @if (showNoteForm()) {
+            <div class="detail-section">
+              <app-encounter-note-form
+                [saving]="savingNote()"
+                [hospitalId]="enc.hospitalId"
+                (noteSubmit)="saveStructuredNote($event)"
+                (noteCancel)="cancelNote()"
+              ></app-encounter-note-form>
+            </div>
+          }
 
           <div class="detail-section">
             @if (!showAddendumForm()) {
@@ -337,6 +360,13 @@
       </div>
     </div>
   }
+
+  <app-eligibility-check-dialog
+    [open]="showEligibilityDialog()"
+    [patientId]="selectedEncounter()?.patientId ?? null"
+    [hospitalId]="selectedEncounter()?.hospitalId ?? null"
+    (closed)="closeEligibilityDialog()"
+  ></app-eligibility-check-dialog>
 </div>
 
 <!-- ═══ AFTER-VISIT SUMMARY MODAL ═══ -->

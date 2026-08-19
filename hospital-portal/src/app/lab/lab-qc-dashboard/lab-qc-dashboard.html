@@ -1,14 +1,15 @@
 <section class="page-header">
   <span class="material-symbols-outlined">monitoring</span>
   <div>
-    <h1>Quality Control Dashboard</h1>
-    <p>QC event trends and validation study results across all test definitions</p>
+    <h1>{{ 'LAB_QC.TITLE' | translate }}</h1>
+    <p>{{ 'LAB_QC.SUBTITLE' | translate }}</p>
   </div>
 </section>
 
 @if (loading()) {
   <div class="loading-spinner">
-    <span class="material-symbols-outlined">progress_activity</span> Loading…
+    <span class="material-symbols-outlined">progress_activity</span>
+    {{ 'LAB_QC.LOADING' | translate }}
   </div>
 } @else {
   <!-- ── Summary cards ──────────────────────────────────────── -->
@@ -19,7 +20,7 @@
       </div>
       <div>
         <div class="value">{{ totalQcEvents() }}</div>
-        <div class="label">Total QC Events</div>
+        <div class="label">{{ 'LAB_QC.TOTAL_QC_EVENTS' | translate }}</div>
       </div>
     </div>
 
@@ -29,7 +30,7 @@
       </div>
       <div>
         <div class="value">{{ totalQcFailures() }}</div>
-        <div class="label">Failed QC Events</div>
+        <div class="label">{{ 'LAB_QC.FAILED_QC_EVENTS' | translate }}</div>
       </div>
     </div>
 
@@ -39,7 +40,7 @@
       </div>
       <div>
         <div class="value">{{ totalValidationStudies() }}</div>
-        <div class="label">Validation Studies</div>
+        <div class="label">{{ 'LAB_QC.VALIDATION_STUDIES' | translate }}</div>
       </div>
     </div>
 
@@ -53,29 +54,29 @@
       </div>
       <div>
         <div class="value">{{ overallPassRate() | number: '1.1-1' }}%</div>
-        <div class="label">Validation Pass Rate</div>
+        <div class="label">{{ 'LAB_QC.VALIDATION_PASS_RATE' | translate }}</div>
       </div>
     </div>
   </div>
 
   <!-- ── QC Summary table ────────────────────────────────── -->
-  <h2 class="section-title">QC Events by Test Definition</h2>
-  <p class="section-hint">Click a row to view Levey-Jennings control charts</p>
+  <h2 class="section-title">{{ 'LAB_QC.EVENTS_BY_TEST' | translate }}</h2>
+  <p class="section-hint">{{ 'LAB_QC.CLICK_ROW_HINT' | translate }}</p>
   @if (qcSummary().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined">monitoring</span>
-      <p>No QC events recorded yet.</p>
+      <p>{{ 'LAB_QC.NO_EVENTS' | translate }}</p>
     </div>
   } @else {
     <table class="data-table clickable-rows">
       <thead>
         <tr>
           <th></th>
-          <th>Test Name</th>
-          <th>Total Events</th>
-          <th>Failed</th>
-          <th>Failure Rate</th>
-          <th>Last Event</th>
+          <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+          <th>{{ 'LAB_QC.COL.TOTAL_EVENTS' | translate }}</th>
+          <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+          <th>{{ 'LAB_QC.COL.FAILURE_RATE' | translate }}</th>
+          <th>{{ 'LAB_QC.COL.LAST_EVENT' | translate }}</th>
         </tr>
       </thead>
       <tbody>
@@ -120,19 +121,24 @@
                 @if (loadingChart()) {
                   <div class="loading-state compact">
                     <span class="material-symbols-outlined spin">progress_activity</span>
-                    Loading QC data…
+                    {{ 'LAB_QC.CHART.LOADING' | translate }}
                   </div>
                 } @else if (qcChartGroups().length === 0) {
                   <div class="empty-state compact">
                     <span class="material-symbols-outlined">show_chart</span>
-                    <p>No QC events recorded for this test.</p>
+                    <p>{{ 'LAB_QC.CHART.NO_EVENTS' | translate }}</p>
                   </div>
                 } @else {
                   @for (group of qcChartGroups(); track group.level) {
                     <div class="qc-chart-group">
                       <div class="qc-chart-title">
                         <span class="qc-level-badge">
-                          {{ group.level === 'LOW_CONTROL' ? 'Low Control' : 'High Control' }}
+                          {{
+                            (group.level === 'LOW_CONTROL'
+                              ? 'LAB_QC.CHART.LEVEL_LOW'
+                              : 'LAB_QC.CHART.LEVEL_HIGH'
+                            ) | translate
+                          }}
                         </span>
                         @if (!group.insufficient) {
                           <span class="qc-stats">
@@ -144,7 +150,7 @@
 
                       @if (group.insufficient) {
                         <div class="empty-state compact">
-                          <p>At least 3 QC events required to render chart.</p>
+                          <p>{{ 'LAB_QC.CHART.INSUFFICIENT_DATA' | translate }}</p>
                         </div>
                       } @else {
                         <div class="qc-svg-wrap">
@@ -302,7 +308,9 @@
                               class="lj-point lj-point-ok"
                               stroke-width="1.5"
                             />
-                            <text x="78" y="15.5" font-size="7" fill="#374151">Within ±1s</text>
+                            <text x="78" y="15.5" font-size="7" fill="#374151">
+                              {{ 'LAB_QC.CHART.LEGEND_OK' | translate }}
+                            </text>
                             <circle
                               cx="130"
                               cy="12"
@@ -311,7 +319,7 @@
                               stroke-width="1.5"
                             />
                             <text x="138" y="15.5" font-size="7" fill="#374151">
-                              ±1s–2s warning
+                              {{ 'LAB_QC.CHART.LEGEND_WARN' | translate }}
                             </text>
                             <circle
                               cx="210"
@@ -320,7 +328,9 @@
                               class="lj-point lj-point-fail"
                               stroke-width="1.5"
                             />
-                            <text x="218" y="15.5" font-size="7" fill="#374151">Outside ±2s</text>
+                            <text x="218" y="15.5" font-size="7" fill="#374151">
+                              {{ 'LAB_QC.CHART.LEGEND_FAIL' | translate }}
+                            </text>
                           </svg>
                         </div>
                       }
@@ -336,23 +346,23 @@
   }
 
   <!-- ── Validation Summary table ────────────────────────── -->
-  <h2 class="section-title">Validation Studies by Test Definition</h2>
+  <h2 class="section-title">{{ 'LAB_QC.STUDIES_BY_TEST' | translate }}</h2>
   @if (validationSummary().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined">biotech</span>
-      <p>No validation studies recorded yet.</p>
+      <p>{{ 'LAB_QC.NO_STUDIES' | translate }}</p>
     </div>
   } @else {
     <table class="data-table">
       <thead>
         <tr>
-          <th>Test Name</th>
-          <th>Code</th>
-          <th>Total</th>
-          <th>Passed</th>
-          <th>Failed</th>
-          <th>Pass Rate</th>
-          <th>Last Study</th>
+          <th>{{ 'LAB_QC.COL.TEST_NAME' | translate }}</th>
+          <th>{{ 'LAB_QC.STUDIES_COL.CODE' | translate }}</th>
+          <th>{{ 'LAB_QC.STUDIES_COL.TOTAL' | translate }}</th>
+          <th>{{ 'LAB_QC.STUDIES_COL.PASSED' | translate }}</th>
+          <th>{{ 'LAB_QC.COL.FAILED' | translate }}</th>
+          <th>{{ 'LAB_QC.STUDIES_COL.PASS_RATE' | translate }}</th>
+          <th>{{ 'LAB_QC.STUDIES_COL.LAST_STUDY' | translate }}</th>
         </tr>
       </thead>
       <tbody>

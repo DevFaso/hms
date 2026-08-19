@@ -1,7 +1,11 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.SessionBootstrapResponseDTO;
 import com.example.hms.payload.dto.EmailVerificationRequestDTO;
 import com.example.hms.payload.dto.EmailVerificationResponseDTO;
 import com.example.hms.payload.dto.JwtResponse;
@@ -13,10 +17,20 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
+import com.example.hms.payload.dto.credential.VerifyRecoveryContactRequest;
+import com.example.hms.controller.support.AuthControllerProperties;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.service.PasswordHistoryService;
+import com.example.hms.service.MfaService;
+import com.example.hms.security.WsTicketService;
+import com.example.hms.security.RefreshTokenCookieService;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.AuthBootstrapService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +47,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -43,6 +56,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -53,6 +67,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -61,8 +76,11 @@ import java.util.UUID;
 @Slf4j
 public class AuthController {
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final AuthBootstrapService authBootstrapService;
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
@@ -70,24 +88,81 @@ public class AuthController {
 
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
-    private final String frontendBaseUrl;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final com.example.hms.security.IdleSessionGate idleSessionGate;
+    private final com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
+    private final LoginAttemptService loginAttemptService;
+    private final AuditEventLogService auditEventLogService;
+    private final PasswordHistoryService passwordHistoryService;
+    private final MfaService mfaService;
+    private final WsTicketService wsTicketService;
+    private final RefreshTokenCookieService refreshTokenCookieService;
+    /**
+     * Bundles the four {@code @Value}-injected configuration scalars
+     * the controller previously took as separate constructor params:
+     * frontend base URL, MFA-required roles, OIDC-required flag, and
+     * OIDC issuer URI. Aggregation drops the constructor parameter
+     * count from 21 to 18. Sonar S107 ("constructor has too many
+     * parameters") still fires at 18 — the residual is documented as
+     * "won't fix" in docs/SonarQubeInstructions.md §Pattern 7
+     * because full helper-class extraction is a feature-scope refactor
+     * (changes the auth-surface architecture) rather than a
+     * Sonar-cleanup chore.
+     *
+     * <p>Field-level docstrings for the original scalars (KC-5 cutover
+     * gate, RFC-8414 Link header behaviour) moved to the accessor
+     * comments on {@link AuthControllerProperties}.</p>
+     */
+    private final AuthControllerProperties authProps;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
+            AuthBootstrapService authBootstrapService,
             UserService userService,
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
-            @Value("${app.frontend.base-url}") String frontendBaseUrl) {
+            TokenBlacklistService tokenBlacklistService,
+            com.example.hms.security.IdleSessionGate idleSessionGate,
+            com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker,
+            LoginAttemptService loginAttemptService,
+            AuditEventLogService auditEventLogService,
+            PasswordHistoryService passwordHistoryService,
+            MfaService mfaService,
+            WsTicketService wsTicketService,
+            RefreshTokenCookieService refreshTokenCookieService,
+            AuthControllerProperties authProps) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
+        this.authBootstrapService = authBootstrapService;
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
-        this.frontendBaseUrl = frontendBaseUrl;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.idleSessionGate = idleSessionGate;
+        this.impersonationSessionTracker = impersonationSessionTracker;
+        this.loginAttemptService = loginAttemptService;
+        this.auditEventLogService = auditEventLogService;
+        this.passwordHistoryService = passwordHistoryService;
+        this.mfaService = mfaService;
+        this.wsTicketService = wsTicketService;
+        this.refreshTokenCookieService = refreshTokenCookieService;
+        this.authProps = authProps;
+
+        // KC-5 cutover signal: surface the gate state in the startup log so the
+        // ops on-call running the cutover runbook can confirm the flip took
+        // effect without grepping request-time WARN lines. Paths are reported
+        // with the /api context-path (server.servlet.context-path=/api), which
+        // is what hits the load balancer — the message must match the URL ops
+        // are actually curling in their smoke checks.
+        if (authProps.oidcRequired()) {
+            log.info("[OIDC] app.auth.oidc.required=true — legacy POST /api/auth/login + POST /api/auth/token/refresh will return 410 Gone");
+        } else {
+            log.info("[OIDC] app.auth.oidc.required=false — legacy POST /api/auth/login + POST /api/auth/token/refresh accept username/password");
+        }
     }
 
     /**
@@ -130,10 +205,34 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Object> authenticateUser(
-            @Parameter(description = "Login request payload", required = true) @Valid @RequestBody LoginRequest loginRequest) {
+            @Parameter(description = "Login request payload", required = true) @Valid @RequestBody LoginRequest loginRequest,
+            HttpServletResponse httpResponse) {
+        // KC-5 prep: short-circuit the legacy issuer when the soak flag is on.
+        // Callers must migrate to the Keycloak Auth Code + PKCE flow.
+        if (authProps.oidcRequired()) {
+            log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
+                    loginRequest.getUsername());
+            return legacyIssuerGone(
+                    "Legacy username/password login is disabled. Sign in via Single Sign-On.");
+        }
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
                 java.time.Instant.now());
+
+        // ── Lockout check (T-12) ──
+        if (loginAttemptService.isLocked(loginRequest.getUsername())) {
+            long remainMs = loginAttemptService.remainingLockMs(loginRequest.getUsername());
+            long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
+            log.warn("🔐 [LOGIN] Account '{}' is locked", loginRequest.getUsername());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.ACCOUNT_LOCKED)
+                    .eventDescription("Login rejected — account locked")
+                    .userName(loginRequest.getUsername())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.status(423)
+                    .body(new MessageResponse("Account is temporarily locked. Try again in " + remainMin + " minute(s)."));
+        }
 
         try {
             log.debug("🔐 [LOGIN] Authenticating via AuthenticationManager...");
@@ -187,11 +286,40 @@ public class AuthController {
 
             var descriptor = new com.example.hms.security.TokenUserDescriptor(
                     user.getId(), user.getUsername(), effectiveRoles);
+
+            // ── MFA challenge gate (T-28) ──
+            if (mfaService != null && isMfaRequiredForUser(effectiveRoles)) {
+                boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
+                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername());
+
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.MFA_CHALLENGE)
+                        .eventDescription("MFA challenge issued")
+                        .userName(user.getUsername())
+                        .userId(user.getId())
+                        .status(AuditStatus.PENDING)
+                        .build());
+
+                long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                log.info("🔐 [LOGIN] MFA required for user='{}', enrolled={} in {}ms",
+                        user.getUsername(), mfaEnabled, elapsedMs);
+
+                var body = JwtResponse.builder()
+                        .mfaRequired(true)
+                        .mfaEnrolled(mfaEnabled)
+                        .mfaToken(mfaToken)
+                        .username(user.getUsername())
+                        .build();
+                // Store selected role in mfa token for later use after verification
+                return ResponseEntity.ok(body);
+            }
+
             String accessToken = jwtTokenProvider.generateAccessToken(descriptor);
             String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor);
             log.debug("🔐 [LOGIN] Tokens generated (effectiveRoles={}); fetching profiles...", effectiveRoles);
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
+            loginAttemptService.resetAttempts(loginRequest.getUsername());
 
             // Pull details from related profiles
             var patient = user.getPatientProfile();
@@ -240,9 +368,22 @@ public class AuthController {
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.info("🔐 [LOGIN] Success user='{}' effectiveRoles={} in {}ms", loginRequest.getUsername(), effectiveRoles, elapsedMs);
+            // S-01: deliver refresh token via HttpOnly cookie (in addition to JSON body during rollout)
+            writeRefreshCookie(httpResponse, refreshToken);
+            // ── Idle session timeout — seed the idle window on token issue ──
+            // Without this, the very first authenticated request after login
+            // hits the idle gate with no tracker entry and is treated as
+            // "idle past the window" (both InMemoryIdleSessionTracker.isIdle
+            // and RedisIdleSessionTracker.isIdle return true on a missing
+            // key). Touching here means the session becomes idle only after
+            // the configured window of true inactivity, not immediately on
+            // first use.
+            idleSessionGate.touchIfHuman(user.getId(),
+                AuthorityUtils.createAuthorityList(effectiveRoles.toArray(new String[0])));
             return ResponseEntity.ok(body);
 
         } catch (BadCredentialsException ex) {
+            loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
@@ -341,7 +482,7 @@ public class AuthController {
 
         String activationLink = String.format(
                 "%s/verify?email=%s&token=%s",
-                frontendBaseUrl, user.getEmail(), user.getActivationToken());
+                authProps.frontendBaseUrl(), user.getEmail(), user.getActivationToken());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
             log.info("📧 Resent verification email to '{}'", user.getEmail());
@@ -357,7 +498,34 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(summary = "Logout current user", description = "Clears authentication context on the server side (stateless JWT requires client to discard tokens).")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
-    public ResponseEntity<Object> logout() {
+    public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response) {
+        // Blacklist the current access token so it cannot be reused
+        String bearerToken = request.getHeader("Authorization");
+        String username = null;
+        if (bearerToken != null && bearerToken.startsWith(BEARER_PREFIX)) {
+            String jwt = bearerToken.substring(7);
+            try {
+                String jti = jwtTokenProvider.getJtiFromToken(jwt);
+                long expMs = jwtTokenProvider.getExpiration(jwt).getTime();
+                username = jwtTokenProvider.getUsernameFromJWT(jwt);
+                if (jti != null) {
+                    tokenBlacklistService.blacklist(jti, expMs);
+                    log.info("[LOGOUT] Blacklisted access token jti={}", jti);
+
+                    auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                            .eventType(AuditEventType.TOKEN_REVOKED)
+                            .eventDescription("Access token revoked on logout (jti=" + jti + ")")
+                            .ipAddress(request.getRemoteAddr())
+                            .status(AuditStatus.SUCCESS)
+                            .userName(username)
+                            .build());
+                }
+            } catch (Exception ex) {
+                log.debug("[LOGOUT] Could not extract jti from token: {}", ex.getMessage());
+            }
+        }
+        // S-01: clear the HttpOnly refresh-token cookie
+        refreshTokenCookieService.clear(response);
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
     }
@@ -381,11 +549,28 @@ public class AuthController {
     @ApiResponse(responseCode = "200", description = "Tokens refreshed")
     @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
     public ResponseEntity<Object> refreshToken(
-            @RequestBody(required = false) java.util.Map<String, String> body) {
+            @RequestBody(required = false) java.util.Map<String, String> body,
+            HttpServletRequest request,
+            HttpServletResponse response) {
 
-        String refreshToken = body != null ? body.get("refreshToken") : null;
+        // KC-5 prep: once the soak flag is on, no new access tokens are
+        // minted from refresh tokens either. Existing access tokens keep
+        // working until they expire; after that clients must re-authenticate
+        // via Keycloak.
+        if (authProps.oidcRequired()) {
+            log.warn("🔄 [REFRESH] Rejected — legacy issuer disabled (app.auth.oidc.required=true)");
+            return legacyIssuerGone(
+                    "Legacy token refresh is disabled. Sign in via Single Sign-On.");
+        }
+
+        // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
+        // Body-based refresh remains supported as a legacy fallback during rollout.
+        String refreshToken = refreshTokenCookieService.read(request);
+        if (refreshToken == null) {
+            refreshToken = body != null ? body.get("refreshToken") : null;
+        }
         if (refreshToken == null || refreshToken.isBlank()) {
-            log.warn("🔄 [REFRESH] Missing refreshToken in request body");
+            log.warn("🔄 [REFRESH] Missing refresh token (cookie + body both empty)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token is required."));
         }
@@ -396,6 +581,14 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
         }
 
+        // Replay detection: reject already-used refresh tokens
+        String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
         if (user == null || !user.isActive()) {
@@ -404,12 +597,52 @@ public class AuthController {
                     .body(new MessageResponse("User account not found or inactive."));
         }
 
+        // Closes Copilot review #4 on PR #224 — refuse to mint a new
+        // super-admin access token from the surviving refresh cookie while
+        // an impersonation session is active for this user. Without this
+        // check, a 401 on the impersonation token would auto-trigger this
+        // refresh path and silently elevate the caller back to super-admin
+        // without ever emitting an IMPERSONATION_ENDED audit event.
+        if (impersonationSessionTracker.hasActive(user.getId())) {
+            log.warn("🔄 [REFRESH] Refused — user '{}' has an active impersonation session", username);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MessageResponse(
+                        "Active support-impersonation session — call /super-admin/impersonation/stop before refreshing."));
+        }
+
         // Resolve current roles from tenant assignments (authoritative source)
         List<String> roles = assignmentRepository.findByUser(user).stream()
                 .filter(a -> Boolean.TRUE.equals(a.getActive()))
                 .map(a -> a.getRole().getCode())
                 .distinct()
                 .toList();
+
+        // ── Idle session timeout gate (v1.0 row 7) ───────────────────────
+        // Refusing refresh-while-idle is the spec invariant: a silent
+        // refresh of an idle session would defeat the timeout entirely.
+        // Gate sits AFTER the impersonation + role-resolution checks so
+        // the role list is available for the machine-role carve-out, and
+        // BEFORE token rotation so a rejected refresh does not extend the
+        // window via the post-rotation touch below.
+        var refreshAuthorities = roles.stream()
+                .<org.springframework.security.core.GrantedAuthority>map(
+                    org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                .toList();
+        if (idleSessionGate.shouldReject(user.getId(), refreshAuthorities)) {
+            log.warn("🔄 [REFRESH] Refused — user '{}' has been idle past the configured window", username);
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.TOKEN_REFRESH)
+                    .eventDescription("Refresh refused — idle timeout")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .header("WWW-Authenticate",
+                        com.example.hms.security.IdleSessionGate.WWW_AUTHENTICATE_CHALLENGE)
+                    .body(new MessageResponse(
+                        "Session timed out due to inactivity. Please log in again."));
+        }
 
         var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
         String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
@@ -426,14 +659,37 @@ public class AuthController {
                      .toList());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
 
+        // Blacklist the old refresh token to prevent replay
+        if (refreshJti != null) {
+            long oldRefreshExp = jwtTokenProvider.getExpiration(refreshToken).getTime();
+            tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
+            log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
+        }
+
+        // ── Idle session timeout — touch on successful refresh ──────────
+        // Only after the rotation has succeeded; touching pre-rotation
+        // would extend the window even if rotation failed downstream.
+        idleSessionGate.touchIfHuman(user.getId(), refreshAuthorities);
+
         long nowMs      = System.currentTimeMillis();
         long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
         long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
         log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
 
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.TOKEN_REFRESH)
+                .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
+                .userName(username)
+                .userId(user.getId())
+                .status(AuditStatus.SUCCESS)
+                .build());
+
         // Include fresh hospital context so the frontend can re-hydrate
         var hospitalContext = resolveHospitalContext(user.getId());
+
+        // S-01: rotate the HttpOnly refresh-token cookie
+        writeRefreshCookie(response, newRefreshToken);
 
         return ResponseEntity.ok(JwtResponse.builder()
                 .accessToken(newAccessToken)
@@ -536,7 +792,20 @@ public class AuthController {
                     .body(new MessageResponse("New password must differ from the current password."));
         }
 
-        // Update password and clear force-change flag via service
+        // Password history check (T-20) — reject reuse of last 5 passwords
+        if (passwordHistoryService.isPasswordReused(user.getId(), request.newPassword())) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.PASSWORD_HISTORY_VIOLATION)
+                    .eventDescription("Password change rejected — matches a recent password")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("New password must not match any of your last 5 passwords."));
+        }
+
+        // Update password, clear force-change flag, and record in history
         userService.changeOwnPassword(user.getId(), request.newPassword());
 
         log.info("🔑 [CHANGE-PWD] Password changed for user='{}'; forcePasswordChange cleared.", username);
@@ -624,13 +893,14 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    // Temporary diagnostic: validate provided Authorization bearer token
+    // Diagnostic endpoint — restricted to SUPER_ADMIN only (T-15 security hardening)
     @GetMapping("/token/echo")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Object> echoToken(@RequestHeader(value = "Authorization", required = false) String authz) {
-        if (authz == null || !authz.startsWith("Bearer ")) {
+        if (authz == null || !authz.startsWith(BEARER_PREFIX)) {
             return ResponseEntity.badRequest().body(new MessageResponse("Missing or invalid Authorization header"));
         }
-        String token = authz.substring("Bearer ".length());
+        String token = authz.substring(BEARER_PREFIX.length());
         try {
             boolean valid = jwtTokenProvider.validateToken(token);
             var roles = valid ? jwtTokenProvider.getRolesFromToken(token) : null;
@@ -727,6 +997,30 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/credentials/recovery/{contactId}/send-code")
+    public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
+            @PathVariable UUID contactId) {
+        UUID userId = resolveCurrentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId);
+        return ResponseEntity.ok(java.util.Map.of("message", "Verification code sent", "contactType", contactType));
+    }
+
+    @PostMapping("/credentials/recovery/{contactId}/verify")
+    public ResponseEntity<UserRecoveryContactDTO> verifyRecoveryContact(
+            @PathVariable UUID contactId,
+            @Valid @RequestBody VerifyRecoveryContactRequest request) {
+        UUID userId = resolveCurrentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        UserRecoveryContactDTO dto = userCredentialLifecycleService.verifyRecoveryContact(
+                userId, contactId, request.getCode());
+        return ResponseEntity.ok(dto);
+    }
+
     private UUID resolveCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -754,6 +1048,55 @@ public class AuthController {
 
     // helper methods removed as self-registration is deprecated
 
+    // ── WebSocket ticket (T-37) ──
+
+    /**
+     * Issue a single-use, 1-minute ticket for WebSocket handshake authentication.
+     * The client passes this as {@code ?ticket=<value>} on the {@code /ws-chat} endpoint
+     * instead of sending the JWT as a query parameter.
+     */
+    @PostMapping("/ws-ticket")
+    public ResponseEntity<Map<String, String>> issueWsTicket(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).build();
+        }
+        String username = authentication.getName();
+        String ticket = wsTicketService.issue(username);
+        return ResponseEntity.ok(Map.of("ticket", ticket));
+    }
+
+    /**
+     * Session bootstrap — resolves authoritative hospital/permission context from the DB.
+     *
+     * <p>Replaces client-side JWT claim decoding for hospital_id. The frontend
+     * (and mobile apps) should call this once after receiving a valid token so
+     * all hospital-context decisions are based on the DB, not the token payload.
+     *
+     * <p>Side-effect: when {@code authSource == "keycloak"}, updates
+     * {@code lastOidcLoginAt} on the user record.
+     *
+     * @return {@link SessionBootstrapResponseDTO} with identity, roles, and hospital context
+     */
+    @Operation(
+        summary = "Session Bootstrap",
+        description = "Returns authoritative session context (roles, hospital, staff/patient profile) "
+                    + "from the DB for the currently authenticated principal. "
+                    + "Updates lastOidcLoginAt when authSource is 'keycloak'.")
+    @ApiResponse(responseCode = "200", description = "Session context resolved",
+        content = @Content(schema = @Schema(implementation = SessionBootstrapResponseDTO.class)))
+    @ApiResponse(responseCode = "401", description = "Not authenticated")
+    @GetMapping("/session/bootstrap")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public ResponseEntity<SessionBootstrapResponseDTO> sessionBootstrap(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = authentication.getName();
+        log.debug("[SESSION-BOOTSTRAP] Resolving session context for user='{}'", username);
+        SessionBootstrapResponseDTO response = authBootstrapService.resolveCurrentSession(username);
+        return ResponseEntity.ok(response);
+    }
+
     /* ── Hospital assignment context ── */
     private record HospitalContext(UUID primaryHospitalId, String primaryHospitalName,
                                    List<UUID> hospitalIds) {}
@@ -762,6 +1105,54 @@ public class AuthController {
      * Resolve hospital context from the user's active tenant role assignments.
      * Returns the primary hospital (first active assignment) and all permitted hospital IDs.
      */
+    private boolean isMfaRequiredForUser(List<String> roles) {
+        List<String> required = authProps.mfaRequiredRoles();
+        if (required.isEmpty()) {
+            return false;
+        }
+        return roles.stream().anyMatch(required::contains);
+    }
+
+    /**
+     * Roadmap row 8 — uniform 410 Gone response for the two legacy
+     * issuer endpoints. Adds an RFC 8414 {@code Link: rel="oauth2-issuer"}
+     * header pointing at the OIDC discovery document so clients can
+     * self-discover the SSO endpoint without operator intervention. The
+     * header is only emitted when {@code app.auth.oidc.issuer-uri} is
+     * non-empty — local dev runs without OIDC configured still get the
+     * runbook copy in the JSON body.
+     */
+    private ResponseEntity<Object> legacyIssuerGone(String userFacingMessage) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(HttpStatus.GONE);
+        String issuer = authProps.oidcIssuerUri();
+        if (!issuer.isEmpty()) {
+            String discovery = issuer.endsWith("/")
+                    ? issuer + ".well-known/openid-configuration"
+                    : issuer + "/.well-known/openid-configuration";
+            builder = builder.header("Link",
+                    "<" + discovery + ">; rel=\"oauth2-issuer\"; type=\"application/json\"");
+        }
+        return builder.body(new MessageResponse(userFacingMessage));
+    }
+
+    /**
+     * S-01: writes the refresh token into an HttpOnly cookie so it is not
+     * accessible from browser JavaScript. MaxAge is derived from the token's
+     * own {@code exp} claim so the cookie expires in lockstep with the JWT.
+     */
+    private void writeRefreshCookie(HttpServletResponse response, String refreshToken) {
+        if (response == null || refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        try {
+            long expMs = jwtTokenProvider.getExpiration(refreshToken).getTime();
+            long maxAgeMs = Math.max(0L, expMs - System.currentTimeMillis());
+            refreshTokenCookieService.write(response, refreshToken, maxAgeMs);
+        } catch (Exception ex) {
+            log.warn("Failed to set refresh cookie: {}", ex.getMessage());
+        }
+    }
+
     private HospitalContext resolveHospitalContext(UUID userId) {
         var assignments = assignmentRepository.findAllDetailedByUserId(userId).stream()
                 .filter(a -> Boolean.TRUE.equals(a.getActive()) && a.getHospital() != null)

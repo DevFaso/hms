@@ -9,6 +9,35 @@ const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 const USER_PROFILE_KEY = 'user_profile';
 
+/**
+ * Authoritative session context returned by GET /api/auth/session/bootstrap.
+ * Replaces client-side JWT claim decoding for hospital/permission resolution.
+ */
+export interface SessionBootstrapResponse {
+  userId: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
+  /** 'internal' | 'keycloak' | 'saml' */
+  authSource: string;
+  roles: string[];
+  superAdmin: boolean;
+  hospitalAdmin: boolean;
+  primaryHospitalId?: string;
+  primaryHospitalName?: string;
+  permittedHospitalIds?: string[];
+  /** Null when the user has no staff record */
+  staffId?: string;
+  staffRoleCode?: string;
+  departmentId?: string;
+  departmentName?: string;
+  /** Null when the user has no patient record */
+  patientId?: string;
+  lastOidcLoginAt?: string;
+}
+
 export interface LoginUserProfile {
   id: string;
   username: string;
@@ -87,13 +116,41 @@ export class AuthService {
   setToken(token: string, remember = true): void {
     if (!this.isBrowser) return;
     try {
+      // Always clear the OTHER storage before writing — a token must live in
+      // exactly one place. Without this, a remember-me login leaves the
+      // original JWT in localStorage; a subsequent setToken(impersonationToken,
+      // false) writes to sessionStorage but getToken() prefers localStorage,
+      // so every API call keeps using the original token (Copilot review #2
+      // on PR #224 — impersonation never takes effect for remembered sessions).
       if (remember) {
+        sessionStorage.removeItem(ACCESS_TOKEN_KEY);
         localStorage.setItem(ACCESS_TOKEN_KEY, token);
       } else {
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
         sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       }
+      // Clear any stale idle-lock flag from a prior session so the new
+      // login does not land on the lock screen instead of the dashboard.
+      sessionStorage.removeItem('hms_idle_locked');
+      sessionStorage.removeItem('hms_lock_ts');
     } catch {
       // Storage not available
+    }
+  }
+
+  /**
+   * MVP-4 — return whether the current access token is in localStorage
+   * (remember-me) or sessionStorage. The {@code ImpersonationService} uses
+   * this to remember the original `remember` preference so that, on
+   * stop(), the original token is restored to its original storage rather
+   * than being silently promoted to localStorage (Copilot review #5).
+   */
+  isTokenRemembered(): boolean {
+    if (!this.isBrowser) return false;
+    try {
+      return localStorage.getItem(ACCESS_TOKEN_KEY) != null;
+    } catch {
+      return false;
     }
   }
 
@@ -108,6 +165,17 @@ export class AuthService {
   }
 
   // ---------- Refresh Token ----------
+  // S-01: refresh token now lives in an HttpOnly cookie (`hms_refresh`)
+  // set by the backend. JavaScript cannot read it, which mitigates XSS
+  // theft. The accessor methods below remain for backward compatibility
+  // (they still purge any legacy localStorage value left over from a
+  // previous session) but no new refresh tokens are written to storage.
+
+  /**
+   * @deprecated S-01: refresh tokens are no longer accessible from JS.
+   * Returns any value left over from a pre-S-01 session so the next
+   * refresh call can use it once and migrate to the cookie.
+   */
   getRefreshToken(): string | null {
     if (!this.isBrowser) return null;
     try {
@@ -119,17 +187,15 @@ export class AuthService {
     }
   }
 
-  setRefreshToken(token: string, remember = true): void {
-    if (!this.isBrowser) return;
-    try {
-      if (remember) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, token);
-      } else {
-        sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
-      }
-    } catch {
-      // Storage not available
-    }
+  /**
+   * @deprecated S-01: no-op. The refresh token is delivered exclusively
+   * via an HttpOnly cookie. Any legacy storage is wiped so future calls
+   * always rely on the cookie.
+   */
+  setRefreshToken(_token: string, _remember = true): void {
+    // Intentionally do not persist the refresh token to web storage.
+    // Wipe any legacy value so subsequent reads see only the cookie.
+    this.clearRefreshToken();
   }
 
   clearRefreshToken(): void {
@@ -143,23 +209,24 @@ export class AuthService {
   }
 
   /**
-   * Call POST /api/auth/token/refresh with the stored refresh token.
-   * Returns an Observable of the new token pair.
+   * Call POST /api/auth/token/refresh.
    *
-   * Uses a window-relative absolute URL so the request bypasses the
-   * apiPrefixInterceptor (which would add a double /api prefix).
-   * Note: Angular interceptors still run for same-origin absolute URLs,
-   * so the csrfInterceptor will execute — this is harmless since the
-   * endpoint is authenticated by the signed refresh-token body.
+   * <p>S-01: the refresh token is sent automatically by the browser as the
+   * HttpOnly `hms_refresh` cookie (scoped to /api/auth). We pass
+   * `withCredentials: true` so cross-origin cookies are included.
+   *
+   * <p>If a legacy localStorage refresh token still exists from a pre-S-01
+   * session, it is forwarded once in the body so the backend can rotate it
+   * and switch the user over to the cookie-based flow.
    */
   refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
-    const refreshToken = this.getRefreshToken();
-    // Build an absolute URL at runtime so we always resolve against the current
-    // origin without duplicating the /api prefix that apiPrefixInterceptor adds.
+    const legacyRefreshToken = this.getRefreshToken();
     const baseUrl = this.isBrowser ? `${globalThis.location.origin}/api` : '/api';
+    const body = legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {};
     return this.http.post<{ accessToken: string; refreshToken: string }>(
       `${baseUrl}/auth/token/refresh`,
-      { refreshToken },
+      body,
+      { withCredentials: true },
     );
   }
 
@@ -273,6 +340,14 @@ export class AuthService {
     if (!p) return [];
     if (Array.isArray(p.roles)) return p.roles;
     if (Array.isArray(p.authorities)) return p.authorities;
+    // Keycloak shape: realm-level roles live under `realm_access.roles`.
+    // Normalise to the `ROLE_*` convention the rest of the portal expects.
+    const realmAccess = p['realm_access'] as { roles?: unknown } | undefined;
+    if (Array.isArray(realmAccess?.roles)) {
+      return realmAccess.roles
+        .filter((r): r is string => typeof r === 'string')
+        .map((r) => (r.startsWith('ROLE_') ? r : `ROLE_${r}`));
+    }
     if (typeof p.scope === 'string') return p.scope.split(/\s+/);
     return [];
   }
@@ -327,7 +402,13 @@ export class AuthService {
     const ctx = this.roleContext.activeHospitalId;
     if (ctx) return ctx;
     const p = this.decodePayload();
-    return (p?.['primaryHospitalId'] as string) ?? (p?.hospitalId as string) ?? null;
+    return (
+      (p?.['primaryHospitalId'] as string) ??
+      (p?.hospitalId as string) ??
+      // Keycloak custom claim (snake_case via the hms-claims scope mapper).
+      (p?.['hospital_id'] as string) ??
+      null
+    );
   }
 
   /**
@@ -343,7 +424,12 @@ export class AuthService {
     const p = this.decodePayload();
     if (!p) return [];
 
-    const primary = (p['primaryHospitalId'] as string) ?? (p.hospitalId as string) ?? null;
+    const primary =
+      (p['primaryHospitalId'] as string) ??
+      (p.hospitalId as string) ??
+      // Keycloak custom claim from the hms-claims scope.
+      (p['hospital_id'] as string) ??
+      null;
 
     // Non-admin staff are always locked to exactly one hospital — their primary.
     if (!this.isAdminRole()) {
@@ -365,7 +451,21 @@ export class AuthService {
   }
 
   resolveLandingPath(): string {
+    if (this.roleContext.activeRole === 'ROLE_SUPER_ADMIN') {
+      return '/super-admin';
+    }
     return '/dashboard';
+  }
+
+  /**
+   * Calls GET /api/auth/session/bootstrap to retrieve authoritative session
+   * context (roles, hospital, staff/patient profile) from the DB.
+   *
+   * Should be called once after a successful login so all hospital-context
+   * decisions use DB data rather than stale JWT claims.
+   */
+  sessionBootstrap(): Observable<SessionBootstrapResponse> {
+    return this.http.get<SessionBootstrapResponse>('auth/session/bootstrap');
   }
 
   logout(): void {

@@ -1,16 +1,18 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './hospital-list.html',
   styleUrl: './hospital-list.scss',
 })
@@ -18,6 +20,14 @@ export class HospitalListComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * Copilot review fix — the lifecycle detail page is gated to
+   * ROLE_SUPER_ADMIN, so the row-level "open detail" link is hidden
+   * for other roles to avoid a click that would always 403.
+   */
+  readonly isSuperAdmin = this.roleContext.isSuperAdmin;
 
   hospitals = signal<HospitalResponse[]>([]);
   filtered = signal<HospitalResponse[]>([]);

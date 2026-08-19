@@ -35,6 +35,16 @@ public class PrescriptionRequestDTO {
     @Size(max = 255)
     private String medicationName;
 
+    /**
+     * Optional formulary code (matches {@code MedicationCatalogItem.code}
+     * when the medication was picked from the catalog). When present,
+     * the CDS rule engine resolves it to RxNorm/ATC/pediatric ceiling;
+     * when absent, freetext-only rules (allergy, duplicate-by-name) still
+     * fire but DDI and the hard pediatric ceiling stay silent.
+     */
+    @Size(max = 64)
+    private String medicationCode;
+
     @Size(max = 100)
     private String dosage;
 

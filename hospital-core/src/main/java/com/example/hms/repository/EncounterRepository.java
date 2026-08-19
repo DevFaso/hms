@@ -171,6 +171,32 @@ public interface EncounterRepository
             @Param("hospitalId") UUID hospitalId);
 
     /**
+     * Paged variant for the chart-review aggregator. Eagerly fetches the few
+     * associations the chart-review DTO needs (staff/user, department,
+     * hospital) so we avoid N+1 lookups on the rendered rows. Sort + limit
+     * are applied at the DB level via the {@link Pageable} argument.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    Page<Encounter> findByPatient_IdOrderByEncounterDateDesc(UUID patientId, Pageable pageable);
+
+    /** Hospital-scoped paged variant for the chart-review aggregator. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {
+        "patient",
+        "staff",
+        "staff.user",
+        "department",
+        "hospital"
+    })
+    Page<Encounter> findByPatient_IdAndHospital_IdOrderByEncounterDateDesc(
+        UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /**
      * Find COMPLETED encounters for a patient that do NOT have a corresponding
      * discharge summary. Used by the patient portal to backfill missing summaries.
      */
@@ -189,4 +215,21 @@ public interface EncounterRepository
         ORDER BY e.checkoutTimestamp DESC
     """)
     List<Encounter> findCompletedWithoutDischargeSummary(@Param("patientId") UUID patientId);
+
+    /**
+     * Look up an encounter by the HL7 v2 reconciliation key
+     * (MSH-3, MSH-4, PV1-19, hospital). Backed by the partial
+     * unique index {@code uk_encounter_external_visit} added in V99.
+     * Used by the ADT visit-sync projection to apply A08 updates to
+     * the right Encounter row without scanning by patient.
+     */
+    Optional<Encounter> findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospital_Id(
+        String externalSendingApplication,
+        String externalSendingFacility,
+        String externalVisitNumber,
+        UUID hospitalId
+    );
+
+    /** Hospital-scoped tile count for the super-admin dashboard. */
+    long countByHospital_Id(UUID hospitalId);
 }

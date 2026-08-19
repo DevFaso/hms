@@ -5,6 +5,14 @@ package com.example.hms.config;
  */
 public class SecurityConstants {
 
+    /**
+     * Common prefix shared by every role constant. Used by
+     * {@code UserServiceImpl.resolveRoleByName} to normalize a raw
+     * role name (with or without the prefix) into a canonical code.
+     * Pattern 5 of docs/SonarQubeInstructions.md (Sonar S1192).
+     */
+    public static final String ROLE_PREFIX = "ROLE_";
+
     // Role constants
     public static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     public static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
@@ -29,6 +37,12 @@ public class SecurityConstants {
     public static final String ROLE_SUPPORT_STAFF = "ROLE_SUPPORT_STAFF";
     public static final String ROLE_IT_STAFF = "ROLE_IT_STAFF";
 
+    // Pharmacy sub-roles
+    public static final String ROLE_PHARMACY_VERIFIER = "ROLE_PHARMACY_VERIFIER";
+    public static final String ROLE_INVENTORY_CLERK = "ROLE_INVENTORY_CLERK";
+    public static final String ROLE_STORE_MANAGER = "ROLE_STORE_MANAGER";
+    public static final String ROLE_CLAIMS_REVIEWER = "ROLE_CLAIMS_REVIEWER";
+
     // Billing permission constants (used as granted authorities)
     public static final String BILLING_VIEW_SUMMARY = "BILLING_VIEW_SUMMARY";
     public static final String BILLING_VIEW_DETAIL = "BILLING_VIEW_DETAIL";
@@ -52,6 +66,14 @@ public class SecurityConstants {
     public static final String CLAIM_PERMITTED_DEPARTMENT_IDS = "departmentIds";
     public static final String CLAIM_IS_SUPER_ADMIN = "isSuperAdmin";
     public static final String CLAIM_IS_HOSPITAL_ADMIN = "isHospitalAdmin";
+
+    // Support impersonation claims (MVP-4 — gap #4 in docs/super-admin-gaps.md).
+    // Present only on tokens minted by SupportImpersonationService.start; the
+    // JWT subject and roles claim represent the *target* user so downstream
+    // RBAC behaves as that user, while these two claims preserve the
+    // forensic trail back to the real super admin.
+    public static final String CLAIM_IMPERSONATOR_USER_ID = "impersonatorUserId";
+    public static final String CLAIM_IMPERSONATOR_USERNAME = "impersonatorUsername";
 
     // Prevent instantiation
     private SecurityConstants() {

@@ -1,0 +1,48 @@
+<section class="kpi-cards" aria-labelledby="kpi-cards-heading">
+  <h3 id="kpi-cards-heading" class="kpi-cards__heading">
+    {{ 'ANALYTICS.KPI.SECTION_HEADING' | translate }}
+  </h3>
+
+  @if (loading()) {
+    <div class="kpi-cards__loading" role="status" aria-live="polite">
+      {{ 'ANALYTICS.KPI.LOADING' | translate }}
+    </div>
+  } @else {
+    <div class="kpi-cards__grid">
+      @for (card of cards(); track card.i18nKey) {
+        <article
+          class="kpi-cards__card"
+          [style.background-color]="card.bg"
+          [attr.aria-labelledby]="card.i18nKey + '__label'"
+          tabindex="0"
+        >
+          <span class="material-icons kpi-cards__icon" [style.color]="card.color">
+            {{ card.icon }}
+          </span>
+          <div class="kpi-cards__body">
+            <span [id]="card.i18nKey + '__label'" class="kpi-cards__label">
+              {{ card.i18nKey + '_LABEL' | translate }}
+            </span>
+            <strong class="kpi-cards__value" [style.color]="card.color">
+              {{ card.display }}
+            </strong>
+            @if (card.median) {
+              <span class="kpi-cards__median">
+                {{ 'ANALYTICS.KPI.MEDIAN_LABEL' | translate }}: {{ card.median }}
+              </span>
+            }
+            <span class="kpi-cards__sub">{{ card.sub }}</span>
+            @if (card.series.length > 0) {
+              <app-kpi-sparkline
+                class="kpi-cards__sparkline"
+                [series]="card.series"
+                [color]="card.color"
+                [label]="card.i18nKey + '_LABEL' | translate"
+              />
+            }
+          </div>
+        </article>
+      }
+    </div>
+  }
+</section>

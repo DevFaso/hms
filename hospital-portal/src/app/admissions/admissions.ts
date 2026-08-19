@@ -16,12 +16,32 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
+import { AuthService } from '../auth/auth.service';
+import { AppliedOrderSetSummary } from '../services/order-set.service';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+
+interface OrderSetPickerCtx {
+  hospitalId: string;
+  admissionId: string;
+  encounterId: string;
+  orderingStaffId: string;
+}
 
 @Component({
   selector: 'app-admissions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    OrderSetPickerComponent,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './admissions.html',
   styleUrl: './admissions.scss',
 })
@@ -34,12 +54,31 @@ export class AdmissionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
   activeTab = signal<'all' | 'admitted' | 'discharged'>('all');
+
+  /**
+   * When non-null, the order-set picker is rendered as a modal-style
+   * overlay. Set by {@link openOrderSetPicker}; cleared by
+   * {@link closeOrderSetPicker} or after a successful apply.
+   *
+   * <p>encounterId is left blank in v0 because AdmissionResponse does
+   * not carry the active encounter — fan-out to MEDICATION + LAB tolerates
+   * a null encounter; IMAGING items in the set will surface a clear
+   * server error. Follow-up work will add `currentEncounterId` to
+   * AdmissionResponse so imaging-rich sets work end-to-end here too.
+   */
+  orderSetPicker = signal<OrderSetPickerCtx | null>(null);
 
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
@@ -129,6 +168,11 @@ export class AdmissionsComponent implements OnInit {
   };
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.load();
     this.loadAssignedHospitals();
     // ── TENANT ISOLATION: scope staff list to active hospital ──
@@ -269,6 +313,42 @@ export class AdmissionsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  openOrderSetPicker(a: AdmissionResponse): void {
+    if (!a.id || !a.hospitalId) return;
+    // The orderer is the signed-in clinician (the person clicking Apply),
+    // not the admission's admittingProvider. Resolved via AuthService so
+    // the apply request anchors prescriptions / labs / imaging on the
+    // correct staff identity for audit + CDS attribution.
+    const orderingStaffId = this.auth.getUserProfile()?.staffId ?? '';
+    if (!orderingStaffId) {
+      this.toast.error(this.translate.instant('ORDER_SETS.MISSING_ORDERING_STAFF'));
+      return;
+    }
+    this.orderSetPicker.set({
+      hospitalId: a.hospitalId,
+      admissionId: a.id,
+      encounterId: a.currentEncounterId ?? '',
+      orderingStaffId,
+    });
+  }
+
+  closeOrderSetPicker(): void {
+    this.orderSetPicker.set(null);
+  }
+
+  onOrderSetApplied(summary: AppliedOrderSetSummary): void {
+    // Compute the real created/skipped counts from the backend summary
+    // so the toast shows accurate numbers instead of empty placeholders.
+    const count =
+      summary.prescriptionIds.length + summary.labOrderIds.length + summary.imagingOrderIds.length;
+    this.toast.success(
+      this.translate.instant('ORDER_SETS.APPLIED_RESULT', {
+        count,
+        skipped: summary.skippedItemCount,
+      }),
+    );
+  }
+
   openEdit(a: AdmissionResponse): void {
     this.form = {
       patientId: a.patientId ?? '',
@@ -382,8 +462,16 @@ export class AdmissionsComponent implements OnInit {
       });
   }
 
+  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
+  }
+
   load(): void {
     this.loading.set(true);
+    // Re-fetch under the current cross-tenant scope (header alone
+    // drives the backend; super-admin global view sends no header,
+    // backend falls through to unscoped findAll).
     this.admissionService.getAll().subscribe({
       next: (list) => {
         this.admissions.set(list ?? []);

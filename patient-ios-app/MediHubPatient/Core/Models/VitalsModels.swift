@@ -7,6 +7,7 @@ struct VitalSignDTO: Codable, Identifiable {
     let patientId: String?
     let registrationId: String?
     let hospitalId: String?
+    let hospitalName: String?
     let recordedByStaffId: String?
     let recordedByAssignmentId: String?
     let recordedByName: String?

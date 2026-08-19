@@ -1,0 +1,228 @@
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+
+import { AuthService, type SessionBootstrapResponse } from './auth.service';
+import { RoleContextService } from '../core/role-context.service';
+
+describe('AuthService — S-01 refresh-token cookie behaviour', () => {
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('setRefreshToken is a no-op — does NOT persist the token to localStorage or sessionStorage', () => {
+    service.setRefreshToken('should-not-be-stored', true);
+    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_refresh_token')).toBeNull();
+
+    service.setRefreshToken('should-not-be-stored-here-either', false);
+    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_refresh_token')).toBeNull();
+  });
+
+  it('setRefreshToken purges any legacy refresh token left over in storage', () => {
+    localStorage.setItem('auth_refresh_token', 'legacy-token');
+    service.setRefreshToken('new-token');
+    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
+  });
+
+  it('refreshTokenRequest sends an empty body and credentials when no legacy token exists', () => {
+    service.refreshTokenRequest().subscribe();
+
+    const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/token/refresh'));
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({});
+    expect(req.request.withCredentials).toBeTrue();
+    req.flush({ accessToken: 'a', refreshToken: 'b' });
+  });
+
+  it('refreshTokenRequest forwards a legacy refresh token in the body to migrate it server-side', () => {
+    localStorage.setItem('auth_refresh_token', 'legacy.refresh.token');
+
+    service.refreshTokenRequest().subscribe();
+
+    const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/token/refresh'));
+    expect(req.request.body).toEqual({ refreshToken: 'legacy.refresh.token' });
+    expect(req.request.withCredentials).toBeTrue();
+    req.flush({ accessToken: 'a', refreshToken: 'b' });
+  });
+
+  it('clearRefreshToken removes any legacy storage entries', () => {
+    localStorage.setItem('auth_refresh_token', 'x');
+    sessionStorage.setItem('auth_refresh_token', 'y');
+    service.clearRefreshToken();
+    expect(localStorage.getItem('auth_refresh_token')).toBeNull();
+    expect(sessionStorage.getItem('auth_refresh_token')).toBeNull();
+  });
+});
+
+describe('AuthService — sessionBootstrap', () => {
+  let service: AuthService;
+  let httpMock: HttpTestingController;
+
+  const mockBootstrapResponse: SessionBootstrapResponse = {
+    userId: 'user-uuid-1',
+    username: 'john.doe',
+    email: 'john.doe@hms.test',
+    firstName: 'John',
+    lastName: 'Doe',
+    authSource: 'internal',
+    roles: ['ROLE_NURSE'],
+    superAdmin: false,
+    hospitalAdmin: false,
+    primaryHospitalId: 'hosp-uuid-1',
+    primaryHospitalName: 'General Hospital',
+    permittedHospitalIds: ['hosp-uuid-1'],
+    staffId: 'staff-uuid-1',
+    staffRoleCode: 'ROLE_NURSE',
+    departmentId: 'dept-uuid-1',
+    departmentName: 'Cardiology',
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('sends GET to the relative session bootstrap endpoint', () => {
+    service.sessionBootstrap().subscribe();
+
+    const req = httpMock.expectOne((r) => r.url === 'auth/session/bootstrap');
+    expect(req.request.method).toBe('GET');
+    req.flush(mockBootstrapResponse);
+  });
+
+  it('returns the bootstrap response from the server', (done) => {
+    service.sessionBootstrap().subscribe((result) => {
+      expect(result.userId).toBe('user-uuid-1');
+      expect(result.username).toBe('john.doe');
+      expect(result.roles).toEqual(['ROLE_NURSE']);
+      expect(result.primaryHospitalId).toBe('hosp-uuid-1');
+      expect(result.primaryHospitalName).toBe('General Hospital');
+      expect(result.staffId).toBe('staff-uuid-1');
+      expect(result.superAdmin).toBeFalse();
+      expect(result.hospitalAdmin).toBeFalse();
+      done();
+    });
+
+    httpMock.expectOne((r) => r.url === 'auth/session/bootstrap').flush(mockBootstrapResponse);
+  });
+
+  it('propagates an HTTP error so the caller can handle it', (done) => {
+    service.sessionBootstrap().subscribe({
+      error: (err) => {
+        expect(err.status).toBe(401);
+        done();
+      },
+    });
+
+    httpMock
+      .expectOne((r) => r.url === 'auth/session/bootstrap')
+      .flush({ message: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' });
+  });
+});
+
+describe('AuthService — resolveLandingPath', () => {
+  let service: AuthService;
+  let roleContext: RoleContextService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+    roleContext = TestBed.inject(RoleContextService);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('lands a super admin (active role ROLE_SUPER_ADMIN) on /super-admin', () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN']);
+    roleContext.activeRole = 'ROLE_SUPER_ADMIN';
+    expect(service.resolveLandingPath()).toBe('/super-admin');
+  });
+
+  it('lands every other role on /dashboard', () => {
+    roleContext.setRoles(['ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.resolveLandingPath()).toBe('/dashboard');
+  });
+
+  it('lands a multi-role user who picked a non-super role on /dashboard', () => {
+    roleContext.setRoles(['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.resolveLandingPath()).toBe('/dashboard');
+  });
+});
+
+describe('AuthService — setToken storage swap (closes Copilot review #2 on PR #224)', () => {
+  let service: AuthService;
+  const KEY = 'auth_token';
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(AuthService);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
+  it('setToken(token, false) clears localStorage so a remember-me original cannot shadow the new token', () => {
+    localStorage.setItem(KEY, 'original-remembered.jwt');
+
+    service.setToken('impersonation.jwt', false);
+
+    expect(localStorage.getItem(KEY)).toBeNull();
+    expect(sessionStorage.getItem(KEY)).toBe('impersonation.jwt');
+    expect(service.getToken()).toBe('impersonation.jwt');
+  });
+
+  it('setToken(token, true) clears sessionStorage so a session-only token cannot leak across the swap', () => {
+    sessionStorage.setItem(KEY, 'session-only.jwt');
+
+    service.setToken('new-remembered.jwt', true);
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+    expect(localStorage.getItem(KEY)).toBe('new-remembered.jwt');
+  });
+
+  it('isTokenRemembered() reflects the storage where the token currently lives', () => {
+    service.setToken('a.jwt', true);
+    expect(service.isTokenRemembered()).toBeTrue();
+    service.setToken('b.jwt', false);
+    expect(service.isTokenRemembered()).toBeFalse();
+  });
+});

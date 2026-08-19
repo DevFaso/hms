@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -16,12 +17,15 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-consultations',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './consultations.html',
   styleUrl: './consultations.scss',
 })
@@ -32,6 +36,17 @@ export class ConsultationsComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /**
+   * Cross-tenant: expose super-admin global-view state to the template
+   * so the "Hospital" column can be conditionally rendered. We expose
+   * the signals (not the booleans) so OnPush change detection picks
+   * them up automatically. See docs/super-admin-cross-tenant-design.md.
+   */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
@@ -116,9 +131,27 @@ export class ConsultationsComponent implements OnInit {
   };
 
   ngOnInit(): void {
+    // Cross-tenant: apply the URL scope BEFORE the first list fetch so
+    // the auth interceptor reads the right X-Hospital-Id on initial
+    // load (otherwise child-component lifecycle order would let the
+    // host fire its first request under the default global-view scope
+    // and immediately re-fetch after the chip's ngOnInit). The chip
+    // additionally fetches the hospital name for its label.
+    // See docs/super-admin-cross-tenant-design.md "URL state".
+    this.scopeUrl.applyUrlScopeSync(this.route);
     this.load();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.loadStats();
+  }
+
+  /**
+   * Fired by the chip after the super-admin picks a hospital (or "All").
+   * The chip handles the URL round-trip itself; we only need to re-fetch
+   * the list and the summary stats under the new scope.
+   */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
     this.loadStats();
   }
 
@@ -164,7 +197,7 @@ export class ConsultationsComponent implements OnInit {
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
+          const hid = this.patientSearchHospitalId();
           return this.patientService.list(hid, q);
         }),
       )
@@ -200,8 +233,19 @@ export class ConsultationsComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  onHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.clearPatient();
+    this.patientSuggestions.set([]);
+    this.patientDropdownOpen.set(false);
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
   }
 
   openCreate(): void {
@@ -455,17 +499,31 @@ export class ConsultationsComponent implements OnInit {
   }
 
   countByGroup(group: string): number {
+    if (group === 'total') return this.stats()?.total ?? this.consultations().length;
     if (group === 'pending')
-      return this.consultations().filter((c) => c.status === 'REQUESTED').length;
+      return (
+        this.stats()?.requested ??
+        this.consultations().filter((c) => c.status === 'REQUESTED').length
+      );
     if (group === 'active')
-      return this.consultations().filter((c) =>
-        ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
-      ).length;
+      return (
+        this.stats()?.active ??
+        this.consultations().filter((c) =>
+          ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
+        ).length
+      );
     if (group === 'completed')
-      return this.consultations().filter((c) => c.status === 'COMPLETED').length;
+      return (
+        this.stats()?.completed ??
+        this.consultations().filter((c) => c.status === 'COMPLETED').length
+      );
     if (group === 'overdue')
       return this.stats()?.overdue ?? this.consultations().filter((c) => this.isOverdue(c)).length;
     return 0;
+  }
+
+  hasConsultationRowsInScope(): boolean {
+    return (this.stats()?.total ?? this.consultations().length) > 0;
   }
 
   isOverdue(c: ConsultationResponse): boolean {

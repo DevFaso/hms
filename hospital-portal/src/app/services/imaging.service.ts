@@ -121,6 +121,10 @@ export interface ImagingReportResponse {
   criticalResultAckByName: string | null;
   measurements?: ImagingReportMeasurement[] | null;
   statusHistory?: ImagingReportStatusEntry[] | null;
+  studyInstanceUid?: string | null;
+  seriesInstanceUid?: string | null;
+  accessionNumber?: string | null;
+  pacsViewerUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -206,7 +210,7 @@ export class ImagingService {
     return this.http.get<ImagingReportResponse>(`${this.baseUrl}/results/order/${orderId}`);
   }
 
-  getReportsByOrder(orderId: string): Observable<ImagingReportResponse[]> {
+  getReportsForOrder(orderId: string): Observable<ImagingReportResponse[]> {
     return this.http.get<ImagingReportResponse[]>(`${this.baseUrl}/results/order/${orderId}/all`);
   }
 

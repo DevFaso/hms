@@ -91,6 +91,8 @@ export interface LabTestDefinition {
   reviewedAt: string | null;
   rejectionReason: string | null;
   unit: string | null;
+  loincCode: string | null;
+  loincDisplay: string | null;
   preparationInstructions: string | null;
   turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
@@ -223,6 +225,8 @@ export interface LabTestDefinitionRequest {
   category?: string;
   description?: string;
   unit?: string;
+  loincCode?: string;
+  loincDisplay?: string;
   sampleType?: string;
   preparationInstructions?: string;
   turnaroundTime?: number;

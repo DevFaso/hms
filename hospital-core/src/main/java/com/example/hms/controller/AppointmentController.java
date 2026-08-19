@@ -178,7 +178,11 @@ public class AppointmentController {
             .toDate(toDate)
             .search(normalizedSearch)
             .build();
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
+        // Sonar S6890 (Pattern 10): Math.clamp replaces the
+        // Math.min(Math.max(size, 1), 200) idiom for clarity.
+        // Math.max(page, 0) is still needed because page has no upper
+        // bound — only a floor.
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
         Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
             filter, pageable, locale, getUsername(authentication));
         HttpHeaders headers = new HttpHeaders();
@@ -368,4 +372,36 @@ public class AppointmentController {
         return Sort.by(direction, property);
     }
 
+
+    // ---- CALENDAR (Cadence visual scheduling grid) ----
+
+    /**
+     * Date-range slice for the Cadence calendar grid. Hospital-scoped;
+     * optionally filtered by provider. Caps the viewport at 31 days to
+     * keep the result set bounded; broader ranges return 400.
+     */
+    @GetMapping("/calendar")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @Operation(summary = "List appointments in a date range for calendar rendering")
+    public ResponseEntity<List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO>> getCalendarEvents(
+        @RequestParam UUID hospitalId,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+        @RequestParam(required = false) UUID staffId,
+        Authentication authentication,
+        @RequestHeader(value = "Accept-Language", required = false) String acceptLanguage
+    ) {
+        if (from == null || to == null || from.isAfter(to)) {
+            return ResponseEntity.badRequest().build();
+        }
+        // 31-day cap is INCLUSIVE: ChronoUnit.DAYS.between is exclusive of
+        // the end date, so a 31-day range yields 30; reject when > 30.
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > 30) {
+            return ResponseEntity.badRequest().build();
+        }
+        Locale locale = (acceptLanguage == null || acceptLanguage.isBlank())
+            ? Locale.ENGLISH : Locale.forLanguageTag(acceptLanguage);
+        return ResponseEntity.ok(appointmentService.getCalendarEvents(
+            hospitalId, from, to, staffId, getUsername(authentication), locale));
+    }
 }

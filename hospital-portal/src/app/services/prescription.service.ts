@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 export interface PrescriptionResponse {
   id: string;
@@ -11,6 +12,13 @@ export interface PrescriptionResponse {
   staffFullName: string;
   encounterId: string;
   hospitalId: string;
+  /**
+   * Display name for the prescription's hospital, populated by the
+   * backend mapper. Used by the super-admin cross-tenant list view
+   * (docs/super-admin-cross-tenant-design.md). Optional for backwards
+   * compatibility with older snapshots that may lack the field.
+   */
+  hospitalName?: string;
   medicationName: string;
   medicationDisplayName: string;
   dosage: string;
@@ -20,6 +28,12 @@ export interface PrescriptionResponse {
   status: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * CDS rule-engine cards returned by the backend on create / update.
+   * Optional because read-only responses (list, get-by-id) do not
+   * re-run the rule engine.
+   */
+  cdsAdvisories?: CdsCard[];
 }
 
 export type PrescriptionStatusType =
@@ -80,5 +94,46 @@ export class PrescriptionService {
 
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
+  }
+
+  dispatchSms(
+    id: string,
+    pharmacyId: string,
+    note?: string,
+  ): Observable<PrescriptionSmsDispatchResult> {
+    return this.http
+      .post<{
+        data: PrescriptionSmsDispatchResult;
+      }>(`${this.baseUrl}/${id}/dispatch-sms`, { pharmacyId, note: note ?? null })
+      .pipe(map((r) => r.data));
+  }
+}
+
+export interface PrescriptionSmsDispatchResult {
+  prescriptionId: string;
+  transmissionId: string;
+  pharmacyId: string;
+  pharmacyName: string;
+  destinationPhone: string;
+  status: string;
+  dispatchedAt: string;
+}
+
+export interface CommunityPharmacyOption {
+  id: string;
+  name: string;
+  phoneNumber: string;
+  pharmacyType: string;
+}
+
+@Injectable({ providedIn: 'root' })
+export class CommunityPharmacyService {
+  private readonly http = inject(HttpClient);
+  private readonly baseUrl = '/pharmacies/community';
+
+  list(hospitalId?: string): Observable<CommunityPharmacyOption[]> {
+    let params = new HttpParams();
+    if (hospitalId) params = params.set('hospitalId', hospitalId);
+    return this.http.get<CommunityPharmacyOption[]>(this.baseUrl, { params });
   }
 }

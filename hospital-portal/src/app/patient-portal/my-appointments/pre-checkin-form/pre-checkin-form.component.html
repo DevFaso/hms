@@ -79,7 +79,7 @@
               id="phone"
               type="tel"
               [(ngModel)]="phoneNumber"
-              placeholder="e.g. (555) 123-4567"
+              [placeholder]="'PRE_CHECKIN.PHONE_PLACEHOLDER' | translate"
             />
           </div>
           <div class="form-row">
@@ -88,7 +88,7 @@
               id="email"
               type="email"
               [(ngModel)]="email"
-              placeholder="e.g. patient@example.com"
+              [placeholder]="'PRE_CHECKIN.EMAIL_PLACEHOLDER' | translate"
             />
           </div>
         </div>
@@ -101,7 +101,7 @@
               id="address"
               type="text"
               [(ngModel)]="addressLine1"
-              placeholder="Street address"
+              [placeholder]="'PRE_CHECKIN.ADDRESS_PLACEHOLDER' | translate"
             />
           </div>
           <div class="form-grid-3">

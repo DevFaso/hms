@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.ROLE_PREFIX;
+
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EmploymentType;
@@ -91,6 +93,7 @@ public class UserServiceImpl implements UserService {
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    private final PasswordHistoryService passwordHistoryService;
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PatientRepository patientRepository;
@@ -115,7 +118,9 @@ public class UserServiceImpl implements UserService {
         user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         user.setActive(false);
 
-        User saved = userRepository.save(user);
+        // saveAndFlush forces the INSERT to hit the DB before any follow-up
+        // writes — see createNewUser() for the full rationale.
+        User saved = userRepository.saveAndFlush(user);
 
         if (existingUsers == 0) {
             Role superAdmin = getRoleByCode(ROLE_SUPER_ADMIN);
@@ -151,7 +156,12 @@ public class UserServiceImpl implements UserService {
         }
 
         User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
-                .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "User disappeared after save (id=" + saved.getId()
+                                + ", username=" + saved.getUsername()
+                                + "). With saveAndFlush in place this should be unreachable; "
+                                + "if you see it, check for a concurrent delete or a "
+                                + "@Transactional propagation mistake."));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
         return userMapper.toResponseDTO(reloaded, assignments);
@@ -316,6 +326,14 @@ public class UserServiceImpl implements UserService {
         final User user = existingByIdentity.or(() -> existingByLicense)
                 .orElseGet(() -> createNewUser(request, username, email, phone, roles));
 
+        // Re-registration after a frontend compensation delete: the previous
+        // attempt soft-deleted the user (FE rolls back when /api/patients
+        // fails), so the lookup above returns a row with isDeleted=true.
+        // Without restoring it, reloadAndMap()'s `where u.isDeleted = false`
+        // filter would later report the misleading "User disappeared after
+        // save" diagnostic.
+        restoreIfSoftDeleted(user);
+
         applyForcePasswordChangeIfReturning(user, newUserCreated, request);
 
         // ---- 4) Ensure roles + hospital-scoped assignments ----
@@ -379,6 +397,29 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /**
+     * Clear the soft-delete flag on a previously deleted user found during
+     * admin-register so downstream reloads (which filter `isDeleted = false`)
+     * see a live row. Also reactivates any soft-deactivated Staff records
+     * tied to the same user to mirror {@link #restoreUser(UUID)}.
+     */
+    private void restoreIfSoftDeleted(User user) {
+        if (user == null || !user.isDeleted()) {
+            return;
+        }
+        log.info("♻️ Re-registering soft-deleted user {} ({}); restoring account.",
+                user.getId(), user.getUsername());
+        user.setDeleted(false);
+        userRepository.save(user);
+
+        for (Staff staff : staffRepository.findByUserId(user.getId())) {
+            if (!staff.isActive()) {
+                staff.setActive(true);
+                staffRepository.save(staff);
+            }
+        }
+    }
+
     /** Record audit + emit creation event only for brand-new users. */
     private void auditIfNewUser(boolean newUserCreated, User user,
                                 List<UserRoleHospitalAssignment> assignments) {
@@ -391,7 +432,11 @@ public class UserServiceImpl implements UserService {
     /** Reload user from DB, map to DTO, and attach role counts. */
     private UserResponseDTO reloadAndMap(UUID userId) {
         final User reloaded = userRepository.findByIdWithRolesAndProfiles(userId)
-                .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+                .orElseThrow(() -> new IllegalStateException(
+                        "User disappeared after save (id=" + userId
+                                + "). With saveAndFlush in createNewUser this should be unreachable; "
+                                + "if you see it, check for a concurrent delete or a "
+                                + "@Transactional propagation mistake on the calling method."));
         final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
         final long roleCount = assignmentRepository.countDistinctRolesByUserId(reloaded.getId());
@@ -423,7 +468,7 @@ public class UserServiceImpl implements UserService {
 
     private Role resolveRoleByName(String name) {
         final String normalized = name == null ? "" : name.trim().toUpperCase(Locale.ROOT);
-        final String code = normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+        final String code = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
         return getRoleByCode(code);
     }
 
@@ -476,7 +521,7 @@ public class UserServiceImpl implements UserService {
     /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
     private static String formatRoleLabel(String roleCode) {
         if (roleCode == null) return "User";
-        String stripped = roleCode.startsWith("ROLE_") ? roleCode.substring(5) : roleCode;
+        String stripped = roleCode.startsWith(ROLE_PREFIX) ? roleCode.substring(ROLE_PREFIX.length()) : roleCode;
         return java.util.Arrays.stream(stripped.split("_"))
             .filter(w -> !w.isEmpty())
             .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
@@ -544,7 +589,15 @@ public class UserServiceImpl implements UserService {
         // includes the 6-digit confirmation code, temp credentials, and a link to
         // the RoleWelcomeComponent verification page.
 
-        return userRepository.save(u);
+        // saveAndFlush (vs save) forces the INSERT to hit the DB synchronously
+        // here. If a unique constraint or NOT NULL fails, the caller gets a
+        // DataIntegrityViolationException with the actual constraint name —
+        // mapped to a 400 with that cause by GlobalExceptionHandler. With the
+        // previous deferred-flush save(), the violation only surfaced later
+        // (during a flush triggered by a follow-up read), the transaction
+        // rolled back silently, and reloadAndMap() reported the meaningless
+        // "User disappeared after save".
+        return userRepository.saveAndFlush(u);
     }
 
         private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {
@@ -770,11 +823,24 @@ public class UserServiceImpl implements UserService {
             if (jwt == null || jwt.isBlank())
                 return null;
 
-            io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
-                    .verifyWith(jwtTokenProvider.getSecretKey())
-                    .build()
-                    .parseSignedClaims(jwt)
-                    .getPayload();
+            io.jsonwebtoken.Claims claims;
+            java.security.Key vk = jwtTokenProvider.getVerificationKey();
+            claims = switch (vk) {
+                case javax.crypto.SecretKey sk -> io.jsonwebtoken.Jwts.parser()
+                        .verifyWith(sk)
+                        .build()
+                        .parseSignedClaims(jwt)
+                        .getPayload();
+                case java.security.PublicKey pk -> io.jsonwebtoken.Jwts.parser()
+                        .verifyWith(pk)
+                        .build()
+                        .parseSignedClaims(jwt)
+                        .getPayload();
+                default -> null;
+            };
+            if (claims == null) {
+                return null;
+            }
 
             Object hId = claims.get("primaryHospitalId");
             if (hId == null) {
@@ -1049,14 +1115,22 @@ public class UserServiceImpl implements UserService {
     }
 
     private void createAssignmentIfAbsent(UUID userId, UUID roleId, UUID hospitalId) {
-        if (!assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
-            assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
-                    .userId(userId)
-                    .roleId(roleId)
-                    .hospitalId(hospitalId)
-                    .active(true)
-                    .build());
+        if (assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
+            return;
         }
+        // Only SUPER_ADMIN bootstraps active=true. Every other role (PATIENT, staff, admin)
+        // must remain inactive at creation; activation is gated on email verification
+        // (see verifyEmail / verifyAssignmentByCode). enforceRoleScopeConstraints rejects
+        // active=true for PATIENT, so passing null lets the downstream guards apply the
+        // correct default per role.
+        Role role = roleRepository.getReferenceById(roleId);
+        Boolean active = ROLE_SUPER_ADMIN.equalsIgnoreCase(role.getCode()) ? Boolean.TRUE : null;
+        assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
+                .userId(userId)
+                .roleId(roleId)
+                .hospitalId(hospitalId)
+                .active(active)
+                .build());
     }
 
     private Hospital getDefaultHospital() {
@@ -1098,12 +1172,17 @@ public class UserServiceImpl implements UserService {
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        String encodedPassword = passwordEncoder.encode(newPassword);
+        user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
         user.setForcePasswordChange(false);
         user.setPasswordRotationWarningAt(null);
         user.setPasswordRotationForcedAt(null);
         userRepository.save(user);
+
+        // Record in password history for reuse prevention
+        passwordHistoryService.recordPassword(userId, encodedPassword);
+
         log.info("🔑 [CHANGE-PWD] Password updated and forcePasswordChange cleared for user={}", userId);
     }
 

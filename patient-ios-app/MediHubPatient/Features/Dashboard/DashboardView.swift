@@ -9,7 +9,7 @@ struct DashboardView: View {
     @State private var selectedLabResult: LabResultDTO?
 
     enum DashboardDestination: Hashable {
-        case appointments, labResults, medications, billing
+        case appointments, labResults, medications, billing, pharmacyInvoices
         case careTeam, vitals, visits, visitSummaries, documents
         case notifications, healthRecords
         case familyAccess, sharingPrivacy
@@ -21,6 +21,7 @@ struct DashboardView: View {
             ("test_results", "testtube.2", .purple, .labResults),
             ("medications_title", "pill.fill", .teal, .medications),
             ("billing_title", "creditcard.fill", .orange, .billing),
+            ("pharmacy_invoices", "cross.case.fill", .green, .pharmacyInvoices),
             ("care_team_title", "person.2.fill", .pink, .careTeam),
             ("vitals_title", "heart.fill", .red, .vitals),
             ("visits_title", "building.2.fill", .indigo, .visits),
@@ -151,6 +152,7 @@ struct DashboardView: View {
                 case .labResults: LabResultsView(embeddedInNav: false)
                 case .medications: MedicationsView(embeddedInNav: false)
                 case .billing: BillingView(embeddedInNav: false)
+                case .pharmacyInvoices: PharmacyInvoicesView(embeddedInNav: false)
                 case .careTeam: CareTeamView(embeddedInNav: false)
                 case .vitals: VitalsView(embeddedInNav: false)
                 case .visits: VisitHistoryView(embeddedInNav: false)

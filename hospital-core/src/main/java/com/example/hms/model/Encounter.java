@@ -149,7 +149,28 @@ public class Encounter extends BaseEntity {
 
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
-    
+
+    /**
+     * HL7 v2 PV1-19 (first component) of the ADT message that created
+     * or last updated this encounter. Opaque external identifier used
+     * to reconcile subsequent A08 updates to the same visit. Null for
+     * encounters created via the in-app workflow.
+     */
+    @Column(name = "external_visit_number", length = 255)
+    private String externalVisitNumber;
+
+    /** HL7 v2 MSH-3 (sending application). Part of the per-sender scope. */
+    @Column(name = "external_sending_application", length = 255)
+    private String externalSendingApplication;
+
+    /** HL7 v2 MSH-4 (sending facility). Part of the per-sender scope. */
+    @Column(name = "external_sending_facility", length = 255)
+    private String externalSendingFacility;
+
+    /** HL7 v2 MSH-10 of the message that LAST touched this encounter. */
+    @Column(name = "external_message_control_id", length = 255)
+    private String externalMessageControlId;
+
         // Audit fields
         @Column(name = "created_by", length = 100)
         private String createdBy;

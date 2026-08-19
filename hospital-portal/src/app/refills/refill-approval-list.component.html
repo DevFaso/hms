@@ -1,0 +1,101 @@
+<section class="refill-list" data-testid="refill-approval-list">
+  <header class="refill-list__header">
+    <a class="back-link" routerLink="/dashboard" [attr.aria-label]="'COMMON.BACK' | translate"
+      ><span aria-hidden="true">←</span></a
+    >
+    <h1>{{ 'REFILLS.QUEUE_TITLE' | translate }}</h1>
+  </header>
+
+  <nav class="refill-list__filters" role="tablist">
+    <button
+      *ngFor="let f of statusFilters"
+      type="button"
+      role="tab"
+      [attr.aria-selected]="activeFilter() === f.value"
+      [class.active]="activeFilter() === f.value"
+      (click)="setFilter(f.value)"
+      [attr.data-testid]="'refill-filter-' + f.value"
+    >
+      {{ f.labelKey | translate }}
+    </button>
+  </nav>
+
+  <p *ngIf="loading()" class="refill-list__state">{{ 'COMMON.LOADING' | translate }}</p>
+  <p
+    *ngIf="loadError() && !loading()"
+    class="refill-list__state error"
+    data-testid="refill-list-error"
+  >
+    {{ 'REFILLS.LOAD_ERROR' | translate }}
+  </p>
+  <p
+    *ngIf="!loading() && !loadError() && refills().length === 0"
+    class="refill-list__state"
+    data-testid="refill-list-empty"
+  >
+    {{ 'REFILLS.EMPTY' | translate }}
+  </p>
+
+  <ul class="refill-list__items" *ngIf="refills().length > 0">
+    <li class="refill-card" *ngFor="let r of refills()" [attr.data-testid]="'refill-card-' + r.id">
+      <div class="refill-card__head">
+        <h2>{{ r.medicationName || ('REFILLS.UNKNOWN_MEDICATION' | translate) }}</h2>
+        <span [class]="statusBadgeClass(r.status)">{{
+          'REFILLS.STATUS_' + r.status | translate
+        }}</span>
+      </div>
+
+      <dl class="refill-card__meta">
+        <div *ngIf="r.requestedAt">
+          <dt>{{ 'REFILLS.FIELD_REQUESTED_AT' | translate }}</dt>
+          <dd>{{ r.requestedAt | date: 'short' }}</dd>
+        </div>
+        <div *ngIf="r.preferredPharmacy">
+          <dt>{{ 'REFILLS.FIELD_PREFERRED_PHARMACY' | translate }}</dt>
+          <dd>{{ r.preferredPharmacy }}</dd>
+        </div>
+        <div *ngIf="r.notes">
+          <dt>{{ 'REFILLS.FIELD_PATIENT_NOTES' | translate }}</dt>
+          <dd>{{ r.notes }}</dd>
+        </div>
+        <div *ngIf="r.providerNotes">
+          <dt>{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}</dt>
+          <dd>{{ r.providerNotes }}</dd>
+        </div>
+      </dl>
+
+      <div *ngIf="r.status === 'REQUESTED'" class="refill-card__actions">
+        <label class="refill-card__notes">
+          <span>{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}</span>
+          <textarea
+            rows="2"
+            [(ngModel)]="decisionNotes[r.id]"
+            [name]="'notes-' + r.id"
+            [attr.data-testid]="'refill-notes-' + r.id"
+            [placeholder]="'REFILLS.NOTES_PLACEHOLDER' | translate"
+          ></textarea>
+        </label>
+        <div class="refill-card__buttons">
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="busyId() !== null"
+            (click)="approve(r)"
+            [attr.data-testid]="'refill-approve-' + r.id"
+          >
+            {{ 'REFILLS.ACTION_APPROVE' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="busyId() !== null"
+            (click)="reject(r)"
+            [attr.data-testid]="'refill-reject-' + r.id"
+          >
+            {{ 'REFILLS.ACTION_REJECT' | translate }}
+          </button>
+        </div>
+      </div>
+    </li>
+  </ul>
+</section>

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DashboardComponent } from './dashboard';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -183,10 +183,14 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.activeView()).toBe('lab-director');
   });
 
-  it('roleLabel should be "Lab Director" for ROLE_LAB_DIRECTOR', () => {
+  it('roleLabel should resolve the lab-director key for ROLE_LAB_DIRECTOR', () => {
+    // The test harness installs TranslateModule.forRoot() with no loader, so
+    // translate.instant() returns the key itself. We assert on the key (proves
+    // the right branch fired) — the rendered French/English string is verified
+    // by the i18n JSON snapshots.
     const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
     c.isLabDirector.set(true);
-    expect(c.roleLabel()).toBe('Lab Director');
+    expect(c.roleLabel()).toBe('DASHBOARD.ROLE.LAB_DIRECTOR');
   });
 
   it('heroGradientClass should be "hero-gradient-lab-director" for ROLE_LAB_DIRECTOR', () => {
@@ -269,7 +273,9 @@ describe('Dashboard navigation & RBAC', () => {
     });
     const tiles = c.labDirectorNavTiles();
     expect(tiles.length).toBe(13);
-    const approvalTile = tiles.find((t) => t.label === 'Approval Queue');
+    // Identify the approval-queue tile by its icon (unique within the array)
+    // rather than its translated label, so the lookup survives i18n changes.
+    const approvalTile = tiles.find((t) => t.icon === 'approval');
     expect(approvalTile?.count).toBe(5);
   });
 
@@ -281,10 +287,10 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.activeView()).toBe('quality-manager');
   });
 
-  it('roleLabel should be "Quality Manager" for ROLE_QUALITY_MANAGER', () => {
+  it('roleLabel should resolve the quality-manager key for ROLE_QUALITY_MANAGER', () => {
     const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
     c.isQualityManager.set(true);
-    expect(c.roleLabel()).toBe('Quality Manager');
+    expect(c.roleLabel()).toBe('DASHBOARD.ROLE.QUALITY_MANAGER');
   });
 
   it('heroGradientClass should be "hero-gradient-quality-manager" for ROLE_QUALITY_MANAGER', () => {
@@ -360,7 +366,9 @@ describe('Dashboard navigation & RBAC', () => {
     );
     c.isReceptionist.set(true);
     const actions = c.quickActions();
-    const checkIn = actions.find((a) => a.label === 'Check-in');
+    // Identify the check-in action by the unique route+icon pair instead of
+    // its translated label, so this assertion is i18n-stable.
+    const checkIn = actions.find((a) => a.route === '/reception' && a.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected receptionist quick actions to include a Check-in action')
       .toBeDefined();
@@ -371,7 +379,9 @@ describe('Dashboard navigation & RBAC', () => {
     const c = createComponent(['ROLE_NURSE'], []);
     c.isNurse.set(true);
     const tiles = c.nurseWorkflowTiles();
-    const checkIn = tiles.find((t) => t.label === 'Check-In');
+    // The check-in tile is the only nurse-station tile that uses the
+    // how_to_reg icon, so look it up by that pair instead of by label.
+    const checkIn = tiles.find((t) => t.route === '/nurse-station' && t.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected nurse workflow tiles to include a Check-In tile')
       .toBeDefined();
@@ -382,7 +392,7 @@ describe('Dashboard navigation & RBAC', () => {
     const c = createComponent(['ROLE_RECEPTIONIST'], []);
     c.isReceptionist.set(true);
     const tiles = c.receptionistWorkflowTiles();
-    const checkIn = tiles.find((t) => t.label === 'Check-In');
+    const checkIn = tiles.find((t) => t.route === '/reception' && t.icon === 'how_to_reg');
     expect(checkIn)
       .withContext('Expected receptionist workflow tiles to include a Check-In tile')
       .toBeDefined();
@@ -477,5 +487,361 @@ describe('Dashboard onStartEncounter', () => {
     component.onStartEncounter('enc-789');
 
     expect(toastSpy.error).toHaveBeenCalledWith('Failed to start encounter');
+  });
+});
+
+/**
+ * Coverage-focused tests for the i18n refactor on this branch.
+ * These do not assert on rendered strings (TranslateModule.forRoot() has no
+ * loader, so translate.instant returns the key) — they cover the new code
+ * paths so Sonar's new-code coverage gate is satisfied.
+ */
+describe('Dashboard i18n refactor coverage', () => {
+  function createComponent(roles: string[], permissions: string[] = []): DashboardComponent {
+    const permSet = new Set(permissions);
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+    ]);
+    authStub.getRoles.and.returnValue(roles);
+    authStub.hasAnyRole.and.callFake((r: string[]) => roles.some((role) => r.includes(role)));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles,
+      staffId: 's1',
+      active: true,
+    } as any);
+
+    const permStub: Partial<PermissionService> = {
+      hasPermission: (p: string) => permSet.has(p) || permSet.has('*'),
+      hasAnyPermission: (...ps: string[]) => ps.some((p) => permSet.has(p) || permSet.has('*')),
+    };
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: permStub },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(DashboardComponent);
+    const c = fixture.componentInstance;
+    c.isDoctor.set(roles.includes('ROLE_DOCTOR'));
+    c.isNurse.set(roles.includes('ROLE_NURSE'));
+    c.isMidwife.set(roles.includes('ROLE_MIDWIFE'));
+    c.isReceptionist.set(roles.includes('ROLE_RECEPTIONIST'));
+    c.isLabScientist.set(roles.includes('ROLE_LAB_SCIENTIST'));
+    c.isLabDirector.set(roles.includes('ROLE_LAB_DIRECTOR'));
+    c.isQualityManager.set(roles.includes('ROLE_QUALITY_MANAGER'));
+    c.isPharmacist.set(roles.includes('ROLE_PHARMACIST'));
+    c.isRadiologist.set(roles.includes('ROLE_RADIOLOGIST'));
+    c.isSuperAdmin.set(roles.includes('ROLE_SUPER_ADMIN'));
+    c.isHospitalAdmin.set(roles.includes('ROLE_HOSPITAL_ADMIN'));
+    c.isPatient.set(roles.includes('ROLE_PATIENT'));
+    return c;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  // ── roleLabel — every branch ──────────────────────────────────
+
+  // Each role should resolve a distinct DASHBOARD.ROLE.* key. The harness has
+  // no translation loader so the key itself comes back, which is enough to
+  // prove the right computed branch fired.
+  // MVP-5: SUPER_ADMIN no longer has a dashboard view branch — they land on
+  // /super-admin (Control Tower) via SuperAdminRedirectGuard.
+  const roleLabelCases: [string, string][] = [
+    ['ROLE_PATIENT', 'DASHBOARD.ROLE.PATIENT'],
+    ['ROLE_HOSPITAL_ADMIN', 'DASHBOARD.ROLE.HOSPITAL_ADMIN'],
+    ['ROLE_DOCTOR', 'DASHBOARD.ROLE.DOCTOR'],
+    ['ROLE_MIDWIFE', 'DASHBOARD.ROLE.MIDWIFE'],
+    ['ROLE_NURSE', 'DASHBOARD.ROLE.NURSE'],
+    ['ROLE_RECEPTIONIST', 'DASHBOARD.ROLE.RECEPTIONIST'],
+    ['ROLE_LAB_DIRECTOR', 'DASHBOARD.ROLE.LAB_DIRECTOR'],
+    ['ROLE_QUALITY_MANAGER', 'DASHBOARD.ROLE.QUALITY_MANAGER'],
+    ['ROLE_LAB_SCIENTIST', 'DASHBOARD.ROLE.LAB_SCIENTIST'],
+    ['ROLE_PHARMACIST', 'DASHBOARD.ROLE.PHARMACIST'],
+    ['ROLE_RADIOLOGIST', 'DASHBOARD.ROLE.RADIOLOGIST'],
+  ];
+
+  for (const [role, expected] of roleLabelCases) {
+    it(`roleLabel resolves ${expected} for ${role}`, () => {
+      const c = createComponent([role]);
+      expect(c.roleLabel()).toBe(expected);
+    });
+  }
+
+  it('roleLabel falls back to STAFF when no role matches', () => {
+    const c = createComponent(['ROLE_UNKNOWN']);
+    expect(c.roleLabel()).toBe('DASHBOARD.ROLE.STAFF');
+  });
+
+  // ── Per-role tile arrays — one assertion each, exercises every label ──
+
+  it('hospitalAdminNavTiles returns 6 tiles', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    expect(c.hospitalAdminNavTiles().length).toBe(6);
+  });
+
+  it('doctorWorkflowTiles returns 10 tiles', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.doctorWorkflowTiles().length).toBe(10);
+  });
+
+  it('nurseWorkflowTiles returns 10 tiles', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    expect(c.nurseWorkflowTiles().length).toBe(10);
+  });
+
+  it('receptionistWorkflowTiles returns 8 tiles', () => {
+    const c = createComponent(['ROLE_RECEPTIONIST']);
+    expect(c.receptionistWorkflowTiles().length).toBe(8);
+  });
+
+  it('labWorkflowTiles returns 8 tiles', () => {
+    const c = createComponent(['ROLE_LAB_SCIENTIST']);
+    expect(c.labWorkflowTiles().length).toBe(8);
+  });
+
+  it('pharmacistWorkflowTiles returns 8 tiles', () => {
+    const c = createComponent(['ROLE_PHARMACIST']);
+    expect(c.pharmacistWorkflowTiles().length).toBe(8);
+  });
+
+  it('radiologistWorkflowTiles returns 8 tiles', () => {
+    const c = createComponent(['ROLE_RADIOLOGIST']);
+    expect(c.radiologistWorkflowTiles().length).toBe(8);
+  });
+
+  it('patientQuickLinks returns 8 tiles', () => {
+    const c = createComponent(['ROLE_PATIENT']);
+    expect(c.patientQuickLinks().length).toBe(8);
+  });
+
+  it('qualityManagerNavTiles returns 9 tiles', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER']);
+    expect(c.qualityManagerNavTiles().length).toBe(9);
+  });
+
+  // ── criticalStripCards / statCards / hospitalAdminStatCards ──
+
+  it('criticalStripCards returns 6 actionable cards when criticalStrip is set', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    c.criticalStrip.set({
+      criticalLabsCount: 2,
+      waitingLongCount: 1,
+      pendingConsultsCount: 0,
+      unsignedNotesCount: 4,
+      pendingOrderReviewCount: 0,
+      activeSafetyAlertsCount: 1,
+    } as any);
+    expect(c.criticalStripCards().length).toBe(6);
+  });
+
+  it('criticalStripCards is empty when no criticalStrip data', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.criticalStripCards()).toEqual([]);
+  });
+
+  it('statCards returns the 6 generic clinical fallback cards', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    expect(c.statCards().length).toBe(6);
+  });
+
+  it('hospitalAdminStatCards returns 14 cards when summary is loaded', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    c.hospitalAdminSummary.set({
+      appointments: { todayTotal: 10, completed: 5, noShows: 1 },
+      admissions: { active: 3, admittedToday: 2, dischargedToday: 1 },
+      consultations: { requested: 4, acknowledged: 2, overdue: 1 },
+      staffing: { activeStaff: 20, onShiftToday: 12, staffOnLeaveToday: 1 },
+      licenseAlerts: [{ severity: 'EXPIRED' }],
+      billing: { overdueInvoices: 2, openBalanceTotal: 1234 },
+    } as any);
+    expect(c.hospitalAdminStatCards().length).toBe(14);
+  });
+
+  it('hospitalAdminStatCards is empty when summary missing', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    expect(c.hospitalAdminStatCards()).toEqual([]);
+  });
+
+  // ── Inbox grouping ────────────────────────────────────────────
+
+  it('inboxGrouped maps each category to a translated label', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    c.inboxItems.set([
+      { id: 'i1', category: 'MESSAGE' } as any,
+      { id: 'i2', category: 'CRITICAL_RESULT' } as any,
+      { id: 'i3', category: 'TASK' } as any,
+    ]);
+    const groups = c.inboxGrouped();
+    expect(groups.length).toBe(3);
+    const cats = groups.map((g) => g.category);
+    expect(cats).toContain('MESSAGE');
+    expect(cats).toContain('CRITICAL_RESULT');
+    expect(cats).toContain('TASK');
+    // Each group should carry an icon + a label (translation key).
+    for (const g of groups) {
+      expect(g.icon).toBeTruthy();
+      expect(g.label).toBeTruthy();
+    }
+  });
+
+  // ── getApptStatusLabel — every status branch ──────────────────
+
+  const apptStatusCases: [string, string][] = [
+    ['SCHEDULED', 'APPOINTMENTS.SCHEDULED'],
+    ['CONFIRMED', 'APPOINTMENTS.CONFIRMED'],
+    ['COMPLETED', 'DASHBOARD.DONE'],
+    ['CANCELLED', 'APPOINTMENTS.CANCELLED'],
+    ['NO_SHOW', 'APPOINTMENTS.NO_SHOW'],
+    ['IN_PROGRESS', 'DASHBOARD.IN_PROGRESS'],
+    ['REQUESTED', 'APPOINTMENTS.REQUESTED'],
+  ];
+
+  for (const [status, expected] of apptStatusCases) {
+    it(`getApptStatusLabel resolves ${expected} for ${status}`, () => {
+      const c = createComponent(['ROLE_DOCTOR']);
+      expect(c.getApptStatusLabel(status)).toBe(expected);
+    });
+  }
+
+  it('getApptStatusLabel returns the raw value for unknown statuses', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getApptStatusLabel('SOMETHING_WEIRD')).toBe('SOMETHING_WEIRD');
+  });
+
+  // ── Locale-aware time formatters ──────────────────────────────
+
+  it('formatApptTime returns empty string for empty input', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.formatApptTime('')).toBe('');
+  });
+
+  it('formatApptTime returns a non-empty string for a valid HH:mm value', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    // Locale output varies by env, so just assert it produced something.
+    expect(c.formatApptTime('09:30').length).toBeGreaterThan(0);
+  });
+
+  // ── Status / appearance helpers (small, branchy) ──────────────
+
+  it('getApptStatusClass maps known statuses to CSS classes', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getApptStatusClass('SCHEDULED')).toContain('status-scheduled');
+    expect(c.getApptStatusClass('UNKNOWN')).toBe('appt-status ');
+  });
+
+  it('getAlertSeverityClass maps known severities and falls back', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getAlertSeverityClass('CRITICAL')).toContain('severity-critical');
+    expect(c.getAlertSeverityClass('UNKNOWN')).toBe('alert-item ');
+  });
+
+  it('getAlertIcon maps known severities and falls back', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getAlertIcon('CRITICAL')).toBe('emergency');
+    expect(c.getAlertIcon('UNKNOWN')).toBe('notification_important');
+  });
+
+  it('getTriageClass maps known triage states and falls back', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    expect(c.getTriageClass('TRIAGED')).toContain('triage-triaged');
+    expect(c.getTriageClass('UNKNOWN')).toContain('triage-default');
+  });
+
+  it('getTrendIcon maps up/down/stable', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getTrendIcon('up')).toBe('trending_up');
+    expect(c.getTrendIcon('down')).toBe('trending_down');
+    expect(c.getTrendIcon('stable')).toBe('trending_flat');
+  });
+
+  it('getTrendClass maps up/down/stable', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getTrendClass('up')).toContain('trend-up');
+    expect(c.getTrendClass('down')).toContain('trend-down');
+    expect(c.getTrendClass('stable')).toContain('trend-stable');
+  });
+
+  it('getPatientInitials handles single, multi, and empty names', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getPatientInitials('Jane Doe')).toBe('JD');
+    expect(c.getPatientInitials('Cher')).toBe('C');
+    expect(c.getPatientInitials('')).toBe('?');
+  });
+
+  it('getAvatarColor returns a deterministic hex colour', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(c.getAvatarColor('JaneDoe')).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(c.getAvatarColor('JaneDoe')).toBe(c.getAvatarColor('JaneDoe'));
+  });
+
+  it('getIntegrationStatusClass maps known + unknown statuses', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    expect(c.getIntegrationStatusClass('ACTIVE')).toContain('integration-active');
+    expect(c.getIntegrationStatusClass('UNKNOWN')).toBe('integration-badge ');
+  });
+
+  it('getAgingBucketColor returns a colour for valid indices and falls back', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    expect(c.getAgingBucketColor(0)).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(c.getAgingBucketColor(99)).toBe('#64748b');
+  });
+
+  it('getPaymentMethodColor maps known + unknown', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    expect(c.getPaymentMethodColor('CASH')).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(c.getPaymentMethodColor('UNKNOWN')).toBe('#64748b');
+  });
+
+  it('formatMethodLabel converts SNAKE_CASE underscores to spaces', () => {
+    const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
+    // Input is already upper-case so the title-case replace is a no-op —
+    // the only observable change is "_" → " ".
+    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('CREDIT CARD');
+    expect(c.formatMethodLabel('bank_transfer')).toBe('Bank Transfer');
+  });
+
+  // ── Language-change subscription path ────────────────────────
+
+  // The component subscribes to translate.onLangChange in ngOnInit and bumps
+  // a langTick signal so every computed() re-evaluates with new strings.
+  it('switching language fires the onLangChange handler without throwing', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    // Snapshot a derived value before, then drive the change, then verify
+    // the array is freshly returned (signals re-fire) and stays valid.
+    const before = c.doctorWorkflowTiles().length;
+    const translate = TestBed.inject(TranslateService);
+    expect(() => translate.use('fr')).not.toThrow();
+    const after = c.doctorWorkflowTiles().length;
+    expect(after).toBe(before);
+    // todayLabel should have been re-set by the subscription (still a string).
+    expect(typeof c.todayLabel()).toBe('string');
+    expect(c.todayLabel().length).toBeGreaterThan(0);
+  });
+
+  it('switching to es also runs the locale-aware paths', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    const translate = TestBed.inject(TranslateService);
+    expect(() => translate.use('es')).not.toThrow();
+    expect(c.formatApptTime('14:05').length).toBeGreaterThan(0);
+  });
+
+  it('ngOnDestroy clears the clock interval and unsubscribes without throwing', () => {
+    const c = createComponent(['ROLE_DOCTOR']);
+    expect(() => c.ngOnDestroy()).not.toThrow();
+    // Idempotent — second call must not blow up either.
+    expect(() => c.ngOnDestroy()).not.toThrow();
   });
 });

@@ -3,11 +3,14 @@ package com.example.hms.config;
 import com.example.hms.security.JwtAuthenticationEntryPoint;
 import com.example.hms.security.JwtAuthenticationFilter;
 import com.example.hms.security.HospitalUserDetailsService;
+import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
+import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +28,9 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -114,12 +120,61 @@ public class SecurityConfig {
     private static final String API_HOSPITALS = "/hospitals";
     private static final String API_HOSPITALS_PATTERN = API_HOSPITALS + "/**";
 
+    // Extracted to avoid duplicated string literals (Sonar S1192).
+    // Follows Pattern 5 of docs/SonarQubeInstructions.md.
+    private static final String API_DEPARTMENTS = "/departments";
+    private static final String API_DEPARTMENTS_PATTERN = API_DEPARTMENTS + "/**";
+
+    private static final String API_BILLING_INVOICES = "/billing-invoices";
+    private static final String API_BILLING_INVOICES_PATTERN = API_BILLING_INVOICES + "/**";
+
+    private static final String API_INVOICE_ITEMS = "/invoice-items";
+    private static final String API_INVOICE_ITEMS_PATTERN = API_INVOICE_ITEMS + "/**";
+
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    /**
+     * Optional Keycloak resource-server beans (S-03 phase 1). Present only when
+     * {@code app.auth.oidc.issuer-uri} is set (see {@code OidcResourceServerConfig}).
+     * When absent, the resource-server stack is not wired into the filter chain
+     * and behaviour is identical to the pre-S-03 baseline.
+     */
+    private final ObjectProvider<JwtDecoder> oidcJwtDecoderProvider;
+    private final ObjectProvider<BearerTokenResolver> oidcBearerTokenResolverProvider;
+    private final KeycloakJwtAuthenticationConverter oidcJwtAuthenticationConverter;
+    private final ObjectProvider<KeycloakHospitalContextFilter> oidcHospitalContextFilterProvider;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
+
+    /**
+     * CDS Hooks sandbox + SMART App Launcher origins. Honored when
+     * {@code app.cors.cds-hooks-sandbox.enabled=true} (default).
+     * Per the CDS Hooks 1.0 spec the discovery endpoint
+     * ({@code GET /cds-services}) must be reachable from the
+     * partner EHR's browser context; explicit allowlisting these
+     * origins lets the Cerner + Epic + SMART App Launcher
+     * validation pages probe HMS without `*` wildcarding.
+     *
+     * <p>Override with {@code APP_CORS_CDS_HOOKS_SANDBOX_ORIGINS}
+     * to add private validation environments. Leave the default
+     * intact in production — these are public testing sandboxes
+     * and they do not carry PHI.
+     */
+    @Value("${app.cors.cds-hooks-sandbox.enabled:true}")
+    private boolean cdsHooksSandboxOriginsEnabled;
+
+    @Value("${app.cors.cds-hooks-sandbox.origins:"
+        + "https://fhir.epic.com,"
+        + "https://*.epic.com,"
+        + "https://fhir-ehr-code.cerner.com,"
+        + "https://sandbox.cerner.com,"
+        + "https://*.cerner.com,"
+        + "https://launcher.smarthealthit.org,"
+        + "https://*.smarthealthit.org}")
+    private String cdsHooksSandboxOrigins;
 
     // ===== Shared beans =====
 
@@ -182,6 +237,20 @@ public class SecurityConfig {
             }
         }
 
+        // CDS Hooks sandbox + SMART App Launcher origins (roadmap row 27).
+        // Discovery is public per the spec; explicit allowlisting lets the
+        // partner sandbox UIs probe HMS without `*` wildcarding.
+        if (cdsHooksSandboxOriginsEnabled
+            && cdsHooksSandboxOrigins != null
+            && !cdsHooksSandboxOrigins.isBlank()) {
+            for (String origin : cdsHooksSandboxOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty() && !patterns.contains(trimmed)) {
+                    patterns.add(trimmed);
+                }
+            }
+        }
+
         cfg.setAllowedOriginPatterns(patterns);
         // TRACE is intentionally excluded (should be denied/disabled)
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
@@ -233,14 +302,22 @@ public class SecurityConfig {
                     new AntPathRequestMatcher("/chat/**"),
                     // Patient portal self-service (native mobile apps use Bearer JWT,
                     // not browser cookies, so CSRF protection is unnecessary)
-                    new AntPathRequestMatcher("/me/patient/**"),
+                    new AntPathRequestMatcher(API_ME_PATIENT_PATTERN),
                     new AntPathRequestMatcher("/me/notifications/**"),
                     new AntPathRequestMatcher("/notifications/**"),
                     new AntPathRequestMatcher("/me/chat/**"),
                     // File uploads from mobile apps (multipart — no XSRF token)
                     new AntPathRequestMatcher("/files/**"),
                     // Appointment booking from mobile apps (Bearer JWT, no cookies)
-                    new AntPathRequestMatcher("/appointments/**")
+                    new AntPathRequestMatcher("/appointments/**"),
+                    // Partner pharmacy SMS webhook (T-55) — shared-secret header auth, no cookies
+                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST"),
+                    // FHIR R4 endpoints — server-to-server clients (OpenMRS/DHIS2/HIE)
+                    // authenticate via Bearer JWT, not browser cookies.
+                    new AntPathRequestMatcher("/fhir/**"),
+                    // CDS Hooks invocations — server-to-server callers post JSON
+                    // with Bearer JWT.
+                    new AntPathRequestMatcher("/cds-services/**")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -265,6 +342,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/logout").authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
+                .requestMatchers("/auth/session/bootstrap").authenticated()
 
                 // Public auth endpoints (login, register, csrf-token bootstrap, etc.)
                 .requestMatchers("/auth/csrf-token").permitAll()
@@ -277,6 +355,18 @@ public class SecurityConfig {
                 // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .requestMatchers("/.well-known/jwks.json").permitAll()
+                // FHIR conformance discovery — public per HL7 FHIR R4 spec
+                // (clients query /fhir/metadata before authenticating)
+                .requestMatchers(HttpMethod.GET, "/fhir/metadata").permitAll()
+                // SMART-on-FHIR App Launch 1.0 discovery — public per spec.
+                .requestMatchers(HttpMethod.GET, "/fhir/.well-known/smart-configuration").permitAll()
+                // CDS Hooks discovery — public per HL7 CDS Hooks 1.0 spec
+                // (decision-support clients enumerate services before auth).
+                .requestMatchers(HttpMethod.GET, "/cds-services").permitAll()
+                // Partner pharmacy SMS webhook — authenticated inside the controller
+                // via the X-HMS-Partner-Signature shared-secret header (T-55).
+                .requestMatchers(HttpMethod.POST, "/webhooks/partner-sms").permitAll()
 
                 // Feature flags
                 .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
@@ -369,7 +459,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Departments / Roles --------------------
-                .requestMatchers(HttpMethod.GET, "/departments/**")
+                .requestMatchers(HttpMethod.GET, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
@@ -377,23 +467,23 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
-                .requestMatchers(HttpMethod.POST, "/departments/**")
+                .requestMatchers(HttpMethod.POST, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.PUT, "/departments/**")
+                .requestMatchers(HttpMethod.PUT, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.PATCH, "/departments/**")
+                .requestMatchers(HttpMethod.PATCH, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.DELETE, "/departments/**")
+                .requestMatchers(HttpMethod.DELETE, API_DEPARTMENTS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Billing --------------------
-                .requestMatchers(HttpMethod.GET, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
 
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/search")
@@ -402,25 +492,25 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/*/email")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.POST, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
 
-                .requestMatchers(HttpMethod.PUT, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.PUT, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.DELETE, "/billing-invoices/**")
+                .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers(HttpMethod.GET, "/invoice-items/**")
+                .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
 
-                .requestMatchers(HttpMethod.POST, "/invoice-items/**")
+                .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.PUT, "/invoice-items/**")
+                .requestMatchers(HttpMethod.PUT, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                .requestMatchers(HttpMethod.DELETE, "/invoice-items/**")
+                .requestMatchers(HttpMethod.DELETE, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 .requestMatchers("/invoices/*/email", "/invoices/*/send-to")
@@ -576,6 +666,43 @@ public class SecurityConfig {
             )
         );
 
+        configureOidcResourceServer(http);
+
         return http.build();
+    }
+
+    /**
+     * Optional Keycloak resource-server stack (S-03 phase 1+).
+     * Activated only when {@code app.auth.oidc.issuer-uri} is configured. The
+     * {@code IssuerAwareBearerTokenResolver} routes only Keycloak-issued
+     * tokens (matched by {@code iss} claim) to this filter, so the existing
+     * custom {@code JwtAuthenticationFilter} continues to handle internal
+     * HMAC/RSA tokens unchanged.
+     */
+    private void configureOidcResourceServer(HttpSecurity http) throws Exception {
+        JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
+        BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
+        if (oidcDecoder == null || oidcResolver == null) {
+            return;
+        }
+
+        SEC_LOG.info("[OIDC] Keycloak resource-server is enabled — accepting JWTs alongside internal tokens");
+        http.oauth2ResourceServer(oauth -> oauth
+            .bearerTokenResolver(oidcResolver)
+            .jwt(jwt -> jwt
+                .decoder(oidcDecoder)
+                .jwtAuthenticationConverter(oidcJwtAuthenticationConverter)
+            )
+        );
+
+        // Populate HospitalContextHolder from Keycloak custom claims
+        // (hospital_id, role_assignments) so tenant-scoped specifications
+        // and @PreAuthorize rules see the same data they get from the
+        // legacy JwtAuthenticationFilter path.
+        KeycloakHospitalContextFilter hospitalContextFilter =
+                oidcHospitalContextFilterProvider.getIfAvailable();
+        if (hospitalContextFilter != null) {
+            http.addFilterAfter(hospitalContextFilter, BearerTokenAuthenticationFilter.class);
+        }
     }
 }

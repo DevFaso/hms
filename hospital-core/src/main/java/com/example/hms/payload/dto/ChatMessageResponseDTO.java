@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 
 @Getter
 @Setter
@@ -29,4 +31,7 @@ public class ChatMessageResponseDTO {
     private String content;
     private boolean read;
     private String translation;
+
+    /** Telehealth attachments (PHOTO/AUDIO) carried by this message; empty if none. */
+    private List<ChatAttachmentDTO> attachments;
 }

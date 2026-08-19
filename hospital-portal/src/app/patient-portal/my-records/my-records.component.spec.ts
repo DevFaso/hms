@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
+import { provideRouter } from '@angular/router';
 import { of } from 'rxjs';
 import { MyRecordsComponent } from './my-records.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
@@ -9,7 +10,12 @@ describe('MyRecordsComponent', () => {
   let fixture: ComponentFixture<MyRecordsComponent>;
 
   const mockPortalService = {
-    getHealthSummary: () => of({ profile: {}, allergies: [], activeDiagnoses: [] }),
+    getHealthSummary: () =>
+      of({
+        profile: { firstName: 'Jane', lastName: 'Doe', dateOfBirth: '1990-01-01' },
+        allergies: ['Penicillin'],
+        activeDiagnoses: ['Hypertension'],
+      }),
     getMyEncounters: () => of([]),
     getMyLabResults: () => of([]),
     getMyMedications: () => of([]),
@@ -19,7 +25,10 @@ describe('MyRecordsComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [MyRecordsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: mockPortalService }],
+      providers: [
+        { provide: PatientPortalService, useValue: mockPortalService },
+        provideRouter([]),
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MyRecordsComponent);
@@ -31,12 +40,12 @@ describe('MyRecordsComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should default to overview tab', () => {
-    expect(component.activeTab()).toBe('overview');
+  it('should load health summary', () => {
+    expect(component.summary()).toBeTruthy();
+    expect(component.summary()!.allergies.length).toBe(1);
   });
 
-  it('should switch tabs', () => {
-    component.activeTab.set('encounters');
-    expect(component.activeTab()).toBe('encounters');
+  it('should set loading to false after data loads', () => {
+    expect(component.loading()).toBe(false);
   });
 });

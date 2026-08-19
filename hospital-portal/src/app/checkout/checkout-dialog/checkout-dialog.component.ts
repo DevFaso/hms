@@ -9,11 +9,12 @@ import {
   AfterVisitSummary,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-checkout-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './checkout-dialog.component.html',
   styleUrl: './checkout-dialog.component.scss',
 })

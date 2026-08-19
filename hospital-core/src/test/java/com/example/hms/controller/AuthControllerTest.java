@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.service.AuthBootstrapService;
+import com.example.hms.controller.support.AuthControllerProperties;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.repository.UserRepository;
@@ -7,6 +9,13 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.PasswordHistoryService;
+import com.example.hms.service.MfaService;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.security.RefreshTokenCookieService;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +35,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -40,6 +51,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         pattern = "com\\.example\\.hms\\.security\\..*"
     )
 )
+// AuthControllerProperties is a @Component but @WebMvcTest doesn't
+// auto-scan components — import it explicitly so the controller's
+// constructor dependency resolves.
+@org.springframework.context.annotation.Import(AuthControllerProperties.class)
+@org.springframework.test.context.TestPropertySource(properties = {
+    "app.mfa.required-roles=",
+    "app.frontend.base-url=https://localhost",
+})
 class AuthControllerTest {
 
     @Autowired private MockMvc mockMvc;
@@ -52,6 +71,16 @@ class AuthControllerTest {
     @MockitoBean private AuthNotificationFacade authNotificationFacade;
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
+    @MockitoBean private TokenBlacklistService tokenBlacklistService;
+    @MockitoBean private com.example.hms.security.IdleSessionGate idleSessionGate;
+    @MockitoBean private com.example.hms.security.ImpersonationSessionTracker impersonationSessionTracker;
+    @MockitoBean private LoginAttemptService loginAttemptService;
+    @MockitoBean private AuditEventLogService auditEventLogService;
+    @MockitoBean private PasswordHistoryService passwordHistoryService;
+    @MockitoBean private MfaService mfaService;
+    @MockitoBean private WsTicketService wsTicketService;
+    @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
+    @MockitoBean private AuthBootstrapService authBootstrapService;
 
     @Test
     void register_returns410Gone() throws Exception {
@@ -356,6 +385,71 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.hospitalIds").doesNotExist());
     }
 
+    /**
+     * Regression for the "idle past the configured window" bug surfaced on
+     * dev: a fresh login → bootstrap → 401 → refresh → 401 loop because
+     * neither {@link com.example.hms.security.InMemoryIdleSessionTracker}
+     * nor {@link com.example.hms.security.RedisIdleSessionTracker} can
+     * distinguish "never touched" from "TTL-evicted" — both report
+     * isIdle=true on a missing entry, and the JWT filter only touches
+     * AFTER the gate has passed, so the entry is never created. The fix
+     * is to seed the idle window on token issue. This test pins that
+     * behaviour: a successful login MUST call {@code touchIfHuman} with
+     * the user id and the effective authorities.
+     */
+    @Test
+    void login_success_seedsIdleWindow() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("dr.jones@hospital-a.com")
+                .email("dr.jones@hospital-a.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                "dr.jones@hospital-a.com", null,
+                AuthorityUtils.createAuthorityList("ROLE_DOCTOR"));
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(auth);
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("mock.refresh.token");
+        when(userRepository.findByUsername("dr.jones@hospital-a.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_DOCTOR")))
+                .thenReturn("ROLE_DOCTOR");
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of());
+
+        LoginRequest loginReq = new LoginRequest("dr.jones@hospital-a.com", "Password1!", null);
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginReq)))
+                .andExpect(status().isOk());
+
+        // The crux of the regression: idleSessionGate.touchIfHuman MUST be
+        // called for this user with at least the selected authority, so the
+        // very next request after login does not see a missing entry and
+        // get rejected as "idle past the configured window".
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<java.util.Collection<? extends org.springframework.security.core.GrantedAuthority>> authoritiesCaptor =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(idleSessionGate).touchIfHuman(eq(userId), authoritiesCaptor.capture());
+        java.util.Collection<? extends org.springframework.security.core.GrantedAuthority> captured = authoritiesCaptor.getValue();
+        org.junit.jupiter.api.Assertions.assertTrue(
+                captured.stream()
+                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .anyMatch("ROLE_DOCTOR"::equals),
+                "touchIfHuman must receive the issued role authority so the "
+                        + "machine-role carve-out has its data");
+    }
+
     // =====================================================================
     // GET /auth/csrf-token  (CSRF bootstrap)
     // =====================================================================
@@ -523,5 +617,82 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.refreshToken").value("new.refresh.token"))
                 .andExpect(jsonPath("$.accessTokenExpiresAt").value(accessExp))
                 .andExpect(jsonPath("$.refreshTokenExpiresAt").value(refreshExp));
+    }
+
+    // ───────────────────────────── S-01: refresh-token cookie ─────────────────────────────
+
+    @Test
+    void logout_clearsRefreshCookieViaCookieService() throws Exception {
+        mockMvc.perform(post("/auth/logout"))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(refreshTokenCookieService)
+                .clear(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void refreshToken_prefersCookieOverBody() throws Exception {
+        // Setup minimal happy path with cookie carrying the refresh token,
+        // body present but with a *different* value to prove cookie wins.
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", userId);
+
+        com.example.hms.model.Role role = com.example.hms.model.Role.builder()
+                .code("ROLE_DOCTOR").build();
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+                com.example.hms.model.UserRoleHospitalAssignment.builder()
+                        .user(activeUser).role(role).active(true)
+                        .assignedAt(java.time.LocalDateTime.now()).build();
+
+        long nowMs = System.currentTimeMillis();
+        when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any()))
+                .thenReturn("cookie.refresh.token");
+        when(jwtTokenProvider.validateToken("cookie.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("cookie.refresh.token"))
+                .thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com"))
+                .thenReturn(java.util.Optional.of(activeUser));
+        when(assignmentRepository.findByUser(activeUser))
+                .thenReturn(java.util.Set.of(assignment));
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of(assignment));
+        when(jwtTokenProvider.generateAccessToken(
+                org.mockito.ArgumentMatchers.any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("new.access.token");
+        when(jwtTokenProvider.generateRefreshToken(
+                org.mockito.ArgumentMatchers.any(
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                .thenReturn("new.refresh.token");
+        when(jwtTokenProvider.getExpiration("new.access.token"))
+                .thenReturn(new java.util.Date(nowMs + 86_400_000L));
+        when(jwtTokenProvider.getExpiration("new.refresh.token"))
+                .thenReturn(new java.util.Date(nowMs + 7 * 86_400_000L));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .cookie(new jakarta.servlet.http.Cookie("hms_refresh", "cookie.refresh.token"))
+                        .content("{\"refreshToken\":\"body.refresh.token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new.access.token"));
+
+        // The cookie value, not the body value, must have been validated
+        org.mockito.Mockito.verify(jwtTokenProvider).validateToken("cookie.refresh.token");
+        // Rotation must have written a fresh cookie back to the response
+        org.mockito.Mockito.verify(refreshTokenCookieService)
+                .write(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("new.refresh.token"),
+                        org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void refreshToken_missingCookieAndBody_returns401() throws Exception {
+        when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+
+        mockMvc.perform(post("/auth/token/refresh"))
+                .andExpect(status().isUnauthorized());
     }
 }

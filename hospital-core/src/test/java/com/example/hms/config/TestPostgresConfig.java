@@ -27,6 +27,31 @@ public class TestPostgresConfig {
         "DB_CLOSE_ON_EXIT=FALSE"
     );
 
+    /**
+     * NOTE on a CI flake the earlier per-context UUID variant of this method
+     * (commit c08a745d, now reverted) tried — but did NOT — fix:
+     *
+     * <p>{@code MllpTcpServerIT} was racing a sibling {@code @SpringBootTest}'s
+     * {@code create-drop} shutdown on the shared {@code jdbc:h2:mem:testdb}
+     * in-memory database, surfacing as {@code Schema "platform" not found}
+     * mid-query on the mllp-worker thread. The intent of the earlier
+     * UUID-per-context approach was to mint a unique URL per Spring context.
+     * That logic was correct in isolation, but did not move CI: the same
+     * flake reproduced on the very next push (job 75227501591) with the
+     * per-context UUID code in place, which means the dynamic property never
+     * actually overrode {@code spring.datasource.url} at the boundary that
+     * mattered for this test. The targeted fix instead lives at the test-
+     * class boundary — see {@code MllpTcpServerIT}'s own
+     * {@code @TestPropertySource(spring.datasource.url=…${random.uuid}…)} +
+     * {@code @DirtiesContext(AFTER_CLASS)}, which Spring DOES honor and
+     * which made the test green in one run locally and one in CI.
+     *
+     * <p>The remaining 3 importers (BaseIT, CdsHooksDiscoveryIT,
+     * PrescriptionsCdsHooksIT) keep the shared {@code testdb} behavior they
+     * have had since this file was added — none of them spin up a worker
+     * thread that queries the DB after Spring shutdown semantics could fire,
+     * so the race is invisible to them.
+     */
     @DynamicPropertySource
     static void dbProps(DynamicPropertyRegistry r) {
         r.add("spring.datasource.url", () -> H2_URL);

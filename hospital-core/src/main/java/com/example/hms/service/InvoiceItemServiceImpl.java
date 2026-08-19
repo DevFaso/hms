@@ -28,6 +28,11 @@ import java.util.UUID;
 public class InvoiceItemServiceImpl implements InvoiceItemService {
     private static final String INVOICE_ITEM_NOT_FOUND_KEY = "invoiceitem.notfound";
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // i18n key for "billing invoice not found" appears 4x in this file.
+    // Naming follows the existing INVOICE_ITEM_NOT_FOUND_KEY pattern.
+    private static final String BILLING_INVOICE_NOT_FOUND_KEY = "billinginvoice.notfound";
+
 
     private final InvoiceItemRepository invoiceItemRepository;
     private final BillingInvoiceRepository billingInvoiceRepository;
@@ -42,7 +47,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
         BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
@@ -88,11 +93,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     public List<InvoiceItemResponseDTO> getItemsByInvoiceId(UUID invoiceId, Locale locale) {
         // ── Tenant isolation: verify the parent invoice belongs to caller's hospital ──
         BillingInvoice invoice = billingInvoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, invoiceId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
-            throw new ResourceNotFoundException("billinginvoice.notfound");
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, invoiceId);
         }
         return invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
             .map(invoiceItemMapper::toInvoiceItemResponseDTO)
@@ -106,7 +111,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
 
         BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));

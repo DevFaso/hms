@@ -1,7 +1,18 @@
-import { Component, computed, effect, inject, signal, OnInit, OnDestroy } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  OnInit,
+  OnDestroy,
+  ElementRef,
+  ViewChild,
+  AfterViewInit,
+} from '@angular/core';
+import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Subscription, filter } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -10,7 +21,12 @@ import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
+import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
+import { ImpersonationService } from '../services/impersonation.service';
+import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadcast-banner';
+import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { NavOrderService } from './nav-order.service';
+import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 
 interface NavItem {
   icon: string;
@@ -30,12 +46,23 @@ interface NavItem {
     RouterLink,
     RouterLinkActive,
     LockScreenComponent,
+    ImpersonationBannerComponent,
+    EmergencyBroadcastBannerComponent,
     TranslateModule,
+    SkipLinkComponent,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
-export class ShellComponent implements OnInit, OnDestroy {
+export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+  /**
+   * v1.0 row 11: target for the skip-link and the programmatic focus
+   * landing on every route change. Carries tabindex="-1" so it can
+   * accept focus without polluting Tab order. See
+   * docs/ui/accessibility.md §4.
+   */
+  @ViewChild('mainContent') protected mainContent?: ElementRef<HTMLElement>;
+  private routerSub?: Subscription;
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
@@ -44,6 +71,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly notifService = inject(NotificationService);
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
+  private readonly impersonation = inject(ImpersonationService);
+  private readonly emergencyBroadcast = inject(EmergencyBroadcastService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -131,6 +160,12 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/my-billing',
         },
         {
+          icon: 'local_pharmacy',
+          label: 'Pharmacy Invoices',
+          translationKey: 'NAV.PHARMACY_INVOICES',
+          route: '/my-pharmacy-invoices',
+        },
+        {
           icon: 'history',
           label: 'Visit History',
           translationKey: 'NAV.VISIT_HISTORY',
@@ -138,8 +173,8 @@ export class ShellComponent implements OnInit, OnDestroy {
         },
         {
           icon: 'groups',
-          label: 'My Care Team',
-          translationKey: 'NAV.MY_CARE_TEAM',
+          label: 'Care Team',
+          translationKey: 'NAV.CARE_TEAM',
           route: '/my-care-team',
         },
         {
@@ -153,6 +188,12 @@ export class ShellComponent implements OnInit, OnDestroy {
           label: 'My Documents',
           translationKey: 'NAV.MY_DOCUMENTS',
           route: '/my-documents',
+        },
+        {
+          icon: 'medical_information',
+          label: 'Medical History',
+          translationKey: 'NAV.MEDICAL_HISTORY',
+          route: '/my-medical-history',
         },
         {
           icon: 'share',
@@ -172,6 +213,12 @@ export class ShellComponent implements OnInit, OnDestroy {
           translationKey: 'NAV.VISIT_SUMMARIES',
           route: '/my-summaries',
         },
+        {
+          icon: 'description',
+          label: 'Documents',
+          translationKey: 'NAV.DOCUMENTS',
+          route: '/my-documents',
+        },
         { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
         {
           icon: 'notifications',
@@ -182,13 +229,22 @@ export class ShellComponent implements OnInit, OnDestroy {
       ];
     }
 
+    // MVP-5: when the active role is super admin, the side-nav drops the
+    // generic Dashboard entry — the Control Tower (/super-admin, appended by
+    // appendSuperAdminEntry) is their landing page. Other roles still see it.
+    const isActiveSuperAdmin = activeRole === 'ROLE_SUPER_ADMIN';
+
     const items: NavItem[] = [
-      {
-        icon: 'dashboard',
-        label: 'Dashboard',
-        translationKey: 'NAV.DASHBOARD',
-        route: '/dashboard',
-      },
+      ...(isActiveSuperAdmin
+        ? []
+        : [
+            {
+              icon: 'dashboard',
+              label: 'Dashboard',
+              translationKey: 'NAV.DASHBOARD',
+              route: '/dashboard',
+            },
+          ]),
       {
         icon: 'people',
         label: 'Patients',
@@ -389,6 +445,9 @@ export class ShellComponent implements OnInit, OnDestroy {
       },
     ];
 
+    // Super-Admin control tower (visible only to ROLE_SUPER_ADMIN)
+    this.appendSuperAdminEntry(items);
+
     // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
     if (this.permissions.hasPermission('View Hospitals')) {
       items.push({
@@ -398,7 +457,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/hospitals',
       });
     }
-    if (this.permissions.hasPermission('*')) {
+    // PR #225 review: gate the admin-items group via the active-role-aware
+    // helper so a multi-role super admin who picked a non-super activeRole
+    // doesn't see entries that the corresponding RoleGuard would 403 on.
+    // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
+    // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
+    if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push(
         {
           icon: 'corporate_fare',
@@ -408,13 +472,28 @@ export class ShellComponent implements OnInit, OnDestroy {
         },
         { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
-        { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
+        // MVP-5b: super-admin lands on the namespaced /super-admin/platform alias
+        // so the active-link highlight matches the address bar after the rewrite
+        // guard runs. ADMIN keeps the legacy /platform path.
         {
+          icon: 'hub',
+          label: 'Platform',
+          translationKey: 'NAV.PLATFORM',
+          route: isActiveSuperAdmin ? '/super-admin/platform' : '/platform',
+        },
+      );
+      // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
+      // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
+      // already have the Control Tower in their nav.
+      if (!isActiveSuperAdmin) {
+        items.push({
           icon: 'admin_panel_settings',
           label: 'Administration',
           translationKey: 'NAV.ADMINISTRATION',
           route: '/admin',
-        },
+        });
+      }
+      items.push(
         {
           icon: 'query_stats',
           label: 'Analytics',
@@ -442,9 +521,68 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'policy',
         label: 'Audit Logs',
         translationKey: 'NAV.AUDIT_LOGS',
-        route: '/audit-logs',
+        // MVP-5b: same rationale as Platform — super admins use the
+        // /super-admin/audit-logs alias; HOSPITAL_ADMIN/ADMIN keep the
+        // legacy /audit-logs path.
+        route: isActiveSuperAdmin ? '/super-admin/audit-logs' : '/audit-logs',
       });
     }
+    // Pharmacy Module
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_INVENTORY_CLERK',
+        'ROLE_STORE_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push(
+        {
+          icon: 'medication',
+          label: 'Medication Catalog',
+          translationKey: 'NAV.MEDICATION_CATALOG',
+          route: '/medication-catalog',
+        },
+        {
+          icon: 'local_pharmacy',
+          label: 'Pharmacy Registry',
+          translationKey: 'NAV.PHARMACY_REGISTRY',
+          route: '/pharmacy-registry',
+        },
+        {
+          icon: 'inventory_2',
+          label: 'Inventory',
+          translationKey: 'NAV.PHARMACY_INVENTORY',
+          route: '/pharmacy/inventory',
+        },
+        {
+          icon: 'add_box',
+          label: 'Goods Receipt',
+          translationKey: 'NAV.GOODS_RECEIPT',
+          route: '/pharmacy/goods-receipt',
+        },
+        {
+          icon: 'swap_vert',
+          label: 'Stock Adjustment',
+          translationKey: 'NAV.STOCK_ADJUSTMENT',
+          route: '/pharmacy/stock-adjustment',
+        },
+        {
+          icon: 'medication',
+          label: 'Dispensing',
+          translationKey: 'NAV.DISPENSING',
+          route: '/pharmacy/dispensing',
+        },
+        {
+          icon: 'alt_route',
+          label: 'Stock Routing',
+          translationKey: 'NAV.STOCK_ROUTING',
+          route: '/pharmacy/stock-routing',
+        },
+      );
+    }
+
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
         icon: 'handshake',
@@ -599,6 +737,50 @@ export class ShellComponent implements OnInit, OnDestroy {
     return this.auth.hasAnyRole(roles);
   }
 
+  private appendSuperAdminEntry(items: NavItem[]): void {
+    // Use the same hasAnyRole helper the rest of baseNavItems relies on so the
+    // sidebar respects the role the user picked at login. Using the raw role
+    // list (isSuperAdmin) would surface this entry for a multi-role user who
+    // selected a non-super active role and route them straight to /error/403.
+    if (!this.hasAnyRole(['ROLE_SUPER_ADMIN'])) return;
+    items.push({
+      icon: 'admin_panel_settings',
+      label: 'Super Admin',
+      translationKey: 'NAV.SUPER_ADMIN',
+      route: '/super-admin',
+    });
+    items.push({
+      icon: 'cable',
+      label: 'Integrations Health',
+      translationKey: 'NAV.INTEGRATIONS_HEALTH',
+      route: '/super-admin/integrations',
+    });
+    items.push({
+      icon: 'policy',
+      label: 'Audit Search',
+      translationKey: 'NAV.AUDIT_SEARCH',
+      route: '/super-admin/audit-search',
+    });
+    items.push({
+      icon: 'emergency',
+      label: 'Emergency Controls',
+      translationKey: 'NAV.EMERGENCY_CONTROLS',
+      route: '/super-admin/emergency',
+    });
+    items.push({
+      icon: 'subscriptions',
+      label: 'Subscriptions',
+      translationKey: 'NAV.SUBSCRIPTIONS',
+      route: '/super-admin/subscriptions',
+    });
+    items.push({
+      icon: 'public',
+      label: 'Data Residency',
+      translationKey: 'NAV.DATA_RESIDENCY',
+      route: '/super-admin/data-residency',
+    });
+  }
+
   /**
    * User-reordered nav items.
    * Rebuilt whenever the permission-filtered base list changes (e.g. when the
@@ -621,6 +803,15 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.loadNotifications();
     this.idle.start();
 
+    // MVP-4: hydrate the impersonation banner state on every shell mount so a
+    // page refresh while impersonating re-paints the banner instead of
+    // silently dropping it.
+    this.impersonation.refreshActive().subscribe({ error: () => undefined });
+
+    // MVP-7b: subscribe to /topic/emergency-broadcast so a super-admin
+    // broadcast surfaces in the banner across every authenticated route.
+    this.emergencyBroadcast.connect();
+
     const username = this.auth.getSubject();
     if (username) {
       this.notifService.connectWebSocket();
@@ -637,10 +828,31 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * v1.0 row 11: on every successful navigation, move focus to the
+   * `<main id="main-content">` element. Without this, keyboard and
+   * screen-reader users stay on whatever they clicked (a sidebar nav
+   * link, a button in a list) and lose context. Angular does NOT do
+   * this by default. See docs/ui/accessibility.md §4.
+   */
+  ngAfterViewInit(): void {
+    this.routerSub = this.router.events
+      .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
+      .subscribe(() => {
+        // queueMicrotask defers until after the new component has
+        // rendered into the outlet so focus actually lands on the
+        // freshly painted <main>, not the previous one.
+        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+      });
+  }
+
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
+    this.routerSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
+    // MVP-7b — release the emergency-broadcast STOMP socket on shell teardown.
+    this.emergencyBroadcast.disconnect();
     this.idle.stop();
   }
 
@@ -683,15 +895,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.resetDrag();
       return;
     }
-
-    this.navItems.update((items) => {
-      const reordered = [...items];
-      const [moved] = reordered.splice(fromIndex, 1);
-      reordered.splice(dropIndex, 0, moved);
-      this.navOrder.save(reordered.map((i) => i.route));
-      return reordered;
-    });
-
+    this.moveNavItem(fromIndex, dropIndex);
     this.resetDrag();
   }
 
@@ -702,6 +906,83 @@ export class ShellComponent implements OnInit, OnDestroy {
   private resetDrag(): void {
     this.dragIndex.set(null);
     this.dragOverIndex.set(null);
+  }
+
+  /**
+   * Shared reorder primitive used by both the mouse drag-drop and the
+   * Alt+ArrowUp/Down keyboard alternative. Mutates the navItems signal
+   * and persists the new order to localStorage via NavOrderService.
+   * Caller is responsible for any focus restoration.
+   */
+  private moveNavItem(fromIndex: number, toIndex: number): void {
+    this.navItems.update((items) => {
+      const reordered = [...items];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, moved);
+      this.navOrder.save(reordered.map((i) => i.route));
+      return reordered;
+    });
+  }
+
+  /**
+   * v1.0 row 11 finish — keyboard alternative to sidebar drag-reorder.
+   *
+   * `Alt+ArrowUp` swaps the focused nav item with the one above;
+   * `Alt+ArrowDown` swaps it with the one below. The shortcut carries
+   * a modifier so it doesn't collide with AZERTY key positions
+   * (docs/ui/accessibility.md §5). After the swap, focus is restored
+   * to the moved item at its new position so a clinician can keep
+   * pressing the shortcut to walk the item across multiple slots.
+   *
+   * No-op (returns without preventDefault) when:
+   * - Alt is not held — let the browser handle the keystroke normally.
+   * - The arrow direction would push the item past either end —
+   *   silently clamped so the user doesn't get a jarring blocked
+   *   keystroke. Screen readers re-announce on the next focus change.
+   */
+  onNavKeydown(event: KeyboardEvent, index: number): void {
+    if (!event.altKey) return;
+    let toIndex: number | null = null;
+    if (event.key === 'ArrowUp') toIndex = index - 1;
+    else if (event.key === 'ArrowDown') toIndex = index + 1;
+    if (toIndex === null) return;
+
+    const items = this.navItems();
+    if (toIndex < 0 || toIndex >= items.length) {
+      // Clamp at the ends. preventDefault still — we don't want the
+      // browser scrolling the viewport while the user holds Alt+Arrow.
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    // Capture the moved item's route BEFORE the swap. After the
+    // signal mutation Angular re-renders the @for, but the
+    // ViewChildren QueryList is keyed by encounter order, not DOM
+    // order — reading it post-swap and indexing into `toIndex` lands
+    // on a stale ElementRef whose underlying DOM node is no longer
+    // at that position. Querying by `routerLink` after the next
+    // animation frame is robust to whichever way Angular chooses to
+    // reuse / recreate nodes.
+    const movingItem = this.navItems()[index];
+
+    this.moveNavItem(index, toIndex);
+
+    // requestAnimationFrame defers past Angular's CD pass. queueMicrotask
+    // is too early — the new DOM hasn't been painted yet, and
+    // focus() against a detached node falls back to <body>. The first
+    // attempt of this handler used queueMicrotask + a ViewChildren
+    // index lookup; both were fragile under Angular signals where
+    // change detection isn't synchronous with the signal write.
+    requestAnimationFrame(() => {
+      const escapedRoute = CSS.escape(movingItem.route);
+      const moved = document.querySelector<HTMLAnchorElement>(
+        `.sidebar-nav .nav-item[href$="${escapedRoute}"]`,
+      );
+      moved?.focus({ preventScroll: false });
+    });
   }
 
   // ── Other handlers ───────────────────────────────────────────

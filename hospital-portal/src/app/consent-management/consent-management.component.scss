@@ -121,7 +121,7 @@
   position: absolute;
   left: 0.6rem;
   font-size: 1.2rem;
-  color: #9ca3af;
+  color: #6b7280;
   pointer-events: none;
 }
 
@@ -240,7 +240,7 @@
 
 .locked-icon {
   font-size: 16px;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .locked-name {
@@ -370,7 +370,7 @@
 
 .form-hint {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .btn-icon {
@@ -427,7 +427,7 @@
 
 .small {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 /* Pagination */
@@ -505,4 +505,20 @@
 
 .scope-label {
   user-select: none;
+}
+
+.scope-checkbox.sensitive {
+  border: 1px dashed #c0392b;
+  background: #fff5f4;
+
+  .scope-label {
+    color: #7a1f1f;
+    font-weight: 500;
+  }
+
+  .sensitive-marker {
+    color: #c0392b;
+    font-weight: 700;
+    margin-left: 0.15rem;
+  }
 }

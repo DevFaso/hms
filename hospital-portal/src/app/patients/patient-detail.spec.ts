@@ -14,6 +14,11 @@ import { HospitalService } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { BpaService } from '../services/bpa.service';
+import { CdsAcknowledgementService } from '../services/cds-acknowledgement.service';
+import { StoryboardService } from '../services/storyboard.service';
+import { BreakGlassService } from '../services/break-glass.service';
+import { AuthService } from '../auth/auth.service';
 
 describe('PatientDetailComponent', () => {
   let component: PatientDetailComponent;
@@ -27,6 +32,8 @@ describe('PatientDetailComponent', () => {
   let toastSpy: jasmine.SpyObj<ToastService>;
   let permissionSpy: jasmine.SpyObj<PermissionService>;
   let roleContextSpy: jasmine.SpyObj<RoleContextService>;
+  let bpaServiceSpy: jasmine.SpyObj<BpaService>;
+  let storyboardServiceSpy: jasmine.SpyObj<StoryboardService>;
 
   const mockPatient = {
     id: 'p1',
@@ -62,6 +69,23 @@ describe('PatientDetailComponent', () => {
     roleContextSpy = jasmine.createSpyObj('RoleContextService', ['isSuperAdmin'], {
       activeHospitalId: 'h1',
     });
+    bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
+    const cdsAckSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
+      'record',
+      'active',
+    ]);
+    cdsAckSpy.active.and.returnValue(of([]));
+    storyboardServiceSpy = jasmine.createSpyObj('StoryboardService', ['getStoryboard']);
+    const breakGlassSpy = jasmine.createSpyObj<BreakGlassService>('BreakGlassService', [
+      'declare',
+      'revoke',
+      'findMyLiveSession',
+      'listLiveForPatient',
+      'listForHospital',
+    ]);
+    breakGlassSpy.findMyLiveSession.and.returnValue(of(null));
+    const authSpy = jasmine.createSpyObj<AuthService>('AuthService', ['getRoles']);
+    authSpy.getRoles.and.returnValue([]);
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
@@ -70,6 +94,18 @@ describe('PatientDetailComponent', () => {
     permissionSpy.hasPermission.and.returnValue(true);
     permissionSpy.hasAnyPermission.and.returnValue(true);
     roleContextSpy.isSuperAdmin.and.returnValue(false);
+    bpaServiceSpy.evaluate.and.returnValue(of([]));
+    storyboardServiceSpy.getStoryboard.and.returnValue(
+      of({
+        patient: { id: 'p1' },
+        allergies: [],
+        problems: [],
+        activeEncounter: null,
+        codeStatus: null,
+        hasHighSeverityAllergy: false,
+        hasChronicProblem: false,
+      }),
+    );
 
     await TestBed.configureTestingModule({
       imports: [PatientDetailComponent, TranslateModule.forRoot()],
@@ -90,6 +126,11 @@ describe('PatientDetailComponent', () => {
         { provide: ToastService, useValue: toastSpy },
         { provide: PermissionService, useValue: permissionSpy },
         { provide: RoleContextService, useValue: roleContextSpy },
+        { provide: BpaService, useValue: bpaServiceSpy },
+        { provide: CdsAcknowledgementService, useValue: cdsAckSpy },
+        { provide: StoryboardService, useValue: storyboardServiceSpy },
+        { provide: BreakGlassService, useValue: breakGlassSpy },
+        { provide: AuthService, useValue: authSpy },
       ],
     }).compileComponents();
 

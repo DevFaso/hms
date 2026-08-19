@@ -8,7 +8,9 @@ import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { ImpersonationService } from '../services/impersonation.service';
+import { Router } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -81,6 +83,9 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly impersonation = inject(ImpersonationService);
+  private readonly router = inject(Router);
+  private readonly translate = inject(TranslateService);
 
   private readonly searchSubject = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
@@ -110,6 +115,13 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Restore
   restoring = signal(false);
+
+  // MVP-4: support impersonation modal state
+  impersonateTarget = signal<UserSummary | null>(null);
+  impersonateReason = '';
+  impersonateMfaCode = '';
+  impersonating = signal(false);
+  impersonateError = signal<string | null>(null);
 
   /** Per-field validation error messages (from 400/409 backend responses). */
   fieldErrors = signal<Record<string, string>>({});
@@ -171,7 +183,7 @@ export class UserListComponent implements OnInit, OnDestroy {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load users');
+        this.toast.error(this.translate.instant('USERS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -332,15 +344,15 @@ export class UserListComponent implements OnInit, OnDestroy {
       !this.createForm.firstName ||
       !this.createForm.lastName
     ) {
-      this.toast.error('All required fields must be filled');
+      this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
       return;
     }
     if (this.selectedRoles.length === 0) {
-      this.toast.error('At least one role must be selected');
+      this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
       return;
     }
     if (this.licenseRequired && !this.createForm.licenseNumber?.trim()) {
-      this.toast.error('License number is required for medical roles');
+      this.toast.error(this.translate.instant('USERS.TOAST.LICENSE_REQUIRED'));
       return;
     }
 
@@ -369,7 +381,9 @@ export class UserListComponent implements OnInit, OnDestroy {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'User updated' : 'User created successfully.');
+        this.toast.success(
+          this.translate.instant(existing ? 'USERS.TOAST.UPDATED' : 'USERS.TOAST.CREATED'),
+        );
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
@@ -387,21 +401,19 @@ export class UserListComponent implements OnInit, OnDestroy {
             ...prev,
             [body.field]: body.message ?? 'Already in use',
           }));
-          this.toast.error(
-            body.message ?? 'A conflict was detected. Please review the highlighted fields.',
-          );
+          this.toast.error(body.message ?? this.translate.instant('USERS.TOAST.CONFLICT'));
           return;
         }
 
         // 400 with fieldErrors map (from @Valid / Bean Validation)
         if (status === 400 && body?.fieldErrors) {
           this.fieldErrors.set(body.fieldErrors as Record<string, string>);
-          this.toast.error('Please fix the highlighted fields and try again.');
+          this.toast.error(this.translate.instant('USERS.TOAST.VALIDATION_ERRORS'));
           return;
         }
 
         // Generic fallback
-        this.toast.error(body?.message ?? 'Operation failed. Please try again.');
+        this.toast.error(body?.message ?? this.translate.instant('USERS.TOAST.OPERATION_FAILED'));
       },
     });
   }
@@ -432,14 +444,16 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.deleting.set(true);
     this.userService.delete(user.id).subscribe({
       next: () => {
-        this.toast.success('User deleted');
+        this.toast.success(this.translate.instant('USERS.TOAST.DELETED'));
         this.showDeleteConfirm.set(false);
         this.deleting.set(false);
         this.deletingUser.set(null);
         this.loadUsers();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to delete user');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('USERS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -449,15 +463,75 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.restoring.set(true);
     this.userService.restore(user.id).subscribe({
       next: () => {
-        this.toast.success(`${user.firstName} ${user.lastName} has been restored.`);
+        this.toast.success(
+          this.translate.instant('USERS.TOAST.RESTORED', {
+            name: `${user.firstName} ${user.lastName}`,
+          }),
+        );
         this.restoring.set(false);
         this.loadUsers(this.currentPage());
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to restore user');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('USERS.TOAST.RESTORE_FAILED'),
+        );
         this.restoring.set(false);
       },
     });
+  }
+
+  // ── MVP-4: support impersonation ────────────────────────────────────
+  /** True when the current user is a super admin and the row is impersonable. */
+  canImpersonate(user: UserSummary): boolean {
+    if (!this.roleContext.isSuperAdmin()) return false;
+    if (user.deleted || !user.active) return false;
+    const role = (user.roleName ?? '').toUpperCase();
+    if (role === 'SUPER_ADMIN' || role === 'ROLE_SUPER_ADMIN') return false;
+    if (this.impersonation.active()?.impersonating) return false;
+    return true;
+  }
+
+  openImpersonate(user: UserSummary): void {
+    this.impersonateTarget.set(user);
+    this.impersonateReason = '';
+    this.impersonateMfaCode = '';
+    this.impersonateError.set(null);
+  }
+
+  closeImpersonate(): void {
+    this.impersonateTarget.set(null);
+    this.impersonateReason = '';
+    this.impersonateMfaCode = '';
+    this.impersonateError.set(null);
+  }
+
+  submitImpersonate(): void {
+    const target = this.impersonateTarget();
+    const reason = this.impersonateReason.trim();
+    if (!target || reason.length < 5) {
+      this.impersonateError.set(this.translate.instant('USERS.TOAST.IMPERSONATE_REASON_TOO_SHORT'));
+      return;
+    }
+    this.impersonating.set(true);
+    this.impersonateError.set(null);
+    this.impersonation
+      .start({ targetUserId: target.id, reason }, this.impersonateMfaCode.trim() || undefined)
+      .subscribe({
+        next: () => {
+          this.impersonating.set(false);
+          this.closeImpersonate();
+          this.toast.success(
+            this.translate.instant('USERS.TOAST.IMPERSONATE_STARTED', { name: target.username }),
+          );
+          this.router.navigateByUrl('/dashboard');
+        },
+        error: (err) => {
+          this.impersonating.set(false);
+          this.impersonateError.set(
+            err?.error?.message ?? this.translate.instant('USERS.TOAST.IMPERSONATE_FAILED'),
+          );
+        },
+      });
   }
 
   goToPage(page: number): void {

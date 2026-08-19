@@ -11,6 +11,7 @@ import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +27,13 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /** Shared response-body field names — kept as constants for Sonar S1192. */
+    private static final String FIELD_TIMESTAMP = "timestamp";
+    private static final String FIELD_STATUS    = "status";
+    private static final String FIELD_ERROR     = "error";
+    private static final String FIELD_MESSAGE   = "message";
+    private static final String FIELD_PATH      = "path";
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Object> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
@@ -45,13 +53,26 @@ public class GlobalExceptionHandler {
             message = raw.substring(idx + 1).trim();
         }
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.CONFLICT.value());
-        body.put("error", "Conflict");
-        body.put("message", message);
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
+        body.put(FIELD_ERROR, "Conflict");
+        body.put(FIELD_MESSAGE, message);
         if (field != null) body.put("field", field);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+    public ResponseEntity<Object> handleCdsCriticalBlock(
+            com.example.hms.cdshooks.CdsCriticalBlockException ex, WebRequest request) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "CDS Critical Advisory");
+        body.put(FIELD_MESSAGE, ex.getMessage());
+        body.put("cdsAdvisories", ex.getCards());
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(BusinessException.class)
@@ -89,6 +110,45 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
+    /**
+     * Catches Jackson deserialisation failures (unknown enum values, malformed
+     * JSON, type-coercion errors) and surfaces them as 400 with the original
+     * Jackson message — far more actionable than the generic 500 the catch-all
+     * RuntimeException handler used to produce. Triggered on dev when the
+     * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
+     * against the {@code PharmacyType} enum whose accepted values are
+     * {@code COMMUNITY_PHARMACY / PARTNER_PHARMACY / HOSPITAL_DISPENSARY}.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex, WebRequest request) {
+        // Jackson exception messages embed the offending field path and the
+        // accepted values for enums; surface them so the caller can self-
+        // diagnose. The cause's message is shorter and cleaner than the
+        // outer JsonMappingException stack-trace prefix, but it can be null
+        // even when the cause itself is non-null (rare Jackson paths build a
+        // cause with no detail message) — fall through to the outer message
+        // and then to a fixed default so the response is never
+        // "Malformed request body: null".
+        String detail = resolveJacksonDetail(ex);
+        String message = detail.isEmpty()
+            ? "Malformed request body."
+            : "Malformed request body: " + detail;
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    private static String resolveJacksonDetail(HttpMessageNotReadableException ex) {
+        // getMostSpecificCause() falls back to the throwable itself when no
+        // cause is chained, so it is documented non-null. Its detail message,
+        // however, can be null on edge-case Jackson paths.
+        String causeMessage = ex.getMostSpecificCause().getMessage();
+        if (causeMessage != null && !causeMessage.isBlank()) {
+            return causeMessage;
+        }
+        String outer = ex.getMessage();
+        return outer != null && !outer.isBlank() ? outer : "";
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Object> handleValidationException(MethodArgumentNotValidException ex, WebRequest request) {
 
@@ -102,12 +162,12 @@ public class GlobalExceptionHandler {
                 ));
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Validation Failed");
-        body.put("message", "Validation errors in request");
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "Validation Failed");
+        body.put(FIELD_MESSAGE, "Validation errors in request");
         body.put("fieldErrors", fieldErrors);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -122,12 +182,12 @@ public class GlobalExceptionHandler {
                 ));
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", HttpStatus.BAD_REQUEST.value());
-        body.put("error", "Validation Failed");
-        body.put("message", "Constraint violation in request parameters");
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
+        body.put(FIELD_ERROR, "Validation Failed");
+        body.put(FIELD_MESSAGE, "Constraint violation in request parameters");
         body.put("fieldErrors", violations);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
@@ -155,11 +215,11 @@ public class GlobalExceptionHandler {
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message, WebRequest request) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("timestamp", LocalDateTime.now());
-        body.put("status", status.value());
-        body.put("error", status.getReasonPhrase());
-        body.put("message", message);
-        body.put("path", request.getDescription(false).replace("uri=", ""));
+        body.put(FIELD_TIMESTAMP, LocalDateTime.now());
+        body.put(FIELD_STATUS, status.value());
+        body.put(FIELD_ERROR, status.getReasonPhrase());
+        body.put(FIELD_MESSAGE, message);
+        body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, status);
     }
 

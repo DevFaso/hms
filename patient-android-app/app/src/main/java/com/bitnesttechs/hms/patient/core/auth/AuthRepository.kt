@@ -50,11 +50,18 @@ class AuthRepository @Inject constructor(
                 AuthResult.Success
             } else {
                 val errorBody = response.errorBody()?.string()
+                val parsedMessage = parseErrorMessage(errorBody)
                 val msg = when (response.code()) {
                     401 -> "Invalid username or password"
                     403 -> "Account locked or disabled"
                     404 -> "Server not reachable"
-                    else -> errorBody?.take(200) ?: "Login failed (${response.code()})"
+                    // KC-3 cutover (S-03): once the backend flips
+                    // app.auth.oidc.required=true, /auth/login responds 410 Gone
+                    // with a JSON body steering the user to SSO. Surface that
+                    // message verbatim so the UI does not show a raw blob.
+                    410 -> parsedMessage
+                        ?: "Single sign-on is required. Please use the SSO button."
+                    else -> parsedMessage ?: "Login failed (${response.code()})"
                 }
                 AuthResult.Error(msg)
             }
@@ -96,4 +103,34 @@ class AuthRepository @Inject constructor(
             } else null
         } catch (_: Exception) { null }
     }
+
+    /**
+     * Extract a user-readable message from a Spring `MessageResponse`-style
+     * error body (`{"message": "..."}` or `{"error": "..."}`). Returns null
+     * when the body is empty, missing both fields, or unparseable so the
+     * caller can fall back to status-code-specific copy.
+     *
+     * Implemented as a regex rather than a full JSON parser so it works in
+     * pure-JVM unit tests without needing Robolectric to stub
+     * {@code org.json.JSONObject}. This is intentionally lenient: malformed
+     * input simply returns null, never throws.
+     */
+    internal fun parseErrorMessage(body: String?): String? {
+        if (body.isNullOrBlank()) return null
+        for (key in listOf("message", "error")) {
+            val match = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(body)
+            val raw = match?.groupValues?.getOrNull(1)
+            if (!raw.isNullOrBlank()) {
+                return unescapeJsonString(raw)
+            }
+        }
+        return null
+    }
+
+    private fun unescapeJsonString(raw: String): String =
+        raw.replace("\\\"", "\"")
+            .replace("\\\\", "\\")
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
 }

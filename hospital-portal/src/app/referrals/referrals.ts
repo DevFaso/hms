@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -13,13 +14,16 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
   templateUrl: './referrals.html',
   styleUrl: './referrals.scss',
 })
@@ -30,6 +34,12 @@ export class ReferralsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
@@ -61,6 +71,26 @@ export class ReferralsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingRef = signal<ReferralResponse | null>(null);
   deleting = signal(false);
+
+  /* ── Status transition modals ── */
+  showAcknowledgeModal = signal(false);
+  acknowledgingRef = signal<ReferralResponse | null>(null);
+  acknowledgeNotes = '';
+  actionLoading = signal(false);
+
+  showCompleteModal = signal(false);
+  completingRef = signal<ReferralResponse | null>(null);
+  completeSummary = '';
+  completeFollowUp = '';
+
+  showScheduleModal = signal(false);
+  schedulingRef = signal<ReferralResponse | null>(null);
+  scheduleAppointmentTime = '';
+  scheduleLocation = '';
+
+  showRejectModal = signal(false);
+  rejectingRef = signal<ReferralResponse | null>(null);
+  rejectReason = '';
 
   urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
 
@@ -125,10 +155,20 @@ export class ReferralsComponent implements OnInit {
   ];
 
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.load();
     this.loadAssignedHospitals();
     this.loadAllHospitals();
     this.initPatientSearch();
+  }
+
+  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
   }
 
   emptyForm(): ReferralRequest {
@@ -316,6 +356,161 @@ export class ReferralsComponent implements OnInit {
     });
   }
 
+  /* ── Submit DRAFT → SUBMITTED ── */
+  submitReferral(r: ReferralResponse): void {
+    this.actionLoading.set(true);
+    this.referralService.submit(r.id).subscribe({
+      next: () => {
+        this.toast.success('Referral submitted');
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Submit failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Acknowledge SUBMITTED → ACKNOWLEDGED ── */
+  openAcknowledge(r: ReferralResponse): void {
+    this.acknowledgingRef.set(r);
+    this.acknowledgeNotes = '';
+    this.showAcknowledgeModal.set(true);
+  }
+  closeAcknowledgeModal(): void {
+    this.showAcknowledgeModal.set(false);
+    this.acknowledgingRef.set(null);
+  }
+  executeAcknowledge(): void {
+    const ref = this.acknowledgingRef();
+    if (!ref) return;
+    const providerId = this.auth.getUserProfile()?.staffId ?? '';
+    this.actionLoading.set(true);
+    this.referralService.acknowledge(ref.id, this.acknowledgeNotes, providerId).subscribe({
+      next: () => {
+        this.toast.success('Referral acknowledged');
+        this.closeAcknowledgeModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Acknowledge failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Schedule ACKNOWLEDGED → SCHEDULED ── */
+  openSchedule(r: ReferralResponse): void {
+    this.schedulingRef.set(r);
+    this.scheduleAppointmentTime = '';
+    this.scheduleLocation = '';
+    this.showScheduleModal.set(true);
+  }
+  closeScheduleModal(): void {
+    this.showScheduleModal.set(false);
+    this.schedulingRef.set(null);
+  }
+  executeSchedule(): void {
+    const ref = this.schedulingRef();
+    if (!ref || !this.scheduleAppointmentTime) return;
+    this.actionLoading.set(true);
+    this.referralService
+      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .subscribe({
+        next: () => {
+          this.toast.success('Referral scheduled');
+          this.closeScheduleModal();
+          this.actionLoading.set(false);
+          this.load();
+          this.closeDetail();
+        },
+        error: () => {
+          this.toast.error('Schedule failed');
+          this.actionLoading.set(false);
+        },
+      });
+  }
+
+  /* ── Start ACKNOWLEDGED/SCHEDULED → IN_PROGRESS (direct, no modal) ── */
+  startReferral(r: ReferralResponse): void {
+    this.actionLoading.set(true);
+    this.referralService.start(r.id).subscribe({
+      next: () => {
+        this.toast.success('Consultation started');
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Start failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Reject SUBMITTED/ACKNOWLEDGED → REJECTED ── */
+  openReject(r: ReferralResponse): void {
+    this.rejectingRef.set(r);
+    this.rejectReason = '';
+    this.showRejectModal.set(true);
+  }
+  closeRejectModal(): void {
+    this.showRejectModal.set(false);
+    this.rejectingRef.set(null);
+  }
+  executeReject(): void {
+    const ref = this.rejectingRef();
+    if (!ref || !this.rejectReason.trim()) return;
+    this.actionLoading.set(true);
+    this.referralService.reject(ref.id, this.rejectReason).subscribe({
+      next: () => {
+        this.toast.success('Referral rejected');
+        this.closeRejectModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Reject failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Complete ACKNOWLEDGED/SCHEDULED/IN_PROGRESS → COMPLETED ── */
+  openComplete(r: ReferralResponse): void {
+    this.completingRef.set(r);
+    this.completeSummary = '';
+    this.completeFollowUp = '';
+    this.showCompleteModal.set(true);
+  }
+  closeCompleteModal(): void {
+    this.showCompleteModal.set(false);
+    this.completingRef.set(null);
+  }
+  executeComplete(): void {
+    const ref = this.completingRef();
+    if (!ref) return;
+    this.actionLoading.set(true);
+    this.referralService.complete(ref.id, this.completeSummary, this.completeFollowUp).subscribe({
+      next: () => {
+        this.toast.success('Referral completed');
+        this.closeCompleteModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Complete failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
   load(): void {
     this.loading.set(true);
     this.referralService.getAll().subscribe({
@@ -341,9 +536,11 @@ export class ReferralsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'pending') list = list.filter((r) => ['DRAFT', 'SUBMITTED'].includes(r.status));
     else if (tab === 'active')
-      list = list.filter((r) => ['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status));
+      list = list.filter((r) => ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status));
     else if (tab === 'completed')
-      list = list.filter((r) => ['COMPLETED', 'CANCELLED'].includes(r.status));
+      list = list.filter((r) =>
+        ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status),
+      );
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -370,12 +567,15 @@ export class ReferralsComponent implements OnInit {
       case 'SUBMITTED':
         return 'status-submitted';
       case 'ACKNOWLEDGED':
+      case 'SCHEDULED':
       case 'IN_PROGRESS':
         return 'status-active';
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+      case 'REJECTED':
         return 'status-cancelled';
+      case 'EXPIRED':
       case 'OVERDUE':
         return 'status-overdue';
       default:
@@ -399,10 +599,13 @@ export class ReferralsComponent implements OnInit {
     if (group === 'pending')
       return this.referrals().filter((r) => ['DRAFT', 'SUBMITTED'].includes(r.status)).length;
     if (group === 'active')
-      return this.referrals().filter((r) => ['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status))
-        .length;
+      return this.referrals().filter((r) =>
+        ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status),
+      ).length;
     if (group === 'completed')
-      return this.referrals().filter((r) => r.status === 'COMPLETED').length;
+      return this.referrals().filter((r) =>
+        ['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status),
+      ).length;
     return 0;
   }
 }

@@ -40,7 +40,7 @@ describe('ImagingService — results', () => {
   });
 
   it('fetches all report versions for an order', () => {
-    service.getReportsByOrder('ord-1').subscribe();
+    service.getReportsForOrder('ord-1').subscribe();
     httpMock.expectOne('/imaging/results/order/ord-1/all').flush([report]);
   });
 

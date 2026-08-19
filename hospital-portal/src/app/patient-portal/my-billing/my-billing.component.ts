@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PortalInvoice,
@@ -18,6 +18,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 })
 export class MyBillingComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
+  private readonly translate = inject(TranslateService);
   invoices = signal<PortalInvoice[]>([]);
   loading = signal(true);
   totalBalance = signal(0);
@@ -66,7 +67,7 @@ export class MyBillingComponent implements OnInit {
     if (!inv || !this.payAmount || this.payAmount <= 0) return;
 
     if (this.payAmount > inv.balance) {
-      this.payError.set('Amount cannot exceed balance due.');
+      this.payError.set(this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS'));
       return;
     }
 
@@ -82,12 +83,19 @@ export class MyBillingComponent implements OnInit {
     this.portal.payInvoice(inv.id, req).subscribe({
       next: () => {
         this.payProcessing.set(false);
-        this.paySuccess.set('Payment of ' + this.payAmount.toFixed(2) + ' recorded successfully!');
+        this.paySuccess.set(
+          this.translate.instant('PORTAL.BILLING.PAYMENT_SUCCESS_AMOUNT', {
+            amount: this.payAmount.toFixed(2),
+          }),
+        );
         this.loadInvoices();
       },
       error: (err) => {
         this.payProcessing.set(false);
-        const msg = err?.error?.message || err?.error?.error || 'Payment failed. Please try again.';
+        const msg =
+          err?.error?.message ||
+          err?.error?.error ||
+          this.translate.instant('PORTAL.BILLING.PAYMENT_FAILED');
         this.payError.set(msg);
       },
     });

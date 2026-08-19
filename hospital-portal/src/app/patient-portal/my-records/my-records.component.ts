@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   PatientPortalService,
@@ -14,7 +15,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-my-records',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './my-records.component.html',
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],
 })
@@ -27,16 +28,6 @@ export class MyRecordsComponent implements OnInit {
   labs = signal<LabResultSummary[]>([]);
   medications = signal<MedicationSummary[]>([]);
   immunizations = signal<ImmunizationSummary[]>([]);
-  activeTab = signal<string>('overview');
-  expandedId = signal<string | null>(null);
-
-  tabs = [
-    { key: 'overview', labelKey: 'PORTAL.RECORDS.OVERVIEW', icon: 'person' },
-    { key: 'encounters', labelKey: 'PORTAL.RECORDS.VISITS_TAB', icon: 'stethoscope' },
-    { key: 'labs', labelKey: 'PORTAL.RECORDS.LABS_TAB', icon: 'science' },
-    { key: 'medications', labelKey: 'PORTAL.RECORDS.MEDICATIONS_TAB', icon: 'medication' },
-    { key: 'immunizations', labelKey: 'PORTAL.RECORDS.IMMUNIZATIONS_TAB', icon: 'vaccines' },
-  ];
 
   ngOnInit(): void {
     this.portal.getHealthSummary().subscribe({
@@ -66,9 +57,5 @@ export class MyRecordsComponent implements OnInit {
 
   printRecords(): void {
     window.print();
-  }
-
-  toggleExpand(id: string): void {
-    this.expandedId.set(this.expandedId() === id ? null : id);
   }
 }

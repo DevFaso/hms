@@ -1,0 +1,15 @@
+<!--
+  Anchor — not <button> — because activating it is a navigation gesture
+  (jump to main content). The href is the same selector the click handler
+  uses, so the element still works for assistive tech that only honors
+  link semantics. We intercept the click to avoid an URL fragment change.
+-->
+<a
+  class="skip-link"
+  [attr.href]="target"
+  data-testid="skip-link"
+  (click)="onActivate($event)"
+  (keydown.enter)="onActivate($event)"
+>
+  {{ label }}
+</a>

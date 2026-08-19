@@ -57,6 +57,8 @@ public class PharmacyFillMapper {
             .pharmacyName(entity.getPharmacyName())
             .pharmacyNpi(entity.getPharmacyNpi())
             .pharmacyNcpdp(entity.getPharmacyNcpdp())
+            .pharmacyLicense(entity.getPharmacyLicense())
+            .facilityCode(entity.getFacilityCode())
             .pharmacyPhone(entity.getPharmacyPhone())
             .pharmacyAddress(entity.getPharmacyAddress())
             .prescriberName(entity.getPrescriberName())
@@ -101,6 +103,8 @@ public class PharmacyFillMapper {
             .pharmacyName(dto.getPharmacyName())
             .pharmacyNpi(dto.getPharmacyNpi())
             .pharmacyNcpdp(dto.getPharmacyNcpdp())
+            .pharmacyLicense(dto.getPharmacyLicense())
+            .facilityCode(dto.getFacilityCode())
             .pharmacyPhone(dto.getPharmacyPhone())
             .pharmacyAddress(dto.getPharmacyAddress())
             .prescriberName(dto.getPrescriberName())
@@ -136,6 +140,8 @@ public class PharmacyFillMapper {
         entity.setPharmacyName(dto.getPharmacyName());
         entity.setPharmacyNpi(dto.getPharmacyNpi());
         entity.setPharmacyNcpdp(dto.getPharmacyNcpdp());
+        entity.setPharmacyLicense(dto.getPharmacyLicense());
+        entity.setFacilityCode(dto.getFacilityCode());
         entity.setPharmacyPhone(dto.getPharmacyPhone());
         entity.setPharmacyAddress(dto.getPharmacyAddress());
         entity.setPrescriberName(dto.getPrescriberName());

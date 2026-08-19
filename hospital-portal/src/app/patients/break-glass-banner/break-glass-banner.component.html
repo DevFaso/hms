@@ -1,0 +1,95 @@
+@if (canDeclare() && state() !== 'idle') {
+  <section class="bg-banner" [class.bg-active]="mySession()?.live">
+    @if (mySession()?.live) {
+      <div class="bg-banner__row">
+        <span class="bg-banner__icon" aria-hidden="true">!</span>
+        <div class="bg-banner__text">
+          <strong>{{ 'BREAK_GLASS.ACTIVE' | translate }}</strong>
+          <span class="bg-banner__meta">
+            {{ 'BREAK_GLASS.EXPIRES_IN' | translate }} {{ remainingLabel() || '…' }}
+          </span>
+        </div>
+        <button type="button" class="bg-banner__btn bg-banner__btn--ghost" (click)="revoke()">
+          {{ 'BREAK_GLASS.REVOKE' | translate }}
+        </button>
+      </div>
+    } @else {
+      <div class="bg-banner__row">
+        <span class="bg-banner__icon bg-banner__icon--idle" aria-hidden="true">⚠</span>
+        <span class="bg-banner__text">
+          @if (!hospitalId()) {
+            {{ 'BREAK_GLASS.NEED_HOSPITAL' | translate }}
+          } @else {
+            {{ 'BREAK_GLASS.PROMPT' | translate }}
+          }
+        </span>
+        <button
+          type="button"
+          class="bg-banner__btn"
+          [disabled]="!canInvokeDeclare()"
+          [title]="!hospitalId() ? ('BREAK_GLASS.NEED_HOSPITAL' | translate) : null"
+          (click)="openModal()"
+        >
+          {{ 'BREAK_GLASS.DECLARE' | translate }}
+        </button>
+      </div>
+    }
+  </section>
+}
+
+@if (modalOpen()) {
+  <div
+    class="bg-modal"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+    (click)="onBackdropClick($event)"
+    (keydown.escape)="closeModal()"
+  >
+    <div class="bg-modal__panel">
+      <h3>{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}</h3>
+      <p class="bg-modal__warn">{{ 'BREAK_GLASS.MODAL_WARN' | translate }}</p>
+
+      <label class="bg-modal__label" for="bgReason">
+        {{ 'BREAK_GLASS.REASON_LABEL' | translate }}
+      </label>
+      <textarea
+        id="bgReason"
+        class="bg-modal__input"
+        rows="4"
+        [ngModel]="reason()"
+        (ngModelChange)="reason.set($event)"
+        [placeholder]="'BREAK_GLASS.REASON_PLACEHOLDER' | translate"
+      ></textarea>
+
+      <label class="bg-modal__label" for="bgTtl">
+        {{ 'BREAK_GLASS.TTL_LABEL' | translate }}
+      </label>
+      <select
+        id="bgTtl"
+        class="bg-modal__input"
+        [ngModel]="ttlMinutes()"
+        (ngModelChange)="ttlMinutes.set(+$event)"
+      >
+        <option [ngValue]="30">30 min</option>
+        <option [ngValue]="60">1 h</option>
+        <option [ngValue]="120">2 h</option>
+        <option [ngValue]="240">4 h</option>
+      </select>
+
+      <div class="bg-modal__actions">
+        <button type="button" class="bg-banner__btn bg-banner__btn--ghost" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="bg-banner__btn bg-banner__btn--danger"
+          [disabled]="submitting()"
+          (click)="submit()"
+        >
+          {{ 'BREAK_GLASS.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

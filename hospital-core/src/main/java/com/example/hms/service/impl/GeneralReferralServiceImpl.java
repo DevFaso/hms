@@ -12,19 +12,30 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.ReferralAttachmentResponseDTO;
+import com.example.hms.payload.dto.referral.ReferralEventResponseDTO;
+import com.example.hms.payload.dto.referral.RejectReferralRequestDTO;
+import com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO;
+import com.example.hms.persistence.JpaProxyUtils;
+import com.example.hms.enums.ReferralEventType;
+import com.example.hms.model.ReferralEvent;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.ReferralEventRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.service.ReferralEventRecorder;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +54,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final RoleValidator roleValidator;
+    private final ReferralEventRecorder eventRecorder;
+    private final ReferralEventRepository eventRepository;
 
     @Override
     @Transactional
@@ -117,8 +130,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO submitReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.submit();
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.SUBMIT, before, null);
         return toResponse(referral);
     }
 
@@ -128,8 +143,34 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         GeneralReferral referral = findReferral(referralId);
         Staff receivingProvider = staffRepository.findById(receivingProviderId)
             .orElseThrow(() -> new ResourceNotFoundException("Receiving provider not found"));
+        ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.ACKNOWLEDGE, before, notes);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
+    public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
+        GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
+        referral.schedule(request.getAppointmentTime(), request.getLocation());
+        referral = referralRepository.save(referral);
+        String note = "appointmentTime=" + request.getAppointmentTime()
+            + (request.getLocation() == null ? "" : ", location=" + request.getLocation());
+        eventRecorder.recordUserEvent(referral, ReferralEventType.SCHEDULE, before, note);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
+    public GeneralReferralResponseDTO startReferral(UUID referralId) {
+        GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
+        referral.start();
+        referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.START, before, null);
         return toResponse(referral);
     }
 
@@ -137,8 +178,21 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.complete(summary, followUp);
         referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.COMPLETE, before, summary);
+        return toResponse(referral);
+    }
+
+    @Override
+    @Transactional
+    public GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request) {
+        GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
+        referral.reject(request.getReason());
+        referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.REJECT, before, request.getReason());
         return toResponse(referral);
     }
 
@@ -146,8 +200,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public void cancelReferral(UUID referralId, String reason) {
         GeneralReferral referral = findReferral(referralId);
+        ReferralStatus before = referral.getStatus();
         referral.cancel(reason);
-        referralRepository.save(referral);
+        referral = referralRepository.save(referral);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, reason);
     }
 
     @Override
@@ -196,14 +252,26 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public List<GeneralReferralResponseDTO> getReferralsByHospital(UUID hospitalId, String status) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<GeneralReferral> referrals;
+        List<GeneralReferral> outgoing;
+        List<GeneralReferral> incoming;
         if (status != null && !status.isBlank()) {
             ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
-            referrals = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
+            outgoing = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
+            incoming = referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
         } else {
-            referrals = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
+            outgoing = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
+            incoming = referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
-        return referrals.stream()
+        // Exclude DRAFT incoming referrals — drafts are unsent and only visible to the sender
+        incoming = incoming.stream()
+            .filter(r -> r.getStatus() != ReferralStatus.DRAFT)
+            .toList();
+        // Merge outgoing and incoming, dedup by ID, sort newest-first
+        Map<UUID, GeneralReferral> merged = new LinkedHashMap<>();
+        outgoing.forEach(r -> merged.put(r.getId(), r));
+        incoming.forEach(r -> merged.putIfAbsent(r.getId(), r));
+        return merged.values().stream()
+            .sorted(Comparator.comparing(GeneralReferral::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
             .map(this::toResponse)
             .toList();
     }
@@ -227,6 +295,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     @Override
+    public List<GeneralReferralResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
+        return referralRepository.findAll(pageable)
+            .map(this::toResponse)
+            .getContent();
+    }
+
+    @Override
     public List<GeneralReferralResponseDTO> getOverdueReferrals() {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<GeneralReferral> referrals;
@@ -240,35 +315,87 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             .toList();
     }
 
+    @Override
+    public List<ReferralEventResponseDTO> getReferralEvents(UUID referralId) {
+        // Validate the referral exists in the caller's scope before exposing its history.
+        findReferral(referralId);
+        return eventRepository.findByReferralIdOrderByRecordedAtAsc(referralId).stream()
+            .map(GeneralReferralServiceImpl::toEventResponse)
+            .toList();
+    }
+
+    private static ReferralEventResponseDTO toEventResponse(ReferralEvent event) {
+        return ReferralEventResponseDTO.builder()
+            .id(event.getId())
+            .referralId(event.getReferralId())
+            .eventType(event.getEventType())
+            .fromStatus(event.getFromStatus())
+            .toStatus(event.getToStatus())
+            .actorUsername(event.getActorUsername())
+            .actorLabel(event.getActorLabel())
+            .note(event.getNote())
+            .recordedAt(event.getRecordedAt())
+            .build();
+    }
+
+    private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";
+
     private GeneralReferral findReferral(UUID referralId) {
         GeneralReferral referral = referralRepository.findById(referralId)
-            .orElseThrow(() -> new ResourceNotFoundException("Referral not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && referral.getHospital() != null
-                && !activeHospitalId.equals(referral.getHospital().getId())) {
-            throw new ResourceNotFoundException("Referral not found");
+        if (activeHospitalId != null) {
+            boolean isSendingHospital = referral.getHospital() != null
+                && activeHospitalId.equals(referral.getHospital().getId());
+            boolean isReceivingHospital = referral.getReceivingHospital() != null
+                && activeHospitalId.equals(referral.getReceivingHospital().getId());
+            if (!isSendingHospital && !isReceivingHospital) {
+                throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
+            }
         }
         return referral;
     }
 
+    private static final String OWNER = "GeneralReferral";
+
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {
         GeneralReferralResponseDTO dto = new GeneralReferralResponseDTO();
-        dto.setId(referral.getId());
-        dto.setPatientId(referral.getPatient() != null ? referral.getPatient().getId() : null);
-        dto.setPatientName(extractPatientName(referral.getPatient()));
-        dto.setHospitalId(referral.getHospital() != null ? referral.getHospital().getId() : null);
-        dto.setHospitalName(referral.getHospital() != null ? referral.getHospital().getName() : null);
-        dto.setReceivingHospitalId(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getId() : null);
-        dto.setReceivingHospitalName(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getName() : null);
-        dto.setSourceDepartmentId(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getId() : null);
-        dto.setSourceDepartmentName(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getName() : null);
-        dto.setReferringProviderId(referral.getReferringProvider() != null ? referral.getReferringProvider().getId() : null);
-        dto.setReferringProviderName(extractStaffName(referral.getReferringProvider()));
-        dto.setReceivingProviderId(referral.getReceivingProvider() != null ? referral.getReceivingProvider().getId() : null);
-        dto.setReceivingProviderName(extractStaffName(referral.getReceivingProvider()));
+        java.util.UUID referralId = referral.getId();
+        dto.setId(referralId);
+
+        // Force-initialise each lazy association up front and substitute null
+        // when the referenced row was hard-deleted (dangling FK). Without this
+        // defence a bare `referral.getPatient().getFirstName()` blows up the
+        // whole list response with a 500 the moment a single referenced row
+        // is missing — visible on dev's /super-admin/recent-activity endpoint.
+        Patient patient = JpaProxyUtils.safeInit(referral.getPatient(), OWNER, referralId, "patient");
+        Hospital hospital = JpaProxyUtils.safeInit(referral.getHospital(), OWNER, referralId, "hospital");
+        Hospital receivingHospital = JpaProxyUtils.safeInit(
+            referral.getReceivingHospital(), OWNER, referralId, "receivingHospital");
+        Department sourceDepartment = JpaProxyUtils.safeInit(
+            referral.getSourceDepartment(), OWNER, referralId, "sourceDepartment");
+        Staff referringProvider = JpaProxyUtils.safeInit(
+            referral.getReferringProvider(), OWNER, referralId, "referringProvider");
+        Staff receivingProvider = JpaProxyUtils.safeInit(
+            referral.getReceivingProvider(), OWNER, referralId, "receivingProvider");
+        Department targetDepartment = JpaProxyUtils.safeInit(
+            referral.getTargetDepartment(), OWNER, referralId, "targetDepartment");
+
+        dto.setPatientId(patient != null ? patient.getId() : null);
+        dto.setPatientName(extractPatientName(patient));
+        dto.setHospitalId(hospital != null ? hospital.getId() : null);
+        dto.setHospitalName(hospital != null ? hospital.getName() : null);
+        dto.setReceivingHospitalId(receivingHospital != null ? receivingHospital.getId() : null);
+        dto.setReceivingHospitalName(receivingHospital != null ? receivingHospital.getName() : null);
+        dto.setSourceDepartmentId(sourceDepartment != null ? sourceDepartment.getId() : null);
+        dto.setSourceDepartmentName(sourceDepartment != null ? sourceDepartment.getName() : null);
+        dto.setReferringProviderId(referringProvider != null ? referringProvider.getId() : null);
+        dto.setReferringProviderName(extractStaffName(referringProvider));
+        dto.setReceivingProviderId(receivingProvider != null ? receivingProvider.getId() : null);
+        dto.setReceivingProviderName(extractStaffName(receivingProvider));
         dto.setTargetSpecialty(referral.getTargetSpecialty());
-        dto.setTargetDepartmentId(referral.getTargetDepartment() != null ? referral.getTargetDepartment().getId() : null);
-        dto.setTargetDepartmentName(referral.getTargetDepartment() != null ? referral.getTargetDepartment().getName() : null);
+        dto.setTargetDepartmentId(targetDepartment != null ? targetDepartment.getId() : null);
+        dto.setTargetDepartmentName(targetDepartment != null ? targetDepartment.getName() : null);
         dto.setTargetFacilityName(referral.getTargetFacilityName());
         dto.setReferralType(referral.getReferralType());
         dto.setStatus(referral.getStatus());
@@ -286,6 +413,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         dto.setAcknowledgementNotes(referral.getAcknowledgementNotes());
         dto.setScheduledAppointmentAt(referral.getScheduledAppointmentAt());
         dto.setAppointmentLocation(referral.getAppointmentLocation());
+        dto.setStartedAt(referral.getStartedAt());
         dto.setCompletedAt(referral.getCompletedAt());
         dto.setCompletionSummary(referral.getCompletionSummary());
         dto.setFollowUpRecommendations(referral.getFollowUpRecommendations());

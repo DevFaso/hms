@@ -1,5 +1,7 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.OrganizationLifecycleState;
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
@@ -27,8 +29,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.EqualsAndHashCode;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -39,7 +43,8 @@ import java.util.Set;
     },
     indexes = {
         @Index(name = "idx_organization_active", columnList = "active"),
-        @Index(name = "idx_organization_type", columnList = "type")
+        @Index(name = "idx_organization_type", columnList = "type"),
+        @Index(name = "idx_organization_lifecycle", columnList = "lifecycle_state")
     }
 )
 @Getter
@@ -114,6 +119,54 @@ public class Organization extends BaseEntity {
 
     @Column(name = "onboarding_notes", length = 1000)
     private String onboardingNotes;
+
+    // ── Tenant lifecycle (MVP-2) ───────────────────────────────────────
+    // Lifecycle is independent of `active` for backwards-compatibility.
+    // `active` continues to gate UI / list filters; `lifecycleState` drives
+    // login-time blocking and is the source of truth for purge scheduling.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_state", nullable = false, length = 32)
+    private OrganizationLifecycleState lifecycleState = OrganizationLifecycleState.ACTIVE;
+
+    // ── Data residency / region tagging (MVP-9 — gap #9) ────────────────
+    // Records the regulatory jurisdiction whose data-protection rules
+    // apply to this tenant's data. Default 'BF' (Burkina Faso) matches
+    // the V82 backfill so legacy rows have a deterministic value.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "region", nullable = false, length = 32)
+    private OrganizationRegion region = OrganizationRegion.BF;
+
+    @Column(name = "suspended_at")
+    private Instant suspendedAt;
+
+    @Column(name = "suspended_by")
+    private UUID suspendedBy;
+
+    @Column(name = "suspension_reason", length = 1000)
+    private String suspensionReason;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
+    @Column(name = "archive_reason", length = 1000)
+    private String archiveReason;
+
+    @Column(name = "purge_scheduled_for")
+    private Instant purgeScheduledFor;
+
+    @Column(name = "purge_scheduled_by")
+    private UUID purgeScheduledBy;
+
+    @Column(name = "purge_reason", length = 1000)
+    private String purgeReason;
+
+    @Column(name = "purged_at")
+    private Instant purgedAt;
 
     @PrePersist
     @PreUpdate

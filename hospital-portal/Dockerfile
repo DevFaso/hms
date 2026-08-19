@@ -1,4 +1,9 @@
 # Multi-stage Dockerfile for Hospital Portal (Angular)
+# Cache-bust 2026-04-29: Railway dev/prod frontend services were replaying
+# cached layers from a prior misconfig where they built the backend
+# Dockerfile. Updating the first instruction below invalidates BuildKit's
+# content-addressable cache for every subsequent layer, forcing a clean
+# rebuild against this (correct) frontend Dockerfile.
 # Build stage
 FROM node:20-alpine AS build
 
@@ -13,10 +18,16 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Build for production (default config)
-# Override with --build-arg BUILD_CONFIG=uat for UAT builds
+# Build for production by default. Per-environment Railway services MUST set
+# BUILD_CONFIG as a Service Variable so it is exposed at build time:
+#   hms-frontend-uat  → BUILD_CONFIG=uat
+#   hms-frontend-dev  → BUILD_CONFIG=dev
+#   hms-frontend-prod → BUILD_CONFIG=production (or unset)
+# A wrong BUILD_CONFIG ships UAT/dev with environment.prod.ts, which routes
+# Faro RUM to the prod collector and tags traffic as `production`.
 ARG BUILD_CONFIG=production
-RUN npm run build -- --configuration ${BUILD_CONFIG}
+RUN echo ">>> Building hospital-portal with --configuration=${BUILD_CONFIG}" \
+ && npm run build -- --configuration ${BUILD_CONFIG}
 
 # Runtime stage — nginx to serve static files
 FROM nginx:alpine

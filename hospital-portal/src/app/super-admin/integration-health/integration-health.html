@@ -1,0 +1,238 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'INTEGRATION_HEALTH.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'INTEGRATION_HEALTH.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'COMMON.BACK' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+      <span>{{ 'INTEGRATION_HEALTH.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{{ 'INTEGRATION_HEALTH.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="load()">
+        {{ 'INTEGRATION_HEALTH.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (integrations().length === 0) {
+    <div class="state-panel" data-test="empty">
+      <span class="material-symbols-outlined" aria-hidden="true">power_off</span>
+      <span>{{ 'INTEGRATION_HEALTH.EMPTY' | translate }}</span>
+    </div>
+  } @else {
+    <div class="chips" data-test="status-chips">
+      @for (chip of chips(); track chip.status) {
+        <div class="chip" [style.borderColor]="chip.color" [style.color]="chip.color">
+          <span class="chip-value">{{ countFor(chip.status) }}</span>
+          <span class="chip-label">{{ chip.labelKey | translate }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="integration-list" data-test="integration-list">
+      @for (row of integrations(); track row.integrationId) {
+        <section class="integration-card">
+          <button
+            type="button"
+            class="integration-header"
+            [attr.aria-expanded]="expandedIntegrationId() === row.integrationId"
+            (click)="toggle(row.integrationId)"
+          >
+            <div class="integration-meta">
+              <h2 class="integration-name">{{ row.displayName }}</h2>
+              <p class="integration-sub">
+                @if (row.serviceType) {
+                  <span class="badge">{{ row.serviceType }}</span>
+                }
+                @if (row.provider) {
+                  <span class="provider">{{ row.provider }}</span>
+                }
+                <span class="enabled" [class.off]="!row.enabled">
+                  {{
+                    row.enabled
+                      ? ('INTEGRATION_HEALTH.ENABLED' | translate)
+                      : ('INTEGRATION_HEALTH.DISABLED' | translate)
+                  }}
+                </span>
+              </p>
+            </div>
+            <div class="integration-status">
+              <span
+                class="status-pill"
+                [style.backgroundColor]="statusColor(row.rolledUpStatus) + '22'"
+                [style.color]="statusColor(row.rolledUpStatus)"
+              >
+                {{ 'INTEGRATION_HEALTH.STATUS.' + row.rolledUpStatus | translate }}
+              </span>
+              <span class="material-symbols-outlined chevron" aria-hidden="true">
+                {{ expandedIntegrationId() === row.integrationId ? 'expand_less' : 'expand_more' }}
+              </span>
+            </div>
+          </button>
+
+          <!-- MVP-3b — row-level Test connection / Re-sync controls. -->
+          <div class="row-actions" [attr.data-test]="'row-actions-' + row.integrationId">
+            <button
+              type="button"
+              class="action-btn"
+              [disabled]="rowAction(row.integrationId).busy"
+              (click)="probe($event, row.integrationId)"
+              [attr.data-test]="'probe-' + row.integrationId"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">network_check</span>
+              {{ 'INTEGRATION_HEALTH.ACTION.TEST' | translate }}
+            </button>
+            <button
+              type="button"
+              class="action-btn"
+              [disabled]="rowAction(row.integrationId).busy"
+              (click)="resync($event, row.integrationId)"
+              [attr.data-test]="'resync-' + row.integrationId"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+              {{ 'INTEGRATION_HEALTH.ACTION.RESYNC' | translate }}
+            </button>
+
+            @if (rowAction(row.integrationId).busy) {
+              <span class="action-status busy">
+                <span class="material-symbols-outlined spin" aria-hidden="true"
+                  >progress_activity</span
+                >
+                {{ 'INTEGRATION_HEALTH.ACTION.BUSY' | translate }}
+              </span>
+            } @else if (rowAction(row.integrationId).result; as result) {
+              <span class="action-status" [class.ok]="result.ok" [class.fail]="!result.ok">
+                <span class="material-symbols-outlined" aria-hidden="true">
+                  {{ result.ok ? 'check_circle' : 'error' }}
+                </span>
+                @if (result.ok) {
+                  {{ 'INTEGRATION_HEALTH.ACTION.OK' | translate }}
+                  @if (result.latencyMs !== null) {
+                    ({{ result.latencyMs }} ms)
+                  }
+                } @else {
+                  {{ result.errorMessage || ('INTEGRATION_HEALTH.ACTION.FAIL' | translate) }}
+                }
+              </span>
+            } @else if (rowAction(row.integrationId).errorKey; as errorKey) {
+              <span class="action-status fail">
+                <span class="material-symbols-outlined" aria-hidden="true">error</span>
+                {{ errorKey | translate }}
+              </span>
+            }
+          </div>
+
+          @if (expandedIntegrationId() === row.integrationId) {
+            <div class="integration-body">
+              @if (row.capabilities && row.capabilities.length) {
+                <ul class="capability-list">
+                  @for (cap of row.capabilities; track cap) {
+                    <li>{{ cap }}</li>
+                  }
+                </ul>
+              }
+              @if (row.organizations.length === 0) {
+                <p class="empty-org">{{ 'INTEGRATION_HEALTH.NO_ORG_HISTORY' | translate }}</p>
+              } @else {
+                <table class="org-table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'INTEGRATION_HEALTH.ORG' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.STATUS_HEAD' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.LAST_SUCCESS' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.LAST_FAILURE' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.SUCCESSES_24H' | translate }}</th>
+                      <th>{{ 'INTEGRATION_HEALTH.FAILURES_24H' | translate }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (org of row.organizations; track org.organizationId ?? '') {
+                      <tr>
+                        <td>
+                          {{
+                            org.organizationName ?? ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate)
+                          }}
+                        </td>
+                        <td>
+                          <span
+                            class="status-pill small"
+                            [style.backgroundColor]="statusColor(org.status) + '22'"
+                            [style.color]="statusColor(org.status)"
+                          >
+                            {{ 'INTEGRATION_HEALTH.STATUS.' + org.status | translate }}
+                          </span>
+                        </td>
+                        <td>{{ org.lastSuccessAt ? (org.lastSuccessAt | date: 'short') : '—' }}</td>
+                        <td>
+                          {{ org.lastFailureAt ? (org.lastFailureAt | date: 'short') : '—' }}
+                          @if (org.lastErrorMessage) {
+                            <span class="err-tooltip" [title]="org.lastErrorMessage">
+                              <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                            </span>
+                          }
+                        </td>
+                        <td>{{ org.successCount24h }}</td>
+                        <td>{{ org.failureCount24h }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+
+              <!-- MVP-3b — 24h history drawer with a sparkline of bucketed counts. -->
+              <section class="history-drawer" [attr.data-test]="'history-' + row.integrationId">
+                <h3 class="history-title">
+                  {{ 'INTEGRATION_HEALTH.HISTORY.TITLE' | translate }}
+                </h3>
+                @if (history(row.integrationId).loading) {
+                  <p class="history-state">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.LOADING' | translate }}
+                  </p>
+                } @else if (history(row.integrationId).error) {
+                  <p class="history-state error">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.ERROR' | translate }}
+                  </p>
+                } @else if (history(row.integrationId).buckets.length === 0) {
+                  <p class="history-state">
+                    {{ 'INTEGRATION_HEALTH.HISTORY.EMPTY' | translate }}
+                  </p>
+                } @else {
+                  <svg
+                    class="sparkline"
+                    viewBox="0 0 100 30"
+                    preserveAspectRatio="none"
+                    role="img"
+                    [attr.aria-label]="'INTEGRATION_HEALTH.HISTORY.SPARKLINE_LABEL' | translate"
+                  >
+                    <polyline
+                      [attr.points]="history(row.integrationId).sparklinePath"
+                      fill="none"
+                      stroke="#ef4444"
+                      stroke-width="0.8"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  </svg>
+                  <p class="history-legend">
+                    {{
+                      'INTEGRATION_HEALTH.HISTORY.LEGEND'
+                        | translate: { count: history(row.integrationId).buckets.length }
+                    }}
+                  </p>
+                }
+              </section>
+            </div>
+          }
+        </section>
+      }
+    </div>
+  }
+</div>

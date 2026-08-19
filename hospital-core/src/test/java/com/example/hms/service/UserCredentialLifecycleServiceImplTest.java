@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -44,6 +45,12 @@ class UserCredentialLifecycleServiceImplTest {
 
     @Mock
     private UserRecoveryContactRepository recoveryContactRepository;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private UserCredentialLifecycleServiceImpl service;
@@ -338,17 +345,18 @@ class UserCredentialLifecycleServiceImplTest {
     }
 
     @Test
-    void upsertRecoveryContactsUpdatesVerifiedTimestamp() {
+    void upsertRecoveryContactsPreservesExistingVerifiedState() {
         UUID userId = UUID.randomUUID();
         User user = User.builder().username("verified-user").email("verified@example.com").build();
         user.setId(userId);
 
+        LocalDateTime verifiedTime = LocalDateTime.now().minusDays(3);
         UserRecoveryContact existing = UserRecoveryContact.builder()
             .user(user)
             .contactType(RecoveryContactType.EMAIL)
             .contactValue("existing@example.com")
             .verified(true)
-            .verifiedAt(LocalDateTime.now().minusDays(3))
+            .verifiedAt(verifiedTime)
             .build();
         existing.setId(UUID.randomUUID());
 
@@ -363,6 +371,7 @@ class UserCredentialLifecycleServiceImplTest {
             return argument;
         });
 
+        // Client sends verified=false but service should preserve existing state
         UserRecoveryContactRequestDTO update = new UserRecoveryContactRequestDTO();
         update.setContactType(RecoveryContactType.EMAIL);
         update.setContactValue("  existing@example.com  ");
@@ -374,9 +383,43 @@ class UserCredentialLifecycleServiceImplTest {
         assertThat(result).hasSize(1);
         assertThat(persisted).hasSize(1);
         UserRecoveryContact saved = persisted.get(0);
-        assertThat(saved.isVerified()).isFalse();
-        assertThat(saved.getVerifiedAt()).isNull();
+        // Verified state preserved — only the verify endpoint can change it
+        assertThat(saved.isVerified()).isTrue();
+        assertThat(saved.getVerifiedAt()).isEqualTo(verifiedTime);
         assertThat(saved.getContactValue()).isEqualTo("existing@example.com");
         verify(recoveryContactRepository, never()).delete(existing);
+    }
+
+    @Test
+    void upsertRecoveryContactsNewContactStartsUnverified() {
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().username("new-user").email("new@example.com").build();
+        user.setId(userId);
+
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(recoveryContactRepository.findByUserId(userId)).thenReturn(List.of());
+
+        List<UserRecoveryContact> persisted = new ArrayList<>();
+        when(recoveryContactRepository.saveAll(anyList())).thenAnswer(invocation -> {
+            List<UserRecoveryContact> argument = invocation.getArgument(0);
+            persisted.clear();
+            persisted.addAll(argument);
+            return argument;
+        });
+
+        // Client sends verified=true but new contacts must start unverified
+        UserRecoveryContactRequestDTO request = new UserRecoveryContactRequestDTO();
+        request.setContactType(RecoveryContactType.EMAIL);
+        request.setContactValue("recovery@example.com");
+        request.setVerified(true);
+        request.setPrimaryContact(true);
+
+        var result = service.upsertRecoveryContacts(userId, List.of(request));
+
+        assertThat(result).hasSize(1);
+        assertThat(persisted).hasSize(1);
+        UserRecoveryContact saved = persisted.get(0);
+        assertThat(saved.isVerified()).isFalse();
+        assertThat(saved.getVerifiedAt()).isNull();
     }
 }

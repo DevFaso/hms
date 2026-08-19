@@ -5,6 +5,9 @@
       <p class="page-subtitle">{{ 'ADMISSIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- Cross-tenant scope chip — super-admin only
+           (docs/super-admin-cross-tenant-design.md). -->
+      <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span> {{ 'ADMISSIONS.NEW' | translate }}
       </button>
@@ -102,7 +105,11 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">hotel</span>
-      <h3>{{ 'ADMISSIONS.NO_RESULTS' | translate }}</h3>
+      @if (isSuperAdmin() && globalView()) {
+        <h3>{{ 'HOSPITAL_SCOPE.EMPTY_GLOBAL.ADMISSIONS' | translate }}</h3>
+      } @else {
+        <h3>{{ 'ADMISSIONS.NO_RESULTS' | translate }}</h3>
+      }
       <p>{{ 'ADMISSIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
   }
@@ -111,6 +118,9 @@
       <table>
         <thead>
           <tr>
+            @if (isSuperAdmin() && globalView()) {
+              <th scope="col">{{ 'HOSPITAL_SCOPE.HOSPITAL_COLUMN' | translate }}</th>
+            }
             <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
             <th scope="col">{{ 'ADMISSIONS.ROOM_BED' | translate }}</th>
             <th scope="col">{{ 'ADMISSIONS.TYPE' | translate }}</th>
@@ -124,6 +134,11 @@
         <tbody>
           @for (a of filtered(); track a.id) {
             <tr class="data-row">
+              @if (isSuperAdmin() && globalView()) {
+                <td>
+                  <div class="cell-primary">{{ a.hospitalName || '—' }}</div>
+                </td>
+              }
               <td>
                 <div class="cell-primary">
                   {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
@@ -139,7 +154,9 @@
               <td class="complaint-cell">{{ a.chiefComplaint || '—' }}</td>
               <td>{{ a.admissionDateTime ? (a.admissionDateTime | date: 'mediumDate') : '—' }}</td>
               <td>
-                <span class="status-badge {{ getStatusClass(a.status) }}">{{ a.status }}</span>
+                <span class="status-badge {{ getStatusClass(a.status) }}">{{
+                  a.status | enumLabel: 'admissionStatus'
+                }}</span>
               </td>
               <td>
                 <div class="action-group">
@@ -150,6 +167,14 @@
                       [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
                     >
                       <span class="material-symbols-outlined">exit_to_app</span>
+                    </button>
+                    <button
+                      class="action-link"
+                      (click)="openOrderSetPicker(a)"
+                      [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
+                      data-testid="open-order-set-picker"
+                    >
+                      <span class="material-symbols-outlined">playlist_add_check</span>
                     </button>
                   }
                   <button class="action-link edit-link" (click)="openEdit(a)">
@@ -167,6 +192,32 @@
     </div>
   }
 </div>
+
+<!-- ═══ ORDER-SET PICKER OVERLAY ═══ -->
+@if (orderSetPicker(); as ctx) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeOrderSetPicker()"
+    (keydown.escape)="closeOrderSetPicker()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <app-order-set-picker
+        [hospitalId]="ctx.hospitalId"
+        [admissionId]="ctx.admissionId"
+        [encounterId]="ctx.encounterId"
+        [orderingStaffId]="ctx.orderingStaffId"
+        (closed)="closeOrderSetPicker()"
+        (applied)="onOrderSetApplied($event)"
+      />
+    </div>
+  </div>
+}
 
 <!-- ═══ CREATE / EDIT ADMISSION MODAL ═══ -->
 @if (showModal()) {

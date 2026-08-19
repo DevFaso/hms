@@ -354,6 +354,52 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public void sendRecoveryContactVerificationEmail(String to, String verificationCode) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        String escapedCode = escapeHtml(verificationCode);
+
+        String header = "<div style=\"background:linear-gradient(135deg,#1e40af,#2563eb);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
+            + "&#128274; Verify Your Recovery Contact"
+            + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
+            + "</div>";
+
+        String bodyContent = "<div style=\"padding:36px 40px;\">"
+            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
+            + "You requested to add this email address as a recovery contact for your HMS account. "
+            + "Please enter the verification code below to confirm ownership:"
+            + "</p>"
+            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + "<div style=\"display:inline-block;background:#f1f5f9;border:2px dashed #94a3b8;"
+            + "border-radius:12px;padding:20px 40px;\">"
+            + "<span style=\"font-size:32px;font-weight:700;letter-spacing:8px;color:#1e293b;font-family:monospace;\">"
+            + escapedCode
+            + "</span>"
+            + "</div>"
+            + "</div>"
+            + "<p style=\"font-size:14px;color:#64748b;text-align:center;margin:0 0 24px;\">"
+            + "This code expires in <strong>15 minutes</strong>."
+            + "</p>"
+            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
+            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
+            + "padding:16px 20px;margin-bottom:24px;\">"
+            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
+            + "&#128680; Didn't request this?</p>"
+            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
+            + "If you did <strong>not</strong> add this recovery contact, you can safely ignore this email. "
+            + "No changes will be made to your account."
+            + "</p></div>"
+            + "</div>";
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+        sendHtml(List.of(to), List.of(), List.of(), "HMS Recovery Contact Verification Code", body);
+        log.info("✅ Recovery contact verification email sent to {}", to);
+    }
+
+    @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
         var subject = subjectUsername(locale);
         var body = buildUsernameReminderEmailBody(username, locale);

@@ -134,5 +134,13 @@ public interface EmailService {
      */
     void sendAccountRestoredEmail(String to, String displayName);
 
+    /**
+     * Sends a verification code to confirm ownership of a recovery contact email address.
+     *
+     * @param to               the recovery contact email address to verify
+     * @param verificationCode the 6-digit code the user must enter to confirm
+     */
+    void sendRecoveryContactVerificationEmail(String to, String verificationCode);
+
 }
 

@@ -79,7 +79,10 @@
     left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: #9ca3af;
+    // v1.0 row 11: aria-hidden via pointer-events:none, but axe still
+    // counts SVG fill against the surrounding text-contrast budget. #6b7280
+    // (5.0:1 on white) replaces #9ca3af (2.84:1).
+    color: #6b7280;
     pointer-events: none;
   }
 
@@ -237,7 +240,7 @@
 
 .empty-icon {
   font-size: 48px;
-  color: #cbd5e1;
+  color: #64748b;
   margin-bottom: 0.75rem;
 }
 
@@ -250,7 +253,10 @@
 .empty-state p {
   margin: 0;
   font-size: 0.875rem;
-  color: #94a3b8;
+  // v1.0 row 11: bumped from #94a3b8 (2.83:1 on white) to #64748b
+  // (5.49:1) so empty-state body text passes WCAG AA. See
+  // docs/ui/accessibility.md §8.
+  color: #64748b;
 }
 
 @keyframes spin {
@@ -270,7 +276,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 1rem;
-    color: #9ca3af;
+    color: #6b7280;
     pointer-events: none;
   }
 
@@ -425,6 +431,167 @@
       font-size: 1rem;
     }
   }
+}
+
+// ---------- Modal ----------
+// Shared modal + dialog styles. Originally duplicated in staff-list.scss,
+// patient-form.scss, organization-list.scss, etc.; consolidated here so
+// every component that already imports page-common (most of them) gets a
+// consistent dialog presentation. Pharmacy modals were rendering as raw
+// black-bordered <dialog> elements because they referenced `.modal-backdrop`
+// / `.modal` / `.field` in their templates without ever defining the styles.
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.2s ease-out;
+  border: none;
+
+  &.modal-lg {
+    max-width: 680px;
+  }
+
+  &.modal-xl {
+    max-width: 880px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #f1f5f9;
+
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f1f5f9;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: #e2e8f0;
+  }
+}
+
+.modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+
+  &.form-row-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #64748b;
+  }
+
+  input,
+  select,
+  textarea {
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: #fff;
+    color: #111827;
+    outline: none;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+
+    &:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+
+    &::placeholder {
+      // v1.0 row 11: #9ca3af (2.84:1) was below WCAG AA 4.5:1 on white.
+      // #6b7280 (5.0:1) keeps the visual hierarchy without failing axe.
+      color: #6b7280;
+    }
+
+    &:disabled {
+      background: #f8fafc;
+      color: #64748b;
+      cursor: not-allowed;
+    }
+  }
+
+  textarea {
+    min-height: 80px;
+    resize: vertical;
+    font-family: inherit;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #f1f5f9;
 }
 
 // ---------- Forms ----------
@@ -598,7 +765,7 @@
       background: transparent;
       border: none;
       cursor: pointer;
-      color: #9ca3af;
+      color: #6b7280;
       display: flex;
       align-items: center;
       padding: 2px;
@@ -868,7 +1035,7 @@
   justify-content: center;
   min-width: 32px;
   height: 32px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 0.875rem;
   -webkit-user-select: none;
   user-select: none;
@@ -888,7 +1055,7 @@
 
 .name-sub {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: #6b7280;
 }
 
 .mrn-code {

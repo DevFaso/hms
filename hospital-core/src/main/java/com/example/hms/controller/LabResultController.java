@@ -65,8 +65,8 @@ public class LabResultController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE')")
-    @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated, hospital-scoped list of lab results.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated list of lab results. Hospital-scoped for tenant roles; SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

@@ -1,0 +1,419 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'AUDIT_SEARCH.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'AUDIT_SEARCH.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'COMMON.BACK_TO_CONTROL_TOWER' | translate }}
+    </a>
+  </div>
+
+  <!-- MVP-8c — tab nav between the per-source AuditEventLog search
+       and the cross-source aggregation drawer. -->
+  <div class="tab-strip" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeTab() === 'support'"
+      [attr.aria-selected]="activeTab() === 'support'"
+      data-test="tab-support"
+      (click)="selectTab('support')"
+    >
+      {{ 'AUDIT_SEARCH.TAB.SUPPORT' | translate }}
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="tab"
+      [class.active]="activeTab() === 'aggregated'"
+      [attr.aria-selected]="activeTab() === 'aggregated'"
+      data-test="tab-aggregated"
+      (click)="selectTab('aggregated')"
+    >
+      {{ 'AUDIT_SEARCH.TAB.AGGREGATED' | translate }}
+    </button>
+  </div>
+
+  @if (activeTab() === 'support') {
+    <!-- MVP-8c — saved searches now live on the server (REST). The
+       service migrates any pre-existing localStorage entries on
+       first instantiation. -->
+    <section class="saved-strip" data-test="saved-strip">
+      <div class="saved-row">
+        <strong class="saved-label">{{ 'AUDIT_SEARCH.SAVED.LABEL' | translate }}</strong>
+        @if (savedSearches().length === 0) {
+          <span class="saved-empty">{{ 'AUDIT_SEARCH.SAVED.EMPTY' | translate }}</span>
+        } @else {
+          @for (saved of savedSearches(); track saved.id) {
+            <span class="saved-chip" data-test="saved-chip">
+              <button type="button" class="saved-chip-load" (click)="applySaved(saved)">
+                {{ saved.name }}
+              </button>
+              <button
+                type="button"
+                class="saved-chip-delete"
+                [attr.aria-label]="'AUDIT_SEARCH.SAVED.DELETE' | translate"
+                (click)="deleteSaved(saved)"
+              >
+                ×
+              </button>
+            </span>
+          }
+        }
+      </div>
+      <div class="saved-row">
+        <input
+          type="text"
+          class="saved-name-input"
+          [ngModel]="newSavedSearchName()"
+          (ngModelChange)="newSavedSearchName.set($event)"
+          [placeholder]="'AUDIT_SEARCH.SAVED.NAME_PLACEHOLDER' | translate"
+          [attr.aria-label]="'AUDIT_SEARCH.SAVED.NAME_PLACEHOLDER' | translate"
+          data-test="saved-name-input"
+        />
+        <button type="button" class="btn-secondary" (click)="saveCurrent()" data-test="saved-save">
+          <span class="material-symbols-outlined" aria-hidden="true">bookmark_add</span>
+          {{ 'AUDIT_SEARCH.SAVED.SAVE_CURRENT' | translate }}
+        </button>
+        @if (saveError()) {
+          <span class="export-error">{{ saveError()! | translate }}</span>
+        }
+      </div>
+    </section>
+
+    <section class="filter-card">
+      <div class="filter-grid">
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.USER_NAME' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="userName()"
+            (ngModelChange)="userName.set($event)"
+            placeholder="{{ 'AUDIT_SEARCH.FILTER.USER_NAME_PLACEHOLDER' | translate }}"
+          />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.IMPERSONATOR_USER_ID' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="impersonatorUserId()"
+            (ngModelChange)="impersonatorUserId.set($event)"
+            placeholder="{{ 'AUDIT_SEARCH.FILTER.RESOURCE_ID_PLACEHOLDER' | translate }}"
+          />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.ENTITY_TYPE' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="entityType()"
+            (ngModelChange)="entityType.set($event)"
+            placeholder="{{ 'AUDIT_SEARCH.FILTER.ENTITY_TYPE_PLACEHOLDER' | translate }}"
+          />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.RESOURCE_ID' | translate }}</span>
+          <input type="text" [ngModel]="resourceId()" (ngModelChange)="resourceId.set($event)" />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.STATUS' | translate }}</span>
+          <select [ngModel]="status()" (ngModelChange)="status.set($event)">
+            <option value="">{{ 'AUDIT_SEARCH.FILTER.ANY' | translate }}</option>
+            @for (s of statusOptions; track s) {
+              <option [value]="s">{{ s }}</option>
+            }
+          </select>
+        </label>
+        <!-- MVP-9b — region scope, options sourced from the Data Residency
+           service so a new code is one backend addition not a parallel UI change. -->
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.TENANT_REGION' | translate }}</span>
+          <select
+            [ngModel]="tenantRegion()"
+            (ngModelChange)="tenantRegion.set($event)"
+            data-test="tenant-region"
+          >
+            <option value="">{{ 'AUDIT_SEARCH.FILTER.ANY' | translate }}</option>
+            @for (code of availableRegions(); track code) {
+              <option [value]="code">{{ 'ORG_REGION.CODE.' + code | translate }}</option>
+            }
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
+          <input
+            type="datetime-local"
+            [ngModel]="fromDate()"
+            (ngModelChange)="fromDate.set($event)"
+          />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
+          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+        </label>
+      </div>
+      <div class="filter-actions">
+        <button type="button" class="btn-primary" (click)="applyFilters()">
+          {{ 'AUDIT_SEARCH.APPLY' | translate }}
+        </button>
+        <button type="button" class="btn-secondary" (click)="resetFilters()">
+          {{ 'AUDIT_SEARCH.RESET' | translate }}
+        </button>
+        <!-- MVP-8b — CSV export uses the same live filters as the JSON view. -->
+        <button
+          type="button"
+          class="btn-secondary"
+          (click)="exportCsv()"
+          [disabled]="exporting()"
+          data-test="export-csv"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          {{ 'AUDIT_SEARCH.EXPORT.CSV' | translate }}
+        </button>
+        @if (exportError()) {
+          <span class="export-error">{{ exportError()! | translate }}</span>
+        }
+      </div>
+    </section>
+
+    @if (loading()) {
+      <div class="state-panel" data-test="loading">
+        <span class="material-symbols-outlined spin">progress_activity</span>
+        <span>{{ 'AUDIT_SEARCH.LOADING' | translate }}</span>
+      </div>
+    } @else if (errored()) {
+      <div class="state-panel error" data-test="error">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ 'AUDIT_SEARCH.LOAD_ERROR' | translate }}</span>
+        <button type="button" class="retry-btn" (click)="runSearch()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (rows().length === 0) {
+      <div class="state-panel empty" data-test="empty">
+        <span class="material-symbols-outlined">search_off</span>
+        <span>{{ 'AUDIT_SEARCH.NO_RESULTS' | translate }}</span>
+      </div>
+    } @else {
+      <section class="results-card" data-test="results">
+        <div class="results-header">
+          <span>
+            {{
+              'AUDIT_SEARCH.RESULTS_COUNT'
+                | translate: { total: totalElements(), shown: rows().length }
+            }}
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'AUDIT_SEARCH.COL.TIME' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.EVENT' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.USER' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.HOSPITAL' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.RESOURCE' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.STATUS' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.IMPERSONATOR' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rows(); track row.id) {
+                <tr [class.row-impersonated]="row.impersonatorUserId">
+                  <td class="cell-time">{{ row.eventTimestamp | date: 'short' }}</td>
+                  <td>
+                    <span class="event-type-badge">{{ row.eventType }}</span>
+                  </td>
+                  <td>
+                    <div class="cell-primary">{{ row.userName || '—' }}</div>
+                    <div class="cell-secondary">{{ row.roleName || '' }}</div>
+                  </td>
+                  <td>{{ row.hospitalName || '—' }}</td>
+                  <td>
+                    <div class="cell-primary">{{ row.resourceName || row.resourceId || '—' }}</div>
+                    <div class="cell-secondary">{{ row.entityType || '' }}</div>
+                  </td>
+                  <td>
+                    <span [class]="statusPillClass(row.status)">
+                      {{ row.status || '—' }}
+                    </span>
+                  </td>
+                  <td class="cell-impersonator">
+                    @if (row.impersonatorUsername) {
+                      <span class="material-symbols-outlined">supervisor_account</span>
+                      {{ row.impersonatorUsername }}
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button type="button" class="btn-secondary" (click)="goToPrev()" [disabled]="!hasPrev()">
+            {{ 'AUDIT_SEARCH.PREV' | translate }}
+          </button>
+          <span class="pager-info">
+            {{
+              'AUDIT_SEARCH.PAGE_OF'
+                | translate: { current: pageNumber() + 1, total: totalPages() || 1 }
+            }}
+          </span>
+          <button type="button" class="btn-secondary" (click)="goToNext()" [disabled]="!hasNext()">
+            {{ 'AUDIT_SEARCH.NEXT' | translate }}
+          </button>
+        </div>
+      </section>
+    }
+  } @else {
+    <!-- MVP-8c — cross-source aggregation tab. -->
+    <section class="filter-card" data-test="aggregated-filter">
+      <h2 class="aggregated-title">
+        {{ 'AUDIT_SEARCH.AGGREGATED.TITLE' | translate }}
+      </h2>
+      <p class="aggregated-subtitle">
+        {{ 'AUDIT_SEARCH.AGGREGATED.SUBTITLE' | translate }}
+      </p>
+      <div class="source-toggles" data-test="source-toggles">
+        @for (source of allSources; track source) {
+          <label
+            class="source-toggle"
+            [class.disabled]="isLastActiveSource(source)"
+            [title]="
+              isLastActiveSource(source)
+                ? ('AUDIT_SEARCH.AGGREGATED.LAST_SOURCE_LOCKED' | translate)
+                : ''
+            "
+          >
+            <input
+              type="checkbox"
+              [checked]="isSourceActive(source)"
+              [disabled]="isLastActiveSource(source)"
+              (change)="toggleAggregatedSource(source)"
+              [attr.data-test]="'source-' + source"
+            />
+            <span>{{ 'AUDIT_SEARCH.AGGREGATED.SOURCE.' + source | translate }}</span>
+          </label>
+        }
+      </div>
+      <div class="filter-grid">
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.FROM_DATE' | translate }}</span>
+          <input
+            type="datetime-local"
+            [ngModel]="fromDate()"
+            (ngModelChange)="fromDate.set($event)"
+          />
+        </label>
+        <label class="filter-field">
+          <span>{{ 'AUDIT_SEARCH.FILTER.TO_DATE' | translate }}</span>
+          <input type="datetime-local" [ngModel]="toDate()" (ngModelChange)="toDate.set($event)" />
+        </label>
+      </div>
+      <div class="filter-actions">
+        <button type="button" class="btn-primary" (click)="applyAggregatedFilters()">
+          {{ 'AUDIT_SEARCH.APPLY' | translate }}
+        </button>
+      </div>
+    </section>
+
+    @if (aggregatedLoading()) {
+      <div class="state-panel" data-test="aggregated-loading">
+        <span class="material-symbols-outlined spin">progress_activity</span>
+        <span>{{ 'AUDIT_SEARCH.LOADING' | translate }}</span>
+      </div>
+    } @else if (aggregatedError()) {
+      <div class="state-panel error" data-test="aggregated-error">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ 'AUDIT_SEARCH.LOAD_ERROR' | translate }}</span>
+        <button type="button" class="retry-btn" (click)="runAggregatedSearch()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (aggregatedRows().length === 0) {
+      <div class="state-panel empty" data-test="aggregated-empty">
+        <span class="material-symbols-outlined">search_off</span>
+        <span>{{ 'AUDIT_SEARCH.NO_RESULTS' | translate }}</span>
+      </div>
+    } @else {
+      <section class="results-card" data-test="aggregated-results">
+        <div class="results-header">
+          <span>
+            {{
+              'AUDIT_SEARCH.RESULTS_COUNT'
+                | translate
+                  : { total: aggregatedPage()?.totalElements ?? 0, shown: aggregatedRows().length }
+            }}
+          </span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'AUDIT_SEARCH.AGGREGATED.COL.SOURCE' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.TIME' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.EVENT' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.USER' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.COL.STATUS' | translate }}</th>
+                <th>{{ 'AUDIT_SEARCH.AGGREGATED.COL.SUMMARY' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of aggregatedRows(); track row.source + '-' + row.id) {
+                <tr [attr.data-test]="'aggregated-row-' + row.source">
+                  <td>
+                    <span class="source-badge" [attr.data-source]="row.source">
+                      {{ 'AUDIT_SEARCH.AGGREGATED.SOURCE.' + row.source | translate }}
+                    </span>
+                  </td>
+                  <td class="cell-time">
+                    {{ row.timestamp ? (row.timestamp | date: 'short') : '—' }}
+                  </td>
+                  <td>
+                    <span class="event-type-badge">{{ row.eventType || '—' }}</span>
+                  </td>
+                  <td>{{ row.actor || '—' }}</td>
+                  <td>
+                    <span [class]="statusPillClass(row.status)">
+                      {{ row.status || '—' }}
+                    </span>
+                  </td>
+                  <td class="cell-summary">{{ row.summary || '' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="goToAggregatedPrev()"
+            [disabled]="!aggregatedHasPrev()"
+          >
+            {{ 'AUDIT_SEARCH.PREV' | translate }}
+          </button>
+          <span class="pager-info">
+            {{
+              'AUDIT_SEARCH.PAGE_OF'
+                | translate
+                  : { current: aggregatedPageNumber() + 1, total: aggregatedTotalPages() || 1 }
+            }}
+          </span>
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="goToAggregatedNext()"
+            [disabled]="!aggregatedHasNext()"
+          >
+            {{ 'AUDIT_SEARCH.NEXT' | translate }}
+          </button>
+        </div>
+      </section>
+    }
+  }
+</div>

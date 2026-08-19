@@ -24,10 +24,12 @@ import com.squareup.moshi.Moshi
 @Singleton
 class AuthInterceptor @Inject constructor(
     private val tokenStorage: TokenStorage,
-    private val moshi: Moshi
+    private val moshi: Moshi,
+    private val keycloakAuthServiceProvider: Provider<KeycloakAuthService>
 ) : Interceptor {
 
     private val refreshMutex = Mutex()
+    private val oidcRefreshMutex = Mutex()
 
     // Lazy to break circular Hilt dependency (ApiService → OkHttp → AuthInterceptor → ApiService)
     private val refreshService: ApiService by lazy {
@@ -42,7 +44,12 @@ class AuthInterceptor @Inject constructor(
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val accessToken = tokenStorage.accessToken
+        // Prefer the Keycloak OIDC access token when a Keycloak session is active
+        // (KC-3). Falls back to the legacy username/password access token otherwise.
+        val oidcToken = tokenStorage.oidcAccessToken
+        val legacyToken = tokenStorage.accessToken
+        val accessToken = oidcToken ?: legacyToken
+        val usingOidc = oidcToken != null
         val request = chain.request().newBuilder().apply {
             if (accessToken != null) {
                 header("Authorization", "Bearer $accessToken")
@@ -51,10 +58,40 @@ class AuthInterceptor @Inject constructor(
 
         val response = chain.proceed(request)
 
-        // Auto-refresh on 401
-        if (response.code == 401 && tokenStorage.refreshToken != null) {
+        if (response.code != 401) {
+            return response
+        }
+
+        if (usingOidc) {
+            // OIDC path: ask AppAuth to refresh via AuthState#performActionWithFreshTokens
+            // and retry the request once. A null token means the refresh failed (e.g.
+            // refresh token expired) and the caller will see the original 401.
+            val tokenBefore = oidcToken
+            val refreshedToken = runBlocking(Dispatchers.IO) {
+                oidcRefreshMutex.withLock {
+                    val current = tokenStorage.oidcAccessToken
+                    if (current != null && current != tokenBefore) {
+                        // Another thread already refreshed while we waited.
+                        current
+                    } else {
+                        keycloakAuthServiceProvider.get().freshAccessToken()
+                    }
+                }
+            }
+            if (refreshedToken != null && refreshedToken != tokenBefore) {
+                response.close()
+                val retryRequest = chain.request().newBuilder()
+                    .header("Authorization", "Bearer $refreshedToken")
+                    .build()
+                return chain.proceed(retryRequest)
+            }
+            return response
+        }
+
+        // Legacy (password-grant) refresh path.
+        if (tokenStorage.refreshToken != null) {
             response.close()
-            val tokenBefore = accessToken
+            val tokenBefore = legacyToken
             val refreshed = runBlocking(Dispatchers.IO) {
                 refreshMutex.withLock {
                     // If another thread already refreshed while we waited, skip

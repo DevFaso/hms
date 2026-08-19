@@ -95,7 +95,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 18px;
-    color: #94a3b8;
+    color: #64748b;
   }
   input {
     width: 100%;
@@ -111,7 +111,7 @@
       background: #fff;
     }
     &::placeholder {
-      color: #94a3b8;
+      color: #64748b;
     }
   }
 }
@@ -196,7 +196,7 @@
   color: #64748b;
   .material-symbols-outlined {
     font-size: 40px;
-    color: #cbd5e1;
+    color: #64748b;
     margin-bottom: 8px;
   }
   p {
@@ -345,7 +345,7 @@
   color: #64748b;
   .material-symbols-outlined {
     font-size: 40px;
-    color: #cbd5e1;
+    color: #64748b;
     margin-bottom: 8px;
   }
   p {
@@ -371,7 +371,7 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
   }
 }
@@ -409,7 +409,7 @@
   color: #64748b;
   .material-symbols-outlined {
     font-size: 56px;
-    color: #cbd5e1;
+    color: #64748b;
   }
   h3 {
     margin: 12px 0 4px;
@@ -460,7 +460,7 @@
     top: 50%;
     transform: translateY(-50%);
     font-size: 20px;
-    color: #94a3b8;
+    color: #64748b;
   }
   input {
     width: 100%;
@@ -475,7 +475,7 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     &::placeholder {
-      color: #94a3b8;
+      color: #64748b;
     }
   }
 }
@@ -546,7 +546,7 @@
 
 .user-item-action {
   font-size: 20px;
-  color: #cbd5e1;
+  color: #64748b;
   transition: color 0.15s;
 }
 
@@ -559,7 +559,7 @@
   color: #64748b;
   .material-symbols-outlined {
     font-size: 40px;
-    color: #cbd5e1;
+    color: #64748b;
     margin-bottom: 8px;
   }
   p {
@@ -629,5 +629,154 @@
   }
   .msg-bubble {
     max-width: 85%;
+  }
+}
+
+/* ── Telehealth low-bandwidth attachments ── */
+
+.msg-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+
+  .msg-photo {
+    display: block;
+    line-height: 0;
+    img {
+      max-width: 240px;
+      max-height: 240px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+  }
+
+  .msg-audio {
+    width: 240px;
+    max-width: 100%;
+  }
+}
+
+.msg-pending-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid #f1f5f9;
+
+  .pending-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px 4px 6px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-size: 0.85rem;
+
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+
+    .pending-meta {
+      color: #475569;
+      font-size: 0.75rem;
+    }
+
+    .pending-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #64748b;
+      padding: 0;
+      .material-symbols-outlined {
+        font-size: 16px;
+      }
+      &:hover {
+        color: #ef4444;
+      }
+    }
+
+    &[data-kind='AUDIO'] {
+      background: #ecfdf5;
+      color: #047857;
+    }
+  }
+}
+
+.msg-attachment-error {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.msg-recording-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  font-size: 0.85rem;
+
+  .rec-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #dc2626;
+    animation: chatRecPulse 1s ease-in-out infinite;
+  }
+}
+
+@keyframes chatRecPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.msg-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+
+  &:hover:not(:disabled) {
+    background: #f8fafc;
+    color: #2563eb;
+    border-color: #2563eb;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.recording {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #991b1b;
   }
 }

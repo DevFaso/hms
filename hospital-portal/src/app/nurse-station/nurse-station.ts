@@ -34,10 +34,11 @@ import {
   NurseCareNoteResponse,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -61,6 +62,7 @@ type SectionType =
     TranslateModule,
     TriageFormComponent,
     NursingIntakeFormComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './nurse-station.html',
   styleUrl: './nurse-station.scss',
@@ -70,6 +72,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly encounterService = inject(EncounterService);
+  private readonly translate = inject(TranslateService);
   private refreshSub?: Subscription;
   private slowRefreshSub?: Subscription;
 
@@ -180,13 +183,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         vitals: this.nurseService.getVitalsDue(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load vitals');
+            this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_LOAD_FAILED'));
             return of([] as NurseVitalTask[]);
           }),
         ),
         medications: this.nurseService.getMedicationMAR(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load medications');
+            this.toast.error(this.translate.instant('NURSE.TOAST.MEDS_LOAD_FAILED'));
             return of([] as NurseMedicationTask[]);
           }),
         ),
@@ -223,13 +226,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       forkJoin({
         orders: this.nurseService.getOrders(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load orders');
+            this.toast.error(this.translate.instant('NURSE.TOAST.ORDERS_LOAD_FAILED'));
             return of([] as NurseOrderTask[]);
           }),
         ),
         handoffs: this.nurseService.getHandoffs(params).pipe(
           catchError(() => {
-            this.toast.error('Failed to load handoffs');
+            this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFFS_LOAD_FAILED'));
             return of([] as NurseHandoff[]);
           }),
         ),
@@ -319,12 +322,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.actionInProgress.set(taskId);
     this.nurseService.administerMedication(taskId, { status: 'GIVEN' }).subscribe({
       next: () => {
-        this.toast.success('Medication administered');
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
+            action: this.translate.instant('NURSE.MED_ACTION.GIVEN'),
+          }),
+        );
         this.actionInProgress.set(null);
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to record administration');
+        this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
         this.actionInProgress.set(null);
       },
     });
@@ -340,7 +347,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     if (!prompt) return;
     const reason = this.reasonText().trim();
     if (!reason) {
-      this.toast.error('A reason is required for Hold/Refuse');
+      this.toast.error(this.translate.instant('NURSE.TOAST.REASON_REQUIRED'));
       return;
     }
     this.actionInProgress.set(prompt.taskId);
@@ -348,13 +355,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       .administerMedication(prompt.taskId, { status: prompt.action, note: reason })
       .subscribe({
         next: () => {
-          this.toast.success(`Medication ${prompt.action.toLowerCase()}`);
+          // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
+          // signature), so feed it directly into the NURSE.MED_ACTION.* key.
+          // The prior `=== 'HOLD'` check was always false and silently coerced
+          // every Hold toast into "refused" — caught by Copilot review on PR #256.
+          this.toast.success(
+            this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
+              action: this.translate.instant('NURSE.MED_ACTION.' + prompt.action),
+            }),
+          );
           this.actionInProgress.set(null);
           this.reasonPrompt.set(null);
           this.loadAll();
         },
         error: () => {
-          this.toast.error('Failed to record action');
+          this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
           this.actionInProgress.set(null);
         },
       });
@@ -393,19 +408,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     const form = this.vitalsForm();
     const hasAtLeastOne = Object.values(form).some((v) => v !== undefined && v !== '');
     if (!hasAtLeastOne) {
-      this.toast.error('Please enter at least one vital sign value.');
+      this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
     }
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
       next: () => {
-        this.toast.success(`Vitals recorded for ${target.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.VITALS_RECORDED', { patient: target.patientName }),
+        );
         this.vitalsCapturing.set(false);
         this.closeVitalsDialog();
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to save vitals');
+        this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
         this.vitalsCapturing.set(false);
       },
     });
@@ -414,14 +431,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Acuity display ─────────────────────────────────────── */
 
   acuityLabel(level: string): string {
+    // Map the backend enum to an i18n key. translate.instant resolves to the
+    // currently-active language so the FR/EN/ES toggle in the header
+    // re-renders these on the next change-detection pass without a reload.
+    // Falls through to the raw enum value for any unknown level so the UI
+    // stays useful if a future backend adds a new tier before the i18n
+    // catalogue catches up.
     const map: Record<string, string> = {
-      LEVEL_1_MINIMAL: 'L1 Minimal',
-      LEVEL_2_MODERATE: 'L2 Moderate',
-      LEVEL_3_MAJOR: 'L3 Major',
-      LEVEL_4_SEVERE: 'L4 Severe',
-      LEVEL_5_CRITICAL: 'L5 Critical',
+      LEVEL_1_MINIMAL: 'NURSE.ACUITY_L1_MINIMAL',
+      LEVEL_2_MODERATE: 'NURSE.ACUITY_L2_MODERATE',
+      LEVEL_3_MAJOR: 'NURSE.ACUITY_L3_MAJOR',
+      LEVEL_4_SEVERE: 'NURSE.ACUITY_L4_SEVERE',
+      LEVEL_5_CRITICAL: 'NURSE.ACUITY_L5_CRITICAL',
     };
-    return map[level] ?? level;
+    const key = map[level];
+    return key ? this.translate.instant(key) : level;
   }
 
   acuityCssClass(level: string): string {
@@ -441,12 +465,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.actionInProgress.set(handoffId);
     this.nurseService.completeHandoff(handoffId).subscribe({
       next: () => {
-        this.toast.success('Handoff completed');
+        this.toast.success(this.translate.instant('NURSE.TOAST.HANDOFF_COMPLETED'));
         this.actionInProgress.set(null);
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to complete handoff');
+        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'));
         this.actionInProgress.set(null);
       },
     });
@@ -470,19 +494,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   submitCreateTask(): void {
     const form = this.taskForm();
     if (!form.patientId || !form.category) {
-      this.toast.error('Patient and category are required.');
+      this.toast.error(this.translate.instant('NURSE.TOAST.TASK_REQUIRED'));
       return;
     }
     this.taskCreating.set(true);
     this.nurseService.createNursingTask(form as NurseTaskCreateRequest).subscribe({
       next: (task) => {
-        this.toast.success(`Task created for ${task.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.TASK_CREATED', { patient: task.patientName }),
+        );
         this.taskCreating.set(false);
         this.closeTaskCreate();
         this.loadAll();
       },
       error: () => {
-        this.toast.error('Failed to create task');
+        this.toast.error(this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'));
         this.taskCreating.set(false);
       },
     });
@@ -494,12 +520,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       .completeNursingTask(taskId, note ? { completionNote: note } : undefined)
       .subscribe({
         next: () => {
-          this.toast.success('Task completed');
+          this.toast.success(this.translate.instant('NURSE.TOAST.TASK_COMPLETED'));
           this.actionInProgress.set(null);
           this.loadAll();
         },
         error: () => {
-          this.toast.error('Failed to complete task');
+          this.toast.error(this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'));
           this.actionInProgress.set(null);
         },
       });
@@ -515,17 +541,22 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   taskCategoryLabel(category: string): string {
+    // The NURSE.<CATEGORY> keys already exist in en/fr/es.json (added with
+    // MVP 13). The previous hardcoded English copy was a leftover from the
+    // initial scaffolding and was producing mixed-language output on the FR
+    // toggle.
     const map: Record<string, string> = {
-      DRESSING_CHANGE: 'Dressing Change',
-      IV_CHECK: 'IV Check',
-      CATHETER_CARE: 'Catheter Care',
-      PAIN_REASSESSMENT: 'Pain Reassessment',
-      MOBILITY_ASSIST: 'Mobility Assist',
-      INTAKE_OUTPUT: 'I&O Recording',
-      WOUND_CARE: 'Wound Care',
-      OTHER: 'Other',
+      DRESSING_CHANGE: 'NURSE.DRESSING_CHANGE',
+      IV_CHECK: 'NURSE.IV_CHECK',
+      CATHETER_CARE: 'NURSE.CATHETER_CARE',
+      PAIN_REASSESSMENT: 'NURSE.PAIN_REASSESSMENT',
+      MOBILITY_ASSIST: 'NURSE.MOBILITY_ASSIST',
+      INTAKE_OUTPUT: 'NURSE.INTAKE_OUTPUT',
+      WOUND_CARE: 'NURSE.WOUND_CARE',
+      OTHER: 'NURSE.OTHER',
     };
-    return map[category] ?? category;
+    const key = map[category];
+    return key ? this.translate.instant(key) : category;
   }
 
   /* ── MVP 13: Inbox ─────────────────────────────────────────── */
@@ -538,7 +569,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         this.inboxUnreadCount.update((n) => Math.max(0, n - 1));
       },
-      error: () => this.toast.error('Failed to mark as read'),
+      error: () => this.toast.error(this.translate.instant('NURSE.TOAST.MARK_READ_FAILED')),
     });
   }
 
@@ -570,12 +601,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.careNoteCreating.set(true);
     this.nurseService.createCareNote(target.patientId, form).subscribe({
       next: (note: NurseCareNoteResponse) => {
-        this.toast.success(`Care note saved for ${note.patientName}`);
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.NOTE_SAVED', { patient: note.patientName }),
+        );
         this.careNoteCreating.set(false);
         this.closeCareNote();
       },
       error: () => {
-        this.toast.error('Failed to save care note');
+        this.toast.error(this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
         this.careNoteCreating.set(false);
       },
     });
@@ -622,12 +655,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         if (active) {
           callback(active);
         } else {
-          this.toast.error('No active encounter found for this patient.');
+          this.toast.error(this.translate.instant('NURSE.TOAST.NO_ENCOUNTER'));
         }
       },
       error: () => {
         this.encounterLookupInProgress.set(false);
-        this.toast.error('Failed to look up encounter.');
+        this.toast.error(this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'));
       },
     });
   }

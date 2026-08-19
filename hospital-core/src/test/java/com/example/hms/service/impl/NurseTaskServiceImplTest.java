@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.FiveRightsStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -35,6 +36,8 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
@@ -67,6 +70,8 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
+import com.example.hms.service.emar.FiveRightsVerificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -103,6 +108,8 @@ class NurseTaskServiceImplTest {
     @Mock private UserRepository userRepository;
 
     private NurseTaskServiceImpl service;
+    private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -110,7 +117,8 @@ class NurseTaskServiceImplTest {
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
-            nursingNoteRepository, notificationRepository, userRepository));
+            nursingNoteRepository, notificationRepository, userRepository,
+            fiveRightsService, objectMapper));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -121,7 +129,8 @@ class NurseTaskServiceImplTest {
         lenient().when(marRepository.findByPatient_IdAndHospital_IdAndStatus(any(), any(), any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
-        lenient().when(announcementRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        lenient().when(announcementRepository.findByHospital_IdOrderByDateDesc(any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
         lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             any(), any(), any())).thenReturn(Optional.empty());
     }
@@ -174,7 +183,7 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksUsesStatusFilterWhenProvided() {
+    void getMedicationTasksReturnsEmptyWhenNoRealMedicationTasksMatchStatus() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
@@ -187,9 +196,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " held ");
 
-        assertThat(tasks)
-            .isNotEmpty()
-            .allMatch(task -> "HELD".equals(task.getStatus()));
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -204,7 +211,7 @@ class NurseTaskServiceImplTest {
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
         verify(nurseDashboardService).getPatientsForNurse(null, hospitalId, null);
     }
 
@@ -246,26 +253,19 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsUsesDefaultHospitalSeedWhenNull() {
+    void getAnnouncementsReturnsEmptyWhenDatabaseIsEmpty() {
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(null, 0);
 
-        assertThat(announcements)
-            .hasSize(1)
-            .first()
-            .extracting(NurseAnnouncementDTO::getText)
-            .asString()
-            .contains("[HOSPITAL]");
+        assertThat(announcements).isEmpty();
     }
 
     @Test
-    void getAnnouncementsAbbreviatesHospitalId() {
+    void getAnnouncementsReturnsEmptyForHospitalWhenDatabaseIsEmpty() {
         UUID hospitalId = UUID.fromString("12345678-1234-5678-1234-567812345678");
 
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(hospitalId, 2);
 
-        assertThat(announcements)
-            .hasSize(2)
-            .allSatisfy(announcement -> assertThat(announcement.getText()).contains("[12345678]"));
+        assertThat(announcements).isEmpty();
     }
 
     @Test
@@ -427,10 +427,10 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksGeneratesDefaultPatientsWhenHospitalMissing() {
+    void getMedicationTasksReturnsEmptyWhenHospitalMissing() {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(UUID.randomUUID(), null, null);
 
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -595,9 +595,8 @@ class NurseTaskServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
 
-        // Should fall back to synthetic tasks since DRAFT is filtered out
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
-        assertThat(tasks).isNotEmpty();
+        assertThat(tasks).isEmpty();
     }
 
     @Test
@@ -782,6 +781,8 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
         request.setNote("Administered on schedule");
+        // P1 #8 — five-rights not yet verified, so an override reason is required.
+        request.setOverrideReason("Pre-eMAR rollout dose; verified manually by charge nurse.");
 
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
 
@@ -789,6 +790,29 @@ class NurseTaskServiceImplTest {
         assertThat(result.getStatus()).isEqualTo("GIVEN");
         verify(marRepository).save(any(MedicationAdministrationRecord.class));
         verify(staffRepository).findByUserIdAndHospitalId(nurseId, hospitalId);
+    }
+
+    @Test
+    void recordMedicationAdministrationGivenWithoutOverrideOrVerifyIsRejected() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient mockPatient = Mockito.mock(Patient.class);
+        Hospital mockHospital = Mockito.mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = Mockito.mock(Prescription.class);
+        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        // No overrideReason and no prior verify — must throw.
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("override reason");
     }
 
     @Test
@@ -1033,7 +1057,8 @@ class NurseTaskServiceImplTest {
         Announcement a1 = Announcement.builder().id(UUID.randomUUID()).text("Code Blue drill at 14:00").date(now.minusMinutes(30)).build();
         Announcement a2 = Announcement.builder().id(UUID.randomUUID()).text("PPE supply update").date(now.minusHours(1)).build();
 
-        when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(a1, a2)));
+        when(announcementRepository.findByHospital_IdOrderByDateDesc(eq(hospitalId), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(a1, a2)));
 
         List<NurseAnnouncementDTO> result = service.getAnnouncements(hospitalId, 5);
 
@@ -1078,7 +1103,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(rx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(3L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(3L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1128,7 +1153,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(overdueRx));
         when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of());
-        when(announcementRepository.count()).thenReturn(0L);
+        when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1142,7 +1167,7 @@ class NurseTaskServiceImplTest {
             assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isZero();
-            assertThat(summary.getAnnouncements()).isEqualTo(6); // 0 count → default
+            assertThat(summary.getAnnouncements()).isZero();
         }
     }
 
@@ -1184,6 +1209,8 @@ class NurseTaskServiceImplTest {
         // nurseId is null → resolveNurseStaff returns empty, no staff set
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
+        // P1 #8 — five-rights not verified, override reason required to proceed.
+        request.setOverrideReason("Edge-case test: anonymous nurse path.");
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, null, hospitalId, request);
         assertThat(result.getStatus()).isEqualTo("GIVEN");
     }
@@ -1378,6 +1405,21 @@ class NurseTaskServiceImplTest {
         assertThat(result.get(0).getMedsDue()).isEqualTo(1L); // one active pending med
     }
 
+    @Test
+    void getWorkboardSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+
+        List<NurseWorkboardPatientDTO> result = service.getWorkboard(UUID.randomUUID(), hospitalId);
+
+        assertThat(result).isEmpty();
+    }
+
     /* ════════════════════════════════════════════════════════════════════
        MVP-12: getPatientFlow
        ════════════════════════════════════════════════════════════════════ */
@@ -1464,6 +1506,28 @@ class NurseTaskServiceImplTest {
 
         assertThat(board.getActive()).hasSize(1);
         assertThat(board.getActive().get(0).getPatientName()).isEqualTo("Dept Pat");
+    }
+
+    @Test
+    void getPatientFlowSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+
+        when(admissionRepository.findFlowBoardAdmissions(
+                eq(hospitalId),
+                argThat(l -> l.containsAll(List.of(AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE)))))
+            .thenReturn(List.of(admission));
+
+        NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, null);
+
+        assertThat(board.getPending()).isEmpty();
+        assertThat(board.getActive()).isEmpty();
+        assertThat(board.getCritical()).isEmpty();
+        assertThat(board.getAwaitingDischarge()).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -1613,6 +1677,24 @@ class NurseTaskServiceImplTest {
         assertThat(result).hasSize(2);
         assertThat(result).extracting(NurseAdmissionSummaryDTO::getPatientName)
             .containsExactly("New Arrival", "Awaiting Discharge");
+    }
+
+    @Test
+    void getPendingAdmissionsSkipsAdmissionWhenPatientMissing() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Admission admission = new Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(AdmissionStatus.PENDING);
+        admission.setAdmissionDateTime(LocalDateTime.now().minusMinutes(30));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(admission));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(
+            hospitalId, AdmissionStatus.AWAITING_DISCHARGE)).thenReturn(List.of());
+
+        List<NurseAdmissionSummaryDTO> result = service.getPendingAdmissions(hospitalId, null);
+
+        assertThat(result).isEmpty();
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -2093,5 +2175,314 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(any(PatientVitalSign.class));
         // No encounter save attempted
         verify(encounterRepository, Mockito.never()).save(any(Encounter.class));
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       eMAR five-rights barcode-scan verify + administer (P1 #8)
+       ════════════════════════════════════════════════════════════════════ */
+
+    private MedicationAdministrationRecord seededMar(UUID patientId, UUID hospitalId, LocalDateTime scheduled) {
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        Hospital hospital = Mockito.mock(Hospital.class);
+        lenient().when(hospital.getId()).thenReturn(hospitalId);
+        Prescription rx = new Prescription();
+        rx.setMedicationName("Amoxicillin");
+        rx.setMedicationCode("AMOX-500");
+        rx.setDosage("500 mg");
+        rx.setRoute("PO");
+        rx.setHospital(hospital);
+        rx.setPatient(patient);
+        return MedicationAdministrationRecord.builder()
+            .prescription(rx)
+            .patient(patient)
+            .hospital(hospital)
+            .medicationName("Amoxicillin")
+            .dose("500 mg")
+            .route("PO")
+            .scheduledTime(scheduled)
+            .status(MedicationAdministrationStatus.PENDING)
+            .build();
+    }
+
+    @Test
+    void verifyMedicationPersistsAllFourScanValuesIncludingRoute() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("AMOX-500");
+        req.setDoseScanValue("500 mg");
+        req.setRouteScanValue("PO");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(marId, null, hospitalId, req);
+
+        assertThat(resp.isAllPassed()).isTrue();
+        ArgumentCaptor<MedicationAdministrationRecord> captor =
+            ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(captor.capture());
+        MedicationAdministrationRecord saved = captor.getValue();
+        assertThat(saved.getPatientScanValue()).isEqualTo(patientId.toString());
+        assertThat(saved.getMedicationScanValue()).isEqualTo("AMOX-500");
+        assertThat(saved.getDoseScanValue()).isEqualTo("500 mg");
+        assertThat(saved.getRouteScanValue()).isEqualTo("PO");
+        assertThat(saved.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
+        assertThat(saved.getScanVerifiedAt()).isNotNull();
+    }
+
+    @Test
+    void verifyMedicationClearsStaleOverrideReasonAndOverrides() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        // Pre-existing OVERRIDDEN state from an earlier attempt.
+        mar.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
+        mar.setOverrideReason("earlier override that should be cleared");
+        mar.setFiveRightsOverrides("[\"DRUG\"]");
+
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("AMOX-500");
+        req.setDoseScanValue("500 mg");
+        req.setRouteScanValue("PO");
+
+        service.verifyMedicationAdministration(marId, null, hospitalId, req);
+
+        ArgumentCaptor<MedicationAdministrationRecord> captor =
+            ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(captor.capture());
+        MedicationAdministrationRecord saved = captor.getValue();
+        assertThat(saved.getOverrideReason()).isNull();
+        assertThat(saved.getFiveRightsOverrides()).isNull();
+        assertThat(saved.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
+    }
+
+    @Test
+    void verifyMedicationFailsAllRightsWhenScansAreWrong() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(UUID.randomUUID().toString());
+        req.setMedicationScanValue("WRONG-CODE");
+        req.setDoseScanValue("250 mg");
+        req.setRouteScanValue("IV");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(marId, null, hospitalId, req);
+
+        assertThat(resp.isAllPassed()).isFalse();
+        assertThat(resp.getFailedChecks())
+            .containsExactlyInAnyOrder("PATIENT", "DRUG", "DOSE", "ROUTE");
+    }
+
+    @Test
+    void administerGivenAfterVerifyAllPassedRecordsVerified() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("PO");
+        mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        mar.setScanVerifiedAt(LocalDateTime.now());
+
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+        when(marRepository.save(mar)).thenReturn(mar);
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+
+        service.recordMedicationAdministration(marId, null, hospitalId, req);
+
+        assertThat(mar.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
+        assertThat(mar.getOverrideReason()).isNull();
+    }
+
+    @Test
+    void administerGivenWithRouteMismatchRequiresOverride() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now());
+        // The nurse scanned IV at the bedside but the prescription is PO —
+        // the persisted scanned route must drive the re-check, not the
+        // prescription's own route. Without the routeScanValue fix this
+        // test would silently pass because mar.getRoute() == "PO".
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("IV");
+        mar.setFiveRightsStatus(FiveRightsStatus.NOT_VERIFIED);
+
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+        // No overrideReason — must throw because ROUTE fails on re-check.
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("ROUTE");
+    }
+
+    @Test
+    void administerGivenOutsideTimeWindowAfterEarlierVerifyRequiresOverride() {
+        UUID marId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        // Scheduled three hours ago — well outside the ±60-minute window.
+        MedicationAdministrationRecord mar = seededMar(patientId, hospitalId, LocalDateTime.now().minusHours(3));
+        mar.setPatientScanValue(patientId.toString());
+        mar.setMedicationScanValue("AMOX-500");
+        mar.setDoseScanValue("500 mg");
+        mar.setRouteScanValue("PO");
+        // Earlier verify ran near the scheduled time and stamped VERIFIED.
+        // The administer call should re-evaluate TIME against the *current*
+        // administration time and demand an override.
+        mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("TIME");
+    }
+
+    @Test
+    void administerGivenOnPreEmarPathStampsScanVerifiedAtForAudit() {
+        UUID rxId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Mockito.mock(Patient.class);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFullName()).thenReturn("Pre-eMAR Pat");
+        Hospital hospital = Mockito.mock(Hospital.class);
+        lenient().when(hospital.getId()).thenReturn(hospitalId);
+        Prescription rx = Mockito.mock(Prescription.class);
+        when(rx.getId()).thenReturn(rxId);
+        when(rx.getPatient()).thenReturn(patient);
+        when(rx.getHospital()).thenReturn(hospital);
+        when(rx.getMedicationName()).thenReturn("Aspirin");
+        when(rx.getDosage()).thenReturn("81");
+        when(rx.getDoseUnit()).thenReturn("mg");
+        when(rx.getRoute()).thenReturn("PO");
+        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
+
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
+        req.setStatus("GIVEN");
+        req.setOverrideReason("Pre-eMAR rollout — verified on paper.");
+
+        service.recordMedicationAdministration(rxId, null, hospitalId, req);
+
+        ArgumentCaptor<MedicationAdministrationRecord> captor =
+            ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(captor.capture());
+        MedicationAdministrationRecord saved = captor.getValue();
+        assertThat(saved.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.OVERRIDDEN);
+        // Audit ranges over scan_verified_at — the override path must stamp
+        // it even when there were no barcode scans, otherwise these doses
+        // disappear from the safety dashboard.
+        assertThat(saved.getScanVerifiedAt()).isNotNull();
+        assertThat(saved.getOverrideReason()).isEqualTo("Pre-eMAR rollout — verified on paper.");
+    }
+
+    @Test
+    void verifyMedicationThrowsWhenMarDoesNotExistAndPrescriptionLookupFails() {
+        UUID marId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(marRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue("p");
+        req.setMedicationScanValue("m");
+        req.setDoseScanValue("d");
+        req.setRouteScanValue("r");
+
+        assertThatThrownBy(() -> service.verifyMedicationAdministration(marId, null, hospitalId, req))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void verifyMedicationThrowsWhenMarIdIsNull() {
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        assertThatThrownBy(() -> service.verifyMedicationAdministration(null, null, UUID.randomUUID(), req))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("MAR identifier");
+    }
+
+    @Test
+    void verifyMedicationThrowsWhenRequestIsNull() {
+        assertThatThrownBy(() -> service.verifyMedicationAdministration(UUID.randomUUID(), null, UUID.randomUUID(), null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Verification request body");
+    }
+
+    @Test
+    void verifyMedicationMaterializesNewMarFromPrescriptionWhenIdResolvesToPrescription() {
+        UUID rxId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        Hospital hospital = Mockito.mock(Hospital.class);
+        lenient().when(hospital.getId()).thenReturn(hospitalId);
+        Prescription rx = Mockito.mock(Prescription.class);
+        lenient().when(rx.getId()).thenReturn(rxId);
+        when(rx.getPatient()).thenReturn(patient);
+        when(rx.getHospital()).thenReturn(hospital);
+        when(rx.getMedicationName()).thenReturn("Amoxicillin");
+        when(rx.getMedicationCode()).thenReturn("AMOX-500");
+        when(rx.getDosage()).thenReturn("500 mg");
+        when(rx.getRoute()).thenReturn("PO");
+        // Created 4 h ago so computeMedicationDueTime → now, keeping the
+        // materialised MAR inside the ±60-minute TIME window.
+        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(4));
+
+        when(marRepository.findById(rxId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> {
+            MedicationAdministrationRecord arg = inv.getArgument(0);
+            return arg;
+        });
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("AMOX-500");
+        req.setDoseScanValue("500 mg");
+        req.setRouteScanValue("PO");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(rxId, null, hospitalId, req);
+
+        assertThat(resp.isAllPassed()).isTrue();
+        // marRepository.save is called twice: once to materialize the new
+        // MAR from the prescription, then again to stamp the verification.
+        verify(marRepository, Mockito.atLeastOnce()).save(any(MedicationAdministrationRecord.class));
     }
 }

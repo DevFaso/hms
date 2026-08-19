@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.impl.ConsultationServiceImpl;
@@ -48,6 +49,7 @@ class ConsultationServiceImplTest {
 
     @Mock private ConsultationRepository consultationRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -133,8 +135,9 @@ class ConsultationServiceImplTest {
             request.setEncounterId(encounterId);
             request.setPreferredConsultantId(consultantId);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(staffRepository.findById(consultantId)).thenReturn(Optional.of(consultant));
@@ -157,8 +160,9 @@ class ConsultationServiceImplTest {
         void createWithoutEncounterAndConsultant() {
             ConsultationRequestDTO request = buildRequest();
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
                 Consultation c = inv.getArgument(0);
@@ -178,8 +182,9 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             request.setIsCurbside(true);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
                 Consultation c = inv.getArgument(0);
@@ -196,7 +201,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when patient not found")
         void throwsWhenPatientNotFound() {
             ConsultationRequestDTO request = buildRequest();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -206,7 +211,7 @@ class ConsultationServiceImplTest {
         @DisplayName("throws when hospital not found")
         void throwsWhenHospitalNotFound() {
             ConsultationRequestDTO request = buildRequest();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
@@ -219,8 +224,9 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             request.setUrgency(ConsultationUrgency.STAT);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
                 Consultation c = inv.getArgument(0);
@@ -240,8 +246,9 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             request.setUrgency(ConsultationUrgency.ROUTINE);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
                 Consultation c = inv.getArgument(0);
@@ -260,8 +267,9 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             UUID userId = UUID.randomUUID();
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(userId)).thenReturn(Optional.empty());
             when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> {
@@ -281,8 +289,9 @@ class ConsultationServiceImplTest {
             ConsultationRequestDTO request = buildRequest();
             UUID userId = UUID.randomUUID();
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(userId)).thenReturn(Optional.empty());
             when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
             when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)).thenReturn(Optional.of(staff));
@@ -295,6 +304,20 @@ class ConsultationServiceImplTest {
             ConsultationResponseDTO result = service.createConsultation(request, userId);
 
             assertThat(result).isNotNull();
+        }
+
+        @Test
+        @DisplayName("throws clear scope error when patient is not registered at hospital")
+        void throwsWhenPatientIsNotRegisteredAtHospital() {
+            ConsultationRequestDTO request = buildRequest();
+
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createConsultation(request, staffId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Patient is not registered with the specified hospital.");
         }
     }
 
@@ -344,15 +367,20 @@ class ConsultationServiceImplTest {
         }
 
         @Test
-        @DisplayName("returns active statuses when status is null")
-        void returnsActiveWhenNull() {
-            when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any()))
+        @DisplayName("returns ALL statuses when status is null (matches dashboard count(*) tile)")
+        void returnsAllWhenNull() {
+            // Was previously filtered to [REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS],
+            // which silently hid COMPLETED / CANCELLED rows and produced the
+            // "Dashboard says 3 Consultations, list shows 0" UX bug. Pending /
+            // active-only worklists already have a dedicated endpoint
+            // (`/consultations/hospital/{id}/pending`).
+            when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
                     .thenReturn(List.of());
 
             List<ConsultationResponseDTO> result = service.getConsultationsForHospital(hospitalId, null);
 
             assertThat(result).isEmpty();
-            verify(consultationRepository).findByHospitalAndStatuses(eq(hospitalId), any());
+            verify(consultationRepository).findByHospital_IdOrderByRequestedAtDesc(hospitalId);
         }
     }
 

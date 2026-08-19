@@ -19,5 +19,9 @@ public interface UserCredentialLifecycleService {
 
     List<UserRecoveryContactDTO> upsertRecoveryContacts(UUID userId, List<UserRecoveryContactRequestDTO> payload);
 
+    String sendRecoveryContactVerificationCode(UUID userId, UUID contactId);
+
+    UserRecoveryContactDTO verifyRecoveryContact(UUID userId, UUID contactId, String code);
+
     void recordSuccessfulLogin(UUID userId);
 }

@@ -68,7 +68,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User patientUser = userRepository.findByUsername(patientUsername)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + patientUsername));
         Patient patient = patientRepository.findByUserId(patientUser.getId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + patientUsername));
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + patientUsername));
 
         User currentUser = getUserOrThrow(username);
         return getAppointmentsByPatientScoped(patient.getId(), currentUser);
@@ -88,18 +88,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final UserRepository userRepository;
     private final StaffAvailabilityService staffAvailabilityService;
     private final DepartmentRepository departmentRepository;
+    private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
-
-    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
-    private static final String CANCEL_PATH = "/appointments/cancel/";
 
     @PersistenceContext
     private EntityManager entityManager;
 
     private static final Logger log = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): this
+    // error-message prefix appears 3x in this file. Naming follows the
+    // existing USER_NOT_FOUND_PREFIX sibling above.
+    private static final String PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX = "Patient not found for username: ";
     private static final String APPOINTMENT_NOT_FOUND_MESSAGE = "Appointment not found";
     private static final String ROLE_SUPER_ADMIN_CODE = "ROLE_SUPER_ADMIN";
     private static final String ROLE_ADMIN_CODE = "ROLE_ADMIN";
@@ -305,8 +307,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment saved = appointmentRepository.save(appointment);
 
         // Build reschedule/cancel links
-        String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + saved.getId();
-        String cancelLink = frontendBaseUrl + CANCEL_PATH + saved.getId();
+        String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId();
+        String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId();
         // Send confirmation email to patient
         emailService.sendAppointmentConfirmationEmail(
             patient.getEmail(),
@@ -368,7 +370,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername()))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + request.getPatientUsername()));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + request.getPatientUsername()));
         } else if (request.getPatientEmail() != null) {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
@@ -380,7 +382,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
                 .getId();
             return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + authenticatedUsername));
+                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USERNAME_PREFIX + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
@@ -562,8 +564,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                     saved.getAppointmentDate().toString(),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     h.getEmail(), h.getPhoneNumber(),
-                    frontendBaseUrl + RESCHEDULE_PATH + saved.getId(),
-                    frontendBaseUrl + CANCEL_PATH + saved.getId());
+                    frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId(),
+                    frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId());
             } catch (Exception e) {
                 log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
             }
@@ -630,8 +632,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();
         String hospitalEmail = hospital.getEmail();
         String hospitalPhone = hospital.getPhoneNumber();
-        String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
-        String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
+        String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
+        String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
         switch (newStatus) {
             case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
@@ -968,5 +970,90 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private void requireHospitalScope(User user, UUID hospitalId) {
     requireHospitalScope(user, hospitalId, LocaleContextHolder.getLocale());
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO> getCalendarEvents(
+        java.util.UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+        java.util.UUID staffId, String username, java.util.Locale locale) {
+        if (hospitalId == null || from == null || to == null || from.isAfter(to)) {
+            return java.util.List.of();
+        }
+        // Authorisation: the calendar must not let an authenticated staff role
+        // enumerate appointments for arbitrary hospitalIds. Reuse the same
+        // hospital-scope gate as the rest of AppointmentServiceImpl so global
+        // roles (SUPER_ADMIN, etc.) still pass through.
+        java.util.Locale loc = locale != null ? locale
+            : org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        if (username != null) {
+            User currentUser = getUserOrThrow(username);
+            requireHospitalScope(currentUser, hospitalId, loc);
+        }
+        java.util.List<com.example.hms.model.Appointment> rows = staffId == null
+            ? appointmentRepository.findByHospital_IdAndAppointmentDateBetween(hospitalId, from, to)
+            : appointmentRepository.findByHospital_IdAndStaff_IdAndAppointmentDateBetween(
+                hospitalId, staffId, from, to);
+        return rows.stream().map(AppointmentServiceImpl::toCalendarEvent).toList();
+    }
+
+    private static com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO toCalendarEvent(com.example.hms.model.Appointment a) {
+        // Sonar S3358 (Pattern 8 of docs/SonarQubeInstructions.md):
+        // the original implementation packed three nested ternaries
+        // across L1002/1005/1007. Extracted into named helpers so each
+        // null-fallback step is independently readable.
+        java.util.UUID providerId = a.getStaff() != null ? a.getStaff().getId() : null;
+        String providerName = resolveProviderName(a.getStaff());
+        java.util.UUID patientId = a.getPatient() != null ? a.getPatient().getId() : null;
+        String patientName = resolvePatientName(a.getPatient());
+        java.time.LocalDateTime start = a.getAppointmentDate() == null || a.getStartTime() == null
+            ? null : a.getAppointmentDate().atTime(a.getStartTime());
+        java.time.LocalDateTime end = a.getAppointmentDate() == null || a.getEndTime() == null
+            ? null : a.getAppointmentDate().atTime(a.getEndTime());
+        String title = (patientName == null || patientName.isBlank() ? "Appointment" : patientName);
+        return new com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO(
+            a.getId(),
+            patientId,
+            patientName,
+            providerId,
+            providerName,
+            title,
+            start,
+            end,
+            a.getStatus() == null ? null : a.getStatus().name(),
+            a.getReason()
+        );
+    }
+
+    /**
+     * Prefer the staff's full name; fall back to plain name; null if no
+     * staff at all. Extracted from {@link #toCalendarEvent} to satisfy
+     * Sonar S3358 (Pattern 8). Behaviour equivalent to the original
+     * nested ternary.
+     */
+    private static String resolveProviderName(com.example.hms.model.Staff staff) {
+        if (staff == null) {
+            return null;
+        }
+        if (staff.getFullName() != null) {
+            return staff.getFullName();
+        }
+        return staff.getName();
+    }
+
+    /**
+     * Compose a patient's display name from first + last with explicit
+     * empty-string fallbacks. Returns null when there is no patient.
+     * Extracted from {@link #toCalendarEvent} to satisfy Sonar S3358
+     * (Pattern 8). Behaviour equivalent to the original nested
+     * ternaries.
+     */
+    private static String resolvePatientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        String first = patient.getFirstName() == null ? "" : patient.getFirstName();
+        String last = patient.getLastName() == null ? "" : patient.getLastName();
+        return (first + " " + last).trim();
     }
 }

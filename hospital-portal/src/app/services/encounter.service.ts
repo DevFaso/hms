@@ -186,9 +186,54 @@ export interface EncounterRequest {
   notes?: string;
 }
 
+export type EncounterNoteTemplate = 'SOAP' | 'SOAPIE';
+
+/**
+ * Per-section EncounterNote payload (item 5). The backend
+ * EncounterNoteRequestDTO has carried these columns since SOAP/SOAPIE
+ * landed; the FE bound a single textarea to `summary` until this change.
+ *
+ * All fields except `template` are optional — the FE collapses sections
+ * the clinician hasn't expanded so the wire payload stays minimal.
+ */
 export interface EncounterNoteRequest {
-  template: 'SOAP' | 'SOAPIE';
-  summary: string;
+  template: EncounterNoteTemplate;
+
+  /** Free-text summary kept for backwards-compat with the legacy single-textarea flow. */
+  summary?: string;
+
+  /** SOAP/SOAPIE chief complaint and visit-context blocks. */
+  chiefComplaint?: string;
+  historyOfPresentIllness?: string;
+  reviewOfSystems?: string;
+  physicalExam?: string;
+  diagnosticResults?: string;
+
+  /** Core SOAP. */
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+
+  /** SOAPIE-only sections. */
+  implementation?: string;
+  evaluation?: string;
+
+  patientInstructions?: string;
+
+  /** Late-entry support — when true, eventOccurredAt is the actual visit time. */
+  lateEntry?: boolean;
+  eventOccurredAt?: string;
+
+  /** Author attestations. */
+  attestAccuracy?: boolean;
+  attestNoAbbreviations?: boolean;
+  attestSpellCheck?: boolean;
+
+  /** Optional digital signature (closes the note for further edits). */
+  signedAt?: string;
+  signedByName?: string;
+  signedByCredentials?: string;
 }
 
 export interface EncounterNoteAddendumRequest {

@@ -55,18 +55,252 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis (token blacklist, shared across instances) ──────
+  # Enable in the backend with REDIS_TOKEN_BLACKLIST_ENABLED=true and
+  # REDIS_HOST=redis. No auth is configured here — treat as local/dev only.
+  redis:
+    image: redis:7-alpine
+    container_name: hms-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Keycloak DB (profile: keycloak) ────────────────────────
+  # Dedicated Postgres for Keycloak so its schema stays isolated from
+  # the HMS application schema. Only reachable from the keycloak service
+  # on the docker network (no host port published).
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: hms-keycloak-db
+    profiles: ["keycloak"]
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Keycloak (profile: keycloak) ───────────────────────────
+  # Local-dev Identity Provider for S-03 (see docs/tasks-keycloak.md).
+  #   docker compose --profile keycloak up -d keycloak
+  # Admin console: http://localhost:8081/  (admin / admin)
+  # Issuer URI for the backend: http://localhost:8081/realms/hms
+  # Realm is imported from keycloak/realm-export.json on first boot.
+  # Production deployment is a managed Railway service, NOT this container.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    container_name: hms-keycloak
+    profiles: ["keycloak"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Override these locally via a (gitignored) `.env` file at the repo root
+      # before running `docker compose --profile keycloak up`. The defaults are
+      # only safe on a single-developer machine that is NOT exposed on a shared
+      # network. See keycloak/README.md.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8081:8080"
+      - "9000:9000"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      # Keycloak's UBI image ships bash; pin to it explicitly because the
+      # /dev/tcp redirection used below is bash-specific.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # ── Prometheus ──────────────────────────────────────────────
+  # Two metric paths feed this instance:
+  #   1. Direct scrape of the backend (legacy prometheus.yml scrape_configs).
+  #   2. remote_write from Alloy (production-shaped pipeline; activated when
+  #      GRAFANA_METRICS_URL is unset and points at this Prometheus instead).
+  # The remote-write receiver flag is required for #2.
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: hms-prometheus
+    # Bind to localhost only. --web.enable-lifecycle below exposes UNAUTHENTICATED
+    # admin endpoints (POST /-/reload, POST /-/quit). On a developer laptop "127.0.0.1"
+    # keeps those endpoints reachable from the host (`curl localhost:9090/-/reload`)
+    # while preventing access from other machines on the same Wi-Fi network. Other
+    # Docker services on this compose network can still reach Prometheus by service
+    # name (`prometheus:9090`) — the port mapping only affects host-side exposure.
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./grafana/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-remote-write-receiver'
+      - '--web.enable-lifecycle'
+
+  # ── Loki (log aggregation) ─────────────────────────────────
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: hms-loki
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    volumes:
+      - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3100/ready | grep -q ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ── Alloy (metrics scraping + log shipping) ────────────────
+  # Reads docker container stdout via the docker socket and ships it to Loki,
+  # and scrapes Spring Boot Prometheus metrics. Requires the docker socket to
+  # be mounted read-only.
+  alloy:
+    image: grafana/alloy:v1.4.2
+    container_name: hms-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./grafana/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    environment:
+      # Local dev: forward metrics to the local Prometheus's remote_write endpoint.
+      # Override these in a Grafana Cloud setup.
+      GRAFANA_METRICS_URL: ${GRAFANA_METRICS_URL:-http://prometheus:9090/api/v1/write}
+      GRAFANA_METRICS_USER: ${GRAFANA_METRICS_USER:-}
+      GRAFANA_METRICS_TOKEN: ${GRAFANA_METRICS_TOKEN:-}
+    depends_on:
+      loki:
+        condition: service_healthy
+
+  # ── mock-oauth2-server (profile: mock-oidc) ───────────────
+  # Lightweight standalone OIDC server used by the iOS
+  # `KeycloakMockE2ETests` (KC-3 / G-5, Phase 2.3 Option B). Exposes
+  # discovery + token endpoints at http://localhost:8082/default/.
+  # Not a substitute for the real Keycloak realm — only used to
+  # exercise AppAuth's discovery + token-exchange code paths in CI
+  # without spinning up the full Keycloak + Postgres profile.
+  #
+  # Bring up only when running mock-backed tests:
+  #   docker compose --profile mock-oidc up -d mock-oauth2-server
+  mock-oauth2-server:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    container_name: hms-mock-oauth2
+    profiles: ["mock-oidc"]
+    ports:
+      - "8082:8080"
+    environment:
+      # Single issuer named "default" — mirrors the path the iOS test
+      # reaches at `/default/.well-known/openid-configuration`.
+      SERVER_PORT: "8080"
+      LOG_LEVEL: INFO
+
+  # ── postgres-exporter (profile: observability) ────────────
+  # Scrapes the local Postgres container so the HMS PostgreSQL dashboard has
+  # data. DATA_SOURCE_NAME points at the `postgres` service from this compose
+  # file (profile: local). To monitor postgres-dev / postgres-uat instead,
+  # add additional postgres-exporter-* services or override DATA_SOURCE_NAME.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: hms-postgres-exporter
+    profiles: ["observability"]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://hospital_user:hospital_pass@postgres:5432/hospital_db?sslmode=disable"
+      PG_EXPORTER_AUTO_DISCOVER_DATABASES: "true"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── redis-exporter (profile: observability) ───────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0
+    container_name: hms-redis-exporter
+    profiles: ["observability"]
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # ── node-exporter (profile: observability) ────────────────
+  # Exposes host CPU / memory / disk / network metrics on :9100.
+  # On macOS Docker Desktop the metrics describe the Linux VM rather than the
+  # macOS host, but they're still useful for spotting compose-stack saturation.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: hms-node-exporter
+    profiles: ["observability"]
+    pid: host
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.rootfs=/host'
+      # `--path.rootfs=/host` rewrites mountpoints so `/host` appears as `/`
+      # in the exported metrics. We must NOT put `host` in the exclude regex,
+      # otherwise the host root filesystem would be filtered out and the
+      # "Root FS used %" panel on hms-host-metrics would have no data.
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|etc)($$|/)'
+    volumes:
+      - /:/host:ro,rslave
+
+  # ── blackbox-exporter (profile: observability) ─────────────
+  # Synthetic HTTP probes against HMS public surfaces (roadmap row 43).
+  # Modules are defined in grafana/blackbox.yml; the probe targets are
+  # listed under the `blackbox_http` scrape job in grafana/prometheus.yml.
+  #
+  # Locally this runs alongside the rest of the observability stack and
+  # probes the bare-stack endpoints. In production the same module file
+  # is reused but the targets list points at the public Railway domains,
+  # and the goal is to run Blackbox in three cloud regions (or use
+  # Grafana k6 cloud — see docs/runbooks/synthetic-monitoring.md) so the
+  # >10% probe-failure alert can distinguish a regional ISP problem
+  # from an actual HMS outage.
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: hms-blackbox-exporter
+    profiles: ["observability"]
+    ports:
+      - "9115:9115"
+    command:
+      - '--config.file=/etc/blackbox_exporter/config.yml'
+    volumes:
+      - ./grafana/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:
@@ -75,14 +309,25 @@ services:
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # Allow loading the public Grafana plugins listed below (none by default).
+      GF_INSTALL_PLUGINS: ""
+      # Default home dashboard = SLO overview when present.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/hms-slo-overview.json
+      # Unified alerting is on by default in Grafana 11; explicit for clarity.
+      GF_UNIFIED_ALERTING_ENABLED: "true"
+      GF_ALERTING_ENABLED: "false"
+      # Disable analytics + update checks for cleaner local logs.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - loki
 
 volumes:
   pgdata:
@@ -90,6 +335,10 @@ volumes:
   pgdata_uat:
   prometheus_data:
   grafana_data:
+  loki_data:
+  alloy_data:
+  redis_data:
+  keycloak_pgdata:
   # Named volume for backend uploaded files (profile images, attachments, etc.).
   # To use this locally, mount it in your backend service:
   #   volumes:

@@ -38,6 +38,10 @@ export interface AdmissionResponse {
   departmentName: string;
   admittingProviderId: string;
   admittingProviderName: string;
+  /** Most-recent non-terminal encounter for this admission's patient at the
+   *  admission's hospital. Populated by the backend mapper; null when no
+   *  open encounter exists. Used by the CPOE order-set picker. */
+  currentEncounterId?: string | null;
   attendingPhysicianId: string;
   attendingPhysicianName: string;
   roomBed: string;

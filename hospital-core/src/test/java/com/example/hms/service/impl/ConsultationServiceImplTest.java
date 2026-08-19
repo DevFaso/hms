@@ -16,8 +16,12 @@ import com.example.hms.service.NotificationService;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,6 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -41,6 +47,7 @@ class ConsultationServiceImplTest {
 
     @Mock private ConsultationRepository consultationRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -63,6 +70,18 @@ class ConsultationServiceImplTest {
         patient = new Patient(); patient.setId(patientId); patient.setFirstName("John"); patient.setLastName("Doe");
         hospital = new Hospital(); hospital.setId(hospitalId); hospital.setName("General Hospital");
         staff = new Staff(); staff.setId(staffId);
+        // Sonar S6809: production wires `self` via setSelf(@Lazy ...).
+        // Point self at the SUT here so the in-class delegate call
+        // doesn't NPE in the unit test.
+        service.setSelf(service);
+    }
+
+    @AfterEach
+    void tearDown() {
+        // Tests that populate HospitalContextHolder must clear it so
+        // the thread-local doesn't leak into a sibling test that
+        // expects an empty context.
+        HospitalContextHolder.clear();
     }
 
     private Consultation buildConsultation(ConsultationStatus status) {
@@ -75,8 +94,9 @@ class ConsultationServiceImplTest {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId);
         r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(consultationRepository.save(any())).thenAnswer(i -> { Consultation c = i.getArgument(0); c.setId(consultationId); return c; });
         ConsultationResponseDTO result = service.createConsultation(r, staffId);
@@ -87,7 +107,7 @@ class ConsultationServiceImplTest {
     @Test void createConsultation_patientNotFound() {
         ConsultationRequestDTO r = new ConsultationRequestDTO();
         r.setPatientId(patientId); r.setHospitalId(hospitalId); r.setUrgency(ConsultationUrgency.URGENT);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -116,7 +136,11 @@ class ConsultationServiceImplTest {
     }
 
     @Test void getConsultationsForHospital_withoutStatus() {
-        when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any())).thenReturn(List.of());
+        // After fix: no-status path returns ALL consultations for the hospital
+        // (matches dashboard count(*) tile semantics). Was previously filtered
+        // to [REQUESTED, ACKNOWLEDGED, SCHEDULED, IN_PROGRESS] which silently
+        // hid COMPLETED / CANCELLED rows and produced "tile says 3, list shows 0".
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId)).thenReturn(List.of());
         assertThat(service.getConsultationsForHospital(hospitalId, null)).isEmpty();
     }
 
@@ -265,6 +289,103 @@ class ConsultationServiceImplTest {
         when(consultationRepository.findAllByOrderByRequestedAtDesc()).thenReturn(List.of());
 
         assertThat(service.getAllConsultations(null)).isEmpty();
+    }
+
+    /**
+     * Super-admin global view (JWT claim set, no X-Hospital-Id header)
+     * takes the new short-circuit branch — bypasses
+     * {@link com.example.hms.utility.RoleValidator#requireActiveHospitalId()}
+     * entirely and goes straight to the unscoped repository read.
+     *
+     * <p>Pinned because the dashboard-tile-vs-list mismatch (count 3 /
+     * list "No consultations across any of your hospitals") that
+     * surfaced on the develop deployment was traced to a path where
+     * {@code requireActiveHospitalId()} would resolve a stale
+     * primary-hospital fallback for a super-admin; the carve-out
+     * fixes that by trusting the JWT claim directly.
+     */
+    @Test void getAllConsultations_superAdminGlobalView_skipsRequireActiveHospitalId() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        when(consultationRepository.findAllByOrderByRequestedAtDesc())
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        // Carve-out fires before requireActiveHospitalId(), so the
+        // RoleValidator gate is never reached.
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(consultationRepository, never()).findByHospital_IdOrderByRequestedAtDesc(any());
+    }
+
+    /**
+     * Super-admin chip-scoped (X-Hospital-Id header set so
+     * headerOverridden=true) MUST fall through to
+     * {@code requireActiveHospitalId()} so the list reflects the chip,
+     * not the system-wide unscoped fetch. Without this, the chip
+     * becomes a visual no-op for super-admins.
+     */
+    @Test void getAllConsultations_superAdminChipScoped_doesNotShortCircuit() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(true)
+            .activeHospitalId(hospitalId)
+            .build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        verify(roleValidator).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
+    }
+
+    /**
+     * Super-admin global view with an explicit status filter — exercises
+     * the {@code findByStatusOrderByRequestedAtDesc(status)} branch on
+     * the unscoped path (the existing
+     * {@code getAllConsultations_superAdmin_withStatus} hits the same
+     * branch via {@code requireActiveHospitalId()=null}; this one hits
+     * it via the new JWT-claim carve-out so both routes are pinned).
+     */
+    @Test void getAllConsultations_superAdminGlobalView_withStatus_filtersByStatus() {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(true)
+            .headerOverridden(false)
+            .build());
+        when(consultationRepository.findByStatusOrderByRequestedAtDesc(ConsultationStatus.IN_PROGRESS))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.IN_PROGRESS)));
+
+        assertThat(service.getAllConsultations(ConsultationStatus.IN_PROGRESS)).hasSize(1);
+
+        verify(roleValidator, never()).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
+        verify(consultationRepository, never()).findByHospital_IdOrderByRequestedAtDesc(any());
+    }
+
+    /**
+     * Non-superadmin context — defaults to empty {@link HospitalContext}
+     * where {@code isSuperAdmin()} is false. The {@code &&} short-circuits
+     * before {@code isHeaderOverridden()} is evaluated, the carve-out
+     * does NOT fire, and {@code requireActiveHospitalId()} drives the
+     * scope. Pinned so a future refactor that flips operand order
+     * (e.g. {@code !isHeaderOverridden() && isSuperAdmin()}) doesn't
+     * silently widen access for non-superadmins.
+     */
+    @Test void getAllConsultations_nonSuperAdmin_emptyContext_usesRequireActiveHospitalId() {
+        // Don't populate HospitalContextHolder — getContextOrEmpty()
+        // returns the empty context (isSuperAdmin=false everywhere).
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(null)).hasSize(1);
+
+        verify(roleValidator).requireActiveHospitalId();
+        verify(consultationRepository, never()).findAllByOrderByRequestedAtDesc();
     }
 
     @Test void getConsultationsRequestedBy_scopedToHospital() {

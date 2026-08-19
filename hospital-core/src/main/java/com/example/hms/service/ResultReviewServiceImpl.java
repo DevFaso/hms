@@ -43,6 +43,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
 
     private static final String URGENCY_NORMAL = "NORMAL";
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // severity / urgency string SEVERITY_CRITICAL appears 3x in this file.
+    // Naming follows the existing URGENCY_NORMAL sibling above.
+    private static final String SEVERITY_CRITICAL = "CRITICAL";
+
     private final StaffRepository staffRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -68,36 +73,28 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         List<LabOrder> completedOrders = labOrderRepository.findByOrderingStaff_Id(staffId);
         List<DoctorResultQueueItemDTO> queue = new ArrayList<>();
 
-        for (LabOrder order : completedOrders) {
-            if (order.getStatus() != LabOrderStatus.COMPLETED) continue;
-            if (order.getPatient() == null) continue;
-
-            // Get results for this order
-            List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
-            for (LabResult result : results) {
-                String testName = order.getLabTestDefinition() != null
-                        ? order.getLabTestDefinition().getName()
-                        : "Lab Test";
-
-                String abnormalFlag;
-                if (result.getAbnormalFlag() != null) {
-                    abnormalFlag = result.getAbnormalFlag().name();
-                } else {
-                    abnormalFlag = result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name();
-                }
-
-                queue.add(DoctorResultQueueItemDTO.builder()
-                        .id(result.getId())
-                        .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
-                        .patientId(order.getPatient().getId())
-                        .testName(testName)
-                        .resultValue(result.getResultValue())
-                        .abnormalFlag(abnormalFlag)
-                        .resultedAt(result.getResultDate())
-                        .orderingContext(order.getClinicalIndication())
-                        .build());
-            }
-        }
+        // Sonar S135 — replaced the outer for-loop (which had two `continue`
+        // statements) with a stream filter chain. The inner result loop still
+        // iterates over every LabResult row for each retained order, but it
+        // contains no jump statements (no break/continue), so it does not
+        // re-trigger S135.
+        //
+        // KNOWN PRE-EXISTING N+1: `findByLabOrder_Id` runs once per retained
+        // order. Predates this refactor (the original for-loop had the same
+        // call site). Fixing requires a bulk repo method (e.g. `findByLabOrder_IdIn`
+        // or a JOIN FETCH on LabOrder + ordering staff) plus tests; scoped out
+        // of this PR. Tracked for a follow-up "perf: bulk-fetch result queue"
+        // commit. For a single physician's queue this stays bounded by the
+        // staff-scoped completed-order count, which is small in practice.
+        completedOrders.stream()
+                .filter(order -> order.getStatus() == LabOrderStatus.COMPLETED)
+                .filter(order -> order.getPatient() != null)
+                .forEach(order -> {
+                    List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
+                    for (LabResult result : results) {
+                        queue.add(toQueueItem(order, result));
+                    }
+                });
 
         // Sort: CRITICAL → ABNORMAL → NORMAL, then by date desc
         queue.sort(Comparator
@@ -217,10 +214,29 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return items;
     }
 
+    private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result) {
+        String testName = order.getLabTestDefinition() != null
+                ? order.getLabTestDefinition().getName()
+                : "Lab Test";
+        String abnormalFlag = result.getAbnormalFlag() != null
+                ? result.getAbnormalFlag().name()
+                : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
+        return DoctorResultQueueItemDTO.builder()
+                .id(result.getId())
+                .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
+                .patientId(order.getPatient().getId())
+                .testName(testName)
+                .resultValue(result.getResultValue())
+                .abnormalFlag(abnormalFlag)
+                .resultedAt(result.getResultDate())
+                .orderingContext(order.getClinicalIndication())
+                .build();
+    }
+
     private int abnormalityRank(String flag) {
         if (flag == null) return 0;
         return switch (flag.toUpperCase()) {
-            case "CRITICAL" -> 3;
+            case SEVERITY_CRITICAL -> 3;
             case "ABNORMAL" -> 2;
             case URGENCY_NORMAL -> 1;
             default -> 0;
@@ -230,7 +246,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private int inboxUrgencyRank(String urgency) {
         if (urgency == null) return 0;
         return switch (urgency.toUpperCase()) {
-            case "CRITICAL" -> 4;
+            case SEVERITY_CRITICAL -> 4;
             case "HIGH" -> 3;
             case URGENCY_NORMAL -> 2;
             case "LOW" -> 1;
@@ -240,7 +256,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
 
     private String mapConsultUrgency(String consultUrgency) {
         return switch (consultUrgency) {
-            case "STAT", "EMERGENCY" -> "CRITICAL";
+            case "STAT", "EMERGENCY" -> SEVERITY_CRITICAL;
             case "URGENT" -> "HIGH";
             default -> URGENCY_NORMAL;
         };

@@ -125,27 +125,6 @@ public class UserMapper {
                 .build();
     }
 
-    /**
-     * Back-compat (prefer the overload with encoded password).
-     * @deprecated since 2025, for removal. Use the overload accepting encoded password.
-     */
-    @Deprecated(since = "2025", forRemoval = true)
-    @SuppressWarnings("java:S1133") // Retained for backward compatibility
-    public User toEntity(UserRequestDTO dto) {
-        if (dto == null)
-            return null;
-
-        return User.builder()
-                .username(trim(dto.getUsername()))
-                .passwordHash(dto.getPassword())
-                .email(normalizeEmail(dto.getEmail()))
-                .firstName(trim(dto.getFirstName()))
-                .lastName(trim(dto.getLastName()))
-                .phoneNumber(trim(dto.getPhoneNumber()))
-                .isActive(Boolean.TRUE.equals(dto.getActive()))
-                .build();
-    }
-
     /** Partial update without forcing active flag unless provided. */
     public void updateEntityFromDTO(User user, UserRequestDTO dto,
             String encodedPasswordHashOrNull, Boolean activeOrNull) {

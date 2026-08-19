@@ -9,6 +9,7 @@ data class VitalSignDto(
     @Json(name = "patientId") val patientId: String? = null,
     @Json(name = "registrationId") val registrationId: String? = null,
     @Json(name = "hospitalId") val hospitalId: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null,
     @Json(name = "recordedByStaffId") val recordedByStaffId: String? = null,
     @Json(name = "recordedByAssignmentId") val recordedByAssignmentId: String? = null,
     @Json(name = "recordedByName") val recordedByName: String? = null,

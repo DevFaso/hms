@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Multi-stage Dockerfile for Hospital Management System
 # Build stage
 FROM eclipse-temurin:21-jdk-jammy AS build
@@ -44,10 +45,72 @@ COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 # Activated only when OTEL_EXPORTER_OTLP_ENDPOINT is set (Railway env vars).
 ADD --chmod=444 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.12.0/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
 
-# Copy the entrypoint script that fixes volume-mount ownership at startup.
-# It runs as root, chowns the uploads directory to appuser, then execs the
-# JVM as appuser — so the running process is still unprivileged.
-COPY entrypoint.sh /entrypoint.sh
+# Inline the entrypoint script (BuildKit heredoc) so the build has zero
+# dependency on entrypoint.sh existing in the build context. This previously
+# bit Railway when its cached build snapshot diverged from the freshly
+# uploaded one and the COPY layer failed with `entrypoint.sh: not found`
+# even though the file was on the branch (see commit a4b68f12 history).
+# Single source of truth — no on-disk entrypoint.sh to drift against.
+#
+# v3 — runs as root to chown the (possibly volume-mounted) uploads directory,
+# then execs the JVM as appuser. Conditionally attaches the OTEL Java agent
+# when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+COPY <<'ENTRYPOINT_SH' /entrypoint.sh
+#!/bin/sh
+# Entrypoint script for the HMS backend container (v3 — inlined into Dockerfile).
+#
+# Problem: When Railway (or Docker) mounts a persistent volume at /app/uploads,
+# the mount overlays the directory created during the image build, and the
+# mounted directory is owned by root.  The application user (appuser, UID 10001)
+# therefore cannot create subdirectories (profile-images/, referral-attachments/,
+# etc.) and every file-upload attempt fails with a permission-denied error.
+#
+# Solution: Run this script as root, ensure the upload directory exists and is
+# writable by appuser, then exec the JVM *as appuser* (via su so the JVM process
+# itself still runs unprivileged).
+#
+# We use the absolute path to the JRE binary because the shell spawned by 'su'
+# inherits a minimal PATH that does not include /opt/java/openjdk/bin.
+
+set -e
+
+UPLOAD_DIR="${APP_UPLOAD_DIR:-/app/uploads}"
+JAVA_BIN="${JAVA_HOME:-/opt/java/openjdk}/bin/java"
+
+# Validate PORT: must be a non-empty string of digits. Anything else (empty,
+# whitespace, shell metacharacters) falls back to 8081 — this prevents an
+# attacker-controlled PORT env var from injecting extra JVM args via the
+# `su -c` command string below. Railway always supplies a numeric PORT, so
+# the fallback path is just defense-in-depth.
+PORT="${PORT:-8081}"
+case "${PORT}" in
+  ''|*[!0-9]*)
+    echo "[entrypoint] Invalid PORT='${PORT}' (not a positive integer); falling back to 8081" >&2
+    PORT=8081
+    ;;
+esac
+
+echo "[entrypoint] Ensuring upload directory exists: ${UPLOAD_DIR}"
+mkdir -p "${UPLOAD_DIR}"
+chown -R appuser:appuser "${UPLOAD_DIR}"
+chmod 750 "${UPLOAD_DIR}"
+
+echo "[entrypoint] Starting application as appuser..."
+
+# Attach the OpenTelemetry Java Agent when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+# This auto-instruments the app to export traces, metrics, and logs to Grafana Cloud.
+OTEL_AGENT=""
+if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagent.jar ]; then
+  OTEL_AGENT="-javaagent:/app/opentelemetry-javaagent.jar"
+  echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
+fi
+
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT} -jar /app/app.jar"
+ENTRYPOINT_SH
+
+# Strip CRLF from the heredoc'd script in case the Dockerfile was checked out
+# with Windows line endings (.gitattributes enforces LF for *.sh and Dockerfile,
+# but this is a cheap belt-and-suspenders against a misconfigured local checkout).
 RUN sed -i 's/\r$//' /entrypoint.sh \
     && chmod +x /entrypoint.sh \
     && mkdir -p /app/uploads \

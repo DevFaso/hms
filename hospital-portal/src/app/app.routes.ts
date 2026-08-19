@@ -3,6 +3,8 @@ import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
+import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
+import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -12,6 +14,14 @@ export const routes: Routes = [
     path: 'login',
     canActivate: [LoginRedirectGuard],
     loadComponent: () => import('./login/login').then((m) => m.Login),
+  },
+  {
+    path: 'mfa-challenge',
+    loadComponent: () => import('./mfa/mfa-challenge').then((m) => m.MfaChallengeComponent),
+  },
+  {
+    path: 'mfa-enroll',
+    loadComponent: () => import('./mfa/mfa-enroll').then((m) => m.MfaEnrollComponent),
   },
   {
     path: 'reset-password',
@@ -45,6 +55,7 @@ export const routes: Routes = [
     children: [
       {
         path: 'dashboard',
+        canActivate: [SuperAdminRedirectGuard],
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
@@ -93,6 +104,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // T-45: patient portal pharmacy invoice & payment history
+        path: 'my-pharmacy-invoices',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component').then(
+            (m) => m.MyPharmacyInvoicesComponent,
+          ),
+      },
+      {
         path: 'my-visits',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
@@ -115,6 +136,15 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./patient-portal/my-records/my-records.component').then(
             (m) => m.MyRecordsComponent,
+          ),
+      },
+      {
+        path: 'my-medical-history',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-medical-history/my-medical-history.component').then(
+            (m) => m.MyMedicalHistoryComponent,
           ),
       },
       {
@@ -226,6 +256,15 @@ export const routes: Routes = [
             path: 'new',
             loadComponent: () =>
               import('./appointments/appointment-form').then((m) => m.AppointmentFormComponent),
+          },
+          {
+            // Cadence visual scheduling grid (P1 #7) — lazy so FullCalendar
+            // only ships when this route is visited.
+            path: 'calendar',
+            loadComponent: () =>
+              import('./appointments/calendar/appointment-calendar.component').then(
+                (m) => m.AppointmentCalendarComponent,
+              ),
           },
           {
             path: ':id',
@@ -490,8 +529,13 @@ export const routes: Routes = [
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
 
-      // Settings → redirect to profile (edit tab)
-      { path: 'settings', redirectTo: 'profile', pathMatch: 'full' },
+      // Settings hub — preferences, language, shortcuts to security/notification
+      // pages. Replaced the old /settings → /profile redirect because both
+      // header menu items pointed at the same screen, which surprised users.
+      {
+        path: 'settings',
+        loadComponent: () => import('./settings/settings').then((m) => m.SettingsComponent),
+      },
 
       // Notifications
       {
@@ -537,6 +581,17 @@ export const routes: Routes = [
           import('./hospitals/hospital-list').then((m) => m.HospitalListComponent),
       },
 
+      // Hospital detail with Lifecycle panel (MVP-c2-frontend — see
+      // docs/super-admin-gaps.md). Super-admin-only because the
+      // panel can suspend / archive / schedule purge.
+      {
+        path: 'hospitals/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./hospitals/hospital-detail').then((m) => m.HospitalDetailComponent),
+      },
+
       // Organizations (Admin)
       {
         path: 'organizations',
@@ -544,6 +599,13 @@ export const routes: Routes = [
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () =>
           import('./organizations/organization-list').then((m) => m.OrganizationListComponent),
+      },
+      {
+        path: 'organizations/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./organizations/organization-detail').then((m) => m.OrganizationDetailComponent),
       },
 
       // Users (Admin)
@@ -563,9 +625,11 @@ export const routes: Routes = [
       },
 
       // Platform (Admin)
+      // MVP-5b: SUPER_ADMIN is rewritten to /super-admin/platform for
+      // namespace consistency; ADMIN keeps the legacy /platform path.
       {
         path: 'platform',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/platform'), RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
@@ -653,6 +717,17 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./nurse-station/nurse-station').then((m) => m.NurseStationComponent),
+      },
+
+      // Inpatient eMAR — bedside five-rights barcode-scan loop (P1 #8)
+      {
+        path: 'emar',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./nurse-station/emar/emar.component').then((m) => m.EmarComponent),
       },
 
       // Patient Tracker Board (MVP 5)
@@ -763,9 +838,11 @@ export const routes: Routes = [
       },
 
       // Audit Logs
+      // MVP-5b: SUPER_ADMIN is rewritten to /super-admin/audit-logs;
+      // HOSPITAL_ADMIN + ADMIN keep the legacy /audit-logs path.
       {
         path: 'audit-logs',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/audit-logs'), RoleGuard],
         data: {
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
@@ -823,27 +900,386 @@ export const routes: Routes = [
           ),
       },
 
-      // Administration
+      // EMPI candidate-match panel (roadmap row 25 follow-on).
+      // Guard mirrors the backend EmpiProbabilisticController which
+      // allows SUPER_ADMIN / HOSPITAL_ADMIN / RECEPTIONIST / NURSE /
+      // DOCTOR (per the cell text + the @PreAuthorize on the
+      // controller). Mismatching the guard would make the UI
+      // unreachable for its intended users — row-32 KPI cards Copilot
+      // lesson on PR #341.
+      {
+        path: 'reception/empi-candidates',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_NURSE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./reception/empi-candidates-panel/empi-candidates-panel.component').then(
+            (m) => m.EmpiCandidatesPanelComponent,
+          ),
+      },
+
+      // Pharmacy Module
+      {
+        path: 'medication-catalog',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
+      },
+      {
+        path: 'pharmacy-registry',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),
+      },
+      {
+        path: 'pharmacy/inventory',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/inventory-dashboard').then((m) => m.InventoryDashboardComponent),
+      },
+      {
+        path: 'pharmacy/goods-receipt',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/goods-receipt').then((m) => m.GoodsReceiptComponent),
+      },
+      {
+        path: 'pharmacy/stock-adjustment',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
+      },
+      {
+        path: 'pharmacy/dispensing',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./pharmacy/dispensing').then((m) => m.DispensingComponent),
+      },
+      {
+        path: 'pharmacy/stock-routing',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
+      },
+      {
+        // P-05: deep-link variant — work-queue rows navigate here with the
+        // prescription ID pre-filled so users never type or paste a UUID.
+        path: 'pharmacy/stock-routing/:prescriptionId',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
+      },
+      {
+        // P-09: pharmacist-led MTM (Medication Therapy Management) review.
+        path: 'pharmacy/mtm',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./pharmacy/mtm-review').then((m) => m.MtmReviewComponent),
+      },
+      {
+        // T-43/T-44: pharmacy checkout & French printable receipt
+        path: 'pharmacy/checkout',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_CASHIER',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-checkout').then((m) => m.PharmacyCheckoutComponent),
+      },
+      {
+        // T-50: pharmacy insurance claims management (AMU)
+        path: 'pharmacy/claims',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_CLAIMS_REVIEWER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-claims').then((m) => m.PharmacyClaimsComponent),
+      },
+
+      // Administration landing for ROLE_ADMIN. ROLE_SUPER_ADMIN passes the
+      // role gate but is redirected to /super-admin by SuperAdminRedirectGuard
+      // (MVP-5) so the Control Tower stays the single mission-control.
       {
         path: 'admin',
-        canActivate: [RoleGuard],
+        canActivate: [SuperAdminRedirectGuard, RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // Super-Admin Control Tower (SUPER_ADMIN only)
+      {
+        path: 'super-admin',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./super-admin/super-admin').then((m) => m.SuperAdminComponent),
+      },
+
+      // Super-Admin Integration Health Console (MVP-3 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/integrations',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/integration-health/integration-health').then(
+            (m) => m.IntegrationHealthComponent,
+          ),
+      },
+
+      // Super-Admin Integration Message Log + DLQ + Replay
+      // (MVP-c3 — Tier 2 #5 in docs/platform-management-gaps-vs-epic.md)
+      {
+        path: 'super-admin/integration-messages',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/integration-messages/integration-messages').then(
+            (m) => m.IntegrationMessagesComponent,
+          ),
+      },
+
+      // Super-Admin Cross-Tenant Audit Search (MVP-8 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/audit-search',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/audit-search/audit-search').then(
+            (m) => m.SuperAdminAuditSearchComponent,
+          ),
+      },
+
+      // Super-Admin Emergency Global Controls (MVP-7 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/emergency',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/emergency/emergency').then((m) => m.EmergencyComponent),
+      },
+
+      // Super-Admin Subscription / Plan Management (MVP-6 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/subscriptions',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/subscriptions/subscriptions').then((m) => m.SubscriptionsComponent),
+      },
+
+      // Per-tenant cost / chargeback panel (roadmap row 44 follow-on).
+      // Mirrors the @PreAuthorize(SUPER_ADMIN) on ChargebackReportController.
+      {
+        path: 'super-admin/cost',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/cost-panel/cost-panel.component').then((m) => m.CostPanelComponent),
+      },
+
+      // Super-Admin Data Residency / Region Tagging (MVP-9 — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/data-residency',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/data-residency/data-residency').then(
+            (m) => m.DataResidencyComponent,
+          ),
+      },
+
+      // Super-Admin Data Residency Policy editor (MVP-9c — see docs/super-admin-gaps.md)
+      {
+        path: 'super-admin/data-residency/policy',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./super-admin/data-residency-policy/data-residency-policy').then(
+            (m) => m.DataResidencyPolicyComponent,
+          ),
+      },
+
+      // MVP-5b — namespaced aliases for the four legacy super-admin
+      // surfaces. Loads the same components as the top-level routes;
+      // the legacy paths (/feature-flags, /analytics, /audit-logs,
+      // /platform) carry a superAdminPathRewriteGuard that bounces a
+      // SUPER_ADMIN here while leaving other roles on the legacy URL.
+      {
+        path: 'super-admin/feature-flags',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
+      },
+      {
+        path: 'super-admin/analytics',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
+      },
+      {
+        path: 'super-admin/audit-logs',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
+      },
+      {
+        path: 'super-admin/platform',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
+      },
+
+      // Refill approval queue (provider-facing — pairs with patient portal refills)
+      {
+        path: 'refills',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'] },
+        loadComponent: () =>
+          import('./refills/refill-approval-list.component').then(
+            (m) => m.RefillApprovalListComponent,
+          ),
+      },
+
+      // CPOE order-set authoring (admin)
+      {
+        path: 'admin/order-sets',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/order-sets/order-set-list.component').then(
+            (m) => m.OrderSetListComponent,
+          ),
+      },
+      {
+        path: 'admin/order-sets/:id',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/order-sets/order-set-edit.component').then(
+            (m) => m.OrderSetEditComponent,
+          ),
+      },
+
+      // ADT auto-create intake config (roadmap row 24 admin UI)
+      // SUPER_ADMIN only — matches @PreAuthorize on
+      // AdtIntakeProviderConfigController.
+      {
+        path: 'admin/adt-intake-configs',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/adt-intake-config/adt-intake-config.component').then(
+            (m) => m.AdtIntakeConfigComponent,
+          ),
+      },
+
+      // DHIS2 ADX export administration (per-hospital config + mappings + manual trigger)
+      {
+        path: 'admin/integrations/dhis2',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin/integrations/dhis2-admin-page/dhis2-admin-page.component').then(
+            (m) => m.Dhis2AdminPageComponent,
+          ),
+      },
+
       // Feature Flags Management
+      // MVP-5b: legacy /feature-flags is superseded by /super-admin/feature-flags.
+      // SUPER_ADMIN gets a transparent rewrite (so bookmarks still work) and
+      // the alias below loads the same component.
       {
         path: 'feature-flags',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/feature-flags'), RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () =>
           import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
       },
 
       // Platform Analytics
+      // MVP-5b: legacy /analytics is superseded by /super-admin/analytics
+      // for SUPER_ADMIN. Same rewrite + alias pattern as /feature-flags.
       {
         path: 'analytics',
-        canActivate: [RoleGuard],
+        canActivate: [superAdminPathRewriteGuard('/super-admin/analytics'), RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
       },

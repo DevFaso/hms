@@ -177,6 +177,11 @@
               class="toggle-password"
               (click)="toggleBootstrapPasswordVisibility()"
               tabindex="-1"
+              [attr.aria-label]="
+                (showBootstrapPassword ? 'COMMON.HIDE_PASSWORD' : 'COMMON.SHOW_PASSWORD')
+                  | translate
+              "
+              [attr.aria-pressed]="showBootstrapPassword"
             >
               @if (showBootstrapPassword) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -260,6 +265,35 @@
       </div>
     } @else {
       <!-- ==================== LOGIN FORM ==================== -->
+      @if (oidcLoginEnabled) {
+        <!-- KC-2b: Keycloak / OIDC PKCE entry point. The legacy form below
+             stays visible during the rollout so admins can still log in
+             with internal credentials if Keycloak is unreachable. -->
+        <button
+          type="button"
+          class="btn-login btn-sso"
+          (click)="loginWithKeycloak()"
+          [disabled]="loading"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path
+              d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"
+            />
+          </svg>
+          <span>Continue with Single Sign-On</span>
+        </button>
+        <div class="sso-divider" aria-hidden="true">
+          <span>or sign in with username</span>
+        </div>
+      } @else if (oidcDiscoveryFailed) {
+        <!-- KC-2b (G-8): SSO is configured but Keycloak is unreachable.
+             Hide the SSO button and tell the user why so they don't
+             keep retrying — legacy form below still works. -->
+        <output class="sso-unavailable" aria-live="polite">
+          Single sign-on is temporarily unavailable. Please use your username and password to
+          continue.
+        </output>
+      }
       <form (ngSubmit)="submit()" class="login-form">
         <div class="form-group">
           <label for="username">{{ 'LOGIN.USERNAME' | translate }}</label>
@@ -269,8 +303,16 @@
                 d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
               />
             </svg>
+            <!--
+              v1.0 row 11: programmatic focus in component.ngAfterViewInit
+              (not the HTML `autofocus` attribute — flagged by
+              @angular-eslint/template/no-autofocus because autofocus can
+              steal focus from screen readers mid-page-load).
+              See docs/ui/accessibility.md §6.8.
+            -->
             <input
               id="username"
+              #usernameInput
               type="text"
               [(ngModel)]="username"
               name="username"
@@ -303,6 +345,10 @@
               class="toggle-password"
               (click)="togglePasswordVisibility()"
               tabindex="-1"
+              [attr.aria-label]="
+                (showPassword ? 'COMMON.HIDE_PASSWORD' : 'COMMON.SHOW_PASSWORD') | translate
+              "
+              [attr.aria-pressed]="showPassword"
             >
               @if (showPassword) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

@@ -1,7 +1,7 @@
-<div class="portal-page">
+<div class="portal-page health-summary">
   <div class="portal-page-header">
     <h1>
-      <span class="material-symbols-outlined">folder_shared</span>
+      <span class="material-symbols-outlined">favorite</span>
       {{ 'PORTAL.RECORDS.TITLE' | translate }}
     </h1>
   </div>
@@ -12,522 +12,209 @@
       <span>{{ 'PORTAL.RECORDS.LOADING' | translate }}</span>
     </div>
   } @else {
-    <!-- Action bar -->
-    <div class="records-actions">
-      <button class="rec-action-btn" (click)="printRecords()">
-        <span class="material-symbols-outlined">print</span>
-        {{ 'PORTAL.RECORDS.PRINT' | translate }}
-      </button>
-    </div>
+    <!-- Top profile bar -->
+    @if (summary()) {
+      <div class="profile-bar">
+        <div class="profile-stats">
+          @if (summary()!.profile.dateOfBirth) {
+            <span class="profile-stat"
+              >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}:
+              {{ summary()!.profile.dateOfBirth | date: 'mediumDate' }}</span
+            >
+          }
+          @if (summary()!.profile.bloodType) {
+            <span class="profile-stat"
+              >{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}:
+              {{ summary()!.profile.bloodType }}</span
+            >
+          }
+          @if (summary()!.profile.gender) {
+            <span class="profile-stat"
+              >{{ 'PORTAL.RECORDS.GENDER' | translate }}:
+              {{ summary()!.profile.gender | enumLabel: 'gender' }}</span
+            >
+          }
+        </div>
+      </div>
+    }
 
-    <!-- Tabs -->
-    <div class="rec-tabs">
-      @for (tab of tabs; track tab.key) {
-        <button
-          class="rec-tab"
-          [class.active]="activeTab() === tab.key"
-          (click)="activeTab.set(tab.key)"
-        >
-          <span class="material-symbols-outlined">{{ tab.icon }}</span>
-          {{ tab.labelKey | translate }}
-        </button>
-      }
-    </div>
-
-    <!-- Overview -->
-    @if (activeTab() === 'overview') {
-      <div class="rec-section">
-        <h2 class="portal-section-title">{{ 'PORTAL.RECORDS.PERSONAL_INFO' | translate }}</h2>
-        @if (summary()) {
-          <div class="rec-info-grid">
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.NAME' | translate }}</span>
-              <span class="info-value"
-                >{{ summary()!.profile.firstName }} {{ summary()!.profile.lastName }}</span
-              >
-            </div>
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}</span>
-              <span class="info-value">{{
-                summary()!.profile.dateOfBirth | date: 'mediumDate'
-              }}</span>
-            </div>
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.GENDER' | translate }}</span>
-              <span class="info-value">{{ summary()!.profile.gender | enumLabel: 'gender' }}</span>
-            </div>
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}</span>
-              <span class="info-value">{{
-                summary()!.profile.bloodType || ('PORTAL.RECORDS.NOT_RECORDED' | translate)
-              }}</span>
-            </div>
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.PRIMARY_PROVIDER' | translate }}</span>
-              <span class="info-value">{{
-                summary()!.profile.primaryCareProvider ||
-                  ('PORTAL.RECORDS.NOT_ASSIGNED' | translate)
-              }}</span>
-            </div>
-            <div class="rec-info-item">
-              <span class="info-label">{{ 'PORTAL.RECORDS.FACILITY' | translate }}</span>
-              <span class="info-value">{{ summary()!.profile.facility || '—' }}</span>
-            </div>
-          </div>
-        }
-
-        <h2 class="portal-section-title" style="margin-top: 24px">
-          {{ 'PORTAL.RECORDS.ALLERGIES' | translate }}
+    <!-- Dashboard Cards Grid -->
+    <div class="dashboard-grid">
+      <!-- Medications Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #d97706">medication</span>
+          {{ 'PORTAL.RECORDS.MEDICATIONS_TAB' | translate }}
         </h2>
-        @if (summary()?.allergies?.length) {
-          <div class="rec-chip-list">
-            @for (a of summary()!.allergies; track a) {
-              <span class="rec-chip rec-chip-danger">{{ a }}</span>
+        <div class="card-content">
+          @if (medications().length) {
+            @for (m of medications().slice(0, 4); track m.id) {
+              <div class="card-item">
+                <span class="card-item-name">{{ m.medicationName }}</span>
+                @if (m.dosage) {
+                  <span class="card-item-detail">{{ m.dosage }}</span>
+                }
+              </div>
             }
-          </div>
-        } @else {
-          <p class="rec-muted">{{ 'PORTAL.RECORDS.NO_ALLERGIES' | translate }}</p>
-        }
+            @if (medications().length > 4) {
+              <span class="card-more"
+                >+ {{ medications().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+              >
+            }
+          } @else {
+            <p class="card-empty">{{ 'PORTAL.RECORDS.NO_MEDS' | translate }}</p>
+          }
+        </div>
+        <a class="card-link" routerLink="/my-medications">
+          <span class="material-symbols-outlined">arrow_forward</span>
+          {{ 'PORTAL.RECORDS.GO_TO_MEDICATIONS' | translate }}
+        </a>
+      </div>
 
-        <h2 class="portal-section-title" style="margin-top: 24px">
+      <!-- Test Results Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #2563eb">science</span>
+          {{ 'PORTAL.RECORDS.LABS_TAB' | translate }}
+        </h2>
+        <div class="card-content">
+          @if (labs().length) {
+            @for (l of labs().slice(0, 4); track l.id) {
+              <div class="card-item" [class.card-item-abnormal]="l.isAbnormal">
+                <span class="card-item-name">{{ l.testName }}</span>
+                <span class="card-item-detail">{{ l.collectedDate | date: 'MMM d, yyyy' }}</span>
+              </div>
+            }
+            @if (labs().length > 4) {
+              <span class="card-more"
+                >+ {{ labs().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+              >
+            }
+          } @else {
+            <p class="card-empty">{{ 'PORTAL.RECORDS.NO_LABS' | translate }}</p>
+          }
+        </div>
+        <a class="card-link" routerLink="/my-lab-results">
+          <span class="material-symbols-outlined">arrow_forward</span>
+          {{ 'PORTAL.RECORDS.GO_TO_TESTS' | translate }}
+        </a>
+      </div>
+
+      <!-- Current Health Issues Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #dc2626">medical_information</span>
           {{ 'PORTAL.RECORDS.ACTIVE_CONDITIONS' | translate }}
         </h2>
-        @if (summary()?.activeDiagnoses?.length) {
-          <div class="rec-chip-list">
-            @for (d of summary()!.activeDiagnoses; track d) {
-              <span class="rec-chip">{{ d }}</span>
-            }
-          </div>
-        } @else {
-          <p class="rec-muted">{{ 'PORTAL.RECORDS.NO_CONDITIONS' | translate }}</p>
-        }
-      </div>
-    }
-
-    <!-- Encounters -->
-    @if (activeTab() === 'encounters') {
-      <div class="rec-section">
-        @if (!encounters().length) {
-          <div class="portal-empty">
-            <span class="material-symbols-outlined">event_busy</span>
-            <h3>{{ 'PORTAL.RECORDS.NO_VISITS' | translate }}</h3>
-            <p>{{ 'PORTAL.RECORDS.VISITS_DESC' | translate }}</p>
-          </div>
-        } @else {
-          <div class="portal-list">
-            @for (e of encounters(); track e.id) {
-              <div
-                class="portal-list-item expandable"
-                [class.expanded]="expandedId() === e.id"
-                (click)="toggleExpand(e.id)"
-                (keydown.enter)="toggleExpand(e.id)"
-                tabindex="0"
-                role="button"
-              >
-                <div class="pli-icon icon-encounter">
-                  <span class="material-symbols-outlined">stethoscope</span>
-                </div>
-                <div class="pli-body">
-                  <span class="pli-title"
-                    >{{ e.type | enumLabel: 'encounterType' }} — {{ e.providerName }}</span
-                  >
-                  <span class="pli-sub">{{ e.chiefComplaint }}</span>
-                  @if (e.diagnosisSummary) {
-                    <span class="pli-meta"
-                      >{{ 'PORTAL.RECORDS.DIAGNOSIS_PREFIX' | translate }}
-                      {{ e.diagnosisSummary }}</span
-                    >
-                  }
-                  <span class="pli-meta"
-                    >{{ e.date | date: 'mediumDate' }} · {{ e.department }}</span
-                  >
-                </div>
-                <div class="pli-end">
-                  <span class="portal-status-chip" [attr.data-status]="e.status">{{
-                    e.status | enumLabel: 'status'
-                  }}</span>
-                  <span class="material-symbols-outlined expand-arrow">{{
-                    expandedId() === e.id ? 'expand_less' : 'expand_more'
-                  }}</span>
-                </div>
+        <div class="card-content">
+          @if (summary()?.activeDiagnoses?.length) {
+            @for (d of summary()!.activeDiagnoses.slice(0, 5); track d) {
+              <div class="card-item">
+                <span class="card-item-name">{{ d }}</span>
               </div>
-              @if (expandedId() === e.id) {
-                <div class="detail-panel">
-                  <div class="detail-grid">
-                    @if (e.hospitalName) {
-                      <div class="detail-item">
-                        <span class="detail-label">Hospital</span>
-                        <span class="detail-value">{{ e.hospitalName }}</span>
-                      </div>
-                    }
-                    <div class="detail-item">
-                      <span class="detail-label">Department</span>
-                      <span class="detail-value">{{ e.department || '—' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Provider</span>
-                      <span class="detail-value">{{ e.providerName }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Visit Type</span>
-                      <span class="detail-value">{{ e.type | enumLabel: 'encounterType' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Date</span>
-                      <span class="detail-value">{{ e.date | date: 'mediumDate' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Status</span>
-                      <span class="detail-value">{{ e.status | enumLabel: 'status' }}</span>
-                    </div>
-                    @if (e.chiefComplaint) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Chief Complaint</span>
-                        <span class="detail-value">{{ e.chiefComplaint }}</span>
-                      </div>
-                    }
-                    @if (e.diagnosisSummary) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Assessment / Diagnosis</span>
-                        <span class="detail-value">{{ e.diagnosisSummary }}</span>
-                      </div>
-                    }
-                    @if (e.appointmentReason) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Reason for Visit</span>
-                        <span class="detail-value">{{ e.appointmentReason }}</span>
-                      </div>
-                    }
-                    @if (e.notes) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Notes</span>
-                        <span class="detail-value">{{ e.notes }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
             }
-          </div>
-        }
-      </div>
-    }
-
-    <!-- Lab Results -->
-    @if (activeTab() === 'labs') {
-      <div class="rec-section">
-        @if (!labs().length) {
-          <div class="portal-empty">
-            <span class="material-symbols-outlined">science</span>
-            <h3>{{ 'PORTAL.RECORDS.NO_LABS' | translate }}</h3>
-            <p>{{ 'PORTAL.RECORDS.LABS_DESC' | translate }}</p>
-          </div>
-        } @else {
-          <div class="portal-list">
-            @for (l of labs(); track l.id) {
-              <div
-                class="portal-list-item expandable"
-                [class.item-abnormal]="l.isAbnormal"
-                [class.expanded]="expandedId() === l.id"
-                (click)="toggleExpand(l.id)"
-                (keydown.enter)="toggleExpand(l.id)"
-                tabindex="0"
-                role="button"
+            @if (summary()!.activeDiagnoses.length > 5) {
+              <span class="card-more"
+                >+ {{ summary()!.activeDiagnoses.length - 5 }}
+                {{ 'PORTAL.RECORDS.MORE' | translate }}</span
               >
-                <div
-                  class="pli-icon"
-                  [class.icon-danger]="l.isAbnormal"
-                  [class.icon-success]="!l.isAbnormal"
-                >
-                  <span class="material-symbols-outlined">
-                    {{ l.isAbnormal ? 'warning' : 'check_circle' }}
-                  </span>
-                </div>
-                <div class="pli-body">
-                  <span class="pli-title">{{ l.testName }}</span>
-                  <span class="pli-sub"
-                    >{{ 'PORTAL.RECORDS.RESULT_PREFIX' | translate }} {{ l.result }} {{ l.unit }}
-                    <span class="rec-muted"
-                      >({{ 'PORTAL.RECORDS.REF_PREFIX' | translate }} {{ l.referenceRange }})</span
-                    >
-                  </span>
-                  <span class="pli-meta">{{ l.collectedDate | date: 'mediumDate' }}</span>
-                </div>
-                <div class="pli-end">
-                  <span class="portal-status-chip" [attr.data-status]="l.status">{{
-                    l.status | enumLabel: 'status'
-                  }}</span>
-                  <span class="material-symbols-outlined expand-arrow">{{
-                    expandedId() === l.id ? 'expand_less' : 'expand_more'
-                  }}</span>
-                </div>
-              </div>
-              @if (expandedId() === l.id) {
-                <div class="detail-panel">
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span class="detail-label">Test Name</span>
-                      <span class="detail-value">{{ l.testName }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Result</span>
-                      <span class="detail-value" [class.text-danger]="l.isAbnormal"
-                        >{{ l.result }} {{ l.unit }}</span
-                      >
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Reference Range</span>
-                      <span class="detail-value">{{ l.referenceRange || '—' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Status</span>
-                      <span class="detail-value">{{ l.status | enumLabel: 'status' }}</span>
-                    </div>
-                    @if (l.category) {
-                      <div class="detail-item">
-                        <span class="detail-label">Category</span>
-                        <span class="detail-value">{{ l.category }}</span>
-                      </div>
-                    }
-                    <div class="detail-item">
-                      <span class="detail-label">Collected</span>
-                      <span class="detail-value">{{ l.collectedDate | date: 'medium' }}</span>
-                    </div>
-                    @if (l.resultedAt) {
-                      <div class="detail-item">
-                        <span class="detail-label">Resulted</span>
-                        <span class="detail-value">{{ l.resultedAt | date: 'medium' }}</span>
-                      </div>
-                    }
-                    @if (l.orderedBy) {
-                      <div class="detail-item">
-                        <span class="detail-label">Ordered By</span>
-                        <span class="detail-value">{{ l.orderedBy }}</span>
-                      </div>
-                    }
-                    @if (l.performedBy) {
-                      <div class="detail-item">
-                        <span class="detail-label">Performed By</span>
-                        <span class="detail-value">{{ l.performedBy }}</span>
-                      </div>
-                    }
-                    @if (l.notes) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Notes</span>
-                        <span class="detail-value">{{ l.notes }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
             }
-          </div>
-        }
+          } @else {
+            <p class="card-empty">{{ 'PORTAL.RECORDS.NO_CONDITIONS' | translate }}</p>
+          }
+        </div>
+        <a class="card-link" routerLink="/my-medical-history">
+          <span class="material-symbols-outlined">arrow_forward</span>
+          {{ 'PORTAL.RECORDS.GO_TO_HEALTH_ISSUES' | translate }}
+        </a>
       </div>
-    }
 
-    <!-- Medications -->
-    @if (activeTab() === 'medications') {
-      <div class="rec-section">
-        @if (!medications().length) {
-          <div class="portal-empty">
-            <span class="material-symbols-outlined">medication</span>
-            <h3>{{ 'PORTAL.RECORDS.NO_MEDS' | translate }}</h3>
-            <p>{{ 'PORTAL.RECORDS.MEDS_DESC' | translate }}</p>
-          </div>
-        } @else {
-          <div class="portal-list">
-            @for (m of medications(); track m.id) {
-              <div
-                class="portal-list-item expandable"
-                [class.expanded]="expandedId() === m.id"
-                (click)="toggleExpand(m.id)"
-                (keydown.enter)="toggleExpand(m.id)"
-                tabindex="0"
-                role="button"
-              >
-                <div class="pli-icon icon-medication">
-                  <span class="material-symbols-outlined">medication</span>
-                </div>
-                <div class="pli-body">
-                  <span class="pli-title">{{ m.medicationName }}</span>
-                  <span class="pli-sub">{{ m.dosage }} · {{ m.frequency }}</span>
-                  <span class="pli-meta"
-                    >{{ 'PORTAL.RECORDS.PRESCRIBED_BY' | translate }} {{ m.prescribedBy }} ·
-                    {{ m.startDate | date: 'mediumDate' }}</span
-                  >
-                </div>
-                <div class="pli-end">
-                  <span class="portal-status-chip" [attr.data-status]="m.status">{{
-                    m.status | enumLabel: 'status'
-                  }}</span>
-                  <span class="material-symbols-outlined expand-arrow">{{
-                    expandedId() === m.id ? 'expand_less' : 'expand_more'
-                  }}</span>
-                </div>
+      <!-- Immunizations Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #7c3aed">vaccines</span>
+          {{ 'PORTAL.RECORDS.IMMUNIZATIONS_TAB' | translate }}
+        </h2>
+        <div class="card-content">
+          @if (immunizations().length) {
+            @for (im of immunizations().slice(0, 4); track im.id) {
+              <div class="card-item">
+                <span class="card-item-name">{{ im.vaccineName }}</span>
+                <span class="card-item-detail">{{
+                  im.dateAdministered | date: 'MMM d, yyyy'
+                }}</span>
               </div>
-              @if (expandedId() === m.id) {
-                <div class="detail-panel">
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span class="detail-label">Medication</span>
-                      <span class="detail-value">{{ m.medicationName }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Dosage</span>
-                      <span class="detail-value">{{ m.dosage || '—' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Frequency</span>
-                      <span class="detail-value">{{ m.frequency || '—' }}</span>
-                    </div>
-                    @if (m.route) {
-                      <div class="detail-item">
-                        <span class="detail-label">Route</span>
-                        <span class="detail-value">{{ m.route }}</span>
-                      </div>
-                    }
-                    <div class="detail-item">
-                      <span class="detail-label">Prescribed By</span>
-                      <span class="detail-value">{{ m.prescribedBy || '—' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Start Date</span>
-                      <span class="detail-value">{{ m.startDate | date: 'mediumDate' }}</span>
-                    </div>
-                    @if (m.endDate) {
-                      <div class="detail-item">
-                        <span class="detail-label">End Date</span>
-                        <span class="detail-value">{{ m.endDate | date: 'mediumDate' }}</span>
-                      </div>
-                    }
-                    <div class="detail-item">
-                      <span class="detail-label">Status</span>
-                      <span class="detail-value">{{ m.status | enumLabel: 'status' }}</span>
-                    </div>
-                    @if (m.indication) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Indication</span>
-                        <span class="detail-value">{{ m.indication }}</span>
-                      </div>
-                    }
-                    @if (m.instructions) {
-                      <div class="detail-item detail-full">
-                        <span class="detail-label">Instructions</span>
-                        <span class="detail-value">{{ m.instructions }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
-              }
             }
-          </div>
-        }
+            @if (immunizations().length > 4) {
+              <span class="card-more"
+                >+ {{ immunizations().length - 4 }} {{ 'PORTAL.RECORDS.MORE' | translate }}</span
+              >
+            }
+          } @else {
+            <p class="card-empty">{{ 'PORTAL.RECORDS.NO_IMMUNIZATIONS' | translate }}</p>
+          }
+        </div>
       </div>
-    }
 
-    <!-- Immunizations -->
-    @if (activeTab() === 'immunizations') {
-      <div class="rec-section">
-        @if (!immunizations().length) {
-          <div class="portal-empty">
-            <span class="material-symbols-outlined">vaccines</span>
-            <h3>{{ 'PORTAL.RECORDS.NO_IMMUNIZATIONS' | translate }}</h3>
-            <p>{{ 'PORTAL.RECORDS.IMMUNIZATIONS_DESC' | translate }}</p>
-          </div>
-        } @else {
-          <div class="portal-list">
-            @for (im of immunizations(); track im.id) {
-              <div
-                class="portal-list-item expandable"
-                [class.expanded]="expandedId() === im.id"
-                (click)="toggleExpand(im.id)"
-                (keydown.enter)="toggleExpand(im.id)"
-                tabindex="0"
-                role="button"
-              >
-                <div class="pli-icon icon-vaccine">
-                  <span class="material-symbols-outlined">vaccines</span>
-                </div>
-                <div class="pli-body">
-                  <span class="pli-title">{{ im.vaccineName }}</span>
-                  <span class="pli-sub"
-                    >{{ 'PORTAL.RECORDS.ADMINISTERED_BY' | translate }} {{ im.provider }}</span
-                  >
-                  <span class="pli-meta">{{ im.dateAdministered | date: 'mediumDate' }}</span>
-                </div>
-                <div class="pli-end">
-                  <span class="portal-status-chip" [attr.data-status]="im.status">{{
-                    im.status | enumLabel: 'status'
-                  }}</span>
-                  <span class="material-symbols-outlined expand-arrow">{{
-                    expandedId() === im.id ? 'expand_less' : 'expand_more'
-                  }}</span>
-                </div>
-              </div>
-              @if (expandedId() === im.id) {
-                <div class="detail-panel">
-                  <div class="detail-grid">
-                    <div class="detail-item">
-                      <span class="detail-label">Vaccine</span>
-                      <span class="detail-value">{{ im.vaccineName }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Date Administered</span>
-                      <span class="detail-value">{{
-                        im.dateAdministered | date: 'mediumDate'
-                      }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Administered By</span>
-                      <span class="detail-value">{{ im.provider || '—' }}</span>
-                    </div>
-                    <div class="detail-item">
-                      <span class="detail-label">Status</span>
-                      <span class="detail-value">{{ im.status | enumLabel: 'status' }}</span>
-                    </div>
-                    @if (im.doseNumber) {
-                      <div class="detail-item">
-                        <span class="detail-label">Dose</span>
-                        <span class="detail-value"
-                          >{{ im.doseNumber }}
-                          @if (im.totalDosesInSeries) {
-                            of {{ im.totalDosesInSeries }}
-                          }
-                        </span>
-                      </div>
-                    }
-                    @if (im.site) {
-                      <div class="detail-item">
-                        <span class="detail-label">Site</span>
-                        <span class="detail-value">{{ im.site }}</span>
-                      </div>
-                    }
-                    @if (im.route) {
-                      <div class="detail-item">
-                        <span class="detail-label">Route</span>
-                        <span class="detail-value">{{ im.route }}</span>
-                      </div>
-                    }
-                    @if (im.manufacturer) {
-                      <div class="detail-item">
-                        <span class="detail-label">Manufacturer</span>
-                        <span class="detail-value">{{ im.manufacturer }}</span>
-                      </div>
-                    }
-                    @if (im.lotNumber) {
-                      <div class="detail-item">
-                        <span class="detail-label">Lot Number</span>
-                        <span class="detail-value">{{ im.lotNumber }}</span>
-                      </div>
-                    }
-                  </div>
-                </div>
+      <!-- Allergies Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #dc2626">emergency</span>
+          {{ 'PORTAL.RECORDS.ALLERGIES' | translate }}
+        </h2>
+        <div class="card-content">
+          @if (summary()?.allergies?.length) {
+            <div class="rec-chip-list">
+              @for (a of summary()!.allergies; track a) {
+                <span class="rec-chip rec-chip-danger">{{ a }}</span>
               }
-            }
-          </div>
-        }
+            </div>
+          } @else {
+            <p class="card-empty">{{ 'PORTAL.RECORDS.NO_ALLERGIES' | translate }}</p>
+          }
+        </div>
       </div>
-    }
+
+      <!-- Share My Record Card -->
+      <div class="dashboard-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #059669">share</span>
+          {{ 'PORTAL.RECORDS.SHARE_RECORD' | translate }}
+        </h2>
+        <div class="card-content">
+          <p class="card-description">{{ 'PORTAL.RECORDS.SHARE_DESC' | translate }}</p>
+        </div>
+        <a class="card-link" routerLink="/my-sharing">
+          <span class="material-symbols-outlined">arrow_forward</span>
+          {{ 'PORTAL.RECORDS.GO_TO_SHARING' | translate }}
+        </a>
+      </div>
+
+      <!-- Quick Links Card -->
+      <div class="dashboard-card quick-links-card">
+        <h2 class="card-title">
+          <span class="material-symbols-outlined" style="color: #475569">link</span>
+          {{ 'PORTAL.RECORDS.QUICK_LINKS' | translate }}
+        </h2>
+        <div class="card-content">
+          <a class="quick-link" routerLink="/my-visits">
+            {{ 'PORTAL.RECORDS.VISITS_TAB' | translate }}
+            <span class="material-symbols-outlined">chevron_right</span>
+          </a>
+          <a class="quick-link" routerLink="/my-appointments">
+            {{ 'PORTAL.RECORDS.UPCOMING_APPOINTMENTS' | translate }}
+            <span class="material-symbols-outlined">chevron_right</span>
+          </a>
+          <a class="quick-link" routerLink="/my-medical-history">
+            {{ 'PORTAL.RECORDS.MEDICAL_HISTORY' | translate }}
+            <span class="material-symbols-outlined">chevron_right</span>
+          </a>
+          <a class="quick-link" routerLink="/my-care-team">
+            {{ 'PORTAL.RECORDS.CARE_TEAM' | translate }}
+            <span class="material-symbols-outlined">chevron_right</span>
+          </a>
+        </div>
+      </div>
+    </div>
   }
 </div>

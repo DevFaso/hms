@@ -68,3 +68,49 @@ struct PageDTO<T: Codable>: Codable {
     let size: Int?
     let last: Bool?
 }
+
+// MARK: - Pharmacy self-service models
+
+struct PharmacyPaymentDTO: Codable, Identifiable, Hashable {
+    let id: String?
+    let dispenseId: String?
+    let patientId: String?
+    let hospitalId: String?
+    let paymentMethod: String?
+    let amount: Double?
+    let currency: String?
+    let referenceNumber: String?
+    let receivedBy: String?
+    let notes: String?
+    let createdAt: String?
+    let updatedAt: String?
+
+    var displayMethod: String {
+        (paymentMethod ?? "Payment").replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    var displayCurrency: String { currency ?? "XOF" }
+}
+
+struct PharmacyClaimDTO: Codable, Identifiable, Hashable {
+    let id: String?
+    let dispenseId: String?
+    let patientId: String?
+    let hospitalId: String?
+    let coverageReference: String?
+    let claimStatus: String?
+    let amount: Double?
+    let currency: String?
+    let submittedAt: String?
+    let submittedBy: String?
+    let rejectionReason: String?
+    let notes: String?
+    let createdAt: String?
+    let updatedAt: String?
+
+    var displayStatus: String {
+        (claimStatus ?? "Pending").replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    var displayCurrency: String { currency ?? "XOF" }
+}

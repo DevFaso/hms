@@ -433,19 +433,25 @@ export class RecordSharingService {
   }
 
   /**
-   * List all consents (admin/staff view), paginated.
+   * List consents where the given hospital is the receiver, paginated.
+   * When toHospitalId is provided, uses the scoped endpoint so each hospital
+   * only sees consents that grant them access to other hospitals' records.
    */
   listConsents(params?: {
     page?: number;
     size?: number;
+    toHospitalId?: string;
   }): Observable<{ content: PatientConsentResponse[]; totalElements: number; totalPages: number }> {
     let httpParams = new HttpParams();
     if (params?.page != null) httpParams = httpParams.set('page', params.page);
     if (params?.size) httpParams = httpParams.set('size', params.size);
+    const url = params?.toHospitalId
+      ? `/patient-consents/to-hospital/${params.toHospitalId}`
+      : '/patient-consents';
     return this.http.get<{
       content: PatientConsentResponse[];
       totalElements: number;
       totalPages: number;
-    }>('/patient-consents', { params: httpParams });
+    }>(url, { params: httpParams });
   }
 }

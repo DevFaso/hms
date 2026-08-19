@@ -81,7 +81,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.MessageSource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -113,6 +115,33 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+
+    /**
+     * Self-reference injected as a proxy so internal calls
+     * ({@link #backfillMissingPatients()} → {@link #createPatient(PatientRequestDTO, Locale)})
+     * route through the Spring transaction proxy instead of being
+     * direct in-class invocations that bypass it.
+     *
+     * <p>Sonar S6809 ("Call transactional methods via an injected
+     * dependency instead of directly via 'this'"). The outer method
+     * is also {@code @Transactional} so today the inner method's
+     * REQUIRED propagation joins the outer tx anyway and behaviour
+     * is correct — but the inner annotation would become silently
+     * load-bearing the day someone weakens or removes the outer
+     * one. Keep the annotations honest.</p>
+     *
+     * <p>{@code @Lazy} breaks the otherwise-circular constructor
+     * dependency Spring would detect (this bean depending on
+     * itself). Setter injection (rather than adding to the Lombok-
+     * generated {@code @RequiredArgsConstructor}) keeps the existing
+     * constructor untouched.</p>
+     */
+    private PatientService self;
+
+    @Autowired
+    public void setSelf(@Lazy PatientService self) {
+        this.self = self;
+    }
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String MSG_USER_NOT_FOUND_PREFIX = "User not found with ID: ";
@@ -215,13 +244,11 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientResponseDTO> getAllPatients(UUID hospitalId, Locale locale) {
-        // SECURITY: Never return unscoped patient data. hospitalId is mandatory for non-superadmin.
-        if (hospitalId == null) {
-            // Only super-admin can list all patients (caller must have already verified role)
-            if (!roleValidator.isSuperAdminFromAuth()) {
-                throw new com.example.hms.exception.BusinessException(
-                    "Hospital context required to list patients. Please select an active hospital.");
-            }
+        // SECURITY: Never return unscoped patient data. Only super-admin can list all patients
+        // (caller must have already verified role). Sonar S1066 — merged nested if.
+        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
+            throw new com.example.hms.exception.BusinessException(
+                "Hospital context required to list patients. Please select an active hospital.");
         }
 
         List<Patient> patients = (hospitalId != null)
@@ -501,7 +528,9 @@ public class PatientServiceImpl implements PatientService {
                 .emergencyContactRelationship(DEFAULT_UNKNOWN)
                 .isActive(true)
                 .build();
-            createPatient(dto, Locale.ENGLISH);
+            // Sonar S6809: route through the proxy so createPatient's
+            // own @Transactional is honored. See setSelf docstring.
+            self.createPatient(dto, Locale.ENGLISH);
         }
     }
 
@@ -1351,20 +1380,37 @@ public class PatientServiceImpl implements PatientService {
         if (normalized == null) {
             return null;
         }
-        if (requiresIcdValidation(icdVersion) && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
+        IcdValidation validation = pickIcdValidation(icdVersion);
+        if (validation == IcdValidation.ICD10 && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
             throw new BusinessException("Diagnosis code must be a valid ICD-10 value.");
+        }
+        if (validation == IcdValidation.ICD11 && !DiagnosisCodeValidator.isValidIcd11(normalized)) {
+            throw new BusinessException("Diagnosis code must be a valid ICD-11 MMS value.");
         }
         return normalized;
     }
 
-    private boolean requiresIcdValidation(String icdVersion) {
+    /**
+     * Selects which ICD format to enforce. Accepts the same flexible
+     * inputs the UI emits (e.g. {@code "ICD-10"}, {@code "icd10"},
+     * {@code "CIM-10"}, {@code "ICD-11"}, {@code "MMS"}).
+     */
+    private IcdValidation pickIcdValidation(String icdVersion) {
         if (icdVersion == null) {
-            return false;
+            return IcdValidation.NONE;
         }
         String normalized = icdVersion.replaceAll("[^A-Za-z0-9]", "")
             .toUpperCase(Locale.ROOT);
-        return normalized.startsWith("ICD") || normalized.startsWith("CIM");
+        if (normalized.contains("11") || normalized.contains("MMS")) {
+            return IcdValidation.ICD11;
+        }
+        if (normalized.startsWith("ICD") || normalized.startsWith("CIM")) {
+            return IcdValidation.ICD10;
+        }
+        return IcdValidation.NONE;
     }
+
+    private enum IcdValidation { NONE, ICD10, ICD11 }
 
     private boolean isActiveDiagnosis(PatientProblem problem) {
         if (problem == null) {

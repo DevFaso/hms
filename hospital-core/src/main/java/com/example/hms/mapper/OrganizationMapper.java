@@ -30,6 +30,8 @@ public class OrganizationMapper {
             .primaryContactPhone(organization.getPrimaryContactPhone())
             .defaultTimezone(organization.getDefaultTimezone())
             .onboardingNotes(organization.getOnboardingNotes())
+            .lifecycleState(organization.getLifecycleState())
+            .region(organization.getRegion())
             .hospitals(mapHospitalsToMinimal(organization.getHospitals()))
             .build();
     }

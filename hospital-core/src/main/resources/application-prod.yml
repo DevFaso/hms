@@ -61,10 +61,37 @@ management:
 # (V4__seed_roles.sql, V5__seed_default_organization_security.sql).
 # Java-based seeders are disabled in production.
 app:
+  # Splunk HEC: opt-in via SPLUNK_HEC_ENABLED=true on the Railway service. URL + token are
+  # resolved from env vars; SplunkLoggingProperties fails fast at boot if enabled without them.
+  # The HEC URL MUST be HTTPS — that is enforced in SplunkLoggingProperties.validateWhenEnabled.
+  observability:
+    splunk:
+      enabled: ${SPLUNK_HEC_ENABLED:false}
+      hec:
+        url: ${SPLUNK_HEC_URL:}
+        token: ${SPLUNK_HEC_TOKEN:}
+        index: ${SPLUNK_HEC_INDEX:hms_prod}
+        source: ${SPLUNK_HEC_SOURCE:hms-backend}
+        source-type: ${SPLUNK_HEC_SOURCETYPE:spring-boot:json}
+        host: ${SPLUNK_HEC_HOST:}
   seed:
     enabled: false
     synthetic:
       enabled: false
+  # ─── JWT (production: no defaults — env vars are required) ────────────────
+  # JWT_SECRET must be set in Railway env. No dev-default fallback here — the
+  # application fails fast at startup rather than boot with the committed
+  # development secret defined in application.properties.
+  jwt:
+    secret: ${JWT_SECRET}
+  security:
+    totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
+  # ─── PHI field-level encryption (S-05) ────────────────────────────────────
+  # APP_ENCRYPTION_KEY must be a Base64-encoded 32 bytes. No default — prod
+  # boot fails fast if the env var is missing rather than running with PHI
+  # encryption silently disabled.
+  encryption:
+    key: ${APP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
   # Set FRONTEND_BASE_URL=https://hms.bitnesttechs.com in Railway env vars.
   frontend:

@@ -56,6 +56,7 @@ import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -79,6 +80,7 @@ import java.util.stream.Collectors;
 import static com.example.hms.mapper.PatientHospitalRegistrationMapper.joinName;
 
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
@@ -263,6 +265,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
+    private final PatientTrackerEventPublisher trackerEventPublisher;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -349,6 +352,8 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
         // Keep a snapshot before merge for audit
         String previousValues = serializeEncounter(existing);
+        // Snapshot the pre-merge status so we can detect a transition into COMPLETED below.
+        EncounterStatus previousStatus = existing.getStatus();
 
         Encounter merged = encounterMapper.mergeEncounter(
             request,
@@ -364,15 +369,64 @@ public class EncounterServiceImpl implements EncounterService {
         applyEncounterDefaults(merged, ctx.department(), fallbackDate, fallbackStatus);
         ensureEncounterCode(merged);
 
+        // If this update is the one transitioning the encounter into COMPLETED and the
+        // dedicated /checkout endpoint was bypassed, ensure a checkout timestamp is set.
+        // Without it the After-Visit-Summary downstream of this row would have no
+        // discharge date.
+        boolean transitioningToCompleted = merged.getStatus() == EncounterStatus.COMPLETED
+                && previousStatus != EncounterStatus.COMPLETED;
+        if (transitioningToCompleted && merged.getCheckoutTimestamp() == null) {
+            merged.setCheckoutTimestamp(LocalDateTime.now());
+        }
+
         Encounter saved = encounterRepository.save(merged);
 
         if (request.getNote() != null) {
             upsertEncounterNoteInternal(saved, ctx.staff(), request.getNote(), locale, request.getUpdatedBy());
         }
 
+        // Mirror the dedicated checkout flow: whenever an update transitions the
+        // encounter into COMPLETED, persist the matching DischargeSummary so the
+        // patient's After-Visit Summary is populated regardless of which write path
+        // the caller used (PUT /encounters/{id} vs POST /encounters/{id}/checkout).
+        if (transitioningToCompleted) {
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO syntheticCheckout =
+                buildSyntheticCheckoutFromEncounter(saved);
+            try {
+                upsertDischargeSummaryForCheckout(saved, syntheticCheckout, saved.getCheckoutTimestamp());
+                notifyPatientAfterVisitSummary(saved);
+            } catch (RuntimeException ex) {
+                // Persistence of the summary must not abort the encounter update — log
+                // and fall back on the patient-portal backfill which will retry on
+                // first AVS query. Pass the throwable so the full cause/stack is captured;
+                // include patient/hospital IDs to make constraint-violation diagnosis
+                // tractable without grepping by encounter ID.
+                log.warn(
+                    "Failed to persist DischargeSummary on COMPLETED transition for encounter {}, patient {}, hospital {}",
+                    saved.getId(),
+                    saved.getPatient() != null ? saved.getPatient().getId() : null,
+                    saved.getHospital() != null ? saved.getHospital().getId() : null,
+                    ex);
+            }
+        }
+
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
 
         return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    /**
+     * Reconstruct a CheckOutRequestDTO from fields already persisted on the encounter
+     * (follow-up instructions, serialized discharge diagnoses) so a generic
+     * updateEncounter call that flips status to COMPLETED feeds the same AVS
+     * persistence logic as the dedicated checkOut() flow.
+     */
+    private com.example.hms.payload.dto.clinical.CheckOutRequestDTO buildSyntheticCheckoutFromEncounter(Encounter encounter) {
+        com.example.hms.payload.dto.clinical.CheckOutRequestDTO dto =
+            new com.example.hms.payload.dto.clinical.CheckOutRequestDTO();
+        dto.setFollowUpInstructions(encounter.getFollowUpInstructions());
+        dto.setDischargeDiagnoses(checkOutMapper.parseDiagnoses(encounter.getDischargeDiagnoses()));
+        return dto;
     }
 
     @Override
@@ -1047,13 +1101,16 @@ public class EncounterServiceImpl implements EncounterService {
                                            EncounterStatus status,
                                            Pageable pageable,
                                            Locale locale) {
-        // SECURITY: Non-superadmin must always have hospital scope
-        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
-            // Try to resolve from context
+        // ── Tenant isolation ──────────────────────────────────────────
+        // Match the ConsultationServiceImpl.getAllConsultations pattern
+        // (docs/super-admin-cross-tenant-design.md): when no hospitalId
+        // is supplied, fall back to the X-Hospital-Id header. If that
+        // resolution returns null we are guaranteed to be a super-admin
+        // in cross-tenant ("global view") mode — RoleValidator throws
+        // for non-super-admins with no scope — so we leave hospitalId
+        // null and the spec below issues an unscoped findAll.
+        if (hospitalId == null) {
             hospitalId = roleValidator.requireActiveHospitalId();
-            if (hospitalId == null) {
-                throw new BusinessException("Hospital context required to list encounters.");
-            }
         }
 
         Specification<Encounter> spec = alwaysTrue();
@@ -1214,10 +1271,14 @@ public class EncounterServiceImpl implements EncounterService {
 
         // (e) Transition ARRIVED → TRIAGE → WAITING_FOR_PHYSICIAN
         LocalDateTime now = LocalDateTime.now();
+        EncounterStatus previousStatus = encounter.getStatus();
         encounter.setTriageTimestamp(now);
         encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
 
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved,
+                previousStatus != null ? previousStatus.name() : null,
+                EncounterStatus.WAITING_FOR_PHYSICIAN.name());
 
         return com.example.hms.payload.dto.TriageSubmissionResponseDTO.builder()
                 .encounterId(saved.getId())
@@ -1488,6 +1549,7 @@ public class EncounterServiceImpl implements EncounterService {
         LocalDateTime now = LocalDateTime.now();
 
         // (a) Transition encounter → COMPLETED
+        EncounterStatus previousStatus = encounter.getStatus();
         encounter.setStatus(EncounterStatus.COMPLETED);
         encounter.setCheckoutTimestamp(now);
 
@@ -1500,6 +1562,9 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(encounter,
+                previousStatus != null ? previousStatus.name() : null,
+                EncounterStatus.COMPLETED.name());
         upsertDischargeSummaryForCheckout(encounter, request, now);
         notifyPatientAfterVisitSummary(encounter);
 
@@ -1687,6 +1752,8 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.IN_PROGRESS.name());
 
         return encounterMapper.toEncounterResponseDTO(saved);
     }
@@ -1714,6 +1781,8 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
         Encounter saved = encounterRepository.save(encounter);
 
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.WAITING_FOR_PHYSICIAN.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
@@ -1772,6 +1841,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(next);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(), next.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
@@ -1811,6 +1881,8 @@ public class EncounterServiceImpl implements EncounterService {
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
         Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved, current.name(),
+                EncounterStatus.READY_FOR_DISCHARGE.name());
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 

@@ -41,6 +41,10 @@ import java.util.UUID;
 public class StaffServiceImpl implements StaffService {
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // i18n key for "staff not found" appears 3x in this file.
+    // Naming follows the existing *_NOT_FOUND_KEY siblings above.
+    private static final String STAFF_NOT_FOUND_KEY = "staff.notFound";
 
     // Find staff by user email
     @Transactional(readOnly = true)
@@ -272,7 +276,7 @@ public class StaffServiceImpl implements StaffService {
     public void updateStaffDepartment(String staffEmail, String departmentName, String hospitalName, Locale locale) {
         Staff staff = userRepository.findByEmail(staffEmail)
             .flatMap(user -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId()))
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("staff.notFound", new Object[]{staffEmail}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{staffEmail}, locale)));
 
         Hospital hospital = hospitalRepository.findByName(hospitalName)
             .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{hospitalName}, locale)));
@@ -368,7 +372,7 @@ public class StaffServiceImpl implements StaffService {
     private Staff findStaffOrThrow(UUID id, Locale locale) {
         Staff staff = staffRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("staff.notFound", new Object[]{id}, locale)
+                getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{id}, locale)
             ));
         assertStaffAccessible(staff, locale);
         return staff;
@@ -536,7 +540,7 @@ public class StaffServiceImpl implements StaffService {
 
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                getLocalizedMessage("staff.notFound", new Object[]{staffId}, locale)));
+                getLocalizedMessage(STAFF_NOT_FOUND_KEY, new Object[]{staffId}, locale)));
 
         // Verify the staff belongs to the caller's hospital scope
         requireHospitalScope(staff.getHospital().getId());

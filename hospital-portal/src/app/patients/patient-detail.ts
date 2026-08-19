@@ -19,6 +19,11 @@ import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
+import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
+import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
+import { ChartReviewComponent } from './chart-review/chart-review.component';
+import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type TabKey =
   | 'overview'
@@ -32,7 +37,18 @@ type TabKey =
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, PatientChartComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    PatientChartComponent,
+    BpaPanelComponent,
+    StoryboardBannerComponent,
+    ChartReviewComponent,
+    BreakGlassBannerComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',
 })
@@ -87,6 +103,11 @@ export class PatientDetailComponent implements OnInit {
     }
     this.patientId = id;
     this.loadPatient(id);
+  }
+
+  /** Active hospital for the caller. Null when no scope is selected (e.g. SUPER_ADMIN unscoped view). */
+  currentHospitalId(): string | null {
+    return this.roleContext.activeHospitalId ?? null;
   }
 
   loadPatient(id: string): void {

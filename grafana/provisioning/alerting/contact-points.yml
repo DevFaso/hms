@@ -1,0 +1,59 @@
+# Grafana Unified Alerting — contact points (provisioned).
+# Re-provisioned on every Grafana restart (orgId 1 only).
+#
+# OUT OF THE BOX this only provisions a `default-grafana` receiver that
+# captures every alert in the Grafana UI ("Alerting → Contact points").
+# Production stacks should add their own PagerDuty / Opsgenie / Slack
+# integration — see the commented-out example below.
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: default-grafana
+    receivers:
+      - uid: default-grafana
+        type: email
+        # SMTP is not configured by default — alerts still appear in the
+        # Grafana UI even when the email cannot be delivered. Configure
+        # [smtp] in grafana.ini and replace the address below in production.
+        settings:
+          addresses: alerts@example.invalid
+          singleEmail: true
+        disableResolveMessage: false
+
+  # ── Example: Slack via incoming webhook ─────────────────────────────
+  # Uncomment AND set GRAFANA_SLACK_WEBHOOK_URL on the grafana container
+  # in docker-compose.yml. Then add a route in notification-policies.yml
+  # to send `severity = page` here.
+  #
+  # - orgId: 1
+  #   name: slack-oncall
+  #   receivers:
+  #     - uid: slack-oncall
+  #       type: slack
+  #       settings:
+  #         url: ${GRAFANA_SLACK_WEBHOOK_URL}
+  #         recipient: "#hms-oncall"
+  #         username: HMS-Grafana
+  #         title: "{{ template \"slack.default.title\" . }}"
+  #         text: |
+  #           {{ range .Alerts }}
+  #           *{{ .Status | toUpper }}* {{ .Labels.alertname }}
+  #           {{ .Annotations.summary }}
+  #           {{ .Annotations.description }}
+  #           {{ if .Annotations.runbook_url }}*Runbook:* {{ .Annotations.runbook_url }}{{ end }}
+  #           {{ end }}
+  #       disableResolveMessage: false
+
+  # ── Example: PagerDuty ──────────────────────────────────────────────
+  # - orgId: 1
+  #   name: pagerduty
+  #   receivers:
+  #     - uid: pagerduty
+  #       type: pagerduty
+  #       settings:
+  #         integrationKey: ${PAGERDUTY_INTEGRATION_KEY}
+  #         severity: "{{ .CommonLabels.severity }}"
+  #         class: "{{ .CommonLabels.service }}"
+  #         component: hms

@@ -12,6 +12,15 @@
   }
 
   @if (!loading() && patient(); as p) {
+    <!-- Persistent Storyboard banner — allergies / problems / active encounter / code status -->
+    <app-storyboard-banner [patientId]="p.id" />
+
+    <!-- Break-the-glass: live emergency-access banner / declare modal (gated to clinical roles) -->
+    <app-break-glass-banner [patientId]="p.id" [hospitalId]="currentHospitalId()" />
+
+    <!-- Best-Practice Advisories — runs the patient-view CDS hook on chart load -->
+    <app-bpa-panel [patientId]="p.id" />
+
     <!-- Header -->
     <div class="detail-header">
       <div class="patient-avatar-lg">{{ getInitials(p) }}</div>
@@ -79,6 +88,14 @@
         </button>
       }
       @if (canViewEncounters()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'chart'"
+          (click)="setTab('chart')"
+          [title]="'CHART_REVIEW.TAB_TITLE' | translate"
+        >
+          {{ 'CHART_REVIEW.TAB_LABEL' | translate }}
+        </button>
         <button
           class="tab"
           [class.active]="activeTab() === 'encounters'"
@@ -219,6 +236,11 @@
           </p>
         </div>
       </div>
+    }
+
+    <!-- ═══ Chart Review Tab ═══ -->
+    @if (activeTab() === 'chart' && canViewEncounters()) {
+      <app-chart-review [patientId]="p.id" />
     }
 
     <!-- ═══ Vitals Tab ═══ -->
@@ -383,7 +405,9 @@
                   <td>{{ enc.staffFullName || enc.staffName || '—' }}</td>
                   <td>{{ enc.departmentName || '—' }}</td>
                   <td>
-                    <span [class]="getEncounterStatusClass(enc.status)">{{ enc.status }}</span>
+                    <span [class]="getEncounterStatusClass(enc.status)">{{
+                      enc.status | enumLabel: 'encounterStatus'
+                    }}</span>
                   </td>
                   <td class="notes-cell">{{ enc.notes || '—' }}</td>
                 </tr>
@@ -429,7 +453,9 @@
                   <td>{{ appt.staffName || '—' }}</td>
                   <td>{{ appt.reason || '—' }}</td>
                   <td>
-                    <span [class]="getApptStatusClass(appt.status)">{{ appt.status }}</span>
+                    <span [class]="getApptStatusClass(appt.status)">{{
+                      appt.status | enumLabel: 'appointmentStatus'
+                    }}</span>
                   </td>
                 </tr>
               }

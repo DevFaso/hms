@@ -105,7 +105,7 @@
   .input-icon {
     position: absolute;
     left: 12px;
-    color: #9ca3af;
+    color: #6b7280;
     pointer-events: none;
   }
 
@@ -130,7 +130,7 @@
     }
 
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
 
     &:disabled {
@@ -196,7 +196,7 @@
 }
 
 .link-separator {
-  color: #cbd5e1;
+  color: #64748b;
   font-size: 0.875rem;
 }
 
@@ -264,7 +264,7 @@
 
   p {
     font-size: 0.75rem;
-    color: #9ca3af;
+    color: #6b7280;
     margin: 0;
   }
 }
@@ -590,4 +590,43 @@
     opacity: 0.5;
     cursor: not-allowed;
   }
+}
+
+// KC-2b: SSO button + divider above legacy login form.
+.btn-sso {
+  background: #1f2937;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+.sso-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  span {
+    padding: 0 0.75rem;
+  }
+}
+
+// KC-2b (G-8): "SSO temporarily unavailable" banner shown when
+// environment.oidc.enabled is true but the issuer's discovery
+// document could not be fetched at bootstrap.
+.sso-unavailable {
+  display: block;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #fde68a;
+  background: #fef3c7;
+  color: #78350f;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }

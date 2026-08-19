@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -14,6 +15,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class AuditEventLogResponseDTO {
+
+    /** AuditEventLog primary key. Exposed so the cross-tenant audit search
+     * UI (MVP-8) can track table rows by a guaranteed-unique value rather
+     * than a fingerprint composed of nullable fields (PR #228 review). */
+    private UUID id;
 
     private String userName;
     private String hospitalName;
@@ -29,4 +35,6 @@ public class AuditEventLogResponseDTO {
     private String entityType;
     private String actorType;
     private String actorLabel;
+    private UUID impersonatorUserId;
+    private String impersonatorUsername;
 }

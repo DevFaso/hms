@@ -8,17 +8,31 @@ import {
   PrescriptionService,
   PrescriptionResponse,
   PrescriptionRequest,
+  CommunityPharmacyService,
+  CommunityPharmacyOption,
 } from '../services/prescription.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
+import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CdsCardListComponent,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './prescriptions.html',
   styleUrl: './prescriptions.scss',
 })
@@ -29,6 +43,13 @@ export class PrescriptionsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
+  private readonly communityPharmacyService = inject(CommunityPharmacyService);
+  private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly translate = inject(TranslateService);
+
+  /** Cross-tenant signals — drive the chip + Hospital column toggle. */
+  protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+  protected readonly globalView = this.roleContext.globalView;
 
   prescriptions = signal<PrescriptionResponse[]>([]);
   filtered = signal<PrescriptionResponse[]>([]);
@@ -58,7 +79,20 @@ export class PrescriptionsComponent implements OnInit {
   deletingRx = signal<PrescriptionResponse | null>(null);
   deleting = signal(false);
 
+  /** CDS rule-engine cards from the most recent submit attempt. */
+  cdsAdvisories = signal<CdsCard[]>([]);
+  /**
+   * True when the backend last rejected the submit with a critical CDS
+   * advisory. Surfaces the override checkbox in the form.
+   */
+  cdsCriticalBlocked = signal(false);
+
   ngOnInit(): void {
+    // Cross-tenant: hydrate URL scope before the first list fetch so
+    // the auth interceptor sends the right X-Hospital-Id (or omits it
+    // for global view). See docs/super-admin-cross-tenant-design.md.
+    this.scopeUrl.applyUrlScopeSync(this.route);
+
     this.load();
     this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
     this.initPatientSearch();
@@ -78,13 +112,18 @@ export class PrescriptionsComponent implements OnInit {
     }
   }
 
+  // Status filter dropdown. The wire `value` is the raw enum (preserved for
+  // API/DB equality checks); `labelKey` points at the canonical
+  // PORTAL.ENUM.PRESCRIPTION_STATUS namespace introduced in
+  // feat/i18n-enum-label-pipe-phase1, so this UI no longer carries its own
+  // duplicate translation namespace (PR #256 keys removed in Phase 2/3).
   prescriptionStatuses = [
-    { value: 'DRAFT', label: 'Draft' },
-    { value: 'PENDING_SIGNATURE', label: 'Pending Signature' },
-    { value: 'SIGNED', label: 'Signed' },
-    { value: 'TRANSMITTED', label: 'Transmitted' },
-    { value: 'CANCELLED', label: 'Cancelled' },
-    { value: 'DISCONTINUED', label: 'Discontinued' },
+    { value: 'DRAFT', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DRAFT' },
+    { value: 'PENDING_SIGNATURE', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.PENDING_SIGNATURE' },
+    { value: 'SIGNED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.SIGNED' },
+    { value: 'TRANSMITTED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.TRANSMITTED' },
+    { value: 'CANCELLED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED' },
+    { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
   ];
 
   emptyForm(): PrescriptionRequest {
@@ -181,6 +220,7 @@ export class PrescriptionsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    this.resetCdsState();
   }
 
   submitForm(): void {
@@ -189,17 +229,71 @@ export class PrescriptionsComponent implements OnInit {
       ? this.prescriptionService.update(this.editingId()!, this.form)
       : this.prescriptionService.create(this.form);
     op.subscribe({
-      next: () => {
-        this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
-        this.closeModal();
+      next: (saved) => {
+        const advisories = saved?.cdsAdvisories ?? [];
+        this.cdsAdvisories.set(advisories);
+        this.cdsCriticalBlocked.set(false);
+        this.toast.success(
+          this.translate.instant(
+            this.editing() ? 'PRESCRIPTIONS.TOAST.UPDATED' : 'PRESCRIPTIONS.TOAST.CREATED',
+          ),
+        );
         this.saving.set(false);
         this.load();
+        // Only auto-close when there is nothing for the clinician to
+        // see; otherwise the closeModal() reset would erase the
+        // warning/info cards we just attached.
+        if (advisories.length === 0) {
+          this.closeModal();
+        }
       },
-      error: () => {
-        this.toast.error('Save failed');
+      error: (err) => {
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0) {
+          // Stay in the modal — backend has signalled a critical
+          // block. Render the structured cards verbatim and expose
+          // the forceOverride checkbox for re-submission.
+          this.cdsAdvisories.set(cards);
+          this.cdsCriticalBlocked.set(true);
+          this.toast.error(this.extractErrorMessage(err));
+        } else {
+          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'));
+        }
         this.saving.set(false);
       },
     });
+  }
+
+  /** Cleared when the modal closes so a stale advisory does not leak between rxes. */
+  resetCdsState(): void {
+    this.cdsAdvisories.set([]);
+    this.cdsCriticalBlocked.set(false);
+    this.form.forceOverride = undefined;
+  }
+
+  /** Allow the clinician to dismiss non-blocking advisories without re-submitting. */
+  dismissAdvisories(): void {
+    this.resetCdsState();
+    this.closeModal();
+  }
+
+  private extractErrorMessage(err: unknown): string {
+    if (err && typeof err === 'object') {
+      const e = err as { error?: { message?: string }; message?: string };
+      return e.error?.message ?? e.message ?? '';
+    }
+    return '';
+  }
+
+  /**
+   * Pulls the structured `cdsAdvisories` array off the error response
+   * body. The backend `CdsCriticalBlockException` handler returns
+   * `{ message, cdsAdvisories: CdsCard[], ... }` with status 400.
+   */
+  private extractCdsCards(err: unknown): CdsCard[] {
+    if (!err || typeof err !== 'object') return [];
+    const body = (err as { error?: { cdsAdvisories?: CdsCard[] } }).error;
+    return body?.cdsAdvisories ?? [];
   }
 
   confirmDelete(p: PrescriptionResponse): void {
@@ -214,16 +308,21 @@ export class PrescriptionsComponent implements OnInit {
     this.deleting.set(true);
     this.prescriptionService.delete(this.deletingRx()!.id).subscribe({
       next: () => {
-        this.toast.success('Prescription deleted');
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.load();
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
+  }
+
+  /** Re-fetch under the new cross-tenant scope when the chip emits. */
+  onScopeChange(_hospitalId: string | null): void {
+    this.load();
   }
 
   load(): void {
@@ -236,7 +335,7 @@ export class PrescriptionsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load prescriptions');
+        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -270,6 +369,57 @@ export class PrescriptionsComponent implements OnInit {
   }
   closeDetail(): void {
     this.selectedPrescription.set(null);
+  }
+
+  /* ── SMS dispatch ────────────────────────────────────────── */
+  showDispatchModal = signal(false);
+  dispatchTarget = signal<PrescriptionResponse | null>(null);
+  pharmacyOptions = signal<CommunityPharmacyOption[]>([]);
+  dispatchPharmacyId = '';
+  dispatchNote = '';
+  dispatching = signal(false);
+
+  openDispatchModal(p: PrescriptionResponse): void {
+    this.dispatchTarget.set(p);
+    this.dispatchPharmacyId = '';
+    this.dispatchNote = '';
+    this.showDispatchModal.set(true);
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.communityPharmacyService.list(hospitalId).subscribe({
+      next: (list) => this.pharmacyOptions.set(list ?? []),
+      error: () => this.pharmacyOptions.set([]),
+    });
+  }
+
+  closeDispatchModal(): void {
+    this.showDispatchModal.set(false);
+    this.dispatchTarget.set(null);
+    this.dispatchPharmacyId = '';
+    this.dispatchNote = '';
+  }
+
+  submitDispatch(): void {
+    const target = this.dispatchTarget();
+    if (!target || !this.dispatchPharmacyId || this.dispatching()) return;
+    this.dispatching.set(true);
+    this.prescriptionService
+      .dispatchSms(target.id, this.dispatchPharmacyId, this.dispatchNote || undefined)
+      .subscribe({
+        next: (result) => {
+          this.dispatching.set(false);
+          this.toast.success(
+            this.translate.instant('PRESCRIPTIONS.TOAST.SMS_SENT', {
+              pharmacy: result.pharmacyName,
+            }),
+          );
+          this.closeDispatchModal();
+        },
+        error: (err) => {
+          this.dispatching.set(false);
+          const msg = err?.error?.message || 'Could not dispatch the prescription SMS';
+          this.toast.error(msg);
+        },
+      });
   }
 
   getStatusClass(status?: string): string {

@@ -14,6 +14,18 @@ import java.util.UUID;
 @Repository
 public interface PrescriptionRepository extends JpaRepository<Prescription, UUID> {
 
+    /**
+     * SUPER_ADMIN cross-tenant fallback list. Overrides {@link JpaRepository#findAll(Pageable)}
+     * so the same {@link EntityGraph} as the hospital-scoped queries is applied — without it
+     * the mapper triggers lazy proxy initialisation per row, and any dangling FK
+     * (e.g. a Patient hard-deleted while a Prescription still references it) raises
+     * {@link jakarta.persistence.EntityNotFoundException} → 500 from
+     * {@code GlobalExceptionHandler.handleEntityNotFound}.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    Page<Prescription> findAll(Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByPatient_Id(UUID patientId, Pageable pageable);
 
@@ -41,4 +53,11 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
 
     /** Count prescriptions by prescribing staff and status (e.g. PENDING_CLARIFICATION). */
     long countByStaff_IdAndStatus(UUID staffId, PrescriptionStatus status);
+
+    /** Pharmacist work queue: dispensable prescriptions at a hospital, ordered by creation date. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
+
+    /** Hospital-scoped tile count for the super-admin dashboard. */
+    long countByHospital_Id(UUID hospitalId);
 }

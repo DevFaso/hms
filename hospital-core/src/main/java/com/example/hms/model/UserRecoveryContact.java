@@ -52,4 +52,14 @@ public class UserRecoveryContact extends BaseEntity {
 
     @Column(name = "notes", length = 255)
     private String notes;
+
+    @Column(name = "verification_code_hash", length = 255)
+    private String verificationCodeHash;
+
+    @Column(name = "verification_code_expires_at")
+    private LocalDateTime verificationCodeExpiresAt;
+
+    @Builder.Default
+    @Column(name = "verification_attempts", nullable = false)
+    private int verificationAttempts = 0;
 }

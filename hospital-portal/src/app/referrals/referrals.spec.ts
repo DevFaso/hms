@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
@@ -40,9 +41,21 @@ describe('ReferralsComponent', () => {
   };
 
   beforeEach(async () => {
-    roleContextStub = jasmine.createSpyObj('RoleContextService', [], {
-      isSuperAdmin: signal(false),
-    });
+    // Cross-tenant chip injects RoleContextService and reads three
+    // signals (isSuperAdmin / globalView / selectedHospitalId) plus two
+    // mutators (scopeToHospital / enableGlobalView). The chip itself
+    // also calls `effectiveHospitalIdForRequest()` indirectly via the
+    // auth interceptor, but in unit tests `provideHttpClientTesting()`
+    // bypasses interceptors entirely so we don't need to stub it.
+    roleContextStub = jasmine.createSpyObj(
+      'RoleContextService',
+      ['scopeToHospital', 'enableGlobalView'],
+      {
+        isSuperAdmin: signal(false),
+        globalView: signal(false),
+        selectedHospitalId: signal<string | null>(null),
+      },
+    );
     authStub = jasmine.createSpyObj('AuthService', ['getUserProfile']);
     authStub.getUserProfile.and.returnValue({ staffId: 'staff-1' } as any);
 
@@ -51,6 +64,7 @@ describe('ReferralsComponent', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: RoleContextService, useValue: roleContextStub },
         { provide: AuthService, useValue: authStub },
       ],
@@ -160,5 +174,136 @@ describe('ReferralsComponent', () => {
   it('hospitalLocked should be true for non-super-admin', () => {
     flushInitRequests();
     expect(component.hospitalLocked).toBeTrue();
+  });
+
+  // ── P1 #12 lifecycle transitions ──────────────────────────────────────
+
+  it('executeSchedule posts to /referrals/{id}/schedule with appointment time + location', () => {
+    flushInitRequests();
+    component.schedulingRef.set({ id: 'r1', patientName: 'X' } as any);
+    component.scheduleAppointmentTime = '2026-06-01T09:30';
+    component.scheduleLocation = 'Clinic 4';
+
+    component.executeSchedule();
+
+    const req = httpMock.expectOne('/referrals/r1/schedule');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      appointmentTime: '2026-06-01T09:30',
+      location: 'Clinic 4',
+    });
+    req.flush({ id: 'r1', status: 'SCHEDULED' });
+    httpMock.match((r) => r.url.includes('/referrals')).forEach((r) => r.flush([]));
+    httpMock.match((r) => r.url.includes('/hospitals')).forEach((r) => r.flush([]));
+  });
+
+  it('executeSchedule is a no-op when appointment time is empty', () => {
+    flushInitRequests();
+    component.schedulingRef.set({ id: 'r1' } as any);
+    component.scheduleAppointmentTime = '';
+
+    component.executeSchedule();
+
+    httpMock.expectNone('/referrals/r1/schedule');
+    expect(component.actionLoading()).toBeFalse();
+  });
+
+  it('startReferral posts to /referrals/{id}/start with empty body', () => {
+    flushInitRequests();
+
+    component.startReferral({ id: 'r2' } as any);
+
+    const req = httpMock.expectOne('/referrals/r2/start');
+    expect(req.request.method).toBe('POST');
+    req.flush({ id: 'r2', status: 'IN_PROGRESS' });
+    httpMock.match((r) => r.url.includes('/referrals')).forEach((r) => r.flush([]));
+    httpMock.match((r) => r.url.includes('/hospitals')).forEach((r) => r.flush([]));
+  });
+
+  it('executeReject posts to /referrals/{id}/reject with reason', () => {
+    flushInitRequests();
+    component.rejectingRef.set({ id: 'r3', patientName: 'Y' } as any);
+    component.rejectReason = 'Out of scope';
+
+    component.executeReject();
+
+    const req = httpMock.expectOne('/referrals/r3/reject');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ reason: 'Out of scope' });
+    req.flush({ id: 'r3', status: 'REJECTED' });
+    httpMock.match((r) => r.url.includes('/referrals')).forEach((r) => r.flush([]));
+    httpMock.match((r) => r.url.includes('/hospitals')).forEach((r) => r.flush([]));
+  });
+
+  it('executeReject is a no-op when reason is blank', () => {
+    flushInitRequests();
+    component.rejectingRef.set({ id: 'r3' } as any);
+    component.rejectReason = '   ';
+
+    component.executeReject();
+
+    httpMock.expectNone('/referrals/r3/reject');
+    expect(component.actionLoading()).toBeFalse();
+  });
+
+  it('getStatusClass maps SCHEDULED to active and REJECTED/EXPIRED to expected groups', () => {
+    flushInitRequests();
+    expect(component.getStatusClass('SCHEDULED')).toBe('status-active');
+    expect(component.getStatusClass('REJECTED')).toBe('status-cancelled');
+    expect(component.getStatusClass('EXPIRED')).toBe('status-overdue');
+  });
+
+  it('applyFilter "active" tab includes SCHEDULED referrals', () => {
+    flushInitRequests();
+    component.referrals.set([
+      { id: 'a', status: 'ACKNOWLEDGED' } as any,
+      { id: 's', status: 'SCHEDULED' } as any,
+      { id: 'd', status: 'DRAFT' } as any,
+    ]);
+    component.setTab('active');
+    expect(
+      component
+        .filtered()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['a', 's']);
+  });
+
+  it('applyFilter "completed" tab includes REJECTED and EXPIRED referrals', () => {
+    flushInitRequests();
+    component.referrals.set([
+      { id: 'c', status: 'COMPLETED' } as any,
+      { id: 'r', status: 'REJECTED' } as any,
+      { id: 'e', status: 'EXPIRED' } as any,
+      { id: 'p', status: 'SUBMITTED' } as any,
+    ]);
+    component.setTab('completed');
+    expect(
+      component
+        .filtered()
+        .map((r) => r.id)
+        .sort(),
+    ).toEqual(['c', 'e', 'r']);
+  });
+
+  it('countByGroup matches the row count shown when each tab is active', () => {
+    flushInitRequests();
+    component.referrals.set([
+      { id: 'd', status: 'DRAFT' } as any,
+      { id: 's', status: 'SUBMITTED' } as any,
+      { id: 'a', status: 'ACKNOWLEDGED' } as any,
+      { id: 'sc', status: 'SCHEDULED' } as any,
+      { id: 'ip', status: 'IN_PROGRESS' } as any,
+      { id: 'co', status: 'COMPLETED' } as any,
+      { id: 'ca', status: 'CANCELLED' } as any,
+      { id: 're', status: 'REJECTED' } as any,
+      { id: 'ex', status: 'EXPIRED' } as any,
+    ]);
+    for (const tab of ['pending', 'active', 'completed'] as const) {
+      component.setTab(tab);
+      expect(component.countByGroup(tab))
+        .withContext(`badge count for ${tab} tab must equal filtered row count`)
+        .toBe(component.filtered().length);
+    }
   });
 });

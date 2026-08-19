@@ -36,6 +36,15 @@ public class AdmissionResponseDTO {
     private UUID admittingProviderId;
     private String admittingProviderName;
 
+    /**
+     * Most-recent non-terminal encounter for this admission's patient at the
+     * admission's hospital, when one exists. Populated by the mapper so the
+     * frontend (CPOE order-set picker, etc.) can attach orders to the right
+     * clinical context without an extra round-trip. Null when no open
+     * encounter exists at this hospital.
+     */
+    private UUID currentEncounterId;
+
     private UUID departmentId;
     private String departmentName;
 

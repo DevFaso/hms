@@ -1,9 +1,24 @@
 apiVersion: 1
 
+# Stable UIDs let dashboards reference these datasources by `uid` (e.g.
+# `"datasource": { "type": "prometheus", "uid": "hms-prometheus" }`)
+# instead of relying on a templating variable that the user has to pick.
 datasources:
   - name: Prometheus
+    uid: hms-prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Loki
+    uid: hms-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: true
+    jsonData:
+      maxLines: 1000

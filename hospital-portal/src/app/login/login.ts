@@ -1,11 +1,25 @@
 import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  PLATFORM_ID,
+  ViewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { catchError, of } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { AuthService, type LoginUserProfile } from '../auth/auth.service';
+import {
+  AuthService,
+  type LoginUserProfile,
+  type SessionBootstrapResponse,
+} from '../auth/auth.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
 @Component({
@@ -15,7 +29,17 @@ import { RoleContextService } from '../core/role-context.service';
   templateUrl: './login.html',
   styleUrls: ['./login.scss'],
 })
-export class Login implements OnInit {
+export class Login implements OnInit, AfterViewInit {
+  /**
+   * v1.0 row 11: keyboard-first staff (receptionists, data clerks) land
+   * on /login on every shift change. Programmatic focus on
+   * `#usernameInput` after the view paints — preferred over the HTML
+   * `autofocus` attribute because `autofocus` fires before assistive
+   * tech is ready and can steal focus mid-page-load. See
+   * docs/ui/accessibility.md §6.8.
+   */
+  @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+
   username = '';
   password = '';
   error = '';
@@ -56,13 +80,54 @@ export class Login implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
+  /**
+   * KC-2b: true when SSO is enabled <em>and</em> the issuer is reachable
+   * (i.e. Keycloak discovery succeeded). Bound to the SSO button —
+   * hides the button automatically when Keycloak is unreachable so the
+   * user falls back to the legacy form rather than tripping over a 502.
+   */
+  get oidcLoginEnabled(): boolean {
+    return this.oidcAuth.isAvailable();
+  }
+
+  /**
+   * KC-2b: true when SSO was configured but discovery failed. Drives the
+   * "temporarily unavailable" banner above the legacy form so the user
+   * understands why the SSO button vanished.
+   */
+  get oidcDiscoveryFailed(): boolean {
+    return this.oidcAuth.isEnabled() && this.oidcAuth.discoveryFailed();
+  }
+
+  /** KC-2b: kick off Authorization Code + PKCE — browser navigates to Keycloak. */
+  loginWithKeycloak(): void {
+    if (!this.isBrowser || !this.oidcLoginEnabled) return;
+    this.error = '';
+    this.oidcAuth.login();
+  }
+
   ngOnInit(): void {
     if (!this.isBrowser) return;
     this.checkBootstrapStatus();
+  }
+
+  /**
+   * v1.0 row 11: focus the username input on initial paint. Skipped
+   * when bootstrap or role-selection modes are active — those modes
+   * render a different first field and we don't want to steal focus
+   * from the field the user actually needs.
+   */
+  ngAfterViewInit(): void {
+    if (!this.isBrowser) return;
+    if (this.bootstrapMode || this.roleSelectionMode) return;
+    // queueMicrotask defers one tick past Angular's first change-
+    // detection cycle so the @ViewChild is populated.
+    queueMicrotask(() => this.usernameInput?.nativeElement.focus({ preventScroll: true }));
   }
 
   /** Check if the system needs initial setup (no users exist) */
@@ -190,6 +255,9 @@ export class Login implements OnInit {
         hospitalIds?: string[];
         roleSelectionRequired?: boolean;
         availableRoles?: string[];
+        mfaRequired?: boolean;
+        mfaEnrolled?: boolean;
+        mfaToken?: string;
       }>('/auth/login', payload)
       .subscribe({
         next: (res) => {
@@ -198,6 +266,30 @@ export class Login implements OnInit {
             this.availableRoles = res.availableRoles;
             this.roleSelectionMode = true;
             this.loading = false;
+            return;
+          }
+
+          // ── MFA gate (T-33): redirect to challenge or enrollment ──
+          if (res?.mfaRequired) {
+            this.loading = false;
+            if (res.mfaEnrolled) {
+              this.router.navigateByUrl('/mfa-challenge', {
+                state: {
+                  mfaToken: res.mfaToken,
+                  mfaEnrolled: true,
+                  username: res.username ?? this.username,
+                },
+              });
+            } else {
+              // User needs to enroll — pass the MFA token via router state
+              // so the enrollment page can authenticate with it.
+              this.router.navigateByUrl('/mfa-enroll', {
+                state: {
+                  mfaToken: res.mfaToken,
+                  username: res.username ?? this.username,
+                },
+              });
+            }
             return;
           }
 
@@ -216,62 +308,127 @@ export class Login implements OnInit {
             this.auth.setRefreshToken(res.refreshToken, this.remember);
           }
 
-          // Hydrate role context immediately so the interceptor sends X-Hospital-Id
-          // on all subsequent requests (including the very first one after redirect).
+          // Seed role context from JWT immediately so the UI has provisional
+          // role information before the session bootstrap response arrives.
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
-
-          // For multi-role users the JWT now contains only the chosen role.
-          // For single-role users setRoles() already sets activeRole automatically.
           if (jwtRoles.length === 1) {
             this.roleContext.activeRole = jwtRoles[0];
           }
+          // Cross-tenant (design call #5): super-admins land on every list
+          // page in "all hospitals" mode by default. Without this seed,
+          // _globalView stays at its default (false) and the auth
+          // interceptor falls back to _activeHospitalId — silently
+          // scoping every request to the JWT primary hospital even
+          // though the dropdown shows "All hospitals". That mismatch
+          // showed up as "/consultations returns [] but tile says 3"
+          // for super-admins whose primary hospital had no consultations.
+          // app.component.ts already does this on hard-refresh /
+          // re-hydration; this seeds the same state on the cold-login
+          // path so the bug doesn't appear in the brand-new session.
+          this.roleContext.markSuperAdminGlobalDefaults();
 
-          // Prefer hospital IDs from the response body (authoritative, fresh from DB)
-          // over JWT claims (which may be stale if assignment changed since last login).
-          const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
-          const permittedIds =
-            bodyHospitalIds.length > 0 ? bodyHospitalIds : this.auth.getPermittedHospitalIds();
-          this.roleContext.setPermittedHospitalIds(permittedIds);
+          // ── Session bootstrap (Task 6): fetch authoritative context from DB ──
+          // Replaces client-side JWT decoding for hospital_id resolution.
+          // Falls back to login-response data gracefully if bootstrap fails.
+          this.auth
+            .sessionBootstrap()
+            .pipe(catchError(() => of(null)))
+            .subscribe((bootstrap: SessionBootstrapResponse | null) => {
+              const forcePasswordChange = res.forcePasswordChange ?? false;
+              const forceUsernameChange = res.forceUsernameChange ?? false;
 
-          // Non-admin staff always resolve to exactly one hospital (their primary).
-          // Admin roles with a single hospital also get locked here.
-          if (permittedIds.length === 1) {
-            this.roleContext.activeHospitalId = permittedIds[0];
-          } else if (res.primaryHospitalId) {
-            // Multi-hospital admin: pre-select the primary hospital
-            this.roleContext.activeHospitalId = res.primaryHospitalId;
-          }
+              if (bootstrap) {
+                // Authoritative data from DB — use this in preference to JWT/login body
+                const bsRoles = bootstrap.roles ?? jwtRoles;
+                this.roleContext.setRoles(bsRoles);
+                if (bsRoles.length === 1) {
+                  this.roleContext.activeRole = bsRoles[0];
+                }
 
-          if (res.id && res.username) {
-            const profile: LoginUserProfile = {
-              id: res.id,
-              username: res.username,
-              email: res.email ?? '',
-              firstName: res.firstName,
-              lastName: res.lastName,
-              phoneNumber: res.phoneNumber,
-              profileImageUrl: res.profilePictureUrl,
-              roles: res.roles ?? [],
-              profileType: res.profileType,
-              licenseNumber: res.licenseNumber,
-              staffId: res.staffId,
-              roleName: res.roleName,
-              active: res.active ?? true,
-              forcePasswordChange: res.forcePasswordChange,
-              forceUsernameChange: res.forceUsernameChange,
-              primaryHospitalId: res.primaryHospitalId,
-              primaryHospitalName: res.primaryHospitalName,
-              hospitalIds: res.hospitalIds,
-            };
-            this.auth.setUserProfile(profile);
-          }
+                const permittedIds = (bootstrap.permittedHospitalIds ?? []).filter((v) => !!v);
+                this.roleContext.setPermittedHospitalIds(permittedIds);
 
-          // Redirect to account setup page if user must change credentials
-          const needsSetup = res.forcePasswordChange || res.forceUsernameChange;
-          const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
-          void this.router.navigateByUrl(dest);
-          this.loading = false;
+                if (permittedIds.length === 1) {
+                  this.roleContext.activeHospitalId = permittedIds[0];
+                } else if (bootstrap.primaryHospitalId) {
+                  this.roleContext.activeHospitalId = bootstrap.primaryHospitalId;
+                }
+                // Re-seed global view from the bootstrap roles in case
+                // bsRoles differs from jwtRoles (e.g. a SUPER_ADMIN role
+                // that wasn't in the JWT but IS in the DB-authoritative
+                // bootstrap response). Idempotent — no-op if already
+                // marked or if the user isn't a super-admin.
+                this.roleContext.markSuperAdminGlobalDefaults();
+
+                const profile: LoginUserProfile = {
+                  id: bootstrap.userId,
+                  username: bootstrap.username,
+                  email: bootstrap.email ?? '',
+                  firstName: bootstrap.firstName,
+                  lastName: bootstrap.lastName,
+                  profileImageUrl: bootstrap.profileImageUrl,
+                  roles: bsRoles,
+                  profileType: bootstrap.staffId
+                    ? 'STAFF'
+                    : bootstrap.patientId
+                      ? 'PATIENT'
+                      : undefined,
+                  staffId: bootstrap.staffId,
+                  roleName: bootstrap.staffRoleCode,
+                  active: true,
+                  forcePasswordChange,
+                  forceUsernameChange,
+                  primaryHospitalId: bootstrap.primaryHospitalId,
+                  primaryHospitalName: bootstrap.primaryHospitalName,
+                  hospitalIds: permittedIds,
+                };
+                this.auth.setUserProfile(profile);
+              } else {
+                // Bootstrap unavailable — fall back to login-response data
+                const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
+                const permittedIds =
+                  bodyHospitalIds.length > 0
+                    ? bodyHospitalIds
+                    : this.auth.getPermittedHospitalIds();
+                this.roleContext.setPermittedHospitalIds(permittedIds);
+
+                if (permittedIds.length === 1) {
+                  this.roleContext.activeHospitalId = permittedIds[0];
+                } else if (res.primaryHospitalId) {
+                  this.roleContext.activeHospitalId = res.primaryHospitalId;
+                }
+
+                if (res.id && res.username) {
+                  const profile: LoginUserProfile = {
+                    id: res.id,
+                    username: res.username,
+                    email: res.email ?? '',
+                    firstName: res.firstName,
+                    lastName: res.lastName,
+                    phoneNumber: res.phoneNumber,
+                    profileImageUrl: res.profilePictureUrl,
+                    roles: jwtRoles,
+                    profileType: res.profileType,
+                    licenseNumber: res.licenseNumber,
+                    staffId: res.staffId,
+                    roleName: res.roleName,
+                    active: res.active ?? true,
+                    forcePasswordChange,
+                    forceUsernameChange,
+                    primaryHospitalId: res.primaryHospitalId,
+                    primaryHospitalName: res.primaryHospitalName,
+                    hospitalIds: res.hospitalIds,
+                  };
+                  this.auth.setUserProfile(profile);
+                }
+              }
+
+              const needsSetup = forcePasswordChange || forceUsernameChange;
+              const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
+              void this.router.navigateByUrl(dest);
+              this.loading = false;
+            });
         },
         error: (err) => {
           this.loading = false;

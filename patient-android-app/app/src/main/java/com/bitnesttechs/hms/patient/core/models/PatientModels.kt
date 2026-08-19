@@ -87,7 +87,11 @@ data class PatientProfileDto(
     @Json(name = "mrn") val mrn: String? = null,
     @Json(name = "medicalRecordNumber") val medicalRecordNumber: String? = null,
     @Json(name = "username") val username: String? = null,
-    @Json(name = "profileImageUrl") val profileImageUrl: String? = null
+    @Json(name = "profileImageUrl") val profileImageUrl: String? = null,
+    @Json(name = "hospitalId") val hospitalId: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null,
+    @Json(name = "primaryHospitalId") val primaryHospitalId: String? = null,
+    @Json(name = "primaryHospitalName") val primaryHospitalName: String? = null
 ) {
     val fullName: String get() = "$firstName $lastName".trim()
     val phone: String? get() = phoneNumberPrimary
@@ -148,7 +152,9 @@ data class CurrentMedicationDto(
     @Json(name = "frequency") val frequency: String? = null,
     @Json(name = "status") val status: String? = null,
     @Json(name = "startDate") val startDate: String? = null,
-    @Json(name = "endDate") val endDate: String? = null
+    @Json(name = "endDate") val endDate: String? = null,
+    @Json(name = "prescribedBy") val prescribedBy: String? = null,
+    @Json(name = "indication") val indication: String? = null
 )
 
 // ── Profile Image Upload ──────────────────────────────────────────────────────

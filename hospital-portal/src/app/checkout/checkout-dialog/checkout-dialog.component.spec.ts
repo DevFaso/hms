@@ -211,6 +211,10 @@ describe('CheckoutDialogComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     const banner = el.querySelector('.patient-banner');
     expect(banner?.textContent).toContain('John Doe');
-    expect(banner?.textContent).toContain('IN_PROGRESS');
+    // The status badge is rendered via `| enumLabel: 'encounterStatus'`, which
+    // translates 'IN_PROGRESS' → 'In Progress' (or the localised equivalent).
+    // Assert on the human-readable label, not the wire value — the wire value
+    // is preserved in the data flow (see EnumLabelPipe spec for that guard).
+    expect(banner?.textContent).toContain('In Progress');
   });
 });

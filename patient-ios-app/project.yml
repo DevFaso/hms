@@ -7,6 +7,27 @@ options:
   generateEmptyDirectories: true
   groupSortPosition: top
 
+# Phase 2.8.B: per-env release configurations for the Keycloak cutover.
+# Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/UAT/Prod
+# layer xcconfig files (Config/{Dev,UAT,Prod}.xcconfig) on top of the
+# Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
+configurations:
+  Debug: debug
+  Release: release
+  Release-Dev: release
+  Release-UAT: release
+  Release-Prod: release
+
+packages:
+  AppAuth:
+    url: https://github.com/openid/AppAuth-iOS.git
+    from: "1.7.5"
+
+configFiles:
+  Release-Dev: Config/Dev.xcconfig
+  Release-UAT: Config/UAT.xcconfig
+  Release-Prod: Config/Prod.xcconfig
+
 settings:
   base:
     MARKETING_VERSION: "1.0.3"
@@ -15,6 +36,13 @@ settings:
     DEVELOPMENT_TEAM: "D6K83N72S4"
     CODE_SIGN_IDENTITY: "Apple Distribution"
     CODE_SIGN_STYLE: Automatic
+    # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
+    # Debug/Release builds. Per-env xcconfigs override these for
+    # Release-{Dev,UAT,Prod}. See Config/README.md.
+    MEDIHUB_KEYCLOAK_ISSUER: ""
+    MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
+    MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
+    MEDIHUB_KEYCLOAK_REDIRECT_URI: "com.bitnesttechs.hms.patient.native:/oauth2redirect"
 
 targets:
   MediHubPatient:
@@ -25,6 +53,9 @@ targets:
       - path: MediHubPatient
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: AppAuth
+        product: AppAuth
     settings:
       base:
         INFOPLIST_FILE: MediHubPatient/Resources/Info.plist
@@ -38,6 +69,48 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"
     info:
       path: MediHubPatient/Resources/Info.plist
+      properties:
+        # KC-3: AppAuth callback scheme. Must match the redirect URI on
+        # the Keycloak `hms-patient-ios` client and `MEDIHUB_KEYCLOAK_REDIRECT_URI`.
+        # Declared here (not just in Info.plist) so `xcodegen generate`
+        # does not strip it on regeneration.
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: com.bitnesttechs.hms.patient.native.oauth
+            CFBundleURLSchemes:
+              - com.bitnesttechs.hms.patient.native
+        # Phase 2.8.B: per-env Keycloak settings, baked into Info.plist
+        # so `xcodebuild archive` builds carry them. `KeycloakConfig` /
+        # `FeatureFlags` read these via Bundle.main.infoDictionary as a
+        # fallback when ProcessInfo doesn't have a value (i.e. archive
+        # builds, where scheme env vars don't apply). Default values
+        # come from `settings.base`; per-env xcconfigs override.
+        MEDIHUB_KEYCLOAK_ISSUER: $(MEDIHUB_KEYCLOAK_ISSUER)
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: $(MEDIHUB_KEYCLOAK_SSO_ENABLED)
+        MEDIHUB_KEYCLOAK_CLIENT_ID: $(MEDIHUB_KEYCLOAK_CLIENT_ID)
+        MEDIHUB_KEYCLOAK_REDIRECT_URI: $(MEDIHUB_KEYCLOAK_REDIRECT_URI)
     scheme:
-      testTargets: []
-      gatherCoverageData: false
+      testTargets:
+        - MediHubPatientTests
+      gatherCoverageData: true
+      environmentVariables:
+        # KC-3: keep scheme defaults hermetic for Run and test actions.
+        # Release-Dev/UAT/Prod archive values come from Config/*.xcconfig;
+        # local live SSO can be enabled by overriding these in an Xcode scheme.
+        MEDIHUB_KEYCLOAK_ISSUER: ""
+        MEDIHUB_KEYCLOAK_CLIENT_ID: ""
+        MEDIHUB_KEYCLOAK_REDIRECT_URI: ""
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
+
+  MediHubPatientTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MediHubPatientTests
+    dependencies:
+      - target: MediHubPatient
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bitnesttechs.hms.patient.native.tests
+        GENERATE_INFOPLIST_FILE: true

@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.superadmin;
 
+import com.example.hms.enums.OrganizationRegion;
 import com.example.hms.enums.OrganizationType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -39,4 +40,11 @@ public class SuperAdminCreateOrganizationRequestDTO {
     private String notes;
 
     private OrganizationType type;
+
+    /**
+     * Data-residency region for the new tenant (MVP-9). Optional — when
+     * null the provisioning service falls back to the platform default
+     * (BF) so legacy callers keep working.
+     */
+    private OrganizationRegion region;
 }

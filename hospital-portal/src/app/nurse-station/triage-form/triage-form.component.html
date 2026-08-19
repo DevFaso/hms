@@ -72,7 +72,8 @@
       <fieldset class="form-section">
         <legend>{{ 'TRIAGE.VITAL_SIGNS' | translate }}</legend>
 
-        <div class="vitals-grid">
+        <!-- Alt+Arrow roving (row 11). docs/ui/accessibility.md §6.2 -->
+        <div class="vitals-grid" appRovingFocus="input" orientation="both" modifier="alt">
           <div class="form-group">
             <label for="temperature">{{ 'TRIAGE.TEMPERATURE' | translate }} (°C)</label>
             <input

@@ -101,7 +101,11 @@
           }
         </h3>
         <div class="week-nav">
-          <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
+          <button
+            class="week-btn"
+            (click)="changeWeek(-1)"
+            [attr.aria-label]="'SCHEDULING.ARIA.PREV_WEEK' | translate"
+          >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           <button
@@ -111,7 +115,11 @@
           >
             {{ getWeekLabel() }}
           </button>
-          <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
+          <button
+            class="week-btn"
+            (click)="changeWeek(1)"
+            [attr.aria-label]="'SCHEDULING.ARIA.NEXT_WEEK' | translate"
+          >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
@@ -146,7 +154,9 @@
                       <span class="shift-staff-name">{{ shift.staffName }}</span>
                       <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                       @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                        <span class="cross-midnight-badge">← cont'd</span>
+                        <span class="cross-midnight-badge">{{
+                          'SCHEDULING.SHIFT_CONTD' | translate
+                        }}</span>
                       }
                       <span class="shift-meta">
                         <span class="material-symbols-outlined">{{
@@ -156,7 +166,7 @@
                       </span>
                     </div>
                     <span class="shift-status-badge" [attr.data-status]="shift.status">
-                      {{ shift.status }}
+                      {{ shift.status | enumLabel: 'shiftStatus' }}
                     </span>
                   </div>
                 } @empty {
@@ -185,28 +195,28 @@
         [class.active]="leaveFilter() === 'PENDING'"
         (click)="setLeaveFilter('PENDING')"
       >
-        {{ 'SCHEDULING.PENDING' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.PENDING' | translate }}
       </button>
       <button
         class="filter-chip approved"
         [class.active]="leaveFilter() === 'APPROVED'"
         (click)="setLeaveFilter('APPROVED')"
       >
-        {{ 'SCHEDULING.APPROVED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.APPROVED' | translate }}
       </button>
       <button
         class="filter-chip denied"
         [class.active]="leaveFilter() === 'REJECTED'"
         (click)="setLeaveFilter('REJECTED')"
       >
-        {{ 'SCHEDULING.REJECTED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.REJECTED' | translate }}
       </button>
       <button
         class="filter-chip cancelled"
         [class.active]="leaveFilter() === 'CANCELLED'"
         (click)="setLeaveFilter('CANCELLED')"
       >
-        {{ 'SCHEDULING.CANCELLED' | translate }}
+        {{ 'PORTAL.ENUM.LEAVE_STATUS.CANCELLED' | translate }}
       </button>
     </div>
 
@@ -296,7 +306,11 @@
           <p class="modal-subtitle">{{ 'SCHEDULING.BULK_SUBTITLE' | translate }}</p>
         </div>
       </div>
-      <button class="modal-close" (click)="closeBulkModal()" aria-label="Close bulk schedule modal">
+      <button
+        class="modal-close"
+        (click)="closeBulkModal()"
+        [attr.aria-label]="'SCHEDULING.ARIA.CLOSE_BULK_MODAL' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
@@ -319,14 +333,16 @@
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
                 <span class="chip-sub">{{
-                  selectedStaff()!.jobTitle ?? selectedStaff()!.roleName ?? 'Staff'
+                  selectedStaff()!.jobTitle ??
+                    selectedStaff()!.roleName ??
+                    ('SCHEDULING.STAFF_FALLBACK' | translate)
                 }}</span>
               </div>
               <button
                 class="chip-clear"
                 type="button"
                 (click)="clearStaff()"
-                aria-label="Clear selected staff"
+                [attr.aria-label]="'SCHEDULING.ARIA.CLEAR_STAFF' | translate"
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -349,14 +365,19 @@
                 <span class="search-spinner"></span>
               }
               @if (staffSuggestionsOpen()) {
-                <ul class="suggestions-dropdown" aria-label="Staff suggestions">
+                <ul
+                  class="suggestions-dropdown"
+                  [attr.aria-label]="'SCHEDULING.ARIA.STAFF_SUGGESTIONS' | translate"
+                >
                   @for (s of staffSuggestions(); track s.id) {
                     <li class="suggestion-item" (mousedown)="selectStaff(s)">
                       <span class="sug-avatar">{{ staffInitials(s) }}</span>
                       <div class="sug-info">
                         <span class="sug-name">{{ s.name }}</span>
                         <span class="sug-meta">
-                          {{ s.jobTitle ?? s.roleName ?? 'Staff' }}
+                          {{
+                            s.jobTitle ?? s.roleName ?? ('SCHEDULING.STAFF_FALLBACK' | translate)
+                          }}
                           @if (s.departmentName) {
                             &nbsp;·&nbsp; {{ s.departmentName }}
                           }
@@ -522,7 +543,7 @@
           <input
             id="bulk-skip"
             type="checkbox"
-            aria-label="Skip conflicting dates"
+            [attr.aria-label]="'SCHEDULING.ARIA.SKIP_CONFLICTING' | translate"
             [(ngModel)]="bulk.skipConflicts"
           />
           <span class="toggle-track" aria-hidden="true">
@@ -538,7 +559,9 @@
             <div class="bulk-stat scheduled">
               <span class="material-symbols-outlined">check_circle</span>
               <span class="bulk-stat-val">{{ bulkResult()!.totalScheduled }}</span>
-              <span class="bulk-stat-lbl">{{ 'SCHEDULING.SCHEDULED' | translate }}</span>
+              <span class="bulk-stat-lbl">{{
+                'PORTAL.ENUM.SHIFT_STATUS.SCHEDULED' | translate
+              }}</span>
             </div>
             <div class="bulk-stat skipped">
               <span class="material-symbols-outlined">cancel</span>

@@ -18,6 +18,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -216,6 +217,11 @@ public class GeneralReferral {
     private String appointmentLocation;
 
     /**
+     * When the consultation/care actually began (status moved to IN_PROGRESS)
+     */
+    private LocalDateTime startedAt;
+
+    /**
      * When referral was completed
      */
     private LocalDateTime completedAt;
@@ -270,60 +276,104 @@ public class GeneralReferral {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    // Business methods
-
     /**
-     * Submit referral
+     * JPA optimistic-lock version. Required for the SLA expiry sweep: without it,
+     * a concurrent transaction that flips status (e.g. SUBMITTED → IN_PROGRESS)
+     * between the sweep's SELECT and its UPDATE would be silently overwritten,
+     * because the in-memory entity would still report the stale status. With
+     * @Version, the second writer's flush throws ObjectOptimisticLockingFailureException
+     * and the sweep skips the row.
      */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
+    // Business methods (state-machine guarded — illegal transitions throw IllegalStateException)
+    //
+    // DRAFT → SUBMITTED → ACKNOWLEDGED → SCHEDULED → IN_PROGRESS → COMPLETED
+    // CANCELLED is reachable from any non-terminal status by the referring side.
+    // REJECTED is reachable from SUBMITTED or ACKNOWLEDGED by the receiving side.
+    // Terminal states (COMPLETED/CANCELLED/REJECTED/EXPIRED) admit no further transitions.
+
     public void submit() {
+        requireStatus("submit", ReferralStatus.DRAFT);
         this.status = ReferralStatus.SUBMITTED;
         this.submittedAt = LocalDateTime.now();
         calculateSlaDueDate();
     }
 
-    /**
-     * Acknowledge referral
-     */
     public void acknowledge(String notes, Staff receivingProvider) {
+        requireStatus("acknowledge", ReferralStatus.SUBMITTED);
         this.status = ReferralStatus.ACKNOWLEDGED;
         this.acknowledgedAt = LocalDateTime.now();
         this.acknowledgementNotes = notes;
         this.receivingProvider = receivingProvider;
     }
 
-    /**
-     * Schedule appointment
-     */
     public void schedule(LocalDateTime appointmentTime, String location) {
+        requireStatus("schedule", ReferralStatus.ACKNOWLEDGED);
         this.status = ReferralStatus.SCHEDULED;
         this.scheduledAppointmentAt = appointmentTime;
         this.appointmentLocation = location;
     }
 
-    /**
-     * Complete referral
-     */
+    public void start() {
+        requireStatus("start", ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED);
+        this.status = ReferralStatus.IN_PROGRESS;
+        this.startedAt = LocalDateTime.now();
+    }
+
     public void complete(String summary, String followUp) {
+        // Complete is reachable from any post-acknowledgement non-terminal status:
+        // some referrals never get a formal appointment slot (SCHEDULED) or explicit
+        // "start" click (IN_PROGRESS) before being closed out.
+        requireStatus("complete",
+            ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED, ReferralStatus.IN_PROGRESS);
         this.status = ReferralStatus.COMPLETED;
         this.completedAt = LocalDateTime.now();
         this.completionSummary = summary;
         this.followUpRecommendations = followUp;
     }
 
-    /**
-     * Cancel referral
-     */
     public void cancel(String reason) {
+        if (isTerminal(this.status)) {
+            throw new IllegalStateException(
+                "Cannot cancel referral in terminal status " + this.status);
+        }
         this.status = ReferralStatus.CANCELLED;
         this.cancellationReason = reason;
     }
 
-    /**
-     * Reject referral
-     */
     public void reject(String reason) {
+        requireStatus("reject", ReferralStatus.SUBMITTED, ReferralStatus.ACKNOWLEDGED);
         this.status = ReferralStatus.REJECTED;
         this.cancellationReason = reason;
+    }
+
+    public void expire(String reason) {
+        // IN_PROGRESS is intentionally excluded — once a consultation has actually begun,
+        // it must terminate via complete() or cancel(), not by SLA expiry sweep.
+        requireStatus("expire",
+            ReferralStatus.SUBMITTED, ReferralStatus.ACKNOWLEDGED, ReferralStatus.SCHEDULED);
+        this.status = ReferralStatus.EXPIRED;
+        this.cancellationReason = reason;
+    }
+
+    private void requireStatus(String action, ReferralStatus... allowed) {
+        for (ReferralStatus s : allowed) {
+            if (this.status == s) {
+                return;
+            }
+        }
+        throw new IllegalStateException(
+            "Cannot " + action + " referral in status " + this.status);
+    }
+
+    private static boolean isTerminal(ReferralStatus s) {
+        return s == ReferralStatus.COMPLETED
+            || s == ReferralStatus.CANCELLED
+            || s == ReferralStatus.REJECTED
+            || s == ReferralStatus.EXPIRED;
     }
 
     /**
@@ -355,8 +405,7 @@ public class GeneralReferral {
      * Check if referral is overdue
      */
     public boolean isOverdue() {
-        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt) 
-               && status != ReferralStatus.COMPLETED && status != ReferralStatus.CANCELLED 
-               && status != ReferralStatus.REJECTED;
+        return slaDueAt != null && LocalDateTime.now().isAfter(slaDueAt)
+               && !isTerminal(this.status);
     }
 }

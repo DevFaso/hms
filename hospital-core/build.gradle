@@ -14,6 +14,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-otlp'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
     // Liquibase
     implementation 'org.liquibase:liquibase-core'
@@ -25,6 +26,12 @@ dependencies {
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
+
+    // TOTP (MFA)
+    implementation 'dev.samstevens.totp:totp:1.7.1'
+
+    // Rate limiting
+    implementation 'com.bucket4j:bucket4j-core:8.10.1'
 
     // OpenAPI / Swagger
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
@@ -49,6 +56,11 @@ dependencies {
     // Twilio SMS
     implementation 'com.twilio.sdk:twilio:10.8.0'
 
+    // HAPI FHIR (R4) — interoperability layer (mounted at /fhir/*)
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-base:7.4.5'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-server:7.4.5'
+    implementation 'ca.uhn.hapi.fhir:hapi-fhir-structures-r4:7.4.5'
+
     // Apache Commons
     implementation 'commons-io:commons-io:2.17.0'
     implementation 'org.apache.commons:commons-csv:1.11.0'
@@ -66,4 +78,12 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testImplementation 'org.springframework.kafka:spring-kafka-test'
+
+    // Testcontainers — drives LiquibaseSchemaIT against real PostgreSQL so
+    // PG-specific migration bugs (PL/pgSQL DO blocks, dollar quoting,
+    // splitStatements config) surface pre-merge instead of on dev deploy.
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }

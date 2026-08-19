@@ -39,7 +39,13 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     fun requestRefill(prescriptionId: String, pharmacy: String?, notes: String?) {
         viewModelScope.launch {
             try {
-                val resp = api.requestRefill(RefillRequest(pharmacyId = pharmacy, notes = notes))
+                val resp = api.requestRefill(
+                    RefillRequest(
+                        prescriptionId = prescriptionId,
+                        preferredPharmacy = pharmacy,
+                        notes = notes
+                    )
+                )
                 if (resp.isSuccessful) {
                     _snackbar.value = "Refill requested successfully"
                     load()

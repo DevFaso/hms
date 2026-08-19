@@ -1,0 +1,60 @@
+{
+  "_comment": "DEV-ONLY users for the hms realm. Apply via Keycloak admin console → Realm Settings → Action → Partial Import (or via the admin REST API). MUST NOT be applied to UAT or production. The HMS docker-compose stack does NOT mount this file into the container — that's deliberate, so a stray `docker compose up` cannot create staff accounts in a shared environment.",
+  "realm": "hms",
+  "users": [
+    {
+      "username": "dev.admin",
+      "email": "dev.admin@hms.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Dev",
+      "lastName": "Admin",
+      "attributes": {
+        "hospital_id": ["00000000-0000-0000-0000-000000000000"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevAdmin#2026",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["ROLE_SUPER_ADMIN", "ROLE_STAFF"]
+    },
+    {
+      "username": "dev.doctor",
+      "email": "dev.doctor@hms.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Dev",
+      "lastName": "Doctor",
+      "attributes": {
+        "hospital_id": ["11111111-1111-1111-1111-111111111111"]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevDoctor#2026",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["ROLE_DOCTOR", "ROLE_STAFF"]
+    },
+    {
+      "username": "dev.patient",
+      "email": "dev.patient@hms.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Dev",
+      "lastName": "Patient",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPatient#2026",
+          "temporary": true
+        }
+      ],
+      "realmRoles": ["ROLE_PATIENT"]
+    }
+  ]
+}

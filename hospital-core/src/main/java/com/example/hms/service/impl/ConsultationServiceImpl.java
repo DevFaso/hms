@@ -17,13 +17,22 @@ import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.Hibernate;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,9 +54,24 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
 
+    /**
+     * Self-reference for proxy-routed internal calls
+     * ({@link #getAllConsultations(ConsultationStatus)}
+     * → {@link #getConsultationsForHospital(UUID, ConsultationStatus)}).
+     * Sonar S6809 — see PatientServiceImpl.setSelf for the full
+     * rationale and pattern docstring.
+     */
+    private ConsultationService self;
+
+    @Autowired
+    public void setSelf(@Lazy ConsultationService self) {
+        this.self = self;
+    }
+
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
+    private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
@@ -55,11 +79,15 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + request.getPatientId()));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + request.getHospitalId()));
+
+        if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            throw new BusinessException("Patient is not registered with the specified hospital.");
+        }
 
         Staff requestingProvider = resolveRequestingProvider(requestingProviderId, hospital.getId());
 
@@ -138,10 +166,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (status != null) {
             consultations = consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(hospitalId, status);
         } else {
-            consultations = consultationRepository.findByHospitalAndStatuses(
-                hospitalId,
-                Arrays.asList(ConsultationStatus.REQUESTED, ConsultationStatus.ACKNOWLEDGED, ConsultationStatus.SCHEDULED, ConsultationStatus.IN_PROGRESS)
-            );
+            // No status filter ⇒ return ALL consultations for the hospital, matching
+            // the semantics of the cross-tenant SUPER_ADMIN path (which also
+            // returns all statuses) and matching the dashboard "Total Consultations"
+            // tile (which reads count(*) with no filter). Previously this fell
+            // through to findByHospitalAndStatuses with the 4 "active" statuses
+            // hard-coded — that silently hid COMPLETED / CANCELLED / DECLINED rows
+            // and produced the "Dashboard says 3, list shows 0" UX bug. Pending /
+            // active-only worklists already have their own dedicated endpoints
+            // (`/consultations/hospital/{id}/pending`).
+            consultations = consultationRepository.findByHospital_IdOrderByRequestedAtDesc(hospitalId);
         }
         return consultations.stream()
             .map(this::toResponseDTO)
@@ -151,10 +185,36 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status) {
-        // ── Tenant isolation: non-superadmin scoped to active hospital ──
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // ── Tenant isolation ──
+        // Super-admin in global view (no chip / no X-Hospital-Id header)
+        // gets the unscoped path so the list matches the dashboard tile,
+        // which uses consultationRepository.count() (no scope filter).
+        // Without this carve-out, a super-admin whose JWT carries a
+        // primary-hospital fallback would see a scoped list (often 0)
+        // while the dashboard count shows the system-wide total —
+        // exactly the symptom the develop-deployment review surfaced
+        // (count tile 3, list page "No consultations across any of your
+        // hospitals"). Mirrors the SuperAdminDashboardServiceImpl
+        // getRecentPrescriptions fix and the
+        // ConsultationServiceImpl#getRecentForSuperAdmin pattern.
+        //
+        // We use ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
+        // RoleValidator.isSuperAdminFromAuth(). Authority-based detection
+        // can be true in impersonation / authority-inflation flows where
+        // the principal holds the ROLE_SUPER_ADMIN authority but the JWT
+        // claim isn't set; trusting it for cross-tenant access would
+        // widen the blast radius of a stolen / inflated authority list.
+        // The JWT claim is the load-bearing signal RoleValidator's own
+        // step 1 trusts (Copilot review on PR fix branch).
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
+        UUID activeHospitalId = superAdminGlobal
+            ? null
+            : roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            return getConsultationsForHospital(activeHospitalId, status);
+            // Sonar S6809: route through the proxy so the inner
+            // method's @Transactional(readOnly=true) is honored.
+            return self.getConsultationsForHospital(activeHospitalId, status);
         }
         List<Consultation> consultations;
         if (status != null) {
@@ -165,6 +225,14 @@ public class ConsultationServiceImpl implements ConsultationService {
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getRecentForSuperAdmin(Pageable pageable) {
+        return consultationRepository.findAll(pageable)
+            .map(this::toResponseDTO)
+            .getContent();
     }
 
     @Override
@@ -593,24 +661,43 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     private ConsultationResponseDTO toResponseDTO(Consultation consultation) {
-        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
+        // Defensive lazy reads. Each association is initialised via `safeInit`
+        // so that a dangling FK (parent row hard-deleted while the consultation
+        // still references it) returns null instead of letting Hibernate throw
+        // EntityNotFoundException — which would 500 the entire list response
+        // via GlobalExceptionHandler.handleEntityNotFound.
+        UUID consultationId = consultation.getId();
+        Patient patient   = safeInit(consultation.getPatient(),            "Consultation", consultationId, "patient");
+        Hospital hospital = safeInit(consultation.getHospital(),           "Consultation", consultationId, "hospital");
+        Staff requester   = safeInit(consultation.getRequestingProvider(), "Consultation", consultationId, "requestingProvider");
+        Staff consultant  = safeInit(consultation.getConsultant(),         "Consultation", consultationId, "consultant");
+        Encounter encounter = safeInit(consultation.getEncounter(),        "Consultation", consultationId, "encounter");
+
+        UUID hospitalId = hospital != null ? hospital.getId() : null;
         String patientMrn = null;
-        if (consultation.getPatient() != null && hospitalId != null) {
-            patientMrn = consultation.getPatient().getMrnForHospital(hospitalId);
+        if (patient != null && hospitalId != null) {
+            try {
+                patientMrn = patient.getMrnForHospital(hospitalId);
+            } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
+                // hospitalRegistrations is LAZY — a dangling registration FK
+                // would land here. MRN simply degrades to null.
+                log.warn("⚠️ Consultation({}) patient {} has dangling hospitalRegistration FK; MRN unavailable.",
+                    consultationId, patient.getId());
+            }
         }
-        
+
         return ConsultationResponseDTO.builder()
-            .id(consultation.getId())
-            .patientId(consultation.getPatient() != null ? consultation.getPatient().getId() : null)
-            .patientName(consultation.getPatient() != null ? consultation.getPatient().getFullName() : null)
+            .id(consultationId)
+            .patientId(patient != null ? patient.getId() : null)
+            .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrn)
             .hospitalId(hospitalId)
-            .hospitalName(consultation.getHospital() != null ? consultation.getHospital().getName() : null)
-            .requestingProviderId(consultation.getRequestingProvider() != null ? consultation.getRequestingProvider().getId() : null)
-            .requestingProviderName(consultation.getRequestingProvider() != null ? consultation.getRequestingProvider().getFullName() : null)
-            .consultantId(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)
-            .consultantName(consultation.getConsultant() != null ? consultation.getConsultant().getFullName() : null)
-            .encounterId(consultation.getEncounter() != null ? consultation.getEncounter().getId() : null)
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .requestingProviderId(requester != null ? requester.getId() : null)
+            .requestingProviderName(requester != null ? requester.getFullName() : null)
+            .consultantId(consultant != null ? consultant.getId() : null)
+            .consultantName(consultant != null ? consultant.getFullName() : null)
+            .encounterId(encounter != null ? encounter.getId() : null)
             .consultationType(consultation.getConsultationType())
             .specialtyRequested(consultation.getSpecialtyRequested())
             .reasonForConsult(consultation.getReasonForConsult())
@@ -639,5 +726,27 @@ public class ConsultationServiceImpl implements ConsultationService {
             .createdAt(consultation.getCreatedAt())
             .updatedAt(consultation.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * Safely initialise a Hibernate lazy proxy. Returns {@code null} when the
+     * referenced row was hard-deleted while this row still references it
+     * (dangling FK) instead of letting {@link EntityNotFoundException} /
+     * {@link JpaObjectRetrievalFailureException} propagate out — which would
+     * otherwise be mapped to HTTP 500 by
+     * {@code GlobalExceptionHandler.handleEntityNotFound} and break the whole
+     * list response over a single bad row.
+     */
+    private static <T> T safeInit(T proxyOrEntity, String parentEntity, Object parentId, String association) {
+        if (proxyOrEntity == null) return null;
+        try {
+            Hibernate.initialize(proxyOrEntity);
+            return proxyOrEntity;
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
+            log.warn("⚠️ {}({}) has a dangling FK on '{}' — referenced row was deleted. " +
+                     "Returning null for this association; DB cleanup required.",
+                     parentEntity, parentId, association);
+            return null;
+        }
     }
 }

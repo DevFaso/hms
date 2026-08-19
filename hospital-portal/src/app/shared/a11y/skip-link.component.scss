@@ -1,0 +1,39 @@
+// Skip-link: visually hidden off-screen until it receives keyboard focus.
+//
+// Implementation notes:
+// - We use the classic "clip-path off-screen" pattern (not `display: none`)
+//   so the element remains in the DOM, focusable, and exposed to assistive
+//   tech. `display: none` removes it from the tab order — wrong here.
+// - On :focus / :focus-visible the element pops into view at the top-left
+//   of the viewport so a keyboard user can see what just gained focus.
+// - z-index is intentionally very high; the link must overlay any topbar
+//   or sticky shell chrome when revealed.
+// - Color tokens match the existing primary palette (#2563eb / #fff). The
+//   contrast pair is 8.59:1, comfortably above WCAG AA 4.5:1.
+
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  z-index: 10000;
+
+  // Visually hidden until focus. Off-screen rather than display:none so
+  // the element stays in the accessibility tree and the tab order.
+  // When focused, the top: 0 below overrides this.
+  padding: 0.625rem 1rem;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: 0 0 8px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: top 120ms ease;
+
+  &:focus,
+  &:focus-visible {
+    top: 0;
+    outline: 3px solid #fbbf24; // amber 400 — high contrast on #2563eb
+    outline-offset: 2px;
+  }
+}

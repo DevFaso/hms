@@ -19,6 +19,7 @@ import {
   throwError,
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { ImpersonationService } from '../services/impersonation.service';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -127,6 +128,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const auth = inject(AuthService);
   const http = inject(HttpClient);
+  const impersonation = inject(ImpersonationService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -134,8 +136,30 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isRefreshCall = req.url.includes('/auth/token/refresh');
         const isVerifyPassword = req.url.includes('/auth/verify-password');
 
-        if (!isRefreshCall && !isVerifyPassword && auth.getRefreshToken()) {
-          // We have a refresh token — attempt silent renewal and replay.
+        // Closes Copilot review #4 on PR #224. If the 401 fires while an
+        // impersonation token is in use (typically because the 30-min TTL
+        // just elapsed), DO NOT auto-refresh — the surviving refresh
+        // cookie would otherwise mint a fresh super-admin access token,
+        // silently elevating the request without an IMPERSONATION_ENDED
+        // audit boundary. Instead, drop the impersonation token, clear
+        // the banner, and bounce the operator back to /super-admin where
+        // they can re-start the session if they still need it. The
+        // backend ImpersonationSessionTracker enforces the same rule
+        // server-side; this client-side check is defense in depth and a
+        // cleaner UX (no spurious refresh round-trip).
+        if (impersonation.isActive() && !isRefreshCall) {
+          impersonation.forceStop();
+          void router.navigate(['/super-admin']);
+          return throwError(() => error);
+        }
+
+        if (
+          !isRefreshCall &&
+          !isVerifyPassword &&
+          (auth.getRefreshToken() || auth.getUserProfile())
+        ) {
+          // We either have a legacy refresh token in storage OR a recorded
+          // session profile (S-01 cookie-based refresh). Attempt silent renewal.
           return tryRefreshAndRetry(req, next, auth, router);
         }
 

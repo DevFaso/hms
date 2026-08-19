@@ -12,6 +12,11 @@ discovery.relabel "metrics_integrations_integrations_spring_boot" {
 		target_label = "instance"
 		replacement  = constants.hostname
 	}
+
+	rule {
+		target_label = "application"
+		replacement  = "hms"
+	}
 }
 
 // ── Prometheus scrape for Spring Boot actuator ─────────────────────────────
@@ -22,13 +27,17 @@ prometheus.scrape "metrics_integrations_integrations_spring_boot" {
 	metrics_path = "/api/actuator/prometheus"
 }
 
-// ── Keep only the metrics required by the Grafana Spring Boot dashboard ────
+// ── Keep only the metrics required by the Grafana dashboards ──────────────
+// Whitelist updated 2026-05-08 to support the SLO / API endpoint / RED panels:
+//   - http_server_requests_seconds_bucket   (needed for histogram_quantile + heatmap)
+//   - tomcat_threads_busy_threads           (gauge metric, used by Active Threads)
+//   - jvm_threads_states_threads            (per-state thread breakdown)
 prometheus.relabel "metrics_integrations_integrations_spring_boot" {
 	forward_to = [prometheus.remote_write.metrics_service.receiver]
 
 	rule {
 		source_labels = ["__name__"]
-		regex         = "up|hikaricp_connections|hikaricp_connections_acquire_seconds_count|hikaricp_connections_acquire_seconds_sum|hikaricp_connections_active|hikaricp_connections_creation_seconds_count|hikaricp_connections_creation_seconds_sum|hikaricp_connections_idle|hikaricp_connections_pending|hikaricp_connections_timeout_total|hikaricp_connections_usage_seconds_count|hikaricp_connections_usage_seconds_sum|http_server_requests_seconds_count|http_server_requests_seconds_sum|jvm_buffer_memory_used_bytes|jvm_buffer_total_capacity_bytes|jvm_classes_loaded_classes|jvm_classes_unloaded_classes_total|jvm_gc_memory_allocated_bytes_total|jvm_gc_memory_promoted_bytes_total|jvm_gc_pause_seconds_count|jvm_gc_pause_seconds_sum|jvm_memory_committed_bytes|jvm_memory_max_bytes|jvm_memory_used_bytes|jvm_threads_daemon_threads|jvm_threads_live_threads|jvm_threads_peak_threads|logback_events_total|process_cpu_usage|process_files_max_files|process_files_open_files|process_start_time_seconds|process_uptime_seconds|system_cpu_count|system_cpu_usage|system_load_average_1m|tomcat_global_error_total|tomcat_global_received_bytes_total|tomcat_global_sent_bytes_total|tomcat_sessions_active_current_sessions|tomcat_threads_busy|tomcat_threads_config_max_threads|tomcat_threads_current_threads"
+		regex         = "up|hikaricp_connections|hikaricp_connections_acquire_seconds_count|hikaricp_connections_acquire_seconds_sum|hikaricp_connections_active|hikaricp_connections_creation_seconds_count|hikaricp_connections_creation_seconds_sum|hikaricp_connections_idle|hikaricp_connections_pending|hikaricp_connections_timeout_total|hikaricp_connections_usage_seconds_count|hikaricp_connections_usage_seconds_sum|http_server_requests_seconds_bucket|http_server_requests_seconds_count|http_server_requests_seconds_sum|http_server_requests_seconds_max|jvm_buffer_memory_used_bytes|jvm_buffer_total_capacity_bytes|jvm_classes_loaded_classes|jvm_classes_unloaded_classes_total|jvm_gc_memory_allocated_bytes_total|jvm_gc_memory_promoted_bytes_total|jvm_gc_pause_seconds_bucket|jvm_gc_pause_seconds_count|jvm_gc_pause_seconds_sum|jvm_memory_committed_bytes|jvm_memory_max_bytes|jvm_memory_used_bytes|jvm_threads_daemon_threads|jvm_threads_live_threads|jvm_threads_peak_threads|jvm_threads_states_threads|logback_events_total|process_cpu_usage|process_files_max_files|process_files_open_files|process_start_time_seconds|process_uptime_seconds|system_cpu_count|system_cpu_usage|system_load_average_1m|tomcat_global_error_total|tomcat_global_received_bytes_total|tomcat_global_sent_bytes_total|tomcat_sessions_active_current_sessions|tomcat_threads_busy_threads|tomcat_threads_config_max_threads|tomcat_threads_current_threads"
 		action        = "keep"
 	}
 }
@@ -45,5 +54,72 @@ prometheus.remote_write "metrics_service" {
 			username = env("GRAFANA_METRICS_USER")
 			password = env("GRAFANA_METRICS_TOKEN")
 		}
+	}
+}
+
+// ── Container log discovery ────────────────────────────────────────────────
+// Tails docker container stdout/stderr from the docker socket so the HMS
+// backend logs land in Loki without any application-side changes.
+discovery.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "10s"
+}
+
+discovery.relabel "container_logs" {
+	targets = discovery.docker.containers.targets
+
+	// Drop Docker's leading slash from the container name so the label is clean.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+
+	// Promote the compose service name when present so dashboards can filter by it.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+
+	// Tag application=hms on the backend container so it joins the metrics labels.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?hms-backend.*"
+		target_label  = "application"
+		replacement   = "hms"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.container_logs.output
+	forward_to = [loki.process.spring_boot.receiver]
+}
+
+// Tag log levels off the Spring Boot log line so panels can filter on `level`.
+// Spring's default pattern starts with the timestamp, then the level token.
+loki.process "spring_boot" {
+	stage.regex {
+		expression = "(?P<level>TRACE|DEBUG|INFO|WARN|ERROR)"
+	}
+
+	stage.labels {
+		values = {
+			level = "level",
+		}
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
 	}
 }

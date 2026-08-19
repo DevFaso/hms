@@ -1,0 +1,170 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'REGION_POLICY.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'REGION_POLICY.SUBTITLE' | translate }}</p>
+    </div>
+    <a class="back-link" routerLink="/super-admin/data-residency">
+      <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
+      {{ 'REGION_POLICY.BACK_TO_RESIDENCY' | translate }}
+    </a>
+  </div>
+
+  @if (loading()) {
+    <div class="state-panel" data-test="loading">
+      <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+      <span>{{ 'REGION_POLICY.LOADING' | translate }}</span>
+    </div>
+  } @else if (errored()) {
+    <div class="state-panel error" data-test="error">
+      <span class="material-symbols-outlined" aria-hidden="true">error</span>
+      <span>{{ 'REGION_POLICY.LOAD_ERROR' | translate }}</span>
+      <button type="button" class="retry-btn" (click)="refresh()">
+        {{ 'REGION_POLICY.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="state-panel" data-test="empty">
+      <span class="material-symbols-outlined" aria-hidden="true">inventory_2</span>
+      <span>{{ 'REGION_POLICY.EMPTY' | translate }}</span>
+    </div>
+  } @else {
+    @if (!remoteProvisioningCapable()) {
+      <output class="state-panel warn" data-test="remote-stub-banner">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        <span>{{ 'REGION_POLICY.REMOTE_STUB_BANNER' | translate }}</span>
+      </output>
+    }
+
+    <table class="policy-table" data-test="policy-table">
+      <thead>
+        <tr>
+          <th>{{ 'REGION_POLICY.COL.REGION' | translate }}</th>
+          <th>{{ 'REGION_POLICY.COL.RETENTION' | translate }}</th>
+          <th>{{ 'REGION_POLICY.COL.EXPORT' | translate }}</th>
+          <th>{{ 'REGION_POLICY.COL.DEPLOYMENT' | translate }}</th>
+          <th>{{ 'REGION_POLICY.COL.UPDATED' | translate }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.region) {
+          <tr>
+            <td class="region-cell">
+              <span class="region-badge" [class]="'region-badge--' + row.region.toLowerCase()">
+                {{ row.region }}
+              </span>
+              <span class="region-label">
+                {{ 'ORG_REGION.CODE.' + row.region | translate }}
+              </span>
+            </td>
+            <td>
+              {{
+                row.retentionDays !== null
+                  ? row.retentionDays
+                  : ('REGION_POLICY.GLOBAL_FALLBACK' | translate)
+              }}
+            </td>
+            <td>
+              {{ row.defaultExportFormat || ('REGION_POLICY.GLOBAL_FALLBACK' | translate) }}
+            </td>
+            <td>
+              {{ row.targetDeploymentUrl || ('REGION_POLICY.LOCAL_DEPLOYMENT' | translate) }}
+            </td>
+            <td class="updated-cell">
+              <div>{{ row.updatedAt }}</div>
+              <small>{{ row.updatedBy }}</small>
+            </td>
+            <td>
+              <button
+                type="button"
+                class="edit-btn"
+                [attr.data-test]="'edit-' + row.region"
+                (click)="startEdit(row)"
+              >
+                {{ 'REGION_POLICY.EDIT' | translate }}
+              </button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    @if (editing(); as edit) {
+      <div class="edit-panel" data-test="edit-panel">
+        <h2>{{ 'REGION_POLICY.EDIT_TITLE' | translate: { region: edit.region } }}</h2>
+
+        <label class="field">
+          <span>{{ 'REGION_POLICY.FIELD.RETENTION' | translate }}</span>
+          <input
+            type="number"
+            min="0"
+            [ngModel]="edit.retentionDays"
+            (ngModelChange)="patchEdit('retentionDays', $event)"
+            [placeholder]="'REGION_POLICY.FIELD.RETENTION_PLACEHOLDER' | translate"
+          />
+          <small>{{ 'REGION_POLICY.FIELD.RETENTION_HELP' | translate }}</small>
+        </label>
+
+        <label class="field">
+          <span>{{ 'REGION_POLICY.FIELD.EXPORT' | translate }}</span>
+          <input
+            type="text"
+            [ngModel]="edit.defaultExportFormat"
+            (ngModelChange)="patchEdit('defaultExportFormat', $event)"
+            [placeholder]="'REGION_POLICY.FIELD.EXPORT_PLACEHOLDER' | translate"
+          />
+          <small>{{ 'REGION_POLICY.FIELD.EXPORT_HELP' | translate }}</small>
+        </label>
+
+        <label class="field">
+          <span>{{ 'REGION_POLICY.FIELD.DEPLOYMENT' | translate }}</span>
+          <input
+            type="text"
+            data-test="deployment-url-input"
+            [ngModel]="edit.targetDeploymentUrl"
+            (ngModelChange)="patchEdit('targetDeploymentUrl', $event)"
+            [attr.disabled]="!remoteProvisioningCapable() ? '' : null"
+            [attr.aria-disabled]="!remoteProvisioningCapable()"
+            [attr.title]="
+              !remoteProvisioningCapable()
+                ? ('REGION_POLICY.FIELD.DEPLOYMENT_DISABLED_TOOLTIP' | translate)
+                : null
+            "
+            [placeholder]="'REGION_POLICY.FIELD.DEPLOYMENT_PLACEHOLDER' | translate"
+          />
+          <small>
+            @if (!remoteProvisioningCapable()) {
+              {{ 'REGION_POLICY.FIELD.DEPLOYMENT_DISABLED_HELP' | translate }}
+            } @else {
+              {{ 'REGION_POLICY.FIELD.DEPLOYMENT_HELP' | translate }}
+            }
+          </small>
+        </label>
+
+        @if (edit.errorKey) {
+          <p class="form-error">{{ edit.errorKey | translate }}</p>
+        }
+
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" [disabled]="edit.busy" (click)="cancelEdit()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="save-btn"
+            [disabled]="edit.busy"
+            data-test="save-policy"
+            (click)="submitEdit()"
+          >
+            @if (edit.busy) {
+              {{ 'REGION_POLICY.SAVING' | translate }}
+            } @else {
+              {{ 'COMMON.SAVE' | translate }}
+            }
+          </button>
+        </div>
+      </div>
+    }
+  }
+</div>

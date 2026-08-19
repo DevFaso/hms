@@ -52,6 +52,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class LabOrderServiceImpl implements LabOrderService {
 
+    // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
+    // i18n key for "lab order not found" appears 7x in this file.
+    // One constant, one source of truth.
+    private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+
     private final LabOrderRepository labOrderRepository;
     private final PatientRepository patientRepository;
     private final StaffRepository staffRepository;
@@ -75,7 +80,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public LabOrderResponseDTO updateLabOrder(UUID id, LabOrderRequestDTO request, Locale locale) {
         LabOrder existing = labOrderRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         LabOrder updated = buildLabOrder(existing, request, false);
         return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(updated));
@@ -86,7 +91,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
         String notes = normalizeOptionalText(request.getNotes());
 
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
 
         Staff staff = staffRepository.findById(request.getOrderingStaffId())
@@ -176,14 +181,14 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional(readOnly = true)
     public LabOrderResponseDTO getLabOrderById(UUID id, Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && labOrder.getHospital() != null
                 && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("laborder.notfound");
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
         return labOrderMapper.toLabOrderResponseDTO(labOrder);
@@ -208,14 +213,14 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public void deleteLabOrder(UUID id, Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
                 && labOrder.getHospital() != null
                 && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("laborder.notfound");
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
         labOrderRepository.deleteById(id);
@@ -307,12 +312,12 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Transactional
     public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null && labOrder.getHospital() != null
                 && !labOrder.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("laborder.notfound");
+            throw new ResourceNotFoundException(LAB_ORDER_NOT_FOUND);
         }
 
         LabOrderStatus current = labOrder.getStatus();

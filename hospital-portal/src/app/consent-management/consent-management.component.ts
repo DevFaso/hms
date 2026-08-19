@@ -31,19 +31,53 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
   'ALL_PURPOSES',
 ];
 
+/**
+ * Granular DataDomain values picked by the backend `@DataDomainCsv` validator.
+ * Keep this list in sync with `com.example.hms.enums.DataDomain`. The order
+ * here drives chip ordering in the UI; sensitive domains are grouped at the
+ * end with a visual separator.
+ *
+ * Legacy aliases (VITAL_SIGNS → VITALS, ENCOUNTER_HISTORY → ENCOUNTERS) are
+ * deliberately omitted from the picker — `DataDomain#parseCsv` on the server
+ * normalises them so historical CSVs continue to work, but the UI surfaces
+ * only the canonical form to avoid duplicate chips that mean the same thing.
+ */
 const SCOPE_DOMAINS = [
+  // General clinical record
   'ENCOUNTERS',
-  'TREATMENTS',
+  'NOTES',
+  'PROBLEMS',
+  'ALLERGIES',
+  // Medication & orders
   'PRESCRIPTIONS',
+  'TREATMENTS',
   'LAB_ORDERS',
   'LAB_RESULTS',
-  'ALLERGIES',
-  'PROBLEMS',
+  'IMAGING',
+  // Procedural / observational
+  'PROCEDURES',
   'SURGICAL_HISTORY',
+  'VITALS',
+  'IMMUNIZATIONS',
   'ADVANCE_DIRECTIVES',
+  'INSURANCES',
+  'BILLING',
+  // Sensitive — patient must opt in explicitly
+  'MENTAL_HEALTH',
+  'HIV_STATUS',
+  'SUBSTANCE_USE',
+  'GENETICS',
 ] as const;
 
 type ScopeDomain = (typeof SCOPE_DOMAINS)[number];
+
+/** Domains that the backend treats as sensitive (must be listed explicitly to grant). */
+export const SENSITIVE_DOMAINS: ReadonlySet<string> = new Set([
+  'MENTAL_HEALTH',
+  'HIV_STATUS',
+  'SUBSTANCE_USE',
+  'GENETICS',
+]);
 
 @Component({
   selector: 'app-consent-management',
@@ -139,14 +173,17 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     else this.shareAll.set(true);
   }
 
+  isSensitive(domain: ScopeDomain): boolean {
+    return SENSITIVE_DOMAINS.has(domain);
+  }
+
   private buildScopeString(): string {
     if (this.shareAll()) return '';
     return SCOPE_DOMAINS.filter((d) => this.scopeSelections()[d]).join(',');
   }
 
   ngOnInit(): void {
-    this.load();
-    this.loadHospitals();
+    this.loadHospitalsAndConsents();
     this.initPatientSearch();
   }
 
@@ -202,12 +239,14 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   }
 
   // ── Hospital loading ────────────────────────────────────
-  private loadHospitals(): void {
+  private loadHospitalsAndConsents(): void {
     this.hospitalsLoading.set(true);
-    // Load the user's own hospital (locked as "To Hospital")
+    // Load the user's own hospital first so consent list can be scoped to it.
     this.hospitalService.getMyHospitalAsResponse().subscribe({
       next: (myHosp) => {
         this.currentHospital.set(myHosp);
+        // Load the consent list now that we know the current hospital.
+        this.load();
         // All roles load the full hospital list for the "From" dropdown
         this.hospitalService.list().subscribe({
           next: (h) => {
@@ -221,26 +260,40 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
           },
         });
       },
-      error: () => this.hospitalsLoading.set(false),
+      error: () => {
+        this.hospitalsLoading.set(false);
+        this.loading.set(false);
+        this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
+      },
     });
   }
 
   load(): void {
     this.loading.set(true);
     this.loadError.set(null);
-    this.sharingService.listConsents({ page: this.currentPage(), size: this.pageSize }).subscribe({
-      next: (res) => {
-        this.consents.set(res.content ?? []);
-        this.totalElements.set(res.totalElements ?? 0);
-        this.totalPages.set(res.totalPages ?? 0);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
-        this.toast.error(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
-        this.loading.set(false);
-      },
-    });
+    const toHospitalId = this.currentHospital()?.id;
+    if (!toHospitalId) {
+      const msg = this.translate.instant('CONSENT.ERRORS.LOAD_FAILED');
+      this.loadError.set(msg);
+      this.toast.error(msg);
+      this.loading.set(false);
+      return;
+    }
+    this.sharingService
+      .listConsents({ page: this.currentPage(), size: this.pageSize, toHospitalId })
+      .subscribe({
+        next: (res) => {
+          this.consents.set(res.content ?? []);
+          this.totalElements.set(res.totalElements ?? 0);
+          this.totalPages.set(res.totalPages ?? 0);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
+          this.toast.error(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   prevPage(): void {
@@ -343,7 +396,10 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     this.router.navigate(['/consent-management/shared-records'], {
       queryParams: {
         patientId: c.patient.id,
-        toHospitalId: this.currentHospital()?.id ?? c.toHospital.id,
+        // Always use the consent's toHospital as the requesting hospital so
+        // the backend fetches records from the correct perspective regardless
+        // of which hospital the current user is logged into.
+        toHospitalId: c.toHospital.id,
       },
     });
   }

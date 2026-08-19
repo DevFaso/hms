@@ -1,201 +1,364 @@
 {
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Deploys",
+        "datasource": { "type": "loki", "uid": "${loki_ds}" },
+        "enable": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "expr": "{application=\"$application\"} |~ \"Started .*Application in [0-9.]+ seconds\"",
+        "titleFormat": "Backend started",
+        "textFormat": "{{instance}}"
+      }
+    ]
   },
-  "description": "Hospital Management System – Spring Boot Prometheus metrics",
+  "description": "Hospital Management System – Spring Boot Prometheus metrics + Loki logs. Filter by application/instance via the variables above.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "title": "HMS Dashboards",
+      "asDropdown": true,
+      "includeVars": true,
+      "keepTime": true,
+      "tags": ["hms"],
+      "type": "dashboards",
+      "icon": "external link",
+      "targetBlank": false
+    }
+  ],
   "panels": [
     {
+      "id": 1,
+      "title": "Service Up",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "max(up{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "up" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "max(process_uptime_seconds{application=\"$application\", instance=~\"$instance\"})" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Req/s (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[5m]))" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Error rate (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.005 }, { "color": "red", "value": 0.02 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[5m])), 0.0001)" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Latency p95 (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 3,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "red", "value": 1.5 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[5m])) by (le))" }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "DB Pool Utilisation",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.7 }, { "color": "red", "value": 0.9 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
+      "targets": [
+        { "expr": "sum(hikaricp_connections_active{application=\"$application\", instance=~\"$instance\"}) / clamp_min(sum(hikaricp_connections{application=\"$application\", instance=~\"$instance\"}), 1)" }
+      ]
+    },
+    {
+      "id": 10,
       "title": "JVM Memory Used",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "bytes", "custom": { "fillOpacity": 10, "lineWidth": 1, "stacking": { "mode": "normal" } } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(jvm_memory_used_bytes{application=\"$application\", instance=~\"$instance\"}) by (area)", "legendFormat": "{{area}}" }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "JVM Memory Max vs Committed",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(jvm_memory_max_bytes{application=\"$application\", instance=~\"$instance\", area=\"heap\"})", "legendFormat": "heap max" },
+        { "expr": "sum(jvm_memory_committed_bytes{application=\"$application\", instance=~\"$instance\", area=\"heap\"})", "legendFormat": "heap committed" },
+        { "expr": "sum(jvm_memory_used_bytes{application=\"$application\", instance=~\"$instance\", area=\"heap\"})", "legendFormat": "heap used" }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "HTTP Request Rate (req/s) by status",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": {
-        "defaults": { "unit": "bytes" },
-        "overrides": []
+        "defaults": { "custom": { "fillOpacity": 10, "lineWidth": 1, "stacking": { "mode": "normal" } } },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": "^5.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byRegexp", "options": "^4.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byRegexp", "options": "^2.." }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] }
+        ]
       },
       "targets": [
-        {
-          "expr": "jvm_memory_used_bytes{application=\"hms\"}",
-          "legendFormat": "{{area}} – {{id}}"
-        }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
       ]
     },
     {
-      "title": "JVM Memory Max",
+      "id": 13,
+      "title": "Latency percentiles (p50 / p95 / p99)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": { "unit": "bytes" },
-        "overrides": []
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
-        {
-          "expr": "jvm_memory_max_bytes{application=\"hms\"}",
-          "legendFormat": "{{area}} – {{id}}"
-        }
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
       ]
     },
     {
-      "title": "HTTP Request Rate (req/s)",
+      "id": 14,
+      "title": "HTTP 5xx Error Rate by URI",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
       "targets": [
-        {
-          "expr": "rate(http_server_requests_seconds_count{application=\"hms\"}[5m])",
-          "legendFormat": "{{method}} {{uri}} – {{status}}"
-        }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\", status=~\"5..\"}[$__rate_interval])) by (uri)", "legendFormat": "{{uri}}" }
       ]
     },
     {
-      "title": "HTTP Response Time (p95)",
+      "id": 15,
+      "title": "Tomcat Threads (busy / max / current)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": { "unit": "s" },
-        "overrides": []
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"hms\"}[5m])) by (le, uri))",
-          "legendFormat": "{{uri}}"
-        }
+        { "expr": "sum(tomcat_threads_busy_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "busy" },
+        { "expr": "sum(tomcat_threads_current_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "current" },
+        { "expr": "sum(tomcat_threads_config_max_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "max" }
       ]
     },
     {
-      "title": "HTTP 5xx Error Rate",
+      "id": 16,
+      "title": "CPU Usage",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
       "targets": [
-        {
-          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", status=~\"5..\"}[5m])) by (uri)",
-          "legendFormat": "{{uri}}"
-        }
+        { "expr": "avg(system_cpu_usage{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "system" },
+        { "expr": "avg(process_cpu_usage{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "process" }
       ]
     },
     {
-      "title": "Active HTTP Threads",
-      "type": "gauge",
-      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "targets": [
-        {
-          "expr": "tomcat_threads_busy_threads{application=\"hms\"}"
-        }
-      ]
-    },
-    {
-      "title": "System CPU Usage",
+      "id": 17,
+      "title": "DB Connection Pool (HikariCP)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 16 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": { "unit": "percentunit", "max": 1 },
-        "overrides": []
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "targets": [
-        {
-          "expr": "system_cpu_usage{application=\"hms\"}",
-          "legendFormat": "System CPU"
-        },
-        {
-          "expr": "process_cpu_usage{application=\"hms\"}",
-          "legendFormat": "Process CPU"
-        }
+        { "expr": "sum(hikaricp_connections_active{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "active" },
+        { "expr": "sum(hikaricp_connections_idle{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "idle" },
+        { "expr": "sum(hikaricp_connections_pending{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "pending" },
+        { "expr": "sum(hikaricp_connections{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "total" }
       ]
     },
     {
-      "title": "DB Connection Pool",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "targets": [
-        {
-          "expr": "hikaricp_connections_active{application=\"hms\"}",
-          "legendFormat": "Active"
-        },
-        {
-          "expr": "hikaricp_connections_idle{application=\"hms\"}",
-          "legendFormat": "Idle"
-        },
-        {
-          "expr": "hikaricp_connections_pending{application=\"hms\"}",
-          "legendFormat": "Pending"
-        }
-      ]
-    },
-    {
+      "id": 18,
       "title": "JVM GC Pause Duration (p95)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "fieldConfig": {
-        "defaults": { "unit": "s" },
-        "overrides": []
-      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
       "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(jvm_gc_pause_seconds_bucket{application=\"hms\"}[5m])) by (le, cause))",
-          "legendFormat": "{{cause}}"
-        }
+        { "expr": "histogram_quantile(0.95, sum(rate(jvm_gc_pause_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le, cause))", "legendFormat": "{{cause}}" }
       ]
     },
     {
+      "id": 19,
       "title": "JVM Threads",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "targets": [
-        {
-          "expr": "jvm_threads_live_threads{application=\"hms\"}",
-          "legendFormat": "Live"
-        },
-        {
-          "expr": "jvm_threads_daemon_threads{application=\"hms\"}",
-          "legendFormat": "Daemon"
-        },
-        {
-          "expr": "jvm_threads_peak_threads{application=\"hms\"}",
-          "legendFormat": "Peak"
-        }
+        { "expr": "sum(jvm_threads_live_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "live" },
+        { "expr": "sum(jvm_threads_daemon_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "daemon" },
+        { "expr": "sum(jvm_threads_peak_threads{application=\"$application\", instance=~\"$instance\"})", "legendFormat": "peak" }
       ]
     },
     {
-      "title": "Log Events Rate",
+      "id": 20,
+      "title": "Log Events Rate (Logback) by level",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "warn" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "info" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] }
+        ]
+      },
       "targets": [
-        {
-          "expr": "rate(logback_events_total{application=\"hms\"}[5m])",
-          "legendFormat": "{{level}}"
-        }
+        { "expr": "sum(rate(logback_events_total{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (level)", "legendFormat": "{{level}}" }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "Errors & Warnings (live)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        { "expr": "{application=\"$application\"} | level=~\"ERROR|WARN\"", "refId": "A" }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "All backend logs (live tail)",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 52 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        { "expr": "{application=\"$application\"}", "refId": "A" }
       ]
     }
   ],
+  "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["hms", "spring-boot", "prometheus"],
+  "tags": ["hms", "spring-boot", "prometheus", "loki"],
   "templating": {
     "list": [
       {
-        "name": "DS_PROMETHEUS",
+        "name": "prometheus_ds",
         "type": "datasource",
+        "label": "Prometheus",
         "query": "prometheus",
-        "current": { "text": "Prometheus", "value": "Prometheus" }
+        "current": { "text": "Prometheus", "value": "hms-prometheus" },
+        "hide": 0
+      },
+      {
+        "name": "loki_ds",
+        "type": "datasource",
+        "label": "Loki",
+        "query": "loki",
+        "current": { "text": "Loki", "value": "hms-loki" },
+        "hide": 0
+      },
+      {
+        "name": "application",
+        "type": "query",
+        "label": "Application",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(up, application)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
+        "refresh": 1,
+        "current": { "text": "hms", "value": "hms" },
+        "includeAll": false,
+        "multi": false,
+        "sort": 1
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "label": "Instance",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(up{application=\"$application\"}, instance)", "refId": "PrometheusVariableQueryEditor-VariableQuery" },
+        "refresh": 2,
+        "current": { "text": "All", "value": ".*" },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1
       }
     ]
   },
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "HMS – Application Metrics",
+  "title": "HMS – Application Metrics & Logs",
   "uid": "hms-app-metrics",
-  "version": 1
+  "version": 3
 }

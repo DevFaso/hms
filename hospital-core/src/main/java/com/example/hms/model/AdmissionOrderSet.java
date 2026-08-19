@@ -131,6 +131,19 @@ public class AdmissionOrderSet {
     private Integer version = 1;
 
     /**
+     * Previous version of this order set, when this row is the result
+     * of an edit. The version chain is traversed by following
+     * {@code parentOrderSet} until null (the v1 root). Each edit creates
+     * a new row with {@code version = parent.version + 1} and
+     * {@code parentOrderSet = parent}; the parent is then deactivated.
+     * Set null on delete so the chain remains query-safe if an ancestor
+     * is hard-deleted.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_order_set_id")
+    private AdmissionOrderSet parentOrderSet;
+
+    /**
      * Staff member who created this order set
      */
     @ManyToOne(fetch = FetchType.LAZY)

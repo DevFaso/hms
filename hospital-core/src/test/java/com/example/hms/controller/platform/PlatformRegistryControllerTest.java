@@ -13,7 +13,10 @@ import com.example.hms.payload.dto.PlatformServiceUpdateRequestDTO;
 import com.example.hms.service.platform.PlatformRegistryService;
 import com.example.hms.service.platform.discovery.IntegrationDescriptor;
 import com.example.hms.service.platform.discovery.PlatformServiceRegistry;
+import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +61,33 @@ class PlatformRegistryControllerTest {
 
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
+
+    @MockitoBean
+    private TokenBlacklistService tokenBlacklistService;
+
+    @MockitoBean
+    private WsTicketService wsTicketService;
+
+    @MockitoBean
+    private HospitalUserDetailsService hospitalUserDetailsService;
+
+    @MockitoBean
+    private com.example.hms.service.OrganizationLifecycleStatusService lifecycleStatusService;
+
+    /** PR #228 review fixup — JwtAuthenticationFilter now depends on
+     *  GlobalSessionRevocationService (MVP-7). */
+    @MockitoBean
+    private com.example.hms.security.GlobalSessionRevocationService globalSessionRevocationService;
+
+    /** MVP-c batch fixup — JwtAuthenticationFilter now also depends on
+     *  HospitalLifecycleStatusService for the per-hospital login block. */
+    @MockitoBean
+    private com.example.hms.service.HospitalLifecycleStatusService hospitalLifecycleStatusService;
+
+    /** v1.0 row 7 fixup — JwtAuthenticationFilter now also depends on
+     *  IdleSessionGate. */
+    @MockitoBean
+    private com.example.hms.security.IdleSessionGate idleSessionGate;
 
     @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;

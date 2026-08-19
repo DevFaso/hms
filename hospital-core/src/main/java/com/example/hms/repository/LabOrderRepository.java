@@ -134,4 +134,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<Object[]> countGroupedByPriority(
             @Param("hospitalId") UUID hospitalId,
             @Param("activeStatuses") java.util.List<LabOrderStatus> activeStatuses);
+
+    /** Hospital-scoped tile count for the super-admin dashboard. */
+    long countByHospital_Id(UUID hospitalId);
 }

@@ -77,6 +77,15 @@ class ImagingOrderServiceImplTest {
 
         hospital = new Hospital();
         hospital.setId(hospitalId);
+
+        // Sonar S6809: production code injects `self` via Spring's
+        // setSelf(@Lazy ImagingOrderService). Mockito constructs the
+        // SUT directly so the setter never fires — wire it manually
+        // here so getAllOrders(...) → self.getOrdersByHospital(...)
+        // does not NPE in the unit test. Pointing self at the SUT
+        // mirrors the in-tx behaviour (REQUIRED propagation joins
+        // the outer tx, so the call resolves to the same instance).
+        imagingOrderService.setSelf(imagingOrderService);
     }
 
     @Test

@@ -15,8 +15,10 @@ import com.example.hms.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,9 +36,16 @@ import java.util.stream.Collectors;
 @Slf4j
 public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecycleService {
 
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int VERIFICATION_CODE_LENGTH = 6;
+    private static final int VERIFICATION_CODE_EXPIRY_MINUTES = 15;
+    private static final int MAX_VERIFICATION_ATTEMPTS = 5;
+
     private final UserRepository userRepository;
     private final UserMfaEnrollmentRepository mfaEnrollmentRepository;
     private final UserRecoveryContactRepository recoveryContactRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -165,14 +174,15 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             contact.setUser(user);
             contact.setContactType(dto.getContactType());
             contact.setContactValue(dto.getContactValue().trim());
-            contact.setVerified(dto.isVerified());
-            contact.setPrimaryContact(dto.isPrimaryContact());
-            contact.setNotes(normalize(dto.getNotes()));
-            if (dto.isVerified()) {
-                contact.setVerifiedAt(contact.getVerifiedAt() != null ? contact.getVerifiedAt() : LocalDateTime.now());
-            } else {
+            // Preserve existing verification state — verified flag is only set via the verify endpoint
+            if (contact.getId() == null) {
+                // New contact — always starts unverified
+                contact.setVerified(false);
                 contact.setVerifiedAt(null);
             }
+            // Existing contacts keep their current verified/verifiedAt values
+            contact.setPrimaryContact(dto.isPrimaryContact());
+            contact.setNotes(normalize(dto.getNotes()));
             existingByKey.put(key, contact);
             toPersist.add(contact);
         }
@@ -188,6 +198,102 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         return saved.stream().map(this::toDto).toList();
+    }
+
+    @Override
+    @Transactional
+    public String sendRecoveryContactVerificationCode(UUID userId, UUID contactId) {
+        UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
+            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+
+        if (!contact.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("Recovery contact does not belong to user");
+        }
+
+        if (contact.isVerified()) {
+            throw new IllegalStateException("Recovery contact is already verified");
+        }
+
+        // Generate 6-digit code
+        String code = generateVerificationCode();
+
+        // Store hashed code with expiry
+        contact.setVerificationCodeHash(passwordEncoder.encode(code));
+        contact.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(VERIFICATION_CODE_EXPIRY_MINUTES));
+        contact.setVerificationAttempts(0);
+        recoveryContactRepository.save(contact);
+
+        // Send verification email
+        if (contact.getContactType() == com.example.hms.enums.RecoveryContactType.EMAIL) {
+            emailService.sendRecoveryContactVerificationEmail(contact.getContactValue(), code);
+        }
+
+        log.info("Verification code sent for recovery contact {} (type={})", contactId, contact.getContactType());
+        return contact.getContactType().name();
+    }
+
+    @Override
+    @Transactional
+    public UserRecoveryContactDTO verifyRecoveryContact(UUID userId, UUID contactId, String code) {
+        UserRecoveryContact contact = recoveryContactRepository.findById(contactId)
+            .orElseThrow(() -> new ResourceNotFoundException("Recovery contact not found"));
+
+        if (!contact.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("Recovery contact does not belong to user");
+        }
+
+        if (contact.isVerified()) {
+            throw new IllegalStateException("Recovery contact is already verified");
+        }
+
+        if (contact.getVerificationCodeHash() == null) {
+            throw new IllegalStateException("No verification code has been sent. Please request a new code.");
+        }
+
+        if (contact.getVerificationAttempts() >= MAX_VERIFICATION_ATTEMPTS) {
+            // Reset the code — force resend
+            contact.setVerificationCodeHash(null);
+            contact.setVerificationCodeExpiresAt(null);
+            contact.setVerificationAttempts(0);
+            recoveryContactRepository.save(contact);
+            throw new IllegalStateException("Too many failed attempts. Please request a new verification code.");
+        }
+
+        if (contact.getVerificationCodeExpiresAt() != null
+                && contact.getVerificationCodeExpiresAt().isBefore(LocalDateTime.now())) {
+            contact.setVerificationCodeHash(null);
+            contact.setVerificationCodeExpiresAt(null);
+            contact.setVerificationAttempts(0);
+            recoveryContactRepository.save(contact);
+            throw new IllegalStateException("Verification code has expired. Please request a new code.");
+        }
+
+        contact.setVerificationAttempts(contact.getVerificationAttempts() + 1);
+
+        if (!passwordEncoder.matches(code, contact.getVerificationCodeHash())) {
+            recoveryContactRepository.save(contact);
+            int remaining = MAX_VERIFICATION_ATTEMPTS - contact.getVerificationAttempts();
+            throw new IllegalArgumentException("Invalid verification code. " + remaining + " attempts remaining.");
+        }
+
+        // Code matches — mark as verified
+        contact.setVerified(true);
+        contact.setVerifiedAt(LocalDateTime.now());
+        contact.setVerificationCodeHash(null);
+        contact.setVerificationCodeExpiresAt(null);
+        contact.setVerificationAttempts(0);
+        UserRecoveryContact saved = recoveryContactRepository.save(contact);
+
+        log.info("Recovery contact {} verified successfully", contactId);
+        return toDto(saved);
+    }
+
+    private String generateVerificationCode() {
+        StringBuilder sb = new StringBuilder(VERIFICATION_CODE_LENGTH);
+        for (int i = 0; i < VERIFICATION_CODE_LENGTH; i++) {
+            sb.append(SECURE_RANDOM.nextInt(10));
+        }
+        return sb.toString();
     }
 
     private User resolveUser(UUID userId) {

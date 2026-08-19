@@ -4,9 +4,11 @@ import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.model.prescription.PrescriptionAlert;
 import com.example.hms.model.prescription.PrescriptionInstruction;
 import com.example.hms.model.prescription.PrescriptionTransmission;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -141,7 +143,8 @@ public class Prescription extends BaseEntity {
     private Integer refillsRemaining;
 
     @Size(max = 2048)
-    @Column(name = "instructions", length = 2048)
+    @Column(name = "instructions", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String instructions;
 
     @Type(JsonBinaryType.class)
@@ -210,7 +213,8 @@ public class Prescription extends BaseEntity {
     private boolean contraindicationsReviewed = false;
 
     @Size(max = 1024)
-    @Column(name = "override_reason", length = 1024)
+    @Column(name = "override_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String overrideReason;
 
     @Size(max = 40)
@@ -237,7 +241,8 @@ public class Prescription extends BaseEntity {
     private LocalDateTime cosignedAt;
 
     @Size(max = 1024)
-    @Column(name = "notes", length = 1024)
+    @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     @Enumerated(EnumType.STRING)

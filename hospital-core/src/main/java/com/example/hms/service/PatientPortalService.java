@@ -203,4 +203,20 @@ public interface PatientPortalService {
 
     /** Submit pre-check-in: demographics, insurance, questionnaire responses. */
     PreCheckInResponseDTO submitPreCheckIn(Authentication auth, PreCheckInRequestDTO dto);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Medical & Family History (read-only portal access)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** All diagnoses for the authenticated patient. */
+    List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> getMyMedicalHistory(Authentication auth);
+
+    /** All surgical procedures for the authenticated patient. */
+    List<com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO> getMySurgicalHistory(Authentication auth);
+
+    /** All family history records for the authenticated patient. */
+    List<com.example.hms.payload.dto.medicalhistory.FamilyHistoryResponseDTO> getMyFamilyHistory(Authentication auth);
+
+    /** Current active social history for the authenticated patient. */
+    com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO getMySocialHistory(Authentication auth);
 }

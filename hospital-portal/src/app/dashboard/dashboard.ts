@@ -15,8 +15,6 @@ import { AppointmentService, AppointmentResponse } from '../services/appointment
 import { PatientService, PatientResponse } from '../services/patient.service';
 import {
   DashboardService,
-  SuperAdminSummary,
-  RecentAuditEvent,
   DashboardKPI,
   ClinicalAlert,
   InboxCounts,
@@ -56,7 +54,8 @@ import {
   PortalInvoice,
   CareTeamDTO,
 } from '../services/patient-portal.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subscription } from 'rxjs';
 import { DoctorWorklistComponent } from './doctor-worklist/doctor-worklist';
 import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient-flow';
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
@@ -64,6 +63,7 @@ import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patien
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 import { EncounterService } from '../services/encounter.service';
 import { ToastService } from '../core/toast.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -124,6 +124,7 @@ interface NavTile {
     DoctorResultsPanelComponent,
     PatientSnapshotDrawerComponent,
     InBasketPanelComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -140,18 +141,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly portalService = inject(PatientPortalService);
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
+
+  /**
+   * Bumps every time the active language changes. Reading this signal inside a
+   * `computed()` makes the array re-evaluate so localized labels follow the
+   * language switch without forcing a component re-mount.
+   */
+  private readonly langTick = signal(0);
+  private langSub?: Subscription;
 
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
   userName = signal('');
   userTitle = signal('');
   currentTime = signal(this.formatTime(new Date()));
-  readonly todayLabel = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+  todayLabel = signal(this.formatTodayLabel(this.translate.currentLang));
   private clockInterval?: ReturnType<typeof setInterval>;
 
   // ── Loading States ───────────────────────────────────────────
@@ -179,10 +184,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isSchedulingRole = computed(
     () => !this.isClinician() && this.permissions.hasPermission('View Appointments'),
   );
-
-  // ── Super-Admin data ─────────────────────────────────────────
-  adminSummary = signal<SuperAdminSummary | null>(null);
-  recentAuditEvents = signal<RecentAuditEvent[]>([]);
 
   // ── Hospital-Admin data ────────────────────────────────────
   hospitalAdminSummary = signal<HospitalAdminSummary | null>(null);
@@ -223,14 +224,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     'PHARMACY_CLARIFICATION',
     'TASK',
   ];
-  readonly _inboxLabels: Record<string, string> = {
-    MESSAGE: 'Messages',
-    CRITICAL_RESULT: 'Critical Results',
-    CONSULT_REQUEST: 'Consult Requests',
-    DOCUMENT_TO_SIGN: 'Documents to Sign',
-    REFILL_REQUEST: 'Refill Requests',
-    PHARMACY_CLARIFICATION: 'Pharmacy Clarifications',
-    TASK: 'Tasks',
+  /** Translation keys keyed by inbox category code. */
+  readonly _inboxLabelKeys: Record<string, string> = {
+    MESSAGE: 'DASHBOARD.MESSAGES',
+    CRITICAL_RESULT: 'DASHBOARD.CRITICAL_RESULTS',
+    CONSULT_REQUEST: 'DASHBOARD.CONSULT_REQUESTS',
+    DOCUMENT_TO_SIGN: 'DASHBOARD.DOCUMENTS_TO_SIGN',
+    REFILL_REQUEST: 'DASHBOARD.REFILL_REQUESTS',
+    PHARMACY_CLARIFICATION: 'DASHBOARD.PHARMACY_CLARIFICATIONS',
+    TASK: 'DASHBOARD.TASKS',
   };
   readonly _inboxIcons: Record<string, string> = {
     MESSAGE: 'chat',
@@ -243,6 +245,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   };
 
   inboxGrouped = computed(() => {
+    this.langTick();
     const groups = new Map<string, ClinicalInboxItem[]>();
     for (const item of this.inboxItems()) {
       const cat = item.category;
@@ -253,7 +256,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .filter((cat) => groups.has(cat))
       .map((cat) => ({
         category: cat,
-        label: this._inboxLabels[cat] ?? cat,
+        label: this.t(this._inboxLabelKeys[cat] ?? cat),
         icon: this._inboxIcons[cat] ?? 'assignment',
         items: groups.get(cat)!,
       }));
@@ -337,7 +340,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Hero gradient class (role-specific) ─────────────────────
   heroGradientClass = computed(() => {
     if (this.isPatient()) return 'hero-gradient-patient';
-    if (this.isSuperAdmin()) return 'hero-gradient-superadmin';
     if (this.isHospitalAdmin()) return 'hero-gradient-hospital-admin';
     if (this.isDoctor()) return 'hero-gradient-doctor';
     if (this.isNurse() || this.isMidwife()) return 'hero-gradient-nurse';
@@ -356,7 +358,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * Priority matches heroGradientClass / roleLabel ordering.
    */
   activeView = computed<
-    | 'superadmin'
     | 'hospitaladmin'
     | 'doctor'
     | 'nurse'
@@ -370,7 +371,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'fallback'
   >(() => {
     if (this.isPatient()) return 'patient';
-    if (this.isSuperAdmin()) return 'superadmin';
     if (this.isHospitalAdmin()) return 'hospitaladmin';
     if (this.isDoctor()) return 'doctor';
     if (this.isNurse() || this.isMidwife()) return 'nurse';
@@ -385,29 +385,31 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
-    if (this.isPatient()) return 'Patient';
-    if (this.isSuperAdmin()) return 'Super Administrator';
-    if (this.isHospitalAdmin()) return 'Hospital Administrator';
-    if (this.isDoctor()) return 'Physician';
-    if (this.isMidwife()) return 'Midwife';
-    if (this.isNurse()) return 'Nurse';
-    if (this.isReceptionist()) return 'Front Desk';
-    if (this.isLabDirector()) return 'Lab Director';
-    if (this.isQualityManager()) return 'Quality Manager';
-    if (this.isLabScientist()) return 'Lab Scientist';
-    if (this.isPharmacist()) return 'Pharmacist';
-    if (this.isRadiologist()) return 'Radiologist';
-    return 'Staff';
+    this.langTick();
+    if (this.isPatient()) return this.t('DASHBOARD.ROLE.PATIENT');
+    if (this.isSuperAdmin()) return this.t('DASHBOARD.ROLE.SUPER_ADMIN');
+    if (this.isHospitalAdmin()) return this.t('DASHBOARD.ROLE.HOSPITAL_ADMIN');
+    if (this.isDoctor()) return this.t('DASHBOARD.ROLE.DOCTOR');
+    if (this.isMidwife()) return this.t('DASHBOARD.ROLE.MIDWIFE');
+    if (this.isNurse()) return this.t('DASHBOARD.ROLE.NURSE');
+    if (this.isReceptionist()) return this.t('DASHBOARD.ROLE.RECEPTIONIST');
+    if (this.isLabDirector()) return this.t('DASHBOARD.ROLE.LAB_DIRECTOR');
+    if (this.isQualityManager()) return this.t('DASHBOARD.ROLE.QUALITY_MANAGER');
+    if (this.isLabScientist()) return this.t('DASHBOARD.ROLE.LAB_SCIENTIST');
+    if (this.isPharmacist()) return this.t('DASHBOARD.ROLE.PHARMACIST');
+    if (this.isRadiologist()) return this.t('DASHBOARD.ROLE.RADIOLOGIST');
+    return this.t('DASHBOARD.ROLE.STAFF');
   });
 
   // ── Critical Strip (doctor — actionable cards) ───────────────
   criticalStripCards = computed<StatCard[]>(() => {
+    this.langTick();
     const cs = this.criticalStrip();
     if (!cs) return [];
     return [
       {
         key: 'critical_labs',
-        label: 'Critical Labs',
+        label: this.t('DASHBOARD.CRITICAL_LABS'),
         value: cs.criticalLabsCount,
         icon: 'science',
         color: '#dc2626',
@@ -416,7 +418,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'waiting_long',
-        label: 'Waiting > 30m',
+        label: this.t('DASHBOARD.WAITING_LONG'),
         value: cs.waitingLongCount,
         icon: 'hourglass_top',
         color: cs.waitingLongCount > 0 ? '#d97706' : '#64748b',
@@ -424,7 +426,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'pending_consults',
-        label: 'Pending Consults',
+        label: this.t('DASHBOARD.PENDING_CONSULTS'),
         value: cs.pendingConsultsCount,
         icon: 'forum',
         color: cs.pendingConsultsCount > 0 ? '#7c3aed' : '#64748b',
@@ -433,7 +435,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'unsigned_notes',
-        label: 'Unsigned Notes',
+        label: this.t('DASHBOARD.UNSIGNED_NOTES'),
         value: cs.unsignedNotesCount,
         icon: 'draw',
         color: cs.unsignedNotesCount > 0 ? '#d97706' : '#64748b',
@@ -441,7 +443,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'pending_orders',
-        label: 'Orders to Review',
+        label: this.t('DASHBOARD.ORDERS_TO_REVIEW'),
         value: cs.pendingOrderReviewCount,
         icon: 'assignment',
         color: cs.pendingOrderReviewCount > 0 ? '#2563eb' : '#64748b',
@@ -450,7 +452,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'safety_alerts',
-        label: 'Safety Alerts',
+        label: this.t('DASHBOARD.SAFETY_ALERTS'),
         value: cs.activeSafetyAlertsCount,
         icon: 'emergency',
         color: cs.activeSafetyAlertsCount > 0 ? '#dc2626' : '#64748b',
@@ -461,10 +463,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Stat strip (generic fallback for non-doctor clinical) ───
   statCards = computed<StatCard[]>(() => {
+    this.langTick();
     const base: StatCard[] = [
       {
         key: 'total_today',
-        label: "Today's Patients",
+        label: this.t('DASHBOARD.PATIENTS_TODAY'),
         value: this.todayAppointments().length,
         icon: 'group',
         color: '#2563eb',
@@ -473,7 +476,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'completed',
-        label: 'Completed',
+        label: this.t('COMMON.COMPLETED'),
         value: this.completedToday(),
         icon: 'task_alt',
         color: '#2563eb',
@@ -482,7 +485,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'in_progress',
-        label: 'In Progress',
+        label: this.t('DASHBOARD.IN_PROGRESS'),
         value: this.inProgressNow(),
         icon: 'person_play',
         color: '#2563eb',
@@ -491,7 +494,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'pending',
-        label: 'Pending',
+        label: this.t('DASHBOARD.PENDING'),
         value: this.pendingToday(),
         icon: 'pending',
         color: '#2563eb',
@@ -500,7 +503,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'alerts',
-        label: 'Active Alerts',
+        label: this.t('DASHBOARD.ACTIVE_ALERTS'),
         value: this.unacknowledgedAlerts().length,
         icon: 'notification_important',
         color: this.criticalAlerts().length > 0 ? '#dc2626' : '#2563eb',
@@ -508,7 +511,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'inbox',
-        label: 'Inbox Items',
+        label: this.t('DASHBOARD.INBOX_ITEMS'),
         value: this.totalInboxCount(),
         icon: 'mark_email_unread',
         color: '#2563eb',
@@ -526,6 +529,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Quick Actions (permission-gated) ─────────────────────────
   quickActions = computed<QuickAction[]>(() => {
+    this.langTick();
     const all: [string, QuickAction][] = [
       // Doctor-priority shortcuts (appear first, dedup 'Start Encounter' on /encounters route)
       ...(this.isDoctor()
@@ -534,8 +538,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
               'Create Encounters',
               {
                 icon: 'navigate_next',
-                label: 'Open Next Patient',
-                description: 'Open next waiting patient',
+                label: this.t('DASHBOARD.QA.OPEN_NEXT_PATIENT'),
+                description: this.t('DASHBOARD.QA.OPEN_NEXT_PATIENT_DESC'),
                 route: '/encounters',
                 color: '#059669',
                 bgColor: '#d1fae5',
@@ -545,8 +549,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
               'Create Encounters',
               {
                 icon: 'meeting_room',
-                label: 'Discharge Patient',
-                description: 'Initiate patient discharge',
+                label: this.t('DASHBOARD.QA.DISCHARGE_PATIENT'),
+                description: this.t('DASHBOARD.QA.DISCHARGE_PATIENT_DESC'),
                 route: '/admissions',
                 queryParams: { tab: 'admitted' },
                 color: '#d97706',
@@ -559,8 +563,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Register Patients',
         {
           icon: 'person_add',
-          label: 'Register Patient',
-          description: 'Onboard a new patient',
+          label: this.t('DASHBOARD.REGISTER_PATIENT'),
+          description: this.t('DASHBOARD.QA.REGISTER_PATIENT_DESC'),
           route: '/patients/new',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -570,8 +574,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Create Appointments',
         {
           icon: 'calendar_add_on',
-          label: 'New Appointment',
-          description: 'Schedule a visit',
+          label: this.t('DASHBOARD.NEW_APPOINTMENT'),
+          description: this.t('DASHBOARD.QA.NEW_APPOINTMENT_DESC'),
           route: '/appointments/new',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -581,8 +585,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Create Encounters',
         {
           icon: 'stethoscope',
-          label: 'Start Encounter',
-          description: 'Begin a clinical encounter',
+          label: this.t('DASHBOARD.START_ENCOUNTER'),
+          description: this.t('DASHBOARD.QA.START_ENCOUNTER_DESC'),
           route: '/encounters',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -592,8 +596,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Create Prescriptions',
         {
           icon: 'medication',
-          label: 'Write Rx',
-          description: 'Prescribe medication',
+          label: this.t('DASHBOARD.WRITE_RX'),
+          description: this.t('DASHBOARD.QA.WRITE_RX_DESC'),
           route: '/prescriptions',
           queryParams: { new: '1' },
           color: '#2563eb',
@@ -604,8 +608,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'View Lab',
         {
           icon: 'science',
-          label: 'Lab Orders',
-          description: 'Order lab tests',
+          label: this.t('DASHBOARD.LAB_ORDERS'),
+          description: this.t('DASHBOARD.QA.LAB_ORDERS_DESC'),
           route: '/lab',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -615,8 +619,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Request Imaging Studies',
         {
           icon: 'radiology',
-          label: 'Imaging',
-          description: 'Request imaging studies',
+          label: this.t('DASHBOARD.IMAGING'),
+          description: this.t('DASHBOARD.QA.IMAGING_DESC'),
           route: '/imaging',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -626,8 +630,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'View Billing',
         {
           icon: 'receipt_long',
-          label: 'Billing',
-          description: 'Manage billing',
+          label: this.t('DASHBOARD.BILLING'),
+          description: this.t('DASHBOARD.QA.BILLING_DESC'),
           route: '/billing',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -637,8 +641,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Create Referrals',
         {
           icon: 'send',
-          label: 'Create Referral',
-          description: 'Refer a patient',
+          label: this.t('DASHBOARD.QA.CREATE_REFERRAL'),
+          description: this.t('DASHBOARD.QA.CREATE_REFERRAL_DESC'),
           route: '/referrals',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -648,8 +652,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'View Prescriptions',
         {
           icon: 'local_pharmacy',
-          label: 'Prescriptions',
-          description: 'View & dispense prescriptions',
+          label: this.t('DASHBOARD.PRESCRIPTIONS'),
+          description: this.t('DASHBOARD.QA.PRESCRIPTIONS_DESC'),
           route: '/prescriptions',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -659,8 +663,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Dispense Medications',
         {
           icon: 'medication_liquid',
-          label: 'Dispense Rx',
-          description: 'Dispense medications',
+          label: this.t('DASHBOARD.QA.DISPENSE_RX'),
+          description: this.t('DASHBOARD.QA.DISPENSE_RX_DESC'),
           route: '/prescriptions',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -670,8 +674,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Process Lab Tests',
         {
           icon: 'biotech',
-          label: 'Process Lab',
-          description: 'Process pending lab tests',
+          label: this.t('DASHBOARD.QA.PROCESS_LAB'),
+          description: this.t('DASHBOARD.QA.PROCESS_LAB_DESC'),
           route: '/lab',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -681,8 +685,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Document Nursing Notes',
         {
           icon: 'edit_note',
-          label: 'Nursing Notes',
-          description: 'Document patient notes',
+          label: this.t('DASHBOARD.QA.NURSING_NOTES'),
+          description: this.t('DASHBOARD.QA.NURSING_NOTES_DESC'),
           route: '/encounters',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -692,8 +696,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         'Check-in Patients',
         {
           icon: 'how_to_reg',
-          label: 'Check-in',
-          description: 'Check in a patient',
+          label: this.t('DASHBOARD.QA.CHECK_IN'),
+          description: this.t('DASHBOARD.QA.CHECK_IN_DESC'),
           route: '/reception',
           color: '#2563eb',
           bgColor: '#eff6ff',
@@ -743,145 +747,66 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return undefined;
   }
 
-  // ── Super-Admin navigation tiles ─────────────────────────────
-  adminNavTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'corporate_fare',
-      label: 'Organizations',
-      route: '/organizations',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'local_hospital',
-      label: 'Hospitals',
-      route: '/hospitals',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'domain',
-      label: 'Departments',
-      route: '/departments',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'shield',
-      label: 'Roles',
-      route: '/roles',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    { icon: 'group', label: 'Users', route: '/users', color: '#2563eb', bg: '#eff6ff' },
-    {
-      icon: 'people',
-      label: 'Patients',
-      route: '/patients',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'calendar_month',
-      label: 'Appointments',
-      route: '/appointments',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'history',
-      label: 'Audit Logs',
-      route: '/audit-logs',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'tune',
-      label: 'Platform Config',
-      route: '/platform',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'flag',
-      label: 'Feature Flags',
-      route: '/feature-flags',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'analytics',
-      label: 'Analytics',
-      route: '/analytics',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'notifications',
-      label: 'Notifications',
-      route: '/notifications',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'verified',
-      label: 'Digital Signatures',
-      route: '/digital-signatures',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-  ]);
-
   // ── Hospital Admin navigation tiles ──────────────────────────
-  hospitalAdminNavTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'group',
-      label: 'Staff',
-      route: '/staff',
-      color: '#2563eb',
-      bg: '#eff6ff',
-      count: undefined,
-    },
-    {
-      icon: 'people',
-      label: 'Patients',
-      route: '/patients',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'calendar_month',
-      label: 'Appointments',
-      route: '/appointments',
-      color: '#2563eb',
-      bg: '#eff6ff',
-      count: this.todayAppointments().length,
-    },
-    {
-      icon: 'domain',
-      label: 'Departments',
-      route: '/departments',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    {
-      icon: 'receipt_long',
-      label: 'Billing',
-      route: '/billing',
-      color: '#2563eb',
-      bg: '#eff6ff',
-    },
-    { icon: 'policy', label: 'Audit Logs', route: '/audit-logs', color: '#2563eb', bg: '#eff6ff' },
-  ]);
+  hospitalAdminNavTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'group',
+        label: this.t('DASHBOARD.TILE.STAFF'),
+        route: '/staff',
+        color: '#2563eb',
+        bg: '#eff6ff',
+        count: undefined,
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#2563eb',
+        bg: '#eff6ff',
+      },
+      {
+        icon: 'calendar_month',
+        label: this.t('DASHBOARD.TILE.APPOINTMENTS'),
+        route: '/appointments',
+        color: '#2563eb',
+        bg: '#eff6ff',
+        count: this.todayAppointments().length,
+      },
+      {
+        icon: 'domain',
+        label: this.t('DASHBOARD.DEPARTMENTS'),
+        route: '/departments',
+        color: '#2563eb',
+        bg: '#eff6ff',
+      },
+      {
+        icon: 'receipt_long',
+        label: this.t('DASHBOARD.BILLING'),
+        route: '/billing',
+        color: '#2563eb',
+        bg: '#eff6ff',
+      },
+      {
+        icon: 'policy',
+        label: this.t('DASHBOARD.TILE.AUDIT_LOGS'),
+        route: '/audit-logs',
+        color: '#2563eb',
+        bg: '#eff6ff',
+      },
+    ];
+  });
 
   // ── Hospital Admin stat cards (from summary API) ────────────
   hospitalAdminStatCards = computed<StatCard[]>(() => {
+    this.langTick();
     const s = this.hospitalAdminSummary();
     if (!s || !s.appointments) return [];
     return [
       {
         key: 'appts_today',
-        label: "Today's Appointments",
+        label: this.t('DASHBOARD.TODAYS_APPOINTMENTS'),
         value: s.appointments.todayTotal,
         icon: 'calendar_today',
         color: '#2563eb',
@@ -890,7 +815,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'appts_completed',
-        label: 'Completed',
+        label: this.t('COMMON.COMPLETED'),
         value: s.appointments.completed,
         icon: 'task_alt',
         color: '#059669',
@@ -899,7 +824,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'appts_noshow',
-        label: 'No-Shows',
+        label: this.t('DASHBOARD.NO_SHOWS'),
         value: s.appointments.noShows,
         icon: 'person_off',
         color: s.appointments.noShows > 0 ? '#dc2626' : '#64748b',
@@ -908,7 +833,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'admissions_active',
-        label: 'Active Admissions',
+        label: this.t('DASHBOARD.ACTIVE_ADMISSIONS'),
         value: s.admissions.active,
         icon: 'hotel',
         color: '#7c3aed',
@@ -917,7 +842,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'admissions_today',
-        label: 'Admitted Today',
+        label: this.t('DASHBOARD.ADMITTED_TODAY'),
         value: s.admissions.admittedToday,
         icon: 'login',
         color: '#2563eb',
@@ -926,7 +851,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'discharged_today',
-        label: 'Discharged Today',
+        label: this.t('DASHBOARD.DISCHARGED_TODAY'),
         value: s.admissions.dischargedToday,
         icon: 'logout',
         color: '#059669',
@@ -935,7 +860,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'consults_pending',
-        label: 'Consults Pending',
+        label: this.t('DASHBOARD.CONSULTS_PENDING'),
         value: s.consultations.requested + s.consultations.acknowledged,
         icon: 'forum',
         color: '#d97706',
@@ -944,7 +869,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'consults_overdue',
-        label: 'Consults Overdue',
+        label: this.t('DASHBOARD.CONSULTS_OVERDUE'),
         value: s.consultations.overdue,
         icon: 'warning',
         color: s.consultations.overdue > 0 ? '#dc2626' : '#64748b',
@@ -953,7 +878,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'staff_active',
-        label: 'Active Staff',
+        label: this.t('DASHBOARD.ACTIVE_STAFF'),
         value: s.staffing.activeStaff,
         icon: 'badge',
         color: '#0891b2',
@@ -962,7 +887,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'staff_on_shift',
-        label: 'On-Shift Today',
+        label: this.t('DASHBOARD.ON_SHIFT_TODAY'),
         value: s.staffing.onShiftToday,
         icon: 'work',
         color: '#059669',
@@ -971,7 +896,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'staff_on_leave',
-        label: 'On Leave Today',
+        label: this.t('DASHBOARD.ON_LEAVE_TODAY'),
         value: s.staffing.staffOnLeaveToday ?? 0,
         icon: 'event_busy',
         color: (s.staffing.staffOnLeaveToday ?? 0) > 0 ? '#d97706' : '#64748b',
@@ -980,7 +905,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'license_alerts',
-        label: 'License Alerts',
+        label: this.t('DASHBOARD.LICENSE_ALERTS'),
         value: (s.licenseAlerts ?? []).length,
         icon: 'gpp_maybe',
         color: (s.licenseAlerts ?? []).some((a) => a.severity === 'EXPIRED')
@@ -997,7 +922,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'invoices_overdue',
-        label: 'Overdue Invoices',
+        label: this.t('DASHBOARD.OVERDUE_INVOICES'),
         value: s.billing.overdueInvoices,
         icon: 'receipt_long',
         color: s.billing.overdueInvoices > 0 ? '#dc2626' : '#64748b',
@@ -1006,7 +931,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'open_balance',
-        label: 'Open Balance',
+        label: this.t('DASHBOARD.OPEN_BALANCE'),
         value: '$' + (s.billing.openBalanceTotal ?? 0).toLocaleString(),
         icon: 'account_balance',
         color: '#d97706',
@@ -1114,149 +1039,295 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   // ── Nurse workflow tiles (Epic-style My Activities) ──────────
-  nurseWorkflowTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'monitor_heart',
-      label: 'Vitals',
-      route: '/nurse-station',
-      color: '#dc2626',
-      bg: '#fee2e2',
-    },
-    { icon: 'medication', label: 'MAR', route: '/nurse-station', color: '#7c3aed', bg: '#ede9fe' },
-    {
-      icon: 'how_to_reg',
-      label: 'Check-In',
-      route: '/nurse-station',
-      color: '#059669',
-      bg: '#d1fae5',
-    },
-    { icon: 'hotel', label: 'Admissions', route: '/admissions', color: '#2563eb', bg: '#dbeafe' },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    {
-      icon: 'clinical_notes',
-      label: 'Encounters',
-      route: '/encounters',
-      color: '#d97706',
-      bg: '#fef3c7',
-    },
-    {
-      icon: 'local_pharmacy',
-      label: 'Prescriptions',
-      route: '/prescriptions',
-      color: '#9333ea',
-      bg: '#f3e8ff',
-    },
-    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
-    {
-      icon: 'assignment',
-      label: 'Tasks',
-      route: '/nurse-station',
-      color: '#ea580c',
-      bg: '#fff7ed',
-    },
-    {
-      icon: 'swap_horiz',
-      label: 'Handoffs',
-      route: '/nurse-station',
-      color: '#4f46e5',
-      bg: '#eef2ff',
-    },
-  ]);
+  nurseWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'monitor_heart',
+        label: this.t('DASHBOARD.TILE.VITALS'),
+        route: '/nurse-station',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'medication',
+        label: this.t('DASHBOARD.TILE.MAR'),
+        route: '/nurse-station',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'how_to_reg',
+        label: this.t('DASHBOARD.TILE.CHECK_IN'),
+        route: '/nurse-station',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'hotel',
+        label: this.t('DASHBOARD.TILE.ADMISSIONS'),
+        route: '/admissions',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'clinical_notes',
+        label: this.t('DASHBOARD.TILE.ENCOUNTERS'),
+        route: '/encounters',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'local_pharmacy',
+        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        route: '/prescriptions',
+        color: '#9333ea',
+        bg: '#f3e8ff',
+      },
+      {
+        icon: 'science',
+        label: this.t('DASHBOARD.LAB_ORDERS'),
+        route: '/lab',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
+      {
+        icon: 'assignment',
+        label: this.t('DASHBOARD.TASKS'),
+        route: '/nurse-station',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+      {
+        icon: 'swap_horiz',
+        label: this.t('DASHBOARD.TILE.HANDOFFS'),
+        route: '/nurse-station',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+    ];
+  });
 
   // ── Doctor workflow tiles (Epic-style Provider Activities) ───
-  doctorWorkflowTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'calendar_month',
-      label: 'Schedule',
-      route: '/appointments',
-      color: '#2563eb',
-      bg: '#dbeafe',
-    },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    {
-      icon: 'stethoscope',
-      label: 'Encounters',
-      route: '/encounters',
-      color: '#059669',
-      bg: '#d1fae5',
-    },
-    {
-      icon: 'medication',
-      label: 'Prescriptions',
-      route: '/prescriptions',
-      color: '#7c3aed',
-      bg: '#ede9fe',
-    },
-    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
-    { icon: 'radiology', label: 'Imaging', route: '/imaging', color: '#d97706', bg: '#fef3c7' },
-    { icon: 'hotel', label: 'Admissions', route: '/admissions', color: '#dc2626', bg: '#fee2e2' },
-    { icon: 'forum', label: 'Consults', route: '/consultations', color: '#4f46e5', bg: '#eef2ff' },
-    {
-      icon: 'assignment',
-      label: 'Treatment Plans',
-      route: '/treatment-plans',
-      color: '#ea580c',
-      bg: '#fff7ed',
-    },
-    { icon: 'send', label: 'Referrals', route: '/referrals', color: '#9333ea', bg: '#f3e8ff' },
-  ]);
+  doctorWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'calendar_month',
+        label: this.t('DASHBOARD.SCHEDULE'),
+        route: '/appointments',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'stethoscope',
+        label: this.t('DASHBOARD.TILE.ENCOUNTERS'),
+        route: '/encounters',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'medication',
+        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        route: '/prescriptions',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'science',
+        label: this.t('DASHBOARD.LAB_ORDERS'),
+        route: '/lab',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
+      {
+        icon: 'radiology',
+        label: this.t('DASHBOARD.IMAGING'),
+        route: '/imaging',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'hotel',
+        label: this.t('DASHBOARD.TILE.ADMISSIONS'),
+        route: '/admissions',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'forum',
+        label: this.t('DASHBOARD.TILE.CONSULTS'),
+        route: '/consultations',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'assignment',
+        label: this.t('DASHBOARD.TILE.TREATMENT_PLANS'),
+        route: '/treatment-plans',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+      {
+        icon: 'send',
+        label: this.t('DASHBOARD.TILE.REFERRALS'),
+        route: '/referrals',
+        color: '#9333ea',
+        bg: '#f3e8ff',
+      },
+    ];
+  });
 
   // ── Receptionist workflow tiles (Epic-style Front Desk) ──────
-  receptionistWorkflowTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'how_to_reg',
-      label: 'Check-In',
-      route: '/reception',
-      color: '#059669',
-      bg: '#d1fae5',
-    },
-    {
-      icon: 'calendar_add_on',
-      label: 'Schedule',
-      route: '/appointments',
-      color: '#2563eb',
-      bg: '#dbeafe',
-    },
-    { icon: 'person_add', label: 'Register', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#7c3aed', bg: '#ede9fe' },
-    { icon: 'receipt_long', label: 'Billing', route: '/billing', color: '#d97706', bg: '#fef3c7' },
-    {
-      icon: 'notifications',
-      label: 'Notifications',
-      route: '/notifications',
-      color: '#dc2626',
-      bg: '#fee2e2',
-    },
-    { icon: 'chat', label: 'Messages', route: '/chat', color: '#4f46e5', bg: '#eef2ff' },
-    {
-      icon: 'event_note',
-      label: 'Scheduling',
-      route: '/scheduling',
-      color: '#ea580c',
-      bg: '#fff7ed',
-    },
-  ]);
+  // Tiles ordered by daily front-desk workflow:
+  //   patient lifecycle → schedule → billing → comms.
+  // Two routes were previously duplicated (REGISTER + Patients both went to
+  // /patients); REGISTER now points at /patients/new so each tile leads
+  // somewhere distinct. Color palette is constrained to the same blue/teal
+  // family as the hero banner so the dashboard reads as one product
+  // surface rather than a rainbow of unrelated apps.
+  receptionistWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'how_to_reg',
+        label: this.t('DASHBOARD.TILE.CHECK_IN'),
+        route: '/reception',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'person_add',
+        label: this.t('DASHBOARD.TILE.REGISTER'),
+        route: '/patients/new',
+        color: '#0e7490',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0369a1',
+        bg: '#e0f2fe',
+      },
+      {
+        icon: 'calendar_add_on',
+        label: this.t('DASHBOARD.SCHEDULE'),
+        route: '/appointments',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'event_note',
+        label: this.t('DASHBOARD.TILE.SCHEDULING'),
+        route: '/scheduling',
+        color: '#1e40af',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'receipt_long',
+        label: this.t('DASHBOARD.BILLING'),
+        route: '/billing',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'chat',
+        label: this.t('DASHBOARD.MESSAGES'),
+        route: '/chat',
+        color: '#1d4ed8',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'notifications',
+        label: this.t('DASHBOARD.TILE.NOTIFICATIONS'),
+        route: '/notifications',
+        color: '#0369a1',
+        bg: '#e0f2fe',
+      },
+    ];
+  });
 
   // ── Lab Scientist workflow tiles ─────────────────────────────
-  labWorkflowTiles = computed<NavTile[]>(() => [
-    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
-    { icon: 'biotech', label: 'Process Tests', route: '/lab', color: '#7c3aed', bg: '#ede9fe' },
-    { icon: 'task_alt', label: 'Results', route: '/lab', color: '#059669', bg: '#d1fae5' },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    {
-      icon: 'clinical_notes',
-      label: 'Encounters',
-      route: '/encounters',
-      color: '#d97706',
-      bg: '#fef3c7',
-    },
-    { icon: 'priority_high', label: 'Urgent', route: '/lab', color: '#dc2626', bg: '#fee2e2' },
-    { icon: 'inventory_2', label: 'Inventory', route: '/lab', color: '#4f46e5', bg: '#eef2ff' },
-    { icon: 'analytics', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
-  ]);
+  labWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'science',
+        label: this.t('DASHBOARD.LAB_ORDERS'),
+        route: '/lab',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
+      {
+        icon: 'biotech',
+        label: this.t('DASHBOARD.TILE.PROCESS_TESTS'),
+        route: '/lab',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'task_alt',
+        label: this.t('DASHBOARD.TILE.RESULTS'),
+        route: '/lab',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'clinical_notes',
+        label: this.t('DASHBOARD.TILE.ENCOUNTERS'),
+        route: '/encounters',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'priority_high',
+        label: this.t('DASHBOARD.URGENT'),
+        route: '/lab',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'inventory_2',
+        label: this.t('DASHBOARD.TILE.INVENTORY'),
+        route: '/lab',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'analytics',
+        label: this.t('DASHBOARD.TILE.REPORTS'),
+        route: '/lab',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+    ];
+  });
 
   // ── Lab Director stat cards ───────────────────────────────────
   labDirectorStatCards = computed<StatCard[]>(() => {
+    this.langTick();
     const d = this.labDirectorDashboard();
     if (!d) return [];
     const tatValue: number | string =
@@ -1264,7 +1335,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return [
       {
         key: 'pending_director',
-        label: 'Pending Your Approval',
+        label: this.t('DASHBOARD.PENDING_YOUR_APPROVAL'),
         value: d.pendingDirectorApproval,
         icon: 'approval',
         color: d.pendingDirectorApproval > 0 ? '#dc2626' : '#64748b',
@@ -1273,7 +1344,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'pending_qa',
-        label: 'Pending QA Review',
+        label: this.t('DASHBOARD.PENDING_QA_REVIEW'),
         value: d.pendingQaReview,
         icon: 'fact_check',
         color: d.pendingQaReview > 0 ? '#d97706' : '#64748b',
@@ -1282,7 +1353,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'active_definitions',
-        label: 'Active Test Definitions',
+        label: this.t('DASHBOARD.ACTIVE_TEST_DEFINITIONS'),
         value: d.activeDefinitions,
         icon: 'science',
         color: '#059669',
@@ -1291,7 +1362,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'orders_today',
-        label: 'Orders Today',
+        label: this.t('DASHBOARD.ORDERS_TODAY'),
         value: d.ordersToday,
         icon: 'assignment',
         color: '#2563eb',
@@ -1300,7 +1371,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'avg_tat',
-        label: 'Avg Turnaround (min)',
+        label: this.t('DASHBOARD.AVG_TURNAROUND'),
         value: tatValue,
         icon: 'timer',
         color: '#7c3aed',
@@ -1311,11 +1382,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Lab Director workflow tiles ───────────────────────────────
   labDirectorNavTiles = computed<NavTile[]>(() => {
+    this.langTick();
     const d = this.labDirectorDashboard();
     return [
       {
         icon: 'approval',
-        label: 'Approval Queue',
+        label: this.t('DASHBOARD.TILE.APPROVAL_QUEUE'),
         route: '/lab',
         color: '#dc2626',
         bg: '#fee2e2',
@@ -1323,73 +1395,85 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'fact_check',
-        label: 'QA Reviews',
+        label: this.t('DASHBOARD.TILE.QA_REVIEWS'),
         route: '/lab',
         color: '#d97706',
         bg: '#fef3c7',
         count: d?.pendingQaReview,
       },
-      { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
+      {
+        icon: 'science',
+        label: this.t('DASHBOARD.LAB_ORDERS'),
+        route: '/lab',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
       {
         icon: 'biotech',
-        label: 'Test Definitions',
+        label: this.t('DASHBOARD.TILE.TEST_DEFINITIONS'),
         route: '/lab',
         color: '#7c3aed',
         bg: '#ede9fe',
       },
       {
         icon: 'analytics',
-        label: 'Validation Studies',
+        label: this.t('DASHBOARD.VALIDATION_STUDIES'),
         route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },
-      { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
       {
         icon: 'history',
-        label: 'Audit Trail',
+        label: this.t('DASHBOARD.TILE.AUDIT_TRAIL'),
         route: '/audit-logs',
         color: '#4f46e5',
         bg: '#eef2ff',
       },
       {
         icon: 'bar_chart',
-        label: 'QC Dashboard',
+        label: this.t('DASHBOARD.TILE.QC_DASHBOARD'),
         route: '/lab-qc-dashboard',
         color: '#ea580c',
         bg: '#fff7ed',
       },
       {
         icon: 'monitoring',
-        label: 'Lab Ops Dashboard',
+        label: this.t('DASHBOARD.TILE.LAB_OPS_DASHBOARD'),
         route: '/lab-ops-dashboard',
         color: '#0284c7',
         bg: '#e0f2fe',
       },
       {
         icon: 'badge',
-        label: 'Lab Staff',
+        label: this.t('DASHBOARD.TILE.LAB_STAFF'),
         route: '/lab-staff',
         color: '#7c3aed',
         bg: '#ede9fe',
       },
       {
         icon: 'tune',
-        label: 'Test Config',
+        label: this.t('DASHBOARD.TILE.TEST_CONFIG'),
         route: '/lab-test-config',
         color: '#0369a1',
         bg: '#e0f2fe',
       },
       {
         icon: 'precision_manufacturing',
-        label: 'Instruments',
+        label: this.t('DASHBOARD.TILE.INSTRUMENTS'),
         route: '/lab-instruments',
         color: '#0284c7',
         bg: '#e0f2fe',
       },
       {
         icon: 'inventory_2',
-        label: 'Inventory',
+        label: this.t('DASHBOARD.TILE.INVENTORY'),
         route: '/lab-inventory',
         color: '#0891b2',
         bg: '#cffafe',
@@ -1399,6 +1483,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Quality Manager stat cards ────────────────────────────────
   qualityManagerStatCards = computed<StatCard[]>(() => {
+    this.langTick();
     const d = this.qualityManagerDashboard();
     if (!d) return [];
     const passRateDisplay: string =
@@ -1406,7 +1491,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return [
       {
         key: 'pending_qa',
-        label: 'Pending QA Review',
+        label: this.t('DASHBOARD.PENDING_QA_REVIEW'),
         value: d.pendingQaReview,
         icon: 'fact_check',
         color: d.pendingQaReview > 0 ? '#dc2626' : '#64748b',
@@ -1415,7 +1500,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'total_studies',
-        label: 'Validation Studies',
+        label: this.t('DASHBOARD.VALIDATION_STUDIES'),
         value: d.totalValidationStudies,
         icon: 'biotech',
         color: '#7c3aed',
@@ -1424,7 +1509,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'pass_rate',
-        label: 'Quality Pass Rate',
+        label: this.t('DASHBOARD.QUALITY_PASS_RATE'),
         value: passRateDisplay,
         icon: 'verified',
         color: '#059669',
@@ -1432,7 +1517,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'active_definitions',
-        label: 'Active Test Definitions',
+        label: this.t('DASHBOARD.ACTIVE_TEST_DEFINITIONS'),
         value: d.activeDefinitions,
         icon: 'science',
         color: '#2563eb',
@@ -1441,7 +1526,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         key: 'studies_30d',
-        label: 'Studies (Last 30d)',
+        label: this.t('DASHBOARD.VALIDATION_STUDIES_30D'),
         value: d.validationStudiesLast30Days,
         icon: 'calendar_month',
         color: '#0891b2',
@@ -1453,11 +1538,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Quality Manager workflow tiles ────────────────────────────
   qualityManagerNavTiles = computed<NavTile[]>(() => {
+    this.langTick();
     const d = this.qualityManagerDashboard();
     return [
       {
         icon: 'fact_check',
-        label: 'QA Reviews',
+        label: this.t('DASHBOARD.TILE.QA_REVIEWS'),
         route: '/lab',
         color: '#dc2626',
         bg: '#fee2e2',
@@ -1465,29 +1551,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'biotech',
-        label: 'Validation Studies',
+        label: this.t('DASHBOARD.VALIDATION_STUDIES'),
         route: '/lab-qc-dashboard',
         color: '#7c3aed',
         bg: '#ede9fe',
       },
       {
         icon: 'science',
-        label: 'Test Definitions',
+        label: this.t('DASHBOARD.TILE.TEST_DEFINITIONS'),
         route: '/lab',
         color: '#0d9488',
         bg: '#ccfbf1',
       },
-      { icon: 'verified', label: 'Approved Tests', route: '/lab', color: '#059669', bg: '#d1fae5' },
+      {
+        icon: 'verified',
+        label: this.t('DASHBOARD.TILE.APPROVED_TESTS'),
+        route: '/lab',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
       {
         icon: 'analytics',
-        label: 'Quality Reports',
+        label: this.t('DASHBOARD.TILE.QUALITY_REPORTS'),
         route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },
       {
         icon: 'warning',
-        label: 'Failed Studies',
+        label: this.t('DASHBOARD.TILE.FAILED_STUDIES'),
         route: '/lab',
         color: '#d97706',
         bg: '#fef3c7',
@@ -1495,14 +1587,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'history',
-        label: 'Audit Trail',
+        label: this.t('DASHBOARD.TILE.AUDIT_TRAIL'),
         route: '/audit-logs',
         color: '#4f46e5',
         bg: '#eef2ff',
       },
       {
         icon: 'pending_actions',
-        label: 'Director Pending',
+        label: this.t('DASHBOARD.TILE.DIRECTOR_PENDING'),
         route: '/lab',
         color: '#ea580c',
         bg: '#fff7ed',
@@ -1510,7 +1602,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       },
       {
         icon: 'monitoring',
-        label: 'Lab Ops Dashboard',
+        label: this.t('DASHBOARD.TILE.LAB_OPS_DASHBOARD'),
         route: '/lab-ops-dashboard',
         color: '#0284c7',
         bg: '#e0f2fe',
@@ -1519,130 +1611,193 @@ export class DashboardComponent implements OnInit, OnDestroy {
   });
 
   // ── Pharmacist workflow tiles ────────────────────────────────
-  pharmacistWorkflowTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'local_pharmacy',
-      label: 'Prescriptions',
-      route: '/prescriptions',
-      color: '#9333ea',
-      bg: '#f3e8ff',
-    },
-    {
-      icon: 'medication_liquid',
-      label: 'Dispense',
-      route: '/prescriptions',
-      color: '#059669',
-      bg: '#d1fae5',
-    },
-    { icon: 'loop', label: 'Refills', route: '/prescriptions', color: '#2563eb', bg: '#dbeafe' },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    {
-      icon: 'clinical_notes',
-      label: 'Encounters',
-      route: '/encounters',
-      color: '#d97706',
-      bg: '#fef3c7',
-    },
-    {
-      icon: 'warning',
-      label: 'Interactions',
-      route: '/prescriptions',
-      color: '#dc2626',
-      bg: '#fee2e2',
-    },
-    {
-      icon: 'inventory_2',
-      label: 'Inventory',
-      route: '/prescriptions',
-      color: '#4f46e5',
-      bg: '#eef2ff',
-    },
-    {
-      icon: 'analytics',
-      label: 'Reports',
-      route: '/prescriptions',
-      color: '#ea580c',
-      bg: '#fff7ed',
-    },
-  ]);
+  pharmacistWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'local_pharmacy',
+        label: this.t('DASHBOARD.PRESCRIPTIONS'),
+        route: '/prescriptions',
+        color: '#9333ea',
+        bg: '#f3e8ff',
+      },
+      {
+        icon: 'medication_liquid',
+        label: this.t('DASHBOARD.TILE.DISPENSE'),
+        route: '/prescriptions',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'loop',
+        label: this.t('DASHBOARD.TILE.REFILLS'),
+        route: '/prescriptions',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'clinical_notes',
+        label: this.t('DASHBOARD.TILE.ENCOUNTERS'),
+        route: '/encounters',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'warning',
+        label: this.t('DASHBOARD.TILE.INTERACTIONS'),
+        route: '/prescriptions',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'inventory_2',
+        label: this.t('DASHBOARD.TILE.INVENTORY'),
+        route: '/prescriptions',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'analytics',
+        label: this.t('DASHBOARD.TILE.REPORTS'),
+        route: '/prescriptions',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+    ];
+  });
 
   // ── Radiologist workflow tiles ───────────────────────────────
-  radiologistWorkflowTiles = computed<NavTile[]>(() => [
-    {
-      icon: 'radiology',
-      label: 'Imaging Studies',
-      route: '/imaging',
-      color: '#2563eb',
-      bg: '#dbeafe',
-    },
-    {
-      icon: 'pending_actions',
-      label: 'Pending Reports',
-      route: '/imaging',
-      color: '#d97706',
-      bg: '#fef3c7',
-    },
-    { icon: 'task_alt', label: 'Completed', route: '/imaging', color: '#059669', bg: '#d1fae5' },
-    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
-    {
-      icon: 'clinical_notes',
-      label: 'Encounters',
-      route: '/encounters',
-      color: '#7c3aed',
-      bg: '#ede9fe',
-    },
-    {
-      icon: 'priority_high',
-      label: 'STAT Orders',
-      route: '/imaging',
-      color: '#dc2626',
-      bg: '#fee2e2',
-    },
-    { icon: 'description', label: 'Templates', route: '/imaging', color: '#4f46e5', bg: '#eef2ff' },
-    { icon: 'analytics', label: 'Reports', route: '/imaging', color: '#ea580c', bg: '#fff7ed' },
-  ]);
+  radiologistWorkflowTiles = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'radiology',
+        label: this.t('DASHBOARD.TILE.IMAGING_STUDIES'),
+        route: '/imaging',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'pending_actions',
+        label: this.t('DASHBOARD.TILE.PENDING_REPORTS'),
+        route: '/imaging',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'task_alt',
+        label: this.t('COMMON.COMPLETED'),
+        route: '/imaging',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'people',
+        label: this.t('PATIENTS.TITLE'),
+        route: '/patients',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
+      {
+        icon: 'clinical_notes',
+        label: this.t('DASHBOARD.TILE.ENCOUNTERS'),
+        route: '/encounters',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'priority_high',
+        label: this.t('DASHBOARD.TILE.STAT_ORDERS'),
+        route: '/imaging',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+      {
+        icon: 'description',
+        label: this.t('DASHBOARD.TILE.TEMPLATES'),
+        route: '/imaging',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'analytics',
+        label: this.t('DASHBOARD.TILE.REPORTS'),
+        route: '/imaging',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+    ];
+  });
 
   // ── Patient quick-access tiles (Epic MyChart style) ──────────
-  patientQuickLinks = computed<NavTile[]>(() => [
-    {
-      icon: 'calendar_month',
-      label: 'Appointments',
-      route: '/my-appointments',
-      color: '#059669',
-      bg: '#d1fae5',
-    },
-    { icon: 'chat', label: 'Messages', route: '/chat', color: '#2563eb', bg: '#dbeafe' },
-    { icon: 'history', label: 'Visits', route: '/my-visits', color: '#4f46e5', bg: '#eef2ff' },
-    {
-      icon: 'science',
-      label: 'Test Results',
-      route: '/my-lab-results',
-      color: '#7c3aed',
-      bg: '#ede9fe',
-    },
-    {
-      icon: 'medication',
-      label: 'Medications',
-      route: '/my-medications',
-      color: '#0d9488',
-      bg: '#ccfbf1',
-    },
-    {
-      icon: 'receipt_long',
-      label: 'Billing',
-      route: '/my-billing',
-      color: '#d97706',
-      bg: '#fef3c7',
-    },
-    { icon: 'groups', label: 'Care Team', route: '/my-care-team', color: '#ec4899', bg: '#fce7f3' },
-    {
-      icon: 'monitor_heart',
-      label: 'Vitals',
-      route: '/my-vitals',
-      color: '#dc2626',
-      bg: '#fee2e2',
-    },
-  ]);
+  patientQuickLinks = computed<NavTile[]>(() => {
+    this.langTick();
+    return [
+      {
+        icon: 'calendar_month',
+        label: this.t('DASHBOARD.TILE.APPOINTMENTS'),
+        route: '/my-appointments',
+        color: '#059669',
+        bg: '#d1fae5',
+      },
+      {
+        icon: 'chat',
+        label: this.t('DASHBOARD.MESSAGES'),
+        route: '/chat',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'history',
+        label: this.t('DASHBOARD.TILE.VISITS'),
+        route: '/my-visits',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'science',
+        label: this.t('DASHBOARD.RECENT_TEST_RESULTS'),
+        route: '/my-lab-results',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'medication',
+        label: this.t('DASHBOARD.TILE.MEDICATIONS'),
+        route: '/my-medications',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
+      {
+        icon: 'receipt_long',
+        label: this.t('DASHBOARD.BILLING'),
+        route: '/my-billing',
+        color: '#d97706',
+        bg: '#fef3c7',
+      },
+      {
+        icon: 'groups',
+        label: this.t('DASHBOARD.MY_CARE_TEAM'),
+        route: '/my-care-team',
+        color: '#ec4899',
+        bg: '#fce7f3',
+      },
+      {
+        icon: 'monitor_heart',
+        label: this.t('DASHBOARD.TILE.VITALS'),
+        route: '/my-vitals',
+        color: '#dc2626',
+        bg: '#fee2e2',
+      },
+    ];
+  });
 
   // ── Upcoming appointments for patient (computed from portal data) ────
   upcomingAppointments = computed(() => {
@@ -1661,6 +1816,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.initProfile();
     this.loadDashboardData();
 
+    // Re-localize labels and time-of-day strings whenever the user changes language.
+    this.langSub = this.translate.onLangChange.subscribe(() => {
+      this.langTick.update((v) => v + 1);
+      this.initGreeting();
+      this.initProfile();
+      this.todayLabel.set(this.formatTodayLabel(this.translate.currentLang));
+      this.currentTime.set(this.formatTime(new Date()));
+    });
+
     this.clockInterval = setInterval(() => {
       this.currentTime.set(this.formatTime(new Date()));
       this.initGreeting();
@@ -1669,6 +1833,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     if (this.clockInterval) clearInterval(this.clockInterval);
+    this.langSub?.unsubscribe();
   }
 
   searchPatients(event: Event): void {
@@ -1688,9 +1853,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private initGreeting(): void {
     const h = new Date().getHours();
-    if (h < 12) this.greeting.set('Good Morning');
-    else if (h < 17) this.greeting.set('Good Afternoon');
-    else this.greeting.set('Good Evening');
+    if (h < 12) this.greeting.set(this.t('DASHBOARD.GREETING_MORNING'));
+    else if (h < 17) this.greeting.set(this.t('DASHBOARD.GREETING_AFTERNOON'));
+    else this.greeting.set(this.t('DASHBOARD.GREETING_EVENING'));
+  }
+
+  /** Translate helper that falls back to the key when no translation is registered. */
+  private t(key: string): string {
+    const value = this.translate.instant(key);
+    return value === key ? key : value;
+  }
+
+  /** Locale-aware version of the long-form date shown beneath the hero greeting. */
+  private formatTodayLabel(lang: string | undefined): string {
+    const localeTag = this.toBrowserLocaleTag(lang);
+    return new Date().toLocaleDateString(localeTag, {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
+  /** Maps the i18n key (`fr`, `en`, `es`) to a BCP-47 locale tag for the browser APIs. */
+  private toBrowserLocaleTag(lang: string | undefined): string {
+    switch ((lang ?? '').toLowerCase()) {
+      case 'fr':
+        return 'fr-FR';
+      case 'es':
+        return 'es-ES';
+      default:
+        return 'en-US';
+    }
   }
 
   private initProfile(): void {
@@ -1715,9 +1909,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
     // Title prefix
     if (this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'])) {
-      this.userTitle.set('Dr.');
+      this.userTitle.set(this.t('DASHBOARD.TITLE_DOCTOR'));
     } else if (this.auth.hasAnyRole(['ROLE_MIDWIFE'])) {
-      this.userTitle.set('Mid.');
+      this.userTitle.set(this.t('DASHBOARD.TITLE_MIDWIFE'));
     } else {
       this.userTitle.set('');
     }
@@ -1731,43 +1925,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const done = () => {
       if (--pending <= 0) this.loading.set(false);
     };
-
-    // Super-admin summary
-    if (this.isSuperAdmin()) {
-      pending++;
-      this.dashboardService.getSummary().subscribe({
-        next: (s) => {
-          this.adminSummary.set(s);
-          this.recentAuditEvents.set(s.recentAuditEvents ?? []);
-          done();
-        },
-        error: () => {
-          // Set an empty fallback so the dashboard renders with zeros instead of blank
-          this.adminSummary.set({
-            totalPatients: 0,
-            totalUsers: 0,
-            activeUsers: 0,
-            inactiveUsers: 0,
-            totalHospitals: 0,
-            activeHospitals: 0,
-            inactiveHospitals: 0,
-            totalOrganizations: 0,
-            activeOrganizations: 0,
-            totalDepartments: 0,
-            totalRoles: 0,
-            totalAssignments: 0,
-            activeAssignments: 0,
-            inactiveAssignments: 0,
-            globalAssignments: 0,
-            activeGlobalAssignments: 0,
-            todayAppointmentsCount: 0,
-            generatedAt: new Date().toISOString(),
-            recentAuditEvents: [],
-          });
-          done();
-        },
-      });
-    }
 
     // Hospital-admin summary
     if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
@@ -2004,6 +2161,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   handleInboxAction(item: ClinicalInboxItem): void {
+    if (item.category === 'REFILL_REQUEST') {
+      this.router.navigate(['/refills']);
+      return;
+    }
     switch (item.actionType) {
       case 'SIGN':
         this.router.navigate(['/encounters']);
@@ -2106,16 +2267,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   getApptStatusLabel(status: string): string {
+    // Read langTick so the template re-evaluates when the user switches language;
+    // status values come from the API so they are not signals themselves.
+    this.langTick();
     const map: Record<string, string> = {
-      SCHEDULED: 'Scheduled',
-      CONFIRMED: 'Confirmed',
-      COMPLETED: 'Done',
-      CANCELLED: 'Cancelled',
-      NO_SHOW: 'No Show',
-      IN_PROGRESS: 'In Progress',
-      REQUESTED: 'Requested',
+      SCHEDULED: 'APPOINTMENTS.SCHEDULED',
+      CONFIRMED: 'APPOINTMENTS.CONFIRMED',
+      COMPLETED: 'DASHBOARD.DONE',
+      CANCELLED: 'APPOINTMENTS.CANCELLED',
+      NO_SHOW: 'APPOINTMENTS.NO_SHOW',
+      IN_PROGRESS: 'DASHBOARD.IN_PROGRESS',
+      REQUESTED: 'APPOINTMENTS.REQUESTED',
     };
-    return map[status] ?? status;
+    const key = map[status];
+    return key ? this.t(key) : status;
   }
 
   getTrendIcon(trend: string): string {
@@ -2154,17 +2319,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return colors[Math.abs(hash) % colors.length];
   }
 
-  /** Format an ISO/HH:mm time string as 12-hour for display */
+  /** Format an ISO/HH:mm time string for display in the active locale. */
   formatApptTime(time: string): string {
     if (!time) return '';
     const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hour = h % 12 || 12;
-    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+    const sample = new Date();
+    sample.setHours(h ?? 0, m ?? 0, 0, 0);
+    return sample.toLocaleTimeString(this.toBrowserLocaleTag(this.translate.currentLang), {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   }
 
   private formatTime(d: Date): string {
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return d.toLocaleTimeString(this.toBrowserLocaleTag(this.translate.currentLang), {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
   }
 
   getIntegrationStatusClass(status: string): string {

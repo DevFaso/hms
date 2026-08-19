@@ -16,8 +16,13 @@
     </button>
   </header>
 
-  <!-- Filter tabs -->
-  <nav class="filter-tabs" aria-label="In-basket filters">
+  <!-- Arrow-key roving on filter tabs (row 11). docs/ui/accessibility.md §6.10 -->
+  <nav
+    class="filter-tabs"
+    aria-label="In-basket filters"
+    appRovingFocus=".filter-tab"
+    orientation="horizontal"
+  >
     <button class="filter-tab" [class.active]="activeFilter() === null" (click)="setFilter(null)">
       {{ 'inBasket.all' | translate }}
       <span class="tab-count">{{ summary().totalUnread }}</span>
@@ -69,9 +74,9 @@
     <p class="empty-state">{{ 'inBasket.empty' | translate }}</p>
   }
 
-  <!-- Items list -->
+  <!-- Items list — arrow-key roving across primary item buttons (row 11). -->
   @if (!loading() && filteredItems().length > 0) {
-    <ul class="item-list">
+    <ul class="item-list" appRovingFocus="button.item-button">
       @for (item of filteredItems(); track trackById($index, item)) {
         <li
           class="basket-item"

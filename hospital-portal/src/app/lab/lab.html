@@ -211,7 +211,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(o.status)">{{ o.status }}</span>
+              ><span class="status-badge" [class]="getStatusClass(o.status)">{{
+                o.status | enumLabel: 'labOrderStatus'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
@@ -320,7 +322,12 @@
               </div>
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
-              <select id="lab-hospitalId" [(ngModel)]="form.hospitalId" required>
+              <select
+                id="lab-hospitalId"
+                [ngModel]="form.hospitalId"
+                (ngModelChange)="onHospitalChange($event)"
+                required
+              >
                 <option value="">{{ 'COMMON.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>

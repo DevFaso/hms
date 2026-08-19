@@ -10,9 +10,15 @@ public enum AuditEventType {
     PASSWORD_CHANGED,
     MFA_CHALLENGE,
     MFA_FAILURE,
+    MFA_ENROLLED,
+    MFA_VERIFIED,
+    MFA_BACKUP_USED,
     ACCOUNT_LOCKED,
     ACCOUNT_UNLOCKED,
     SESSION_TERMINATED,
+    TOKEN_REFRESH,
+    TOKEN_REVOKED,
+    PASSWORD_HISTORY_VIOLATION,
 
     // User & access administration
     USER_CREATE,
@@ -44,6 +50,11 @@ public enum AuditEventType {
     APPOINTMENT_CREATED,
     APPOINTMENT_UPDATED,
     APPOINTMENT_CANCELLED,
+    ADMISSION_AUTOCREATED,
+    ADMISSION_DISCHARGED,
+    ADMISSION_TRANSFERRED,
+    ENCOUNTER_AUTOCREATED,
+    ENCOUNTER_UPDATE,
     PRESCRIPTION_CREATED,
     PRESCRIPTION_UPDATED,
     PRESCRIPTION_DISCONTINUED,
@@ -69,6 +80,24 @@ public enum AuditEventType {
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
 
+    // Pharmacy & inventory
+    STOCK_RECEIPT,
+    STOCK_ADJUSTMENT,
+    STOCK_TRANSFER,
+    STOCK_RETURN,
+    STOCK_REORDER_ALERT,
+    DISPENSE_CREATED,
+    DISPENSE_CANCELLED,
+    DISPENSE_SUBSTITUTED,
+    MEDICATION_DEACTIVATED,
+    PHARMACY_DEACTIVATED,
+    MTM_REVIEW_STARTED,
+    MTM_INTERVENTION_RECORDED,
+    PRESCRIPTION_ROUTED_EXTERNAL,
+    PRESCRIPTION_SENT_TO_PARTNER,
+    PRESCRIPTION_PRINTED,
+    PRESCRIPTION_BACKORDER,
+
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,
     SECURITY_ALERT_TRIGGERED,
@@ -77,6 +106,46 @@ public enum AuditEventType {
     API_KEY_REVOKED,
     INTEGRATION_CONFIGURED,
     PLATFORM_REGISTRY_UPDATED,
+
+    // Tenant lifecycle (MVP-2)
+    TENANT_SUSPENDED,
+    TENANT_RESTORED,
+    TENANT_ARCHIVED,
+    TENANT_PURGE_SCHEDULED,
+    TENANT_PURGE_CANCELLED,
+    TENANT_PURGED,
+
+    // Support impersonation (MVP-4 — gap #4 in docs/super-admin-gaps.md)
+    IMPERSONATION_STARTED,
+    IMPERSONATION_ENDED,
+
+    // Data residency (MVP-9 — gap #9 in docs/super-admin-gaps.md)
+    ORGANIZATION_REGION_UPDATED,
+
+    // Hospital-level lifecycle (MVP-c batch — Hospital lifecycle item)
+    HOSPITAL_SUSPENDED,
+    HOSPITAL_RESTORED,
+    HOSPITAL_ARCHIVED,
+    HOSPITAL_PURGE_SCHEDULED,
+    HOSPITAL_PURGE_CANCELLED,
+    HOSPITAL_PURGED,
+
+    // Plan-tier feature gating (MVP-c batch — MVP-6c plan-tier audit emission)
+    PLAN_FEATURE_GATE_BLOCKED,
+
+    // Per-region policy updates (MVP-c batch — MVP-9c)
+    REGION_POLICY_UPDATED,
+
+    // Tenant data export packaging (MVP-c batch — MVP-2c follow-up)
+    TENANT_PURGE_PACKAGED,
+    TENANT_PURGE_PACKAGING_FAILED,
+
+    // Schema-per-tenant cache control (roadmap row 33 follow-on)
+    TENANT_SCHEMA_CACHE_INVALIDATED,
+    // Schema-per-tenant provisioning (roadmap row 33 follow-on,
+    // provisioning script wiring). Past-tense — see naming-convention
+    // lesson in the pr-review-response skill.
+    TENANT_SCHEMA_PROVISIONED,
 
     OTHER
 }

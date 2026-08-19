@@ -98,14 +98,14 @@
 
   .dept-icon {
     font-size: 14px;
-    color: #94a3b8;
+    color: #64748b;
   }
 }
 
 .staff-email {
   margin: 0.375rem 0 0;
   font-size: 0.75rem;
-  color: #94a3b8;
+  color: #64748b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -269,7 +269,7 @@
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     &::placeholder {
-      color: #9ca3af;
+      color: #6b7280;
     }
   }
 }

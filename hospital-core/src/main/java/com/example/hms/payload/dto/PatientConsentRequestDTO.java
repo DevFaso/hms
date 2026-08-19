@@ -1,6 +1,7 @@
 package com.example.hms.payload.dto;
 
 import com.example.hms.enums.ConsentType;
+import com.example.hms.validation.DataDomainCsv;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -46,7 +47,10 @@ public class PatientConsentRequestDTO {
     private ConsentType consentType;
 
     @Size(max = 500)
-    @Schema(description = "Comma-separated record domains in scope, e.g. PRESCRIPTIONS,LAB_RESULTS. Null means all domains.",
+    @DataDomainCsv
+    @Schema(description = "Comma-separated DataDomain values in scope, e.g. PRESCRIPTIONS,LAB_RESULTS. "
+                        + "Null/empty means all non-sensitive domains; sensitive categories "
+                        + "(MENTAL_HEALTH, HIV_STATUS, SUBSTANCE_USE, GENETICS) must be listed explicitly.",
             example = "PRESCRIPTIONS,LAB_RESULTS,ENCOUNTERS")
     private String scope;
 }

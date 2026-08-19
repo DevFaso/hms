@@ -1,0 +1,222 @@
+{
+  "annotations": { "list": [] },
+  "description": "Drill into a single HTTP endpoint (URI pattern). Pick the endpoint and method via the variables.\nLinked from SLO and Business KPI dashboards.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [
+    { "title": "HMS Dashboards", "asDropdown": true, "includeVars": true, "keepTime": true, "tags": ["hms"], "type": "dashboards", "icon": "external link", "targetBlank": false }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "title": "Selected endpoint",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "options": { "textMode": "name", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval]))", "legendFormat": "$method $uri" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Req/s (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m]))" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error rate (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 3,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green" }, { "color": "yellow", "value": 0.005 }, { "color": "red", "value": 0.02 }] }
+        }
+      },
+      "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])), 0.0001)" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "p95 (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])) by (le))" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "p99 (5m)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 3 } },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[5m])) by (le))" }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Requests by status code",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 10 } } },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Latency percentiles",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "Latency heatmap",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "options": {
+        "calculate": false,
+        "yAxis": { "unit": "s" },
+        "color": { "mode": "scheme", "scheme": "Spectral", "fill": "dark-orange", "exponent": 0.5, "steps": 64, "reverse": true }
+      },
+      "targets": [
+        { "expr": "sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])) by (le)", "format": "heatmap", "legendFormat": "{{le}}" }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Apdex (target = $apdex_target s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red" }, { "color": "yellow", "value": 0.85 }, { "color": "green", "value": 0.94 }] }
+        }
+      },
+      "targets": [
+        { "expr": "(sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\", le=\"$apdex_target\"}[$__rate_interval])) + sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri=~\"$uri\", method=~\"$method\", le=\"${apdex_tolerable}\"}[$__rate_interval]))) / 2 / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[$__rate_interval])), 0.0001)", "legendFormat": "apdex" }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Status mix table",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "transformations": [
+        { "id": "organize", "options": { "excludeByName": { "Time": true, "__name__": true, "instance": true, "job": true, "application": true }, "renameByName": { "Value": "requests" } } }
+      ],
+      "targets": [
+        { "expr": "sum(increase(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\", method=~\"$method\"}[1h])) by (status, exception)", "format": "table", "instant": true }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Logs for this endpoint",
+      "type": "logs",
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 28 },
+      "datasource": { "type": "loki", "uid": "${loki_ds}" },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        { "expr": "{application=\"$application\"} |= `$uri`", "refId": "A" }
+      ]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["hms", "api", "endpoint"],
+  "templating": {
+    "list": [
+      { "name": "prometheus_ds", "type": "datasource", "label": "Prometheus", "query": "prometheus", "current": { "text": "Prometheus", "value": "hms-prometheus" } },
+      { "name": "loki_ds", "type": "datasource", "label": "Loki", "query": "loki", "current": { "text": "Loki", "value": "hms-loki" } },
+      {
+        "name": "application", "type": "query", "label": "Application",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(up, application)" },
+        "refresh": 1, "current": { "text": "hms", "value": "hms" }
+      },
+      {
+        "name": "uri", "type": "query", "label": "URI",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\"}, uri)" },
+        "refresh": 2, "current": { "text": "All", "value": ".*" }, "includeAll": true, "allValue": ".*", "multi": false, "sort": 1
+      },
+      {
+        "name": "method", "type": "query", "label": "HTTP method",
+        "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
+        "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\", uri=~\"$uri\"}, method)" },
+        "refresh": 2, "current": { "text": "All", "value": ".*" }, "includeAll": true, "allValue": ".*", "multi": true, "sort": 1
+      },
+      {
+        "name": "apdex_target", "type": "custom", "label": "Apdex target T (s)",
+        "query": "0.1,0.25,0.5,1,2",
+        "current": { "text": "0.5", "value": "0.5" },
+        "options": [
+          { "text": "0.1", "value": "0.1" },
+          { "text": "0.25", "value": "0.25" },
+          { "text": "0.5", "value": "0.5", "selected": true },
+          { "text": "1", "value": "1" },
+          { "text": "2", "value": "2" }
+        ]
+      },
+      {
+        "name": "apdex_tolerable", "type": "custom", "label": "Apdex tolerable 4T (s)",
+        "query": "0.4,1,2,4,8",
+        "current": { "text": "2", "value": "2" },
+        "options": [
+          { "text": "0.4", "value": "0.4" },
+          { "text": "1", "value": "1" },
+          { "text": "2", "value": "2", "selected": true },
+          { "text": "4", "value": "4" },
+          { "text": "8", "value": "8" }
+        ]
+      }
+    ]
+  },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HMS – API Endpoint Deep Dive",
+  "uid": "hms-api-endpoints",
+  "version": 1
+}

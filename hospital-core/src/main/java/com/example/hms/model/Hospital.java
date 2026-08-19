@@ -1,5 +1,7 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.enums.TenantIsolationMode;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.HospitalPlatformServiceLink;
@@ -8,6 +10,8 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
@@ -25,11 +29,14 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.EqualsAndHashCode;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 @Entity
@@ -90,9 +97,91 @@ public class Hospital extends BaseEntity {
     @Column(length = 255)
     private String website;
 
+    /**
+     * DHIS2 organisation-unit UID (11-char DHIS2 convention) bound to this
+     * hospital for ADX exports. Null when the facility does not export.
+     * The DB-side CHECK enforces this format too; the {@code @Pattern}
+     * here surfaces the violation at validation time so callers see a
+     * user-actionable error rather than a 500 on commit.
+     */
+    @Size(max = 11)
+    @Pattern(regexp = "^[A-Za-z][A-Za-z0-9]{10}$",
+        message = "DHIS2 org-unit UID must be 11 chars, alphanumeric, leading letter")
+    @Column(name = "dhis2_org_unit_uid", length = 11)
+    private String dhis2OrgUnitUid;
+
+    /**
+     * URL template for the hospital's PACS viewer (e.g.
+     * {@code https://orthanc.local/viewer.html?studyUid={studyInstanceUid}}).
+     * Resolved by the imaging-report mapper to surface a "View in PACS" link
+     * when only a study UID is available. Null when the hospital has no PACS.
+     */
+    @Size(max = 500)
+    @Column(name = "pacs_viewer_url_template", length = 500)
+    private String pacsViewerUrlTemplate;
+
     @Builder.Default
     @Column(nullable = false)
     private boolean active = true;
+
+    // ── Hospital lifecycle (MVP-c batch) ─────────────────────────────
+    // Mirrors Organization.lifecycleState. `active` continues to gate
+    // UI / list filters; `lifecycleState` drives login-time blocking
+    // and is the source of truth for purge scheduling at the hospital
+    // level. Suspending a hospital narrows the org-wide block to a
+    // single facility.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_state", nullable = false, length = 32)
+    private HospitalLifecycleState lifecycleState = HospitalLifecycleState.ACTIVE;
+
+    @Column(name = "suspended_at")
+    private Instant suspendedAt;
+
+    @Column(name = "suspended_by")
+    private UUID suspendedBy;
+
+    @Column(name = "suspension_reason", length = 1000)
+    private String suspensionReason;
+
+    @Column(name = "archived_at")
+    private Instant archivedAt;
+
+    @Column(name = "archived_by")
+    private UUID archivedBy;
+
+    @Column(name = "archive_reason", length = 1000)
+    private String archiveReason;
+
+    @Column(name = "purge_scheduled_for")
+    private Instant purgeScheduledFor;
+
+    @Column(name = "purge_scheduled_by")
+    private UUID purgeScheduledBy;
+
+    @Column(name = "purge_reason", length = 1000)
+    private String purgeReason;
+
+    @Column(name = "purged_at")
+    private Instant purgedAt;
+
+    // ── Tenant isolation mode (roadmap row 33, v2.0) ─────────────────
+    // ROW_LEVEL: shared schema, hospital_id filtering (default for all
+    // hospitals today). SCHEMA: dedicated PG schema named by
+    // tenantSchemaName, routed via SchemaTenantConnectionProvider when
+    // app.tenancy.schema-isolation.enabled=true. Flipping the field on
+    // a live hospital requires the schema to exist first — see
+    // docs/runbooks/schema-per-tenant-migration.md.
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "isolation_mode", nullable = false, length = 16)
+    private TenantIsolationMode isolationMode = TenantIsolationMode.ROW_LEVEL;
+
+    @Pattern(regexp = "^[a-z][a-z0-9_]{0,62}$",
+        message = "tenantSchemaName must be a valid PostgreSQL identifier (lowercase, "
+            + "starts with a letter, ≤ 63 chars, [a-z0-9_])")
+    @Column(name = "tenant_schema_name", length = 63)
+    private String tenantSchemaName;
 
     @Builder.Default
     @OneToMany(mappedBy = "hospital", fetch = FetchType.LAZY,

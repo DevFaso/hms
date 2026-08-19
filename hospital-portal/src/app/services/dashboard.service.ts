@@ -22,18 +22,68 @@ export interface SuperAdminSummary {
   globalAssignments: number;
   activeGlobalAssignments: number;
   todayAppointmentsCount: number;
+  totalEncounters: number;
+  totalConsultations: number;
+  totalLabOrders: number;
+  totalLabResults: number;
+  totalLabTestDefinitions: number;
+  totalAdmissions: number;
+  totalPrescriptions: number;
+  totalTreatmentPlans: number;
+  totalReferrals: number;
   generatedAt: string;
   recentAuditEvents: RecentAuditEvent[];
+}
+
+export interface SuperAdminRecentItem {
+  id?: string;
+  createdAt?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Aggregate response for `GET /api/super-admin/recent-activity?limit=N`,
+ * the F5 follow-up from `docs/super-admin-cross-tenant-design.md`.
+ *
+ * Mirrors the backend `RecentActivityDTO` exactly. Each list carries the
+ * same DTO shape the per-feed endpoint returns, so consumers (the
+ * super-admin dashboard's `loadAll()`) can drop the eight individual
+ * subscriptions and unpack one object instead.
+ */
+export interface SuperAdminRecentActivityBundle {
+  encounters: SuperAdminRecentItem[];
+  consultations: SuperAdminRecentItem[];
+  labOrders: SuperAdminRecentItem[];
+  labResults: SuperAdminRecentItem[];
+  labTestDefinitions: SuperAdminRecentItem[];
+  admissions: SuperAdminRecentItem[];
+  prescriptions: SuperAdminRecentItem[];
+  treatmentPlans: SuperAdminRecentItem[];
+  referrals: SuperAdminRecentItem[];
+}
+
+export function emptyRecentActivityBundle(): SuperAdminRecentActivityBundle {
+  return {
+    encounters: [],
+    consultations: [],
+    labOrders: [],
+    labResults: [],
+    labTestDefinitions: [],
+    admissions: [],
+    prescriptions: [],
+    treatmentPlans: [],
+    referrals: [],
+  };
 }
 
 export interface RecentAuditEvent {
   id: string;
   eventType: string;
   status: string;
-  entityType: string;
+  entityType: string | null;
   resourceId: string;
-  resourceName: string;
-  userName: string;
+  resourceName: string | null;
+  userName: string | null;
   roleName: string;
   hospitalName: string;
   eventTimestamp: string;
@@ -260,9 +310,9 @@ export interface HospitalAdminAuditSnippet {
   id: string;
   eventType: string;
   status: string;
-  entityType: string;
-  resourceName: string;
-  userName: string;
+  entityType: string | null;
+  resourceName: string | null;
+  userName: string | null;
   eventTimestamp: string;
 }
 
@@ -307,7 +357,7 @@ export interface InvoiceAgingBuckets {
 
 export interface IntegrationStatusRow {
   serviceType: string;
-  provider: string;
+  provider: string | null;
   status: string;
   enabled: boolean;
   baseUrl: string;
@@ -435,6 +485,48 @@ export interface QualityManagerDashboard {
   ordersToday: number;
 }
 
+/* ── KPI Dashboard DTOs (roadmap row 32) ── */
+
+export interface KpiDashboard {
+  hospitalId?: string;
+  from: string;
+  to: string;
+  doorToDoctor: KpiDoorToDoctor;
+  dispenseLeadTime: KpiDispenseLeadTime;
+  noShowRate: KpiNoShowRate;
+  /**
+   * Per-day timeseries for sparkline rendering. Only present when the
+   * caller passes `withTrends=true` to `getKpiDashboard`. Days that
+   * lacked samples for a given KPI carry `undefined`/`null` for that
+   * field; the sparkline draws a gap rather than a misleading zero.
+   */
+  trend?: KpiTrendPoint[];
+}
+
+export interface KpiDoorToDoctor {
+  sampleSize: number;
+  averageMinutes?: number;
+  medianMinutesEstimate?: number;
+}
+
+export interface KpiDispenseLeadTime {
+  sampleSize: number;
+  averageMinutes?: number;
+}
+
+export interface KpiNoShowRate {
+  totalAppointments: number;
+  noShowCount: number;
+  rate?: number;
+}
+
+export interface KpiTrendPoint {
+  date: string;
+  doorToDoctorAverageMinutes?: number;
+  dispenseLeadTimeAverageMinutes?: number;
+  noShowRate?: number;
+}
+
 /* ── Platform Analytics DTOs ── */
 
 export interface PlatformAnalytics {
@@ -483,6 +575,76 @@ export class DashboardService {
   getSummary(auditLimit = 10): Observable<SuperAdminSummary> {
     const params = new HttpParams().set('auditLimit', auditLimit);
     return this.http.get<SuperAdminSummary>('/super-admin/summary', { params });
+  }
+
+  private getSuperAdminRecent(slug: string, limit = 10): Observable<SuperAdminRecentItem[]> {
+    const params = new HttpParams().set('limit', limit);
+    return this.http.get<SuperAdminRecentItem[]>(`/api/super-admin/${slug}`, { params }).pipe(
+      catchError((err) => {
+        // Surface the failure in dev tools so 403/500/network errors don't
+        // silently degrade to "no recent items" on the super-admin dashboard.
+        console.error(`[super-admin] /${slug} failed`, err);
+        return of([]);
+      }),
+    );
+  }
+
+  getRecentConsultations(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-consultations', limit);
+  }
+
+  getRecentLabOrders(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-lab-orders', limit);
+  }
+
+  getRecentLabResults(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-lab-results', limit);
+  }
+
+  getRecentLabTestDefinitions(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-lab-test-definitions', limit);
+  }
+
+  getRecentAdmissions(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-admissions', limit);
+  }
+
+  getRecentPrescriptions(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-prescriptions', limit);
+  }
+
+  getRecentTreatmentPlans(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-treatment-plans', limit);
+  }
+
+  getRecentReferrals(limit = 10): Observable<SuperAdminRecentItem[]> {
+    return this.getSuperAdminRecent('recent-referrals', limit);
+  }
+
+  /**
+   * Aggregate recent-activity feed (F5 in
+   * docs/super-admin-cross-tenant-design.md). Replaces the eight
+   * individual `getRecent*` calls in `super-admin.ts`'s `loadAll()`
+   * with a single round-trip. Keys mirror the per-feed slugs:
+   *
+   *   consultations / labOrders / labResults / labTestDefinitions /
+   *   admissions / prescriptions / treatmentPlans / referrals / encounters
+   *
+   * On failure the whole bundle resolves to empty arrays for every
+   * key so the dashboard's per-tab "No recent items" empty-state
+   * still renders correctly — same UX semantics as the per-feed
+   * `catchError(of([]))` branches.
+   */
+  getRecentActivity(limit = 10): Observable<SuperAdminRecentActivityBundle> {
+    const params = new HttpParams().set('limit', limit);
+    return this.http
+      .get<SuperAdminRecentActivityBundle>('/api/super-admin/recent-activity', { params })
+      .pipe(
+        catchError((err) => {
+          console.error('[super-admin] /recent-activity failed', err);
+          return of(emptyRecentActivityBundle());
+        }),
+      );
   }
 
   /* ── Clinical Dashboard (doctor / physician / surgeon) ── */
@@ -586,6 +748,22 @@ export class DashboardService {
     return this.http
       .get<PlatformAnalytics>('/super-admin/analytics', { params })
       .pipe(catchError(() => of({} as PlatformAnalytics)));
+  }
+
+  /* ── Operational KPI dashboard (row 32) ── */
+
+  /**
+   * Door-to-doctor + dispense lead time + no-show rate for the current
+   * hospital context (resolved server-side from the JWT
+   * `hospital_id` claim). Returns an empty rollup when the caller has
+   * no active hospital pin (e.g. raw SUPER_ADMIN session).
+   */
+  getKpiDashboard(from: string, to: string, withTrends = false): Observable<KpiDashboard> {
+    let params = new HttpParams().set('from', from).set('to', to);
+    if (withTrends) {
+      params = params.set('withTrends', 'true');
+    }
+    return this.http.get<KpiDashboard>('/api/kpi/dashboard', { params });
   }
 
   /* ── Hospital Admin Summary ── */

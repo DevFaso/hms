@@ -67,4 +67,15 @@ public class JwtResponse {
      */
     private List<String> availableRoles;
 
+    // ── MFA challenge ──
+
+    /** True when MFA verification is required before tokens are issued. */
+    private boolean mfaRequired;
+
+    /** True when the user has already enrolled in MFA (TOTP). */
+    private boolean mfaEnrolled;
+
+    /** Short-lived token used to authorize the MFA verification step. */
+    private String mfaToken;
+
 }

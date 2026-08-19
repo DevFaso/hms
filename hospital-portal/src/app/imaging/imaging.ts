@@ -19,6 +19,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -27,7 +28,7 @@ type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
 @Component({
   selector: 'app-imaging',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './imaging.html',
   styleUrl: './imaging.scss',
 })
@@ -46,6 +47,7 @@ export class ImagingComponent implements OnInit {
   searchTerm = '';
   activeTab = signal<'all' | 'ordered' | 'completed' | 'cancelled'>('all');
   selectedOrder = signal<ImagingOrderResponse | null>(null);
+  selectedOrderReports = signal<ImagingReportResponse[]>([]);
 
   hospitals = signal<HospitalResponse[]>([]);
 
@@ -356,9 +358,20 @@ export class ImagingComponent implements OnInit {
 
   viewDetail(o: ImagingOrderResponse): void {
     this.selectedOrder.set(o);
+    this.selectedOrderReports.set([]);
+    this.imagingService.getReportsForOrder(o.id).subscribe({
+      next: (reports) => this.selectedOrderReports.set(reports ?? []),
+      error: () => this.selectedOrderReports.set([]),
+    });
   }
   closeDetail(): void {
     this.selectedOrder.set(null);
+    this.selectedOrderReports.set([]);
+  }
+
+  openPacsViewer(url: string): void {
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   getStatusClass(status: string): string {

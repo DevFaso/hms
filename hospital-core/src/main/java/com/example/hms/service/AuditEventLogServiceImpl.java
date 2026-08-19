@@ -14,6 +14,8 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.ImpersonationContext;
+import com.example.hms.security.context.ImpersonationContextHolder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -118,21 +120,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO) {
         User user = resolveUser(requestDTO);
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
-
-        // Derive actor type and display name
-        ActorType actorType;
-        String userName;
-        if (user != null) {
-            actorType = ActorType.USER;
-            userName = user.getFirstName() + " " + user.getLastName();
-        } else if (requestDTO.getUserName() != null && !requestDTO.getUserName().isBlank()) {
-            actorType = ActorType.SYSTEM;
-            userName = requestDTO.getUserName();
-        } else {
-            actorType = ActorType.SYSTEM;
-            userName = "SYSTEM";
-        }
-
+        ActorContext actor = resolveActorContext(requestDTO, user);
         String hospitalName = resolveHospitalName(requestDTO, assignment);
         String roleName = resolveRoleName(requestDTO, assignment, user);
         String detailsStr = convertDetailsToString(requestDTO.getDetails());
@@ -143,6 +131,13 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             resourceId = resolvePatientResourceId(resourceId, resourceName);
             resourceName = resolvePatientResourceName(resourceName, resourceId);
         }
+
+        ImpersonatorIdentity impersonator = resolveImpersonatorIdentity(requestDTO);
+
+        ActorType actorType = actor.actorType();
+        String userName = actor.userName();
+        UUID impersonatorUserId = impersonator.userId();
+        String impersonatorUsername = impersonator.username();
 
         AuditEventLog event = AuditEventLog.builder()
                 .user(user)          // nullable — SYSTEM / bootstrap flows have no actor user
@@ -161,6 +156,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .roleName(roleName)
                 .resourceName(resourceName != null && !resourceName.isBlank() ? resourceName : "Unknown Resource")
                 .eventTimestamp(java.time.LocalDateTime.now())
+                .impersonatorUserId(impersonatorUserId)
+                .impersonatorUsername(impersonatorUsername)
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
@@ -279,6 +276,47 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             log.warn("Could not serialize audit event details: {}", e.getMessage());
             return "{\"error\":\"Could not serialize details object\"}";
         }
+    }
+
+    // ── Cognitive-complexity extracts (Sonar S3776) ───────────────────────────
+
+    /** (actorType, userName) pair derived from the resolved user + request. */
+    private record ActorContext(ActorType actorType, String userName) {}
+
+    /** (userId, username) pair for the impersonating super-admin, if any. */
+    private record ImpersonatorIdentity(UUID userId, String username) {}
+
+    private ActorContext resolveActorContext(AuditEventRequestDTO requestDTO, User user) {
+        if (user != null) {
+            return new ActorContext(ActorType.USER, user.getFirstName() + " " + user.getLastName());
+        }
+        if (requestDTO.getUserName() != null && !requestDTO.getUserName().isBlank()) {
+            return new ActorContext(ActorType.SYSTEM, requestDTO.getUserName());
+        }
+        return new ActorContext(ActorType.SYSTEM, "SYSTEM");
+    }
+
+    /**
+     * MVP-4 — caller may have explicitly set impersonator fields on the request
+     * (boundary events from SupportImpersonationService); for every other event
+     * we read the request-scoped ImpersonationContext so any action taken under
+     * a support-impersonation token carries the real super-admin's identity
+     * even though {@code user} points at the impersonated target.
+     */
+    private ImpersonatorIdentity resolveImpersonatorIdentity(AuditEventRequestDTO requestDTO) {
+        UUID userId = requestDTO.getImpersonatorUserId();
+        String username = requestDTO.getImpersonatorUsername();
+        if (userId != null && username != null) {
+            return new ImpersonatorIdentity(userId, username);
+        }
+        ImpersonationContext ctx = ImpersonationContextHolder.get().orElse(null);
+        if (ctx == null) {
+            return new ImpersonatorIdentity(userId, username);
+        }
+        return new ImpersonatorIdentity(
+            userId != null ? userId : ctx.impersonatorUserId(),
+            username != null ? username : ctx.impersonatorUsername()
+        );
     }
 }
 
