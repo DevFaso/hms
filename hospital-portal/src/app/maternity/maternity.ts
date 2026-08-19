@@ -1,4 +1,11 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -25,6 +32,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { nowLocalDatetime } from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
@@ -60,6 +68,7 @@ type MaternityTab =
   ],
   templateUrl: './maternity.html',
   styleUrl: './maternity.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MaternityComponent implements OnInit {
   private readonly maternityService = inject(MaternityService);
@@ -152,6 +161,8 @@ export class MaternityComponent implements OnInit {
 
   viewedHistory = signal<MaternalHistoryResponse | null>(null);
   historyVersions = signal<MaternalHistoryResponse[]>([]);
+  historyVersionsLoading = signal(false);
+  historyVersionsError = signal(false);
 
   showHistoryModal = signal(false);
   editingHistoryId = signal<string | null>(null);
@@ -166,7 +177,6 @@ export class MaternityComponent implements OnInit {
   referralsLoading = signal(false);
   referralPage = signal(0);
   referralTotalPages = signal(0);
-  referralTotal = signal(0);
   referralPatient = signal<PatientResponse | null>(null);
   summary = signal<ReferralStatusSummary | null>(null);
 
@@ -218,14 +228,30 @@ export class MaternityComponent implements OnInit {
       this.loadPatientNames();
       this.loadBoard();
     }
-    this.loadSummary();
-    if (this.referralMode() !== 'patient') {
-      this.loadReferrals();
+    // Referral data loads lazily on first tab activation: eager loading hit
+    // a guaranteed 403 on the summary endpoint for receptionists (who only
+    // see the prenatal tab) and wasted two round-trips for everyone else.
+    if (this.activeTab() === 'referrals') {
+      this.initReferralsTab();
     }
   }
 
   setTab(tab: MaternityTab): void {
     this.activeTab.set(tab);
+    if (tab === 'referrals') {
+      this.initReferralsTab();
+    }
+  }
+
+  private referralsInitialized = false;
+
+  private initReferralsTab(): void {
+    if (this.referralsInitialized || !this.canSeeReferrals) return;
+    this.referralsInitialized = true;
+    this.loadSummary();
+    if (this.referralMode() !== 'patient') {
+      this.loadReferrals();
+    }
   }
 
   /* ── Board ── */
@@ -317,9 +343,18 @@ export class MaternityComponent implements OnInit {
   openHistoryDetail(history: MaternalHistoryResponse): void {
     this.viewedHistory.set(history);
     this.historyVersions.set([]);
+    this.historyVersionsLoading.set(true);
+    this.historyVersionsError.set(false);
     this.maternityService.versionsForPatient(history.patientId).subscribe({
-      next: (versions) => this.historyVersions.set(versions ?? []),
-      error: () => this.historyVersions.set([]),
+      next: (versions) => {
+        this.historyVersions.set(versions ?? []);
+        this.historyVersionsLoading.set(false);
+      },
+      error: () => {
+        this.historyVersions.set([]);
+        this.historyVersionsLoading.set(false);
+        this.historyVersionsError.set(true);
+      },
     });
   }
 
@@ -370,7 +405,7 @@ export class MaternityComponent implements OnInit {
     return {
       patientId: '',
       hospitalId: '',
-      recordedDate: this.nowLocalDatetime(),
+      recordedDate: nowLocalDatetime(),
       updateReason: '',
       menstrualHistory: {},
       obstetricHistory: {},
@@ -385,13 +420,6 @@ export class MaternityComponent implements OnInit {
     };
   }
 
-  /** Local-timezone yyyy-MM-ddTHH:mm for datetime-local inputs. */
-  private nowLocalDatetime(): string {
-    const d = new Date();
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   openCreateHistory(): void {
     this.historyForm = this.emptyHistoryForm();
     this.editingHistoryId.set(null);
@@ -403,7 +431,7 @@ export class MaternityComponent implements OnInit {
     this.historyForm = {
       patientId: history.patientId,
       hospitalId: history.hospitalId,
-      recordedDate: this.nowLocalDatetime(),
+      recordedDate: nowLocalDatetime(),
       updateReason: '',
       menstrualHistory: { ...(history.menstrualHistory ?? {}) },
       obstetricHistory: { ...(history.obstetricHistory ?? {}) },
@@ -479,7 +507,6 @@ export class MaternityComponent implements OnInit {
     if (mode === 'patient' && !this.referralPatient()) {
       this.referrals.set([]);
       this.referralTotalPages.set(0);
-      this.referralTotal.set(0);
       return;
     }
     this.loadReferrals();
@@ -493,7 +520,6 @@ export class MaternityComponent implements OnInit {
     } else {
       this.referrals.set([]);
       this.referralTotalPages.set(0);
-      this.referralTotal.set(0);
     }
   }
 
@@ -532,7 +558,6 @@ export class MaternityComponent implements OnInit {
       next: (result) => {
         this.referrals.set(result?.content ?? []);
         this.referralTotalPages.set(result?.totalPages ?? 0);
-        this.referralTotal.set(result?.totalElements ?? 0);
         this.referralsLoading.set(false);
       },
       error: () => {
@@ -581,9 +606,10 @@ export class MaternityComponent implements OnInit {
     return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || (p.mrn ?? p.id);
   }
 
+  /** Mirrors the backend summary: SUBMITTED and ACKNOWLEDGED both count. */
   isOverdue(referral: ObgynReferralResponse): boolean {
     return (
-      referral.status === 'SUBMITTED' &&
+      (referral.status === 'SUBMITTED' || referral.status === 'ACKNOWLEDGED') &&
       !!referral.slaDueAt &&
       new Date(referral.slaDueAt).getTime() < Date.now()
     );
@@ -626,6 +652,13 @@ export class MaternityComponent implements OnInit {
     const form = this.referralForm;
     if (!form.patientId || !form.referralReason.trim()) {
       this.toast.error(this.translate.instant('MATERNITY.REFERRAL_REQUIRED_FIELDS'));
+      return;
+    }
+    // The backend rejects PRIORITY/URGENT referrals without at least one
+    // attachment, and the create request has no attachments field — block
+    // client-side with an explanation until attachment upload ships.
+    if (form.urgency !== 'ROUTINE') {
+      this.toast.error(this.translate.instant('MATERNITY.URGENCY_ATTACHMENT_REQUIRED'));
       return;
     }
     form.hospitalId = this.hospitalId;
