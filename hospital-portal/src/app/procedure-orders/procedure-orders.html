@@ -1,0 +1,555 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PROCEDURES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PROCEDURES.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (canManage) {
+        <button type="button" class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'PROCEDURES.NEW_ORDER' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tabs">
+      @for (w of worklists; track w) {
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="worklist() === w"
+          (click)="setWorklist(w)"
+        >
+          {{ 'PROCEDURES.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+  @if (!loading() && loadError()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">error</span>
+      <h3>{{ 'PROCEDURES.LOAD_ERROR' | translate }}</h3>
+      <button type="button" class="btn-secondary btn-sm" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  @if (!loading() && !loadError() && orders().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">surgical</span>
+      <h3>{{ 'PROCEDURES.NO_ORDERS' | translate }}</h3>
+    </div>
+  }
+  @if (!loading() && !loadError() && orders().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PROCEDURES.PATIENT' | translate }}</th>
+            <th scope="col">{{ 'PROCEDURES.PROCEDURE' | translate }}</th>
+            <th scope="col">{{ 'PROCEDURES.URGENCY' | translate }}</th>
+            <th scope="col">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }}</th>
+            <th scope="col">{{ 'PROCEDURES.CONSENT' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (o of orders(); track o.id) {
+            <tr class="data-row">
+              <td>
+                {{ o.patientName || '—' }}
+                @if (o.patientMrn) {
+                  <span class="muted">{{ o.patientMrn }}</span>
+                }
+              </td>
+              <td>
+                {{ o.procedureName }}
+                @if (o.procedureCode) {
+                  <span class="muted">{{ o.procedureCode }}</span>
+                }
+              </td>
+              <td>
+                <span class="{{ urgencyClass(o.urgency) }}">
+                  {{ 'PROCEDURES.URGENCY_' + (o.urgency || 'ROUTINE') | translate }}
+                </span>
+              </td>
+              <td>{{ o.scheduledDatetime ? (o.scheduledDatetime | date: 'short') : '—' }}</td>
+              <td>
+                @if (o.consentObtained) {
+                  <span class="status-badge status-completed">
+                    {{ 'PROCEDURES.CONSENT_OBTAINED' | translate }}
+                  </span>
+                } @else if (!isTerminal(o)) {
+                  <span class="status-badge status-warning">
+                    {{ 'PROCEDURES.CONSENT_PENDING' | translate }}
+                  </span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td>
+                <span class="{{ statusClass(o.status) }}">
+                  {{ 'PROCEDURES.STATUS_' + o.status | translate }}
+                </span>
+              </td>
+              <td class="actions-cell">
+                <button
+                  type="button"
+                  class="btn-secondary btn-sm"
+                  [title]="'COMMON.VIEW' | translate"
+                  (click)="openOrder(o)"
+                >
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- ══ Detail modal (rendered from the row — never GET-by-id) ══ -->
+@if (viewedOrder(); as o) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ o.procedureName }}
+          <span class="{{ statusClass(o.status) }}">
+            {{ 'PROCEDURES.STATUS_' + o.status | translate }}
+          </span>
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeOrder()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="view-section">
+          <p>
+            <strong>{{ o.patientName }}</strong>
+            @if (o.patientMrn) {
+              <span class="muted">· {{ o.patientMrn }}</span>
+            }
+            ·
+            <span class="{{ urgencyClass(o.urgency) }}">
+              {{ 'PROCEDURES.URGENCY_' + (o.urgency || 'ROUTINE') | translate }}
+            </span>
+          </p>
+          <p class="muted">
+            {{ 'PROCEDURES.ORDERED_BY' | translate }}: {{ o.orderingProviderName || '—' }}
+            @if (o.orderedAt) {
+              — {{ o.orderedAt | date: 'medium' }}
+            }
+          </p>
+          @if (o.scheduledDatetime) {
+            <p>
+              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}:
+              {{ o.scheduledDatetime | date: 'medium' }}
+            </p>
+          }
+          @if (o.laterality) {
+            <p class="muted">
+              {{ 'PROCEDURES.LATERALITY' | translate }}:
+              {{ 'PROCEDURES.LATERALITY_' + o.laterality | translate }}
+              @if (o.siteMarked) {
+                · {{ 'PROCEDURES.SITE_MARKED' | translate }}
+              }
+            </p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'PROCEDURES.INDICATION' | translate }}</h3>
+          <p>{{ o.indication }}</p>
+          @if (o.clinicalNotes) {
+            <h3>{{ 'PROCEDURES.CLINICAL_NOTES' | translate }}</h3>
+            <p>{{ o.clinicalNotes }}</p>
+          }
+          @if (o.preProcedureInstructions) {
+            <h3>{{ 'PROCEDURES.PRE_INSTRUCTIONS' | translate }}</h3>
+            <p>{{ o.preProcedureInstructions }}</p>
+          }
+        </div>
+        @if (
+          o.requiresAnesthesia ||
+          o.requiresSedation ||
+          o.bloodProductsRequired ||
+          o.imagingGuidanceRequired
+        ) {
+          <div class="view-section">
+            <h3>{{ 'PROCEDURES.REQUIREMENTS' | translate }}</h3>
+            <p class="chip-row">
+              @if (o.requiresAnesthesia) {
+                <span class="flag-badge">
+                  {{ 'PROCEDURES.ANESTHESIA' | translate
+                  }}{{ o.anesthesiaType ? ': ' + o.anesthesiaType : '' }}
+                </span>
+              }
+              @if (o.requiresSedation) {
+                <span class="flag-badge">
+                  {{ 'PROCEDURES.SEDATION' | translate
+                  }}{{ o.sedationType ? ': ' + o.sedationType : '' }}
+                </span>
+              }
+              @if (o.bloodProductsRequired) {
+                <span class="flag-badge">{{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}</span>
+              }
+              @if (o.imagingGuidanceRequired) {
+                <span class="flag-badge">{{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}</span>
+              }
+            </p>
+            @if (o.specialEquipmentNeeded) {
+              <p class="muted">{{ o.specialEquipmentNeeded }}</p>
+            }
+          </div>
+        }
+        <div class="view-section">
+          <h3>{{ 'PROCEDURES.CONSENT' | translate }}</h3>
+          @if (o.consentObtained) {
+            <p>
+              {{ 'PROCEDURES.CONSENT_OBTAINED' | translate }}
+              @if (o.consentObtainedBy) {
+                — {{ o.consentObtainedBy }}
+              }
+              @if (o.consentObtainedAt) {
+                ({{ o.consentObtainedAt | date: 'medium' }})
+              }
+            </p>
+            @if (o.consentFormLocation) {
+              <p class="muted">{{ o.consentFormLocation }}</p>
+            }
+          } @else {
+            <p class="muted">{{ 'PROCEDURES.CONSENT_PENDING' | translate }}</p>
+          }
+        </div>
+        @if (o.cancellationReason) {
+          <div class="view-section">
+            <h3>{{ 'PROCEDURES.CANCELLATION_REASON' | translate }}</h3>
+            <p>{{ o.cancellationReason }}</p>
+          </div>
+        }
+
+        @if (detailAction() === 'schedule') {
+          <div class="view-section action-form">
+            <h3>{{ 'PROCEDURES.SCHEDULE_TITLE' | translate }}</h3>
+            <div class="field">
+              <label for="proc-schedule">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }} *</label>
+              <input id="proc-schedule" type="datetime-local" [(ngModel)]="scheduleDatetime" />
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-secondary" (click)="cancelAction()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                [disabled]="actionBusy() || !scheduleDatetime"
+                (click)="submitSchedule()"
+              >
+                {{ 'COMMON.CONFIRM' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+        @if (detailAction() === 'consent') {
+          <div class="view-section action-form">
+            <h3>{{ 'PROCEDURES.RECORD_CONSENT' | translate }}</h3>
+            <div class="form-row">
+              <div class="field">
+                <label for="proc-consent-by">{{ 'PROCEDURES.CONSENT_BY' | translate }} *</label>
+                <input id="proc-consent-by" type="text" [(ngModel)]="consentBy" />
+              </div>
+              <div class="field">
+                <label for="proc-consent-form">{{ 'PROCEDURES.CONSENT_FORM' | translate }}</label>
+                <input id="proc-consent-form" type="text" [(ngModel)]="consentFormLocation" />
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-secondary" (click)="cancelAction()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-primary"
+                [disabled]="actionBusy() || !consentBy.trim()"
+                (click)="submitConsent()"
+              >
+                {{ 'COMMON.CONFIRM' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+        @if (detailAction() === 'cancel') {
+          <div class="view-section action-form">
+            <h3>{{ 'PROCEDURES.CANCEL_TITLE' | translate }}</h3>
+            <div class="field">
+              <label for="proc-cancel-reason">
+                {{ 'PROCEDURES.CANCELLATION_REASON' | translate }} *
+              </label>
+              <textarea id="proc-cancel-reason" rows="2" [(ngModel)]="cancelReason"></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-secondary" (click)="cancelAction()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-danger"
+                [disabled]="actionBusy() || !cancelReason.trim()"
+                (click)="submitCancel()"
+              >
+                {{ 'COMMON.CONFIRM' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        @if (canManage && !isTerminal(o) && !detailAction()) {
+          <button type="button" class="btn-primary" (click)="openAction('schedule')">
+            {{
+              (o.scheduledDatetime ? 'PROCEDURES.RESCHEDULE' : 'PROCEDURES.SCHEDULE') | translate
+            }}
+          </button>
+          @if (needsConsent(o)) {
+            <button type="button" class="btn-primary" (click)="openAction('consent')">
+              {{ 'PROCEDURES.RECORD_CONSENT' | translate }}
+            </button>
+          }
+          @if (o.status === 'SCHEDULED' || o.status === 'READY_FOR_PROCEDURE') {
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="actionBusy()"
+              (click)="setStatus('IN_PROGRESS')"
+            >
+              {{ 'PROCEDURES.START' | translate }}
+            </button>
+          }
+          @if (o.status === 'IN_PROGRESS') {
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="actionBusy()"
+              (click)="setStatus('COMPLETED')"
+            >
+              {{ 'PROCEDURES.COMPLETE' | translate }}
+            </button>
+          }
+          @if (o.status === 'SCHEDULED') {
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="actionBusy()"
+              (click)="setStatus('POSTPONED')"
+            >
+              {{ 'PROCEDURES.POSTPONE' | translate }}
+            </button>
+          }
+          @if (o.laterality && !o.siteMarked) {
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="actionBusy()"
+              (click)="toggleSiteMarked()"
+            >
+              {{ 'PROCEDURES.MARK_SITE' | translate }}
+            </button>
+          }
+        }
+        @if (canCancel && !isTerminal(o) && !detailAction()) {
+          <button type="button" class="btn-danger" (click)="openAction('cancel')">
+            {{ 'PROCEDURES.CANCEL_ORDER' | translate }}
+          </button>
+        }
+        <button type="button" class="btn-secondary" (click)="closeOrder()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Create modal ══ -->
+@if (showOrderModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeOrderModal()"
+    (keydown.escape)="closeOrderModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeOrderModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="proc-patient">{{ 'PROCEDURES.PATIENT' | translate }} *</label>
+          <app-patient-picker
+            inputId="proc-patient"
+            [selected]="orderPatient()"
+            (selectedChange)="onPatientPicked($event)"
+          />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="proc-name">{{ 'PROCEDURES.PROCEDURE' | translate }} *</label>
+            <input id="proc-name" type="text" [(ngModel)]="orderForm.procedureName" />
+          </div>
+          <div class="field">
+            <label for="proc-code">{{ 'PROCEDURES.CODE' | translate }}</label>
+            <input id="proc-code" type="text" [(ngModel)]="orderForm.procedureCode" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="proc-category">{{ 'PROCEDURES.CATEGORY' | translate }}</label>
+            <input id="proc-category" type="text" [(ngModel)]="orderForm.procedureCategory" />
+          </div>
+          <div class="field">
+            <label for="proc-urgency">{{ 'PROCEDURES.URGENCY' | translate }} *</label>
+            <select id="proc-urgency" [(ngModel)]="orderForm.urgency">
+              @for (u of urgencies; track u) {
+                <option [value]="u">{{ 'PROCEDURES.URGENCY_' + u | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="proc-indication">{{ 'PROCEDURES.INDICATION' | translate }} *</label>
+          <textarea id="proc-indication" rows="2" [(ngModel)]="orderForm.indication"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="proc-scheduled">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }}</label>
+            <input
+              id="proc-scheduled"
+              type="datetime-local"
+              [(ngModel)]="orderForm.scheduledDatetime"
+            />
+          </div>
+          <div class="field">
+            <label for="proc-duration">{{ 'PROCEDURES.DURATION' | translate }}</label>
+            <input
+              id="proc-duration"
+              type="number"
+              min="0"
+              [(ngModel)]="orderForm.estimatedDurationMinutes"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="proc-laterality">{{ 'PROCEDURES.LATERALITY' | translate }}</label>
+            <select id="proc-laterality" [(ngModel)]="orderForm.laterality">
+              <option [ngValue]="undefined">—</option>
+              @for (l of lateralities; track l) {
+                <option [value]="l">{{ 'PROCEDURES.LATERALITY_' + l | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="proc-equipment">{{ 'PROCEDURES.EQUIPMENT' | translate }}</label>
+            <input id="proc-equipment" type="text" [(ngModel)]="orderForm.specialEquipmentNeeded" />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="orderForm.requiresAnesthesia" />
+            {{ 'PROCEDURES.ANESTHESIA' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="orderForm.requiresSedation" />
+            {{ 'PROCEDURES.SEDATION' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="orderForm.bloodProductsRequired" />
+            {{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="orderForm.imagingGuidanceRequired" />
+            {{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}
+          </label>
+        </div>
+        @if (orderForm.requiresAnesthesia) {
+          <div class="field">
+            <label for="proc-anesthesia">{{ 'PROCEDURES.ANESTHESIA_TYPE' | translate }}</label>
+            <input id="proc-anesthesia" type="text" [(ngModel)]="orderForm.anesthesiaType" />
+          </div>
+        }
+        @if (orderForm.requiresSedation) {
+          <div class="field">
+            <label for="proc-sedation">{{ 'PROCEDURES.SEDATION_TYPE' | translate }}</label>
+            <input id="proc-sedation" type="text" [(ngModel)]="orderForm.sedationType" />
+          </div>
+        }
+        <div class="field">
+          <label for="proc-pre">{{ 'PROCEDURES.PRE_INSTRUCTIONS' | translate }}</label>
+          <textarea id="proc-pre" rows="2" [(ngModel)]="orderForm.preProcedureInstructions">
+          </textarea>
+        </div>
+        <div class="field">
+          <label for="proc-notes">{{ 'PROCEDURES.CLINICAL_NOTES' | translate }}</label>
+          <textarea id="proc-notes" rows="2" [(ngModel)]="orderForm.clinicalNotes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeOrderModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="
+            orderSaving() ||
+            !orderForm.patientId ||
+            !orderForm.procedureName ||
+            !orderForm.indication
+          "
+          (click)="submitOrder()"
+        >
+          {{ 'PROCEDURES.SUBMIT' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

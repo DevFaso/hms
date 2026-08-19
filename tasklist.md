@@ -89,7 +89,7 @@
 - [ ] 13. Maternity module v2: ultrasound orders/reports/templates, birth plans, prenatal scheduling, postpartum + newborn assessments
 - [ ] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming)
 - [x] 15. Pharmacy: medication-history timeline + pharmacy-fill recording (PHARMACIST workspace) — ✅ DONE (`/medication-history` page: timeline w/ overlap+interaction detection, polypharmacy warnings, fill record/edit; roles mirror backend exactly)
-- [ ] 16. Procedure orders page (order → consent-pending → scheduled → cancel)
+- [x] 16. Procedure orders page (order → consent-pending → scheduled → cancel) — ✅ DONE (`/procedure-orders`: status worklists + pending-consent, create modal, detail w/ schedule/consent/start/complete/postpone/site-mark/cancel; detail renders from list rows since HOSPITAL_ADMIN cannot GET-by-id)
 - [ ] 17. Insurance management + multi-hospital registration UI (reception + patient detail)
 - [ ] 18. Patient education: resource management + assignment/progress views
 - [ ] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines)

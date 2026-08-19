@@ -1221,6 +1221,18 @@ export const routes: Routes = [
           ),
       },
 
+      // Procedure orders (order → consent → schedule → complete/cancel).
+      // HOSPITAL_ADMIN is read-only (backend allows lists but not writes).
+      {
+        path: 'procedure-orders',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./procedure-orders/procedure-orders').then((m) => m.ProcedureOrdersComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
