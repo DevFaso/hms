@@ -1,0 +1,290 @@
+<div class="tab-panel">
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.USERS_TITLE' | translate }}</h2>
+    <div class="panel-actions">
+      <button type="button" class="btn-secondary" (click)="openReset()">
+        <span class="material-symbols-outlined">lock_reset</span>
+        {{ 'ADMIN_GOV.FORCE_RESET' | translate }}
+      </button>
+      <button type="button" class="btn-primary" (click)="openImport()">
+        <span class="material-symbols-outlined">upload_file</span>
+        {{ 'ADMIN_GOV.IMPORT_USERS' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══ Password rotation health ═══ -->
+  <div class="panel-header">
+    <h3>{{ 'ADMIN_GOV.ROTATION_TITLE' | translate }}</h3>
+    <select
+      class="filter-select"
+      [ngModel]="rotationFilter()"
+      (ngModelChange)="rotationFilter.set($event)"
+    >
+      <option value="">{{ 'ADMIN_GOV.ALL_STATUSES' | translate }}</option>
+      <option value="HEALTHY">{{ 'ADMIN_GOV.ROT_HEALTHY' | translate }}</option>
+      <option value="WARNING">{{ 'ADMIN_GOV.ROT_WARNING' | translate }}</option>
+      <option value="FORCE_REQUIRED">{{ 'ADMIN_GOV.ROT_FORCE_REQUIRED' | translate }}</option>
+    </select>
+  </div>
+
+  @if (rotationLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (rotationError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.ROTATION_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadRotation()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (filteredRotation().length === 0) {
+    <div class="empty-state">
+      <p>{{ 'ADMIN_GOV.ROTATION_EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ASSIGN_ADMIN.USER' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.PASSWORD_AGE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.ROTATION_DUE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.DAYS_UNTIL_DUE' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filteredRotation(); track row.userId) {
+            <tr>
+              <td>
+                <div class="cell-main">{{ row.firstName }} {{ row.lastName }}</div>
+                <div class="cell-sub">{{ row.email || row.username }}</div>
+              </td>
+              <td>{{ 'ADMIN_GOV.DAYS_N' | translate: { days: row.passwordAgeDays } }}</td>
+              <td>{{ row.rotationDueOn || '—' }}</td>
+              <td [class.overdue]="row.daysUntilDue < 0">{{ row.daysUntilDue }}</td>
+              <td>
+                <span
+                  class="badge"
+                  [class.badge-success]="row.status === 'HEALTHY'"
+                  [class.badge-warn]="row.status === 'WARNING'"
+                  [class.badge-danger]="row.status === 'FORCE_REQUIRED'"
+                >
+                  {{ 'ADMIN_GOV.ROT_' + row.status | translate }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Import users modal ═══ -->
+  @if (importModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeImport()"
+      (keydown.escape)="closeImport()"
+    >
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
+        @if (!importResult()) {
+          <p class="form-hint">{{ 'ADMIN_GOV.IMPORT_USERS_HINT' | translate }}</p>
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.CSV_FILE' | translate }} *</span>
+            <input type="file" accept=".csv,text/csv" (change)="onImportFile($event)" />
+            @if (importFileName()) {
+              <span class="file-name">{{ importFileName() }}</span>
+            }
+          </label>
+          <div class="form-row">
+            <label class="form-field">
+              <span>{{ 'ASSIGN_ADMIN.DELIMITER' | translate }}</span>
+              <input
+                type="text"
+                maxlength="1"
+                [ngModel]="importDelimiter()"
+                (ngModelChange)="importDelimiter.set($event)"
+              />
+            </label>
+            <label class="form-field">
+              <span>{{ 'ASSIGN_ADMIN.DEFAULT_HOSPITAL' | translate }}</span>
+              <select
+                [ngModel]="importDefaultHospitalId()"
+                (ngModelChange)="importDefaultHospitalId.set($event)"
+              >
+                <option value="">—</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="importForceChange()"
+              (ngModelChange)="importForceChange.set($event)"
+            />
+            <span>{{ 'ADMIN_GOV.FORCE_PASSWORD_CHANGE' | translate }}</span>
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="importSendInvites()"
+              (ngModelChange)="importSendInvites.set($event)"
+            />
+            <span>{{ 'ADMIN_GOV.SEND_INVITES' | translate }}</span>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeImport()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="saving()"
+              (click)="submitImport()"
+            >
+              {{ 'ASSIGN_ADMIN.RUN_IMPORT' | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="result-summary">
+            <span class="badge badge-info">
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+            </span>
+            <span class="badge badge-success">
+              {{ 'ADMIN_GOV.IMPORTED' | translate }}: {{ importResult()!.imported }}
+            </span>
+            <span class="badge badge-danger">
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+            </span>
+          </div>
+          <div class="table-wrap result-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{{ 'ASSIGN_ADMIN.IDENTIFIER' | translate }}</th>
+                  <th>{{ 'COMMON.STATUS' | translate }}</th>
+                  <th>{{ 'ASSIGN_ADMIN.MESSAGE' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of importResult()!.results; track r.rowNumber) {
+                  <tr>
+                    <td>{{ r.rowNumber }}</td>
+                    <td>{{ r.identifier || '—' }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class.badge-success]="r.success"
+                        [class.badge-danger]="!r.success"
+                      >
+                        {{ (r.success ? 'ASSIGN_ADMIN.OK' : 'ASSIGN_ADMIN.FAILED') | translate }}
+                      </span>
+                    </td>
+                    <td>{{ r.message || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-primary" (click)="closeImport()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Force password reset modal ═══ -->
+  @if (resetModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeReset()"
+      (keydown.escape)="closeReset()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
+        @if (!resetResult()) {
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.RESET_IDENTIFIERS' | translate }} *</span>
+            <textarea
+              rows="4"
+              [ngModel]="resetIdentifiers()"
+              (ngModelChange)="resetIdentifiers.set($event)"
+              [placeholder]="'ADMIN_GOV.RESET_IDENTIFIERS_HINT' | translate"
+            ></textarea>
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.REASON' | translate }}</span>
+            <input
+              type="text"
+              maxlength="255"
+              [ngModel]="resetReason()"
+              (ngModelChange)="resetReason.set($event)"
+            />
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="resetSendEmail()"
+              (ngModelChange)="resetSendEmail.set($event)"
+            />
+            <span>{{ 'ADMIN_GOV.SEND_RESET_EMAIL' | translate }}</span>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeReset()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitReset()">
+              {{ 'ADMIN_GOV.FORCE_RESET' | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="result-summary">
+            <span class="badge badge-info">
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ resetResult()!.requested }}
+            </span>
+            <span class="badge badge-success">
+              {{ 'ADMIN_GOV.SUCCEEDED' | translate }}: {{ resetResult()!.succeeded }}
+            </span>
+          </div>
+          <ul class="failure-list">
+            @for (r of resetResult()!.results; track $index) {
+              @if (!r.success) {
+                <li>{{ r.email || r.userId }}: {{ r.message }}</li>
+              }
+            }
+          </ul>
+          <div class="modal-actions">
+            <button type="button" class="btn-primary" (click)="closeReset()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

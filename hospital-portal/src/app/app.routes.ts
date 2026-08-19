@@ -1103,6 +1103,28 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // Assignment administration. SecurityConfig hard-gates /assignments/**
+      // to HOSPITAL_ADMIN + SUPER_ADMIN at the URL layer; the route mirrors it.
+      {
+        path: 'admin-assignments',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin-assignments/admin-assignments').then((m) => m.AdminAssignmentsComponent),
+      },
+
+      // Governance console (permission matrix, security policies, user
+      // governance, credential health, baselines). SUPER_ADMIN only: most
+      // backing endpoints are SUPER_ADMIN-only, and the flat security-policy
+      // reads that would admit HOSPITAL_ADMIN are unscoped cross-tenant.
+      {
+        path: 'admin-governance',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin-governance/admin-governance').then((m) => m.AdminGovernanceComponent),
+      },
+
       // Super-Admin Control Tower (SUPER_ADMIN only)
       {
         path: 'super-admin',

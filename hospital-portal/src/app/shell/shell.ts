@@ -531,6 +531,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/digital-signatures',
       });
     }
+    // Assignment admin — SecurityConfig gates /assignments/** to these two roles
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'assignment_ind',
+        label: 'Assignments',
+        translationKey: 'NAV.ASSIGNMENTS',
+        route: '/admin-assignments',
+      });
+    }
+    // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
+    if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'gavel',
+        label: 'Governance',
+        translationKey: 'NAV.GOVERNANCE',
+        route: '/admin-governance',
+      });
+    }
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({
         icon: 'policy',

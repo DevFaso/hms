@@ -1,0 +1,327 @@
+<div class="tab-panel">
+  <!-- ═══ Latest snapshot per environment ═══ -->
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.MATRIX_LATEST' | translate }}</h2>
+    <div class="panel-actions">
+      <select
+        class="filter-select"
+        [ngModel]="environment()"
+        (ngModelChange)="onEnvironmentChange($event)"
+      >
+        @for (env of environments; track env) {
+          <option [value]="env">{{ 'ADMIN_GOV.ENV_' + env | translate }}</option>
+        }
+      </select>
+      <button type="button" class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add_a_photo</span>
+        {{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (latestLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (latestError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.MATRIX_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadLatest()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (latestEmpty()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">grid_off</span>
+      <p>{{ 'ADMIN_GOV.MATRIX_NO_SNAPSHOT' | translate }}</p>
+    </div>
+  } @else if (latest(); as snap) {
+    <div class="snapshot-meta">
+      <span class="badge badge-info">v{{ snap.version }}</span>
+      @if (snap.label) {
+        <span class="badge badge-muted">{{ snap.label }}</span>
+      }
+      <span class="meta-text">
+        {{ snap.createdBy || '—' }} · {{ snap.createdAt | date: 'medium' }}
+      </span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.MATRIX_DOMAIN' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.MATRIX_ACTIONS' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.MATRIX_OWNERS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of snap.rows; track row.domain) {
+            <tr>
+              <td class="cell-main">{{ row.domain }}</td>
+              <td>
+                <div class="chip-row">
+                  @for (a of row.actions; track a) {
+                    <span class="flag-badge">{{ a }}</span>
+                  }
+                </div>
+              </td>
+              <td>{{ row.owners.join(', ') }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Snapshot history ═══ -->
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.MATRIX_HISTORY' | translate }}</h2>
+  </div>
+  @if (snapshotsLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (snapshotsError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.MATRIX_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadSnapshots()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (snapshots().length === 0) {
+    <div class="empty-state">
+      <p>{{ 'ADMIN_GOV.MATRIX_NO_HISTORY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.ENVIRONMENT' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.VERSION' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.LABEL' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.CREATED_BY' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.CREATED_AT' | translate }}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (snap of snapshots(); track snap.id) {
+            <tr>
+              <td>{{ 'ADMIN_GOV.ENV_' + snap.environment | translate }}</td>
+              <td>v{{ snap.version }}</td>
+              <td>{{ snap.label || '—' }}</td>
+              <td>{{ snap.createdBy || '—' }}</td>
+              <td>{{ snap.createdAt | date: 'short' }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="viewSnapshot(snap)"
+                  [title]="'COMMON.VIEW' | translate"
+                >
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Audit trail (server-capped at the latest 50) ═══ -->
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.MATRIX_AUDIT' | translate }}</h2>
+    <select
+      class="filter-select"
+      [ngModel]="auditFilter()"
+      (ngModelChange)="onAuditFilterChange($event)"
+    >
+      <option value="">{{ 'ADMIN_GOV.ALL_ACTIONS' | translate }}</option>
+      @for (a of auditActions; track a) {
+        <option [value]="a">{{ 'ADMIN_GOV.AUDIT_' + a | translate }}</option>
+      }
+    </select>
+  </div>
+  @if (auditLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (auditError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.MATRIX_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadAudit()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (audit().length === 0) {
+    <div class="empty-state">
+      <p>{{ 'ADMIN_GOV.MATRIX_NO_AUDIT' | translate }}</p>
+    </div>
+  } @else {
+    <p class="form-hint">{{ 'ADMIN_GOV.AUDIT_CAP_NOTE' | translate }}</p>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.ACTION' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.DESCRIPTION' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.INITIATED_BY' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.CREATED_AT' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (event of audit(); track event.id) {
+            <tr>
+              <td>
+                <span class="badge badge-info">{{
+                  'ADMIN_GOV.AUDIT_' + event.action | translate
+                }}</span>
+              </td>
+              <td>{{ event.description || '—' }}</td>
+              <td>{{ event.initiatedBy || '—' }}</td>
+              <td>{{ event.createdAt | date: 'short' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Snapshot view modal ═══ -->
+  @if (viewedSnapshot(); as snap) {
+    <div class="modal-backdrop" tabindex="-1" (click)="closeView()" (keydown.escape)="closeView()">
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>
+          {{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ snap.version }}
+          @if (snap.label) {
+            — {{ snap.label }}
+          }
+        </h2>
+        @if (snap.notes) {
+          <p class="form-static">{{ snap.notes }}</p>
+        }
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>{{ 'ADMIN_GOV.MATRIX_DOMAIN' | translate }}</th>
+                <th>{{ 'ADMIN_GOV.MATRIX_ACTIONS' | translate }}</th>
+                <th>{{ 'ADMIN_GOV.MATRIX_OWNERS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of snap.rows; track row.domain) {
+                <tr>
+                  <td class="cell-main">{{ row.domain }}</td>
+                  <td>{{ row.actions.join(', ') }}</td>
+                  <td>{{ row.owners.join(', ') }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" (click)="closeView()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Create snapshot modal ═══ -->
+  @if (showCreate()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeCreate()"
+      (keydown.escape)="closeCreate()"
+    >
+      <div
+        class="modal modal-xl"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.ENVIRONMENT' | translate }} *</span>
+            <select [ngModel]="createEnvironment()" (ngModelChange)="createEnvironment.set($event)">
+              @for (env of environments; track env) {
+                <option [value]="env">{{ 'ADMIN_GOV.ENV_' + env | translate }}</option>
+              }
+            </select>
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.LABEL' | translate }}</span>
+            <input
+              type="text"
+              maxlength="255"
+              [ngModel]="createLabel()"
+              (ngModelChange)="createLabel.set($event)"
+            />
+          </label>
+        </div>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.NOTES' | translate }}</span>
+          <textarea
+            rows="2"
+            maxlength="2000"
+            [ngModel]="createNotes()"
+            (ngModelChange)="createNotes.set($event)"
+          ></textarea>
+        </label>
+        <p class="form-hint">{{ 'ADMIN_GOV.MATRIX_ROWS_HINT' | translate }}</p>
+        <div class="rows-editor">
+          @for (row of createRows(); track $index) {
+            <div class="row-editor-line">
+              <input
+                type="text"
+                [placeholder]="'ADMIN_GOV.MATRIX_DOMAIN' | translate"
+                [ngModel]="row.domain"
+                (ngModelChange)="updateRow($index, 'domain', $event)"
+              />
+              <input
+                type="text"
+                [placeholder]="'ADMIN_GOV.MATRIX_ACTIONS' | translate"
+                [ngModel]="row.actions"
+                (ngModelChange)="updateRow($index, 'actions', $event)"
+              />
+              <input
+                type="text"
+                [placeholder]="'ADMIN_GOV.MATRIX_OWNERS' | translate"
+                [ngModel]="row.owners"
+                (ngModelChange)="updateRow($index, 'owners', $event)"
+              />
+              <button
+                type="button"
+                class="icon-btn danger"
+                (click)="removeRow($index)"
+                [title]="'COMMON.DELETE' | translate"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+        <button type="button" class="btn-link" (click)="addRow()">
+          + {{ 'ADMIN_GOV.ADD_ROW' | translate }}
+        </button>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeCreate()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitCreate()">
+            {{ 'ADMIN_GOV.PUBLISH_SNAPSHOT' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

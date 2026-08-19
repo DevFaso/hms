@@ -92,7 +92,7 @@
 - [ ] 16. Procedure orders page (order → consent-pending → scheduled → cancel)
 - [ ] 17. Insurance management + multi-hospital registration UI (reception + patient detail)
 - [ ] 18. Patient education: resource management + assignment/progress views
-- [ ] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines)
+- [x] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines) — ✅ DONE (`/admin-assignments`: paged worklist + filters, single/multi-scope create, edit, regenerate-code w/ verification-reset warning, resend, deactivate/delete, CSV bulk import; `/admin-governance` console (SUPER_ADMIN): permission-matrix snapshots w/ prefill+publish+audit trail, security policies/rules CRUD, user CSV import + force-password-reset + rotation health, credential health (read-only, MFA/recovery upserts deferred), baselines + export, rule-set templates/import/simulation)
 - [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
 
 ### Phase 4 — Quality floor (P3, parallelizable)
