@@ -77,6 +77,16 @@
           {{ 'CHART.TAB' | translate }}
         </button>
       }
+      @if (canViewMedHistory()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'med-history'"
+          (click)="setTab('med-history')"
+          [title]="'MED_HISTORY.TAB_TITLE' | translate"
+        >
+          {{ 'MED_HISTORY.TAB' | translate }}
+        </button>
+      }
       @if (canViewCoverage()) {
         <button
           class="tab"
@@ -139,6 +149,11 @@
     <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
       <app-patient-chart [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Medical History Tab (social / family / immunizations) ═══ -->
+    @if (activeTab() === 'med-history' && canViewMedHistory()) {
+      <app-medical-history-tab [patientId]="patient()!.id" />
     }
 
     <!-- ═══ Coverage Tab (insurance + hospital registrations) ═══ -->

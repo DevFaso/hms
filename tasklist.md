@@ -85,9 +85,9 @@
 
 ### Phase 3 — New modules (P2, by clinical value)
 
-- [ ] 12. Maternity module v1: maternal history (+ high-risk board, risk calc, mark-reviewed) and OB/GYN referrals with messaging
-- [ ] 13. Maternity module v2: ultrasound orders/reports/templates, birth plans, prenatal scheduling, postpartum + newborn assessments
-- [ ] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming)
+- [x] 12. Maternity module v1: maternal history (+ high-risk board, risk calc, mark-reviewed) and OB/GYN referrals with messaging — ✅ DONE (`/maternity` page: worklist board with risk badges + calculate-risk/mark-reviewed, versioned history form, referral lifecycle + messaging; referral attachments and high-risk care plans deferred)
+- [x] 13. Maternity module v2: ultrasound orders/reports/templates, birth plans, prenatal scheduling, postpartum + newborn assessments — ✅ DONE (four new `/maternity` tabs: ultrasound worklists + report entry w/ NT & anatomy templates + review/notify, birth-plan CRUD + provider review, prenatal cadence generation + reschedule/reminders, postpartum observations + newborn assessments w/ backend alerts)
+- [x] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming) — ✅ DONE (History tab: versioned social summary+form, family worklists w/ genetic/screening filters, immunizations w/ client-computed overdue + mark-reminder-sent; roles mirror backend reads exactly)
 - [x] 15. Pharmacy: medication-history timeline + pharmacy-fill recording (PHARMACIST workspace) — ✅ DONE (`/medication-history` page: timeline w/ overlap+interaction detection, polypharmacy warnings, fill record/edit; roles mirror backend exactly)
 - [x] 16. Procedure orders page (order → consent-pending → scheduled → cancel) — ✅ DONE (`/procedure-orders`: status worklists + pending-consent, create modal, detail w/ schedule/consent/start/complete/postpone/site-mark/cancel; detail renders from list rows since HOSPITAL_ADMIN cannot GET-by-id)
 - [x] 17. Insurance management + multi-hospital registration UI (reception + patient detail) — ✅ DONE (`/registrations` admin page w/ multi-hospital panel + Coverage tab on patient detail for insurance link/edit/delete and registration history; fixed the latent findActiveRegistration bare-array bug)
