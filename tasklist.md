@@ -99,7 +99,7 @@
 
 - [x] 21. Raise spec coverage: prioritize billing, encounters, admissions, imaging, consultations, scheduling, auth interceptors; enforce via `coverage-thresholds.json` ratchet — DONE (`feature/coverage-ratchet`): 120 new specs took billing/scheduling/imaging/consultations/encounters from 0% and interceptors from 30%→95%; `scripts/check-coverage.mjs` enforces global + per-module floors from `coverage-thresholds.json`; CI runs `test:coverage` + `coverage:check`. Follow-up: encounter-note-form + eligibility-check-dialog sub-components still untested (encounters floor pinned at 47%)
 - [x] 22. i18n: backfill 342 ES + 13 FR keys; sweep hardcoded EN strings; add key-parity CI check — DONE (`feature/i18n-backfill`): FR was already 100%; ES backfilled 515 keys (NAV/PORTAL/RECEPTION/PHARMACY) to 100%, removed 1 orphan ES key; swept hardcoded EN out of `login.html`/`login.ts`, `billing.html`, checkout dialog (46 new keys ×3 locales); CI gate switched from 99%/89% thresholds to strict key parity (`npm run i18n:parity`)
-- [ ] 23. A11y pass: skip-link, `aria-live` regions, global `sr-only`, reduced-motion, focus-visible
+- [x] 23. A11y pass: skip-link, `aria-live` regions, global `sr-only`, reduced-motion, focus-visible — DONE (`feature/a11y-pass`): skip-link + focus-visible were already shipped (row 11); this pass added live-region toasts (`role="alert"` for errors, `role="status"` otherwise, aria-hidden icons, labelled close button), a global `.sr-only` utility in `styles.scss` (local copies in stock-routing/pre-checkin removed), and a global `prefers-reduced-motion: reduce` kill-switch (0.01ms durations so end-events still fire)
 - [ ] 24. Migrate dashboard/nurse-station/patient-tracker polling to STOMP topics
 
 ---
