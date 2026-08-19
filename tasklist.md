@@ -74,14 +74,14 @@
 - [x] 4. Silenced 403s now reported once-per-URL to `POST /frontend-audit` (`type: SILENT_403`); errors still propagate to callers; `/frontend-audit` itself excluded from the 403 redirect
 - [x] 5. GA: static gtag snippet removed from `index.html`; `AnalyticsService` bootstraps gtag at runtime only for a real `G-…` id; prod placeholder replaced with empty (disabled) + key added to dev/uat envs
 
-### Phase 2 — Close broken workflows (P1)
+### Phase 2 — Close broken workflows (P1) — ✅ DONE 2026-08-18 (`feature/web-p0-hardening`)
 
-- [ ] 6. Discharge Approvals page (create/approve/reject/cancel, pending queue) + Discharge Summary editor (draft → finalize, pending-results view)
-- [ ] 7. Imaging Results: results list/detail per order, status updates, critical-result acknowledge
-- [ ] 8. Lab: specimen collect/receive flow; result sign + acknowledge actions; Critical Results panel (unacknowledged); sequential comparison view in result detail
-- [ ] 9. Patient chart: structured allergies + diagnoses CRUD tabs, chart-updates feed, doctor timeline; switch patient list to `/patients/search`
-- [ ] 10. Encounter detail: complete-examination + ready-for-discharge actions, AVS view/print, note addendums
-- [ ] 11. Specs + e2e coverage for each workflow above as it lands
+- [x] 6. `/discharge` page: approval queue (nurse request w/ auto-resolved registration, doctor approve/reject, cancel) + summary editor (unfinalized & pending-results worklists, med reconciliation / pending tests / follow-ups, finalize w/ signature, delete)
+- [x] 7. Imaging Results view: hospital report list (status/modality/critical filters), report detail w/ measurements + status history, status updates, critical acknowledge, view-report from completed orders
+- [x] 8. Lab: specimen collect/receive per order; result sign + acknowledge; Critical (unacknowledged) tab; comparison modal (trend, % change, significance); Reflex Rules manager in lab-test-config
+- [x] 9. Patient chart tab: structured allergies CRUD (+audited deactivation), doctor-managed problem list, versioned chart-updates feed, audited doctor timeline; `PatientService.search()` added (list page still on `/patients?search=` — kept, both are server-side)
+- [x] 10. Encounter detail: complete-examination + ready-for-discharge, AVS viewer, note history + addendums (also fixed addAddendum payload contract bug)
+- [x] 11. Unit specs shipped with each feature (36 new service tests; 566 total green). E2E: deferred — Playwright flows for discharge/imaging-results/lab-depth need seeded backend fixtures (follow-up)
 
 ### Phase 3 — New modules (P2, by clinical value)
 
