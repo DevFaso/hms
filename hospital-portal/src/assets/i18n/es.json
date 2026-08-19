@@ -858,7 +858,19 @@
     "TITLE": "Consultas",
     "TREATMENT": "Tratamiento",
     "TYPE": "Type",
-    "VITALS": "Signos Vitales"
+    "VITALS": "Signos Vitales",
+    "COMPLETE_EXAM": "Completar examen",
+    "VIEW_AVS": "Resumen de visita",
+    "AVS_TITLE": "Resumen de Visita",
+    "NOTE_HISTORY": "Historial de notas",
+    "ADD_ADDENDUM": "Agregar adenda",
+    "ADDENDUM_PLACEHOLDER": "Entrada tardía / corrección de la nota de la consulta...",
+    "AVS_DIAGNOSES": "Diagnósticos de alta",
+    "AVS_PRESCRIPTIONS": "Recetas",
+    "AVS_REFERRALS": "Derivaciones",
+    "AVS_FOLLOW_UP": "Indicaciones de seguimiento",
+    "AVS_EDUCATION": "Educación del paciente",
+    "AVS_FOLLOW_UP_APPT": "Cita de seguimiento"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

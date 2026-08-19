@@ -8,6 +8,8 @@ import {
   EncounterRequest,
   EncounterResponse,
   EncounterType,
+  EncounterNoteResponse,
+  AfterVisitSummary,
 } from '../services/encounter.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
@@ -48,6 +50,18 @@ export class EncountersComponent implements OnInit {
   selectedEncounter = signal<EncounterResponse | null>(null);
   noteContent = '';
   showNoteForm = signal(false);
+
+  /* Note history + addendums */
+  noteHistory = signal<EncounterNoteResponse[]>([]);
+  noteHistoryLoading = signal(false);
+  addendumContent = '';
+  showAddendumForm = signal(false);
+  addendumSaving = signal(false);
+
+  /* Status transitions + AVS */
+  transitioning = signal(false);
+  avs = signal<AfterVisitSummary | null>(null);
+  avsLoading = signal(false);
 
   // Dropdowns
   hospitals = signal<HospitalResponse[]>([]);
@@ -364,10 +378,14 @@ export class EncountersComponent implements OnInit {
     this.selectedEncounter.set(enc);
     this.showNoteForm.set(false);
     this.noteContent = '';
+    this.showAddendumForm.set(false);
+    this.addendumContent = '';
+    this.loadNoteHistory(enc.id);
   }
 
   closeDetail(): void {
     this.selectedEncounter.set(null);
+    this.noteHistory.set([]);
   }
 
   addNote(): void {
@@ -380,9 +398,107 @@ export class EncountersComponent implements OnInit {
           this.toast.success('Note added successfully');
           this.noteContent = '';
           this.showNoteForm.set(false);
+          this.loadNoteHistory(enc.id);
         },
         error: () => this.toast.error('Failed to add note'),
       });
+  }
+
+  private loadNoteHistory(encounterId: string): void {
+    this.noteHistoryLoading.set(true);
+    this.encounterService.getNoteHistory(encounterId).subscribe({
+      next: (history) => {
+        this.noteHistory.set(history ?? []);
+        this.noteHistoryLoading.set(false);
+      },
+      error: () => {
+        this.noteHistory.set([]);
+        this.noteHistoryLoading.set(false);
+      },
+    });
+  }
+
+  addAddendum(): void {
+    const enc = this.selectedEncounter();
+    if (!enc || !this.addendumContent.trim()) return;
+    this.addendumSaving.set(true);
+    this.encounterService
+      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })
+      .subscribe({
+        next: () => {
+          this.toast.success('Addendum recorded');
+          this.addendumContent = '';
+          this.showAddendumForm.set(false);
+          this.addendumSaving.set(false);
+          this.loadNoteHistory(enc.id);
+        },
+        error: () => {
+          this.toast.error('Failed to record addendum');
+          this.addendumSaving.set(false);
+        },
+      });
+  }
+
+  /* ── Status transitions ── */
+
+  canCompleteExamination(enc: EncounterResponse): boolean {
+    return enc.status === 'IN_PROGRESS';
+  }
+
+  canMarkReadyForDischarge(enc: EncounterResponse): boolean {
+    return enc.status === 'IN_PROGRESS' || enc.status === 'AWAITING_RESULTS';
+  }
+
+  completeExamination(enc: EncounterResponse): void {
+    this.transitioning.set(true);
+    this.encounterService.completeExamination(enc.id).subscribe({
+      next: (updated) => {
+        this.toast.success('Examination completed');
+        this.transitioning.set(false);
+        this.selectedEncounter.set(updated);
+        this.loadEncounters();
+      },
+      error: () => {
+        this.toast.error('Failed to complete examination');
+        this.transitioning.set(false);
+      },
+    });
+  }
+
+  markReadyForDischarge(enc: EncounterResponse): void {
+    this.transitioning.set(true);
+    this.encounterService.markReadyForDischarge(enc.id).subscribe({
+      next: (updated) => {
+        this.toast.success('Marked ready for discharge');
+        this.transitioning.set(false);
+        this.selectedEncounter.set(updated);
+        this.loadEncounters();
+      },
+      error: () => {
+        this.toast.error('Failed to update encounter status');
+        this.transitioning.set(false);
+      },
+    });
+  }
+
+  /* ── After-visit summary ── */
+
+  viewAvs(enc: EncounterResponse): void {
+    this.avsLoading.set(true);
+    this.encounterService.getAvs(enc.id).subscribe({
+      next: (summary) => {
+        this.avs.set(summary);
+        this.avsLoading.set(false);
+      },
+      error: () => {
+        this.toast.error('No after-visit summary available for this encounter');
+        this.avsLoading.set(false);
+      },
+    });
+  }
+
+  closeAvs(): void {
+    this.avs.set(null);
   }
 
   getStatusClass(status: string): string {

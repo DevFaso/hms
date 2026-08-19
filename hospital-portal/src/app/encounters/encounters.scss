@@ -627,3 +627,34 @@
   font-weight: 500;
   cursor: not-allowed;
 }
+
+/* ── Transitions / note history / AVS additions ─────────────── */
+
+.transition-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.note-history {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .note-history-item {
+    border-left: 3px solid #d6d6e3;
+    padding-left: 10px;
+
+    .note-meta {
+      display: block;
+      color: #8a8aa3;
+      font-size: 0.8rem;
+      margin-top: 2px;
+    }
+  }
+}
+
+.avs-meta p {
+  color: #6b6b8f;
+  margin: 0 0 10px;
+}

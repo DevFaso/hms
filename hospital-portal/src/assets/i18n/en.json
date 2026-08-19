@@ -857,7 +857,19 @@
     "TITLE": "Encounters",
     "TREATMENT": "Treatment",
     "TYPE": "Type",
-    "VITALS": "Vitals"
+    "VITALS": "Vitals",
+    "COMPLETE_EXAM": "Complete examination",
+    "VIEW_AVS": "After-visit summary",
+    "AVS_TITLE": "After-Visit Summary",
+    "NOTE_HISTORY": "Note history",
+    "ADD_ADDENDUM": "Add addendum",
+    "ADDENDUM_PLACEHOLDER": "Late entry / correction to the encounter note...",
+    "AVS_DIAGNOSES": "Discharge diagnoses",
+    "AVS_PRESCRIPTIONS": "Prescriptions",
+    "AVS_REFERRALS": "Referrals",
+    "AVS_FOLLOW_UP": "Follow-up instructions",
+    "AVS_EDUCATION": "Patient education",
+    "AVS_FOLLOW_UP_APPT": "Follow-up appointment"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

@@ -857,7 +857,19 @@
     "TITLE": "Consultations",
     "TREATMENT": "Traitement",
     "TYPE": "Type",
-    "VITALS": "Signes Vitaux"
+    "VITALS": "Signes Vitaux",
+    "COMPLETE_EXAM": "Terminer l'examen",
+    "VIEW_AVS": "Résumé de visite",
+    "AVS_TITLE": "Résumé de Visite",
+    "NOTE_HISTORY": "Historique des notes",
+    "ADD_ADDENDUM": "Ajouter un addendum",
+    "ADDENDUM_PLACEHOLDER": "Saisie tardive / correction de la note de consultation...",
+    "AVS_DIAGNOSES": "Diagnostics de sortie",
+    "AVS_PRESCRIPTIONS": "Ordonnances",
+    "AVS_REFERRALS": "Orientations",
+    "AVS_FOLLOW_UP": "Consignes de suivi",
+    "AVS_EDUCATION": "Éducation du patient",
+    "AVS_FOLLOW_UP_APPT": "Rendez-vous de suivi"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
