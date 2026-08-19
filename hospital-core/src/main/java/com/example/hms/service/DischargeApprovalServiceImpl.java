@@ -40,6 +40,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final DischargeApprovalMapper mapper;
+    private final EncounterAutoCompletionService encounterAutoCompletion;
 
     @Override
     @Transactional
@@ -110,6 +111,14 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         PatientHospitalRegistration registration = approval.getRegistration();
         registration.markDischarged();
         registrationRepository.save(registration);
+
+        // The approval flow is a discharge in its own right (it marks the
+        // registration discharged), so it must also complete the patient's
+        // active encounters — otherwise they linger In Progress unless the
+        // separate POST /admissions/{id}/discharge is called afterwards.
+        encounterAutoCompletion.completeActiveEncounters(
+                registration.getPatient().getId(),
+                registration.getHospital().getId());
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);
         log.info("Doctor {} approved discharge request {}", doctor.getId(), approvalId);

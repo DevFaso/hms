@@ -2,7 +2,6 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
-import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -21,11 +20,11 @@ import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
 import com.example.hms.repository.AdmissionOrderSetRepository;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.DepartmentRepository;
-import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AdmissionService;
+import com.example.hms.service.EncounterAutoCompletionService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,9 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -62,16 +59,13 @@ public class AdmissionServiceImpl implements AdmissionService {
         this.self = self;
     }
 
-    private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EnumSet.of(
-            EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
-
     private final AdmissionRepository admissionRepository;
     private final AdmissionOrderSetRepository orderSetRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
-    private final EncounterRepository encounterRepository;
+    private final EncounterAutoCompletionService encounterAutoCompletion;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
 
@@ -223,21 +217,13 @@ public class AdmissionServiceImpl implements AdmissionService {
     /**
      * When an admission is discharged, any non-terminal encounter for the same
      * patient + hospital should transition to COMPLETED automatically.
+     * Delegates to the shared auto-completion service so the discharge-approval
+     * path behaves identically and tracker boards get WebSocket updates.
      */
     private void completeActiveEncounters(Admission admission) {
-        var active = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+        encounterAutoCompletion.completeActiveEncounters(
                 admission.getPatient().getId(),
-                admission.getHospital().getId(),
-                ENCOUNTER_TERMINAL);
-
-        LocalDateTime now = LocalDateTime.now();
-        for (var enc : active) {
-            enc.setStatus(EncounterStatus.COMPLETED);
-            enc.setCheckoutTimestamp(now);
-        }
-        if (!active.isEmpty()) {
-            encounterRepository.saveAll(active);
-        }
+                admission.getHospital().getId());
     }
 
     @Override

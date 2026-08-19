@@ -46,6 +46,7 @@ class DischargeApprovalServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private DischargeApprovalMapper mapper;
+    @Mock private EncounterAutoCompletionService encounterAutoCompletion;
 
     @InjectMocks private DischargeApprovalServiceImpl service;
 
@@ -279,6 +280,9 @@ class DischargeApprovalServiceImplTest {
         DischargeApprovalResponseDTO result = service.approve(approvalId, buildDecision());
         assertThat(result).isEqualTo(responseDTO);
         assertThat(approval.getStatus()).isEqualTo(DischargeStatus.APPROVED);
+        // The approval flow is a discharge in its own right — it must also
+        // complete the patient's active encounters.
+        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
     }
 
     @Test
