@@ -50,7 +50,7 @@ describe('LabOpsDashboardComponent', () => {
   });
 
   function flushSummary(data: LabOpsSummary = MOCK_SUMMARY): void {
-    const req = httpMock.expectOne('/api/dashboard/lab-ops/summary');
+    const req = httpMock.expectOne('/dashboard/lab-ops/summary');
     expect(req.request.method).toBe('GET');
     req.flush(data);
   }
@@ -58,13 +58,13 @@ describe('LabOpsDashboardComponent', () => {
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();
-    httpMock.expectOne('/api/dashboard/lab-ops/summary');
+    httpMock.expectOne('/dashboard/lab-ops/summary');
   });
 
   it('should start in loading state', () => {
     expect(component.loading()).toBeTrue();
     fixture.detectChanges();
-    httpMock.expectOne('/api/dashboard/lab-ops/summary');
+    httpMock.expectOne('/dashboard/lab-ops/summary');
   });
 
   it('should fetch summary on init and stop loading', () => {
@@ -148,7 +148,7 @@ describe('LabOpsDashboardComponent', () => {
 
   it('should handle API error gracefully', () => {
     fixture.detectChanges();
-    const req = httpMock.expectOne('/api/dashboard/lab-ops/summary');
+    const req = httpMock.expectOne('/dashboard/lab-ops/summary');
     req.error(new ProgressEvent('error'));
     fixture.detectChanges();
 
@@ -209,6 +209,6 @@ describe('LabOpsDashboardComponent', () => {
     const spinner = fixture.nativeElement.querySelector('.loading-overlay');
     expect(spinner).toBeTruthy();
 
-    httpMock.expectOne('/api/dashboard/lab-ops/summary');
+    httpMock.expectOne('/dashboard/lab-ops/summary');
   });
 });

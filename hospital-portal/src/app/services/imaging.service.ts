@@ -62,26 +62,78 @@ export interface ImagingOrderRequest {
   clinicalQuestion?: string;
 }
 
+export type ImagingReportStatus =
+  | 'DRAFT'
+  | 'PRELIMINARY'
+  | 'FINAL'
+  | 'ADDENDUM'
+  | 'CORRECTED'
+  | 'AMENDED'
+  | 'CANCELLED'
+  | 'ERROR';
+
+export interface ImagingReportMeasurement {
+  id: string;
+  sequenceNumber: number;
+  label: string;
+  region: string;
+  numericValue: number | null;
+  textValue: string | null;
+  unit: string;
+  referenceMin: number | null;
+  referenceMax: number | null;
+  abnormal: boolean | null;
+  notes: string;
+}
+
+export interface ImagingReportStatusEntry {
+  id: string;
+  status: ImagingReportStatus;
+  statusReason: string;
+  changedAt: string;
+  changedByName: string;
+  notes: string;
+}
+
 export interface ImagingReportResponse {
   id: string;
   imagingOrderId: string;
   hospitalId: string;
   reportNumber: string;
-  reportStatus: string;
+  reportStatus: ImagingReportStatus;
+  reportVersion: number;
+  latestVersion: boolean;
+  reportTitle: string;
   modality: ImagingModality;
   bodyRegion: string;
+  technique: string;
   findings: string;
   impression: string;
   recommendations: string;
-  isCritical: boolean;
+  comparisonStudies: string;
+  contrastAdministered: boolean | null;
   performedByName: string;
   interpretingProviderName: string;
+  signedByName: string;
+  signedAt: string | null;
+  criticalResultFlaggedAt: string | null;
+  criticalResultAcknowledgedAt: string | null;
+  criticalResultAckByName: string | null;
+  measurements?: ImagingReportMeasurement[] | null;
+  statusHistory?: ImagingReportStatusEntry[] | null;
   studyInstanceUid?: string | null;
   seriesInstanceUid?: string | null;
   accessionNumber?: string | null;
   pacsViewerUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ImagingReportStatusUpdateRequest {
+  status?: ImagingReportStatus;
+  statusReason?: string;
+  changedByStaffId?: string;
+  notes?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -148,11 +200,53 @@ export class ImagingService {
     );
   }
 
+  /* ── Results / reports ── */
+
+  getReport(reportId: string): Observable<ImagingReportResponse> {
+    return this.http.get<ImagingReportResponse>(`${this.baseUrl}/results/${reportId}`);
+  }
+
+  getLatestReportByOrder(orderId: string): Observable<ImagingReportResponse> {
+    return this.http.get<ImagingReportResponse>(`${this.baseUrl}/results/order/${orderId}`);
+  }
+
   getReportsForOrder(orderId: string): Observable<ImagingReportResponse[]> {
     return this.http.get<ImagingReportResponse[]>(`${this.baseUrl}/results/order/${orderId}/all`);
   }
 
-  getReport(reportId: string): Observable<ImagingReportResponse> {
-    return this.http.get<ImagingReportResponse>(`${this.baseUrl}/results/${reportId}`);
+  /** Hospital-wide reports. Backend precedence: status wins over modality; neither → FINAL. */
+  getReportsByHospital(
+    hospitalId: string,
+    params?: { status?: ImagingReportStatus; modality?: ImagingModality },
+  ): Observable<ImagingReportResponse[]> {
+    let httpParams = new HttpParams();
+    if (params?.status) httpParams = httpParams.set('status', params.status);
+    if (params?.modality) httpParams = httpParams.set('modality', params.modality);
+    return this.http.get<ImagingReportResponse[]>(
+      `${this.baseUrl}/results/hospital/${hospitalId}`,
+      { params: httpParams },
+    );
+  }
+
+  updateReportStatus(
+    reportId: string,
+    update: ImagingReportStatusUpdateRequest,
+  ): Observable<ImagingReportResponse> {
+    return this.http.put<ImagingReportResponse>(
+      `${this.baseUrl}/results/${reportId}/status`,
+      update,
+    );
+  }
+
+  acknowledgeCriticalReport(
+    reportId: string,
+    acknowledgingStaffId: string,
+  ): Observable<ImagingReportResponse> {
+    const params = new HttpParams().set('acknowledgingStaffId', acknowledgingStaffId);
+    return this.http.put<ImagingReportResponse>(
+      `${this.baseUrl}/results/${reportId}/acknowledge-critical`,
+      null,
+      { params },
+    );
   }
 }

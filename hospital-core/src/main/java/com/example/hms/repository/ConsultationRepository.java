@@ -85,4 +85,13 @@ public interface ConsultationRepository extends JpaRepository<Consultation, UUID
         @Param("now") LocalDateTime now,
         @Param("completedStatuses") List<ConsultationStatus> completedStatuses
     );
+
+    /**
+     * Hospital-scoped tile count for the super-admin dashboard. Used
+     * when the chip is pinned to a specific hospital so the dashboard
+     * tile agrees with the {@code /api/consultations} list page.
+     * For "All hospitals" view the orchestrator falls back to the
+     * unscoped {@link #count()}.
+     */
+    long countByHospital_Id(UUID hospitalId);
 }

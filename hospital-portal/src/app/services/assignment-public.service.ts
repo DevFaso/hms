@@ -31,7 +31,7 @@ export class AssignmentPublicService {
    * No authentication required.
    */
   getPublicView(assignmentCode: string): Observable<AssignmentPublicView> {
-    return this.http.get<AssignmentPublicView>(`/api/assignments/public/${assignmentCode}`);
+    return this.http.get<AssignmentPublicView>(`/assignments/public/${assignmentCode}`);
   }
 
   /**
@@ -39,9 +39,8 @@ export class AssignmentPublicService {
    * No authentication required.
    */
   verifyCode(assignmentCode: string, confirmationCode: string): Observable<AssignmentPublicView> {
-    return this.http.post<AssignmentPublicView>(
-      `/api/assignments/public/${assignmentCode}/verify`,
-      { confirmationCode },
-    );
+    return this.http.post<AssignmentPublicView>(`/assignments/public/${assignmentCode}/verify`, {
+      confirmationCode,
+    });
   }
 }

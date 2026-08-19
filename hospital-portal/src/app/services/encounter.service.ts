@@ -236,6 +236,24 @@ export interface EncounterNoteRequest {
   signedByCredentials?: string;
 }
 
+export interface EncounterNoteAddendumRequest {
+  content: string;
+  eventOccurredAt?: string;
+  attestAccuracy?: boolean;
+}
+
+export interface EncounterNoteAddendumResponse {
+  id: string;
+  content: string;
+  eventOccurredAt?: string;
+  documentedAt?: string;
+  signedAt?: string;
+  createdAt: string;
+  authorName?: string;
+  authorCredentials?: string;
+  lateEntry?: boolean;
+}
+
 export interface EncounterFilterRequest {
   patientId?: string;
   staffId?: string;
@@ -289,8 +307,12 @@ export class EncounterService {
     return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes`, req);
   }
 
-  addAddendum(encounterId: string, req: EncounterNoteRequest): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(
+  /** Backend contract: EncounterNoteAddendumRequestDTO requires `content`. */
+  addAddendum(
+    encounterId: string,
+    req: EncounterNoteAddendumRequest,
+  ): Observable<EncounterNoteAddendumResponse> {
+    return this.http.post<EncounterNoteAddendumResponse>(
       `${this.baseUrl}/${encounterId}/notes/addendums`,
       req,
     );
@@ -341,5 +363,10 @@ export class EncounterService {
       `${this.baseUrl}/${encounterId}/ready-for-discharge`,
       {},
     );
+  }
+
+  /** After-visit summary for a checked-out encounter (JSON document). */
+  getAvs(encounterId: string): Observable<AfterVisitSummary> {
+    return this.http.get<AfterVisitSummary>(`${this.baseUrl}/${encounterId}/avs`);
   }
 }

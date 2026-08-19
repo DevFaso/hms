@@ -1,3 +1,110 @@
+# Web Portal Achievement Assessment & Gap Tasklist — 2026-08-18
+
+> Full cross-reference of the Angular portal (`hospital-portal`) against the backend API surface
+> (`hospital-core`: 97 controllers, ~730 endpoints). Assessment: the portal is mature for core
+> operations (auth/RBAC shell, dashboards, patients, appointments, encounters, admissions, lab
+> suite, reception, nurse station, chat/notifications via STOMP, patient portal, i18n EN/FR/ES,
+> Playwright e2e) — but roughly a third of the backend's user-facing domains have **no web UI at
+> all**, several shipped workflows are missing their closing half, and test/i18n/a11y quality
+> lags behind the feature surface.
+
+## Scorecard
+
+| Area | Status |
+| --- | --- |
+| Core ops (patients, appointments, encounters, admissions, reception, nurse station) | ✅ Built |
+| Lab suite (orders, results, approval queue, QC, ops, config, instruments, inventory) | ✅ Built (depth gaps: specimens, sign/ack, critical results, reflex rules) |
+| Patient portal (14 `my-*` pages) | ✅ Built |
+| Admin (users, roles, orgs, hospitals, platform, audit, feature flags) | 🟡 Partial (governance suite missing) |
+| Discharge approvals + summaries | ❌ No UI |
+| Imaging **results** (orders only) | ❌ No UI |
+| Maternity suite (~70 endpoints: maternal history, ultrasound, birth plans, prenatal, postpartum, newborn, OB/GYN referrals, high-risk plans) | ❌ No UI |
+| Medical history (social/family/immunizations, 24 EP) | ❌ No UI |
+| Patient education (32 EP), procedure orders, medication history/pharmacy fills, insurance mgmt, registrations | ❌ No UI |
+| Unit tests | 🟡 48 specs / 131 files (~37%); billing, imaging, encounters, admissions, consultations, scheduling, auth all untested |
+| i18n | 🟡 ES missing 342 keys, FR missing 13; hardcoded EN strings in login/billing/forms |
+| Accessibility | 🟡 aria-labels present; no skip-link, only 2 `aria-live`, no reduced-motion |
+
+---
+
+## Gaps in Priority Order
+
+### P0 — Integrity risks in what's already shipped
+
+1. **Hardcoded client-side permission map** — `hospital-portal/src/app/core/permission.service.ts` duplicates role→permission mapping in TS; drift already gutted LAB_MANAGER's sidebar once (see lab-role section below). Backend exposes `/roles/{id}/permissions`.
+2. **Unreachable pages** — routes with no sidebar/nav entry: `analytics`, `feature-flags`, `digital-signatures`, `lab-staff`, `lab-instruments`, `lab-inventory`, `my-care-team`, `my-documents`, `my-family-access`, `my-notifications`, `notification-settings`; `force-change-password` component has no route at all.
+3. **Mixed API prefixing** — 6 newer services hardcode `/api/...` while the rest rely on `apiPrefixInterceptor` (`auth.interceptor.ts:48`); double-prefix fragility.
+4. **Silent 403 swallowing** — `error.interceptor.ts` suppresses 403s on 11 URL patterns, masking real authorization failures as "working" UI.
+5. **Placeholder GA id `G-XXXXXXXXXX`** shipped in `index.html` + `environment.prod.ts`.
+
+### P1 — Shipped workflows missing their closing half
+
+6. **Discharge approvals + summaries** — `/discharge-approvals` (8 EP) and `/discharge-summaries` (11 EP incl. finalize, pending-results) have zero UI; admission/discharge exists but the approval + summary loop is broken.
+7. **Imaging results** — portal only places orders; `/imaging/results` (view, status, critical-acknowledge) unconsumed. Ordering without resulting is half a workflow.
+8. **Lab depth** — specimens (collect/receive), result **sign/acknowledge**, critical results (`hospital/{id}/critical[/unacknowledged]`), sequential result comparison, reflex rules: all backend-ready, no UI.
+9. **Patient chart depth** — structured allergies/diagnoses CRUD, chart-updates, doctor-record/timeline, `/patients/search` unconsumed; portal treats allergies as a free-text field.
+10. **Encounter transitions** — `complete-examination`, `ready-for-discharge`, AVS retrieval, note addendums not wired.
+
+### P2 — Whole backend domains with no web UI
+
+11. **Maternity suite** (~70 EP) — biggest single gap; MIDWIFE role exists in the portal but has no maternity pages.
+12. **Medical history** — social/family history + immunizations (24 EP, incl. overdue/reminders).
+13. **Patient education** (32 EP) + **procedure orders** (9 EP).
+14. **Medication history / pharmacy fills** (6 EP) + pharmacy directory — PHARMACIST role only gets the prescriptions page.
+15. **Insurance management** (6 EP) + multi-hospital **registrations** (6 EP) — reception only has issues/attest.
+16. **Admin governance** — permission-matrix snapshots/audit, org security policies/rules (16 EP), super-admin user governance/credentials/security (15 EP), assignment admin CRUD + bulk-import, reference catalogs, service translations.
+17. **Digital signatures actions** — UI lists + audit-trail only; sign/verify/revoke flows missing. **Billing depth** — invoice email, search, standalone payment recording.
+
+### P3 — Quality & maturity
+
+18. **Unit tests** — ~37% file coverage; entire domains untested (billing, imaging, consultations, treatment-plans, encounters, admissions, prescriptions, scheduling, auth, admin CRUD pages).
+19. **i18n** — ES: 342 missing keys (PORTAL.*, RECEPTION.*); FR: 13 (PORTAL.SUMMARIES.*); hardcoded EN in `login.html`, `billing.html:294-361`, form placeholders, checkout dialog.
+20. **Accessibility** — add skip-link, `aria-live` on toasts/async regions, shared `sr-only` utility, `prefers-reduced-motion`, focus-visible styles.
+21. **Realtime consistency** — dashboard, nurse-station, patient-tracker poll via `setInterval` while STOMP infra already exists.
+
+---
+
+## Task List
+
+### Phase 1 — P0 hardening (small, do first) — ✅ DONE 2026-08-18 (`feature/web-p0-hardening`)
+
+- [x] 1. Drive UI permissions from backend: `PermissionService.loadFromBackend()` now fetches `GET /me/dashboard-config` `mergedPermissions` (union with static map as fallback; alias table bridges backend↔frontend permission names; nav rebuilds reactively via `effect()`)
+- [x] 2. Nav entries added for orphaned routes (analytics, feature-flags, digital-signatures, lab-staff, lab-instruments, lab-inventory, my-care-team, my-documents, my-family-access; patient nav now uses `/my-notifications`). Note: `notification-settings` and `profile` were already reachable in-page — not gaps. `force-change-password` was dead code superseded by `account-setup` → deleted
+- [x] 3. Stripped hardcoded `/api/` from dashboard, patient-portal, patient-tracker, in-basket, digital-signatures, assignment-public services (+ affected specs). Kept: auth refresh (intentional absolute URL) and SockJS `/api/ws-chat` (not HTTP-intercepted)
+- [x] 4. Silenced 403s now reported once-per-URL to `POST /frontend-audit` (`type: SILENT_403`); errors still propagate to callers; `/frontend-audit` itself excluded from the 403 redirect
+- [x] 5. GA: static gtag snippet removed from `index.html`; `AnalyticsService` bootstraps gtag at runtime only for a real `G-…` id; prod placeholder replaced with empty (disabled) + key added to dev/uat envs
+
+### Phase 2 — Close broken workflows (P1) — ✅ DONE 2026-08-18 (`feature/web-p0-hardening`)
+
+- [x] 6. `/discharge` page: approval queue (nurse request w/ auto-resolved registration, doctor approve/reject, cancel) + summary editor (unfinalized & pending-results worklists, med reconciliation / pending tests / follow-ups, finalize w/ signature, delete)
+- [x] 7. Imaging Results view: hospital report list (status/modality/critical filters), report detail w/ measurements + status history, status updates, critical acknowledge, view-report from completed orders
+- [x] 8. Lab: specimen collect/receive per order; result sign + acknowledge; Critical (unacknowledged) tab; comparison modal (trend, % change, significance); Reflex Rules manager in lab-test-config
+- [x] 9. Patient chart tab: structured allergies CRUD (+audited deactivation), doctor-managed problem list, versioned chart-updates feed, audited doctor timeline; `PatientService.search()` added (list page still on `/patients?search=` — kept, both are server-side)
+- [x] 10. Encounter detail: complete-examination + ready-for-discharge, AVS viewer, note history + addendums (also fixed addAddendum payload contract bug)
+- [x] 11. Unit specs shipped with each feature (36 new service tests; 566 total green). E2E: deferred — Playwright flows for discharge/imaging-results/lab-depth need seeded backend fixtures (follow-up)
+
+### Phase 3 — New modules (P2, by clinical value)
+
+- [ ] 12. Maternity module v1: maternal history (+ high-risk board, risk calc, mark-reviewed) and OB/GYN referrals with messaging
+- [ ] 13. Maternity module v2: ultrasound orders/reports/templates, birth plans, prenatal scheduling, postpartum + newborn assessments
+- [ ] 14. Medical History tab on patient detail: social, family, immunizations (with overdue/upcoming)
+- [ ] 15. Pharmacy: medication-history timeline + pharmacy-fill recording (PHARMACIST workspace)
+- [ ] 16. Procedure orders page (order → consent-pending → scheduled → cancel)
+- [ ] 17. Insurance management + multi-hospital registration UI (reception + patient detail)
+- [ ] 18. Patient education: resource management + assignment/progress views
+- [ ] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines)
+- [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
+
+### Phase 4 — Quality floor (P3, parallelizable)
+
+- [ ] 21. Raise spec coverage: prioritize billing, encounters, admissions, imaging, consultations, scheduling, auth interceptors; enforce via `coverage-thresholds.json` ratchet
+- [ ] 22. i18n: backfill 342 ES + 13 FR keys; sweep hardcoded EN strings; add key-parity CI check
+- [ ] 23. A11y pass: skip-link, `aria-live` regions, global `sr-only`, reduced-motion, focus-visible
+- [ ] 24. Migrate dashboard/nurse-station/patient-tracker polling to STOMP topics
+
+---
+---
+
 # Patient Tracker Board & Discharge → Encounter Auto-Complete
 
 > Two bugs reported: Patient Tracker Board ignores carry-over encounters

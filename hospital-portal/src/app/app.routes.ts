@@ -668,6 +668,22 @@ export const routes: Routes = [
         loadComponent: () => import('./admissions/admissions').then((m) => m.AdmissionsComponent),
       },
 
+      // Discharge (approvals + summaries)
+      {
+        path: 'discharge',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./discharge/discharge').then((m) => m.DischargeComponent),
+      },
+
       // Prescriptions
       {
         path: 'prescriptions',

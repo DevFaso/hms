@@ -5,6 +5,7 @@ export const environment = {
   name: 'uat' satisfies EnvironmentName,
   apiUrl: '/api',
   apiBase: '/api',
+  gaTrackingId: '',
   faroCollectorUrl: '',
   // UAT Keycloak issuer is the Railway-hosted Keycloak (Phase 2.8.A).
   // Stays disabled until cutover per Phase 2.8.B in

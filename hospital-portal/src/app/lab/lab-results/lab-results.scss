@@ -694,3 +694,77 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Critical tab / sign / comparison additions ─────────────── */
+
+.tab-critical.active {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+.compare-patient {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+
+  .compare-card {
+    border: 1px solid #ececf4;
+    border-radius: 10px;
+    padding: 12px;
+
+    h4 {
+      margin: 0 0 6px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6b6b8f;
+    }
+
+    .compare-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .compare-date {
+      margin: 2px 0 0;
+      color: #8a8aa3;
+      font-size: 0.82rem;
+    }
+  }
+}
+
+.compare-meta {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f6f6fb;
+  margin-bottom: 12px;
+
+  p {
+    margin: 0 0 2px;
+  }
+
+  .compare-significance {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #6b6b8f;
+  }
+
+  .compare-interpretation {
+    font-size: 0.88rem;
+  }
+}
+
+.compare-history-title {
+  margin: 10px 0 6px;
+}

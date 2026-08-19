@@ -116,6 +116,14 @@ class SuperAdminDashboardServiceImplTest {
         service.setSelf(service);
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        // The new chip-aware getSummary path reads HospitalContextHolder.
+        // Clear after each test so a sibling test that expects an empty
+        // (global) context doesn't see leaked super-admin/chip state.
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
     @Test
     void getSummary_success() {
         when(userRepository.countByIsDeletedFalse()).thenReturn(100L);
@@ -234,6 +242,99 @@ class SuperAdminDashboardServiceImplTest {
         assertThat(result.getTotalPrescriptions()).isEqualTo(77L);
         assertThat(result.getTotalTreatmentPlans()).isEqualTo(88L);
         assertThat(result.getTotalReferrals()).isEqualTo(99L);
+    }
+
+    /**
+     * Chip-aware tile counts (super-admin pinned to a single hospital
+     * via X-Hospital-Id header) MUST use the hospital-scoped count
+     * methods so the dashboard tile matches the corresponding list
+     * page (e.g. /consultations). Without this carve-out, the dashboard
+     * tile shows the system-wide count while the chip-scoped list
+     * shows only the chip's hospital — the "tile=3 / list=0" UX trap
+     * the develop-deployment review surfaced.
+     */
+    @Test
+    void getSummary_superAdminChipScoped_usesHospitalScopedCounts() {
+        java.util.UUID chip = java.util.UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true)
+                .headerOverridden(true)
+                .activeHospitalId(chip)
+                .build());
+
+        when(encounterRepository.countByHospital_Id(chip)).thenReturn(1L);
+        when(consultationRepository.countByHospital_Id(chip)).thenReturn(2L);
+        when(labOrderRepository.countByHospital_Id(chip)).thenReturn(3L);
+        when(labResultRepository.countByLabOrder_Hospital_Id(chip)).thenReturn(4L);
+        when(labTestDefinitionRepository.count()).thenReturn(55L); // catalog stays system-wide
+        when(admissionRepository.countByHospital_Id(chip)).thenReturn(6L);
+        when(prescriptionRepository.countByHospital_Id(chip)).thenReturn(7L);
+        when(treatmentPlanRepository.countByHospital_Id(chip)).thenReturn(8L);
+        when(generalReferralRepository.countByHospital_Id(chip)).thenReturn(9L);
+        when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        SuperAdminSummaryDTO result = service.getSummary(10);
+
+        // Scoped counts (chip-aware path)
+        assertThat(result.getTotalEncounters()).isEqualTo(1L);
+        assertThat(result.getTotalConsultations()).isEqualTo(2L);
+        assertThat(result.getTotalLabOrders()).isEqualTo(3L);
+        assertThat(result.getTotalLabResults()).isEqualTo(4L);
+        assertThat(result.getTotalAdmissions()).isEqualTo(6L);
+        assertThat(result.getTotalPrescriptions()).isEqualTo(7L);
+        assertThat(result.getTotalTreatmentPlans()).isEqualTo(8L);
+        assertThat(result.getTotalReferrals()).isEqualTo(9L);
+        // Reference-data catalog stays system-wide
+        assertThat(result.getTotalLabTestDefinitions()).isEqualTo(55L);
+
+        // Crucially, the unscoped count() methods on the clinical
+        // repos are NEVER called on the chip path — that would defeat
+        // the carve-out and surface the system-wide total in the tile.
+        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never()).count();
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never()).count();
+        org.mockito.Mockito.verify(prescriptionRepository, org.mockito.Mockito.never()).count();
+    }
+
+    /**
+     * Super-admin global view (no X-Hospital-Id header → headerOverridden
+     * false) AND non-superadmin (empty context) BOTH take the
+     * system-wide {@code count()} path. The chip-aware short-circuit
+     * fires only on the {@code (isSuperAdmin && isHeaderOverridden)}
+     * conjunction.
+     */
+    @Test
+    void getSummary_superAdminGlobalView_usesSystemWideCount() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true)
+                .headerOverridden(false) // global view — no chip
+                .build());
+
+        when(consultationRepository.count()).thenReturn(99L);
+        when(encounterRepository.count()).thenReturn(11L);
+        when(admissionRepository.count()).thenReturn(66L);
+        when(labOrderRepository.count()).thenReturn(33L);
+        when(labResultRepository.count()).thenReturn(44L);
+        when(labTestDefinitionRepository.count()).thenReturn(55L);
+        when(prescriptionRepository.count()).thenReturn(77L);
+        when(treatmentPlanRepository.count()).thenReturn(88L);
+        when(generalReferralRepository.count()).thenReturn(99L);
+        when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        SuperAdminSummaryDTO result = service.getSummary(10);
+
+        assertThat(result.getTotalConsultations()).isEqualTo(99L);
+        // The chip-scoped count methods MUST NOT be invoked on the
+        // global path.
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never())
+            .countByHospital_Id(any());
+        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never())
+            .countByHospital_Id(any());
+        org.mockito.Mockito.verify(labResultRepository, org.mockito.Mockito.never())
+            .countByLabOrder_Hospital_Id(any());
     }
 
     @Test

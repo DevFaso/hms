@@ -235,6 +235,94 @@ export interface LabTestDefinitionRequest {
   referenceRanges?: LabTestReferenceRange[];
 }
 
+export type LabSpecimenStatus =
+  | 'PENDING'
+  | 'COLLECTED'
+  | 'IN_TRANSIT'
+  | 'RECEIVED'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'REJECTED';
+
+export interface LabSpecimen {
+  id: string;
+  labOrderId: string;
+  accessionNumber: string | null;
+  barcodeValue: string | null;
+  specimenType: string | null;
+  collectedAt: string | null;
+  receivedAt: string | null;
+  currentLocation: string | null;
+  status: LabSpecimenStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabSpecimenRequest {
+  specimenType?: string;
+  currentLocation?: string;
+  collectedAt?: string;
+  notes?: string;
+}
+
+export type TrendDirection =
+  | 'INCREASING'
+  | 'DECREASING'
+  | 'STABLE'
+  | 'FLUCTUATING'
+  | 'INSUFFICIENT_DATA';
+
+export interface LabResultComparisonPoint {
+  labResultId: string;
+  labOrderCode: string;
+  resultDate: string;
+  resultValue: string;
+  resultUnit: string;
+  severityFlag: string | null;
+}
+
+export interface LabResultComparison {
+  testCode: string;
+  testName: string;
+  patientId: string;
+  patientName: string;
+  currentResult: LabResultComparisonPoint | null;
+  previousResult: LabResultComparisonPoint | null;
+  comparison: {
+    absoluteChange: string | null;
+    percentageChange: number | null;
+    trendDirection: TrendDirection | null;
+    daysBetween: number | null;
+    significanceLevel: string | null;
+    crossedThreshold: boolean | null;
+    interpretation: string | null;
+  } | null;
+  trendHistory: LabResultComparisonPoint[];
+  referenceRanges: LabResultReferenceRange[];
+}
+
+export interface LabReflexRule {
+  id: string;
+  triggerTestDefinitionId: string;
+  triggerTestDefinitionName: string;
+  condition: string;
+  reflexTestDefinitionId: string;
+  reflexTestDefinitionName: string;
+  active: boolean;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabReflexRuleRequest {
+  triggerTestDefinitionId: string;
+  condition: string;
+  reflexTestDefinitionId: string;
+  active: boolean;
+  description?: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -452,6 +540,86 @@ export class LabService {
   ): Observable<LabTestDefinition> {
     return this.http
       .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/reference-ranges`, ranges)
+      .pipe(map((res) => res.data));
+  }
+
+  // ── Specimens ────────────────────────────────────────────────────────
+
+  listSpecimens(orderId: string): Observable<LabSpecimen[]> {
+    return this.http
+      .get<ApiWrapper<LabSpecimen[]>>(`/lab-orders/${orderId}/specimens`)
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  createSpecimen(orderId: string, req: LabSpecimenRequest): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-orders/${orderId}/specimens`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  receiveSpecimen(specimenId: string): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/receive`, null)
+      .pipe(map((res) => res.data));
+  }
+
+  // ── Result sign / acknowledge / critical / comparison ────────────────
+
+  signResult(
+    id: string,
+    req?: { signature?: string; notes?: string },
+  ): Observable<LabResultResponse> {
+    return this.http.post<LabResultResponse>(`/lab-results/${id}/sign`, req ?? {});
+  }
+
+  acknowledgeResult(id: string): Observable<void> {
+    return this.http.post<void>(`/lab-results/${id}/acknowledge`, null);
+  }
+
+  compareResult(id: string): Observable<LabResultComparison> {
+    return this.http.get<LabResultComparison>(`/lab-results/${id}/compare`);
+  }
+
+  compareSequential(
+    patientId: string,
+    testDefinitionId: string,
+  ): Observable<LabResultComparison[]> {
+    return this.http.get<LabResultComparison[]>(
+      `/lab-results/patient/${patientId}/test/${testDefinitionId}/compare-sequential`,
+    );
+  }
+
+  criticalResults(hospitalId: string, since?: string): Observable<LabResultResponse[]> {
+    let params = new HttpParams();
+    if (since) params = params.set('since', since);
+    return this.http.get<LabResultResponse[]>(`/lab-results/hospital/${hospitalId}/critical`, {
+      params,
+    });
+  }
+
+  criticalUnacknowledged(hospitalId: string): Observable<LabResultResponse[]> {
+    return this.http.get<LabResultResponse[]>(
+      `/lab-results/hospital/${hospitalId}/critical/unacknowledged`,
+    );
+  }
+
+  // ── Reflex rules ─────────────────────────────────────────────────────
+
+  listReflexRules(): Observable<LabReflexRule[]> {
+    return this.http
+      .get<ApiWrapper<LabReflexRule[]>>('/lab-reflex-rules')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  createReflexRule(req: LabReflexRuleRequest): Observable<LabReflexRule> {
+    return this.http
+      .post<ApiWrapper<LabReflexRule>>('/lab-reflex-rules', req)
+      .pipe(map((res) => res.data));
+  }
+
+  updateReflexRule(id: string, req: LabReflexRuleRequest): Observable<LabReflexRule> {
+    return this.http
+      .put<ApiWrapper<LabReflexRule>>(`/lab-reflex-rules/${id}`, req)
       .pipe(map((res) => res.data));
   }
 }
