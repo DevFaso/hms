@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -18,6 +18,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { localDateString } from '../shared/date-utils';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
@@ -27,6 +28,7 @@ type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anoma
   imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './ultrasound-tab.html',
   styleUrl: './maternity.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class UltrasoundTabComponent implements OnInit {
   private readonly ultrasoundService = inject(UltrasoundService);
@@ -296,7 +298,12 @@ export class UltrasoundTabComponent implements OnInit {
         this.cancelBusy.set(false);
         this.showCancelPrompt.set(false);
         this.viewedOrder.set(updated);
-        this.load();
+        // Patch in place; a cancelled order leaves the pending worklist.
+        this.orders.update((list) =>
+          this.worklist() === 'pending'
+            ? list.filter((o) => o.id !== updated.id)
+            : list.map((o) => (o.id === updated.id ? updated : o)),
+        );
       },
       error: () => {
         this.toast.error(this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
@@ -309,7 +316,7 @@ export class UltrasoundTabComponent implements OnInit {
 
   emptyReportForm(): UltrasoundReportRequest {
     return {
-      scanDate: new Date().toISOString().substring(0, 10),
+      scanDate: localDateString(),
       findingCategory: 'NORMAL',
       reportFinalized: false,
     };
@@ -335,7 +342,7 @@ export class UltrasoundTabComponent implements OnInit {
       } = existing;
       this.reportForm = {
         ...fields,
-        scanDate: existing.scanDate ?? new Date().toISOString().substring(0, 10),
+        scanDate: existing.scanDate ?? localDateString(),
         findingCategory: existing.findingCategory ?? 'NORMAL',
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
@@ -343,6 +350,10 @@ export class UltrasoundTabComponent implements OnInit {
     } else {
       this.reportForm = this.emptyReportForm();
     }
+    // Snapshot the seeded values so applyTemplate can tell defaults apart
+    // from genuine clinician entries.
+    this.reportSeed = { ...this.reportForm };
+    this.reportBaseline = { ...this.reportForm };
     this.showReportModal.set(true);
   }
 
@@ -351,12 +362,32 @@ export class UltrasoundTabComponent implements OnInit {
     this.reportTargetOrder.set(null);
   }
 
+  /** Form values as seeded by openReport — used to distinguish defaults. */
+  private reportSeed: UltrasoundReportRequest = this.emptyReportForm();
+  /** Form values after the last template application (or the seed). */
+  private reportBaseline: UltrasoundReportRequest = this.emptyReportForm();
+
   applyTemplate(kind: 'nuchal-translucency' | 'anatomy-scan'): void {
     this.templateLoading.set(true);
     this.ultrasoundService.template(kind).subscribe({
       next: (template) => {
-        // Template values fill only the blanks — clinician entries win.
-        this.reportForm = { ...template, ...this.stripEmpty(this.reportForm) };
+        // Clinician entries (fields changed since the last template/seed)
+        // win over the template; the template wins over untouched seeded
+        // defaults; fields a previous template filled but this one doesn't
+        // fall back to the seed — so switching templates actually switches.
+        const base = this.reportBaseline as unknown as Record<string, unknown>;
+        const userChanged: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(this.reportForm)) {
+          if (value !== base[key] && value !== undefined && value !== null && value !== '') {
+            userChanged[key] = value;
+          }
+        }
+        this.reportForm = {
+          ...this.reportSeed,
+          ...this.stripEmpty(template as UltrasoundReportRequest),
+          ...userChanged,
+        } as UltrasoundReportRequest;
+        this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
       },
       error: () => {

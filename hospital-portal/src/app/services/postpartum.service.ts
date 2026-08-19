@@ -166,14 +166,8 @@ export type NewbornFollowUpAction =
   | 'MONITORING_RECHECK'
   | 'PARENT_EDUCATION_REINFORCEMENT';
 
-export interface NewbornAlert {
-  type: string;
-  severity: PostpartumAlertSeverity;
-  code?: string;
-  message: string;
-  triggeredBy?: string;
-  createdAt?: string;
-}
+/** Same shape as maternal alerts — kept as an alias, not a duplicate. */
+export type NewbornAlert = PostpartumAlert;
 
 export interface NewbornAssessmentRequest {
   hospitalId?: string;

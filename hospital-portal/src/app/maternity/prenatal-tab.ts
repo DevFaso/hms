@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -21,6 +21,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
   imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './prenatal-tab.html',
   styleUrl: './maternity.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PrenatalTabComponent implements OnInit {
   private readonly prenatalService = inject(PrenatalService);
@@ -129,8 +130,26 @@ export class PrenatalTabComponent implements OnInit {
         next: () => {
           this.toast.success(this.translate.instant('PRENATAL.RESCHEDULED'));
           this.rescheduleBusy.set(false);
+          // Patch the row in place rather than re-running generate(): the
+          // generate form is live state the user may have edited or cleared
+          // since, so regenerating could toast a spurious required-fields
+          // error or repaint the table with a different LMP's cadence.
+          const date = this.rescheduleDate;
+          const time = this.rescheduleTime;
+          const appointmentId = target.appointmentId;
+          this.schedule.update((s) =>
+            s
+              ? {
+                  ...s,
+                  existingAppointments: (s.existingAppointments ?? []).map((a) =>
+                    a.appointmentId === appointmentId
+                      ? { ...a, appointmentDate: date, startTime: time }
+                      : a,
+                  ),
+                }
+              : s,
+          );
           this.closeReschedule();
-          this.generate();
         },
         error: () => {
           this.toast.error(this.translate.instant('PRENATAL.RESCHEDULE_ERROR'));
