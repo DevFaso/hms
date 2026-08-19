@@ -1,0 +1,659 @@
+<div class="filter-bar">
+  <div class="tabs">
+    @for (w of worklists; track w) {
+      <button class="tab-btn" [class.active]="worklist() === w" (click)="setWorklist(w)">
+        {{ 'ULTRASOUND.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+      </button>
+    }
+  </div>
+  @if (canOrder) {
+    <button class="btn-primary" (click)="openCreateOrder()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'ULTRASOUND.NEW_ORDER' | translate }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>{{ 'COMMON.LOADING' | translate }}</p>
+  </div>
+}
+
+<!-- ══ Orders worklists ══ -->
+@if (!loading() && !isReportList()) {
+  @if (orders().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">waves</span>
+      <h3>{{ 'ULTRASOUND.NO_ORDERS' | translate }}</h3>
+    </div>
+  } @else {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.SCAN_TYPE' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.GA' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.SCHEDULED' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.PRIORITY' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (o of orders(); track o.id) {
+            <tr class="data-row">
+              <td>
+                {{ o.patientDisplayName || '—' }}
+                @if (o.isHighRiskPregnancy) {
+                  <span
+                    class="material-symbols-outlined flag"
+                    [title]="'ULTRASOUND.HIGH_RISK' | translate"
+                    >warning</span
+                  >
+                }
+              </td>
+              <td>{{ 'ULTRASOUND.TYPE_' + o.scanType | translate }}</td>
+              <td>{{ o.gestationalAgeAtOrder ?? '—' }}</td>
+              <td>
+                {{ o.scheduledDate ? (o.scheduledDate | date: 'mediumDate') : '—' }}
+                {{ o.scheduledTime || '' }}
+              </td>
+              <td>{{ o.priority || 'ROUTINE' }}</td>
+              <td>
+                <span class="{{ statusClass(o.status) }}">
+                  {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
+                </span>
+              </td>
+              <td class="actions-cell">
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'COMMON.VIEW' | translate"
+                  (click)="openOrder(o)"
+                >
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+                @if (canOrder && o.status !== 'CANCELLED') {
+                  <button
+                    class="btn-secondary btn-sm"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEditOrder(o)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-secondary btn-sm"
+                    [title]="'ULTRASOUND.RECORD_REPORT' | translate"
+                    (click)="openReport(o)"
+                  >
+                    <span class="material-symbols-outlined">description</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+<!-- ══ Report worklists (follow-up / anomalies) ══ -->
+@if (!loading() && isReportList()) {
+  @if (reports().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">description</span>
+      <h3>{{ 'ULTRASOUND.NO_REPORTS' | translate }}</h3>
+    </div>
+  } @else {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'ULTRASOUND.SCAN_DATE' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.GA' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.FINDING' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.SUMMARY' | translate }}</th>
+            <th scope="col">{{ 'ULTRASOUND.FOLLOW_UP' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of reports(); track r.id) {
+            <tr class="data-row">
+              <td>{{ r.scanDate ? (r.scanDate | date: 'mediumDate') : '—' }}</td>
+              <td>{{ r.gestationalAgeAtScan ?? '—' }}</td>
+              <td>
+                <span class="{{ findingClass(r.findingCategory) }}">
+                  {{
+                    r.findingCategory
+                      ? ('ULTRASOUND.FINDING_' + r.findingCategory | translate)
+                      : '—'
+                  }}
+                </span>
+              </td>
+              <td class="truncate-cell">{{ r.findingsSummary || '—' }}</td>
+              <td class="truncate-cell">{{ r.followUpRecommendations || '—' }}</td>
+              <td class="actions-cell">
+                @if (canReviewReport && !r.reportReviewedByProvider) {
+                  <button
+                    class="btn-secondary btn-sm"
+                    [disabled]="reportActionBusy()"
+                    [title]="'ULTRASOUND.MARK_REVIEWED' | translate"
+                    (click)="reviewReport(r)"
+                  >
+                    <span class="material-symbols-outlined">task_alt</span>
+                  </button>
+                }
+                @if (canOrder && !r.patientNotified) {
+                  <button
+                    class="btn-secondary btn-sm"
+                    [disabled]="reportActionBusy()"
+                    [title]="'ULTRASOUND.NOTIFY_PATIENT' | translate"
+                    (click)="notifyPatient(r)"
+                  >
+                    <span class="material-symbols-outlined">notifications</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+<!-- ══ Order detail modal ══ -->
+@if (viewedOrder(); as o) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate) }}
+          <span class="{{ statusClass(o.status) }}">
+            {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
+          </span>
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeOrder()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="view-section">
+          <p>
+            {{ 'ULTRASOUND.TYPE_' + o.scanType | translate }} · {{ o.priority || 'ROUTINE' }}
+            @if (o.gestationalAgeAtOrder) {
+              · {{ o.gestationalAgeAtOrder }} {{ 'MATERNITY.WEEKS' | translate }}
+            }
+          </p>
+          @if (o.clinicalIndication) {
+            <p class="muted">{{ o.clinicalIndication }}</p>
+          }
+          @if (o.isHighRiskPregnancy) {
+            <p>
+              <span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
+              {{ o.highRiskNotes }}
+            </p>
+          }
+          @if (o.cancellationReason) {
+            <p class="muted">
+              {{ 'MATERNITY.CANCELLATION_REASON' | translate }}: {{ o.cancellationReason }}
+            </p>
+          }
+        </div>
+        @if (o.report; as rep) {
+          <div class="view-section">
+            <h3>{{ 'ULTRASOUND.REPORT' | translate }}</h3>
+            <p>
+              <span class="{{ findingClass(rep.findingCategory) }}">
+                {{
+                  rep.findingCategory
+                    ? ('ULTRASOUND.FINDING_' + rep.findingCategory | translate)
+                    : '—'
+                }}
+              </span>
+              @if (rep.scanDate) {
+                · {{ rep.scanDate | date: 'mediumDate' }}
+              }
+              @if (rep.fetalHeartRate) {
+                · FHR {{ rep.fetalHeartRate }}
+              }
+            </p>
+            @if (rep.findingsSummary) {
+              <p>{{ rep.findingsSummary }}</p>
+            }
+            @if (rep.interpretation) {
+              <p class="muted">{{ rep.interpretation }}</p>
+            }
+            @if (rep.anomaliesDetected) {
+              <p>
+                <span class="risk-badge risk-high">{{ 'ULTRASOUND.ANOMALIES' | translate }}</span>
+                {{ rep.anomalyDescription }}
+              </p>
+            }
+            @if (rep.followUpRequired) {
+              <p class="muted">
+                {{ 'ULTRASOUND.FOLLOW_UP' | translate }}: {{ rep.followUpRecommendations || '—' }}
+              </p>
+            }
+          </div>
+        }
+        @if (showCancelPrompt()) {
+          <div class="view-section action-form">
+            <h3>{{ 'ULTRASOUND.CANCEL_ORDER' | translate }}</h3>
+            <div class="field">
+              <label for="us-cancel-reason">{{
+                'MATERNITY.CANCELLATION_REASON' | translate
+              }}</label>
+              <textarea id="us-cancel-reason" rows="2" [(ngModel)]="cancelReason"></textarea>
+            </div>
+            <div class="modal-actions">
+              <button class="btn-secondary" (click)="showCancelPrompt.set(false)">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+              <button class="btn-danger" [disabled]="cancelBusy()" (click)="submitCancel()">
+                {{ 'COMMON.CONFIRM' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        @if (o.report; as rep) {
+          @if (canReviewReport && !rep.reportReviewedByProvider) {
+            <button class="btn-primary" [disabled]="reportActionBusy()" (click)="reviewReport(rep)">
+              {{ 'ULTRASOUND.MARK_REVIEWED' | translate }}
+            </button>
+          }
+          @if (canOrder && !rep.patientNotified) {
+            <button
+              class="btn-secondary"
+              [disabled]="reportActionBusy()"
+              (click)="notifyPatient(rep)"
+            >
+              {{ 'ULTRASOUND.NOTIFY_PATIENT' | translate }}
+            </button>
+          }
+        }
+        @if (canOrder && o.status !== 'CANCELLED' && !showCancelPrompt()) {
+          <button class="btn-danger" (click)="openCancelPrompt()">
+            {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
+          </button>
+        }
+        <button class="btn-secondary" (click)="closeOrder()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Order create/edit modal ══ -->
+@if (showOrderModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeOrderModal()"
+    (keydown.escape)="closeOrderModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND.NEW_ORDER') | translate }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeOrderModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editingOrderId()) {
+          <div class="field">
+            <label for="us-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="us-patient"
+              [selected]="orderPatient()"
+              (selectedChange)="onOrderPatientPicked($event)"
+            />
+          </div>
+        }
+        <div class="form-row">
+          <div class="field">
+            <label for="us-scan-type">{{ 'ULTRASOUND.SCAN_TYPE' | translate }} *</label>
+            <select id="us-scan-type" [(ngModel)]="orderForm.scanType">
+              @for (t of scanTypes; track t) {
+                <option [value]="t">{{ 'ULTRASOUND.TYPE_' + t | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="us-priority">{{ 'ULTRASOUND.PRIORITY' | translate }}</label>
+            <select id="us-priority" [(ngModel)]="orderForm.priority">
+              @for (p of priorities; track p) {
+                <option [value]="p">{{ p }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="us-ga">{{ 'ULTRASOUND.GA' | translate }}</label>
+            <input
+              id="us-ga"
+              type="number"
+              min="0"
+              max="45"
+              [(ngModel)]="orderForm.gestationalAgeAtOrder"
+            />
+          </div>
+          <div class="field">
+            <label for="us-scan-count">{{ 'ULTRASOUND.SCAN_COUNT' | translate }}</label>
+            <input
+              id="us-scan-count"
+              type="number"
+              min="1"
+              [(ngModel)]="orderForm.scanCountForPregnancy"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="us-date">{{ 'ULTRASOUND.SCHEDULED' | translate }}</label>
+            <input id="us-date" type="date" [(ngModel)]="orderForm.scheduledDate" />
+          </div>
+          <div class="field">
+            <label for="us-time">{{ 'ULTRASOUND.SCHEDULED_TIME' | translate }}</label>
+            <input id="us-time" type="text" [(ngModel)]="orderForm.scheduledTime" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="us-indication">{{ 'MATERNITY.CLINICAL_INDICATION' | translate }}</label>
+          <textarea
+            id="us-indication"
+            rows="2"
+            [(ngModel)]="orderForm.clinicalIndication"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="us-location">{{ 'ULTRASOUND.LOCATION' | translate }}</label>
+          <input id="us-location" type="text" [(ngModel)]="orderForm.appointmentLocation" />
+        </div>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" [(ngModel)]="orderForm.isHighRiskPregnancy" />
+            {{ 'ULTRASOUND.HIGH_RISK' | translate }}
+          </label>
+        </div>
+        @if (orderForm.isHighRiskPregnancy) {
+          <div class="field">
+            <label for="us-hr-notes">{{ 'ULTRASOUND.HIGH_RISK_NOTES' | translate }}</label>
+            <textarea id="us-hr-notes" rows="2" [(ngModel)]="orderForm.highRiskNotes"></textarea>
+          </div>
+        }
+        <div class="field">
+          <label for="us-instructions">{{ 'ULTRASOUND.SPECIAL_INSTRUCTIONS' | translate }}</label>
+          <textarea id="us-instructions" rows="2" [(ngModel)]="orderForm.specialInstructions">
+          </textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeOrderModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="orderSaving() || !orderForm.patientId"
+          (click)="submitOrder()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Report modal ══ -->
+@if (showReportModal() && reportTargetOrder(); as order) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReportModal()"
+    (keydown.escape)="closeReportModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.patientDisplayName }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReportModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="template-buttons">
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="templateLoading()"
+            (click)="applyTemplate('nuchal-translucency')"
+          >
+            {{ 'ULTRASOUND.TEMPLATE_NT' | translate }}
+          </button>
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="templateLoading()"
+            (click)="applyTemplate('anatomy-scan')"
+          >
+            {{ 'ULTRASOUND.TEMPLATE_ANATOMY' | translate }}
+          </button>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="rep-date">{{ 'ULTRASOUND.SCAN_DATE' | translate }} *</label>
+            <input id="rep-date" type="date" [(ngModel)]="reportForm.scanDate" />
+          </div>
+          <div class="field">
+            <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>
+            <select id="rep-category" [(ngModel)]="reportForm.findingCategory">
+              @for (c of findingCategories; track c) {
+                <option [value]="c">{{ 'ULTRASOUND.FINDING_' + c | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="rep-performer">{{ 'ULTRASOUND.PERFORMED_BY' | translate }}</label>
+            <input id="rep-performer" type="text" [(ngModel)]="reportForm.scanPerformedBy" />
+          </div>
+          <div class="field">
+            <label for="rep-fhr">{{ 'ULTRASOUND.FHR' | translate }}</label>
+            <input id="rep-fhr" type="number" min="0" [(ngModel)]="reportForm.fetalHeartRate" />
+          </div>
+        </div>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="rep-ga-w">{{ 'ULTRASOUND.GA' | translate }}</label>
+            <input
+              id="rep-ga-w"
+              type="number"
+              min="0"
+              [(ngModel)]="reportForm.gestationalAgeAtScan"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-ga-d">{{ 'ULTRASOUND.GA_DAYS' | translate }}</label>
+            <input
+              id="rep-ga-d"
+              type="number"
+              min="0"
+              max="6"
+              [(ngModel)]="reportForm.gestationalAgeDays"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-fetuses">{{ 'ULTRASOUND.FETUSES' | translate }}</label>
+            <input
+              id="rep-fetuses"
+              type="number"
+              min="1"
+              [(ngModel)]="reportForm.numberOfFetuses"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-efw">{{ 'ULTRASOUND.EFW' | translate }}</label>
+            <input
+              id="rep-efw"
+              type="number"
+              min="0"
+              [(ngModel)]="reportForm.estimatedFetalWeightGrams"
+            />
+          </div>
+        </div>
+        <h3 class="section-heading">{{ 'ULTRASOUND.BIOMETRY' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="rep-bpd">BPD (mm)</label>
+            <input
+              id="rep-bpd"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.biparietalDiameterMm"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-hc">HC (mm)</label>
+            <input
+              id="rep-hc"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.headCircumferenceMm"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-ac">AC (mm)</label>
+            <input
+              id="rep-ac"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.abdominalCircumferenceMm"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-fl">FL (mm)</label>
+            <input
+              id="rep-fl"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.femurLengthMm"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-nt">NT (mm)</label>
+            <input
+              id="rep-nt"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.nuchalTranslucencyMm"
+            />
+          </div>
+          <div class="field">
+            <label for="rep-crl">CRL (mm)</label>
+            <input
+              id="rep-crl"
+              type="number"
+              min="0"
+              step="0.1"
+              [(ngModel)]="reportForm.crownRumpLengthMm"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="rep-summary">{{ 'ULTRASOUND.SUMMARY' | translate }}</label>
+          <textarea id="rep-summary" rows="3" [(ngModel)]="reportForm.findingsSummary"></textarea>
+        </div>
+        <div class="field">
+          <label for="rep-interpretation">{{ 'ULTRASOUND.INTERPRETATION' | translate }}</label>
+          <textarea
+            id="rep-interpretation"
+            rows="2"
+            [(ngModel)]="reportForm.interpretation"
+          ></textarea>
+        </div>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" [(ngModel)]="reportForm.anomaliesDetected" />
+            {{ 'ULTRASOUND.ANOMALIES' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="reportForm.followUpRequired" />
+            {{ 'ULTRASOUND.FOLLOW_UP' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="reportForm.reportFinalized" />
+            {{ 'ULTRASOUND.FINALIZE' | translate }}
+          </label>
+        </div>
+        @if (reportForm.anomaliesDetected) {
+          <div class="field">
+            <label for="rep-anomaly">{{ 'ULTRASOUND.ANOMALY_DESCRIPTION' | translate }}</label>
+            <textarea id="rep-anomaly" rows="2" [(ngModel)]="reportForm.anomalyDescription">
+            </textarea>
+          </div>
+        }
+        @if (reportForm.followUpRequired) {
+          <div class="field">
+            <label for="rep-follow-up">{{ 'ULTRASOUND.FOLLOW_UP_RECS' | translate }}</label>
+            <textarea id="rep-follow-up" rows="2" [(ngModel)]="reportForm.followUpRecommendations">
+            </textarea>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReportModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="reportSaving()" (click)="submitReport()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
