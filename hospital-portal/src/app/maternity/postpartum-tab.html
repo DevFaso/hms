@@ -33,14 +33,7 @@
   </div>
 }
 
-@if (patient() && loading()) {
-  <div class="loading-state">
-    <div class="spinner"></div>
-    <p>{{ 'COMMON.LOADING' | translate }}</p>
-  </div>
-}
-
-@if (patient() && !loading()) {
+@if (patient()) {
   @if (section() === 'mother') {
     @if (schedule(); as s) {
       <div class="view-section action-form schedule-banner">
@@ -72,7 +65,20 @@
       </button>
     </div>
 
-    @if (observations().length === 0) {
+    @if (observationsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (observationsError()) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">error</span>
+        <h3>{{ 'POSTPARTUM.OBSERVATIONS_LOAD_ERROR' | translate }}</h3>
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (observations().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">monitor_heart</span>
         <h3>{{ 'POSTPARTUM.NO_OBSERVATIONS' | translate }}</h3>
@@ -131,7 +137,20 @@
       </button>
     </div>
 
-    @if (assessments().length === 0) {
+    @if (assessmentsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (assessmentsError()) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">error</span>
+        <h3>{{ 'POSTPARTUM.ASSESSMENTS_LOAD_ERROR' | translate }}</h3>
+        <button type="button" class="btn-secondary" (click)="load()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    } @else if (assessments().length === 0) {
       <div class="empty-state">
         <span class="material-symbols-outlined empty-icon">child_care</span>
         <h3>{{ 'POSTPARTUM.NO_ASSESSMENTS' | translate }}</h3>
@@ -353,6 +372,15 @@
               <option [ngValue]="undefined">—</option>
               @for (s of supportStatuses; track s) {
                 <option [value]="s">{{ 'POSTPARTUM.SUPPORT_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="obs-sleep">{{ 'POSTPARTUM.SLEEP' | translate }}</label>
+            <select id="obs-sleep" [(ngModel)]="observationForm.sleepStatus">
+              <option [ngValue]="undefined">—</option>
+              @for (s of sleepQualities; track s) {
+                <option [value]="s">{{ 'POSTPARTUM.SLEEP_' + s | translate }}</option>
               }
             </select>
           </div>

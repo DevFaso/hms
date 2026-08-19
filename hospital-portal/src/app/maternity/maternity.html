@@ -503,8 +503,12 @@
         }
         <div class="view-section">
           <h3>{{ 'MATERNITY.VERSIONS' | translate }}</h3>
-          @if (historyVersions().length === 0) {
+          @if (historyVersionsLoading()) {
             <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else if (historyVersionsError()) {
+            <p class="muted">{{ 'MATERNITY.VERSIONS_LOAD_ERROR' | translate }}</p>
+          } @else if (historyVersions().length === 0) {
+            <p class="muted">{{ 'MATERNITY.NO_VERSIONS' | translate }}</p>
           } @else {
             <ul class="version-list">
               @for (v of historyVersions(); track v.id) {
@@ -948,6 +952,11 @@
                 <option [value]="u">{{ 'MATERNITY.URGENCY_' + u | translate }}</option>
               }
             </select>
+            @if (referralForm.urgency !== 'ROUTINE') {
+              <p class="field-warning">
+                {{ 'MATERNITY.URGENCY_ATTACHMENT_REQUIRED' | translate }}
+              </p>
+            }
           </div>
         </div>
         <div class="form-row">
