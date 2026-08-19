@@ -7,6 +7,8 @@ import {
   LabTestDefinition,
   LabTestDefinitionRequest,
   LabTestReferenceRange,
+  LabReflexRule,
+  LabReflexRuleRequest,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
@@ -48,6 +50,14 @@ export class LabTestConfigComponent implements OnInit {
   showDeleteDefConfirm = signal(false);
   deletingDef = signal<LabTestDefinition | null>(null);
   deletingDefInProgress = signal(false);
+
+  /** Reflex rules */
+  showReflexModal = signal(false);
+  reflexRules = signal<LabReflexRule[]>([]);
+  reflexLoading = signal(false);
+  reflexSaving = signal(false);
+  editingRuleId = signal<string | null>(null);
+  reflexForm = this.emptyReflexForm();
 
   private activeAssignmentId = '';
 
@@ -301,5 +311,157 @@ export class LabTestConfigComponent implements OnInit {
       default:
         return 'badge-pending';
     }
+  }
+
+  // ── Reflex rules ─────────────────────────────────────────────────────
+
+  emptyReflexForm(): {
+    triggerTestDefinitionId: string;
+    reflexTestDefinitionId: string;
+    conditionType: 'severity' | 'threshold';
+    severityFlag: 'ABNORMAL' | 'CRITICAL';
+    thresholdOperator: 'GT' | 'GTE' | 'LT' | 'LTE';
+    thresholdValue: number | null;
+    description: string;
+    active: boolean;
+  } {
+    return {
+      triggerTestDefinitionId: '',
+      reflexTestDefinitionId: '',
+      conditionType: 'severity',
+      severityFlag: 'ABNORMAL',
+      thresholdOperator: 'GT',
+      thresholdValue: null,
+      description: '',
+      active: true,
+    };
+  }
+
+  openReflexRules(): void {
+    this.reflexForm = this.emptyReflexForm();
+    this.editingRuleId.set(null);
+    this.showReflexModal.set(true);
+    this.loadReflexRules();
+  }
+
+  closeReflexRules(): void {
+    this.showReflexModal.set(false);
+  }
+
+  loadReflexRules(): void {
+    this.reflexLoading.set(true);
+    this.labService.listReflexRules().subscribe({
+      next: (rules) => {
+        this.reflexRules.set(rules ?? []);
+        this.reflexLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_LOAD_ERROR'));
+        this.reflexLoading.set(false);
+      },
+    });
+  }
+
+  editReflexRule(rule: LabReflexRule): void {
+    const form = this.emptyReflexForm();
+    form.triggerTestDefinitionId = rule.triggerTestDefinitionId;
+    form.reflexTestDefinitionId = rule.reflexTestDefinitionId;
+    form.description = rule.description ?? '';
+    form.active = rule.active;
+    try {
+      const cond = JSON.parse(rule.condition ?? '{}');
+      if (cond.severityFlag) {
+        form.conditionType = 'severity';
+        form.severityFlag = cond.severityFlag;
+      } else if (cond.thresholdOperator) {
+        form.conditionType = 'threshold';
+        form.thresholdOperator = cond.thresholdOperator;
+        form.thresholdValue = cond.thresholdValue ?? null;
+      }
+    } catch {
+      // keep defaults for unparseable conditions
+    }
+    this.reflexForm = form;
+    this.editingRuleId.set(rule.id);
+  }
+
+  cancelReflexEdit(): void {
+    this.reflexForm = this.emptyReflexForm();
+    this.editingRuleId.set(null);
+  }
+
+  private buildReflexRequest(): LabReflexRuleRequest | null {
+    const f = this.reflexForm;
+    if (!f.triggerTestDefinitionId || !f.reflexTestDefinitionId) return null;
+    const condition =
+      f.conditionType === 'severity'
+        ? JSON.stringify({ severityFlag: f.severityFlag })
+        : JSON.stringify({
+            thresholdOperator: f.thresholdOperator,
+            thresholdValue: f.thresholdValue,
+          });
+    if (f.conditionType === 'threshold' && f.thresholdValue === null) return null;
+    return {
+      triggerTestDefinitionId: f.triggerTestDefinitionId,
+      reflexTestDefinitionId: f.reflexTestDefinitionId,
+      condition,
+      active: f.active,
+      description: f.description.trim() || undefined,
+    };
+  }
+
+  submitReflexRule(): void {
+    const req = this.buildReflexRequest();
+    if (!req) {
+      this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_VALIDATION'));
+      return;
+    }
+    this.reflexSaving.set(true);
+    const id = this.editingRuleId();
+    const op = id
+      ? this.labService.updateReflexRule(id, req)
+      : this.labService.createReflexRule(req);
+    op.subscribe({
+      next: () => {
+        this.toast.success(
+          this.translate.instant(
+            id ? 'LAB_TEST_CONFIG.REFLEX_UPDATED' : 'LAB_TEST_CONFIG.REFLEX_CREATED',
+          ),
+        );
+        this.reflexSaving.set(false);
+        this.cancelReflexEdit();
+        this.loadReflexRules();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'));
+        this.reflexSaving.set(false);
+      },
+    });
+  }
+
+  toggleReflexRule(rule: LabReflexRule): void {
+    this.labService
+      .updateReflexRule(rule.id, {
+        triggerTestDefinitionId: rule.triggerTestDefinitionId,
+        reflexTestDefinitionId: rule.reflexTestDefinitionId,
+        condition: rule.condition,
+        active: !rule.active,
+        description: rule.description ?? undefined,
+      })
+      .subscribe({
+        next: () => this.loadReflexRules(),
+        error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR')),
+      });
+  }
+
+  describeCondition(rule: LabReflexRule): string {
+    try {
+      const cond = JSON.parse(rule.condition ?? '{}');
+      if (cond.severityFlag) return `severity = ${cond.severityFlag}`;
+      if (cond.thresholdOperator) return `value ${cond.thresholdOperator} ${cond.thresholdValue}`;
+    } catch {
+      // fall through to raw condition
+    }
+    return rule.condition ?? '—';
   }
 }

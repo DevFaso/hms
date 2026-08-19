@@ -9,6 +9,7 @@ import {
   LabOrderRequest,
   LabTestDefinition,
   LabTestDefinitionApprovalRequest,
+  LabSpecimen,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -77,6 +78,28 @@ export class LabComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingOrder = signal<LabOrderResponse | null>(null);
   deleting = signal(false);
+
+  /* ── Specimens ── */
+  showSpecimensModal = signal(false);
+  specimensOrder = signal<LabOrderResponse | null>(null);
+  specimens = signal<LabSpecimen[]>([]);
+  specimensLoading = signal(false);
+  specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+  specimenSaving = signal(false);
+  receivingSpecimenId = signal<string | null>(null);
+
+  /** Matches the specimen create/receive @PreAuthorize (lab staff + admins). */
+  readonly canManageSpecimens = computed(() =>
+    this.auth.hasAnyRole([
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]),
+  );
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
@@ -432,6 +455,97 @@ export class LabComponent implements OnInit {
         return 'status-badge status-cancelled';
       default:
         return 'status-badge';
+    }
+  }
+
+  // ── Specimen tracking ────────────────────────────────────────────────
+
+  openSpecimens(order: LabOrderResponse): void {
+    this.specimensOrder.set(order);
+    this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+    this.showSpecimensModal.set(true);
+    this.loadSpecimens(order.id);
+  }
+
+  closeSpecimens(): void {
+    this.showSpecimensModal.set(false);
+    this.specimensOrder.set(null);
+    this.specimens.set([]);
+  }
+
+  private loadSpecimens(orderId: string): void {
+    this.specimensLoading.set(true);
+    this.labService.listSpecimens(orderId).subscribe({
+      next: (list) => {
+        this.specimens.set(list ?? []);
+        this.specimensLoading.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to load specimens');
+        this.specimensLoading.set(false);
+      },
+    });
+  }
+
+  collectSpecimen(): void {
+    const order = this.specimensOrder();
+    if (!order || !this.specimenForm.specimenType.trim()) return;
+    this.specimenSaving.set(true);
+    this.labService
+      .createSpecimen(order.id, {
+        specimenType: this.specimenForm.specimenType.trim(),
+        currentLocation: this.specimenForm.currentLocation.trim() || undefined,
+        notes: this.specimenForm.notes.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Specimen collected');
+          this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+          this.specimenSaving.set(false);
+          this.loadSpecimens(order.id);
+        },
+        error: () => {
+          this.toast.error('Failed to record specimen');
+          this.specimenSaving.set(false);
+        },
+      });
+  }
+
+  receiveSpecimen(specimen: LabSpecimen): void {
+    const order = this.specimensOrder();
+    if (!order) return;
+    this.receivingSpecimenId.set(specimen.id);
+    this.labService.receiveSpecimen(specimen.id).subscribe({
+      next: () => {
+        this.toast.success('Specimen received');
+        this.receivingSpecimenId.set(null);
+        this.loadSpecimens(order.id);
+      },
+      error: () => {
+        this.toast.error('Failed to receive specimen');
+        this.receivingSpecimenId.set(null);
+      },
+    });
+  }
+
+  canReceive(specimen: LabSpecimen): boolean {
+    return specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT';
+  }
+
+  getSpecimenStatusClass(status: string): string {
+    switch (status) {
+      case 'RECEIVED':
+      case 'COMPLETED':
+        return 'status-badge status-completed';
+      case 'COLLECTED':
+      case 'IN_TRANSIT':
+        return 'status-badge status-collected';
+      case 'PROCESSING':
+        return 'status-badge status-in_progress';
+      case 'REJECTED':
+        return 'status-badge status-cancelled';
+      default:
+        return 'status-badge status-pending';
     }
   }
 }

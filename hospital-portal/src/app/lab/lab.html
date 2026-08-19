@@ -139,6 +139,15 @@
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
+                  @if (canManageSpecimens()) {
+                    <button
+                      class="action-link specimen-link"
+                      [title]="'LAB.SPECIMENS' | translate"
+                      (click)="openSpecimens(order)"
+                    >
+                      <span class="material-symbols-outlined">labs</span>
+                    </button>
+                  }
                   <button
                     class="action-link delete-link"
                     [title]="'COMMON.DELETE' | translate"
@@ -498,6 +507,113 @@
         </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
           {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ SPECIMENS MODAL ═══ -->
+@if (showSpecimensModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeSpecimens()"
+    (keydown.escape)="closeSpecimens()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB.SPECIMENS' | translate }} — {{ specimensOrder()?.labOrderCode }}</h2>
+        <button class="modal-close" (click)="closeSpecimens()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (specimensLoading()) {
+          <div class="loading-state">
+            <div class="spinner"></div>
+          </div>
+        } @else if (specimens().length === 0) {
+          <p class="empty-hint">{{ 'LAB.NO_SPECIMENS' | translate }}</p>
+        } @else {
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'LAB.ACCESSION' | translate }}</th>
+                  <th scope="col">{{ 'LAB.SPECIMEN_TYPE' | translate }}</th>
+                  <th scope="col">{{ 'LAB.COLLECTED_AT' | translate }}</th>
+                  <th scope="col">{{ 'LAB.LOCATION' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (s of specimens(); track s.id) {
+                  <tr>
+                    <td>{{ s.accessionNumber || '—' }}</td>
+                    <td>{{ s.specimenType || '—' }}</td>
+                    <td>{{ s.collectedAt ? (s.collectedAt | date: 'short') : '—' }}</td>
+                    <td>{{ s.currentLocation || '—' }}</td>
+                    <td>
+                      <span [class]="getSpecimenStatusClass(s.status)">{{
+                        'LAB.SPECIMEN_STATUS_' + s.status | translate
+                      }}</span>
+                    </td>
+                    <td>
+                      @if (canReceive(s)) {
+                        <button
+                          class="btn-secondary btn-sm"
+                          (click)="receiveSpecimen(s)"
+                          [disabled]="receivingSpecimenId() === s.id"
+                        >
+                          {{ 'LAB.RECEIVE' | translate }}
+                        </button>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+
+        <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="specimen-type">{{ 'LAB.SPECIMEN_TYPE' | translate }} *</label>
+            <input
+              id="specimen-type"
+              type="text"
+              [placeholder]="'LAB.SPECIMEN_TYPE_PLACEHOLDER' | translate"
+              [(ngModel)]="specimenForm.specimenType"
+            />
+          </div>
+          <div class="field">
+            <label for="specimen-location">{{ 'LAB.LOCATION' | translate }}</label>
+            <input id="specimen-location" type="text" [(ngModel)]="specimenForm.currentLocation" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="specimen-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea id="specimen-notes" rows="2" [(ngModel)]="specimenForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeSpecimens()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="collectSpecimen()"
+          [disabled]="specimenSaving() || !specimenForm.specimenType.trim()"
+        >
+          {{ 'LAB.COLLECT' | translate }}
         </button>
       </div>
     </div>

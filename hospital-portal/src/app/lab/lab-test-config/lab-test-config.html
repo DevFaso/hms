@@ -12,6 +12,10 @@
         <span class="material-symbols-outlined">add</span>
         {{ 'LAB_TEST_CONFIG.CREATE' | translate }}
       </button>
+      <button class="btn-export" (click)="openReflexRules()">
+        <span class="material-symbols-outlined">alt_route</span>
+        {{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}
+      </button>
       <button class="btn-export" (click)="exportCsv()">
         <span class="material-symbols-outlined">download</span>
         {{ 'LAB_TEST_CONFIG.EXPORT_CSV' | translate }}
@@ -451,6 +455,182 @@
               <span class="material-symbols-outlined spin">progress_activity</span>
             }
             {{ 'LAB_TEST_CONFIG.DELETE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Reflex Rules Modal -->
+  @if (showReflexModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeReflexRules()"
+      (keydown.escape)="closeReflexRules()"
+    >
+      <div
+        class="modal-content modal-lg"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeReflexRules()"
+      >
+        <div class="modal-header">
+          <h2>{{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}</h2>
+          <button class="btn-close" (click)="closeReflexRules()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          @if (reflexLoading()) {
+            <div class="loading-state"><div class="spinner"></div></div>
+          } @else if (reflexRules().length === 0) {
+            <p class="reflex-empty">{{ 'LAB_TEST_CONFIG.REFLEX_EMPTY' | translate }}</p>
+          } @else {
+            <table class="reflex-table">
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'LAB_TEST_CONFIG.REFLEX_TRIGGER' | translate }}</th>
+                  <th scope="col">{{ 'LAB_TEST_CONFIG.REFLEX_CONDITION' | translate }}</th>
+                  <th scope="col">{{ 'LAB_TEST_CONFIG.REFLEX_TEST' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (rule of reflexRules(); track rule.id) {
+                  <tr>
+                    <td>{{ rule.triggerTestDefinitionName }}</td>
+                    <td>
+                      <code>{{ describeCondition(rule) }}</code>
+                    </td>
+                    <td>{{ rule.reflexTestDefinitionName }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class.badge-active]="rule.active"
+                        [class.badge-retired]="!rule.active"
+                      >
+                        {{ (rule.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="editReflexRule(rule)"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        {{ 'COMMON.EDIT' | translate }}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-link"
+                        (click)="toggleReflexRule(rule)"
+                        [title]="'LAB_TEST_CONFIG.REFLEX_TOGGLE' | translate"
+                      >
+                        {{
+                          (rule.active
+                            ? 'LAB_TEST_CONFIG.REFLEX_DEACTIVATE'
+                            : 'LAB_TEST_CONFIG.REFLEX_ACTIVATE'
+                          ) | translate
+                        }}
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+
+          <h3 class="reflex-form-title">
+            {{
+              (editingRuleId() ? 'LAB_TEST_CONFIG.REFLEX_EDIT' : 'LAB_TEST_CONFIG.REFLEX_NEW')
+                | translate
+            }}
+          </h3>
+          <div class="def-form-grid">
+            <div class="form-group">
+              <label for="reflexTrigger">{{ 'LAB_TEST_CONFIG.REFLEX_TRIGGER' | translate }}</label>
+              <select id="reflexTrigger" [(ngModel)]="reflexForm.triggerTestDefinitionId">
+                <option value="">&mdash;</option>
+                @for (d of definitions(); track d.id) {
+                  <option [value]="d.id">{{ d.testName }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reflexTest">{{ 'LAB_TEST_CONFIG.REFLEX_TEST' | translate }}</label>
+              <select id="reflexTest" [(ngModel)]="reflexForm.reflexTestDefinitionId">
+                <option value="">&mdash;</option>
+                @for (d of definitions(); track d.id) {
+                  <option [value]="d.id">{{ d.testName }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="reflexCondType">
+                {{ 'LAB_TEST_CONFIG.REFLEX_CONDITION' | translate }}
+              </label>
+              <select id="reflexCondType" [(ngModel)]="reflexForm.conditionType">
+                <option value="severity">
+                  {{ 'LAB_TEST_CONFIG.REFLEX_COND_SEVERITY' | translate }}
+                </option>
+                <option value="threshold">
+                  {{ 'LAB_TEST_CONFIG.REFLEX_COND_THRESHOLD' | translate }}
+                </option>
+              </select>
+            </div>
+            @if (reflexForm.conditionType === 'severity') {
+              <div class="form-group">
+                <label for="reflexSeverity">{{ 'LAB_RESULTS.SEVERITY' | translate }}</label>
+                <select id="reflexSeverity" [(ngModel)]="reflexForm.severityFlag">
+                  <option value="ABNORMAL">ABNORMAL</option>
+                  <option value="CRITICAL">CRITICAL</option>
+                </select>
+              </div>
+            } @else {
+              <div class="form-group">
+                <label for="reflexOperator">
+                  {{ 'LAB_TEST_CONFIG.REFLEX_OPERATOR' | translate }}
+                </label>
+                <select id="reflexOperator" [(ngModel)]="reflexForm.thresholdOperator">
+                  <option value="GT">&gt;</option>
+                  <option value="GTE">&ge;</option>
+                  <option value="LT">&lt;</option>
+                  <option value="LTE">&le;</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="reflexValue">{{ 'LAB_TEST_CONFIG.REFLEX_VALUE' | translate }}</label>
+                <input id="reflexValue" type="number" [(ngModel)]="reflexForm.thresholdValue" />
+              </div>
+            }
+            <div class="form-group">
+              <label for="reflexDescription">{{ 'COMMON.DESCRIPTION' | translate }}</label>
+              <input id="reflexDescription" type="text" [(ngModel)]="reflexForm.description" />
+            </div>
+            <div class="form-group checkbox-group">
+              <label>
+                <input type="checkbox" [(ngModel)]="reflexForm.active" />
+                {{ 'COMMON.ACTIVE' | translate }}
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          @if (editingRuleId()) {
+            <button class="btn-secondary" (click)="cancelReflexEdit()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+          }
+          <button class="btn-secondary" (click)="closeReflexRules()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+          <button class="btn-primary" (click)="submitReflexRule()" [disabled]="reflexSaving()">
+            {{ (editingRuleId() ? 'COMMON.SAVE' : 'LAB_TEST_CONFIG.REFLEX_ADD') | translate }}
           </button>
         </div>
       </div>
