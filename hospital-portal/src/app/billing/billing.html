@@ -325,7 +325,7 @@
           </div>
           @if (inv.notes) {
             <div class="notes-section">
-              <span class="field-label">Notes</span>
+              <span class="field-label">{{ 'BILLING.NOTES' | translate }}</span>
               <p>{{ inv.notes }}</p>
             </div>
           }
@@ -372,7 +372,7 @@
               id="bill-hospitalName"
               type="text"
               [(ngModel)]="form.hospitalName"
-              placeholder="Hospital name"
+              [placeholder]="'BILLING.HOSPITAL_NAME_PLACEHOLDER' | translate"
               required
             />
           </div>
@@ -424,12 +424,12 @@
           </div>
         </div>
         <div class="field">
-          <label for="bill-notes">Notes</label>
+          <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
           <textarea
             id="bill-notes"
             [(ngModel)]="form.notes"
             rows="3"
-            placeholder="Invoice notes..."
+            [placeholder]="'BILLING.NOTES_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>

@@ -41,7 +41,7 @@
             [ngModel]="dischargeDiagnosesText()"
             (ngModelChange)="dischargeDiagnosesText.set($event)"
             name="dischargeDiagnoses"
-            placeholder="e.g. Upper respiratory infection"
+            [placeholder]="'CHECKOUT.DIAGNOSES_PLACEHOLDER' | translate"
           ></textarea>
         </fieldset>
 
@@ -55,7 +55,7 @@
             [ngModel]="prescriptionSummary()"
             (ngModelChange)="prescriptionSummary.set($event)"
             name="prescriptionSummary"
-            placeholder="e.g. Amoxicillin 500mg TID x 7 days"
+            [placeholder]="'CHECKOUT.RX_PLACEHOLDER' | translate"
           ></textarea>
 
           <label for="checkout-referrals" class="form-label">{{
@@ -68,7 +68,7 @@
             [ngModel]="referralSummary()"
             (ngModelChange)="referralSummary.set($event)"
             name="referralSummary"
-            placeholder="e.g. Cardiology follow-up"
+            [placeholder]="'CHECKOUT.REFERRAL_PLACEHOLDER' | translate"
           ></textarea>
         </fieldset>
 
@@ -84,7 +84,7 @@
             [ngModel]="followUpInstructions()"
             (ngModelChange)="followUpInstructions.set($event)"
             name="followUpInstructions"
-            placeholder="e.g. Return to clinic if symptoms worsen"
+            [placeholder]="'CHECKOUT.INSTRUCTIONS_PLACEHOLDER' | translate"
           ></textarea>
 
           <label for="checkout-education" class="form-label">{{
@@ -97,7 +97,7 @@
             [ngModel]="patientEducationMaterials()"
             (ngModelChange)="patientEducationMaterials.set($event)"
             name="patientEducationMaterials"
-            placeholder="e.g. Medication management handout"
+            [placeholder]="'CHECKOUT.EDUCATION_PLACEHOLDER' | translate"
           />
         </fieldset>
 
@@ -113,7 +113,7 @@
             [ngModel]="followUpReason()"
             (ngModelChange)="followUpReason.set($event)"
             name="followUpReason"
-            placeholder="e.g. Recheck in 2 weeks"
+            [placeholder]="'CHECKOUT.FOLLOWUP_REASON_PLACEHOLDER' | translate"
           />
 
           <label for="checkout-fu-date" class="form-label">{{
