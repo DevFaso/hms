@@ -59,6 +59,42 @@ textarea:focus-visible {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
 }
 
+/* ── Screen-reader-only utility (v1.0 roadmap row 11 / task 23) ─────
+   The standard "visually hidden" pattern: content stays in the
+   accessibility tree but takes no visual space. Global so component
+   templates can use it without redeclaring it in every scoped
+   stylesheet (global class selectors pierce Angular's emulated
+   view encapsulation). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Reduced motion (WCAG 2.3.3, task 23) ───────────────────────────
+   Users who set "reduce motion" at the OS level get near-instant
+   animations and transitions everywhere. Durations are forced to
+   0.01ms rather than 0 so `animationend`/`transitionend` handlers
+   (used by some dismiss/close flows) still fire. Components with
+   essential motion can opt back in under a
+   `@media (prefers-reduced-motion: no-preference)` guard. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 *,
 *::before,
 *::after {
