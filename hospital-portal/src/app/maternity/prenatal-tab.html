@@ -1,0 +1,265 @@
+<div class="view-section action-form prenatal-form">
+  <h3>{{ 'PRENATAL.GENERATE_TITLE' | translate }}</h3>
+  <div class="form-row">
+    <div class="field">
+      <label for="pn-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
+      <app-patient-picker
+        inputId="pn-patient"
+        [selected]="patient()"
+        (selectedChange)="onPatientPicked($event)"
+      />
+    </div>
+    <div class="field">
+      <label for="pn-lmp">{{ 'MATERNITY.LMP' | translate }} *</label>
+      <input id="pn-lmp" type="date" [(ngModel)]="lmpDate" />
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="field">
+      <label for="pn-weeks">{{ 'PRENATAL.SUPPLEMENTAL_WEEKS' | translate }}</label>
+      <input
+        id="pn-weeks"
+        type="text"
+        [(ngModel)]="supplementalWeeks"
+        [placeholder]="'PRENATAL.SUPPLEMENTAL_HINT' | translate"
+      />
+    </div>
+    <div class="field checkbox-field">
+      <label>
+        <input type="checkbox" [(ngModel)]="highRisk" />
+        {{ 'ULTRASOUND.HIGH_RISK' | translate }}
+      </label>
+    </div>
+  </div>
+  <div class="field">
+    <label for="pn-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
+    <textarea id="pn-notes" rows="2" [(ngModel)]="notes"></textarea>
+  </div>
+  <div class="modal-actions">
+    <button
+      class="btn-primary"
+      [disabled]="generating() || !patient() || !lmpDate"
+      (click)="generate()"
+    >
+      {{ 'PRENATAL.GENERATE' | translate }}
+    </button>
+  </div>
+</div>
+
+@if (generating()) {
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>{{ 'COMMON.LOADING' | translate }}</p>
+  </div>
+}
+
+@if (schedule(); as s) {
+  <div class="view-section">
+    <h3>
+      {{ 'PRENATAL.RESULT_TITLE' | translate }} — {{ 'PRENATAL.CURRENT_WEEK' | translate }}
+      {{ s.currentGestationalWeek }}
+      @if (s.estimatedDueDate) {
+        · {{ 'MATERNITY.EDD' | translate }}: {{ s.estimatedDueDate | date: 'mediumDate' }}
+      }
+      @if (s.highRisk) {
+        <span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
+      }
+    </h3>
+    @for (alert of s.alerts; track alert) {
+      <p class="prenatal-alert">
+        <span class="material-symbols-outlined">warning</span>
+        {{ alert }}
+      </p>
+    }
+  </div>
+
+  @if (s.recommendations.length > 0) {
+    <h3 class="section-heading">{{ 'PRENATAL.RECOMMENDATIONS' | translate }}</h3>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PRENATAL.WEEK' | translate }}</th>
+            <th scope="col">{{ 'PRENATAL.VISIT_TYPE' | translate }}</th>
+            <th scope="col">{{ 'PRENATAL.TARGET_DATE' | translate }}</th>
+            <th scope="col">{{ 'PRENATAL.WINDOW' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of s.recommendations; track $index) {
+            <tr class="data-row">
+              <td>{{ r.gestationalWeek }}</td>
+              <td>{{ 'PRENATAL.VISIT_' + r.visitType | translate }}</td>
+              <td>{{ r.targetDate ? (r.targetDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{ r.windowStart ? (r.windowStart | date: 'shortDate') : '—' }} —
+                {{ r.windowEnd ? (r.windowEnd | date: 'shortDate') : '—' }}
+              </td>
+              <td>
+                @if (r.scheduled) {
+                  <span class="status-badge status-completed">
+                    {{ 'PRENATAL.SCHEDULED' | translate }}
+                  </span>
+                } @else {
+                  <span class="status-badge status-submitted">
+                    {{ 'PRENATAL.UNSCHEDULED' | translate }}
+                  </span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (s.existingAppointments.length > 0) {
+    <h3 class="section-heading">{{ 'PRENATAL.EXISTING' | translate }}</h3>
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'PRENATAL.WEEK' | translate }}</th>
+            <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+            <th scope="col">{{ 'PRENATAL.TIME' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of s.existingAppointments; track a.appointmentId) {
+            <tr class="data-row">
+              <td>{{ a.gestationalWeek }}</td>
+              <td>{{ a.appointmentDate | date: 'mediumDate' }}</td>
+              <td>{{ a.startTime || '—' }}</td>
+              <td>{{ a.status || '—' }}</td>
+              <td class="actions-cell">
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'PRENATAL.RESCHEDULE' | translate"
+                  (click)="openReschedule(a)"
+                >
+                  <span class="material-symbols-outlined">edit_calendar</span>
+                </button>
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'PRENATAL.SEND_REMINDER' | translate"
+                  (click)="openReminder(a)"
+                >
+                  <span class="material-symbols-outlined">notifications</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+}
+
+<!-- ══ Reschedule modal ══ -->
+@if (showRescheduleModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReschedule()"
+    (keydown.escape)="closeReschedule()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReschedule()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="pn-new-date">{{ 'PRENATAL.NEW_DATE' | translate }} *</label>
+            <input id="pn-new-date" type="date" [(ngModel)]="rescheduleDate" />
+          </div>
+          <div class="field">
+            <label for="pn-new-time">{{ 'PRENATAL.NEW_TIME' | translate }} *</label>
+            <input id="pn-new-time" type="time" [(ngModel)]="rescheduleTime" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="pn-res-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
+          <textarea id="pn-res-notes" rows="2" [(ngModel)]="rescheduleNotes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReschedule()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="rescheduleBusy() || !rescheduleDate || !rescheduleTime"
+          (click)="submitReschedule()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Reminder modal ══ -->
+@if (showReminderModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReminder()"
+    (keydown.escape)="closeReminder()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReminder()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="pn-days">{{ 'PRENATAL.DAYS_BEFORE' | translate }}</label>
+          <input id="pn-days" type="number" min="0" max="30" [(ngModel)]="reminderDaysBefore" />
+        </div>
+        <div class="field">
+          <label for="pn-message">{{ 'PRENATAL.CUSTOM_MESSAGE' | translate }}</label>
+          <textarea id="pn-message" rows="2" [(ngModel)]="reminderMessage"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReminder()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="reminderBusy()" (click)="submitReminder()">
+          {{ 'PRENATAL.SEND' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

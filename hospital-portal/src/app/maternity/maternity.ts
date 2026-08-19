@@ -25,6 +25,10 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { UltrasoundTabComponent } from './ultrasound-tab';
+import { BirthPlanTabComponent } from './birth-plan-tab';
+import { PrenatalTabComponent } from './prenatal-tab';
+import { PostpartumTabComponent } from './postpartum-tab';
 
 type BoardWorklist =
   | 'high-risk'
@@ -33,11 +37,27 @@ type BoardWorklist =
   | 'psychosocial'
   | 'all';
 type ReferralListMode = 'hospital' | 'assigned' | 'patient';
+type MaternityTab =
+  | 'board'
+  | 'referrals'
+  | 'ultrasound'
+  | 'birth-plans'
+  | 'prenatal'
+  | 'postpartum';
 
 @Component({
   selector: 'app-maternity',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    UltrasoundTabComponent,
+    BirthPlanTabComponent,
+    PrenatalTabComponent,
+    PostpartumTabComponent,
+  ],
   templateUrl: './maternity.html',
   styleUrl: './maternity.scss',
 })
@@ -89,7 +109,38 @@ export class MaternityComponent implements OnInit {
   ]);
   readonly canListAssigned = this.canDecideReferral;
 
-  activeTab = signal<'board' | 'referrals'>('board');
+  /* ── Tab visibility (effective backend role lists per domain) ── */
+  readonly canSeeReferrals = this.roleContext.hasAnyActiveRole([
+    'ROLE_MIDWIFE',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canSeeUltrasound = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_MIDWIFE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canSeeBirthPlans = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canSeePrenatal = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canSeePostpartum = this.canSeeBirthPlans;
+
+  activeTab = signal<MaternityTab>('board');
 
   /* ── Board (maternal histories) ── */
   worklist = signal<BoardWorklist>('high-risk');
@@ -156,7 +207,9 @@ export class MaternityComponent implements OnInit {
   ngOnInit(): void {
     this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
     if (!this.canManageHistory) {
-      this.activeTab.set('referrals');
+      this.activeTab.set(
+        this.canSeeReferrals ? 'referrals' : this.canSeePrenatal ? 'prenatal' : 'board',
+      );
     }
     this.referralMode.set(
       this.canListHospitalReferrals ? 'hospital' : this.canListAssigned ? 'assigned' : 'patient',
@@ -171,7 +224,7 @@ export class MaternityComponent implements OnInit {
     }
   }
 
-  setTab(tab: 'board' | 'referrals'): void {
+  setTab(tab: MaternityTab): void {
     this.activeTab.set(tab);
   }
 

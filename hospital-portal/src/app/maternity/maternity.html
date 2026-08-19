@@ -27,15 +27,66 @@
           {{ 'MATERNITY.BOARD_TAB' | translate }}
         </button>
       }
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'referrals'"
-        (click)="setTab('referrals')"
-      >
-        {{ 'MATERNITY.REFERRALS_TAB' | translate }}
-      </button>
+      @if (canSeeReferrals) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'referrals'"
+          (click)="setTab('referrals')"
+        >
+          {{ 'MATERNITY.REFERRALS_TAB' | translate }}
+        </button>
+      }
+      @if (canSeeUltrasound) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'ultrasound'"
+          (click)="setTab('ultrasound')"
+        >
+          {{ 'MATERNITY.ULTRASOUND_TAB' | translate }}
+        </button>
+      }
+      @if (canSeeBirthPlans) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'birth-plans'"
+          (click)="setTab('birth-plans')"
+        >
+          {{ 'MATERNITY.BIRTH_PLANS_TAB' | translate }}
+        </button>
+      }
+      @if (canSeePrenatal) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'prenatal'"
+          (click)="setTab('prenatal')"
+        >
+          {{ 'MATERNITY.PRENATAL_TAB' | translate }}
+        </button>
+      }
+      @if (canSeePostpartum) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'postpartum'"
+          (click)="setTab('postpartum')"
+        >
+          {{ 'MATERNITY.POSTPARTUM_TAB' | translate }}
+        </button>
+      }
     </div>
   </div>
+
+  @if (activeTab() === 'ultrasound' && canSeeUltrasound) {
+    <app-ultrasound-tab />
+  }
+  @if (activeTab() === 'birth-plans' && canSeeBirthPlans) {
+    <app-birth-plan-tab />
+  }
+  @if (activeTab() === 'prenatal' && canSeePrenatal) {
+    <app-prenatal-tab />
+  }
+  @if (activeTab() === 'postpartum' && canSeePostpartum) {
+    <app-postpartum-tab />
+  }
 
   <!-- ══ Board tab ══ -->
   @if (activeTab() === 'board' && canManageHistory) {
