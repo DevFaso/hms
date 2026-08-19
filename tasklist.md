@@ -93,7 +93,7 @@
 - [x] 17. Insurance management + multi-hospital registration UI (reception + patient detail) — ✅ DONE (`/registrations` admin page w/ multi-hospital panel + Coverage tab on patient detail for insurance link/edit/delete and registration history; fixed the latent findActiveRegistration bare-array bug)
 - [ ] 18. Patient education: resource management + assignment/progress views
 - [ ] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines)
-- [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
+- [x] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search — ✅ DONE (signatures: sign modal + report-lookup/is-signed panel, FIXED broken verify (isValid + required reportType/reportId) and revoke (revocationReason) contract bugs, role-gated actions; billing: server-side search w/ status/date filters + paging, email modal (to/cc/message/attachPdf/locale, 503-aware), standalone payment recording w/ balance guard, InvoiceStatus enum drift fixed (SENT/PARTIALLY_PAID), text-plain DELETE fixed)
 
 ### Phase 4 — Quality floor (P3, parallelizable)
 
