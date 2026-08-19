@@ -1103,6 +1103,28 @@ export const routes: Routes = [
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
       },
 
+      // Assignment administration. SecurityConfig hard-gates /assignments/**
+      // to HOSPITAL_ADMIN + SUPER_ADMIN at the URL layer; the route mirrors it.
+      {
+        path: 'admin-assignments',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin-assignments/admin-assignments').then((m) => m.AdminAssignmentsComponent),
+      },
+
+      // Governance console (permission matrix, security policies, user
+      // governance, credential health, baselines). SUPER_ADMIN only: most
+      // backing endpoints are SUPER_ADMIN-only, and the flat security-policy
+      // reads that would admit HOSPITAL_ADMIN are unscoped cross-tenant.
+      {
+        path: 'admin-governance',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./admin-governance/admin-governance').then((m) => m.AdminGovernanceComponent),
+      },
+
       // Super-Admin Control Tower (SUPER_ADMIN only)
       {
         path: 'super-admin',
@@ -1224,6 +1246,19 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
+      },
+
+      // Patient education (resource library + assignment/progress).
+      // Writes are SUPER_ADMIN/DOCTOR/NURSE on the backend; MIDWIFE is
+      // read-only (library browsing); HOSPITAL_ADMIN has no access.
+      {
+        path: 'patient-education',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./patient-education/patient-education').then((m) => m.PatientEducationComponent),
       },
 
       // Medication-history timeline + external pharmacy-fill recording.

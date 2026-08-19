@@ -1,0 +1,698 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'ASSIGN_ADMIN.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'ASSIGN_ADMIN.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn-secondary" (click)="openImport()">
+        <span class="material-symbols-outlined">upload_file</span>
+        {{ 'ASSIGN_ADMIN.BULK_IMPORT' | translate }}
+      </button>
+      <button type="button" class="btn-secondary" (click)="openMulti()">
+        <span class="material-symbols-outlined">stacks</span>
+        {{ 'ASSIGN_ADMIN.MULTI_SCOPE' | translate }}
+      </button>
+      <button type="button" class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">person_add</span>
+        {{ 'ASSIGN_ADMIN.NEW' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-bar">
+    <input
+      type="text"
+      class="search-box"
+      [ngModel]="filterSearch()"
+      (ngModelChange)="filterSearch.set($event)"
+      (keydown.enter)="applyFilters()"
+      [placeholder]="'ASSIGN_ADMIN.SEARCH' | translate"
+    />
+    <select
+      class="filter-select"
+      [ngModel]="filterHospitalId()"
+      (ngModelChange)="filterHospitalId.set($event)"
+    >
+      <option value="">{{ 'ASSIGN_ADMIN.ALL_HOSPITALS' | translate }}</option>
+      @for (h of hospitals(); track h.id) {
+        <option [value]="h.id">{{ h.name }}</option>
+      }
+    </select>
+    <select
+      class="filter-select"
+      [ngModel]="filterActive()"
+      (ngModelChange)="filterActive.set($event)"
+    >
+      <option value="">{{ 'ASSIGN_ADMIN.ALL_STATUSES' | translate }}</option>
+      <option value="true">{{ 'COMMON.ACTIVE' | translate }}</option>
+      <option value="false">{{ 'COMMON.INACTIVE' | translate }}</option>
+    </select>
+    <input
+      type="text"
+      class="filter-input"
+      [ngModel]="filterCode()"
+      (ngModelChange)="filterCode.set($event)"
+      (keydown.enter)="applyFilters()"
+      [placeholder]="'ASSIGN_ADMIN.CODE_FILTER' | translate"
+    />
+    <button type="button" class="btn-secondary" (click)="applyFilters()">
+      {{ 'COMMON.APPLY' | translate }}
+    </button>
+    <button type="button" class="btn-link" (click)="clearFilters()">
+      {{ 'COMMON.CLEAR' | translate }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (loadError()) {
+    <div class="error-state">
+      <p>{{ 'ASSIGN_ADMIN.LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load(page())">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">assignment_ind</span>
+      <p>{{ 'ASSIGN_ADMIN.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ASSIGN_ADMIN.USER' | translate }}</th>
+            <th>{{ 'ASSIGN_ADMIN.ROLE' | translate }}</th>
+            <th>{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</th>
+            <th>{{ 'ASSIGN_ADMIN.CODE' | translate }}</th>
+            <th>{{ 'ASSIGN_ADMIN.VERIFIED' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>
+                <div class="cell-main">{{ row.userName || row.userEmail || '—' }}</div>
+                @if (row.userName && row.userEmail) {
+                  <div class="cell-sub">{{ row.userEmail }}</div>
+                }
+              </td>
+              <td>{{ row.roleName || row.roleCode || '—' }}</td>
+              <td>{{ row.hospitalName || '—' }}</td>
+              <td>
+                <code>{{ row.assignmentCode || '—' }}</code>
+              </td>
+              <td>
+                <span
+                  class="badge"
+                  [class.badge-success]="row.confirmationVerified"
+                  [class.badge-muted]="!row.confirmationVerified"
+                >
+                  {{
+                    (row.confirmationVerified ? 'ASSIGN_ADMIN.YES' : 'ASSIGN_ADMIN.NO') | translate
+                  }}
+                </span>
+              </td>
+              <td>
+                <span
+                  class="badge"
+                  [class.badge-success]="row.active"
+                  [class.badge-danger]="!row.active"
+                >
+                  {{ (row.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+                </span>
+              </td>
+              <td class="actions-cell">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="openDetail(row)"
+                  [title]="'COMMON.VIEW' | translate"
+                >
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="openEdit(row)"
+                  [title]="'COMMON.EDIT' | translate"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="openRegen(row)"
+                  [title]="'ASSIGN_ADMIN.REGENERATE' | translate"
+                >
+                  <span class="material-symbols-outlined">key</span>
+                </button>
+                <button
+                  type="button"
+                  class="icon-btn"
+                  (click)="resendNotification(row)"
+                  [title]="'ASSIGN_ADMIN.RESEND' | translate"
+                >
+                  <span class="material-symbols-outlined">forward_to_inbox</span>
+                </button>
+                @if (row.active) {
+                  <button
+                    type="button"
+                    class="icon-btn warn"
+                    (click)="deactivate(row)"
+                    [title]="'ASSIGN_ADMIN.DEACTIVATE' | translate"
+                  >
+                    <span class="material-symbols-outlined">block</span>
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="icon-btn danger"
+                  (click)="delete(row)"
+                  [title]="'COMMON.DELETE' | translate"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="page() === 0"
+        (click)="load(page() - 1)"
+      >
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span class="page-info">
+        {{
+          'ASSIGN_ADMIN.PAGE_INFO'
+            | translate: { page: page() + 1, total: totalPages(), count: totalElements() }
+        }}
+      </span>
+      <button
+        type="button"
+        class="btn-secondary"
+        [disabled]="page() + 1 >= totalPages()"
+        (click)="load(page() + 1)"
+      >
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- ═══ Create / Edit modal ═══ -->
+  @if (modal() === 'create' || modal() === 'edit') {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>
+          {{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMIN.EDIT') | translate }}
+        </h2>
+        @if (modal() === 'create') {
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.USER_IDENTIFIER' | translate }} *</span>
+            <input
+              type="text"
+              [ngModel]="formUserIdentifier()"
+              (ngModelChange)="formUserIdentifier.set($event)"
+              [placeholder]="'ASSIGN_ADMIN.USER_IDENTIFIER_HINT' | translate"
+            />
+          </label>
+        } @else {
+          <p class="form-static">
+            <strong>{{ 'ASSIGN_ADMIN.USER' | translate }}:</strong>
+            {{ selected()?.userName || selected()?.userEmail }}
+          </p>
+        }
+        <label class="form-field">
+          <span>{{ 'ASSIGN_ADMIN.ROLE' | translate }} *</span>
+          <select [ngModel]="formRoleId()" (ngModelChange)="formRoleId.set($event)">
+            <option value="">—</option>
+            @for (r of roles(); track r.id) {
+              <option [value]="r.id">{{ r.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="form-field">
+          <span>{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
+          <select [ngModel]="formHospitalId()" (ngModelChange)="formHospitalId.set($event)">
+            <option value="">—</option>
+            @for (h of hospitals(); track h.id) {
+              <option [value]="h.id">{{ h.name }}</option>
+            }
+          </select>
+        </label>
+        <label class="form-field">
+          <span>{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
+          <input
+            type="date"
+            [ngModel]="formStartDate()"
+            (ngModelChange)="formStartDate.set($event)"
+          />
+        </label>
+        <label class="check-field">
+          <input
+            type="checkbox"
+            [ngModel]="formActive()"
+            (ngModelChange)="formActive.set($event)"
+          />
+          <span>{{ 'COMMON.ACTIVE' | translate }}</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="modal() === 'create' ? submitCreate() : submitEdit()"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Multi-scope modal ═══ -->
+  @if (modal() === 'multi') {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}</h2>
+        @if (!multiResult()) {
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.USER_IDENTIFIER' | translate }} *</span>
+            <input
+              type="text"
+              [ngModel]="formUserIdentifier()"
+              (ngModelChange)="formUserIdentifier.set($event)"
+              [placeholder]="'ASSIGN_ADMIN.USER_IDENTIFIER_HINT' | translate"
+            />
+          </label>
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.ROLE' | translate }} *</span>
+            <select [ngModel]="formRoleId()" (ngModelChange)="formRoleId.set($event)">
+              <option value="">—</option>
+              @for (r of roles(); track r.id) {
+                <option [value]="r.id">{{ r.name }}</option>
+              }
+            </select>
+          </label>
+          <fieldset class="form-field">
+            <legend>{{ 'ASSIGN_ADMIN.HOSPITALS' | translate }} *</legend>
+            <div class="checkbox-grid">
+              @for (h of hospitals(); track h.id) {
+                <label class="check-field">
+                  <input
+                    type="checkbox"
+                    [checked]="multiHospitalIds().has(h.id)"
+                    (change)="toggleMultiHospital(h.id)"
+                  />
+                  <span>{{ h.name }}</span>
+                </label>
+              }
+            </div>
+          </fieldset>
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
+            <input
+              type="date"
+              [ngModel]="formStartDate()"
+              (ngModelChange)="formStartDate.set($event)"
+            />
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="multiSendNotifications()"
+              (ngModelChange)="multiSendNotifications.set($event)"
+            />
+            <span>{{ 'ASSIGN_ADMIN.SEND_NOTIFICATIONS' | translate }}</span>
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="multiSkipConflicts()"
+              (ngModelChange)="multiSkipConflicts.set($event)"
+            />
+            <span>{{ 'ASSIGN_ADMIN.SKIP_CONFLICTS' | translate }}</span>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitMulti()">
+              {{ 'ASSIGN_ADMIN.CREATE_ASSIGNMENTS' | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="result-summary">
+            <span class="badge badge-info">
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ multiResult()!.requestedAssignments }}
+            </span>
+            <span class="badge badge-success">
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ multiResult()!.createdAssignments }}
+            </span>
+            <span class="badge badge-muted">
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ multiResult()!.skippedAssignments }}
+            </span>
+          </div>
+          @if (multiResult()!.failures.length > 0) {
+            <ul class="failure-list">
+              @for (f of multiResult()!.failures; track $index) {
+                <li>
+                  <strong>{{ f.scopeLabel || f.hospitalId }}</strong
+                  >: {{ f.message }}
+                </li>
+              }
+            </ul>
+          }
+          <div class="modal-actions">
+            <button type="button" class="btn-primary" (click)="closeModal()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Detail modal ═══ -->
+  @if (modal() === 'detail' && selected(); as row) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
+        <div class="detail-grid">
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.USER' | translate }}</span>
+            <span>{{ row.userName || '—' }} ({{ row.userEmail || '—' }})</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.ROLE' | translate }}</span>
+            <span>{{ row.roleName || row.roleCode || '—' }}</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
+            <span
+              >{{ row.hospitalName || '—' }}
+              {{ row.hospitalCode ? '(' + row.hospitalCode + ')' : '' }}</span
+            >
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.CODE' | translate }}</span>
+            <span
+              ><code>{{ row.assignmentCode || '—' }}</code></span
+            >
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
+            <span>{{ row.startDate || '—' }}</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
+            <span>{{ row.assignedAt ? (row.assignedAt | date: 'medium') : '—' }}</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_SENT' | translate }}</span>
+            <span>{{
+              row.confirmationSentAt ? (row.confirmationSentAt | date: 'medium') : '—'
+            }}</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_VERIFIED' | translate }}</span>
+            <span>{{
+              row.confirmationVerifiedAt
+                ? (row.confirmationVerifiedAt | date: 'medium')
+                : ('ASSIGN_ADMIN.NOT_VERIFIED' | translate)
+            }}</span>
+          </div>
+          <div>
+            <span class="label">{{ 'ASSIGN_ADMIN.REGISTERED_BY' | translate }}</span>
+            <span>{{ row.registeredByUserName || '—' }}</span>
+          </div>
+        </div>
+        @if (row.profileCompletionUrl) {
+          <p class="form-static">
+            <strong>{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}:</strong>
+            <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
+          </p>
+        }
+        @if (row.profileChecklist && row.profileChecklist.length > 0) {
+          <div class="checklist">
+            <strong>{{ 'ASSIGN_ADMIN.CHECKLIST' | translate }}</strong>
+            <ul>
+              @for (item of row.profileChecklist; track $index) {
+                <li>{{ item }}</li>
+              }
+            </ul>
+          </div>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" (click)="closeModal()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Regenerate-code modal ═══ -->
+  @if (modal() === 'regen' && selected(); as row) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}</h2>
+        <p class="warning-note">
+          <span class="material-symbols-outlined">warning</span>
+          {{ 'ASSIGN_ADMIN.REGENERATE_WARNING' | translate }}
+        </p>
+        <label class="check-field">
+          <input
+            type="checkbox"
+            [ngModel]="regenResend()"
+            (ngModelChange)="regenResend.set($event)"
+          />
+          <span>{{ 'ASSIGN_ADMIN.RESEND_ON_REGEN' | translate }}</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitRegen()">
+            {{ 'ASSIGN_ADMIN.REGENERATE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Bulk import modal ═══ -->
+  @if (modal() === 'import') {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
+        @if (!importResult()) {
+          <p class="form-hint">{{ 'ASSIGN_ADMIN.IMPORT_HINT' | translate }}</p>
+          <label class="form-field">
+            <span>{{ 'ASSIGN_ADMIN.CSV_FILE' | translate }} *</span>
+            <input type="file" accept=".csv,text/csv" (change)="onImportFile($event)" />
+            @if (importFileName()) {
+              <span class="file-name">{{ importFileName() }}</span>
+            }
+          </label>
+          <div class="form-row">
+            <label class="form-field">
+              <span>{{ 'ASSIGN_ADMIN.DELIMITER' | translate }}</span>
+              <input
+                type="text"
+                maxlength="1"
+                [ngModel]="importDelimiter()"
+                (ngModelChange)="importDelimiter.set($event)"
+              />
+            </label>
+            <label class="form-field">
+              <span>{{ 'ASSIGN_ADMIN.DEFAULT_ROLE' | translate }}</span>
+              <select
+                [ngModel]="importDefaultRoleId()"
+                (ngModelChange)="importDefaultRoleId.set($event)"
+              >
+                <option value="">—</option>
+                @for (r of roles(); track r.id) {
+                  <option [value]="r.id">{{ r.name }}</option>
+                }
+              </select>
+            </label>
+            <label class="form-field">
+              <span>{{ 'ASSIGN_ADMIN.DEFAULT_HOSPITAL' | translate }}</span>
+              <select
+                [ngModel]="importDefaultHospitalId()"
+                (ngModelChange)="importDefaultHospitalId.set($event)"
+              >
+                <option value="">—</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="importDefaultActive()"
+              (ngModelChange)="importDefaultActive.set($event)"
+            />
+            <span>{{ 'ASSIGN_ADMIN.DEFAULT_ACTIVE' | translate }}</span>
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="importSendNotifications()"
+              (ngModelChange)="importSendNotifications.set($event)"
+            />
+            <span>{{ 'ASSIGN_ADMIN.SEND_NOTIFICATIONS' | translate }}</span>
+          </label>
+          <label class="check-field">
+            <input
+              type="checkbox"
+              [ngModel]="importSkipConflicts()"
+              (ngModelChange)="importSkipConflicts.set($event)"
+            />
+            <span>{{ 'ASSIGN_ADMIN.SKIP_CONFLICTS' | translate }}</span>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="saving()"
+              (click)="submitImport()"
+            >
+              {{ 'ASSIGN_ADMIN.RUN_IMPORT' | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="result-summary">
+            <span class="badge badge-info">
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+            </span>
+            <span class="badge badge-success">
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ importResult()!.created }}
+            </span>
+            <span class="badge badge-muted">
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ importResult()!.skipped }}
+            </span>
+            <span class="badge badge-danger">
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+            </span>
+          </div>
+          <div class="table-wrap result-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>{{ 'ASSIGN_ADMIN.IDENTIFIER' | translate }}</th>
+                  <th>{{ 'COMMON.STATUS' | translate }}</th>
+                  <th>{{ 'ASSIGN_ADMIN.MESSAGE' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of importResult()!.results; track r.rowNumber) {
+                  <tr>
+                    <td>{{ r.rowNumber }}</td>
+                    <td>{{ r.identifier || '—' }}</td>
+                    <td>
+                      <span
+                        class="badge"
+                        [class.badge-success]="r.success"
+                        [class.badge-danger]="!r.success"
+                      >
+                        {{ (r.success ? 'ASSIGN_ADMIN.OK' : 'ASSIGN_ADMIN.FAILED') | translate }}
+                      </span>
+                    </td>
+                    <td>{{ r.message || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-primary" (click)="closeModal()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

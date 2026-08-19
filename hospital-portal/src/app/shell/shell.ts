@@ -364,6 +364,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'school',
+        label: 'Patient Education',
+        translationKey: 'NAV.PATIENT_EDUCATION',
+        route: '/patient-education',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'pregnant_woman',
         label: 'Maternity',
         translationKey: 'NAV.MATERNITY',
@@ -557,6 +564,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Digital Signatures',
         translationKey: 'NAV.DIGITAL_SIGNATURES',
         route: '/digital-signatures',
+      });
+    }
+    // Assignment admin — SecurityConfig gates /assignments/** to these two roles
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'assignment_ind',
+        label: 'Assignments',
+        translationKey: 'NAV.ASSIGNMENTS',
+        route: '/admin-assignments',
+      });
+    }
+    // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
+    if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'gavel',
+        label: 'Governance',
+        translationKey: 'NAV.GOVERNANCE',
+        route: '/admin-governance',
       });
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
