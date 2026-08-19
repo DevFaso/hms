@@ -2607,8 +2607,7 @@
     "PATIENT_EDUCATION": "Educación del Paciente",
     "MEDICATION_HISTORY": "Historial de Medicamentos",
     "PROCEDURE_ORDERS": "Órdenes de Procedimiento",
-    "REGISTRATIONS": "Registros",
-    "MATERNITY": "Maternidad"
+    "REGISTRATIONS": "Registros"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",
@@ -5736,7 +5735,10 @@
     "ULTRASOUND_TAB": "Ecografía",
     "BIRTH_PLANS_TAB": "Planes de Parto",
     "PRENATAL_TAB": "Prenatal",
-    "POSTPARTUM_TAB": "Posparto"
+    "POSTPARTUM_TAB": "Posparto",
+    "URGENCY_ATTACHMENT_REQUIRED": "Las derivaciones prioritarias y urgentes requieren al menos un adjunto de respaldo, que este formulario aún no admite. Cree la derivación como Rutinaria por ahora.",
+    "VERSIONS_LOAD_ERROR": "Error al cargar el historial de versiones",
+    "NO_VERSIONS": "Sin versiones anteriores"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Todas las órdenes",
@@ -6005,7 +6007,15 @@
     "ACTION_OXYGEN_THERAPY": "Oxigenoterapia",
     "ACTION_FEEDING_SUPPORT": "Apoyo a la alimentación",
     "ACTION_MONITORING_RECHECK": "Recontrol",
-    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Educación de los padres"
+    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Educación de los padres",
+    "SLEEP": "Sueño",
+    "SLEEP_RESTED": "Descansada",
+    "SLEEP_ADEQUATE": "Adecuado",
+    "SLEEP_INTERRUPTED": "Interrumpido",
+    "SLEEP_EXHAUSTED": "Agotada",
+    "SLEEP_UNKNOWN": "Desconocido",
+    "OBSERVATIONS_LOAD_ERROR": "Error al cargar las observaciones",
+    "ASSESSMENTS_LOAD_ERROR": "Error al cargar las evaluaciones del recién nacido"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",

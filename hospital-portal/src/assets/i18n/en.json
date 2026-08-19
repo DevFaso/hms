@@ -2614,8 +2614,7 @@
     "PATIENT_EDUCATION": "Patient Education",
     "MEDICATION_HISTORY": "Medication History",
     "PROCEDURE_ORDERS": "Procedure Orders",
-    "REGISTRATIONS": "Registrations",
-    "MATERNITY": "Maternity"
+    "REGISTRATIONS": "Registrations"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -6284,7 +6283,10 @@
     "ULTRASOUND_TAB": "Ultrasound",
     "BIRTH_PLANS_TAB": "Birth Plans",
     "PRENATAL_TAB": "Prenatal",
-    "POSTPARTUM_TAB": "Postpartum"
+    "POSTPARTUM_TAB": "Postpartum",
+    "URGENCY_ATTACHMENT_REQUIRED": "Priority and urgent referrals require at least one supporting attachment, which this form does not support yet. Create the referral as Routine for now.",
+    "VERSIONS_LOAD_ERROR": "Failed to load version history",
+    "NO_VERSIONS": "No earlier versions"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "All orders",
@@ -6553,7 +6555,15 @@
     "ACTION_OXYGEN_THERAPY": "Oxygen therapy",
     "ACTION_FEEDING_SUPPORT": "Feeding support",
     "ACTION_MONITORING_RECHECK": "Monitoring recheck",
-    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Parent education"
+    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Parent education",
+    "SLEEP": "Sleep",
+    "SLEEP_RESTED": "Rested",
+    "SLEEP_ADEQUATE": "Adequate",
+    "SLEEP_INTERRUPTED": "Interrupted",
+    "SLEEP_EXHAUSTED": "Exhausted",
+    "SLEEP_UNKNOWN": "Unknown",
+    "OBSERVATIONS_LOAD_ERROR": "Failed to load observations",
+    "ASSESSMENTS_LOAD_ERROR": "Failed to load newborn assessments"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",

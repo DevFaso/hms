@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -23,6 +23,7 @@ import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { nowLocalDatetime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-postpartum-tab',
@@ -30,6 +31,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
   imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './postpartum-tab.html',
   styleUrl: './maternity.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PostpartumTabComponent {
   private readonly postpartumService = inject(PostpartumService);
@@ -42,8 +44,11 @@ export class PostpartumTabComponent {
 
   schedule = signal<PostpartumSchedule | null>(null);
   observations = signal<PostpartumObservationResponse[]>([]);
+  observationsLoading = signal(false);
+  observationsError = signal(false);
   assessments = signal<NewbornAssessmentResponse[]>([]);
-  loading = signal(false);
+  assessmentsLoading = signal(false);
+  assessmentsError = signal(false);
 
   readonly fundusTones: PostpartumFundusTone[] = [
     'FIRM',
@@ -144,24 +149,38 @@ export class PostpartumTabComponent {
   load(): void {
     const patient = this.patient();
     if (!patient) return;
-    this.loading.set(true);
     this.postpartumService.schedule(patient.id).subscribe({
       next: (schedule) => this.schedule.set(schedule),
       error: () => this.schedule.set(null),
     });
+    // Mother and newborn sections track their own loading/error state — a
+    // shared flag let the newborn list show "no assessments" while its
+    // request was still in flight (or had silently failed).
+    this.observationsLoading.set(true);
+    this.observationsError.set(false);
     this.postpartumService.recentObservations(patient.id, 20).subscribe({
       next: (list) => {
         this.observations.set(list ?? []);
-        this.loading.set(false);
+        this.observationsLoading.set(false);
       },
       error: () => {
         this.observations.set([]);
-        this.loading.set(false);
+        this.observationsLoading.set(false);
+        this.observationsError.set(true);
       },
     });
+    this.assessmentsLoading.set(true);
+    this.assessmentsError.set(false);
     this.postpartumService.recentNewbornAssessments(patient.id, 20).subscribe({
-      next: (list) => this.assessments.set(list ?? []),
-      error: () => this.assessments.set([]),
+      next: (list) => {
+        this.assessments.set(list ?? []);
+        this.assessmentsLoading.set(false);
+      },
+      error: () => {
+        this.assessments.set([]);
+        this.assessmentsLoading.set(false);
+        this.assessmentsError.set(true);
+      },
     });
   }
 
@@ -180,17 +199,10 @@ export class PostpartumTabComponent {
     }
   }
 
-  /** Local-timezone yyyy-MM-ddTHH:mm for datetime-local inputs. */
-  private nowLocalDatetime(): string {
-    const d = new Date();
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   /* ── Observation ── */
 
   openObservation(): void {
-    this.observationForm = { observationTime: this.nowLocalDatetime() };
+    this.observationForm = { observationTime: nowLocalDatetime() };
     this.showObservationModal.set(true);
   }
 
@@ -225,7 +237,7 @@ export class PostpartumTabComponent {
   /* ── Newborn assessment ── */
 
   openAssessment(): void {
-    this.assessmentForm = { assessmentTime: this.nowLocalDatetime() };
+    this.assessmentForm = { assessmentTime: nowLocalDatetime() };
     this.selectedFollowUps = new Set();
     this.showAssessmentModal.set(true);
   }

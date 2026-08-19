@@ -2614,8 +2614,7 @@
     "PATIENT_EDUCATION": "Éducation des Patients",
     "MEDICATION_HISTORY": "Historique Médicamenteux",
     "PROCEDURE_ORDERS": "Ordres de Procédure",
-    "REGISTRATIONS": "Enregistrements",
-    "MATERNITY": "Maternité"
+    "REGISTRATIONS": "Enregistrements"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -6284,7 +6283,10 @@
     "ULTRASOUND_TAB": "Échographie",
     "BIRTH_PLANS_TAB": "Plans de Naissance",
     "PRENATAL_TAB": "Prénatal",
-    "POSTPARTUM_TAB": "Post-partum"
+    "POSTPARTUM_TAB": "Post-partum",
+    "URGENCY_ATTACHMENT_REQUIRED": "Les références prioritaires et urgentes exigent au moins une pièce jointe justificative, que ce formulaire ne prend pas encore en charge. Créez la référence en Routine pour le moment.",
+    "VERSIONS_LOAD_ERROR": "Échec du chargement de l'historique des versions",
+    "NO_VERSIONS": "Aucune version antérieure"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Toutes les demandes",
@@ -6553,7 +6555,15 @@
     "ACTION_OXYGEN_THERAPY": "Oxygénothérapie",
     "ACTION_FEEDING_SUPPORT": "Aide à l'alimentation",
     "ACTION_MONITORING_RECHECK": "Recontrôle",
-    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Éducation des parents"
+    "ACTION_PARENT_EDUCATION_REINFORCEMENT": "Éducation des parents",
+    "SLEEP": "Sommeil",
+    "SLEEP_RESTED": "Reposée",
+    "SLEEP_ADEQUATE": "Adéquat",
+    "SLEEP_INTERRUPTED": "Interrompu",
+    "SLEEP_EXHAUSTED": "Épuisée",
+    "SLEEP_UNKNOWN": "Inconnu",
+    "OBSERVATIONS_LOAD_ERROR": "Échec du chargement des observations",
+    "ASSESSMENTS_LOAD_ERROR": "Échec du chargement des évaluations du nouveau-né"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",

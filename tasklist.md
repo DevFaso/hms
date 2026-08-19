@@ -146,14 +146,16 @@
 
 ## Task List
 
-- [ ] 1. Add `findCarryOverEncounters()` query to EncounterRepository
-- [ ] 2. Update PatientTrackerServiceImpl to merge carry-over encounters
-- [ ] 3. Inject EncounterRepository into AdmissionServiceImpl
-- [ ] 4. Auto-complete active encounters in dischargePatient()
-- [ ] 5. Add JUnit tests for carry-over encounters (PatientTrackerServiceImplTest)
-- [ ] 6. Add JUnit tests for discharge auto-complete (AdmissionServiceImplTest)
-- [ ] 7. Build, format, test, lint, JaCoCo
-- [ ] 8. Commit and push
+- [x] 1. Add `findCarryOverEncounters()` query to EncounterRepository — ✅ DONE (commit 31239f72)
+- [x] 2. Update PatientTrackerServiceImpl to merge carry-over encounters — ✅ DONE (ID-deduped merge; counts/avg-wait include carry-overs)
+- [x] 3. Inject EncounterRepository into AdmissionServiceImpl — ✅ DONE (since refactored to shared `EncounterAutoCompletionService`)
+- [x] 4. Auto-complete active encounters in dischargePatient() — ✅ DONE (+ follow-up: discharge-approval `approve()` now also completes encounters, and both paths publish tracker WS events)
+- [x] 5. Add JUnit tests for carry-over encounters (PatientTrackerServiceImplTest) — ✅ DONE (3 cases)
+- [x] 6. Add JUnit tests for discharge auto-complete (AdmissionServiceImplTest) — ✅ DONE (+ EncounterAutoCompletionServiceTest, DischargeApprovalServiceImplTest coverage)
+- [x] 7. Build, format, test, lint, JaCoCo — ✅ DONE
+- [x] 8. Commit and push — ✅ DONE
+
+> Follow-up (2026-08-19, `fix/tracker-discharge-residual-gaps`): today's staff-less encounters were still invisible on the board — `findAllByHospitalAndDateRange` used inner `JOIN FETCH e.staff` while the carry-over query used LEFT JOIN, so an unassigned walk-in only appeared the *next* day as a carry-over. Both queries now LEFT JOIN. Discharge via the approval flow now completes encounters too, and tracker boards get WebSocket pushes on discharge instead of waiting for the next poll.
 
 ---
 ---

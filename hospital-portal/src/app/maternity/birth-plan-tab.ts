@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -22,6 +22,7 @@ type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
   imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './birth-plan-tab.html',
   styleUrl: './maternity.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class BirthPlanTabComponent implements OnInit {
   private readonly birthPlanService = inject(BirthPlanService);
@@ -60,7 +61,6 @@ export class BirthPlanTabComponent implements OnInit {
   loading = signal(false);
   page = signal(0);
   totalPages = signal(0);
-  total = signal(0);
   filterPatient = signal<PatientResponse | null>(null);
 
   showPlanModal = signal(false);
@@ -118,13 +118,19 @@ export class BirthPlanTabComponent implements OnInit {
     const filter = this.filter();
     if (filter === 'pending-review' && !this.canSeePendingReview) return;
     this.loading.set(true);
+    // The dedicated pending-review endpoint takes no patientId, so with a
+    // patient selected it would silently list every patient's pending plans
+    // under a patient-filtered UI. Use the search endpoint (which supports
+    // both filters) whenever a patient is picked.
+    const patientId = this.filterPatient()?.id;
     const source =
-      filter === 'pending-review'
+      filter === 'pending-review' && !patientId
         ? this.birthPlanService.pendingReview(this.hospitalId ?? undefined, this.page())
         : this.birthPlanService.search({
             hospitalId: this.hospitalId ?? undefined,
-            patientId: this.filterPatient()?.id,
-            providerReviewed: filter === 'reviewed' ? true : undefined,
+            patientId,
+            providerReviewed:
+              filter === 'reviewed' ? true : filter === 'pending-review' ? false : undefined,
             page: this.page(),
             size: 20,
           });
@@ -132,7 +138,6 @@ export class BirthPlanTabComponent implements OnInit {
       next: (result) => {
         this.plans.set(result?.content ?? []);
         this.totalPages.set(result?.totalPages ?? 0);
-        this.total.set(result?.totalElements ?? 0);
         this.loading.set(false);
       },
       error: () => {
