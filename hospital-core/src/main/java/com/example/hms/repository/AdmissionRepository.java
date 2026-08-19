@@ -168,4 +168,7 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
         String externalVisitNumber,
         UUID hospitalId
     );
+
+    /** Hospital-scoped tile count for the super-admin dashboard. */
+    long countByHospital_Id(UUID hospitalId);
 }

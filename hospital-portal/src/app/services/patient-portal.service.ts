@@ -723,7 +723,7 @@ interface PageWrapper<T> {
 @Injectable({ providedIn: 'root' })
 export class PatientPortalService {
   private readonly http = inject(HttpClient);
-  private readonly base = '/api/me/patient';
+  private readonly base = '/me/patient';
 
   private unwrapData<T>(response: ApiMaybeWrapped<T> | null | undefined): T | null | undefined {
     if (response && typeof response === 'object' && 'data' in response) {

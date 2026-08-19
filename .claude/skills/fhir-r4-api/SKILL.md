@@ -347,6 +347,57 @@ read-your-own-write semantics.
 - `docs/runbooks/fhir-write-api.md` — Patient + Encounter + Observation write runbook
 - `docs/fhir-bulk.md` — `$export` + `$everything` runbook (row 21 + 22)
 
+## `$everything` and per-section pagination
+
+The Patient-compartment `$everything` follow-on (multi-row review,
+2026-05-18) surfaced three patterns worth pinning so the next
+compartment-export operation doesn't repeat them.
+
+**Page-returning repositories drive `Bundle.link[next]`.** A section's
+"more rows beyond this page" signal is `Page.hasNext()`; a `List<T>`
+with a `Pageable` argument is identical to a query without paging
+from the next-link logic's perspective. For every section that
+participates in the continuation cursor (vitals, labs, encounters,
+prescriptions), the repository method MUST return `Page<T>`. Use
+`findPageBy...` naming when the list-returning sibling has to stay
+for other callers.
+
+**Per-resource section helpers + `SectionContext`.** The orchestrator
+method (`everythingForPatient`) shouldn't carry per-section inline
+loops + filter chains + page-overflow accumulators — that's a
+Sonar "Brain Method" trigger at ~5 sections. The shape that scales:
+
+- A private inner static `SectionContext` carrying `patientId`,
+  `hospitalId`, `params`, the prebuilt `PageRequest`, and the
+  `hasMore` accumulator.
+- One `append<Section>(Bundle, SectionContext)` private method per
+  resource type. Each calls its repository, increments `hasMore`,
+  filters by `_since`, and mutates the Bundle in place.
+- The orchestrator becomes a flat list of `append*Section` calls
+  + final `setTotal` + optional `link[next]` emission.
+
+**`_type` blank means "no filter," not "malformed."** The
+`PatientEverythingParams.parseTypeList(String)` method already
+treats blank / whitespace as absent. Provider Javadoc that says
+blank `_type` surfaces as `400 + OperationOutcome(VALUE)` is wrong —
+the documentation must match the implementation. Either rewrite the
+Javadoc to say "blank `_type` applies no type filter" or add
+explicit blank-rejection at the parser. The Bulk Data spec's
+malformed `_since` / `_outputFormat` rule is different and DOES
+require 400 — those parsers throw `InvalidRequestException`.
+
+**Patient resource itself emits ONLY on the first page.** A cursored
+section iteration that doesn't gate the Patient entry on
+`ctx.isFirstPage()` will repeat the Patient resource on every page,
+inflating the Bundle and breaking the FHIR consumer's expectation
+that the Patient appears exactly once.
+
+**`Patient/` is a duplicated literal (Sonar S1192).** The `$everything`
+response builders mention `Patient/<uuid>` in several places (cursor
+URL, OperationOutcome diagnostics, audit description). Extract a
+`private static final String PATIENT_PREFIX = "Patient/";` constant
+near the top of the class as soon as you write the third occurrence.
+
 ## Roadmap context
 
 - Row 20: FHIR write API. Patient PUT + conditional POST shipped on

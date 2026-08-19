@@ -9,10 +9,12 @@ import {
   LabResultTrendPoint,
   LabResultRequest,
   LabOrderResponse,
+  LabResultComparison,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { AuthService } from '../../auth/auth.service';
 import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 
@@ -29,6 +31,7 @@ export class LabResultsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly profileService = inject(ProfileService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
 
@@ -40,9 +43,51 @@ export class LabResultsComponent implements OnInit {
   results = signal<LabResultResponse[]>([]);
   filtered = signal<LabResultResponse[]>([]);
   searchTerm = '';
-  activeTab = signal<'all' | 'released' | 'pending'>('all');
+  activeTab = signal<'all' | 'released' | 'pending' | 'critical'>('all');
 
   stats = signal({ total: 0, released: 0, pending: 0 });
+
+  /* ── Critical queue ── */
+  criticalList = signal<LabResultResponse[]>([]);
+  criticalLoading = signal(false);
+
+  /* ── Sign ── */
+  showSignModal = signal(false);
+  signTarget = signal<LabResultResponse | null>(null);
+  signForm = { signature: '', notes: '' };
+  signSubmitting = signal(false);
+
+  /* ── Comparison ── */
+  comparison = signal<LabResultComparison | null>(null);
+  comparisonLoading = signal(false);
+
+  readonly canSign = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+  ]);
+  /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
+  readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_QUALITY_MANAGER',
+    'ROLE_HOSPITAL_ADMIN',
+  ]);
+  /** POST /{id}/acknowledge — intersection of @PreAuthorize and SecurityConfig matcher. */
+  readonly canAcknowledge = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+  ]);
+
+  private hospitalId(): string | null {
+    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
+  }
 
   orders = signal<LabOrderResponse[]>([]);
   private activeAssignmentId = '';
@@ -231,14 +276,34 @@ export class LabResultsComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'all' | 'released' | 'pending'): void {
+  setTab(tab: 'all' | 'released' | 'pending' | 'critical'): void {
     this.activeTab.set(tab);
+    if (tab === 'critical') {
+      this.loadCritical();
+    }
     this.applyFilter();
   }
 
+  loadCritical(): void {
+    const hospitalId = this.hospitalId();
+    if (!hospitalId || !this.canSeeCritical) return;
+    this.criticalLoading.set(true);
+    this.labService.criticalUnacknowledged(hospitalId).subscribe({
+      next: (list) => {
+        this.criticalList.set(list ?? []);
+        this.criticalLoading.set(false);
+        this.applyFilter();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('LAB_RESULTS.CRITICAL_LOAD_ERROR'));
+        this.criticalLoading.set(false);
+      },
+    });
+  }
+
   applyFilter(): void {
-    let list = this.results();
     const tab = this.activeTab();
+    let list = tab === 'critical' ? this.criticalList() : this.results();
     if (tab === 'released') {
       list = list.filter((r) => r.released);
     } else if (tab === 'pending') {
@@ -314,6 +379,90 @@ export class LabResultsComponent implements OnInit {
     const delta = current - previous;
     const sign = delta > 0 ? '+' : '';
     return `${sign}${delta.toFixed(2)}`;
+  }
+
+  /* ── Sign / acknowledge / compare ── */
+
+  openSign(r: LabResultResponse): void {
+    this.signTarget.set(r);
+    this.signForm = { signature: '', notes: '' };
+    this.showSignModal.set(true);
+  }
+
+  closeSign(): void {
+    this.showSignModal.set(false);
+    this.signTarget.set(null);
+  }
+
+  submitSign(): void {
+    const target = this.signTarget();
+    if (!target) return;
+    this.signSubmitting.set(true);
+    this.labService
+      .signResult(target.id, {
+        signature: this.signForm.signature.trim() || undefined,
+        notes: this.signForm.notes.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('LAB_RESULTS.SIGNED'));
+          this.signSubmitting.set(false);
+          this.closeSign();
+          this.loadResults();
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
+          this.signSubmitting.set(false);
+        },
+      });
+  }
+
+  acknowledge(r: LabResultResponse): void {
+    this.labService.acknowledgeResult(r.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB_RESULTS.ACKNOWLEDGED'));
+        // Patch the row in place — no need to refetch 200 results for one flag.
+        const patch = (list: LabResultResponse[]): LabResultResponse[] =>
+          list.map((row) => (row.id === r.id ? { ...row, acknowledged: true } : row));
+        this.results.update(patch);
+        this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
+        this.applyFilter();
+      },
+      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR')),
+    });
+  }
+
+  openCompare(r: LabResultResponse): void {
+    this.comparisonLoading.set(true);
+    this.labService.compareResult(r.id).subscribe({
+      next: (cmp) => {
+        this.comparison.set(cmp);
+        this.comparisonLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
+        this.comparisonLoading.set(false);
+      },
+    });
+  }
+
+  closeCompare(): void {
+    this.comparison.set(null);
+  }
+
+  trendIcon(direction: string | null | undefined): string {
+    switch (direction) {
+      case 'INCREASING':
+        return 'trending_up';
+      case 'DECREASING':
+        return 'trending_down';
+      case 'STABLE':
+        return 'trending_flat';
+      case 'FLUCTUATING':
+        return 'show_chart';
+      default:
+        return 'help';
+    }
   }
 
   getSeverityClass(flag: string): string {

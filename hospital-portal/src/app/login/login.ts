@@ -315,6 +315,18 @@ export class Login implements OnInit, AfterViewInit {
           if (jwtRoles.length === 1) {
             this.roleContext.activeRole = jwtRoles[0];
           }
+          // Cross-tenant (design call #5): super-admins land on every list
+          // page in "all hospitals" mode by default. Without this seed,
+          // _globalView stays at its default (false) and the auth
+          // interceptor falls back to _activeHospitalId — silently
+          // scoping every request to the JWT primary hospital even
+          // though the dropdown shows "All hospitals". That mismatch
+          // showed up as "/consultations returns [] but tile says 3"
+          // for super-admins whose primary hospital had no consultations.
+          // app.component.ts already does this on hard-refresh /
+          // re-hydration; this seeds the same state on the cold-login
+          // path so the bug doesn't appear in the brand-new session.
+          this.roleContext.markSuperAdminGlobalDefaults();
 
           // ── Session bootstrap (Task 6): fetch authoritative context from DB ──
           // Replaces client-side JWT decoding for hospital_id resolution.
@@ -342,6 +354,12 @@ export class Login implements OnInit, AfterViewInit {
                 } else if (bootstrap.primaryHospitalId) {
                   this.roleContext.activeHospitalId = bootstrap.primaryHospitalId;
                 }
+                // Re-seed global view from the bootstrap roles in case
+                // bsRoles differs from jwtRoles (e.g. a SUPER_ADMIN role
+                // that wasn't in the JWT but IS in the DB-authoritative
+                // bootstrap response). Idempotent — no-op if already
+                // marked or if the user isn't a super-admin.
+                this.roleContext.markSuperAdminGlobalDefaults();
 
                 const profile: LoginUserProfile = {
                   id: bootstrap.userId,

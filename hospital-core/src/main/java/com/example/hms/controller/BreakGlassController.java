@@ -85,8 +85,14 @@ public class BreakGlassController {
     @Operation(summary = "Find the caller's live session for a patient",
                description = "Used by clients that need to know whether the current user already holds "
                            + "an emergency-access session for the patient (e.g. before showing the "
-                           + "'Declare break-glass' button).")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+                           + "'Declare break-glass' button). Receptionists are allowed because the "
+                           + "patient-detail page they share with clinicians renders the break-glass "
+                           + "banner on this endpoint; a 403 here would surface as a noisy error "
+                           + "card on every patient open. Receptionists who lack the clinical-role "
+                           + "predicate get 204 No Content (never an active session), so the "
+                           + "endpoint stays informational without granting any data they shouldn't "
+                           + "see — the heavier {@code /active} listing remains clinician-only.")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     public ResponseEntity<BreakGlassSessionResponseDTO> findMyLiveSession(
             @RequestParam UUID patientId) {
         Optional<BreakGlassSessionResponseDTO> live =

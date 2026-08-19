@@ -579,3 +579,60 @@
     height: 1rem;
   }
 }
+
+/* ---- Reflex rules additions ---- */
+
+.reflex-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #ececf4;
+  }
+
+  code {
+    background: #f6f6fb;
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+}
+
+.reflex-empty {
+  color: #8a8aa3;
+  font-style: italic;
+}
+
+.reflex-form-title {
+  margin: 18px 0 10px;
+  font-size: 0.95rem;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.badge-active {
+  background: #e6f7ed;
+  color: #1a7f43;
+}
+
+.checkbox-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

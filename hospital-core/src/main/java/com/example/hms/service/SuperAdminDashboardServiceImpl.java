@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.mapper.LabOrderMapper;
+import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -35,6 +36,8 @@ import com.example.hms.repository.StaffAvailabilityRepository;
 import com.example.hms.repository.TreatmentPlanRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -47,6 +50,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -82,6 +86,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final GeneralReferralService generalReferralService;
     private final LabOrderMapper labOrderMapper;
     private final AdmissionMapper admissionMapper;
+    private final PrescriptionMapper prescriptionMapper;
 
     /**
      * BaseEntity-mapped property name reused as the tiebreaker / null-safety
@@ -151,15 +156,51 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long todayAppointmentsCount = appointmentRepository
                 .countByAppointmentDateBetween(LocalDate.now(), LocalDate.now());
 
-        long totalEncounters = encounterRepository.count();
-        long totalConsultations = consultationRepository.count();
-        long totalLabOrders = labOrderRepository.count();
-        long totalLabResults = labResultRepository.count();
+        // ── Chip-aware clinical tile counts ────────────────────────────
+        // When the super-admin has pinned a hospital chip (X-Hospital-Id
+        // header → ctx.isHeaderOverridden=true), the dashboard tile
+        // MUST reflect that scope so it matches the corresponding list
+        // page (e.g. /consultations). Without this, a super-admin chip-
+        // scoped to Hospital D sees tile=3 (system-wide) but list=0
+        // (Hospital D has no consultations) — exactly the symptom the
+        // develop-deployment review surfaced. "All hospitals" view
+        // (no chip / no header) falls back to the system-wide count().
+        //
+        // We trust ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
+        // the authority predicate — see the ConsultationServiceImpl
+        // global-view carve-out for the same security trade-off.
+        // Lab test definitions are reference data (catalog), not
+        // tenant-scoped, so its count is always system-wide.
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        UUID chipScope = (ctx.isSuperAdmin() && ctx.isHeaderOverridden())
+            ? ctx.getActiveHospitalId()
+            : null;
+
+        long totalEncounters = (chipScope != null)
+            ? encounterRepository.countByHospital_Id(chipScope)
+            : encounterRepository.count();
+        long totalConsultations = (chipScope != null)
+            ? consultationRepository.countByHospital_Id(chipScope)
+            : consultationRepository.count();
+        long totalLabOrders = (chipScope != null)
+            ? labOrderRepository.countByHospital_Id(chipScope)
+            : labOrderRepository.count();
+        long totalLabResults = (chipScope != null)
+            ? labResultRepository.countByLabOrder_Hospital_Id(chipScope)
+            : labResultRepository.count();
         long totalLabTestDefinitions = labTestDefinitionRepository.count();
-        long totalAdmissions = admissionRepository.count();
-        long totalPrescriptions = prescriptionRepository.count();
-        long totalTreatmentPlans = treatmentPlanRepository.count();
-        long totalReferrals = generalReferralRepository.count();
+        long totalAdmissions = (chipScope != null)
+            ? admissionRepository.countByHospital_Id(chipScope)
+            : admissionRepository.count();
+        long totalPrescriptions = (chipScope != null)
+            ? prescriptionRepository.countByHospital_Id(chipScope)
+            : prescriptionRepository.count();
+        long totalTreatmentPlans = (chipScope != null)
+            ? treatmentPlanRepository.countByHospital_Id(chipScope)
+            : treatmentPlanRepository.count();
+        long totalReferrals = (chipScope != null)
+            ? generalReferralRepository.countByHospital_Id(chipScope)
+            : generalReferralRepository.count();
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));
@@ -316,7 +357,19 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         // entity (`dispatchedAt`, `acknowledgedAt`, `cosignedAt`) are
         // workflow-stage events that are null for most rows.
         var pageable = PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, CREATED_AT));
-        return prescriptionService.list(null, null, null, pageable, locale).getContent();
+        // Hit the repository directly rather than going through
+        // PrescriptionService.list — the service enforces
+        // roleValidator.requireActiveHospitalId() and filters to the
+        // active hospital, which produces a count-vs-content mismatch
+        // on the super-admin dashboard (totalPrescriptions counts
+        // system-wide via prescriptionRepository.count() but the
+        // service-filtered list returns 0 when the super-admin has
+        // no hospital pin). The other unscoped getRecent* methods
+        // (getRecentAdmissions, getRecentLabOrders) already use this
+        // direct-repo pattern.
+        return prescriptionRepository.findAll(pageable)
+            .map(prescriptionMapper::toResponseDTO)
+            .getContent();
     }
 
     @Override

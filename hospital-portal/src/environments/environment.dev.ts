@@ -5,6 +5,7 @@ export const environment = {
   name: 'dev' satisfies EnvironmentName,
   apiUrl: '/api',
   apiBase: '/api',
+  gaTrackingId: '',
   faroCollectorUrl: '',
   // Hosted dev tier (Railway, served at https://hms.dev.bitnesttechs.com).
   // Targets the per-env Railway Keycloak provisioned per

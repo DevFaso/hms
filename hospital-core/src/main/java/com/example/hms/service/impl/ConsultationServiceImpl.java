@@ -20,6 +20,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
@@ -183,8 +185,32 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status) {
-        // ── Tenant isolation: non-superadmin scoped to active hospital ──
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // ── Tenant isolation ──
+        // Super-admin in global view (no chip / no X-Hospital-Id header)
+        // gets the unscoped path so the list matches the dashboard tile,
+        // which uses consultationRepository.count() (no scope filter).
+        // Without this carve-out, a super-admin whose JWT carries a
+        // primary-hospital fallback would see a scoped list (often 0)
+        // while the dashboard count shows the system-wide total —
+        // exactly the symptom the develop-deployment review surfaced
+        // (count tile 3, list page "No consultations across any of your
+        // hospitals"). Mirrors the SuperAdminDashboardServiceImpl
+        // getRecentPrescriptions fix and the
+        // ConsultationServiceImpl#getRecentForSuperAdmin pattern.
+        //
+        // We use ONLY the JWT-claim signal (ctx.isSuperAdmin()), NOT
+        // RoleValidator.isSuperAdminFromAuth(). Authority-based detection
+        // can be true in impersonation / authority-inflation flows where
+        // the principal holds the ROLE_SUPER_ADMIN authority but the JWT
+        // claim isn't set; trusting it for cross-tenant access would
+        // widen the blast radius of a stolen / inflated authority list.
+        // The JWT claim is the load-bearing signal RoleValidator's own
+        // step 1 trusts (Copilot review on PR fix branch).
+        HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
+        boolean superAdminGlobal = ctx.isSuperAdmin() && !ctx.isHeaderOverridden();
+        UUID activeHospitalId = superAdminGlobal
+            ? null
+            : roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
             // Sonar S6809: route through the proxy so the inner
             // method's @Transactional(readOnly=true) is honored.

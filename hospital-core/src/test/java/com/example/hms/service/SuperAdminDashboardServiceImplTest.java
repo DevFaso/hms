@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.mapper.LabOrderMapper;
+import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.model.Admission;
 import com.example.hms.model.AuditEventLog;
@@ -93,6 +94,7 @@ class SuperAdminDashboardServiceImplTest {
     @Mock private GeneralReferralService generalReferralService;
     @Mock private LabOrderMapper labOrderMapper;
     @Mock private AdmissionMapper admissionMapper;
+    @Mock private PrescriptionMapper prescriptionMapper;
 
     @InjectMocks private SuperAdminDashboardServiceImpl service;
 
@@ -112,6 +114,14 @@ class SuperAdminDashboardServiceImplTest {
     @org.junit.jupiter.api.BeforeEach
     void wireSelf() {
         service.setSelf(service);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearHospitalContext() {
+        // The new chip-aware getSummary path reads HospitalContextHolder.
+        // Clear after each test so a sibling test that expects an empty
+        // (global) context doesn't see leaked super-admin/chip state.
+        com.example.hms.security.context.HospitalContextHolder.clear();
     }
 
     @Test
@@ -234,6 +244,99 @@ class SuperAdminDashboardServiceImplTest {
         assertThat(result.getTotalReferrals()).isEqualTo(99L);
     }
 
+    /**
+     * Chip-aware tile counts (super-admin pinned to a single hospital
+     * via X-Hospital-Id header) MUST use the hospital-scoped count
+     * methods so the dashboard tile matches the corresponding list
+     * page (e.g. /consultations). Without this carve-out, the dashboard
+     * tile shows the system-wide count while the chip-scoped list
+     * shows only the chip's hospital — the "tile=3 / list=0" UX trap
+     * the develop-deployment review surfaced.
+     */
+    @Test
+    void getSummary_superAdminChipScoped_usesHospitalScopedCounts() {
+        java.util.UUID chip = java.util.UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true)
+                .headerOverridden(true)
+                .activeHospitalId(chip)
+                .build());
+
+        when(encounterRepository.countByHospital_Id(chip)).thenReturn(1L);
+        when(consultationRepository.countByHospital_Id(chip)).thenReturn(2L);
+        when(labOrderRepository.countByHospital_Id(chip)).thenReturn(3L);
+        when(labResultRepository.countByLabOrder_Hospital_Id(chip)).thenReturn(4L);
+        when(labTestDefinitionRepository.count()).thenReturn(55L); // catalog stays system-wide
+        when(admissionRepository.countByHospital_Id(chip)).thenReturn(6L);
+        when(prescriptionRepository.countByHospital_Id(chip)).thenReturn(7L);
+        when(treatmentPlanRepository.countByHospital_Id(chip)).thenReturn(8L);
+        when(generalReferralRepository.countByHospital_Id(chip)).thenReturn(9L);
+        when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        SuperAdminSummaryDTO result = service.getSummary(10);
+
+        // Scoped counts (chip-aware path)
+        assertThat(result.getTotalEncounters()).isEqualTo(1L);
+        assertThat(result.getTotalConsultations()).isEqualTo(2L);
+        assertThat(result.getTotalLabOrders()).isEqualTo(3L);
+        assertThat(result.getTotalLabResults()).isEqualTo(4L);
+        assertThat(result.getTotalAdmissions()).isEqualTo(6L);
+        assertThat(result.getTotalPrescriptions()).isEqualTo(7L);
+        assertThat(result.getTotalTreatmentPlans()).isEqualTo(8L);
+        assertThat(result.getTotalReferrals()).isEqualTo(9L);
+        // Reference-data catalog stays system-wide
+        assertThat(result.getTotalLabTestDefinitions()).isEqualTo(55L);
+
+        // Crucially, the unscoped count() methods on the clinical
+        // repos are NEVER called on the chip path — that would defeat
+        // the carve-out and surface the system-wide total in the tile.
+        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never()).count();
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never()).count();
+        org.mockito.Mockito.verify(prescriptionRepository, org.mockito.Mockito.never()).count();
+    }
+
+    /**
+     * Super-admin global view (no X-Hospital-Id header → headerOverridden
+     * false) AND non-superadmin (empty context) BOTH take the
+     * system-wide {@code count()} path. The chip-aware short-circuit
+     * fires only on the {@code (isSuperAdmin && isHeaderOverridden)}
+     * conjunction.
+     */
+    @Test
+    void getSummary_superAdminGlobalView_usesSystemWideCount() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .superAdmin(true)
+                .headerOverridden(false) // global view — no chip
+                .build());
+
+        when(consultationRepository.count()).thenReturn(99L);
+        when(encounterRepository.count()).thenReturn(11L);
+        when(admissionRepository.count()).thenReturn(66L);
+        when(labOrderRepository.count()).thenReturn(33L);
+        when(labResultRepository.count()).thenReturn(44L);
+        when(labTestDefinitionRepository.count()).thenReturn(55L);
+        when(prescriptionRepository.count()).thenReturn(77L);
+        when(treatmentPlanRepository.count()).thenReturn(88L);
+        when(generalReferralRepository.count()).thenReturn(99L);
+        when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        SuperAdminSummaryDTO result = service.getSummary(10);
+
+        assertThat(result.getTotalConsultations()).isEqualTo(99L);
+        // The chip-scoped count methods MUST NOT be invoked on the
+        // global path.
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never())
+            .countByHospital_Id(any());
+        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never())
+            .countByHospital_Id(any());
+        org.mockito.Mockito.verify(labResultRepository, org.mockito.Mockito.never())
+            .countByLabOrder_Hospital_Id(any());
+    }
+
     @Test
     void getRecentConsultations_delegatesToPagedSuperAdminQuery() {
         when(consultationService.getRecentForSuperAdmin(any(Pageable.class)))
@@ -244,13 +347,22 @@ class SuperAdminDashboardServiceImplTest {
     }
 
     @Test
-    void getRecentPrescriptions_delegatesToList() {
-        Page<PrescriptionResponseDTO> page = new PageImpl<>(List.of(new PrescriptionResponseDTO()));
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any(Locale.class)))
-            .thenReturn(page);
+    void getRecentPrescriptions_queriesRepositoryDirectly() {
+        // PR review fix: getRecentPrescriptions now hits the repository
+        // directly (PrescriptionMapper) rather than going through
+        // PrescriptionService.list — the service enforces the active
+        // hospital scope, which produced a count-vs-content mismatch on
+        // the super-admin dashboard (summary count was system-wide via
+        // prescriptionRepository.count(); the list was filtered).
+        com.example.hms.model.Prescription pres = new com.example.hms.model.Prescription();
+        when(prescriptionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(pres)));
+        when(prescriptionMapper.toResponseDTO(pres)).thenReturn(new PrescriptionResponseDTO());
 
         List<PrescriptionResponseDTO> result = service.getRecentPrescriptions(5, Locale.ENGLISH);
         assertThat(result).hasSize(1);
+        org.mockito.Mockito.verify(prescriptionService, org.mockito.Mockito.never())
+            .list(any(), any(), any(), any(Pageable.class), any());
     }
 
     @Test
@@ -441,14 +553,13 @@ class SuperAdminDashboardServiceImplTest {
         // write event for this entity (no separate clinical-time field
         // is universally populated). Lock the choice with a test so a
         // future "consistency" refactor doesn't silently change it.
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
+        when(prescriptionRepository.findAll(any(Pageable.class)))
             .thenReturn(new PageImpl<>(java.util.List.of()));
 
         service.getRecentPrescriptions(5, Locale.ENGLISH);
 
         org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
-        org.mockito.Mockito.verify(prescriptionService)
-            .list(any(), any(), any(), captor.capture(), any());
+        org.mockito.Mockito.verify(prescriptionRepository).findAll(captor.capture());
         assertSortOrdersStartWith(captor.getValue(), "createdAt");
     }
 
@@ -489,10 +600,13 @@ class SuperAdminDashboardServiceImplTest {
             .thenReturn(new PageImpl<>(java.util.List.of(adm)));
         AdmissionResponseDTO admDto = new AdmissionResponseDTO();
         when(admissionMapper.toResponseDTO(adm)).thenReturn(admDto);
-        // Prescriptions
+        // Prescriptions — repository + mapper (post-PR-review fix, see
+        // getRecentPrescriptions_queriesRepositoryDirectly above).
+        com.example.hms.model.Prescription pres = new com.example.hms.model.Prescription();
+        when(prescriptionRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(java.util.List.of(pres)));
         PrescriptionResponseDTO presDto = new PrescriptionResponseDTO();
-        when(prescriptionService.list(any(), any(), any(), any(Pageable.class), any()))
-            .thenReturn(new PageImpl<>(java.util.List.of(presDto)));
+        when(prescriptionMapper.toResponseDTO(pres)).thenReturn(presDto);
         // Treatment plans
         TreatmentPlanResponseDTO planDto = new TreatmentPlanResponseDTO();
         when(treatmentPlanService.listAll(any(), any(Pageable.class)))

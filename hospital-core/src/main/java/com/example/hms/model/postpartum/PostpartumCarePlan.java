@@ -5,6 +5,7 @@ import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.neonatal.NewbornAssessment;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -50,7 +51,7 @@ import java.util.List;
         @Index(name = "idx_postpartum_plan_active", columnList = "active")
     }
 )
-@EqualsAndHashCode(callSuper = true, exclude = {"patient", "hospital", "registration", "observations"})
+@EqualsAndHashCode(callSuper = true, exclude = {"patient", "hospital", "registration", "newbornAssessment", "observations"})
 public class PostpartumCarePlan extends BaseEntity {
 
     public static final int IMMEDIATE_INTERVAL_MINUTES = 15;
@@ -75,6 +76,19 @@ public class PostpartumCarePlan extends BaseEntity {
     @JoinColumn(name = "registration_id",
         foreignKey = @ForeignKey(name = "fk_postpartum_plan_registration"))
     private PatientHospitalRegistration registration;
+
+    /**
+     * Cross-service link to the infant's newborn assessment (roadmap
+     * row 41 follow-on, V106). Nullable: a plan can predate the
+     * assessment, and not every plan tracks a newborn (fetal loss /
+     * adoption). When populated, the PostpartumCare→ImmunizationService
+     * auto-enqueue path (named row-41 follow-on) reads this to know
+     * which infant's immunizations to schedule.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "newborn_assessment_id",
+        foreignKey = @ForeignKey(name = "fk_postpartum_plan_newborn_assessment"))
+    private NewbornAssessment newbornAssessment;
 
     @Column(name = "delivery_occurred_at")
     private LocalDateTime deliveryOccurredAt;

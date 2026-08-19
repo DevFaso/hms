@@ -1,0 +1,694 @@
+<div class="chart-container">
+  <div class="chart-tabs">
+    @if (canViewAllergies) {
+      <button
+        type="button"
+        class="chart-tab"
+        [class.active]="section() === 'allergies'"
+        (click)="setSection('allergies')"
+      >
+        {{ 'CHART.ALLERGIES' | translate }}
+      </button>
+    }
+    @if (canViewProblems) {
+      <button
+        type="button"
+        class="chart-tab"
+        [class.active]="section() === 'problems'"
+        (click)="setSection('problems')"
+      >
+        {{ 'CHART.PROBLEMS' | translate }}
+      </button>
+    }
+    @if (canViewUpdates) {
+      <button
+        type="button"
+        class="chart-tab"
+        [class.active]="section() === 'updates'"
+        (click)="setSection('updates')"
+      >
+        {{ 'CHART.UPDATES' | translate }}
+      </button>
+    }
+    @if (canViewTimeline) {
+      <button
+        type="button"
+        class="chart-tab"
+        [class.active]="section() === 'timeline'"
+        (click)="setSection('timeline')"
+      >
+        {{ 'CHART.TIMELINE' | translate }}
+      </button>
+    }
+  </div>
+
+  <!-- ══ Allergies ══ -->
+  @if (section() === 'allergies' && canViewAllergies) {
+    <div class="section-toolbar">
+      @if (canEditAllergies) {
+        <button type="button" class="btn-primary btn-sm" (click)="openAddAllergy()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'CHART.ADD_ALLERGY' | translate }}
+        </button>
+      }
+    </div>
+    @if (allergiesLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (allergies().length === 0) {
+      <p class="empty-hint">{{ 'CHART.NO_ALLERGIES' | translate }}</p>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'CHART.ALLERGEN' | translate }}</th>
+              <th scope="col">{{ 'CHART.CATEGORY' | translate }}</th>
+              <th scope="col">{{ 'CHART.SEVERITY' | translate }}</th>
+              <th scope="col">{{ 'CHART.VERIFICATION' | translate }}</th>
+              <th scope="col">{{ 'CHART.REACTION' | translate }}</th>
+              <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              @if (canEditAllergies) {
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of allergies(); track a.id) {
+              <tr [class.inactive-row]="a.active === false">
+                <td>
+                  <strong>{{ a.allergenDisplay }}</strong>
+                </td>
+                <td>{{ a.category || '—' }}</td>
+                <td>
+                  <span [class]="severityClass(a.severity)">{{
+                    a.severity ? ('CHART.SEVERITY_' + a.severity | translate) : '—'
+                  }}</span>
+                </td>
+                <td>
+                  {{
+                    a.verificationStatus ? ('CHART.VERIF_' + a.verificationStatus | translate) : '—'
+                  }}
+                </td>
+                <td>{{ a.reaction || '—' }}</td>
+                <td>{{ a.onsetDate ? (a.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>
+                  {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
+                </td>
+                @if (canEditAllergies) {
+                  <td>
+                    <div class="action-group">
+                      <button
+                        type="button"
+                        class="action-link"
+                        (click)="openEditAllergy(a)"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      @if (a.active !== false) {
+                        <button
+                          type="button"
+                          class="action-link delete-link"
+                          (click)="openDeactivateAllergy(a)"
+                          [title]="'CHART.DEACTIVATE' | translate"
+                        >
+                          <span class="material-symbols-outlined">block</span>
+                        </button>
+                      }
+                    </div>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Problems / diagnoses ══ -->
+  @if (section() === 'problems' && canViewProblems) {
+    <div class="section-toolbar">
+      <label class="row-check">
+        <input type="checkbox" [checked]="includeHistorical()" (change)="toggleHistorical()" />
+        {{ 'CHART.INCLUDE_HISTORICAL' | translate }}
+      </label>
+      @if (canEditProblems) {
+        <button type="button" class="btn-primary btn-sm" (click)="openAddProblem()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'CHART.ADD_PROBLEM' | translate }}
+        </button>
+      }
+    </div>
+    @if (problemsLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (problems().length === 0) {
+      <p class="empty-hint">{{ 'CHART.NO_PROBLEMS' | translate }}</p>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'CHART.PROBLEM' | translate }}</th>
+              <th scope="col">{{ 'CHART.CODE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'CHART.SEVERITY' | translate }}</th>
+              <th scope="col">{{ 'CHART.ONSET' | translate }}</th>
+              <th scope="col">{{ 'CHART.CHRONIC' | translate }}</th>
+              @if (canEditProblems) {
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of problems(); track p.id) {
+              <tr>
+                <td>
+                  <strong>{{ p.problemDisplay }}</strong>
+                  @if (p.notes) {
+                    <div class="cell-secondary">{{ p.notes }}</div>
+                  }
+                </td>
+                <td>{{ p.problemCode || '—' }}</td>
+                <td>
+                  <span [class]="problemStatusClass(p.status)">{{
+                    p.status ? ('CHART.PSTATUS_' + p.status | translate) : '—'
+                  }}</span>
+                </td>
+                <td>
+                  <span [class]="severityClass(p.severity)">{{
+                    p.severity ? ('CHART.SEVERITY_' + p.severity | translate) : '—'
+                  }}</span>
+                </td>
+                <td>{{ p.onsetDate ? (p.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
+                @if (canEditProblems) {
+                  <td>
+                    <div class="action-group">
+                      <button
+                        type="button"
+                        class="action-link"
+                        (click)="openEditProblem(p)"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="action-link delete-link"
+                        (click)="openDeleteProblem(p)"
+                        [title]="'COMMON.DELETE' | translate"
+                      >
+                        <span class="material-symbols-outlined">delete</span>
+                      </button>
+                    </div>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Chart updates ══ -->
+  @if (section() === 'updates' && canViewUpdates) {
+    <div class="section-toolbar">
+      @if (canCreateUpdates) {
+        <button type="button" class="btn-primary btn-sm" (click)="openCreateUpdate()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'CHART.NEW_UPDATE' | translate }}
+        </button>
+      }
+    </div>
+    @if (updatesLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (updates().length === 0) {
+      <p class="empty-hint">{{ 'CHART.NO_UPDATES' | translate }}</p>
+    } @else {
+      <div class="updates-list">
+        @for (u of updates(); track u.id) {
+          <div class="update-card">
+            <button type="button" class="update-header" (click)="toggleUpdate(u)">
+              <span class="update-version">v{{ u.versionNumber }}</span>
+              <span class="update-reason">{{ u.updateReason }}</span>
+              <span class="update-meta">
+                {{ u.recordedByName }} — {{ u.recordedAt | date: 'short' }}
+              </span>
+              <span class="material-symbols-outlined">
+                {{ expandedUpdateId() === u.id ? 'expand_less' : 'expand_more' }}
+              </span>
+            </button>
+            @if (expandedUpdateId() === u.id) {
+              <div class="update-body">
+                @if (u.summary) {
+                  <p>{{ u.summary }}</p>
+                }
+                @if (u.sections?.length) {
+                  <ul class="update-sections">
+                    @for (s of u.sections; track s.id) {
+                      <li>
+                        <span class="section-type">{{ s.sectionType }}</span>
+                        <strong>{{ s.display }}</strong>
+                        @if (s.narrative) {
+                          <span> — {{ s.narrative }}</span>
+                        }
+                      </li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="empty-hint">{{ 'CHART.NO_SECTIONS' | translate }}</p>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ══ Timeline ══ -->
+  @if (section() === 'timeline' && canViewTimeline) {
+    @if (timelineLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (timeline(); as tl) {
+      <p class="timeline-meta">
+        {{ 'CHART.TIMELINE_REASON' | translate }}: {{ tl.accessReason }} — {{ tl.totalEntries }}
+        {{ 'CHART.ENTRIES' | translate }}
+      </p>
+      <ul class="timeline-list">
+        @for (e of tl.entries; track e.entryId) {
+          <li class="timeline-entry">
+            <span class="material-symbols-outlined timeline-icon">{{
+              timelineIcon(e.category)
+            }}</span>
+            <div>
+              <div class="timeline-summary">{{ e.summary }}</div>
+              <div class="timeline-date">
+                {{ e.category }} · {{ e.occurredAt | date: 'medium' }}
+              </div>
+            </div>
+          </li>
+        }
+      </ul>
+      <button type="button" class="btn-secondary btn-sm" (click)="openTimelineReason()">
+        {{ 'CHART.RELOAD_TIMELINE' | translate }}
+      </button>
+    } @else {
+      <p class="empty-hint">{{ 'CHART.TIMELINE_PROMPT' | translate }}</p>
+      <button type="button" class="btn-primary btn-sm" (click)="openTimelineReason()">
+        {{ 'CHART.LOAD_TIMELINE' | translate }}
+      </button>
+    }
+  }
+</div>
+
+<!-- ══ Allergy modal ══ -->
+@if (showAllergyModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAllergyModal()"
+    (keydown.escape)="closeAllergyModal()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_ALLERGY') | translate }}
+        </h2>
+        <button type="button" class="modal-close" (click)="closeAllergyModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="allergy-name">{{ 'CHART.ALLERGEN' | translate }} *</label>
+          <input id="allergy-name" type="text" [(ngModel)]="allergyForm.allergenDisplay" />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="allergy-category">{{ 'CHART.CATEGORY' | translate }}</label>
+            <input
+              id="allergy-category"
+              type="text"
+              [placeholder]="'CHART.CATEGORY_PLACEHOLDER' | translate"
+              [(ngModel)]="allergyForm.category"
+            />
+          </div>
+          <div class="field">
+            <label for="allergy-severity">{{ 'CHART.SEVERITY' | translate }}</label>
+            <select id="allergy-severity" [(ngModel)]="allergyForm.severity">
+              @for (s of severities; track s) {
+                <option [value]="s">{{ 'CHART.SEVERITY_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="allergy-verification">{{ 'CHART.VERIFICATION' | translate }}</label>
+            <select id="allergy-verification" [(ngModel)]="allergyForm.verificationStatus">
+              @for (v of verificationStatuses; track v) {
+                <option [value]="v">{{ 'CHART.VERIF_' + v | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="allergy-onset">{{ 'CHART.ONSET' | translate }}</label>
+            <input id="allergy-onset" type="date" [(ngModel)]="allergyForm.onsetDate" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="allergy-reaction">{{ 'CHART.REACTION' | translate }}</label>
+          <input id="allergy-reaction" type="text" [(ngModel)]="allergyForm.reaction" />
+        </div>
+        <div class="field">
+          <label for="allergy-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea id="allergy-notes" rows="2" [(ngModel)]="allergyForm.reactionNotes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeAllergyModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="submitAllergy()"
+          [disabled]="allergySaving()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Allergy deactivate modal ══ -->
+@if (showAllergyDeactivate()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDeactivateAllergy()"
+    (keydown.escape)="closeDeactivateAllergy()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
+        <button type="button" class="modal-close" (click)="closeDeactivateAllergy()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ deactivatingAllergy()?.allergenDisplay }}</strong>
+        </p>
+        <div class="field">
+          <label for="deactivate-reason">{{ 'CHART.REASON' | translate }} *</label>
+          <textarea id="deactivate-reason" rows="3" [(ngModel)]="deactivateReason"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeDeactivateAllergy()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="button" class="btn-danger" (click)="submitDeactivateAllergy()">
+          {{ 'CHART.DEACTIVATE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Problem modal ══ -->
+@if (showProblemModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeProblemModal()"
+    (keydown.escape)="closeProblemModal()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_PROBLEM') | translate }}
+        </h2>
+        <button type="button" class="modal-close" (click)="closeProblemModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="problem-name">{{ 'CHART.PROBLEM' | translate }} *</label>
+          <input id="problem-name" type="text" [(ngModel)]="problemForm.problemDisplay" />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="problem-code">{{ 'CHART.CODE' | translate }}</label>
+            <input
+              id="problem-code"
+              type="text"
+              placeholder="e.g. E11.9"
+              [(ngModel)]="problemForm.problemCode"
+            />
+          </div>
+          <div class="field">
+            <label for="problem-status">{{ 'COMMON.STATUS' | translate }}</label>
+            <select id="problem-status" [(ngModel)]="problemForm.status">
+              @for (s of problemStatuses; track s) {
+                <option [value]="s">{{ 'CHART.PSTATUS_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="problem-severity">{{ 'CHART.SEVERITY' | translate }}</label>
+            <select id="problem-severity" [(ngModel)]="problemForm.severity">
+              @for (s of problemSeverities; track s) {
+                <option [value]="s">{{ 'CHART.SEVERITY_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="problem-onset">{{ 'CHART.ONSET' | translate }}</label>
+            <input id="problem-onset" type="date" [(ngModel)]="problemForm.onsetDate" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="problem-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea id="problem-notes" rows="2" [(ngModel)]="problemForm.notes"></textarea>
+        </div>
+        <label class="row-check">
+          <input type="checkbox" [(ngModel)]="problemForm.chronic" />
+          {{ 'CHART.CHRONIC' | translate }}
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeProblemModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="submitProblem()"
+          [disabled]="problemSaving()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Problem delete modal ══ -->
+@if (showProblemDelete()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDeleteProblem()"
+    (keydown.escape)="closeDeleteProblem()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
+        <button type="button" class="modal-close" (click)="closeDeleteProblem()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ deletingProblem()?.problemDisplay }}</strong>
+        </p>
+        <div class="field">
+          <label for="problem-delete-reason">{{ 'CHART.REASON' | translate }} *</label>
+          <textarea
+            id="problem-delete-reason"
+            rows="3"
+            [(ngModel)]="problemDeleteReason"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeDeleteProblem()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="button" class="btn-danger" (click)="submitDeleteProblem()">
+          {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Chart update modal ══ -->
+@if (showUpdateModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeUpdateModal()"
+    (keydown.escape)="closeUpdateModal()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'CHART.NEW_UPDATE' | translate }}</h2>
+        <button type="button" class="modal-close" (click)="closeUpdateModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="update-reason">{{ 'CHART.UPDATE_REASON' | translate }} *</label>
+          <input id="update-reason" type="text" [(ngModel)]="updateForm.updateReason" />
+        </div>
+        <div class="field">
+          <label for="update-summary">{{ 'CHART.SUMMARY' | translate }}</label>
+          <textarea id="update-summary" rows="2" [(ngModel)]="updateForm.summary"></textarea>
+        </div>
+        <label class="row-check">
+          <input type="checkbox" [(ngModel)]="updateForm.notifyCareTeam" />
+          {{ 'CHART.NOTIFY_CARE_TEAM' | translate }}
+        </label>
+
+        <div class="section-heading">
+          {{ 'CHART.SECTIONS' | translate }}
+          <button type="button" class="btn-add-row" (click)="addUpdateSection()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'CHART.ADD_SECTION' | translate }}
+          </button>
+        </div>
+        <div class="dynamic-rows">
+          @for (s of updateForm.sections; track $index) {
+            <div class="dynamic-row">
+              <select
+                [(ngModel)]="s.sectionType"
+                [attr.aria-label]="'CHART.SECTION_TYPE' | translate"
+              >
+                @for (t of sectionTypes; track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+              <input
+                type="text"
+                [placeholder]="'CHART.SECTION_DISPLAY' | translate"
+                [(ngModel)]="s.display"
+              />
+              <input
+                type="text"
+                [placeholder]="'CHART.SECTION_NARRATIVE' | translate"
+                [(ngModel)]="s.narrative"
+              />
+              <button
+                type="button"
+                class="btn-icon-danger"
+                (click)="removeUpdateSection($index)"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
+              >
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeUpdateModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="submitUpdate()"
+          [disabled]="updateSaving()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Timeline reason modal ══ -->
+@if (showTimelineReason()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeTimelineReason()"
+    (keydown.escape)="closeTimelineReason()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
+        <button type="button" class="modal-close" (click)="closeTimelineReason()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>{{ 'CHART.TIMELINE_ACCESS_HINT' | translate }}</p>
+        <div class="field">
+          <label for="timeline-reason">{{ 'CHART.REASON' | translate }} *</label>
+          <textarea id="timeline-reason" rows="3" [(ngModel)]="timelineReason"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeTimelineReason()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="button" class="btn-primary" (click)="submitTimelineReason()">
+          {{ 'CHART.LOAD_TIMELINE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

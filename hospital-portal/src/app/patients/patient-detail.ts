@@ -17,6 +17,8 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { PatientChartComponent } from './patient-chart/patient-chart.component';
+import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
 import { ChartReviewComponent } from './chart-review/chart-review.component';
@@ -40,6 +42,7 @@ type TabKey =
     FormsModule,
     RouterLink,
     TranslateModule,
+    PatientChartComponent,
     BpaPanelComponent,
     StoryboardBannerComponent,
     ChartReviewComponent,
@@ -130,6 +133,12 @@ export class PatientDetailComponent implements OnInit {
   /** Whether the current user can view clinical encounters */
   canViewEncounters(): boolean {
     return this.permissions.hasPermission('Create Encounters');
+  }
+
+  /** Whether the current user can view the structured Chart tab (roles that can
+   *  access at least one of allergies / diagnoses / chart updates). */
+  canViewChart(): boolean {
+    return this.roleContext.hasAnyActiveRole(CHART_VIEW_ROLES);
   }
 
   /** Whether the current user can view the Record Sharing tab */

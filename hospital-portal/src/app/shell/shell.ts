@@ -1,6 +1,7 @@
 import {
   Component,
   computed,
+  effect,
   inject,
   signal,
   OnInit,
@@ -26,6 +27,7 @@ import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadc
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { NavOrderService } from './nav-order.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 
 interface NavItem {
   icon: string;
@@ -183,6 +185,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-records',
         },
         {
+          icon: 'description',
+          label: 'My Documents',
+          translationKey: 'NAV.MY_DOCUMENTS',
+          route: '/my-documents',
+        },
+        {
           icon: 'medical_information',
           label: 'Medical History',
           translationKey: 'NAV.MEDICAL_HISTORY',
@@ -313,6 +321,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.ADMISSIONS',
         route: '/admissions',
         permission: 'Admit Patients',
+      },
+      {
+        icon: 'exit_to_app',
+        label: 'Discharge',
+        translationKey: 'NAV.DISCHARGE',
+        route: '/discharge',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'medication',
@@ -473,6 +494,28 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/admin',
         });
       }
+      items.push(
+        {
+          icon: 'query_stats',
+          label: 'Analytics',
+          translationKey: 'NAV.ANALYTICS',
+          route: '/analytics',
+        },
+        {
+          icon: 'toggle_on',
+          label: 'Feature Flags',
+          translationKey: 'NAV.FEATURE_FLAGS',
+          route: '/feature-flags',
+        },
+      );
+    }
+    if (this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'draw',
+        label: 'Digital Signatures',
+        translationKey: 'NAV.DIGITAL_SIGNATURES',
+        route: '/digital-signatures',
+      });
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({
@@ -619,6 +662,46 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (
       this.hasAnyRole([
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_LAB_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'badge',
+        label: 'Lab Staff',
+        translationKey: 'NAV.LAB_STAFF',
+        route: '/lab-staff',
+      });
+    }
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push(
+        {
+          icon: 'precision_manufacturing',
+          label: 'Lab Instruments',
+          translationKey: 'NAV.LAB_INSTRUMENTS',
+          route: '/lab-instruments',
+        },
+        {
+          icon: 'inventory_2',
+          label: 'Lab Inventory',
+          translationKey: 'NAV.LAB_INVENTORY',
+          route: '/lab-inventory',
+        },
+      );
+    }
+    if (
+      this.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_ADMIN',
@@ -701,17 +784,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   /**
    * User-reordered nav items.
-   * Loaded from localStorage on init, then mutated in-place on each drop.
+   * Rebuilt whenever the permission-filtered base list changes (e.g. when the
+   * backend permission set arrives), with any saved order re-applied on top.
    */
   navItems = signal<NavItem[]>([]);
 
+  constructor() {
+    effect(() => {
+      const base = this.baseNavItems();
+      const saved = this.navOrder.load();
+      this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    });
+  }
+
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
-
-    // Apply any saved order on top of the permission-filtered base list
-    const base = this.baseNavItems();
-    const saved = this.navOrder.load();
-    this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+    this.permissions.loadFromBackend();
 
     this.loadNotifications();
     this.idle.start();
@@ -942,6 +1030,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   logout(): void {
+    this.permissions.clear();
+    clearReportedSilent403s();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }
@@ -959,6 +1049,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /** Shared tear-down: stop idle, log out, redirect to login */
   private tearDownAndRedirect(): void {
     this.idle.stop();
+    this.permissions.clear();
+    clearReportedSilent403s();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }

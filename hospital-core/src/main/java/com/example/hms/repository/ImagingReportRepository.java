@@ -42,4 +42,14 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
      * highest {@code reportVersion} per order from this list in memory.
      */
     List<ImagingReport> findByImagingOrder_IdIn(Collection<UUID> imagingOrderIds);
+
+    /**
+     * Cross-tenant guard for the DICOM proxy (row 42 follow-on). The
+     * upstream DICOMweb server is queried by caller-supplied
+     * {@code studyInstanceUid}; without this check, a caller in
+     * tenant A could enumerate studies recorded at tenant B simply by
+     * guessing a UID. Returns true only when the UID resolves to a
+     * report at the active hospital scope.
+     */
+    boolean existsByHospital_IdAndStudyInstanceUid(UUID hospitalId, String studyInstanceUid);
 }
