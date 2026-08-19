@@ -64,6 +64,16 @@
     >
       {{ 'LAB_RESULTS.PENDING_RELEASE' | translate }} ({{ stats().pending }})
     </button>
+    @if (canSeeCritical) {
+      <button
+        class="tab tab-critical"
+        [class.active]="activeTab() === 'critical'"
+        (click)="setTab('critical')"
+        [title]="'LAB_RESULTS.CRITICAL_QUEUE' | translate"
+      >
+        {{ 'LAB_RESULTS.CRITICAL_QUEUE' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-box">
@@ -167,6 +177,31 @@
                       <span class="material-symbols-outlined">verified</span>
                     </button>
                   }
+                  @if (canSign && !r.signedAt) {
+                    <button
+                      class="action-link sign-link"
+                      [title]="'LAB_RESULTS.SIGN' | translate"
+                      (click)="openSign(r)"
+                    >
+                      <span class="material-symbols-outlined">draw</span>
+                    </button>
+                  }
+                  @if (canAcknowledge && !r.acknowledged) {
+                    <button
+                      class="action-link ack-link"
+                      [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
+                      (click)="acknowledge(r)"
+                    >
+                      <span class="material-symbols-outlined">task_alt</span>
+                    </button>
+                  }
+                  <button
+                    class="action-link compare-link"
+                    [title]="'LAB_RESULTS.COMPARE' | translate"
+                    (click)="openCompare(r)"
+                  >
+                    <span class="material-symbols-outlined">timeline</span>
+                  </button>
                   <button
                     class="action-link delete-link"
                     [title]="'COMMON.DELETE' | translate"
@@ -485,6 +520,145 @@
         </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
           {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ SIGN RESULT MODAL ═══ -->
+@if (showSignModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeSign()" (keydown.escape)="closeSign()">
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.SIGN_TITLE' | translate }} — {{ signTarget()?.labOrderCode }}</h2>
+        <button class="modal-close" (click)="closeSign()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="sign-signature">{{ 'LAB_RESULTS.SIGNATURE' | translate }}</label>
+          <input
+            id="sign-signature"
+            type="text"
+            [placeholder]="'LAB_RESULTS.SIGNATURE_PLACEHOLDER' | translate"
+            [(ngModel)]="signForm.signature"
+          />
+        </div>
+        <div class="field">
+          <label for="sign-notes">{{ 'LAB_RESULTS.SIGNATURE_NOTES' | translate }}</label>
+          <textarea id="sign-notes" rows="3" [(ngModel)]="signForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeSign()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitSign()" [disabled]="signSubmitting()">
+          {{ 'LAB_RESULTS.SIGN' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ COMPARISON MODAL ═══ -->
+@if (comparison(); as cmp) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeCompare()"
+    (keydown.escape)="closeCompare()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}</h2>
+        <button class="modal-close" (click)="closeCompare()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="compare-patient">{{ cmp.patientName }}</p>
+        <div class="compare-grid">
+          <div class="compare-card">
+            <h4>{{ 'LAB_RESULTS.CURRENT_RESULT' | translate }}</h4>
+            @if (cmp.currentResult; as cur) {
+              <p class="compare-value">{{ cur.resultValue }} {{ cur.resultUnit }}</p>
+              <p class="compare-date">{{ cur.resultDate | date: 'medium' }}</p>
+            } @else {
+              <p>—</p>
+            }
+          </div>
+          <div class="compare-card">
+            <h4>{{ 'LAB_RESULTS.PREVIOUS_RESULT' | translate }}</h4>
+            @if (cmp.previousResult; as prev) {
+              <p class="compare-value">{{ prev.resultValue }} {{ prev.resultUnit }}</p>
+              <p class="compare-date">{{ prev.resultDate | date: 'medium' }}</p>
+            } @else {
+              <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
+            }
+          </div>
+        </div>
+        @if (cmp.comparison; as meta) {
+          <div class="compare-meta">
+            <span class="material-symbols-outlined">{{ trendIcon(meta.trendDirection) }}</span>
+            <div>
+              <p>
+                <strong>{{ meta.absoluteChange ?? '—' }}</strong>
+                @if (meta.percentageChange !== null) {
+                  ({{ meta.percentageChange | number: '1.0-1' }}%)
+                }
+                @if (meta.daysBetween !== null) {
+                  — {{ meta.daysBetween }} {{ 'LAB_RESULTS.DAYS_BETWEEN' | translate }}
+                }
+              </p>
+              @if (meta.significanceLevel) {
+                <p class="compare-significance">{{ meta.significanceLevel }}</p>
+              }
+              @if (meta.interpretation) {
+                <p class="compare-interpretation">{{ meta.interpretation }}</p>
+              }
+            </div>
+          </div>
+        }
+        @if (cmp.trendHistory.length) {
+          <h4 class="compare-history-title">{{ 'LAB_RESULTS.TREND_HISTORY' | translate }}</h4>
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</th>
+                  <th scope="col">{{ 'LAB_RESULTS.VALUE' | translate }}</th>
+                  <th scope="col">{{ 'LAB_RESULTS.SEVERITY' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (pt of cmp.trendHistory; track pt.labResultId) {
+                  <tr>
+                    <td>{{ pt.resultDate | date: 'medium' }}</td>
+                    <td>{{ pt.resultValue }} {{ pt.resultUnit }}</td>
+                    <td>{{ pt.severityFlag || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeCompare()">
+          {{ 'COMMON.CLOSE' | translate }}
         </button>
       </div>
     </div>

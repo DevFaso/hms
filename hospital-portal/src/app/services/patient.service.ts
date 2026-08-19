@@ -76,6 +76,149 @@ export interface PatientCreateRequest {
   isActive?: boolean;
 }
 
+/* ── Structured chart data ─────────────────────────────────── */
+
+export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING' | 'UNKNOWN';
+export type AllergyVerificationStatus =
+  | 'UNCONFIRMED'
+  | 'PROVISIONAL'
+  | 'CONFIRMED'
+  | 'REFUTED'
+  | 'ENTERED_IN_ERROR';
+
+export interface PatientAllergy {
+  id: string;
+  patientId: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  allergenDisplay: string;
+  allergenCode?: string;
+  category?: string;
+  severity?: AllergySeverity;
+  verificationStatus?: AllergyVerificationStatus;
+  reaction?: string;
+  reactionNotes?: string;
+  onsetDate?: string;
+  lastOccurrenceDate?: string;
+  recordedDate?: string;
+  active?: boolean;
+  recordedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PatientAllergyRequest {
+  hospitalId?: string;
+  allergenDisplay: string;
+  allergenCode?: string;
+  category?: string;
+  severity?: AllergySeverity;
+  verificationStatus?: AllergyVerificationStatus;
+  reaction?: string;
+  reactionNotes?: string;
+  onsetDate?: string;
+  active?: boolean;
+}
+
+export type ProblemStatus = 'ACTIVE' | 'RESOLVED' | 'INACTIVE' | 'RECURRENCE';
+export type ProblemSeverity = 'UNKNOWN' | 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING';
+
+export interface PatientProblem {
+  id: string;
+  patientId: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  problemCode?: string;
+  problemDisplay: string;
+  icdVersion?: string;
+  status?: ProblemStatus;
+  severity?: ProblemSeverity;
+  onsetDate?: string;
+  resolvedDate?: string;
+  recordedBy?: string;
+  notes?: string;
+  supportingEvidence?: string;
+  chronic?: boolean;
+  diagnosisCodes?: string[];
+}
+
+export interface PatientDiagnosisRequest {
+  hospitalId: string;
+  problemDisplay: string;
+  problemCode?: string;
+  icdVersion?: string;
+  status?: ProblemStatus;
+  severity?: ProblemSeverity;
+  onsetDate?: string;
+  notes?: string;
+  chronic?: boolean;
+  changeReason?: string;
+  resolvedDate?: string;
+}
+
+export type ChartSectionType =
+  | 'DIAGNOSIS'
+  | 'PROBLEM'
+  | 'ALLERGY'
+  | 'MEDICAL_HISTORY'
+  | 'SURGICAL_HISTORY'
+  | 'SOCIAL_HISTORY'
+  | 'FAMILY_HISTORY'
+  | 'HOSPITALIZATION'
+  | 'IMMUNIZATION'
+  | 'CARE_PLAN'
+  | 'MEDICATION'
+  | 'NOTE'
+  | 'OTHER';
+
+export interface ChartUpdateSection {
+  sectionType: ChartSectionType;
+  display?: string;
+  narrative?: string;
+  status?: string;
+  severity?: string;
+  occurredOn?: string;
+}
+
+export interface ChartUpdate {
+  id: string;
+  patientId: string;
+  versionNumber: number;
+  updateReason: string;
+  summary?: string;
+  sectionCount?: number;
+  attachmentCount?: number;
+  recordedAt: string;
+  recordedByName?: string;
+  recordedByRole?: string;
+  sections?: (ChartUpdateSection & { id: string })[];
+}
+
+export interface ChartUpdateRequest {
+  hospitalId: string;
+  updateReason: string;
+  summary?: string;
+  notifyCareTeam?: boolean;
+  sections?: ChartUpdateSection[];
+}
+
+export interface TimelineEntry {
+  entryId: string;
+  category: string;
+  occurredAt: string;
+  summary: string;
+  sensitive: boolean;
+}
+
+export interface PatientTimeline {
+  patientId: string;
+  patientName: string;
+  accessReason: string;
+  entries: TimelineEntry[];
+  totalEntries: number;
+  generatedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -113,5 +256,103 @@ export class PatientService {
     if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     return this.http.get<PatientResponse[]>('/patients/lookup', { params: httpParams });
+  }
+
+  /* ── Allergies ── */
+
+  listAllergies(patientId: string, hospitalId?: string): Observable<PatientAllergy[]> {
+    let params = new HttpParams();
+    if (hospitalId) params = params.set('hospitalId', hospitalId);
+    return this.http.get<PatientAllergy[]>(`/patients/${patientId}/allergies`, { params });
+  }
+
+  addAllergy(patientId: string, req: PatientAllergyRequest): Observable<PatientAllergy> {
+    return this.http.post<PatientAllergy>(`/patients/${patientId}/allergies`, req);
+  }
+
+  updateAllergy(
+    patientId: string,
+    allergyId: string,
+    req: PatientAllergyRequest,
+  ): Observable<PatientAllergy> {
+    return this.http.put<PatientAllergy>(`/patients/${patientId}/allergies/${allergyId}`, req);
+  }
+
+  deactivateAllergy(
+    patientId: string,
+    allergyId: string,
+    reason: string,
+  ): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`/patients/${patientId}/allergies/${allergyId}`, {
+      body: { reason },
+    });
+  }
+
+  /* ── Diagnoses / problems ── */
+
+  listDiagnoses(
+    patientId: string,
+    options?: { hospitalId?: string; includeHistorical?: boolean },
+  ): Observable<PatientProblem[]> {
+    let params = new HttpParams();
+    if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
+    if (options?.includeHistorical) params = params.set('includeHistorical', 'true');
+    return this.http.get<PatientProblem[]>(`/patients/${patientId}/diagnoses`, { params });
+  }
+
+  addDiagnosis(patientId: string, req: PatientDiagnosisRequest): Observable<PatientProblem> {
+    return this.http.post<PatientProblem>(`/patients/${patientId}/diagnoses`, req);
+  }
+
+  updateDiagnosis(
+    patientId: string,
+    diagnosisId: string,
+    req: Partial<PatientDiagnosisRequest>,
+  ): Observable<PatientProblem> {
+    return this.http.put<PatientProblem>(`/patients/${patientId}/diagnoses/${diagnosisId}`, req);
+  }
+
+  deleteDiagnosis(
+    patientId: string,
+    diagnosisId: string,
+    reason: string,
+  ): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(
+      `/patients/${patientId}/diagnoses/${diagnosisId}`,
+      { body: { reason } },
+    );
+  }
+
+  /* ── Chart updates ── */
+
+  listChartUpdates(
+    patientId: string,
+    options?: { hospitalId?: string; page?: number; size?: number },
+  ): Observable<{ content: ChartUpdate[]; totalElements: number }> {
+    let params = new HttpParams();
+    if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
+    if (options?.page !== undefined) params = params.set('page', String(options.page));
+    if (options?.size !== undefined) params = params.set('size', String(options.size));
+    return this.http.get<{ content: ChartUpdate[]; totalElements: number }>(
+      `/patients/${patientId}/chart-updates`,
+      { params },
+    );
+  }
+
+  createChartUpdate(patientId: string, req: ChartUpdateRequest): Observable<ChartUpdate> {
+    return this.http.post<ChartUpdate>(`/patients/${patientId}/chart-updates`, req);
+  }
+
+  /* ── Doctor timeline (audited access) ── */
+
+  getDoctorTimeline(
+    patientId: string,
+    accessReason: string,
+    maxEvents = 50,
+  ): Observable<PatientTimeline> {
+    return this.http.post<PatientTimeline>(`/patients/${patientId}/doctor-timeline`, {
+      accessReason,
+      maxEvents,
+    });
   }
 }

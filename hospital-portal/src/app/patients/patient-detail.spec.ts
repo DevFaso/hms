@@ -1,5 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { PatientDetailComponent } from './patient-detail';
@@ -64,9 +66,14 @@ describe('PatientDetailComponent', () => {
       'hasPermission',
       'hasAnyPermission',
     ]);
-    roleContextSpy = jasmine.createSpyObj('RoleContextService', ['isSuperAdmin'], {
-      activeHospitalId: 'h1',
-    });
+    roleContextSpy = jasmine.createSpyObj(
+      'RoleContextService',
+      ['isSuperAdmin', 'hasAnyActiveRole'],
+      {
+        activeHospitalId: 'h1',
+      },
+    );
+    roleContextSpy.hasAnyActiveRole.and.returnValue(false);
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
     const cdsAckSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
       'record',
@@ -109,6 +116,8 @@ describe('PatientDetailComponent', () => {
       imports: [PatientDetailComponent, TranslateModule.forRoot()],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: { get: () => 'p1' } } },

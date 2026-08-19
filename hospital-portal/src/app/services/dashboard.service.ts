@@ -574,7 +574,7 @@ export class DashboardService {
 
   getSummary(auditLimit = 10): Observable<SuperAdminSummary> {
     const params = new HttpParams().set('auditLimit', auditLimit);
-    return this.http.get<SuperAdminSummary>('/api/super-admin/summary', { params });
+    return this.http.get<SuperAdminSummary>('/super-admin/summary', { params });
   }
 
   private getSuperAdminRecent(slug: string, limit = 10): Observable<SuperAdminRecentItem[]> {
@@ -651,30 +651,28 @@ export class DashboardService {
 
   getClinicalDashboard(): Observable<ClinicalDashboard> {
     return this.http
-      .get<ApiWrapper<ClinicalDashboard>>('/api/me/clinical-dashboard')
+      .get<ApiWrapper<ClinicalDashboard>>('/me/clinical-dashboard')
       .pipe(map((res) => res.data));
   }
 
   getCriticalAlerts(hours = 24): Observable<ClinicalAlert[]> {
     const params = new HttpParams().set('hours', hours);
-    return this.http.get<ApiWrapper<ClinicalAlert[]>>('/api/me/critical-alerts', { params }).pipe(
+    return this.http.get<ApiWrapper<ClinicalAlert[]>>('/me/critical-alerts', { params }).pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),
     );
   }
 
   acknowledgeAlert(alertId: string): Observable<void> {
-    return this.http.post<void>(`/api/me/alerts/${alertId}/acknowledge`, {});
+    return this.http.post<void>(`/me/alerts/${alertId}/acknowledge`, {});
   }
 
   getInboxCounts(): Observable<InboxCounts> {
-    return this.http
-      .get<ApiWrapper<InboxCounts>>('/api/me/inbox-counts')
-      .pipe(map((res) => res.data));
+    return this.http.get<ApiWrapper<InboxCounts>>('/me/inbox-counts').pipe(map((res) => res.data));
   }
 
   getRoomedPatients(): Observable<RoomedPatient[]> {
-    return this.http.get<ApiWrapper<RoomedPatient[]>>('/api/me/roomed-patients').pipe(
+    return this.http.get<ApiWrapper<RoomedPatient[]>>('/me/roomed-patients').pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),
     );
@@ -684,7 +682,7 @@ export class DashboardService {
     return this.http
       .get<
         ApiWrapper<import('../services/patient.service').PatientResponse[]>
-      >('/api/me/recent-patients')
+      >('/me/recent-patients')
       .pipe(
         map((res) => res.data ?? []),
         catchError(() => of([])),
@@ -693,7 +691,7 @@ export class DashboardService {
 
   getOnCallStatus(): Observable<OnCallStatus> {
     return this.http
-      .get<ApiWrapper<OnCallStatus>>('/api/me/on-call-status')
+      .get<ApiWrapper<OnCallStatus>>('/me/on-call-status')
       .pipe(map((res) => res.data));
   }
 
@@ -701,7 +699,7 @@ export class DashboardService {
 
   getCriticalStrip(): Observable<CriticalStrip> {
     return this.http
-      .get<ApiWrapper<CriticalStrip>>('/api/me/critical-strip')
+      .get<ApiWrapper<CriticalStrip>>('/me/critical-strip')
       .pipe(map((res) => res.data));
   }
 
@@ -710,30 +708,28 @@ export class DashboardService {
     if (status) params = params.set('status', status);
     if (urgency) params = params.set('urgency', urgency);
     if (date) params = params.set('date', date);
-    return this.http.get<ApiWrapper<DoctorWorklistItem[]>>('/api/me/worklist', { params }).pipe(
+    return this.http.get<ApiWrapper<DoctorWorklistItem[]>>('/me/worklist', { params }).pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),
     );
   }
 
   getPatientFlow(): Observable<Record<string, PatientFlowItem[]>> {
-    return this.http
-      .get<ApiWrapper<Record<string, PatientFlowItem[]>>>('/api/me/patient-flow')
-      .pipe(
-        map((res) => res.data ?? {}),
-        catchError(() => of({})),
-      );
+    return this.http.get<ApiWrapper<Record<string, PatientFlowItem[]>>>('/me/patient-flow').pipe(
+      map((res) => res.data ?? {}),
+      catchError(() => of({})),
+    );
   }
 
   getInbox(): Observable<ClinicalInboxItem[]> {
-    return this.http.get<ApiWrapper<ClinicalInboxItem[]>>('/api/me/inbox').pipe(
+    return this.http.get<ApiWrapper<ClinicalInboxItem[]>>('/me/inbox').pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),
     );
   }
 
   getResultReviewQueue(): Observable<DoctorResultQueueItem[]> {
-    return this.http.get<ApiWrapper<DoctorResultQueueItem[]>>('/api/me/results/review-queue').pipe(
+    return this.http.get<ApiWrapper<DoctorResultQueueItem[]>>('/me/results/review-queue').pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),
     );
@@ -741,7 +737,7 @@ export class DashboardService {
 
   getPatientSnapshot(patientId: string): Observable<PatientSnapshot> {
     return this.http
-      .get<ApiWrapper<PatientSnapshot>>(`/api/me/patients/${patientId}/snapshot`)
+      .get<ApiWrapper<PatientSnapshot>>(`/me/patients/${patientId}/snapshot`)
       .pipe(map((res) => res.data));
   }
 
@@ -750,7 +746,7 @@ export class DashboardService {
   getAnalytics(trendDays = 14): Observable<PlatformAnalytics> {
     const params = new HttpParams().set('trendDays', trendDays);
     return this.http
-      .get<PlatformAnalytics>('/api/super-admin/analytics', { params })
+      .get<PlatformAnalytics>('/super-admin/analytics', { params })
       .pipe(catchError(() => of({} as PlatformAnalytics)));
   }
 
@@ -776,7 +772,7 @@ export class DashboardService {
     let params = new HttpParams().set('auditLimit', auditLimit);
     if (date) params = params.set('date', date);
     return this.http
-      .get<HospitalAdminSummary>('/api/dashboard/hospital-admin/summary', { params })
+      .get<HospitalAdminSummary>('/dashboard/hospital-admin/summary', { params })
       .pipe(catchError(() => of({} as HospitalAdminSummary)));
   }
 
@@ -784,21 +780,21 @@ export class DashboardService {
 
   getLabDirectorSummary(): Observable<LabDirectorDashboard> {
     return this.http
-      .get<LabDirectorDashboard>('/api/dashboard/lab-director/summary')
+      .get<LabDirectorDashboard>('/dashboard/lab-director/summary')
       .pipe(catchError(() => of({} as LabDirectorDashboard)));
   }
 
   /* ── Lab Ops Summary ── */
 
   getLabOpsSummary(): Observable<LabOpsSummary> {
-    return this.http.get<LabOpsSummary>('/api/dashboard/lab-ops/summary');
+    return this.http.get<LabOpsSummary>('/dashboard/lab-ops/summary');
   }
 
   /* ── Quality Manager Summary ── */
 
   getQualityManagerSummary(): Observable<QualityManagerDashboard> {
     return this.http
-      .get<QualityManagerDashboard>('/api/dashboard/quality-manager/summary')
+      .get<QualityManagerDashboard>('/dashboard/quality-manager/summary')
       .pipe(catchError(() => of({} as QualityManagerDashboard)));
   }
 }

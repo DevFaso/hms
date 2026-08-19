@@ -232,10 +232,55 @@
             </div>
           </div>
 
+          <div class="detail-section transition-actions">
+            @if (canCompleteExamination(enc)) {
+              <button
+                class="btn-primary"
+                [disabled]="transitioning()"
+                (click)="completeExamination(enc)"
+              >
+                <span class="material-symbols-outlined">task_alt</span>
+                {{ 'ENCOUNTERS.COMPLETE_EXAM' | translate }}
+              </button>
+            }
+            @if (canMarkReadyForDischarge(enc)) {
+              <button
+                class="btn-secondary"
+                [disabled]="transitioning()"
+                (click)="markReadyForDischarge(enc)"
+              >
+                <span class="material-symbols-outlined">exit_to_app</span>
+                {{ 'ENCOUNTERS.READY_FOR_DISCHARGE' | translate }}
+              </button>
+            }
+            @if (enc.status === 'COMPLETED') {
+              <button class="btn-secondary" [disabled]="avsLoading()" (click)="viewAvs(enc)">
+                <span class="material-symbols-outlined">summarize</span>
+                {{ 'ENCOUNTERS.VIEW_AVS' | translate }}
+              </button>
+            }
+          </div>
+
           @if (enc.notes) {
             <div class="detail-section">
               <h3>Notes</h3>
               <p class="notes-content">{{ enc.notes }}</p>
+            </div>
+          }
+
+          @if (noteHistory().length > 0) {
+            <div class="detail-section">
+              <h3>{{ 'ENCOUNTERS.NOTE_HISTORY' | translate }}</h3>
+              <div class="note-history">
+                @for (n of noteHistory(); track n.id) {
+                  <div class="note-history-item">
+                    <p class="notes-content">{{ n.content }}</p>
+                    <span class="note-meta">
+                      {{ n.authorName }} — {{ n.createdAt | date: 'short' }}
+                    </span>
+                  </div>
+                }
+              </div>
             </div>
           }
 
@@ -277,6 +322,40 @@
               ></app-encounter-note-form>
             </div>
           }
+
+          <div class="detail-section">
+            @if (!showAddendumForm()) {
+              <button
+                class="btn-secondary"
+                [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
+                (click)="showAddendumForm.set(true)"
+              >
+                <span class="material-symbols-outlined">post_add</span>
+                {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
+              </button>
+            } @else {
+              <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+              <textarea
+                class="note-input"
+                [(ngModel)]="addendumContent"
+                rows="3"
+                aria-label="Encounter note addendum"
+                [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
+              ></textarea>
+              <div class="note-actions">
+                <button
+                  class="btn-primary"
+                  (click)="addAddendum()"
+                  [disabled]="!addendumContent.trim() || addendumSaving()"
+                >
+                  {{ 'COMMON.SAVE' | translate }}
+                </button>
+                <button class="btn-secondary" (click)="showAddendumForm.set(false)">
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
+              </div>
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -289,6 +368,84 @@
     (closed)="closeEligibilityDialog()"
   ></app-eligibility-check-dialog>
 </div>
+
+<!-- ═══ AFTER-VISIT SUMMARY MODAL ═══ -->
+@if (avs(); as summary) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeAvs()" (keydown.escape)="closeAvs()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patientName }}</h2>
+        <button class="modal-close" (click)="closeAvs()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="avs-meta">
+          <p>
+            {{ summary.visitDate | date: 'medium' }} · {{ summary.providerName }} ·
+            {{ summary.departmentName }} · {{ summary.hospitalName }}
+          </p>
+        </div>
+        @if (summary.chiefComplaint) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.CHIEF_COMPLAINT' | translate }}</h3>
+            <p>{{ summary.chiefComplaint }}</p>
+          </div>
+        }
+        @if (summary.dischargeDiagnoses.length) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_DIAGNOSES' | translate }}</h3>
+            <ul>
+              @for (d of summary.dischargeDiagnoses; track $index) {
+                <li>{{ d }}</li>
+              }
+            </ul>
+          </div>
+        }
+        @if (summary.prescriptionSummary) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_PRESCRIPTIONS' | translate }}</h3>
+            <p>{{ summary.prescriptionSummary }}</p>
+          </div>
+        }
+        @if (summary.referralSummary) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_REFERRALS' | translate }}</h3>
+            <p>{{ summary.referralSummary }}</p>
+          </div>
+        }
+        @if (summary.followUpInstructions) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_FOLLOW_UP' | translate }}</h3>
+            <p>{{ summary.followUpInstructions }}</p>
+          </div>
+        }
+        @if (summary.patientEducationMaterials) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_EDUCATION' | translate }}</h3>
+            <p>{{ summary.patientEducationMaterials }}</p>
+          </div>
+        }
+        @if (summary.followUpAppointmentDate) {
+          <div class="detail-section">
+            <h3>{{ 'ENCOUNTERS.AVS_FOLLOW_UP_APPT' | translate }}</h3>
+            <p>{{ summary.followUpAppointmentDate }}</p>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAvs()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
 
 <!-- ═══ CREATE/EDIT ENCOUNTER MODAL ═══ -->
 @if (showModal()) {

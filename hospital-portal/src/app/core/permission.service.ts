@@ -1,11 +1,51 @@
-import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject, signal } from '@angular/core';
 
 import { AuthService } from '../auth/auth.service';
+
+interface DashboardConfigResponse {
+  mergedPermissions?: string[] | null;
+}
+
+/**
+ * Backend permission names (DashboardConfigService vocabulary) that gate the
+ * same UI features as a differently-named frontend permission. Grants from
+ * the backend are expanded through this map so nav gating keeps working even
+ * though the two vocabularies drifted apart historically.
+ */
+const BACKEND_PERMISSION_ALIASES: Record<string, string[]> = {
+  'View Lab Orders': ['View Lab'],
+  'View Lab Results': ['View Lab'],
+  'View Schedules': ['View Staff Schedules'],
+  'Administer Medication': ['Administer Medications'],
+};
 
 @Injectable({ providedIn: 'root' })
 export class PermissionService {
   private readonly auth = inject(AuthService);
+  private readonly http = inject(HttpClient);
 
+  /**
+   * Permissions granted by the backend for the signed-in user
+   * (GET /me/dashboard-config → mergedPermissions). Null until loaded;
+   * checks then fall back to the static role map below.
+   */
+  private readonly backendPermissions = signal<ReadonlySet<string> | null>(null);
+
+  /**
+   * Bumped by clear()/loadFromBackend() so a dashboard-config response that
+   * lands AFTER a logout (or a newer reload) is discarded instead of
+   * repopulating permissions for a session that no longer exists.
+   */
+  private loadGeneration = 0;
+
+  /**
+   * Static fallback only — the authoritative source is the backend
+   * (loadFromBackend()). Kept so the UI still renders a sensible nav when the
+   * dashboard-config call fails or has not resolved yet. Backend grants are
+   * UNIONED with this map, so a role missing here still gets its server-side
+   * permissions instead of a gutted sidebar.
+   */
   private readonly ROLE_PERMISSIONS: Record<string, string[]> = {
     ROLE_SUPER_ADMIN: ['*'],
     ROLE_HOSPITAL_ADMIN: [
@@ -415,7 +455,49 @@ export class PermissionService {
     ],
   };
 
+  /**
+   * Fetch the signed-in user's permission set from the backend. Fire-and-forget:
+   * checks work off the static fallback map until the response lands, then the
+   * backend grants (expanded through BACKEND_PERMISSION_ALIASES) are unioned in.
+   * Reads go through a signal, so computed() consumers re-evaluate on arrival.
+   */
+  loadFromBackend(): void {
+    this.backendPermissions.set(null);
+    if (!this.auth.isAuthenticated()) return;
+    const generation = ++this.loadGeneration;
+    this.http.get<DashboardConfigResponse>('/me/dashboard-config').subscribe({
+      next: (cfg) => {
+        if (generation !== this.loadGeneration) return; // clear()/reload happened meanwhile
+        // NOTE: the backend unions permissions across ALL of the user's active
+        // assignments regardless of hospital, so grants here can be broader
+        // than the active hospital's role. Route guards + backend authz remain
+        // the enforcement layer; this only drives nav visibility.
+        const merged = cfg?.mergedPermissions ?? [];
+        if (merged.length === 0) return;
+        const expanded = new Set<string>(merged);
+        for (const name of merged) {
+          for (const alias of BACKEND_PERMISSION_ALIASES[name] ?? []) {
+            expanded.add(alias);
+          }
+        }
+        this.backendPermissions.set(expanded);
+      },
+      error: () => {
+        // Static fallback map remains in effect.
+      },
+    });
+  }
+
+  /** Drop backend-loaded permissions (call on logout / user switch). */
+  clear(): void {
+    this.loadGeneration++;
+    this.backendPermissions.set(null);
+  }
+
   hasPermission(permission: string): boolean {
+    if (this.backendPermissions()?.has(permission)) {
+      return true;
+    }
     const roles = this.auth.getRoles();
     for (const role of roles) {
       const perms = this.ROLE_PERMISSIONS[role];

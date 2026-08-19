@@ -5,163 +5,483 @@
       <p class="page-subtitle">{{ 'IMAGING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'IMAGING.NEW_ORDER' | translate }}
-      </button>
+      @if (view() === 'orders') {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> {{ 'IMAGING.NEW_ORDER' | translate }}
+        </button>
+      }
     </div>
   </div>
-  <div class="summary-cards">
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon active">radiology</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
+  @if (canSeeResults) {
+    <div class="filter-bar">
+      <div class="tabs">
+        <button class="tab-btn" [class.active]="view() === 'orders'" (click)="setView('orders')">
+          {{ 'IMAGING.ORDERS_TAB' | translate }}
+        </button>
+        <button class="tab-btn" [class.active]="view() === 'results'" (click)="setView('results')">
+          {{ 'IMAGING.RESULTS_TAB' | translate }}
+        </button>
       </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon completed">check_circle</span>
-      <div class="card-info">
-        <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
-      </div>
-    </div>
-    <div class="summary-card">
-      <span class="material-symbols-outlined card-icon total">bar_chart</span>
-      <div class="card-info">
-        <span class="card-value">{{ orders().length }}</span
-        ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
-      </div>
-    </div>
-  </div>
-  <div class="filter-bar">
-    <div class="tabs">
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'all'"
-        (click)="setTab('all')"
-        [title]="'IMAGING.SHOW_ALL' | translate"
-      >
-        {{ 'COMMON.ALL' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'ordered'"
-        (click)="setTab('ordered')"
-        [title]="'IMAGING.SHOW_ACTIVE' | translate"
-      >
-        {{ 'COMMON.ACTIVE' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'completed'"
-        (click)="setTab('completed')"
-        [title]="'IMAGING.SHOW_COMPLETED' | translate"
-      >
-        {{ 'IMAGING.COMPLETED' | translate }}
-      </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'cancelled'"
-        (click)="setTab('cancelled')"
-        [title]="'IMAGING.SHOW_CANCELLED' | translate"
-      >
-        {{ 'IMAGING.CANCELLED' | translate }}
-      </button>
-    </div>
-    <div class="search-box">
-      <span class="material-symbols-outlined">search</span
-      ><input
-        type="text"
-        [placeholder]="'IMAGING.SEARCH_PLACEHOLDER' | translate"
-        [(ngModel)]="searchTerm"
-        (input)="applyFilter()"
-      />
-    </div>
-  </div>
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>{{ 'IMAGING.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
-    <div class="empty-state">
-      <span class="material-symbols-outlined empty-icon">radiology</span>
-      <h3>{{ 'IMAGING.NO_ORDERS_FOUND' | translate }}</h3>
-      <p>{{ 'IMAGING.ORDERS_WILL_APPEAR' | translate }}</p>
+  @if (view() === 'orders') {
+    <div class="summary-cards">
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon active">radiology</span>
+        <div class="card-info">
+          <span class="card-value">{{ activeOrderCount() }}</span
+          ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon completed">check_circle</span>
+        <div class="card-info">
+          <span class="card-value">{{ completedOrderCount() }}</span
+          ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card">
+        <span class="material-symbols-outlined card-icon total">bar_chart</span>
+        <div class="card-info">
+          <span class="card-value">{{ orders().length }}</span
+          ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
+        </div>
+      </div>
     </div>
-  }
-  @if (!loading() && filtered().length > 0) {
-    <div class="data-table">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
-            <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
-            <th scope="col">{{ 'IMAGING.STUDY' | translate }}</th>
-            <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
-            <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
-            <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
-            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
-            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (o of filtered(); track o.id) {
-            <tr class="data-row">
-              <td>
-                <div class="cell-primary">
-                  {{ o.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
-                </div>
-                <div class="cell-secondary">{{ o.patientMrn }}</div>
-              </td>
-              <td>
-                <span class="modality-badge">{{ o.modality }}</span>
-              </td>
-              <td>{{ o.studyType || '—' }}</td>
-              <td>{{ o.bodyRegion || '—' }}</td>
-              <td>
-                <span class="priority-badge {{ getPriorityClass(o.priority) }}">{{
-                  o.priority
-                }}</span>
-              </td>
-              <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
-              <td>
-                <span class="status-badge {{ getStatusClass(o.status) }}">{{
-                  o.status | enumLabel: 'imagingOrderStatus'
-                }}</span>
-              </td>
-              <td>
-                <div class="action-group">
-                  <button
-                    class="action-link"
-                    (click)="viewDetail(o)"
-                    [title]="'IMAGING.VIEW_DETAILS' | translate"
-                  >
-                    <span class="material-symbols-outlined">visibility</span>
-                  </button>
-                  @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
+    <div class="filter-bar">
+      <div class="tabs">
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'all'"
+          (click)="setTab('all')"
+          [title]="'IMAGING.SHOW_ALL' | translate"
+        >
+          {{ 'COMMON.ALL' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'ordered'"
+          (click)="setTab('ordered')"
+          [title]="'IMAGING.SHOW_ACTIVE' | translate"
+        >
+          {{ 'COMMON.ACTIVE' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'completed'"
+          (click)="setTab('completed')"
+          [title]="'IMAGING.SHOW_COMPLETED' | translate"
+        >
+          {{ 'IMAGING.COMPLETED' | translate }}
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'cancelled'"
+          (click)="setTab('cancelled')"
+          [title]="'IMAGING.SHOW_CANCELLED' | translate"
+        >
+          {{ 'IMAGING.CANCELLED' | translate }}
+        </button>
+      </div>
+      <div class="search-box">
+        <span class="material-symbols-outlined">search</span
+        ><input
+          type="text"
+          [placeholder]="'IMAGING.SEARCH_PLACEHOLDER' | translate"
+          [(ngModel)]="searchTerm"
+          (input)="applyFilter()"
+        />
+      </div>
+    </div>
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'IMAGING.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!loading() && filtered().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">radiology</span>
+        <h3>{{ 'IMAGING.NO_ORDERS_FOUND' | translate }}</h3>
+        <p>{{ 'IMAGING.ORDERS_WILL_APPEAR' | translate }}</p>
+      </div>
+    }
+    @if (!loading() && filtered().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.STUDY' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (o of filtered(); track o.id) {
+              <tr class="data-row">
+                <td>
+                  <div class="cell-primary">
+                    {{ o.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
+                  </div>
+                  <div class="cell-secondary">{{ o.patientMrn }}</div>
+                </td>
+                <td>
+                  <span class="modality-badge">{{ o.modality }}</span>
+                </td>
+                <td>{{ o.studyType || '—' }}</td>
+                <td>{{ o.bodyRegion || '—' }}</td>
+                <td>
+                  <span class="priority-badge {{ getPriorityClass(o.priority) }}">{{
+                    o.priority
+                  }}</span>
+                </td>
+                <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
+                <td>
+                  <span class="status-badge {{ getStatusClass(o.status) }}">{{
+                    o.status | enumLabel: 'imagingOrderStatus'
+                  }}</span>
+                </td>
+                <td>
+                  <div class="action-group">
                     <button
                       class="action-link"
-                      (click)="openEdit(o)"
-                      [title]="'IMAGING.EDIT_ORDER' | translate"
+                      (click)="viewDetail(o)"
+                      [title]="'IMAGING.VIEW_DETAILS' | translate"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined">visibility</span>
                     </button>
-                    <button
-                      class="action-link delete"
-                      (click)="confirmCancel(o)"
-                      [title]="'IMAGING.CANCEL_ORDER' | translate"
-                    >
-                      <span class="material-symbols-outlined">cancel</span>
-                    </button>
-                  }
-                </div>
-              </td>
-            </tr>
+                    @if (['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status)) {
+                      <button
+                        class="action-link"
+                        (click)="viewReportForOrder(o)"
+                        [title]="'IMAGING.VIEW_REPORT' | translate"
+                      >
+                        <span class="material-symbols-outlined">description</span>
+                      </button>
+                    }
+                    @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
+                      <button
+                        class="action-link"
+                        (click)="openEdit(o)"
+                        [title]="'IMAGING.EDIT_ORDER' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      <button
+                        class="action-link delete"
+                        (click)="confirmCancel(o)"
+                        [title]="'IMAGING.CANCEL_ORDER' | translate"
+                      >
+                        <span class="material-symbols-outlined">cancel</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Results view ══ -->
+  @if (view() === 'results') {
+    <div class="filter-bar">
+      <div class="tabs">
+        @for (st of reportStatuses; track st) {
+          <button
+            class="tab-btn"
+            [class.active]="reportStatusFilter() === st"
+            (click)="setReportStatusFilter(st)"
+          >
+            {{ 'IMAGING.REPORT_STATUS_' + st | translate }}
+          </button>
+        }
+      </div>
+      <div class="results-filters">
+        <select
+          [ngModel]="reportModalityFilter()"
+          (ngModelChange)="onReportModalityChange($event)"
+          [title]="'IMAGING.MODALITY' | translate"
+        >
+          <option value="">{{ 'IMAGING.ALL_MODALITIES' | translate }}</option>
+          @for (m of modalities; track m) {
+            <option [value]="m">{{ m }}</option>
           }
-        </tbody>
-      </table>
+        </select>
+        <label class="critical-toggle">
+          <input type="checkbox" [checked]="criticalOnly()" (change)="toggleCriticalOnly()" />
+          {{ 'IMAGING.CRITICAL_ONLY' | translate }}
+        </label>
+      </div>
+    </div>
+
+    @if (reportsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'IMAGING.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!reportsLoading() && visibleReports().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">description</span>
+        <h3>{{ 'IMAGING.NO_REPORTS_FOUND' | translate }}</h3>
+        <p>{{ 'IMAGING.REPORTS_WILL_APPEAR' | translate }}</p>
+      </div>
+    }
+    @if (!reportsLoading() && visibleReports().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'IMAGING.REPORT_NUMBER' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
+              <th scope="col">{{ 'IMAGING.INTERPRETED_BY' | translate }}</th>
+              <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of visibleReports(); track r.id) {
+              <tr class="data-row">
+                <td>
+                  <div class="cell-primary">{{ r.reportNumber || '—' }}</div>
+                  <div class="cell-secondary">{{ r.reportTitle }}</div>
+                </td>
+                <td>
+                  <span class="modality-badge">{{ r.modality }}</span>
+                </td>
+                <td>{{ r.bodyRegion || '—' }}</td>
+                <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
+                <td>{{ r.createdAt ? (r.createdAt | date: 'mediumDate') : '—' }}</td>
+                <td>
+                  <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
+                    'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
+                  }}</span>
+                  @if (isCriticalUnacked(r)) {
+                    <span class="critical-badge">{{ 'IMAGING.CRITICAL' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  <div class="action-group">
+                    <button
+                      class="action-link"
+                      (click)="openReport(r)"
+                      [title]="'IMAGING.VIEW_REPORT' | translate"
+                    >
+                      <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                    @if (isCriticalUnacked(r) && canAckCritical) {
+                      <button
+                        class="action-link"
+                        (click)="acknowledgeCritical(r)"
+                        [disabled]="acknowledging()"
+                        [title]="'IMAGING.ACK_CRITICAL' | translate"
+                      >
+                        <span class="material-symbols-outlined">notifications_active</span>
+                      </button>
+                    }
+                    @if (canUpdateReportStatus) {
+                      <button
+                        class="action-link"
+                        (click)="openStatusUpdate(r)"
+                        [title]="'IMAGING.UPDATE_STATUS' | translate"
+                      >
+                        <span class="material-symbols-outlined">sync_alt</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Report detail overlay ══ -->
+  @if (selectedReport(); as rep) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeReport()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>{{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}</h2>
+          <button class="btn-close" (click)="closeReport()" [title]="'COMMON.CLOSE' | translate">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          @if (isCriticalUnacked(rep)) {
+            <div class="critical-banner">
+              <span class="material-symbols-outlined">warning</span>
+              {{ 'IMAGING.CRITICAL_UNACKED' | translate }}
+              @if (canAckCritical) {
+                <button
+                  class="btn-danger"
+                  (click)="acknowledgeCritical(rep)"
+                  [disabled]="acknowledging()"
+                >
+                  {{ 'IMAGING.ACK_CRITICAL' | translate }}
+                </button>
+              }
+            </div>
+          }
+          @if (rep.criticalResultAcknowledgedAt) {
+            <p class="muted">
+              {{ 'IMAGING.CRITICAL_ACKED_BY' | translate }} {{ rep.criticalResultAckByName }} —
+              {{ rep.criticalResultAcknowledgedAt | date: 'short' }}
+            </p>
+          }
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
+              ><span class="field-value"
+                ><span class="status-badge {{ getReportStatusClass(rep.reportStatus) }}">{{
+                  'IMAGING.REPORT_STATUS_' + rep.reportStatus | translate
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
+              ><span class="field-value">{{ rep.modality }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
+              ><span class="field-value">{{ rep.bodyRegion || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'IMAGING.INTERPRETED_BY' | translate }}</span
+              ><span class="field-value">{{ rep.interpretingProviderName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
+              ><span class="field-value"
+                >{{ rep.signedByName || '—' }}
+                {{ rep.signedAt ? '(' + (rep.signedAt | date: 'short') + ')' : '' }}</span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'IMAGING.REPORT_VERSION' | translate }}</span
+              ><span class="field-value">{{ rep.reportVersion }}</span>
+            </div>
+          </div>
+          @if (rep.technique) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.TECHNIQUE' | translate }}</span>
+              <p>{{ rep.technique }}</p>
+            </div>
+          }
+          @if (rep.findings) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.FINDINGS' | translate }}</span>
+              <p>{{ rep.findings }}</p>
+            </div>
+          }
+          @if (rep.impression) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.IMPRESSION' | translate }}</span>
+              <p>{{ rep.impression }}</p>
+            </div>
+          }
+          @if (rep.recommendations) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.RECOMMENDATIONS' | translate }}</span>
+              <p>{{ rep.recommendations }}</p>
+            </div>
+          }
+          @if (rep.measurements?.length) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.MEASUREMENTS' | translate }}</span>
+              <table class="measurements-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'IMAGING.MEASUREMENT' | translate }}</th>
+                    <th scope="col">{{ 'IMAGING.VALUE' | translate }}</th>
+                    <th scope="col">{{ 'IMAGING.REFERENCE' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (m of rep.measurements; track m.id) {
+                    <tr [class.abnormal-row]="m.abnormal">
+                      <td>{{ m.label }} {{ m.region ? '(' + m.region + ')' : '' }}</td>
+                      <td>{{ m.numericValue ?? m.textValue ?? '—' }} {{ m.unit }}</td>
+                      <td>{{ m.referenceMin ?? '—' }}–{{ m.referenceMax ?? '—' }} {{ m.unit }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+          @if (rep.statusHistory?.length) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'IMAGING.STATUS_HISTORY' | translate }}</span>
+              <ul class="status-history">
+                @for (h of rep.statusHistory; track h.id) {
+                  <li>
+                    {{ h.changedAt | date: 'short' }} —
+                    {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
+                    {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
+                    {{ h.statusReason ? '· ' + h.statusReason : '' }}
+                  </li>
+                }
+              </ul>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Report status update modal ══ -->
+  @if (showStatusModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeStatusUpdate()"
+      (keydown.escape)="closeStatusUpdate()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>{{ 'IMAGING.UPDATE_STATUS' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeStatusUpdate()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="report-status">{{ 'COMMON.STATUS' | translate }}</label>
+          <select id="report-status" [(ngModel)]="statusForm.status">
+            @for (st of reportStatuses; track st) {
+              <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="report-status-reason">{{ 'IMAGING.STATUS_REASON' | translate }}</label>
+          <textarea id="report-status-reason" rows="3" [(ngModel)]="statusForm.statusReason">
+          </textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeStatusUpdate()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitStatusUpdate()" [disabled]="statusSubmitting()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
     </div>
   }
   @if (selectedOrder(); as ord) {
@@ -315,57 +635,11 @@
         <div class="form-row">
           <div class="field">
             <label for="img-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
-            @if (selectedPatient()) {
-              <div class="picker-chip">
-                <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
-                <span class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
-                  <span class="chip-sub">{{
-                    selectedPatient()!.mrn || selectedPatient()!.email
-                  }}</span>
-                </span>
-                <button
-                  type="button"
-                  class="chip-clear"
-                  (click)="clearPatient()"
-                  [title]="'COMMON.REMOVE' | translate"
-                >
-                  ×
-                </button>
-              </div>
-            } @else {
-              <div class="patient-picker-wrap">
-                <span class="picker-search-icon material-icons">person_search</span>
-                <input
-                  id="img-patientSearch"
-                  type="text"
-                  class="picker-input"
-                  [value]="patientQuery()"
-                  (input)="onPatientQueryChange($any($event.target).value)"
-                  (blur)="patientDropdownOpen.set(false)"
-                  [placeholder]="'IMAGING.SEARCH_PATIENT_PLACEHOLDER' | translate"
-                  autocomplete="off"
-                />
-                @if (patientSearchLoading()) {
-                  <span class="picker-spinner"></span>
-                }
-                @if (patientDropdownOpen()) {
-                  <ul class="picker-dropdown" aria-label="Patient suggestions">
-                    @for (p of patientSuggestions(); track p.id) {
-                      <li class="picker-option" (mousedown)="selectPatient(p)">
-                        <span class="opt-avatar">{{ patientInitials(p) }}</span>
-                        <span class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                          <span class="opt-meta">{{ p.mrn }} · {{ p.email }}</span>
-                        </span>
-                      </li>
-                    }
-                  </ul>
-                }
-              </div>
-            }
+            <app-patient-picker
+              inputId="img-patientSearch"
+              [selected]="selectedPatient()"
+              (selectedChange)="onPatientPicked($event)"
+            />
           </div>
           <div class="field">
             <label for="img-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>

@@ -1,0 +1,52 @@
+@if (selectedPatient(); as sp) {
+  <div class="picker-chip">
+    <div class="chip-avatar">{{ initials(sp) }}</div>
+    <div class="chip-info">
+      <span class="chip-name">{{ sp.firstName }} {{ sp.lastName }}</span>
+      <span class="chip-sub">{{ sp.email }}</span>
+    </div>
+    <button
+      type="button"
+      class="chip-clear"
+      (click)="clear()"
+      [title]="'COMMON.CHANGE_PATIENT' | translate"
+    >
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+} @else {
+  <div class="patient-picker-wrap">
+    <span class="material-symbols-outlined picker-search-icon">person_search</span>
+    <input
+      [id]="inputId"
+      class="picker-input"
+      type="text"
+      [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
+      [value]="query()"
+      (input)="onQueryChange($any($event.target).value)"
+      (blur)="dropdownOpen.set(false)"
+      autocomplete="off"
+    />
+    @if (searchLoading()) {
+      <span class="picker-spinner"></span>
+    }
+    @if (dropdownOpen()) {
+      <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
+        @for (p of suggestions(); track p.id) {
+          <div
+            class="picker-option"
+            role="option"
+            [attr.aria-selected]="selectedPatient()?.id === p.id"
+            (mousedown)="select(p)"
+          >
+            <div class="opt-avatar">{{ initials(p) }}</div>
+            <div class="opt-info">
+              <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+              <span class="opt-meta">{{ p.email }}</span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+}
