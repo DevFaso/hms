@@ -1,0 +1,780 @@
+<div class="mh-container">
+  <div class="mh-tabs">
+    <button
+      type="button"
+      class="mh-tab"
+      [class.active]="section() === 'social'"
+      (click)="setSection('social')"
+    >
+      {{ 'MED_HISTORY.SOCIAL_TAB' | translate }}
+    </button>
+    <button
+      type="button"
+      class="mh-tab"
+      [class.active]="section() === 'family'"
+      (click)="setSection('family')"
+    >
+      {{ 'MED_HISTORY.FAMILY_TAB' | translate }}
+    </button>
+    <button
+      type="button"
+      class="mh-tab"
+      [class.active]="section() === 'immunizations'"
+      (click)="setSection('immunizations')"
+    >
+      {{ 'MED_HISTORY.IMMUNIZATIONS_TAB' | translate }}
+      @if (overdueCount() > 0) {
+        <span class="overdue-pill">{{ overdueCount() }}</span>
+      }
+    </button>
+  </div>
+
+  <!-- ══ Social history ══ -->
+  @if (section() === 'social') {
+    <div class="section-toolbar">
+      <h3>{{ 'MED_HISTORY.SOCIAL_TITLE' | translate }}</h3>
+      @if (canEditSocialFamily) {
+        <button type="button" class="btn-primary btn-sm" (click)="openSocialForm()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}
+        </button>
+      }
+    </div>
+    @if (socialLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (!currentSocial()) {
+      <p class="empty-hint">{{ 'MED_HISTORY.NO_SOCIAL' | translate }}</p>
+    } @else {
+      @if (currentSocial(); as s) {
+        <div class="summary-grid">
+          <div class="summary-block">
+            <h4>{{ 'MED_HISTORY.SUBSTANCES' | translate }}</h4>
+            <p>
+              {{ 'MED_HISTORY.TOBACCO' | translate }}:
+              {{ (s.tobaccoUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
+              @if (s.tobaccoUse) {
+                ({{ s.tobaccoType || '—' }}, {{ s.tobaccoPacksPerDay ?? '—' }}
+                {{ 'MED_HISTORY.PACKS_DAY' | translate }})
+              }
+            </p>
+            <p>
+              {{ 'MED_HISTORY.ALCOHOL' | translate }}:
+              {{ (s.alcoholUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
+              @if (s.alcoholUse) {
+                ({{ s.alcoholFrequency || '—' }})
+              }
+            </p>
+            <p>
+              {{ 'MED_HISTORY.DRUGS' | translate }}:
+              {{ (s.recreationalDrugUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
+              @if (s.recreationalDrugUse) {
+                ({{ s.drugTypesUsed || '—' }})
+              }
+            </p>
+          </div>
+          <div class="summary-block">
+            <h4>{{ 'MED_HISTORY.LIFESTYLE' | translate }}</h4>
+            <p>
+              {{ 'MED_HISTORY.EXERCISE' | translate }}: {{ s.exerciseFrequency || '—' }}
+              @if (s.exerciseMinutesPerWeek) {
+                ({{ s.exerciseMinutesPerWeek }} {{ 'MED_HISTORY.MIN_WEEK' | translate }})
+              }
+            </p>
+            <p>{{ 'MED_HISTORY.DIET' | translate }}: {{ s.dietType || '—' }}</p>
+            <p>
+              {{ 'MED_HISTORY.OCCUPATION' | translate }}: {{ s.occupation || '—' }}
+              @if (s.employmentStatus) {
+                ({{ s.employmentStatus }})
+              }
+            </p>
+          </div>
+          <div class="summary-block">
+            <h4>{{ 'MED_HISTORY.SOCIAL_CONTEXT' | translate }}</h4>
+            <p>
+              {{ 'MED_HISTORY.LIVING' | translate }}: {{ s.livingArrangement || '—' }}
+              @if (s.householdMembers) {
+                ({{ s.householdMembers }} {{ 'MED_HISTORY.MEMBERS' | translate }})
+              }
+            </p>
+            <p>{{ 'MED_HISTORY.EDUCATION' | translate }}: {{ s.educationLevel || '—' }}</p>
+            <p>
+              {{ 'MED_HISTORY.LANGUAGE' | translate }}: {{ s.preferredLanguage || '—' }}
+              @if (s.interpreterNeeded) {
+                <span class="flag-badge">{{ 'MED_HISTORY.INTERPRETER' | translate }}</span>
+              }
+            </p>
+          </div>
+          <div class="summary-block">
+            <h4>{{ 'MED_HISTORY.SAFETY' | translate }}</h4>
+            <p>
+              {{ 'MED_HISTORY.FEELS_SAFE' | translate }}:
+              {{
+                s.feelsSafeAtHome === false
+                  ? ('COMMON.NO' | translate)
+                  : s.feelsSafeAtHome
+                    ? ('COMMON.YES' | translate)
+                    : '—'
+              }}
+              @if (s.feelsSafeAtHome === false || s.abuseHistory) {
+                <span class="flag-badge danger">{{ 'MED_HISTORY.SAFETY_FLAG' | translate }}</span>
+              }
+            </p>
+            <p>{{ 'MED_HISTORY.STRESS' | translate }}: {{ s.stressLevel || '—' }}</p>
+            @if (s.socialIsolationRisk) {
+              <p>
+                <span class="flag-badge">{{ 'MED_HISTORY.ISOLATION_RISK' | translate }}</span>
+              </p>
+            }
+          </div>
+        </div>
+        @if (s.additionalNotes) {
+          <p class="notes-block">{{ s.additionalNotes }}</p>
+        }
+        <p class="muted">
+          v{{ s.versionNumber ?? 1 }} — {{ s.recordedDate | date: 'mediumDate' }}
+          @if (s.recordedByName) {
+            — {{ s.recordedByName }}
+          }
+          · {{ socialVersions().length }} {{ 'MED_HISTORY.VERSIONS' | translate }}
+        </p>
+      }
+    }
+  }
+
+  <!-- ══ Family history ══ -->
+  @if (section() === 'family') {
+    <div class="section-toolbar">
+      <div class="mh-chips">
+        <button
+          type="button"
+          class="mh-chip"
+          [class.active]="familyFilter() === 'all'"
+          (click)="setFamilyFilter('all')"
+        >
+          {{ 'COMMON.ALL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="mh-chip"
+          [class.active]="familyFilter() === 'genetic'"
+          (click)="setFamilyFilter('genetic')"
+        >
+          {{ 'MED_HISTORY.GENETIC' | translate }}
+        </button>
+        <button
+          type="button"
+          class="mh-chip"
+          [class.active]="familyFilter() === 'screening-needed'"
+          (click)="setFamilyFilter('screening-needed')"
+        >
+          {{ 'MED_HISTORY.SCREENING_NEEDED' | translate }}
+        </button>
+      </div>
+      @if (canEditSocialFamily) {
+        <button type="button" class="btn-primary btn-sm" (click)="openCreateFamily()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MED_HISTORY.ADD_FAMILY' | translate }}
+        </button>
+      }
+    </div>
+    @if (familyLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (familyEntries().length === 0) {
+      <p class="empty-hint">{{ 'MED_HISTORY.NO_FAMILY' | translate }}</p>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MED_HISTORY.RELATIONSHIP' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.CONDITION' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.ONSET_AGE' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.FLAGS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (f of familyEntries(); track f.id) {
+              <tr>
+                <td>
+                  {{ f.relationship }}
+                  @if (f.relationshipSide) {
+                    <span class="muted">({{ f.relationshipSide }})</span>
+                  }
+                </td>
+                <td>
+                  {{ f.conditionDisplay }}
+                  @if (f.conditionCategory) {
+                    <span class="muted">· {{ f.conditionCategory }}</span>
+                  }
+                </td>
+                <td>{{ f.ageAtOnset ?? '—' }}</td>
+                <td class="flags-cell">
+                  @if (f.geneticCondition) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MED_HISTORY.GENETIC' | translate"
+                      >genetics</span
+                    >
+                  }
+                  @if (f.riskFactorForPatient) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MED_HISTORY.RISK_FACTOR' | translate"
+                      >warning</span
+                    >
+                  }
+                  @if (f.screeningRecommended) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MED_HISTORY.SCREENING_NEEDED' | translate"
+                      >screen_search_desktop</span
+                    >
+                  }
+                </td>
+                <td>
+                  @if (canEditSocialFamily) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditFamily(f)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Immunizations ══ -->
+  @if (section() === 'immunizations') {
+    <div class="section-toolbar">
+      <h3>{{ 'MED_HISTORY.IMMUNIZATIONS_TITLE' | translate }}</h3>
+      @if (canEditImmunizations) {
+        <button type="button" class="btn-primary btn-sm" (click)="openCreateImmunization()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MED_HISTORY.ADD_IMMUNIZATION' | translate }}
+        </button>
+      }
+    </div>
+    @if (immunizationsLoading()) {
+      <div class="loading-state"><div class="spinner"></div></div>
+    } @else if (activeImmunizations().length === 0) {
+      <p class="empty-hint">{{ 'MED_HISTORY.NO_IMMUNIZATIONS' | translate }}</p>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MED_HISTORY.VACCINE' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.ADMINISTERED' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.DOSE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'MED_HISTORY.NEXT_DUE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (im of activeImmunizations(); track im.id) {
+              <tr [class.row-overdue]="isOverdue(im)">
+                <td>
+                  {{ im.vaccineDisplay }}
+                  <span class="muted">{{ im.vaccineCode }}</span>
+                  @if (im.adverseReaction) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MED_HISTORY.ADVERSE_REACTION' | translate"
+                      >report</span
+                    >
+                  }
+                </td>
+                <td>
+                  {{ im.administrationDate ? (im.administrationDate | date: 'mediumDate') : '—' }}
+                </td>
+                <td>{{ doseLabel(im) }}</td>
+                <td>{{ im.status || '—' }}</td>
+                <td>
+                  {{ im.nextDoseDueDate ? (im.nextDoseDueDate | date: 'mediumDate') : '—' }}
+                  @if (isOverdue(im)) {
+                    <span class="flag-badge danger">{{ 'MED_HISTORY.OVERDUE' | translate }}</span>
+                  } @else if (im.nextDoseDueDate && im.reminderSent) {
+                    <span class="flag-badge">{{ 'MED_HISTORY.REMINDER_SENT' | translate }}</span>
+                  }
+                </td>
+                <td class="actions-cell">
+                  @if (canEditImmunizations) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditImmunization(im)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canMarkReminder && im.nextDoseDueDate && !im.reminderSent) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [disabled]="reminderBusyId() === im.id"
+                      [title]="'MED_HISTORY.MARK_REMINDER' | translate"
+                      (click)="markReminderSent(im)"
+                    >
+                      <span class="material-symbols-outlined">notifications</span>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>
+
+<!-- ══ Social form modal ══ -->
+@if (showSocialModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeSocialModal()"
+    (keydown.escape)="closeSocialModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeSocialModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <h3 class="section-heading">{{ 'MED_HISTORY.SUBSTANCES' | translate }}</h3>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.tobaccoUse" />
+            {{ 'MED_HISTORY.TOBACCO' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.alcoholUse" />
+            {{ 'MED_HISTORY.ALCOHOL' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.recreationalDrugUse" />
+            {{ 'MED_HISTORY.DRUGS' | translate }}
+          </label>
+        </div>
+        @if (socialForm.tobaccoUse) {
+          <div class="form-row">
+            <div class="field">
+              <label for="sh-tobacco-type">{{ 'MED_HISTORY.TOBACCO_TYPE' | translate }}</label>
+              <input id="sh-tobacco-type" type="text" [(ngModel)]="socialForm.tobaccoType" />
+            </div>
+            <div class="field">
+              <label for="sh-packs">{{ 'MED_HISTORY.PACKS_DAY' | translate }}</label>
+              <input
+                id="sh-packs"
+                type="number"
+                min="0"
+                step="0.5"
+                [(ngModel)]="socialForm.tobaccoPacksPerDay"
+              />
+            </div>
+          </div>
+        }
+        @if (socialForm.alcoholUse) {
+          <div class="form-row">
+            <div class="field">
+              <label for="sh-alcohol-freq">{{ 'MED_HISTORY.ALCOHOL_FREQ' | translate }}</label>
+              <input id="sh-alcohol-freq" type="text" [(ngModel)]="socialForm.alcoholFrequency" />
+            </div>
+            <div class="field">
+              <label for="sh-drinks">{{ 'MED_HISTORY.DRINKS_WEEK' | translate }}</label>
+              <input
+                id="sh-drinks"
+                type="number"
+                min="0"
+                [(ngModel)]="socialForm.alcoholDrinksPerWeek"
+              />
+            </div>
+          </div>
+        }
+        @if (socialForm.recreationalDrugUse) {
+          <div class="field">
+            <label for="sh-drug-types">{{ 'MED_HISTORY.DRUG_TYPES' | translate }}</label>
+            <input id="sh-drug-types" type="text" [(ngModel)]="socialForm.drugTypesUsed" />
+          </div>
+        }
+
+        <h3 class="section-heading">{{ 'MED_HISTORY.LIFESTYLE' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="sh-exercise">{{ 'MED_HISTORY.EXERCISE' | translate }}</label>
+            <input id="sh-exercise" type="text" [(ngModel)]="socialForm.exerciseFrequency" />
+          </div>
+          <div class="field">
+            <label for="sh-diet">{{ 'MED_HISTORY.DIET' | translate }}</label>
+            <input id="sh-diet" type="text" [(ngModel)]="socialForm.dietType" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="sh-occupation">{{ 'MED_HISTORY.OCCUPATION' | translate }}</label>
+            <input id="sh-occupation" type="text" [(ngModel)]="socialForm.occupation" />
+          </div>
+          <div class="field">
+            <label for="sh-employment">{{ 'MED_HISTORY.EMPLOYMENT' | translate }}</label>
+            <input id="sh-employment" type="text" [(ngModel)]="socialForm.employmentStatus" />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MED_HISTORY.SOCIAL_CONTEXT' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="sh-living">{{ 'MED_HISTORY.LIVING' | translate }}</label>
+            <input id="sh-living" type="text" [(ngModel)]="socialForm.livingArrangement" />
+          </div>
+          <div class="field">
+            <label for="sh-language">{{ 'MED_HISTORY.LANGUAGE' | translate }}</label>
+            <input id="sh-language" type="text" [(ngModel)]="socialForm.preferredLanguage" />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.interpreterNeeded" />
+            {{ 'MED_HISTORY.INTERPRETER' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.socialIsolationRisk" />
+            {{ 'MED_HISTORY.ISOLATION_RISK' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.housingStability" />
+            {{ 'MED_HISTORY.HOUSING_STABLE' | translate }}
+          </label>
+        </div>
+
+        <h3 class="section-heading">{{ 'MED_HISTORY.SAFETY' | translate }}</h3>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.feelsSafeAtHome" />
+            {{ 'MED_HISTORY.FEELS_SAFE' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.abuseHistory" />
+            {{ 'MED_HISTORY.ABUSE_HISTORY' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="socialForm.mentalHealthSupport" />
+            {{ 'MED_HISTORY.MENTAL_HEALTH_SUPPORT' | translate }}
+          </label>
+        </div>
+        <div class="field">
+          <label for="sh-stress">{{ 'MED_HISTORY.STRESS' | translate }}</label>
+          <input id="sh-stress" type="text" [(ngModel)]="socialForm.stressLevel" />
+        </div>
+        <div class="field">
+          <label for="sh-notes">{{ 'MED_HISTORY.NOTES' | translate }}</label>
+          <textarea id="sh-notes" rows="3" [(ngModel)]="socialForm.additionalNotes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeSocialModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="socialSaving()"
+          (click)="submitSocial()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Family form modal ══ -->
+@if (showFamilyModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeFamilyModal()"
+    (keydown.escape)="closeFamilyModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingFamilyId() ? 'MED_HISTORY.EDIT_FAMILY' : 'MED_HISTORY.ADD_FAMILY') | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeFamilyModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="fh-relationship">{{ 'MED_HISTORY.RELATIONSHIP' | translate }} *</label>
+            <input id="fh-relationship" type="text" [(ngModel)]="familyForm.relationship" />
+          </div>
+          <div class="field">
+            <label for="fh-side">{{ 'MED_HISTORY.SIDE' | translate }}</label>
+            <input id="fh-side" type="text" [(ngModel)]="familyForm.relationshipSide" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="fh-condition">{{ 'MED_HISTORY.CONDITION' | translate }} *</label>
+            <input id="fh-condition" type="text" [(ngModel)]="familyForm.conditionDisplay" />
+          </div>
+          <div class="field">
+            <label for="fh-category">{{ 'MED_HISTORY.CATEGORY' | translate }}</label>
+            <input id="fh-category" type="text" [(ngModel)]="familyForm.conditionCategory" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="fh-onset">{{ 'MED_HISTORY.ONSET_AGE' | translate }}</label>
+            <input id="fh-onset" type="number" min="0" [(ngModel)]="familyForm.ageAtOnset" />
+          </div>
+          <div class="field">
+            <label for="fh-outcome">{{ 'MED_HISTORY.OUTCOME' | translate }}</label>
+            <input id="fh-outcome" type="text" [(ngModel)]="familyForm.outcome" />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="familyForm.geneticCondition" />
+            {{ 'MED_HISTORY.GENETIC' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="familyForm.riskFactorForPatient" />
+            {{ 'MED_HISTORY.RISK_FACTOR' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="familyForm.screeningRecommended" />
+            {{ 'MED_HISTORY.SCREENING_NEEDED' | translate }}
+          </label>
+        </div>
+        @if (familyForm.screeningRecommended) {
+          <div class="form-row">
+            <div class="field">
+              <label for="fh-screening-type">{{ 'MED_HISTORY.SCREENING_TYPE' | translate }}</label>
+              <input id="fh-screening-type" type="text" [(ngModel)]="familyForm.screeningType" />
+            </div>
+            <div class="field">
+              <label for="fh-screening-age">{{ 'MED_HISTORY.SCREENING_AGE' | translate }}</label>
+              <input
+                id="fh-screening-age"
+                type="number"
+                min="0"
+                [(ngModel)]="familyForm.recommendedAgeForScreening"
+              />
+            </div>
+          </div>
+        }
+        <div class="field">
+          <label for="fh-notes">{{ 'MED_HISTORY.NOTES' | translate }}</label>
+          <textarea id="fh-notes" rows="2" [(ngModel)]="familyForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeFamilyModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="familySaving() || !familyForm.relationship || !familyForm.conditionDisplay"
+          (click)="submitFamily()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Immunization form modal ══ -->
+@if (showImmunizationModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeImmunizationModal()"
+    (keydown.escape)="closeImmunizationModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingImmunizationId()
+              ? 'MED_HISTORY.EDIT_IMMUNIZATION'
+              : 'MED_HISTORY.ADD_IMMUNIZATION'
+            ) | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeImmunizationModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
+            <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
+          </div>
+          <div class="field">
+            <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
+            <input id="im-display" type="text" [(ngModel)]="immunizationForm.vaccineDisplay" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="im-date">{{ 'MED_HISTORY.ADMINISTERED' | translate }} *</label>
+            <input id="im-date" type="date" [(ngModel)]="immunizationForm.administrationDate" />
+          </div>
+          <div class="field">
+            <label for="im-status">{{ 'COMMON.STATUS' | translate }} *</label>
+            <select id="im-status" [(ngModel)]="immunizationForm.status">
+              <option value="COMPLETED">{{ 'MED_HISTORY.STATUS_COMPLETED' | translate }}</option>
+              <option value="NOT_DONE">{{ 'MED_HISTORY.STATUS_NOT_DONE' | translate }}</option>
+              <option value="REFUSED">{{ 'MED_HISTORY.STATUS_REFUSED' | translate }}</option>
+              <option value="ENTERED_IN_ERROR">
+                {{ 'MED_HISTORY.STATUS_ENTERED_IN_ERROR' | translate }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="im-dose">{{ 'MED_HISTORY.DOSE_NUMBER' | translate }}</label>
+            <input id="im-dose" type="number" min="1" [(ngModel)]="immunizationForm.doseNumber" />
+          </div>
+          <div class="field">
+            <label for="im-total">{{ 'MED_HISTORY.TOTAL_DOSES' | translate }}</label>
+            <input
+              id="im-total"
+              type="number"
+              min="1"
+              [(ngModel)]="immunizationForm.totalDosesInSeries"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="im-lot">{{ 'MED_HISTORY.LOT' | translate }}</label>
+            <input id="im-lot" type="text" [(ngModel)]="immunizationForm.lotNumber" />
+          </div>
+          <div class="field">
+            <label for="im-manufacturer">{{ 'MED_HISTORY.MANUFACTURER' | translate }}</label>
+            <input id="im-manufacturer" type="text" [(ngModel)]="immunizationForm.manufacturer" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="im-route">{{ 'MED_HISTORY.ROUTE' | translate }}</label>
+            <input id="im-route" type="text" [(ngModel)]="immunizationForm.route" />
+          </div>
+          <div class="field">
+            <label for="im-site">{{ 'MED_HISTORY.SITE' | translate }}</label>
+            <input id="im-site" type="text" [(ngModel)]="immunizationForm.site" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="im-next-due">{{ 'MED_HISTORY.NEXT_DUE' | translate }}</label>
+          <input id="im-next-due" type="date" [(ngModel)]="immunizationForm.nextDoseDueDate" />
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="immunizationForm.adverseReaction" />
+            {{ 'MED_HISTORY.ADVERSE_REACTION' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="immunizationForm.visGiven" />
+            {{ 'MED_HISTORY.VIS_GIVEN' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="immunizationForm.consentObtained" />
+            {{ 'MED_HISTORY.CONSENT' | translate }}
+          </label>
+        </div>
+        @if (immunizationForm.adverseReaction) {
+          <div class="field">
+            <label for="im-reaction">{{ 'MED_HISTORY.REACTION_DESCRIPTION' | translate }}</label>
+            <textarea
+              id="im-reaction"
+              rows="2"
+              [(ngModel)]="immunizationForm.reactionDescription"
+            ></textarea>
+          </div>
+        }
+        <div class="field">
+          <label for="im-notes">{{ 'MED_HISTORY.NOTES' | translate }}</label>
+          <textarea id="im-notes" rows="2" [(ngModel)]="immunizationForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeImmunizationModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="
+            immunizationSaving() ||
+            !immunizationForm.vaccineCode ||
+            !immunizationForm.vaccineDisplay
+          "
+          (click)="submitImmunization()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
