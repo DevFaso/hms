@@ -1,0 +1,334 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'REGISTRATIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'REGISTRATIONS.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (canSeeMultiHospital) {
+        <button type="button" class="btn-secondary" (click)="toggleMultiHospital()">
+          <span class="material-symbols-outlined">hub</span>
+          {{ 'REGISTRATIONS.MULTI_HOSPITAL' | translate }}
+        </button>
+      }
+      @if (canManage) {
+        <button type="button" class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'REGISTRATIONS.NEW' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (showMultiHospital()) {
+    <div class="multi-panel">
+      <h3 class="section-heading">{{ 'REGISTRATIONS.MULTI_TITLE' | translate }}</h3>
+      @if (multiHospitalLoading()) {
+        <div class="loading-state"><div class="spinner"></div></div>
+      } @else if (multiHospitalRows().length === 0) {
+        <p class="muted">{{ 'REGISTRATIONS.MULTI_EMPTY' | translate }}</p>
+      } @else {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
+                <th scope="col">{{ 'REGISTRATIONS.HOSPITAL' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of multiHospitalRows(); track row.patientId + row.hospitalId) {
+                <tr>
+                  <td>{{ row.patientName || row.patientId }}</td>
+                  <td>{{ row.hospitalName || row.hospitalId }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeFilter() === 'active'"
+        (click)="setActiveFilter('active')"
+      >
+        {{ 'COMMON.ACTIVE' | translate }}
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeFilter() === 'inactive'"
+        (click)="setActiveFilter('inactive')"
+      >
+        {{ 'COMMON.INACTIVE' | translate }}
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeFilter() === 'all'"
+        (click)="setActiveFilter('all')"
+      >
+        {{ 'COMMON.ALL' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+  @if (!loading() && loadError()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">error</span>
+      <h3>{{ 'REGISTRATIONS.LOAD_ERROR' | translate }}</h3>
+      <button type="button" class="btn-secondary btn-sm" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+  @if (!loading() && !loadError() && registrations().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">how_to_reg</span>
+      <h3>{{ 'REGISTRATIONS.NONE' | translate }}</h3>
+    </div>
+  }
+  @if (!loading() && !loadError() && registrations().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'REGISTRATIONS.PATIENT' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.LOCATION' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of registrations(); track r.id) {
+            <tr class="data-row">
+              <td>
+                {{ r.patientFullName || r.patientUsername || '—' }}
+                @if (r.patientEmail) {
+                  <span class="muted">{{ r.patientEmail }}</span>
+                }
+              </td>
+              <td>{{ r.mri || r.registrationCode || '—' }}</td>
+              <td>
+                @if (r.stayStatus) {
+                  <span class="{{ stayStatusClass(r.stayStatus) }}">
+                    {{ 'REGISTRATIONS.STAY_' + r.stayStatus | translate }}
+                  </span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+              <td>
+                {{ r.currentRoom || '—' }}
+                @if (r.currentBed) {
+                  / {{ r.currentBed }}
+                }
+              </td>
+              <td>{{ r.attendingPhysicianName || '—' }}</td>
+              <td>
+                @if (r.active) {
+                  <span class="status-badge status-completed">{{
+                    'COMMON.ACTIVE' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-cancelled">
+                    {{ 'COMMON.INACTIVE' | translate }}
+                  </span>
+                }
+              </td>
+              <td class="actions-cell">
+                @if (canManage) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(r)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  @if (r.active) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [title]="'REGISTRATIONS.DEACTIVATE' | translate"
+                      (click)="deactivate(r)"
+                    >
+                      <span class="material-symbols-outlined">person_off</span>
+                    </button>
+                  }
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm danger"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(r)"
+                  >
+                    <span class="material-symbols-outlined">delete_forever</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- ══ Create/edit modal ══ -->
+@if (showFormModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeFormModal()"
+    (keydown.escape)="closeFormModal()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRATIONS.NEW') | translate }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeFormModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editingRegistration()) {
+          <div class="field">
+            <label for="reg-patient">{{ 'REGISTRATIONS.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="reg-patient"
+              [selected]="formPatient()"
+              (selectedChange)="onFormPatientPicked($event)"
+            />
+          </div>
+        } @else {
+          <p class="muted">
+            {{ editingRegistration()?.patientFullName || editingRegistration()?.patientUsername }}
+            — {{ editingRegistration()?.mri }}
+          </p>
+        }
+        <div class="form-row">
+          <div class="field">
+            <label for="reg-status">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</label>
+            <select id="reg-status" [(ngModel)]="form.stayStatus">
+              @for (s of stayStatuses; track s) {
+                <option [value]="s">{{ 'REGISTRATIONS.STAY_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="form.active" />
+              {{ 'COMMON.ACTIVE' | translate }}
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="reg-room">{{ 'REGISTRATIONS.ROOM' | translate }}</label>
+            <input id="reg-room" type="text" [(ngModel)]="form.currentRoom" />
+          </div>
+          <div class="field">
+            <label for="reg-bed">{{ 'REGISTRATIONS.BED' | translate }}</label>
+            <input id="reg-bed" type="text" [(ngModel)]="form.currentBed" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="reg-physician">{{ 'REGISTRATIONS.PHYSICIAN' | translate }}</label>
+          <input id="reg-physician" type="text" [(ngModel)]="form.attendingPhysicianName" />
+        </div>
+        <div class="field">
+          <label for="reg-note">{{ 'REGISTRATIONS.DISCHARGE_NOTE' | translate }}</label>
+          <textarea id="reg-note" rows="2" [(ngModel)]="form.readyForDischargeNote"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeFormModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="formSaving() || (!editingRegistration() && !form.patientId)"
+          (click)="submitForm()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Hard-delete confirm ══ -->
+@if (deleteTarget(); as target) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDelete()"
+    (keydown.escape)="closeDelete()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ 'REGISTRATIONS.DELETE_CONFIRM' | translate }}
+          <strong>{{ target.patientFullName || target.patientUsername }}</strong>
+          ({{ target.mri }})?
+        </p>
+        <p class="muted">{{ 'REGISTRATIONS.DELETE_WARNING' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="button" class="btn-danger" [disabled]="deleteBusy()" (click)="submitDelete()">
+          {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
