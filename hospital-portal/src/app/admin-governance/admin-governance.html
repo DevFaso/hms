@@ -1,0 +1,40 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'ADMIN_GOV.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'ADMIN_GOV.SUBTITLE' | translate }}</p>
+    </div>
+  </div>
+
+  <div class="tabs">
+    @for (tab of tabs; track tab.key) {
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab() === tab.key"
+        (click)="setTab(tab.key)"
+      >
+        <span class="material-symbols-outlined">{{ tab.icon }}</span>
+        {{ tab.labelKey | translate }}
+      </button>
+    }
+  </div>
+
+  @switch (activeTab()) {
+    @case ('matrix') {
+      <app-gov-matrix-tab />
+    }
+    @case ('policies') {
+      <app-gov-policies-tab />
+    }
+    @case ('users') {
+      <app-gov-users-tab />
+    }
+    @case ('credentials') {
+      <app-gov-credentials-tab />
+    }
+    @case ('security') {
+      <app-gov-security-tab />
+    }
+  }
+</div>

@@ -1,0 +1,550 @@
+<div class="filter-bar">
+  <div class="mode-picker">
+    <app-patient-picker
+      inputId="pp-patient"
+      [selected]="patient()"
+      (selectedChange)="onPatientPicked($event)"
+    />
+  </div>
+  @if (patient()) {
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="section() === 'mother'"
+        (click)="setSection('mother')"
+      >
+        {{ 'POSTPARTUM.MOTHER_TAB' | translate }}
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="section() === 'newborn'"
+        (click)="setSection('newborn')"
+      >
+        {{ 'POSTPARTUM.NEWBORN_TAB' | translate }}
+      </button>
+    </div>
+  }
+</div>
+
+@if (!patient()) {
+  <div class="empty-state">
+    <span class="material-symbols-outlined empty-icon">family_restroom</span>
+    <h3>{{ 'MATERNITY.PICK_PATIENT_HINT' | translate }}</h3>
+  </div>
+}
+
+@if (patient() && loading()) {
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>{{ 'COMMON.LOADING' | translate }}</p>
+  </div>
+}
+
+@if (patient() && !loading()) {
+  @if (section() === 'mother') {
+    @if (schedule(); as s) {
+      <div class="view-section action-form schedule-banner">
+        <p>
+          <strong>{{ phaseLabelKey(s) | translate }}</strong>
+          @if (s.frequencyMinutes) {
+            · {{ 'POSTPARTUM.EVERY' | translate }} {{ s.frequencyMinutes }}
+            {{ 'POSTPARTUM.MINUTES' | translate }}
+          }
+          @if (s.nextDueAt) {
+            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}: {{ s.nextDueAt | date: 'short' }}
+          }
+          @if (s.overdue) {
+            <span class="risk-badge risk-high">{{ 'POSTPARTUM.OVERDUE' | translate }}</span>
+          }
+        </p>
+        <p class="muted">
+          {{ 'POSTPARTUM.IMMEDIATE_PROGRESS' | translate }}: {{ s.immediateChecksCompleted }} /
+          {{ s.immediateCheckTarget }}
+        </p>
+      </div>
+    }
+
+    <div class="filter-bar">
+      <h3 class="section-heading">{{ 'POSTPARTUM.OBSERVATIONS' | translate }}</h3>
+      <button class="btn-primary" (click)="openObservation()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}
+      </button>
+    </div>
+
+    @if (observations().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+        <h3>{{ 'POSTPARTUM.NO_OBSERVATIONS' | translate }}</h3>
+      </div>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'POSTPARTUM.TIME' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.VITALS' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.FUNDUS' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.LOCHIA' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.MOOD' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (o of observations(); track o.id) {
+              <tr class="data-row">
+                <td>{{ o.observationTime ? (o.observationTime | date: 'short') : '—' }}</td>
+                <td>
+                  {{ o.temperatureCelsius ?? '—' }}°C · {{ o.systolicBpMmHg ?? '—' }}/{{
+                    o.diastolicBpMmHg ?? '—'
+                  }}
+                  · {{ o.pulseBpm ?? '—' }} bpm
+                </td>
+                <td>
+                  {{ o.fundusTone ? ('POSTPARTUM.FUNDUS_' + o.fundusTone | translate) : '—' }}
+                </td>
+                <td>
+                  {{ o.lochiaAmount ? ('POSTPARTUM.LOCHIA_' + o.lochiaAmount | translate) : '—' }}
+                </td>
+                <td>{{ o.moodStatus ? ('POSTPARTUM.MOOD_' + o.moodStatus | translate) : '—' }}</td>
+                <td>
+                  @for (alert of o.alerts ?? []; track $index) {
+                    <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
+                      {{ alert.type }}
+                    </span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  @if (section() === 'newborn') {
+    <div class="filter-bar">
+      <h3 class="section-heading">{{ 'POSTPARTUM.ASSESSMENTS' | translate }}</h3>
+      <button class="btn-primary" (click)="openAssessment()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}
+      </button>
+    </div>
+
+    @if (assessments().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">child_care</span>
+        <h3>{{ 'POSTPARTUM.NO_ASSESSMENTS' | translate }}</h3>
+      </div>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'POSTPARTUM.TIME' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.APGAR' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.VITALS' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.ESCALATION' | translate }}</th>
+              <th scope="col">{{ 'POSTPARTUM.ALERTS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of assessments(); track a.id) {
+              <tr class="data-row">
+                <td>{{ a.assessmentTime ? (a.assessmentTime | date: 'short') : '—' }}</td>
+                <td>{{ apgarSummary(a) }}</td>
+                <td>
+                  {{ a.temperatureCelsius ?? '—' }}°C · {{ a.heartRateBpm ?? '—' }} bpm ·
+                  {{ a.oxygenSaturationPercent ?? '—' }}%
+                </td>
+                <td>
+                  @if (a.escalationRecommended) {
+                    <span class="risk-badge risk-high">{{ 'COMMON.YES' | translate }}</span>
+                  } @else {
+                    <span class="muted">{{ 'COMMON.NO' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  @for (alert of a.alerts ?? []; track $index) {
+                    <span class="{{ alertClass(alert.severity) }}" [title]="alert.message">
+                      {{ alert.type }}
+                    </span>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+}
+
+<!-- ══ Observation modal ══ -->
+@if (showObservationModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeObservation()"
+    (keydown.escape)="closeObservation()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeObservation()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="obs-time">{{ 'POSTPARTUM.TIME' | translate }}</label>
+          <input
+            id="obs-time"
+            type="datetime-local"
+            [(ngModel)]="observationForm.observationTime"
+          />
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.VITALS' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="obs-temp">°C</label>
+            <input
+              id="obs-temp"
+              type="number"
+              step="0.1"
+              [(ngModel)]="observationForm.temperatureCelsius"
+            />
+          </div>
+          <div class="field">
+            <label for="obs-sys">SYS</label>
+            <input id="obs-sys" type="number" [(ngModel)]="observationForm.systolicBpMmHg" />
+          </div>
+          <div class="field">
+            <label for="obs-dia">DIA</label>
+            <input id="obs-dia" type="number" [(ngModel)]="observationForm.diastolicBpMmHg" />
+          </div>
+          <div class="field">
+            <label for="obs-pulse">{{ 'POSTPARTUM.PULSE' | translate }}</label>
+            <input id="obs-pulse" type="number" [(ngModel)]="observationForm.pulseBpm" />
+          </div>
+          <div class="field">
+            <label for="obs-resp">{{ 'POSTPARTUM.RESP' | translate }}</label>
+            <input id="obs-resp" type="number" [(ngModel)]="observationForm.respirationsPerMin" />
+          </div>
+          <div class="field">
+            <label for="obs-pain">{{ 'POSTPARTUM.PAIN' | translate }}</label>
+            <input
+              id="obs-pain"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="observationForm.painScore"
+            />
+          </div>
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.RECOVERY' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="obs-fundus">{{ 'POSTPARTUM.FUNDUS' | translate }}</label>
+            <select id="obs-fundus" [(ngModel)]="observationForm.fundusTone">
+              <option [ngValue]="undefined">—</option>
+              @for (t of fundusTones; track t) {
+                <option [value]="t">{{ 'POSTPARTUM.FUNDUS_' + t | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="obs-bladder">{{ 'POSTPARTUM.BLADDER' | translate }}</label>
+            <select id="obs-bladder" [(ngModel)]="observationForm.bladderStatus">
+              <option [ngValue]="undefined">—</option>
+              @for (b of bladderStatuses; track b) {
+                <option [value]="b">{{ 'POSTPARTUM.BLADDER_' + b | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="obs-lochia-amount">{{ 'POSTPARTUM.LOCHIA' | translate }}</label>
+            <select id="obs-lochia-amount" [(ngModel)]="observationForm.lochiaAmount">
+              <option [ngValue]="undefined">—</option>
+              @for (l of lochiaAmounts; track l) {
+                <option [value]="l">{{ 'POSTPARTUM.LOCHIA_' + l | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="obs-lochia-char">{{ 'POSTPARTUM.LOCHIA_CHARACTER' | translate }}</label>
+            <select id="obs-lochia-char" [(ngModel)]="observationForm.lochiaCharacter">
+              <option [ngValue]="undefined">—</option>
+              @for (l of lochiaCharacters; track l) {
+                <option [value]="l">{{ 'POSTPARTUM.LOCHIA_CHAR_' + l | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.HEMORRHAGE' | translate }}</h3>
+        <div class="checkbox-grid">
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.uterineAtonySuspected" />
+            {{ 'POSTPARTUM.ATONY' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.excessiveBleeding" />
+            {{ 'POSTPARTUM.EXCESSIVE_BLEEDING' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.uterotonicGiven" />
+            {{ 'POSTPARTUM.UTEROTONIC' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.hemorrhageProtocolActivated" />
+            {{ 'POSTPARTUM.PROTOCOL_ACTIVATED' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.foulLochiaOdor" />
+            {{ 'POSTPARTUM.FOUL_ODOR' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.uterineTenderness" />
+            {{ 'POSTPARTUM.TENDERNESS' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="observationForm.chillsOrRigors" />
+            {{ 'POSTPARTUM.CHILLS' | translate }}
+          </label>
+        </div>
+        @if (observationForm.excessiveBleeding) {
+          <div class="field">
+            <label for="obs-ebl">{{ 'POSTPARTUM.EBL' | translate }}</label>
+            <input
+              id="obs-ebl"
+              type="number"
+              min="0"
+              [(ngModel)]="observationForm.estimatedBloodLossMl"
+            />
+          </div>
+        }
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_PSYCHOSOCIAL' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="obs-mood">{{ 'POSTPARTUM.MOOD' | translate }}</label>
+            <select id="obs-mood" [(ngModel)]="observationForm.moodStatus">
+              <option [ngValue]="undefined">—</option>
+              @for (m of moodStatuses; track m) {
+                <option [value]="m">{{ 'POSTPARTUM.MOOD_' + m | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="obs-support">{{ 'POSTPARTUM.SUPPORT' | translate }}</label>
+            <select id="obs-support" [(ngModel)]="observationForm.supportStatus">
+              <option [ngValue]="undefined">—</option>
+              @for (s of supportStatuses; track s) {
+                <option [value]="s">{{ 'POSTPARTUM.SUPPORT_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="obs-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
+          <textarea id="obs-notes" rows="2" [(ngModel)]="observationForm.psychosocialNotes">
+          </textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="obs-signoff">{{ 'POSTPARTUM.SIGNOFF' | translate }}</label>
+            <input id="obs-signoff" type="text" [(ngModel)]="observationForm.signoffName" />
+          </div>
+          <div class="field">
+            <label for="obs-credentials">{{ 'POSTPARTUM.CREDENTIALS' | translate }}</label>
+            <input
+              id="obs-credentials"
+              type="text"
+              [(ngModel)]="observationForm.signoffCredentials"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeObservation()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="observationSaving()" (click)="submitObservation()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Newborn assessment modal ══ -->
+@if (showAssessmentModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAssessment()"
+    (keydown.escape)="closeAssessment()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeAssessment()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="nb-time">{{ 'POSTPARTUM.TIME' | translate }}</label>
+          <input id="nb-time" type="datetime-local" [(ngModel)]="assessmentForm.assessmentTime" />
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.APGAR' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="nb-apgar1">1 min</label>
+            <input
+              id="nb-apgar1"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="assessmentForm.apgarOneMinute"
+            />
+          </div>
+          <div class="field">
+            <label for="nb-apgar5">5 min</label>
+            <input
+              id="nb-apgar5"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="assessmentForm.apgarFiveMinute"
+            />
+          </div>
+          <div class="field">
+            <label for="nb-apgar10">10 min</label>
+            <input
+              id="nb-apgar10"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="assessmentForm.apgarTenMinute"
+            />
+          </div>
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.VITALS' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="nb-temp">°C</label>
+            <input
+              id="nb-temp"
+              type="number"
+              step="0.1"
+              [(ngModel)]="assessmentForm.temperatureCelsius"
+            />
+          </div>
+          <div class="field">
+            <label for="nb-hr">{{ 'POSTPARTUM.PULSE' | translate }}</label>
+            <input id="nb-hr" type="number" [(ngModel)]="assessmentForm.heartRateBpm" />
+          </div>
+          <div class="field">
+            <label for="nb-resp">{{ 'POSTPARTUM.RESP' | translate }}</label>
+            <input id="nb-resp" type="number" [(ngModel)]="assessmentForm.respirationsPerMin" />
+          </div>
+          <div class="field">
+            <label for="nb-spo2">SpO2 %</label>
+            <input
+              id="nb-spo2"
+              type="number"
+              min="0"
+              max="100"
+              [(ngModel)]="assessmentForm.oxygenSaturationPercent"
+            />
+          </div>
+          <div class="field">
+            <label for="nb-glucose">{{ 'POSTPARTUM.GLUCOSE' | translate }}</label>
+            <input id="nb-glucose" type="number" min="0" [(ngModel)]="assessmentForm.glucoseMgDl" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="nb-appearance">{{ 'POSTPARTUM.GENERAL_APPEARANCE' | translate }}</label>
+          <textarea
+            id="nb-appearance"
+            rows="2"
+            [(ngModel)]="assessmentForm.examGeneralAppearance"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="nb-exam-notes">{{ 'POSTPARTUM.EXAM_NOTES' | translate }}</label>
+          <textarea id="nb-exam-notes" rows="2" [(ngModel)]="assessmentForm.examNotes"></textarea>
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.INTERVENTIONS' | translate }}</h3>
+        <div class="checkbox-grid">
+          <label>
+            <input type="checkbox" [(ngModel)]="assessmentForm.escalationRecommended" />
+            {{ 'POSTPARTUM.ESCALATION' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="assessmentForm.respiratorySupportInitiated" />
+            {{ 'POSTPARTUM.RESP_SUPPORT' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="assessmentForm.glucoseProtocolInitiated" />
+            {{ 'POSTPARTUM.GLUCOSE_PROTOCOL' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="assessmentForm.thermoregulationSupportInitiated" />
+            {{ 'POSTPARTUM.THERMO_SUPPORT' | translate }}
+          </label>
+        </div>
+        <h3 class="section-heading">{{ 'POSTPARTUM.FOLLOW_UP_ACTIONS' | translate }}</h3>
+        <div class="checkbox-grid">
+          @for (action of followUpActions; track action) {
+            <label>
+              <input
+                type="checkbox"
+                [checked]="selectedFollowUps.has(action)"
+                (change)="toggleFollowUp(action)"
+              />
+              {{ 'POSTPARTUM.ACTION_' + action | translate }}
+            </label>
+          }
+        </div>
+        <div class="field">
+          <label for="nb-follow-notes">{{ 'POSTPARTUM.FOLLOW_UP_NOTES' | translate }}</label>
+          <textarea id="nb-follow-notes" rows="2" [(ngModel)]="assessmentForm.followUpNotes">
+          </textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAssessment()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" [disabled]="assessmentSaving()" (click)="submitAssessment()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

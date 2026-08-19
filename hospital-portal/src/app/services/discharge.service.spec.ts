@@ -98,7 +98,7 @@ describe('DischargeService', () => {
     expect(req.request.params.get('patientId')).toBe('p-1');
     expect(req.request.params.get('hospitalId')).toBe('h-1');
     expect(req.request.params.get('active')).toBe('true');
-    req.flush({ content: [{ id: 'r-1' }] });
+    req.flush([{ id: 'r-1' }]);
   });
 
   it('creates a discharge summary', () => {

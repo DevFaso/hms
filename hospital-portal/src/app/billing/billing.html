@@ -31,8 +31,8 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().pending }}</span
-        ><span class="card-label">{{ 'BILLING.PENDING' | translate }}</span>
+        <span class="card-value">{{ stats().outstanding }}</span
+        ><span class="card-label">{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
@@ -52,7 +52,7 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
       <div class="card-info">
-        <span class="card-value">{{ formatCurrency(stats().outstanding) }}</span
+        <span class="card-value">{{ formatCurrency(stats().balance) }}</span
         ><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
       </div>
     </div>
@@ -69,11 +69,11 @@
     </button>
     <button
       class="tab"
-      [class.active]="activeTab() === 'pending'"
-      (click)="setTab('pending')"
-      title="Pending invoices"
+      [class.active]="activeTab() === 'outstanding'"
+      (click)="setTab('outstanding')"
+      [title]="'BILLING.OUTSTANDING_COUNT' | translate"
     >
-      {{ 'BILLING.PENDING' | translate }} ({{ stats().pending }})
+      {{ 'BILLING.OUTSTANDING_COUNT' | translate }} ({{ stats().outstanding }})
     </button>
     <button
       class="tab"
@@ -102,6 +102,41 @@
       (input)="applyFilter()"
     />
   </div>
+
+  <!-- Server-side search filters (status + invoice-date range) -->
+  @if (activeTab() === 'all') {
+    <div class="server-filters">
+      <select
+        [attr.aria-label]="'COMMON.STATUS' | translate"
+        [title]="'COMMON.STATUS' | translate"
+        [ngModel]="filterStatus()"
+        (ngModelChange)="filterStatus.set($event)"
+      >
+        <option value="">{{ 'BILLING.ALL_STATUSES' | translate }}</option>
+        @for (s of invoiceStatuses; track s) {
+          <option [value]="s">{{ formatStatus(s) }}</option>
+        }
+      </select>
+      <label class="date-filter">
+        <span>{{ 'BILLING.FROM_DATE' | translate }}</span>
+        <input
+          type="date"
+          [ngModel]="filterFromDate()"
+          (ngModelChange)="filterFromDate.set($event)"
+        />
+      </label>
+      <label class="date-filter">
+        <span>{{ 'BILLING.TO_DATE' | translate }}</span>
+        <input type="date" [ngModel]="filterToDate()" (ngModelChange)="filterToDate.set($event)" />
+      </label>
+      <button type="button" class="btn-secondary" (click)="applyServerFilters()">
+        {{ 'COMMON.APPLY' | translate }}
+      </button>
+      <button type="button" class="btn-link" (click)="clearServerFilters()">
+        {{ 'COMMON.CLEAR' | translate }}
+      </button>
+    </div>
+  }
 
   @if (loading()) {
     <div class="loading-state">
@@ -147,7 +182,7 @@
               <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                  inv.status
+                  formatStatus(inv.status)
                 }}</span>
               </td>
               <td class="actions-cell">
@@ -162,8 +197,21 @@
                   <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)">
                     <span class="material-symbols-outlined">picture_as_pdf</span>
                   </button>
+                  @if (canPayInvoice(inv)) {
+                    <button
+                      class="action-link pay-link"
+                      [title]="'BILLING.RECORD_PAYMENT' | translate"
+                      (click)="openPayment(inv)"
+                    >
+                      <span class="material-symbols-outlined">payments</span>
+                    </button>
+                  }
                   @if (canEmail) {
-                    <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)">
+                    <button
+                      class="action-link"
+                      [title]="'BILLING.EMAIL_INVOICE' | translate"
+                      (click)="openEmail(inv)"
+                    >
                       <span class="material-symbols-outlined">email</span>
                     </button>
                   }
@@ -188,6 +236,29 @@
         </tbody>
       </table>
     </div>
+    @if (activeTab() !== 'overdue' && totalPages() > 1) {
+      <div class="pagination-row">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="page() === 0"
+          (click)="loadInvoices(page() - 1)"
+        >
+          {{ 'COMMON.PREVIOUS' | translate }}
+        </button>
+        <span class="pagination-info">
+          {{ page() + 1 }} / {{ totalPages() }} ({{ totalElements() }})
+        </span>
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="page() + 1 >= totalPages()"
+          (click)="loadInvoices(page() + 1)"
+        >
+          {{ 'COMMON.NEXT' | translate }}
+        </button>
+      </div>
+    }
   }
 
   @if (!loading() && filtered().length === 0) {
@@ -232,7 +303,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
-                inv.status
+                formatStatus(inv.status)
               }}</span>
             </div>
             <div class="detail-field">
@@ -320,8 +391,8 @@
           <div class="field">
             <label for="bill-status">{{ 'COMMON.STATUS' | translate }} *</label>
             <select id="bill-status" [(ngModel)]="form.status" required>
-              @for (s of paymentStatuses; track s) {
-                <option [value]="s">{{ s }}</option>
+              @for (s of invoiceStatuses; track s) {
+                <option [value]="s">{{ formatStatus(s) }}</option>
               }
             </select>
           </div>
@@ -423,6 +494,128 @@
         </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
           {{ deleting() ? ('BILLING.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ EMAIL INVOICE MODAL ═══ -->
+@if (showEmailModal() && emailInv(); as inv) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeEmail()" (keydown.escape)="closeEmail()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
+        <button class="modal-close" (click)="closeEmail()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="email-to">{{ 'BILLING.EMAIL_TO' | translate }} *</label>
+          <input
+            id="email-to"
+            type="text"
+            [ngModel]="emailTo()"
+            (ngModelChange)="emailTo.set($event)"
+            [placeholder]="'BILLING.EMAIL_TO_HINT' | translate"
+          />
+        </div>
+        <div class="field">
+          <label for="email-cc">{{ 'BILLING.EMAIL_CC' | translate }}</label>
+          <input
+            id="email-cc"
+            type="text"
+            [ngModel]="emailCc()"
+            (ngModelChange)="emailCc.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="email-message">{{ 'BILLING.EMAIL_MESSAGE' | translate }}</label>
+          <textarea
+            id="email-message"
+            rows="3"
+            [ngModel]="emailMessage()"
+            (ngModelChange)="emailMessage.set($event)"
+          ></textarea>
+        </div>
+        <label class="checkbox-field">
+          <input
+            type="checkbox"
+            [ngModel]="emailAttachPdf()"
+            (ngModelChange)="emailAttachPdf.set($event)"
+          />
+          <span>{{ 'BILLING.EMAIL_ATTACH_PDF' | translate }}</span>
+        </label>
+        <p class="muted-note">{{ 'BILLING.EMAIL_SENT_NOTE' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeEmail()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="sendEmail()" [disabled]="emailSending()">
+          {{ emailSending() ? ('BILLING.SENDING' | translate) : ('BILLING.SEND' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ RECORD PAYMENT MODAL ═══ -->
+@if (showPaymentModal() && paymentInv(); as inv) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePayment()"
+    (keydown.escape)="closePayment()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
+        <button class="modal-close" (click)="closePayment()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="payment-balance">
+          {{ 'BILLING.BALANCE_DUE' | translate }}:
+          <strong>{{ formatCurrency(inv.balanceDue) }}</strong>
+        </p>
+        <div class="field">
+          <label for="payment-amount">{{ 'BILLING.PAYMENT_AMOUNT' | translate }} *</label>
+          <input
+            id="payment-amount"
+            type="number"
+            min="0.01"
+            [max]="inv.balanceDue"
+            [ngModel]="paymentAmount()"
+            (ngModelChange)="paymentAmount.set($event)"
+          />
+        </div>
+        <p class="muted-note">{{ 'BILLING.PAYMENT_NOTE' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closePayment()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="recordPayment()" [disabled]="paymentSaving()">
+          {{
+            paymentSaving() ? ('COMMON.SAVING' | translate) : ('BILLING.RECORD_PAYMENT' | translate)
+          }}
         </button>
       </div>
     </div>

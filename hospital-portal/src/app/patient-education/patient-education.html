@@ -1,0 +1,549 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'EDUCATION.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'EDUCATION.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (activeTab() === 'resources' && canManageResources) {
+        <button type="button" class="btn-primary" (click)="openCreateResource()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'EDUCATION.NEW_RESOURCE' | translate }}
+        </button>
+      }
+      @if (activeTab() === 'progress' && canTrackProgress && progressPatient()) {
+        <button type="button" class="btn-primary" (click)="openAssign()">
+          <span class="material-symbols-outlined">assignment_add</span>
+          {{ 'EDUCATION.ASSIGN' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        [class.active]="activeTab() === 'resources'"
+        (click)="setTab('resources')"
+      >
+        {{ 'EDUCATION.RESOURCES_TAB' | translate }}
+      </button>
+      @if (canTrackProgress) {
+        <button
+          type="button"
+          class="tab-btn"
+          [class.active]="activeTab() === 'progress'"
+          (click)="setTab('progress')"
+        >
+          {{ 'EDUCATION.PROGRESS_TAB' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- ══ Resources ══ -->
+  @if (activeTab() === 'resources') {
+    <div class="filter-bar">
+      <div class="search-box">
+        <span class="material-symbols-outlined">search</span>
+        <input
+          type="text"
+          [placeholder]="'EDUCATION.SEARCH' | translate"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="searchTerm.set($event)"
+        />
+      </div>
+      <div class="filter-selects">
+        <select
+          [ngModel]="categoryFilter()"
+          (ngModelChange)="categoryFilter.set($event)"
+          [title]="'EDUCATION.CATEGORY' | translate"
+        >
+          <option value="">{{ 'EDUCATION.ALL_CATEGORIES' | translate }}</option>
+          @for (c of categories; track c) {
+            <option [value]="c">{{ 'EDUCATION.CAT_' + c | translate }}</option>
+          }
+        </select>
+        <select
+          [ngModel]="typeFilter()"
+          (ngModelChange)="typeFilter.set($event)"
+          [title]="'EDUCATION.TYPE' | translate"
+        >
+          <option value="">{{ 'EDUCATION.ALL_TYPES' | translate }}</option>
+          @for (t of resourceTypes; track t) {
+            <option [value]="t">{{ 'EDUCATION.TYPE_' + t | translate }}</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    @if (resourcesLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!resourcesLoading() && resourcesError()) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">error</span>
+        <h3>{{ 'EDUCATION.LOAD_ERROR' | translate }}</h3>
+        <button type="button" class="btn-secondary btn-sm" (click)="loadResources()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    }
+    @if (!resourcesLoading() && !resourcesError() && filteredResources().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">school</span>
+        <h3>{{ 'EDUCATION.NO_RESOURCES' | translate }}</h3>
+      </div>
+    }
+    @if (!resourcesLoading() && !resourcesError() && filteredResources().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'EDUCATION.RESOURCE' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.CATEGORY' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.TYPE' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.DURATION' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.STATS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of filteredResources(); track r.id) {
+              <tr class="data-row">
+                <td>
+                  {{ r.title }}
+                  @if (r.isWarningSignContent) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'EDUCATION.WARNING_CONTENT' | translate"
+                      >warning</span
+                    >
+                  }
+                  @if (r.isEvidenceBased) {
+                    <span
+                      class="material-symbols-outlined flag evidence"
+                      [title]="'EDUCATION.EVIDENCE_BASED' | translate"
+                      >verified</span
+                    >
+                  }
+                  @if (r.description) {
+                    <span class="muted">{{ r.description }}</span>
+                  }
+                </td>
+                <td>{{ 'EDUCATION.CAT_' + r.category | translate }}</td>
+                <td>{{ 'EDUCATION.TYPE_' + r.resourceType | translate }}</td>
+                <td>
+                  {{ r.estimatedDuration ? r.estimatedDuration + ' min' : '—' }}
+                </td>
+                <td>
+                  <span class="muted">
+                    {{ r.viewCount ?? 0 }} {{ 'EDUCATION.VIEWS' | translate }}
+                    @if (r.averageRating) {
+                      · ★ {{ r.averageRating | number: '1.1-1' }}
+                    }
+                  </span>
+                </td>
+                <td class="actions-cell">
+                  @if (canManageResources) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditResource(r)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canDeleteResource) {
+                    <button
+                      type="button"
+                      class="btn-secondary btn-sm danger"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(r)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Progress ══ -->
+  @if (activeTab() === 'progress' && canTrackProgress) {
+    <div class="filter-bar">
+      <div class="mode-picker">
+        <app-patient-picker
+          inputId="edu-patient"
+          [selected]="progressPatient()"
+          (selectedChange)="onProgressPatientPicked($event)"
+        />
+      </div>
+    </div>
+
+    @if (!progressPatient()) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">school</span>
+        <h3>{{ 'EDUCATION.PICK_PATIENT' | translate }}</h3>
+      </div>
+    }
+    @if (progressPatient() && progressLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (progressPatient() && !progressLoading() && progressEntries().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">assignment</span>
+        <h3>{{ 'EDUCATION.NO_PROGRESS' | translate }}</h3>
+      </div>
+    }
+    @if (progressPatient() && !progressLoading() && progressEntries().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'EDUCATION.RESOURCE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.PROGRESS' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.LAST_ACCESSED' | translate }}</th>
+              <th scope="col">{{ 'EDUCATION.RATING' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of progressEntries(); track p.id) {
+              <tr class="data-row">
+                <td>{{ resourceTitle(p.resourceId) }}</td>
+                <td>
+                  <span class="{{ statusClass(p.comprehensionStatus) }}">
+                    {{ 'EDUCATION.STATUS_' + (p.comprehensionStatus || 'NOT_STARTED') | translate }}
+                  </span>
+                  @if (p.needsClarification) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="
+                        p.clarificationRequest || ('EDUCATION.NEEDS_CLARIFICATION' | translate)
+                      "
+                      >help</span
+                    >
+                  }
+                </td>
+                <td>
+                  @if (p.progressPercentage !== null && p.progressPercentage !== undefined) {
+                    <div class="progress-track">
+                      <div class="progress-fill" [style.width.%]="p.progressPercentage"></div>
+                    </div>
+                    <span class="muted">{{ p.progressPercentage }}%</span>
+                  } @else {
+                    <span class="muted">—</span>
+                  }
+                </td>
+                <td>{{ p.lastAccessedAt ? (p.lastAccessedAt | date: 'short') : '—' }}</td>
+                <td>{{ p.rating ? '★ ' + p.rating : '—' }}</td>
+                <td class="actions-cell">
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [title]="'EDUCATION.UPDATE_PROGRESS' | translate"
+                    (click)="openProgressUpdate(p)"
+                  >
+                    <span class="material-symbols-outlined">edit_note</span>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>
+
+<!-- ══ Resource create/edit modal ══ -->
+@if (showResourceModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeResourceModal()"
+    (keydown.escape)="closeResourceModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCATION.NEW_RESOURCE') | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeResourceModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="edu-title">{{ 'EDUCATION.RESOURCE_TITLE' | translate }} *</label>
+          <input id="edu-title" type="text" [(ngModel)]="resourceForm.title" />
+        </div>
+        <div class="field">
+          <label for="edu-description">{{ 'EDUCATION.DESCRIPTION' | translate }}</label>
+          <textarea id="edu-description" rows="2" [(ngModel)]="resourceForm.description">
+          </textarea>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="edu-category">{{ 'EDUCATION.CATEGORY' | translate }} *</label>
+            <select id="edu-category" [(ngModel)]="resourceForm.category">
+              @for (c of categories; track c) {
+                <option [value]="c">{{ 'EDUCATION.CAT_' + c | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="edu-type">{{ 'EDUCATION.TYPE' | translate }} *</label>
+            <select id="edu-type" [(ngModel)]="resourceForm.resourceType">
+              @for (t of resourceTypes; track t) {
+                <option [value]="t">{{ 'EDUCATION.TYPE_' + t | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="edu-duration">{{ 'EDUCATION.DURATION_MIN' | translate }}</label>
+            <input
+              id="edu-duration"
+              type="number"
+              min="0"
+              [(ngModel)]="resourceForm.estimatedDuration"
+            />
+          </div>
+          <div class="field">
+            <label for="edu-language">{{ 'EDUCATION.LANGUAGE' | translate }}</label>
+            <select id="edu-language" [(ngModel)]="resourceForm.primaryLanguage">
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="edu-content-url">{{ 'EDUCATION.CONTENT_URL' | translate }}</label>
+            <input id="edu-content-url" type="text" [(ngModel)]="resourceForm.contentUrl" />
+          </div>
+          <div class="field">
+            <label for="edu-video-url">{{ 'EDUCATION.VIDEO_URL' | translate }}</label>
+            <input id="edu-video-url" type="text" [(ngModel)]="resourceForm.videoUrl" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="edu-text">{{ 'EDUCATION.TEXT_CONTENT' | translate }}</label>
+          <textarea id="edu-text" rows="4" [(ngModel)]="resourceForm.textContent"></textarea>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="resourceForm.isEvidenceBased" />
+            {{ 'EDUCATION.EVIDENCE_BASED' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="resourceForm.isHighRiskRelevant" />
+            {{ 'EDUCATION.HIGH_RISK_RELEVANT' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="resourceForm.isWarningSignContent" />
+            {{ 'EDUCATION.WARNING_CONTENT' | translate }}
+          </label>
+        </div>
+        @if (resourceForm.isEvidenceBased) {
+          <div class="field">
+            <label for="edu-evidence">{{ 'EDUCATION.EVIDENCE_SOURCE' | translate }}</label>
+            <input id="edu-evidence" type="text" [(ngModel)]="resourceForm.evidenceSource" />
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeResourceModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="resourceSaving() || !resourceForm.title"
+          (click)="submitResource()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Assign modal ══ -->
+@if (showAssignModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAssign()"
+    (keydown.escape)="closeAssign()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeAssign()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="edu-assign-resource">{{ 'EDUCATION.RESOURCE' | translate }} *</label>
+          <select id="edu-assign-resource" [(ngModel)]="assignResourceId">
+            <option value="">—</option>
+            @for (r of resources(); track r.id) {
+              <option [value]="r.id">{{ r.title }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeAssign()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="assignBusy() || !assignResourceId"
+          (click)="submitAssign()"
+        >
+          {{ 'EDUCATION.ASSIGN' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Progress update modal ══ -->
+@if (showProgressModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeProgressModal()"
+    (keydown.escape)="closeProgressModal()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeProgressModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ resourceTitle(progressForm.resourceId) }}</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="edu-progress-status">{{ 'COMMON.STATUS' | translate }}</label>
+            <select id="edu-progress-status" [(ngModel)]="progressForm.comprehensionStatus">
+              @for (s of comprehensionStatuses; track s) {
+                <option [value]="s">{{ 'EDUCATION.STATUS_' + s | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="edu-progress-pct">{{ 'EDUCATION.PROGRESS' | translate }} (%)</label>
+            <input
+              id="edu-progress-pct"
+              type="number"
+              min="0"
+              max="100"
+              [(ngModel)]="progressForm.progressPercentage"
+            />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="progressForm.confirmedUnderstanding" />
+            {{ 'EDUCATION.CONFIRMED_UNDERSTANDING' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="progressForm.needsClarification" />
+            {{ 'EDUCATION.NEEDS_CLARIFICATION' | translate }}
+          </label>
+        </div>
+        @if (progressForm.needsClarification) {
+          <div class="field">
+            <label for="edu-clarification">{{ 'EDUCATION.CLARIFICATION' | translate }}</label>
+            <textarea
+              id="edu-clarification"
+              rows="2"
+              [(ngModel)]="progressForm.clarificationRequest"
+            ></textarea>
+          </div>
+        }
+        <div class="field">
+          <label for="edu-provider-notes">{{ 'EDUCATION.PROVIDER_NOTES' | translate }}</label>
+          <textarea id="edu-provider-notes" rows="2" [(ngModel)]="progressForm.providerNotes">
+          </textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeProgressModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="progressSaving()"
+          (click)="submitProgressUpdate()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

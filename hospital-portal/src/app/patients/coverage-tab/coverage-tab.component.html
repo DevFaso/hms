@@ -1,0 +1,323 @@
+<div class="coverage-container">
+  <div class="section-toolbar">
+    <h3>{{ 'COVERAGE.INSURANCE_TITLE' | translate }}</h3>
+    @if (canEdit) {
+      <button type="button" class="btn-primary btn-sm" (click)="openLink()">
+        <span class="material-symbols-outlined">add_link</span>
+        {{ 'COVERAGE.LINK_INSURANCE' | translate }}
+      </button>
+    }
+  </div>
+
+  @if (insurancesLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (insurances().length === 0) {
+    <p class="empty-hint">{{ 'COVERAGE.NO_INSURANCE' | translate }}</p>
+  } @else {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'COVERAGE.PROVIDER' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.POLICY' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.SUBSCRIBER' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.VALIDITY' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (i of insurances(); track i.id) {
+            <tr>
+              <td>
+                {{ i.providerName || '—' }}
+                @if (i.primary) {
+                  <span class="flag-badge primary-badge">{{ 'COVERAGE.PRIMARY' | translate }}</span>
+                }
+              </td>
+              <td>
+                {{ i.policyNumber || '—' }}
+                @if (i.groupNumber) {
+                  <span class="muted">{{ 'COVERAGE.GROUP' | translate }} {{ i.groupNumber }}</span>
+                }
+              </td>
+              <td>
+                {{ i.subscriberName || '—' }}
+                @if (i.subscriberRelationship) {
+                  <span class="muted">({{ i.subscriberRelationship }})</span>
+                }
+              </td>
+              <td>
+                {{ i.effectiveDate ? (i.effectiveDate | date: 'shortDate') : '—' }} —
+                {{ i.expirationDate ? (i.expirationDate | date: 'shortDate') : '…' }}
+              </td>
+              <td>
+                @if (isExpired(i)) {
+                  <span class="status-badge status-cancelled">
+                    {{ 'COVERAGE.EXPIRED' | translate }}
+                  </span>
+                } @else {
+                  <span class="status-badge status-completed">
+                    {{ 'COMMON.ACTIVE' | translate }}
+                  </span>
+                }
+              </td>
+              <td class="actions-cell">
+                @if (canEdit) {
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(i)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-secondary btn-sm danger"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(i)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <div class="section-toolbar">
+    <h3>{{ 'COVERAGE.REGISTRATIONS_TITLE' | translate }}</h3>
+  </div>
+  @if (registrationsLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (registrations().length === 0) {
+    <p class="empty-hint">{{ 'COVERAGE.NO_REGISTRATIONS' | translate }}</p>
+  } @else {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'REGISTRATIONS.HOSPITAL' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.MRN' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.REGISTERED_ON' | translate }}</th>
+            <th scope="col">{{ 'REGISTRATIONS.STAY_STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of registrations(); track r.id) {
+            <tr>
+              <td>{{ r.hospitalName || '—' }}</td>
+              <td>{{ r.mri || r.registrationCode || '—' }}</td>
+              <td>{{ r.registrationDate ? (r.registrationDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{ r.stayStatus ? ('REGISTRATIONS.STAY_' + r.stayStatus | translate) : '—' }}
+              </td>
+              <td>
+                @if (r.active) {
+                  <span class="status-badge status-completed">{{
+                    'COMMON.ACTIVE' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-cancelled">
+                    {{ 'COMMON.INACTIVE' | translate }}
+                  </span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
+
+<!-- ══ Link insurance modal ══ -->
+@if (showLinkModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeLink()" (keydown.escape)="closeLink()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeLink()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ 'COVERAGE.LINK_HINT' | translate }}</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-payer">{{ 'COVERAGE.PAYER_CODE' | translate }} *</label>
+            <input id="cov-payer" type="text" [(ngModel)]="linkForm.payerCode" />
+          </div>
+          <div class="field">
+            <label for="cov-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
+            <input id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="linkPrimary" />
+            {{ 'COVERAGE.MAKE_PRIMARY' | translate }}
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeLink()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="linkSaving() || !linkForm.payerCode || !linkForm.policyNumber"
+          (click)="submitLink()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Edit insurance modal ══ -->
+@if (showEditModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeEdit()" (keydown.escape)="closeEdit()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeEdit()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-provider">{{ 'COVERAGE.PROVIDER' | translate }} *</label>
+            <input id="cov-provider" type="text" [(ngModel)]="editForm.providerName" />
+          </div>
+          <div class="field">
+            <label for="cov-edit-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
+            <input id="cov-edit-policy" type="text" [(ngModel)]="editForm.policyNumber" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-group">{{ 'COVERAGE.GROUP' | translate }}</label>
+            <input id="cov-group" type="text" [(ngModel)]="editForm.groupNumber" />
+          </div>
+          <div class="field">
+            <label for="cov-subscriber">{{ 'COVERAGE.SUBSCRIBER' | translate }}</label>
+            <input id="cov-subscriber" type="text" [(ngModel)]="editForm.subscriberName" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-relationship">{{ 'COVERAGE.RELATIONSHIP' | translate }}</label>
+            <input
+              id="cov-relationship"
+              type="text"
+              [(ngModel)]="editForm.subscriberRelationship"
+            />
+          </div>
+          <div class="field"></div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-effective">{{ 'COVERAGE.EFFECTIVE' | translate }}</label>
+            <input id="cov-effective" type="date" [(ngModel)]="editForm.effectiveDate" />
+          </div>
+          <div class="field">
+            <label for="cov-expiration">{{ 'COVERAGE.EXPIRATION' | translate }}</label>
+            <input id="cov-expiration" type="date" [(ngModel)]="editForm.expirationDate" />
+          </div>
+        </div>
+        <p class="muted">{{ 'COVERAGE.PRIMARY_HINT' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeEdit()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="editSaving() || !editForm.providerName || !editForm.policyNumber"
+          (click)="submitEdit()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Delete confirm ══ -->
+@if (deleteTarget(); as target) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDelete()"
+    (keydown.escape)="closeDelete()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ 'COVERAGE.DELETE_CONFIRM' | translate }} <strong>{{ target.providerName }}</strong> —
+          {{ target.policyNumber }}?
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="button" class="btn-danger" [disabled]="deleteBusy()" (click)="submitDelete()">
+          {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -1,15 +1,20 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   BillingService,
   BillingInvoiceResponse,
   BillingInvoiceRequest,
-  PaymentStatus,
+  InvoiceStatus,
+  INVOICE_STATUSES,
 } from '../services/billing.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+
+type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 @Component({
   selector: 'app-billing',
@@ -22,6 +27,8 @@ export class BillingComponent implements OnInit {
   private readonly billingService = inject(BillingService);
   private readonly toast = inject(ToastService);
   private readonly permissions = inject(PermissionService);
+  private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
 
   // Permission-gated action flags
   readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
@@ -32,15 +39,32 @@ export class BillingComponent implements OnInit {
     'View Billing Reports',
     'Manage Billing',
   );
+  /** SecurityConfig excludes RECEPTIONIST from POST /billing-invoices/**, so
+   *  payment recording 403s for receptionists despite the @PreAuthorize. */
+  readonly canRecordPayment = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_ACCOUNTANT',
+  ]);
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
   searchTerm = '';
   loading = signal(true);
-  activeTab = signal<'all' | 'pending' | 'paid' | 'overdue'>('all');
+  activeTab = signal<BillingTab>('all');
   selectedInvoice = signal<BillingInvoiceResponse | null>(null);
 
-  stats = signal({ total: 0, paid: 0, pending: 0, overdue: 0, totalRevenue: 0, outstanding: 0 });
+  /* Server-side search state */
+  page = signal(0);
+  totalPages = signal(0);
+  totalElements = signal(0);
+  readonly pageSize = 20;
+  filterStatus = signal('');
+  filterFromDate = signal('');
+  filterToDate = signal('');
+
+  stats = signal({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 });
 
   /* ── CRUD signals ── */
   showModal = signal(false);
@@ -53,15 +77,22 @@ export class BillingComponent implements OnInit {
   deletingInv = signal<BillingInvoiceResponse | null>(null);
   deleting = signal(false);
 
-  paymentStatuses: PaymentStatus[] = [
-    'DRAFT',
-    'PENDING',
-    'PAID',
-    'PARTIAL',
-    'OVERDUE',
-    'CANCELLED',
-    'REFUNDED',
-  ];
+  /* ── Email modal ── */
+  showEmailModal = signal(false);
+  emailInv = signal<BillingInvoiceResponse | null>(null);
+  emailTo = signal('');
+  emailCc = signal('');
+  emailMessage = signal('');
+  emailAttachPdf = signal(true);
+  emailSending = signal(false);
+
+  /* ── Payment modal ── */
+  showPaymentModal = signal(false);
+  paymentInv = signal<BillingInvoiceResponse | null>(null);
+  paymentAmount = signal<number | null>(null);
+  paymentSaving = signal(false);
+
+  readonly invoiceStatuses: InvoiceStatus[] = INVOICE_STATUSES;
 
   ngOnInit(): void {
     this.loadInvoices();
@@ -116,13 +147,15 @@ export class BillingComponent implements OnInit {
       : this.billingService.createInvoice(this.form);
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Invoice updated' : 'Invoice created');
+        this.toast.success(
+          this.translate.instant(this.editing() ? 'BILLING.UPDATED' : 'BILLING.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
-        this.loadInvoices();
+        this.loadInvoices(this.page());
       },
-      error: () => {
-        this.toast.error('Save failed');
+      error: (err: HttpErrorResponse) => {
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -140,61 +173,111 @@ export class BillingComponent implements OnInit {
     this.deleting.set(true);
     this.billingService.deleteInvoice(this.deletingInv()!.id).subscribe({
       next: () => {
-        this.toast.success('Invoice deleted');
+        this.toast.success(this.translate.instant('BILLING.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
-        this.loadInvoices();
+        this.loadInvoices(this.page());
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('BILLING.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
   }
 
-  loadInvoices(): void {
+  loadInvoices(page = 0): void {
     this.loading.set(true);
-    this.billingService.listInvoices().subscribe({
-      next: (res) => {
-        const list = Array.isArray(res) ? res : [];
-        this.invoices.set(list);
-        this.computeStats(list);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to load billing data');
-        this.loading.set(false);
-      },
-    });
+    if (this.activeTab() === 'overdue') {
+      // Dedicated server-side worklist (SENT/PARTIALLY_PAID past due).
+      this.billingService.getOverdue().subscribe({
+        next: (list) => {
+          this.invoices.set(list ?? []);
+          this.page.set(0);
+          this.totalPages.set(1);
+          this.totalElements.set(list?.length ?? 0);
+          this.computeStats(list ?? []);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
+      return;
+    }
+    const tab = this.activeTab();
+    const statuses: InvoiceStatus[] | undefined =
+      tab === 'paid'
+        ? ['PAID']
+        : tab === 'outstanding'
+          ? ['SENT', 'PARTIALLY_PAID']
+          : this.filterStatus()
+            ? [this.filterStatus() as InvoiceStatus]
+            : undefined;
+    this.billingService
+      .searchInvoices(
+        {
+          statuses,
+          fromDate: this.filterFromDate() || undefined,
+          toDate: this.filterToDate() || undefined,
+        },
+        page,
+        this.pageSize,
+      )
+      .subscribe({
+        next: (res) => {
+          const list = res?.content ?? [];
+          this.invoices.set(list);
+          this.page.set(res?.number ?? page);
+          this.totalPages.set(res?.totalPages ?? 0);
+          this.totalElements.set(res?.totalElements ?? list.length);
+          this.computeStats(list);
+          this.applyFilter();
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
+          this.loading.set(false);
+        },
+      });
   }
 
   private computeStats(list: BillingInvoiceResponse[]): void {
+    const today = new Date();
     this.stats.set({
-      total: list.length,
+      total: this.totalElements(),
       paid: list.filter((i) => i.status === 'PAID').length,
-      pending: list.filter((i) => i.status === 'PENDING' || i.status === 'DRAFT').length,
-      overdue: list.filter((i) => i.status === 'OVERDUE').length,
+      outstanding: list.filter((i) => i.status === 'SENT' || i.status === 'PARTIALLY_PAID').length,
+      overdue: list.filter(
+        (i) =>
+          (i.status === 'SENT' || i.status === 'PARTIALLY_PAID') &&
+          !!i.dueDate &&
+          new Date(i.dueDate) < today,
+      ).length,
       totalRevenue: list.reduce((sum, i) => sum + (i.amountPaid ?? 0), 0),
-      outstanding: list.reduce((sum, i) => sum + (i.balanceDue ?? 0), 0),
+      balance: list.reduce((sum, i) => sum + (i.balanceDue ?? 0), 0),
     });
   }
 
-  setTab(tab: 'all' | 'pending' | 'paid' | 'overdue'): void {
+  setTab(tab: BillingTab): void {
     this.activeTab.set(tab);
-    this.applyFilter();
+    this.loadInvoices(0);
+  }
+
+  applyServerFilters(): void {
+    this.loadInvoices(0);
+  }
+
+  clearServerFilters(): void {
+    this.filterStatus.set('');
+    this.filterFromDate.set('');
+    this.filterToDate.set('');
+    this.loadInvoices(0);
   }
 
   applyFilter(): void {
     let list = this.invoices();
-    const tab = this.activeTab();
-    if (tab === 'pending') {
-      list = list.filter((i) => i.status === 'PENDING' || i.status === 'DRAFT');
-    } else if (tab === 'paid') {
-      list = list.filter((i) => i.status === 'PAID');
-    } else if (tab === 'overdue') {
-      list = list.filter((i) => i.status === 'OVERDUE');
-    }
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -225,19 +308,115 @@ export class BillingComponent implements OnInit {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: () => this.toast.error('Failed to download PDF'),
+      error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
 
-  emailInvoice(inv: BillingInvoiceResponse): void {
-    const to = inv.patientEmail ? [inv.patientEmail] : [];
-    if (!to.length) {
-      this.toast.error('No patient email available');
+  /* ── Email ── */
+
+  openEmail(inv: BillingInvoiceResponse): void {
+    this.emailInv.set(inv);
+    this.emailTo.set(inv.patientEmail ?? '');
+    this.emailCc.set('');
+    this.emailMessage.set('');
+    this.emailAttachPdf.set(true);
+    this.showEmailModal.set(true);
+  }
+
+  closeEmail(): void {
+    this.showEmailModal.set(false);
+    this.emailInv.set(null);
+  }
+
+  sendEmail(): void {
+    const inv = this.emailInv();
+    if (!inv) return;
+    const to = this.emailTo()
+      .split(/[\s,;]+/)
+      .map((a) => a.trim())
+      .filter(Boolean);
+    if (to.length === 0) {
+      this.toast.error(this.translate.instant('BILLING.EMAIL_TO_REQUIRED'));
       return;
     }
-    this.billingService.emailInvoice(inv.id, { to, attachPdf: true }).subscribe({
-      next: () => this.toast.success('Invoice emailed successfully'),
-      error: () => this.toast.error('Failed to email invoice'),
+    const cc = this.emailCc()
+      .split(/[\s,;]+/)
+      .map((a) => a.trim())
+      .filter(Boolean);
+    this.emailSending.set(true);
+    this.billingService
+      .emailInvoice(inv.id, {
+        to,
+        cc: cc.length ? cc : undefined,
+        message: this.emailMessage().trim() || undefined,
+        locale: this.translate.currentLang || 'fr',
+        attachPdf: this.emailAttachPdf(),
+      })
+      .subscribe({
+        next: () => {
+          this.emailSending.set(false);
+          this.toast.success(this.translate.instant('BILLING.EMAIL_SENT'));
+          this.closeEmail();
+          // Sending flips the invoice to SENT server-side.
+          this.loadInvoices(this.page());
+        },
+        error: (err: HttpErrorResponse) => {
+          this.emailSending.set(false);
+          this.toast.error(
+            err.status === 503
+              ? this.translate.instant('BILLING.EMAIL_UNAVAILABLE')
+              : this.translate.instant('BILLING.EMAIL_FAILED'),
+          );
+        },
+      });
+  }
+
+  /* ── Payment ── */
+
+  canPayInvoice(inv: BillingInvoiceResponse): boolean {
+    return (
+      this.canRecordPayment &&
+      (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID') &&
+      (inv.balanceDue ?? 0) > 0
+    );
+  }
+
+  openPayment(inv: BillingInvoiceResponse): void {
+    this.paymentInv.set(inv);
+    this.paymentAmount.set(inv.balanceDue ?? null);
+    this.showPaymentModal.set(true);
+  }
+
+  closePayment(): void {
+    this.showPaymentModal.set(false);
+    this.paymentInv.set(null);
+  }
+
+  recordPayment(): void {
+    const inv = this.paymentInv();
+    const amount = this.paymentAmount();
+    if (!inv || !amount || amount <= 0) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_AMOUNT_REQUIRED'));
+      return;
+    }
+    if (amount > (inv.balanceDue ?? 0)) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'));
+      return;
+    }
+    this.paymentSaving.set(true);
+    this.billingService.recordPayment(inv.id, amount).subscribe({
+      next: (updated) => {
+        this.paymentSaving.set(false);
+        this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
+        this.closePayment();
+        this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+        this.computeStats(this.invoices());
+        this.applyFilter();
+      },
+      error: (err: HttpErrorResponse) => {
+        this.paymentSaving.set(false);
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
+      },
     });
   }
 
@@ -245,20 +424,21 @@ export class BillingComponent implements OnInit {
     switch (status) {
       case 'PAID':
         return 'status-badge status-paid';
-      case 'PENDING':
       case 'DRAFT':
         return 'status-badge status-pending';
-      case 'OVERDUE':
-        return 'status-badge status-overdue';
+      case 'SENT':
+        return 'status-badge status-pending';
+      case 'PARTIALLY_PAID':
+        return 'status-badge status-partial';
       case 'CANCELLED':
         return 'status-badge status-cancelled';
-      case 'PARTIAL':
-        return 'status-badge status-partial';
-      case 'REFUNDED':
-        return 'status-badge status-refunded';
       default:
         return 'status-badge';
     }
+  }
+
+  formatStatus(status: string): string {
+    return status ? status.replace(/_/g, ' ') : '—';
   }
 
   formatCurrency(amount: number): string {
