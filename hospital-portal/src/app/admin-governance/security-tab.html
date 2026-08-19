@@ -1,0 +1,324 @@
+<div class="tab-panel">
+  <!-- ═══ Security baselines ═══ -->
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.BASELINES_TITLE' | translate }}</h2>
+    <div class="panel-actions">
+      <button type="button" class="btn-secondary" [disabled]="exporting()" (click)="exportLatest()">
+        <span class="material-symbols-outlined">download</span>
+        {{ 'ADMIN_GOV.EXPORT_LATEST' | translate }}
+      </button>
+      <button type="button" class="btn-primary" (click)="openBaseline()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'ADMIN_GOV.NEW_BASELINE' | translate }}
+      </button>
+    </div>
+  </div>
+  <p class="form-hint">{{ 'ADMIN_GOV.BASELINES_HINT' | translate }}</p>
+
+  @if (createdBaselines().length > 0) {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.VERSION' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.BASELINE_TITLE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.ENFORCEMENT' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.POLICY_COUNT' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.CREATED_AT' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (b of createdBaselines(); track b.id) {
+            <tr>
+              <td>
+                <code>{{ b.baselineVersion }}</code>
+              </td>
+              <td class="cell-main">{{ b.title }}</td>
+              <td>{{ b.enforcementLevel }}</td>
+              <td>{{ b.policyCount ?? 0 }}</td>
+              <td>{{ b.createdAt ? (b.createdAt | date: 'short') : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Pending approvals (read-only; backend has no approve/reject endpoint) ═══ -->
+  <div class="panel-header">
+    <h3>{{ 'ADMIN_GOV.APPROVALS_TITLE' | translate }}</h3>
+  </div>
+  @if (approvalsLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (approvalsError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.APPROVALS_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadApprovals()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (approvals().length === 0) {
+    <div class="empty-state">
+      <p>{{ 'ADMIN_GOV.NO_APPROVALS' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.POLICY' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.CHANGE_TYPE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.REQUESTED_BY' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.SEVERITY' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.REQUIRED_BY' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of approvals(); track a.id) {
+            <tr>
+              <td class="cell-main">{{ a.policyName || '—' }}</td>
+              <td>{{ a.changeType || '—' }}</td>
+              <td>{{ a.requestedBy || '—' }}</td>
+              <td>{{ a.severity || '—' }}</td>
+              <td>{{ a.requiredBy ? (a.requiredBy | date: 'short') : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Rule-set templates ═══ -->
+  <div class="panel-header">
+    <h3>{{ 'ADMIN_GOV.TEMPLATES_TITLE' | translate }}</h3>
+  </div>
+  <p class="form-hint">{{ 'ADMIN_GOV.TEMPLATES_HINT' | translate }}</p>
+  @if (templatesLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (templatesError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.TEMPLATES_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="loadTemplates()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else {
+    <div class="template-grid">
+      @for (template of templates(); track template.code) {
+        <div class="template-card">
+          <div class="template-head">
+            <span class="cell-main">{{ template.title }}</span>
+            <span class="badge badge-muted">{{ template.category }}</span>
+          </div>
+          <p class="template-summary">{{ template.summary }}</p>
+          <div class="chip-row">
+            @for (rule of template.defaultRules; track rule.code) {
+              <span class="flag-badge">{{ rule.name }}</span>
+            }
+          </div>
+          <div class="template-actions">
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="saving()"
+              (click)="openSimulation(template)"
+            >
+              <span class="material-symbols-outlined">experiment</span>
+              {{ 'ADMIN_GOV.SIMULATE' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="saving()"
+              (click)="importTemplate(template)"
+            >
+              <span class="material-symbols-outlined">library_add</span>
+              {{ 'ADMIN_GOV.IMPORT_TEMPLATE' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (createdRuleSets().length > 0) {
+    <div class="panel-header">
+      <h3>{{ 'ADMIN_GOV.RULE_SETS_CREATED' | translate }}</h3>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'ADMIN_GOV.CODE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.NAME' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.SCOPE' | translate }}</th>
+            <th>{{ 'ADMIN_GOV.RULE_COUNT' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (rs of createdRuleSets(); track rs.id) {
+            <tr>
+              <td>
+                <code>{{ rs.code }}</code>
+              </td>
+              <td class="cell-main">{{ rs.name }}</td>
+              <td>{{ rs.enforcementScope }}</td>
+              <td>{{ rs.ruleCount ?? rs.rules.length }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══ Baseline modal ═══ -->
+  @if (baselineModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeBaseline()"
+      (keydown.escape)="closeBaseline()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.BASELINE_TITLE' | translate }} *</span>
+          <input
+            type="text"
+            maxlength="160"
+            [ngModel]="bTitle()"
+            (ngModelChange)="bTitle.set($event)"
+          />
+        </label>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.SUMMARY' | translate }}</span>
+          <textarea
+            rows="3"
+            maxlength="1000"
+            [ngModel]="bSummary()"
+            (ngModelChange)="bSummary.set($event)"
+          ></textarea>
+        </label>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.ENFORCEMENT' | translate }}</span>
+            <input
+              type="text"
+              maxlength="60"
+              [ngModel]="bEnforcementLevel()"
+              (ngModelChange)="bEnforcementLevel.set($event)"
+            />
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.POLICY_COUNT' | translate }}</span>
+            <input
+              type="number"
+              min="0"
+              [ngModel]="bPolicyCount()"
+              (ngModelChange)="bPolicyCount.set($event)"
+            />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeBaseline()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="submitBaseline()"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Simulation modal ═══ -->
+  @if (simModal() && simTemplate(); as template) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeSimulation()"
+      (keydown.escape)="closeSimulation()"
+    >
+      <div
+        class="modal modal-lg"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}</h2>
+        @if (!simResult()) {
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.SCENARIO' | translate }} *</span>
+            <input
+              type="text"
+              maxlength="120"
+              [ngModel]="simScenario()"
+              (ngModelChange)="simScenario.set($event)"
+              [placeholder]="'ADMIN_GOV.SCENARIO_HINT' | translate"
+            />
+          </label>
+          <p class="form-hint">
+            {{ 'ADMIN_GOV.SIM_RULES_NOTE' | translate: { count: template.defaultRules.length } }}
+          </p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeSimulation()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="saving()"
+              (click)="runSimulation()"
+            >
+              {{ 'ADMIN_GOV.RUN_SIMULATION' | translate }}
+            </button>
+          </div>
+        } @else {
+          <div class="sim-result">
+            <div class="sim-score" [class.high]="simResult()!.impactScore >= 3.5">
+              <span class="score-value">{{ simResult()!.impactScore }}</span>
+              <span class="score-label">{{ 'ADMIN_GOV.IMPACT_SCORE' | translate }}</span>
+            </div>
+            <div class="sim-details">
+              <p>
+                <strong>{{ 'ADMIN_GOV.EVALUATED_RULES' | translate }}:</strong>
+                {{ simResult()!.evaluatedRuleCount }}
+              </p>
+              <p>
+                <strong>{{ 'ADMIN_GOV.IMPACTED_CONTROLLERS' | translate }}:</strong>
+                {{ simResult()!.impactedControllers.join(', ') || '—' }}
+              </p>
+              <div>
+                <strong>{{ 'ADMIN_GOV.RECOMMENDED_ACTIONS' | translate }}:</strong>
+                <ul>
+                  @for (action of simResult()!.recommendedActions; track $index) {
+                    <li>{{ action }}</li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-primary" (click)="closeSimulation()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

@@ -217,17 +217,18 @@ export class DischargeService {
     return this.http.get<DischargeApproval[]>(`${this.approvalsUrl}/patient/${patientId}`);
   }
 
-  /** Resolve the active hospital registration an approval request must reference. */
-  findActiveRegistration(
-    patientId: string,
-    hospitalId: string,
-  ): Observable<{ content: PatientRegistration[] }> {
+  /**
+   * Resolve the active hospital registration an approval request must
+   * reference. The backend returns a BARE array (no Page envelope) and, when
+   * patientId is present, filters by patient only — active=true narrows it.
+   */
+  findActiveRegistration(patientId: string, hospitalId: string): Observable<PatientRegistration[]> {
     const params = new HttpParams()
       .set('patientId', patientId)
       .set('hospitalId', hospitalId)
       .set('active', 'true')
       .set('size', '1');
-    return this.http.get<{ content: PatientRegistration[] }>('/registrations', { params });
+    return this.http.get<PatientRegistration[]>('/registrations', { params });
   }
 
   /* ── Summaries ── */

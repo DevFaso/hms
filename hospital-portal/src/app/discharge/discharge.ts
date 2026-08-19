@@ -321,8 +321,12 @@ export class DischargeComponent implements OnInit {
     if (!patient || !this.requireStaffContext(true)) return;
     this.requestSubmitting.set(true);
     this.dischargeService.findActiveRegistration(patient.id, this.hospitalId!).subscribe({
-      next: (page) => {
-        const registration = page?.content?.[0];
+      next: (registrations) => {
+        // Bare array from the backend; the hospitalId param is ignored when
+        // patientId is set, so double-check the hospital client-side.
+        const registration =
+          (registrations ?? []).find((r) => !r.hospitalId || r.hospitalId === this.hospitalId) ??
+          registrations?.[0];
         if (!registration) {
           this.toast.error(this.translate.instant('DISCHARGE.NO_REGISTRATION'));
           this.requestSubmitting.set(false);

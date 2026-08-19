@@ -1,0 +1,555 @@
+<div class="filter-bar">
+  <div class="tabs">
+    <button class="tab-btn" [class.active]="filter() === 'all'" (click)="setFilter('all')">
+      {{ 'MATERNITY.WORKLIST_ALL' | translate }}
+    </button>
+    @if (canSeePendingReview) {
+      <button
+        class="tab-btn"
+        [class.active]="filter() === 'pending-review'"
+        (click)="setFilter('pending-review')"
+      >
+        {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
+      </button>
+    }
+    <button
+      class="tab-btn"
+      [class.active]="filter() === 'reviewed'"
+      (click)="setFilter('reviewed')"
+    >
+      {{ 'BIRTH_PLAN.REVIEWED' | translate }}
+    </button>
+  </div>
+  <div class="mode-picker">
+    <app-patient-picker
+      inputId="bp-filter-patient"
+      [selected]="filterPatient()"
+      (selectedChange)="onFilterPatientPicked($event)"
+    />
+  </div>
+  @if (canEdit) {
+    <button class="btn-primary" (click)="openCreatePlan()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'BIRTH_PLAN.NEW' | translate }}
+    </button>
+  }
+</div>
+
+@if (loading()) {
+  <div class="loading-state">
+    <div class="spinner"></div>
+    <p>{{ 'COMMON.LOADING' | translate }}</p>
+  </div>
+}
+@if (!loading() && plans().length === 0) {
+  <div class="empty-state">
+    <span class="material-symbols-outlined empty-icon">assignment</span>
+    <h3>{{ 'BIRTH_PLAN.NONE' | translate }}</h3>
+  </div>
+}
+@if (!loading() && plans().length > 0) {
+  <div class="data-table">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
+          <th scope="col">{{ 'MATERNITY.EDD' | translate }}</th>
+          <th scope="col">{{ 'BIRTH_PLAN.PLACE' | translate }}</th>
+          <th scope="col">{{ 'BIRTH_PLAN.PROVIDER' | translate }}</th>
+          <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+          <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (p of plans(); track p.id) {
+          <tr class="data-row">
+            <td>{{ p.introduction?.patientName || '—' }}</td>
+            <td>
+              {{
+                p.introduction?.expectedDueDate
+                  ? (p.introduction?.expectedDueDate | date: 'mediumDate')
+                  : '—'
+              }}
+            </td>
+            <td>{{ p.introduction?.placeOfBirth || '—' }}</td>
+            <td>{{ p.introduction?.healthcareProvider || '—' }}</td>
+            <td>
+              @if (p.providerReviewed) {
+                <span class="status-badge status-completed">
+                  {{ 'BIRTH_PLAN.REVIEWED' | translate }}
+                </span>
+              } @else {
+                <span class="status-badge status-submitted">
+                  {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
+                </span>
+              }
+            </td>
+            <td class="actions-cell">
+              <button
+                class="btn-secondary btn-sm"
+                [title]="'COMMON.VIEW' | translate"
+                (click)="openPlan(p)"
+              >
+                <span class="material-symbols-outlined">visibility</span>
+              </button>
+              @if (canEdit) {
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'COMMON.EDIT' | translate"
+                  (click)="openEditPlan(p)"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+              }
+              @if (canReview && !p.providerReviewed) {
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'BIRTH_PLAN.REVIEW' | translate"
+                  (click)="openReview(p)"
+                >
+                  <span class="material-symbols-outlined">approval</span>
+                </button>
+              }
+              @if (canDelete) {
+                <button
+                  class="btn-secondary btn-sm"
+                  [title]="'COMMON.DELETE' | translate"
+                  (click)="confirmDelete(p)"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (totalPages() > 1) {
+    <div class="pager">
+      <button
+        class="btn-secondary btn-sm"
+        [disabled]="page() === 0"
+        (click)="prev()"
+        [title]="'COMMON.PREVIOUS' | translate"
+      >
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <span class="muted">{{ page() + 1 }} / {{ totalPages() }}</span>
+      <button
+        class="btn-secondary btn-sm"
+        [disabled]="page() + 1 >= totalPages()"
+        (click)="next()"
+        [title]="'COMMON.NEXT' | translate"
+      >
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+    </div>
+  }
+}
+
+<!-- ══ Plan detail modal ══ -->
+@if (viewedPlan(); as p) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closePlan()" (keydown.escape)="closePlan()">
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closePlan()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="view-section">
+          <h3>{{ 'BIRTH_PLAN.SECTION_INTRO' | translate }}</h3>
+          <p>
+            {{ 'MATERNITY.EDD' | translate }}:
+            {{
+              p.introduction?.expectedDueDate
+                ? (p.introduction?.expectedDueDate | date: 'mediumDate')
+                : '—'
+            }}
+            · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·
+            {{ 'BIRTH_PLAN.PROVIDER' | translate }}: {{ p.introduction?.healthcareProvider || '—' }}
+          </p>
+          @if (p.introduction?.medicalConditions) {
+            <p class="muted">{{ p.introduction?.medicalConditions }}</p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'BIRTH_PLAN.SECTION_DELIVERY' | translate }}</h3>
+          <p>
+            {{ p.deliveryPreferences?.preferredDeliveryMethod || '—' }}
+            @if (p.deliveryPreferences?.backupDeliveryMethod) {
+              ({{ 'BIRTH_PLAN.BACKUP' | translate }}:
+              {{ p.deliveryPreferences?.backupDeliveryMethod }})
+            }
+          </p>
+          @if (p.deliveryPreferences?.deliveryMethodNotes) {
+            <p class="muted">{{ p.deliveryPreferences?.deliveryMethodNotes }}</p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'BIRTH_PLAN.SECTION_PAIN' | translate }}</h3>
+          <p>{{ p.painManagement?.preferredApproach || '—' }}</p>
+          @if (p.painManagement?.unmedicatedTechniques?.length) {
+            <p class="muted">{{ p.painManagement?.unmedicatedTechniques?.join(', ') }}</p>
+          }
+          @if (p.painManagement?.medicatedOptions?.length) {
+            <p class="muted">{{ p.painManagement?.medicatedOptions?.join(', ') }}</p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'BIRTH_PLAN.SECTION_ENVIRONMENT' | translate }}</h3>
+          @if (p.deliveryRoomEnvironment?.supportPersons?.length) {
+            <p>
+              {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}:
+              {{ p.deliveryRoomEnvironment?.supportPersons?.join(', ') }}
+            </p>
+          }
+          @if (p.deliveryRoomEnvironment?.environmentNotes) {
+            <p class="muted">{{ p.deliveryRoomEnvironment?.environmentNotes }}</p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'BIRTH_PLAN.SECTION_POSTPARTUM' | translate }}</h3>
+          <p>
+            {{ 'BIRTH_PLAN.FEEDING' | translate }}:
+            {{ p.postpartumPreferences?.feedingMethod || '—' }}
+            @if (p.postpartumPreferences?.skinToSkinContact) {
+              · {{ 'BIRTH_PLAN.SKIN_TO_SKIN' | translate }}
+            }
+            @if (p.postpartumPreferences?.delayedCordClamping) {
+              · {{ 'BIRTH_PLAN.DELAYED_CORD' | translate }}
+            }
+          </p>
+          @if (p.postpartumPreferences?.postpartumNotes) {
+            <p class="muted">{{ p.postpartumPreferences?.postpartumNotes }}</p>
+          }
+        </div>
+        @if (p.additionalWishes) {
+          <div class="view-section">
+            <h3>{{ 'BIRTH_PLAN.ADDITIONAL_WISHES' | translate }}</h3>
+            <p>{{ p.additionalWishes }}</p>
+          </div>
+        }
+        @if (p.providerReviewed) {
+          <div class="view-section">
+            <h3>{{ 'BIRTH_PLAN.PROVIDER_REVIEW' | translate }}</h3>
+            <p>
+              {{ p.providerSignature }} —
+              {{ p.providerSignatureDate ? (p.providerSignatureDate | date: 'medium') : '' }}
+            </p>
+            @if (p.providerComments) {
+              <p class="muted">{{ p.providerComments }}</p>
+            }
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        @if (canReview && !p.providerReviewed) {
+          <button class="btn-primary" (click)="closePlan(); openReview(p)">
+            {{ 'BIRTH_PLAN.REVIEW' | translate }}
+          </button>
+        }
+        <button class="btn-secondary" (click)="closePlan()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Plan create/edit modal ══ -->
+@if (showPlanModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePlanModal()"
+    (keydown.escape)="closePlanModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closePlanModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editingPlanId()) {
+          <div class="field">
+            <label for="bp-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="bp-patient"
+              [selected]="planPatient()"
+              (selectedChange)="onPlanPatientPicked($event)"
+            />
+          </div>
+        }
+        <h3 class="section-heading">{{ 'BIRTH_PLAN.SECTION_INTRO' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-name">{{ 'BIRTH_PLAN.PATIENT_NAME' | translate }} *</label>
+            <input id="bp-name" type="text" [(ngModel)]="planForm.introduction.patientName" />
+          </div>
+          <div class="field">
+            <label for="bp-edd">{{ 'MATERNITY.EDD' | translate }} *</label>
+            <input id="bp-edd" type="date" [(ngModel)]="planForm.introduction.expectedDueDate" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-place">{{ 'BIRTH_PLAN.PLACE' | translate }}</label>
+            <input id="bp-place" type="text" [(ngModel)]="planForm.introduction.placeOfBirth" />
+          </div>
+          <div class="field">
+            <label for="bp-provider">{{ 'BIRTH_PLAN.PROVIDER' | translate }}</label>
+            <input
+              id="bp-provider"
+              type="text"
+              [(ngModel)]="planForm.introduction.healthcareProvider"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="bp-conditions">{{ 'BIRTH_PLAN.MEDICAL_CONDITIONS' | translate }}</label>
+          <textarea
+            id="bp-conditions"
+            rows="2"
+            [(ngModel)]="planForm.introduction.medicalConditions"
+          ></textarea>
+        </div>
+
+        <h3 class="section-heading">{{ 'BIRTH_PLAN.SECTION_DELIVERY' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-method">{{ 'BIRTH_PLAN.PREFERRED_METHOD' | translate }}</label>
+            <input
+              id="bp-method"
+              type="text"
+              [(ngModel)]="planForm.deliveryPreferences!.preferredDeliveryMethod"
+            />
+          </div>
+          <div class="field">
+            <label for="bp-backup">{{ 'BIRTH_PLAN.BACKUP' | translate }}</label>
+            <input
+              id="bp-backup"
+              type="text"
+              [(ngModel)]="planForm.deliveryPreferences!.backupDeliveryMethod"
+            />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'BIRTH_PLAN.SECTION_PAIN' | translate }}</h3>
+        <div class="field">
+          <label for="bp-pain-approach">{{ 'BIRTH_PLAN.PAIN_APPROACH' | translate }}</label>
+          <input
+            id="bp-pain-approach"
+            type="text"
+            [(ngModel)]="planForm.painManagement!.preferredApproach"
+          />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-unmedicated">{{ 'BIRTH_PLAN.UNMEDICATED' | translate }}</label>
+            <input id="bp-unmedicated" type="text" [(ngModel)]="listInputs.unmedicated" />
+          </div>
+          <div class="field">
+            <label for="bp-medicated">{{ 'BIRTH_PLAN.MEDICATED' | translate }}</label>
+            <input id="bp-medicated" type="text" [(ngModel)]="listInputs.medicated" />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'BIRTH_PLAN.SECTION_ENVIRONMENT' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-support">{{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}</label>
+            <input id="bp-support" type="text" [(ngModel)]="listInputs.supportPersons" />
+          </div>
+          <div class="field">
+            <label for="bp-comfort">{{ 'BIRTH_PLAN.COMFORT_ITEMS' | translate }}</label>
+            <input id="bp-comfort" type="text" [(ngModel)]="listInputs.comfortItems" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="bp-env-notes">{{ 'BIRTH_PLAN.ENVIRONMENT_NOTES' | translate }}</label>
+          <textarea
+            id="bp-env-notes"
+            rows="2"
+            [(ngModel)]="planForm.deliveryRoomEnvironment!.environmentNotes"
+          ></textarea>
+        </div>
+
+        <h3 class="section-heading">{{ 'BIRTH_PLAN.SECTION_POSTPARTUM' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="bp-feeding">{{ 'BIRTH_PLAN.FEEDING' | translate }}</label>
+            <input
+              id="bp-feeding"
+              type="text"
+              [(ngModel)]="planForm.postpartumPreferences!.feedingMethod"
+            />
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="planForm.postpartumPreferences!.skinToSkinContact"
+              />
+              {{ 'BIRTH_PLAN.SKIN_TO_SKIN' | translate }}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="planForm.postpartumPreferences!.delayedCordClamping"
+              />
+              {{ 'BIRTH_PLAN.DELAYED_CORD' | translate }}
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="bp-wishes">{{ 'BIRTH_PLAN.ADDITIONAL_WISHES' | translate }}</label>
+          <textarea id="bp-wishes" rows="2" [(ngModel)]="planForm.additionalWishes"></textarea>
+        </div>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" [(ngModel)]="planForm.flexibilityAcknowledgment" />
+            {{ 'BIRTH_PLAN.FLEXIBILITY' | translate }} *
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="planForm.discussedWithProvider" />
+            {{ 'BIRTH_PLAN.DISCUSSED' | translate }}
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closePlanModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="planSaving() || !planForm.patientId || !planForm.flexibilityAcknowledgment"
+          (click)="submitPlan()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Review modal ══ -->
+@if (showReviewModal() && reviewTarget(); as plan) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReview()"
+    (keydown.escape)="closeReview()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReview()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ plan.introduction?.patientName }}</p>
+        <div class="field">
+          <label for="bp-signature">{{ 'BIRTH_PLAN.SIGNATURE' | translate }} *</label>
+          <input id="bp-signature" type="text" [(ngModel)]="reviewSignature" />
+        </div>
+        <div class="field">
+          <label for="bp-comments">{{ 'BIRTH_PLAN.COMMENTS' | translate }}</label>
+          <textarea id="bp-comments" rows="3" [(ngModel)]="reviewComments"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReview()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="reviewBusy() || !reviewSignature.trim()"
+          (click)="submitReview()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Delete confirm ══ -->
+@if (showDeleteConfirm() && deleteTarget(); as plan) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDelete()"
+    (keydown.escape)="closeDelete()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>{{ 'BIRTH_PLAN.DELETE_CONFIRM' | translate }} {{ plan.introduction?.patientName }}?</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-danger" [disabled]="deleteBusy()" (click)="submitDelete()">
+          {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

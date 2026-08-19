@@ -1,0 +1,333 @@
+<div class="tab-panel">
+  <div class="panel-header">
+    <h2>{{ 'ADMIN_GOV.POLICIES_TITLE' | translate }}</h2>
+    <button type="button" class="btn-primary" (click)="openCreatePolicy()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'ADMIN_GOV.NEW_POLICY' | translate }}
+    </button>
+  </div>
+  <p class="form-hint">{{ 'ADMIN_GOV.POLICIES_HINT' | translate }}</p>
+
+  @if (loading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (loadError()) {
+    <div class="error-state">
+      <p>{{ 'ADMIN_GOV.POLICIES_LOAD_ERROR' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  } @else if (policies().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">policy</span>
+      <p>{{ 'ADMIN_GOV.NO_POLICIES' | translate }}</p>
+    </div>
+  } @else {
+    @for (policy of policies(); track policy.id) {
+      <div class="policy-card">
+        <div class="policy-head">
+          <button type="button" class="expand-btn" (click)="toggleExpand(policy.id)">
+            <span class="material-symbols-outlined">
+              {{ expanded().has(policy.id) ? 'expand_less' : 'expand_more' }}
+            </span>
+          </button>
+          <div class="policy-title">
+            <span class="cell-main">{{ policy.name }}</span>
+            <code>{{ policy.code }}</code>
+            <span class="badge badge-info">{{
+              'ADMIN_GOV.PT_' + policy.policyType | translate
+            }}</span>
+            <span
+              class="badge"
+              [class.badge-success]="policy.active"
+              [class.badge-danger]="!policy.active"
+            >
+              {{ (policy.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+            </span>
+            @if (policy.enforceStrict) {
+              <span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
+            }
+          </div>
+          <div class="policy-org">{{ policy.organizationName || policy.organizationId }}</div>
+          <div class="actions-cell">
+            <button
+              type="button"
+              class="icon-btn"
+              (click)="openCreateRule(policy)"
+              [title]="'ADMIN_GOV.NEW_RULE' | translate"
+            >
+              <span class="material-symbols-outlined">add_moderator</span>
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              (click)="openEditPolicy(policy)"
+              [title]="'COMMON.EDIT' | translate"
+            >
+              <span class="material-symbols-outlined">edit</span>
+            </button>
+            <button
+              type="button"
+              class="icon-btn danger"
+              (click)="deletePolicy(policy)"
+              [title]="'COMMON.DELETE' | translate"
+            >
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        </div>
+        @if (policy.description) {
+          <p class="policy-desc">{{ policy.description }}</p>
+        }
+        @if (expanded().has(policy.id)) {
+          @if (policy.rules.length === 0) {
+            <p class="form-hint rules-empty">{{ 'ADMIN_GOV.NO_RULES' | translate }}</p>
+          } @else {
+            <div class="table-wrap rules-table">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'ADMIN_GOV.RULE_NAME' | translate }}</th>
+                    <th>{{ 'ADMIN_GOV.RULE_TYPE' | translate }}</th>
+                    <th>{{ 'ADMIN_GOV.RULE_VALUE' | translate }}</th>
+                    <th>{{ 'ADMIN_GOV.PRIORITY' | translate }}</th>
+                    <th>{{ 'COMMON.STATUS' | translate }}</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (rule of policy.rules; track rule.id) {
+                    <tr>
+                      <td>
+                        <div class="cell-main">{{ rule.name }}</div>
+                        <div class="cell-sub">
+                          <code>{{ rule.code }}</code>
+                        </div>
+                      </td>
+                      <td>{{ 'ADMIN_GOV.RT_' + rule.ruleType | translate }}</td>
+                      <td class="rule-value">{{ rule.ruleValue || '—' }}</td>
+                      <td>{{ rule.priority ?? 0 }}</td>
+                      <td>
+                        <span
+                          class="badge"
+                          [class.badge-success]="rule.active"
+                          [class.badge-danger]="!rule.active"
+                        >
+                          {{ (rule.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
+                        </span>
+                      </td>
+                      <td class="actions-cell">
+                        <button
+                          type="button"
+                          class="icon-btn"
+                          (click)="openEditRule(policy, rule)"
+                          [title]="'COMMON.EDIT' | translate"
+                        >
+                          <span class="material-symbols-outlined">edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="icon-btn danger"
+                          (click)="deleteRule(policy, rule)"
+                          [title]="'COMMON.DELETE' | translate"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        }
+      </div>
+    }
+  }
+
+  <!-- ═══ Policy modal ═══ -->
+  @if (policyModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closePolicyModal()"
+      (keydown.escape)="closePolicyModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>
+          {{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.NEW_POLICY') | translate }}
+        </h2>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.NAME' | translate }} *</span>
+            <input
+              type="text"
+              maxlength="255"
+              [ngModel]="pName()"
+              (ngModelChange)="pName.set($event)"
+            />
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.CODE' | translate }} *</span>
+            <input
+              type="text"
+              maxlength="100"
+              [ngModel]="pCode()"
+              (ngModelChange)="pCode.set($event)"
+            />
+          </label>
+        </div>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.DESCRIPTION' | translate }}</span>
+          <textarea
+            rows="2"
+            maxlength="1000"
+            [ngModel]="pDescription()"
+            (ngModelChange)="pDescription.set($event)"
+          ></textarea>
+        </label>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.POLICY_TYPE' | translate }} *</span>
+            <select [ngModel]="pType()" (ngModelChange)="pType.set($event)">
+              <option value="">—</option>
+              @for (t of policyTypes; track t) {
+                <option [value]="t">{{ 'ADMIN_GOV.PT_' + t | translate }}</option>
+              }
+            </select>
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.ORGANIZATION' | translate }} *</span>
+            <select [ngModel]="pOrganizationId()" (ngModelChange)="pOrganizationId.set($event)">
+              <option value="">—</option>
+              @for (org of organizations(); track org.id) {
+                <option [value]="org.id">{{ org.name }}</option>
+              }
+            </select>
+          </label>
+        </div>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.PRIORITY' | translate }}</span>
+          <input type="number" [ngModel]="pPriority()" (ngModelChange)="pPriority.set($event)" />
+        </label>
+        <label class="check-field">
+          <input type="checkbox" [ngModel]="pActive()" (ngModelChange)="pActive.set($event)" />
+          <span>{{ 'COMMON.ACTIVE' | translate }}</span>
+        </label>
+        <label class="check-field">
+          <input
+            type="checkbox"
+            [ngModel]="pEnforceStrict()"
+            (ngModelChange)="pEnforceStrict.set($event)"
+          />
+          <span>{{ 'ADMIN_GOV.ENFORCE_STRICT' | translate }}</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closePolicyModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitPolicy()">
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ═══ Rule modal ═══ -->
+  @if (ruleModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeRuleModal()"
+      (keydown.escape)="closeRuleModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <h2>
+          {{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_RULE') | translate }}
+          — {{ rulePolicy()?.name }}
+        </h2>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.NAME' | translate }} *</span>
+            <input
+              type="text"
+              maxlength="255"
+              [ngModel]="rName()"
+              (ngModelChange)="rName.set($event)"
+            />
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.CODE' | translate }} *</span>
+            <input
+              type="text"
+              maxlength="100"
+              [ngModel]="rCode()"
+              (ngModelChange)="rCode.set($event)"
+            />
+          </label>
+        </div>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.DESCRIPTION' | translate }}</span>
+          <textarea
+            rows="2"
+            maxlength="1000"
+            [ngModel]="rDescription()"
+            (ngModelChange)="rDescription.set($event)"
+          ></textarea>
+        </label>
+        <div class="form-row">
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.RULE_TYPE' | translate }} *</span>
+            <select [ngModel]="rType()" (ngModelChange)="rType.set($event)">
+              <option value="">—</option>
+              @for (t of ruleTypes; track t) {
+                <option [value]="t">{{ 'ADMIN_GOV.RT_' + t | translate }}</option>
+              }
+            </select>
+          </label>
+          <label class="form-field">
+            <span>{{ 'ADMIN_GOV.PRIORITY' | translate }}</span>
+            <input type="number" [ngModel]="rPriority()" (ngModelChange)="rPriority.set($event)" />
+          </label>
+        </div>
+        <label class="form-field">
+          <span>{{ 'ADMIN_GOV.RULE_VALUE' | translate }}</span>
+          <textarea
+            rows="3"
+            maxlength="2000"
+            [ngModel]="rValue()"
+            (ngModelChange)="rValue.set($event)"
+            [placeholder]="'ADMIN_GOV.RULE_VALUE_HINT' | translate"
+          ></textarea>
+        </label>
+        <label class="check-field">
+          <input type="checkbox" [ngModel]="rActive()" (ngModelChange)="rActive.set($event)" />
+          <span>{{ 'COMMON.ACTIVE' | translate }}</span>
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeRuleModal()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitRule()">
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

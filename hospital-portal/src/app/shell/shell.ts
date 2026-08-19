@@ -323,6 +323,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'Admit Patients',
       },
       {
+        icon: 'medication_liquid',
+        label: 'Medication History',
+        translationKey: 'NAV.MEDICATION_HISTORY',
+        route: '/medication-history',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST'],
+      },
+      {
+        icon: 'surgical',
+        label: 'Procedure Orders',
+        translationKey: 'NAV.PROCEDURE_ORDERS',
+        route: '/procedure-orders',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
+        icon: 'how_to_reg',
+        label: 'Registrations',
+        translationKey: 'NAV.REGISTRATIONS',
+        route: '/registrations',
+        roles: [
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'exit_to_app',
         label: 'Discharge',
         translationKey: 'NAV.DISCHARGE',
@@ -331,6 +359,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
+        icon: 'school',
+        label: 'Patient Education',
+        translationKey: 'NAV.PATIENT_EDUCATION',
+        route: '/patient-education',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+      },
+      {
+        icon: 'pregnant_woman',
+        label: 'Maternity',
+        translationKey: 'NAV.MATERNITY',
+        route: '/maternity',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
           'ROLE_HOSPITAL_ADMIN',
           'ROLE_SUPER_ADMIN',
         ],
@@ -515,6 +564,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         label: 'Digital Signatures',
         translationKey: 'NAV.DIGITAL_SIGNATURES',
         route: '/digital-signatures',
+      });
+    }
+    // Assignment admin — SecurityConfig gates /assignments/** to these two roles
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'assignment_ind',
+        label: 'Assignments',
+        translationKey: 'NAV.ASSIGNMENTS',
+        route: '/admin-assignments',
+      });
+    }
+    // Governance console — SUPER_ADMIN-only backends (matrix, /super-admin/**)
+    if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'gavel',
+        label: 'Governance',
+        translationKey: 'NAV.GOVERNANCE',
+        route: '/admin-governance',
       });
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
