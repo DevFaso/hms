@@ -12,7 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { catchError, of } from 'rxjs';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
   AuthService,
@@ -82,6 +82,7 @@ export class Login implements OnInit, AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly translate = inject(TranslateService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
@@ -148,7 +149,7 @@ export class Login implements OnInit, AfterViewInit {
         // After retries exhausted, show a helpful message
         this.bootstrapAllowed = false;
         console.error('[bootstrap-status] Failed after retries:', err?.status, err?.message);
-        this.error = 'Unable to reach the server. Please refresh the page or try again shortly.';
+        this.error = this.translate.instant('LOGIN.SERVER_UNREACHABLE');
       },
     });
   }
@@ -167,15 +168,15 @@ export class Login implements OnInit, AfterViewInit {
       !this.bootstrap.lastName ||
       !this.bootstrap.phoneNumber
     ) {
-      this.error = 'All required fields must be filled.';
+      this.error = this.translate.instant('LOGIN.ALL_FIELDS_REQUIRED');
       return;
     }
     if (this.bootstrap.password.length < 8) {
-      this.error = 'Password must be at least 8 characters.';
+      this.error = this.translate.instant('LOGIN.PASSWORD_MIN_LENGTH');
       return;
     }
     if (this.bootstrap.password !== this.bootstrap.confirmPassword) {
-      this.error = 'Passwords do not match.';
+      this.error = this.translate.instant('LOGIN.PASSWORDS_MISMATCH');
       return;
     }
 
@@ -193,7 +194,9 @@ export class Login implements OnInit, AfterViewInit {
       .subscribe({
         next: (res) => {
           this.bootstrapLoading = false;
-          this.bootstrapSuccess = `Super Admin account "${res?.username ?? this.bootstrap.username}" created successfully! You can now sign in.`;
+          this.bootstrapSuccess = this.translate.instant('LOGIN.BOOTSTRAP_SUCCESS', {
+            username: res?.username ?? this.bootstrap.username,
+          });
           // Pre-fill login form with the new username
           this.username = this.bootstrap.username;
           this.password = '';
@@ -204,7 +207,9 @@ export class Login implements OnInit, AfterViewInit {
         error: (err) => {
           this.bootstrapLoading = false;
           this.error =
-            err?.error?.message ?? err?.error?.error ?? 'Setup failed. Please try again.';
+            err?.error?.message ??
+            err?.error?.error ??
+            this.translate.instant('LOGIN.SETUP_FAILED');
         },
       });
   }
@@ -214,7 +219,7 @@ export class Login implements OnInit, AfterViewInit {
     this.error = '';
     this.bootstrapSuccess = '';
     if (!this.username || !this.password) {
-      this.error = 'Username and password required.';
+      this.error = this.translate.instant('LOGIN.CREDENTIALS_REQUIRED');
       return;
     }
     this.loading = true;
@@ -295,7 +300,7 @@ export class Login implements OnInit, AfterViewInit {
 
           const token = res?.token ?? res?.accessToken ?? res?.jwt;
           if (!token) {
-            this.error = 'Token missing in response.';
+            this.error = this.translate.instant('LOGIN.TOKEN_MISSING');
             this.loading = false;
             return;
           }
@@ -433,7 +438,9 @@ export class Login implements OnInit, AfterViewInit {
         error: (err) => {
           this.loading = false;
           this.error =
-            err?.error?.message ?? err?.error?.error ?? 'Login failed. Please try again.';
+            err?.error?.message ??
+            err?.error?.error ??
+            this.translate.instant('LOGIN.LOGIN_FAILED');
         },
       });
   }
@@ -512,21 +519,19 @@ export class Login implements OnInit, AfterViewInit {
     this.error = '';
     this.forgotPasswordSuccess = '';
     if (!this.forgotPasswordEmail) {
-      this.error = 'Please enter your email address.';
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
       return;
     }
     this.forgotPasswordLoading = true;
     this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
-        this.forgotPasswordSuccess =
-          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
       },
       error: () => {
         this.forgotPasswordLoading = false;
         // Always show neutral message to avoid email enumeration
-        this.forgotPasswordSuccess =
-          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
       },
     });
   }
