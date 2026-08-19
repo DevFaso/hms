@@ -323,6 +323,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'Admit Patients',
       },
       {
+        icon: 'medication_liquid',
+        label: 'Medication History',
+        translationKey: 'NAV.MEDICATION_HISTORY',
+        route: '/medication-history',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST'],
+      },
+      {
         icon: 'exit_to_app',
         label: 'Discharge',
         translationKey: 'NAV.DISCHARGE',

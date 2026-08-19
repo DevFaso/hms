@@ -1207,6 +1207,20 @@ export const routes: Routes = [
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
 
+      // Medication-history timeline + external pharmacy-fill recording.
+      // Roles mirror the backend timeline gate exactly (no MIDWIFE, no admins).
+      {
+        path: 'medication-history',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST'],
+        },
+        loadComponent: () =>
+          import('./medication-history/medication-history').then(
+            (m) => m.MedicationHistoryComponent,
+          ),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
