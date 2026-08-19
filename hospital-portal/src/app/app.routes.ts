@@ -1226,6 +1226,19 @@ export const routes: Routes = [
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
 
+      // Patient education (resource library + assignment/progress).
+      // Writes are SUPER_ADMIN/DOCTOR/NURSE on the backend; MIDWIFE is
+      // read-only (library browsing); HOSPITAL_ADMIN has no access.
+      {
+        path: 'patient-education',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./patient-education/patient-education').then((m) => m.PatientEducationComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',

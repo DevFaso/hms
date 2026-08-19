@@ -91,7 +91,7 @@
 - [ ] 15. Pharmacy: medication-history timeline + pharmacy-fill recording (PHARMACIST workspace)
 - [ ] 16. Procedure orders page (order → consent-pending → scheduled → cancel)
 - [ ] 17. Insurance management + multi-hospital registration UI (reception + patient detail)
-- [ ] 18. Patient education: resource management + assignment/progress views
+- [x] 18. Patient education: resource management + assignment/progress views — ✅ DONE (`/patient-education` page: resource library CRUD w/ category/type/search filters, evidence & warning-sign flags, view/completion/rating stats; per-patient assignment (POST progress NOT_STARTED) + progress/comprehension tracking w/ provider notes; Q&A + visit-documentation blocks deferred)
 - [ ] 19. Admin governance: assignment admin (CRUD, bulk-import, regenerate-code), permission-matrix snapshots/audit, org security policies/rules, super-admin governance (user import, credential health, security baselines)
 - [ ] 20. Digital signatures: sign/verify/revoke flows; billing: invoice email + search
 

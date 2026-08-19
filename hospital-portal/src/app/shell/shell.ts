@@ -336,6 +336,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'school',
+        label: 'Patient Education',
+        translationKey: 'NAV.PATIENT_EDUCATION',
+        route: '/patient-education',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'pregnant_woman',
         label: 'Maternity',
         translationKey: 'NAV.MATERNITY',
