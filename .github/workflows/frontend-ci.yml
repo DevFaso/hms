@@ -45,8 +45,16 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Unit tests
-        run: npm run test:headless
+      # Task 21 — coverage ratchet. Tests run with coverage, then the
+      # per-module floors in hospital-portal/coverage-thresholds.json are
+      # enforced. Floors are pinned at (just below) achieved coverage so a
+      # module can only stay level or improve; raise a floor in the same PR
+      # that raises its coverage, never lower one to make a build pass.
+      - name: Unit tests (with coverage)
+        run: npm run test:coverage
+
+      - name: Coverage ratchet check
+        run: npm run coverage:check
 
   # v1.0 row 10 — axe-core/playwright a11y smoke. Runs in its own job so
   # the Chromium download (≈170 MB) and Angular dev-server startup (≈90 s)
