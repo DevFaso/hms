@@ -56,6 +56,8 @@ import {
 } from '../services/patient-portal.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
+import { debounceTime } from 'rxjs/operators';
+import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { DoctorWorklistComponent } from './doctor-worklist/doctor-worklist';
 import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient-flow';
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
@@ -142,6 +144,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly trackerWs = inject(PatientTrackerWsService);
 
   /**
    * Bumps every time the active language changes. Reading this signal inside a
@@ -150,6 +153,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
    */
   private readonly langTick = signal(0);
   private langSub?: Subscription;
+  private wsEventsSub?: Subscription;
+  /** Collapse bursts of tracker events into a single panel refetch. */
+  private static readonly WS_REFRESH_DEBOUNCE_MS = 2_500;
 
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
@@ -1829,11 +1835,60 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.currentTime.set(this.formatTime(new Date()));
       this.initGreeting();
     }, 60_000);
+
+    // Task 24: the clinician dashboard previously only refreshed via the
+    // manual button. /topic/patient-tracker/{hospitalId} carries exactly
+    // the encounter transitions that invalidate the worklist, patient-flow,
+    // and roomed-patients panels, so refresh those on the live stream
+    // (debounced — a discharge can emit several transitions at once).
+    if (this.isClinician()) {
+      const hospitalId = this.auth.getHospitalId();
+      if (hospitalId) {
+        this.wsEventsSub = this.trackerWs
+          .getEvents()
+          .pipe(debounceTime(DashboardComponent.WS_REFRESH_DEBOUNCE_MS))
+          .subscribe(() => this.refreshFlowPanels());
+        this.trackerWs.connect(hospitalId);
+      }
+    }
   }
 
   ngOnDestroy(): void {
     if (this.clockInterval) clearInterval(this.clockInterval);
     this.langSub?.unsubscribe();
+    if (this.wsEventsSub) {
+      this.wsEventsSub.unsubscribe();
+      this.trackerWs.disconnect();
+    }
+  }
+
+  /**
+   * Background refetch of the encounter-driven panels, triggered by tracker
+   * STOMP events (task 24). Errors stay silent — this augments, and never
+   * replaces, the initial load and the manual refresh button.
+   */
+  private refreshFlowPanels(): void {
+    if (!this.isClinician()) return;
+    this.dashboardService.getClinicalDashboard().subscribe({
+      next: (d) => {
+        this.kpis.set(d.kpis ?? []);
+        this.alerts.set(d.alerts ?? []);
+        this.inboxCounts.set(d.inboxCounts ?? null);
+        this.onCallStatus.set(d.onCallStatus ?? null);
+        this.roomedPatients.set(d.roomedPatients ?? []);
+      },
+      error: () => undefined,
+    });
+    if (this.isDoctor()) {
+      this.dashboardService.getWorklist().subscribe({
+        next: (items) => this.worklistItems.set(items),
+        error: () => undefined,
+      });
+      this.dashboardService.getPatientFlow().subscribe({
+        next: (data) => this.patientFlowData.set(data),
+        error: () => undefined,
+      });
+    }
   }
 
   searchPatients(event: Event): void {
