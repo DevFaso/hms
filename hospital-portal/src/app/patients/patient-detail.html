@@ -87,6 +87,16 @@
           {{ 'MED_HISTORY.TAB' | translate }}
         </button>
       }
+      @if (canViewCoverage()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'coverage'"
+          (click)="setTab('coverage')"
+          [title]="'COVERAGE.TAB_TITLE' | translate"
+        >
+          {{ 'COVERAGE.TAB' | translate }}
+        </button>
+      }
       @if (canViewVitals()) {
         <button
           class="tab"
@@ -144,6 +154,11 @@
     <!-- ═══ Medical History Tab (social / family / immunizations) ═══ -->
     @if (activeTab() === 'med-history' && canViewMedHistory()) {
       <app-medical-history-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Coverage Tab (insurance + hospital registrations) ═══ -->
+    @if (activeTab() === 'coverage' && canViewCoverage()) {
+      <app-coverage-tab [patientId]="patient()!.id" />
     }
 
     <!-- ═══ Overview Tab ═══ -->

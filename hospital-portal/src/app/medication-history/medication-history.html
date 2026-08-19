@@ -1,0 +1,459 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'MED_TIMELINE.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'MED_TIMELINE.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (canRecordFill && patient()) {
+        <button type="button" class="btn-primary" (click)="openRecordFill()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MED_TIMELINE.RECORD_FILL' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="mode-picker">
+      <app-patient-picker
+        inputId="mt-patient"
+        [selected]="patient()"
+        (selectedChange)="onPatientPicked($event)"
+      />
+    </div>
+    @if (patient()) {
+      <div class="range-picker">
+        <input
+          type="date"
+          [(ngModel)]="startDate"
+          [attr.aria-label]="'MED_TIMELINE.START_DATE' | translate"
+        />
+        <span>—</span>
+        <input
+          type="date"
+          [(ngModel)]="endDate"
+          [attr.aria-label]="'MED_TIMELINE.END_DATE' | translate"
+        />
+        <button type="button" class="btn-secondary btn-sm" (click)="load()">
+          {{ 'COMMON.APPLY' | translate }}
+        </button>
+      </div>
+    }
+  </div>
+
+  @if (!patient()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">medication</span>
+      <h3>{{ 'MED_TIMELINE.PICK_PATIENT' | translate }}</h3>
+    </div>
+  }
+
+  @if (patient() && timelineLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (patient() && !timelineLoading() && timelineError()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">error</span>
+      <h3>{{ 'MED_TIMELINE.LOAD_ERROR' | translate }}</h3>
+      <button type="button" class="btn-secondary btn-sm" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (patient() && !timelineLoading() && timeline(); as t) {
+    <div class="summary-strip">
+      <div class="summary-item">
+        <span class="summary-value">{{ t.totalMedications }}</span>
+        <span class="summary-label">{{ 'MED_TIMELINE.TOTAL' | translate }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-value">{{ t.activeMedications }}</span>
+        <span class="summary-label">{{ 'MED_TIMELINE.ACTIVE' | translate }}</span>
+      </div>
+      <div class="summary-item">
+        <span class="summary-value">{{ t.controlledSubstances }}</span>
+        <span class="summary-label">{{ 'MED_TIMELINE.CONTROLLED' | translate }}</span>
+      </div>
+      <div class="summary-item" [class.summary-alert]="t.medicationsWithOverlaps > 0">
+        <span class="summary-value">{{ t.medicationsWithOverlaps }}</span>
+        <span class="summary-label">{{ 'MED_TIMELINE.OVERLAPS' | translate }}</span>
+      </div>
+      <div class="summary-item" [class.summary-alert]="t.medicationsWithInteractions > 0">
+        <span class="summary-value">{{ t.medicationsWithInteractions }}</span>
+        <span class="summary-label">{{ 'MED_TIMELINE.INTERACTIONS' | translate }}</span>
+      </div>
+    </div>
+
+    @if (t.polypharmacyDetected) {
+      <div class="warning-banner">
+        <span class="material-symbols-outlined">warning</span>
+        {{ 'MED_TIMELINE.POLYPHARMACY' | translate }}
+        @if (t.concurrentMedicationsCount) {
+          ({{ t.concurrentMedicationsCount }} {{ 'MED_TIMELINE.CONCURRENT' | translate }})
+        }
+      </div>
+    }
+    @for (warning of t.warnings ?? []; track warning) {
+      <div class="warning-banner">
+        <span class="material-symbols-outlined">info</span>
+        {{ warning }}
+      </div>
+    }
+
+    @if (sortedInteractions().length > 0) {
+      <h3 class="section-heading">{{ 'MED_TIMELINE.INTERACTIONS_TITLE' | translate }}</h3>
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MED_TIMELINE.SEVERITY' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.DRUGS' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.DESCRIPTION' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.RECOMMENDATION' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (i of sortedInteractions(); track $index) {
+              <tr>
+                <td>
+                  <span class="{{ severityClass(i.severity) }}">
+                    {{
+                      i.severity
+                        ? ('MED_TIMELINE.SEV_' + i.severity | translate)
+                        : ('MED_TIMELINE.SEV_UNKNOWN' | translate)
+                    }}
+                  </span>
+                </td>
+                <td>{{ i.drug1Name }} + {{ i.drug2Name }}</td>
+                <td class="truncate-cell">{{ i.description || '—' }}</td>
+                <td class="truncate-cell">{{ i.recommendation || '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    <h3 class="section-heading">{{ 'MED_TIMELINE.TIMELINE_TITLE' | translate }}</h3>
+    @if (t.timeline.length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">medication</span>
+        <h3>{{ 'MED_TIMELINE.NO_ENTRIES' | translate }}</h3>
+      </div>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MED_TIMELINE.TYPE' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.MEDICATION' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.PERIOD' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.REGIMEN' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.SOURCE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'MED_TIMELINE.FLAGS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (e of t.timeline; track e.entryId) {
+              <tr [class.row-flagged]="e.hasOverlap || e.hasInteraction">
+                <td>
+                  <span class="{{ entryTypeClass(e) }}">
+                    {{
+                      (e.entryType === 'PHARMACY_FILL'
+                        ? 'MED_TIMELINE.TYPE_FILL'
+                        : 'MED_TIMELINE.TYPE_RX'
+                      ) | translate
+                    }}
+                  </span>
+                </td>
+                <td>
+                  {{ e.medicationName }}
+                  @if (e.strength) {
+                    <span class="muted">{{ e.strength }}</span>
+                  }
+                  @if (e.controlledSubstance) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MED_TIMELINE.CONTROLLED' | translate"
+                      >lock</span
+                    >
+                  }
+                </td>
+                <td>
+                  {{ e.startDate ? (e.startDate | date: 'shortDate') : '—' }} —
+                  {{ e.endDate ? (e.endDate | date: 'shortDate') : '…' }}
+                  @if (e.daysSupply) {
+                    <span class="muted">({{ e.daysSupply }}d)</span>
+                  }
+                </td>
+                <td>
+                  {{ e.dosage || '—' }}
+                  @if (e.frequency) {
+                    · {{ e.frequency }}
+                  }
+                  @if (e.route) {
+                    · {{ e.route }}
+                  }
+                </td>
+                <td>{{ e.source || '—' }}</td>
+                <td>{{ e.status || '—' }}</td>
+                <td class="flags-cell">
+                  @if (e.hasOverlap) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="
+                        ('MED_TIMELINE.OVERLAP_WITH' | translate) +
+                        ' ' +
+                        (e.overlappingWith?.join(', ') || '')
+                      "
+                      >join</span
+                    >
+                  }
+                  @if (e.hasInteraction) {
+                    <span
+                      class="material-symbols-outlined flag danger"
+                      [title]="
+                        ('MED_TIMELINE.INTERACTS_WITH' | translate) +
+                        ' ' +
+                        (e.interactingWith?.join(', ') || '')
+                      "
+                      >warning</span
+                    >
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (canSeeFills) {
+      <h3 class="section-heading">{{ 'MED_TIMELINE.FILLS_TITLE' | translate }}</h3>
+      @if (fillsLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+        </div>
+      } @else if (fills().length === 0) {
+        <p class="muted">{{ 'MED_TIMELINE.NO_FILLS' | translate }}</p>
+      } @else {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'MED_TIMELINE.MEDICATION' | translate }}</th>
+                <th scope="col">{{ 'MED_TIMELINE.FILL_DATE' | translate }}</th>
+                <th scope="col">{{ 'MED_TIMELINE.QUANTITY' | translate }}</th>
+                <th scope="col">{{ 'MED_TIMELINE.REFILL_NO' | translate }}</th>
+                <th scope="col">{{ 'MED_TIMELINE.PHARMACY' | translate }}</th>
+                <th scope="col">{{ 'MED_TIMELINE.DEPLETION' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (f of fills(); track f.id) {
+                <tr>
+                  <td>
+                    {{ f.medicationName }}
+                    @if (f.strength) {
+                      <span class="muted">{{ f.strength }}</span>
+                    }
+                  </td>
+                  <td>{{ f.fillDate ? (f.fillDate | date: 'mediumDate') : '—' }}</td>
+                  <td>
+                    {{ f.quantityDispensed ?? '—' }} {{ f.quantityUnit || '' }}
+                    @if (f.daysSupply) {
+                      <span class="muted">({{ f.daysSupply }}d)</span>
+                    }
+                  </td>
+                  <td>{{ f.refillNumber ?? '—' }}</td>
+                  <td>{{ f.pharmacyName || f.sourceSystem || '—' }}</td>
+                  <td>
+                    {{
+                      f.expectedDepletionDate ? (f.expectedDepletionDate | date: 'mediumDate') : '—'
+                    }}
+                  </td>
+                  <td class="actions-cell">
+                    @if (canRecordFill) {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [title]="'COMMON.EDIT' | translate"
+                        (click)="openEditFill(f)"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+  }
+</div>
+
+<!-- ══ Fill record/edit modal ══ -->
+@if (showFillModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeFillModal()"
+    (keydown.escape)="closeFillModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELINE.RECORD_FILL') | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeFillModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-medication">{{ 'MED_TIMELINE.MEDICATION' | translate }} *</label>
+            <input id="fill-medication" type="text" [(ngModel)]="fillForm.medicationName" />
+          </div>
+          <div class="field">
+            <label for="fill-date">{{ 'MED_TIMELINE.FILL_DATE' | translate }} *</label>
+            <input id="fill-date" type="date" [(ngModel)]="fillForm.fillDate" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-strength">{{ 'MED_TIMELINE.STRENGTH' | translate }}</label>
+            <input id="fill-strength" type="text" [(ngModel)]="fillForm.strength" />
+          </div>
+          <div class="field">
+            <label for="fill-form">{{ 'MED_TIMELINE.DOSAGE_FORM' | translate }}</label>
+            <input id="fill-form" type="text" [(ngModel)]="fillForm.dosageForm" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-ndc">{{ 'MED_TIMELINE.NDC' | translate }}</label>
+            <input id="fill-ndc" type="text" [(ngModel)]="fillForm.ndcCode" />
+          </div>
+          <div class="field">
+            <label for="fill-rxnorm">{{ 'MED_TIMELINE.RXNORM' | translate }}</label>
+            <input id="fill-rxnorm" type="text" [(ngModel)]="fillForm.rxnormCode" />
+          </div>
+        </div>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="fill-qty">{{ 'MED_TIMELINE.QUANTITY' | translate }}</label>
+            <input
+              id="fill-qty"
+              type="number"
+              min="0"
+              step="0.01"
+              [(ngModel)]="fillForm.quantityDispensed"
+            />
+          </div>
+          <div class="field">
+            <label for="fill-unit">{{ 'MED_TIMELINE.UNIT' | translate }}</label>
+            <input id="fill-unit" type="text" [(ngModel)]="fillForm.quantityUnit" />
+          </div>
+          <div class="field">
+            <label for="fill-days">{{ 'MED_TIMELINE.DAYS_SUPPLY' | translate }}</label>
+            <input id="fill-days" type="number" min="0" [(ngModel)]="fillForm.daysSupply" />
+          </div>
+          <div class="field">
+            <label for="fill-refill">{{ 'MED_TIMELINE.REFILL_NO' | translate }}</label>
+            <input id="fill-refill" type="number" min="0" [(ngModel)]="fillForm.refillNumber" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="fill-directions">{{ 'MED_TIMELINE.DIRECTIONS' | translate }}</label>
+          <textarea id="fill-directions" rows="2" [(ngModel)]="fillForm.directions"></textarea>
+        </div>
+
+        <h3 class="section-heading">{{ 'MED_TIMELINE.PHARMACY' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-pharmacy">{{ 'MED_TIMELINE.PHARMACY_NAME' | translate }}</label>
+            <input id="fill-pharmacy" type="text" [(ngModel)]="fillForm.pharmacyName" />
+          </div>
+          <div class="field">
+            <label for="fill-npi">{{ 'MED_TIMELINE.PHARMACY_NPI' | translate }}</label>
+            <input id="fill-npi" type="text" [(ngModel)]="fillForm.pharmacyNpi" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-phone">{{ 'MED_TIMELINE.PHARMACY_PHONE' | translate }}</label>
+            <input id="fill-phone" type="text" [(ngModel)]="fillForm.pharmacyPhone" />
+          </div>
+          <div class="field">
+            <label for="fill-facility">{{ 'MED_TIMELINE.FACILITY_CODE' | translate }}</label>
+            <input id="fill-facility" type="text" [(ngModel)]="fillForm.facilityCode" />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MED_TIMELINE.PRESCRIBER' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="fill-prescriber">{{ 'MED_TIMELINE.PRESCRIBER_NAME' | translate }}</label>
+            <input id="fill-prescriber" type="text" [(ngModel)]="fillForm.prescriberName" />
+          </div>
+          <div class="field">
+            <label for="fill-source">{{ 'MED_TIMELINE.SOURCE_SYSTEM' | translate }}</label>
+            <input id="fill-source" type="text" [(ngModel)]="fillForm.sourceSystem" />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="fillForm.controlledSubstance" />
+            {{ 'MED_TIMELINE.CONTROLLED' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="fillForm.genericSubstitution" />
+            {{ 'MED_TIMELINE.GENERIC_SUBSTITUTION' | translate }}
+          </label>
+        </div>
+        <div class="field">
+          <label for="fill-notes">{{ 'MED_TIMELINE.NOTES' | translate }}</label>
+          <textarea id="fill-notes" rows="2" [(ngModel)]="fillForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeFillModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="fillSaving() || !fillForm.medicationName || !fillForm.fillDate"
+          (click)="submitFill()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

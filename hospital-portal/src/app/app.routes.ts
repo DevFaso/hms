@@ -1226,6 +1226,51 @@ export const routes: Routes = [
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
 
+      // Medication-history timeline + external pharmacy-fill recording.
+      // Roles mirror the backend timeline gate exactly (no MIDWIFE, no admins).
+      {
+        path: 'medication-history',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST', 'ROLE_LAB_SCIENTIST'],
+        },
+        loadComponent: () =>
+          import('./medication-history/medication-history').then(
+            (m) => m.MedicationHistoryComponent,
+          ),
+      },
+
+      // Multi-hospital registrations admin (reception-facing). Writes are
+      // RECEPTIONIST/HOSPITAL_ADMIN; other clinical roles read.
+      {
+        path: 'registrations',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./registrations/registrations').then((m) => m.RegistrationsComponent),
+      },
+
+      // Procedure orders (order → consent → schedule → complete/cancel).
+      // HOSPITAL_ADMIN is read-only (backend allows lists but not writes).
+      {
+        path: 'procedure-orders',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./procedure-orders/procedure-orders').then((m) => m.ProcedureOrdersComponent),
+      },
+
       // Refill approval queue (provider-facing — pairs with patient portal refills)
       {
         path: 'refills',
