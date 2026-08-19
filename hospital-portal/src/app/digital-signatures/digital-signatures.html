@@ -15,8 +15,70 @@
           >{{ revokedCount() }} {{ 'SIGNATURES.REVOKED' | translate }}</span
         >
       </div>
+      @if (canSign) {
+        <button type="button" class="btn-primary" (click)="openSign()">
+          <span class="material-icons">draw</span>
+          {{ 'SIGNATURES.SIGN_REPORT' | translate }}
+        </button>
+      }
     </div>
   </div>
+
+  <!-- Report lookup: is a given report signed, and by whom? -->
+  <div class="lookup-panel">
+    <select
+      [attr.aria-label]="'SIGNATURES.REPORT_TYPE' | translate"
+      [title]="'SIGNATURES.REPORT_TYPE' | translate"
+      [ngModel]="lookupReportType()"
+      (ngModelChange)="lookupReportType.set($event)"
+    >
+      <option value="">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</option>
+      @for (t of reportTypes; track t) {
+        <option [value]="t">{{ formatReportType(t) }}</option>
+      }
+    </select>
+    <input
+      type="text"
+      [placeholder]="'SIGNATURES.REPORT_ID_PLACEHOLDER' | translate"
+      [ngModel]="lookupReportId()"
+      (ngModelChange)="lookupReportId.set($event)"
+      (keydown.enter)="runLookup()"
+    />
+    <button type="button" class="btn-secondary" (click)="runLookup()" [disabled]="lookupLoading()">
+      {{ 'SIGNATURES.LOOKUP' | translate }}
+    </button>
+    @if (lookupDone()) {
+      <button type="button" class="btn-icon" (click)="clearLookup()">
+        <span class="material-icons">close</span>
+      </button>
+    }
+  </div>
+  @if (lookupDone()) {
+    <div class="lookup-result">
+      @if (lookupSigned() !== null) {
+        <span class="badge" [class]="lookupSigned() ? 'badge-success' : 'badge-warning'">
+          {{
+            (lookupSigned() ? 'SIGNATURES.REPORT_SIGNED' : 'SIGNATURES.REPORT_NOT_SIGNED')
+              | translate
+          }}
+        </span>
+      }
+      @if (lookupSignatures().length > 0) {
+        <ul class="lookup-list">
+          @for (sig of lookupSignatures(); track sig.id) {
+            <li>
+              <span class="badge" [class]="statusClass(sig.status)">{{
+                sig.status | enumLabel: 'signatureStatus'
+              }}</span>
+              {{ sig.signedByName }} · {{ formatDate(sig.signatureDateTime) }}
+            </li>
+          }
+        </ul>
+      } @else {
+        <span class="muted">{{ 'SIGNATURES.LOOKUP_NONE' | translate }}</span>
+      }
+    </div>
+  }
 
   <!-- Filters -->
   <div class="filter-bar">
@@ -88,14 +150,16 @@
                 >
                   <span class="material-icons">verified_user</span>
                 </button>
-                <button
-                  class="btn-icon danger"
-                  (click)="openRevoke(sig)"
-                  [title]="'SIGNATURES.REVOKE' | translate"
-                  [disabled]="sig.status !== 'SIGNED'"
-                >
-                  <span class="material-icons">block</span>
-                </button>
+                @if (canRevoke) {
+                  <button
+                    class="btn-icon danger"
+                    (click)="openRevoke(sig)"
+                    [title]="'SIGNATURES.REVOKE' | translate"
+                    [disabled]="sig.status !== 'SIGNED'"
+                  >
+                    <span class="material-icons">block</span>
+                  </button>
+                }
               </td>
             </tr>
           }
@@ -236,6 +300,10 @@
           </button>
         </div>
         <div class="modal-body">
+          <p class="muted">
+            {{ formatReportType(verifyReportType()) }} ·
+            <code>{{ verifyReportId() }}</code>
+          </p>
           <div class="form-group">
             <label for="verify-value">{{ 'SIGNATURES.SIGNATURE_VALUE' | translate }}</label>
             <input
@@ -323,6 +391,94 @@
             {{
               revoking() ? ('SIGNATURES.REVOKING' | translate) : ('SIGNATURES.REVOKE' | translate)
             }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Sign Modal -->
+  @if (showSignModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeSign()"
+      (keydown.enter)="closeSign()"
+      tabindex="0"
+      role="button"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>{{ 'SIGNATURES.SIGN_TITLE' | translate }}</h2>
+          <button type="button" class="btn-icon" (click)="closeSign()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="sign-type">{{ 'SIGNATURES.REPORT_TYPE' | translate }} *</label>
+            <select
+              id="sign-type"
+              [ngModel]="signReportType()"
+              (ngModelChange)="signReportType.set($event)"
+            >
+              <option value="">—</option>
+              @for (t of reportTypes; track t) {
+                <option [value]="t">{{ formatReportType(t) }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="sign-report-id">{{ 'SIGNATURES.REPORT_ID' | translate }} *</label>
+            <input
+              id="sign-report-id"
+              type="text"
+              [placeholder]="'SIGNATURES.REPORT_ID_PLACEHOLDER' | translate"
+              [ngModel]="signReportId()"
+              (ngModelChange)="signReportId.set($event)"
+            />
+          </div>
+          <div class="form-group">
+            <label for="sign-value">{{ 'SIGNATURES.SIGNATURE_VALUE' | translate }} *</label>
+            <input
+              id="sign-value"
+              type="text"
+              [placeholder]="'SIGNATURES.SIGN_VALUE_PLACEHOLDER' | translate"
+              [ngModel]="signValue()"
+              (ngModelChange)="signValue.set($event)"
+            />
+            <p class="muted">{{ 'SIGNATURES.SIGN_VALUE_HINT' | translate }}</p>
+          </div>
+          <div class="form-group">
+            <label for="sign-notes">{{ 'SIGNATURES.NOTES' | translate }}</label>
+            <textarea
+              id="sign-notes"
+              rows="2"
+              [ngModel]="signNotes()"
+              (ngModelChange)="signNotes.set($event)"
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="sign-expires">{{ 'SIGNATURES.EXPIRES_AT' | translate }}</label>
+            <input
+              id="sign-expires"
+              type="datetime-local"
+              [ngModel]="signExpiresAt()"
+              (ngModelChange)="signExpiresAt.set($event)"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" (click)="closeSign()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn-primary" (click)="doSign()" [disabled]="signing()">
+            {{ signing() ? ('SIGNATURES.SIGNING' | translate) : ('SIGNATURES.SIGN' | translate) }}
           </button>
         </div>
       </div>
