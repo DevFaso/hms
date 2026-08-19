@@ -2,12 +2,10 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.DischargeDisposition;
-import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
 import com.example.hms.model.AdmissionOrderSet;
-import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
@@ -19,10 +17,10 @@ import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
 import com.example.hms.repository.AdmissionOrderSetRepository;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.DepartmentRepository;
-import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.EncounterAutoCompletionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,7 +28,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -38,10 +35,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -54,7 +47,7 @@ class AdmissionServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
-    @Mock private EncounterRepository encounterRepository;
+    @Mock private EncounterAutoCompletionService encounterAutoCompletion;
     @Mock private AdmissionMapper admissionMapper;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
@@ -75,10 +68,6 @@ class AdmissionServiceImplTest {
         patient = new Patient(); patient.setId(patientId);
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
         staff = new Staff(); staff.setId(staffId);
-
-        // Default: no active encounters (overridden in discharge-encounter tests)
-        lenient().when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(any(), any(), anyCollection()))
-                .thenReturn(Collections.emptyList());
     }
 
     @Test
@@ -261,40 +250,7 @@ class AdmissionServiceImplTest {
     }
 
     @Test
-    void dischargePatient_completesActiveEncounters() {
-        Admission admission = new Admission();
-        admission.setId(admissionId);
-        admission.setStatus(AdmissionStatus.ACTIVE);
-        admission.setPatient(patient);
-        admission.setHospital(hospital);
-
-        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
-        request.setDischargingProviderId(staffId);
-        request.setDischargeDisposition(DischargeDisposition.HOME);
-        request.setDischargeSummary("Recovered");
-        request.setDischargeInstructions("Rest");
-
-        Encounter activeEnc = new Encounter();
-        activeEnc.setId(UUID.randomUUID());
-        activeEnc.setStatus(EncounterStatus.IN_PROGRESS);
-
-        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(admissionRepository.save(admission)).thenReturn(admission);
-        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
-        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
-                eq(patientId), eq(hospitalId), anyCollection()))
-                .thenReturn(List.of(activeEnc));
-
-        service.dischargePatient(admissionId, request);
-
-        assertThat(activeEnc.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
-        assertThat(activeEnc.getCheckoutTimestamp()).isNotNull();
-        verify(encounterRepository).saveAll(List.of(activeEnc));
-    }
-
-    @Test
-    void dischargePatient_noActiveEncounters_doesNotCallSaveAll() {
+    void dischargePatient_delegatesEncounterCompletion() {
         Admission admission = new Admission();
         admission.setId(admissionId);
         admission.setStatus(AdmissionStatus.ACTIVE);
@@ -311,12 +267,9 @@ class AdmissionServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(admissionRepository.save(admission)).thenReturn(admission);
         when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
-        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
-                eq(patientId), eq(hospitalId), anyCollection()))
-                .thenReturn(Collections.emptyList());
 
         service.dischargePatient(admissionId, request);
 
-        verify(encounterRepository, never()).saveAll(any());
+        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
     }
 }
