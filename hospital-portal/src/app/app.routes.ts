@@ -684,6 +684,25 @@ export const routes: Routes = [
         loadComponent: () => import('./discharge/discharge').then((m) => m.DischargeComponent),
       },
 
+      // Maternity (history board, OB/GYN referrals, ultrasound, birth plans,
+      // prenatal scheduling, postpartum). RECEPTIONIST is included for the
+      // prenatal-scheduling tab only; the other tabs are role-gated inside.
+      {
+        path: 'maternity',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./maternity/maternity').then((m) => m.MaternityComponent),
+      },
+
       // Prescriptions
       {
         path: 'prescriptions',
