@@ -1221,6 +1221,25 @@ export const routes: Routes = [
           ),
       },
 
+      // Multi-hospital registrations admin (reception-facing). Writes are
+      // RECEPTIONIST/HOSPITAL_ADMIN; other clinical roles read.
+      {
+        path: 'registrations',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./registrations/registrations').then((m) => m.RegistrationsComponent),
+      },
+
       // Procedure orders (order → consent → schedule → complete/cancel).
       // HOSPITAL_ADMIN is read-only (backend allows lists but not writes).
       {

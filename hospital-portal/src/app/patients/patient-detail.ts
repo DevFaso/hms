@@ -19,6 +19,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
+import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
 import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner.component';
 import { ChartReviewComponent } from './chart-review/chart-review.component';
@@ -29,6 +30,7 @@ type TabKey =
   | 'overview'
   | 'medical'
   | 'chart'
+  | 'coverage'
   | 'vitals'
   | 'encounters'
   | 'appointments'
@@ -43,6 +45,7 @@ type TabKey =
     RouterLink,
     TranslateModule,
     PatientChartComponent,
+    CoverageTabComponent,
     BpaPanelComponent,
     StoryboardBannerComponent,
     ChartReviewComponent,
@@ -139,6 +142,17 @@ export class PatientDetailComponent implements OnInit {
    *  access at least one of allergies / diagnoses / chart updates). */
   canViewChart(): boolean {
     return this.roleContext.hasAnyActiveRole(CHART_VIEW_ROLES);
+  }
+
+  /** Insurance endpoints grant HOSPITAL_ADMIN/RECEPTIONIST/NURSE/DOCTOR only
+   *  (no SUPER_ADMIN on the backend), so the Coverage tab mirrors that. */
+  canViewCoverage(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_NURSE',
+      'ROLE_DOCTOR',
+    ]);
   }
 
   /** Whether the current user can view the Record Sharing tab */

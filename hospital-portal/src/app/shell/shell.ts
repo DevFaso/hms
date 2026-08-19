@@ -337,6 +337,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'how_to_reg',
+        label: 'Registrations',
+        translationKey: 'NAV.REGISTRATIONS',
+        route: '/registrations',
+        roles: [
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'exit_to_app',
         label: 'Discharge',
         translationKey: 'NAV.DISCHARGE',
