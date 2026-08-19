@@ -17,6 +17,7 @@
  *   I18N_COVERAGE_THRESHOLD=98 node scripts/check-i18n-coverage.mjs
  *   I18N_LOCALE_THRESHOLDS=fr:99,es:89 node scripts/check-i18n-coverage.mjs
  *   node scripts/check-i18n-coverage.mjs --report-only    # never exit non-zero
+ *   node scripts/check-i18n-coverage.mjs --strict         # exact key parity
  *
  * The default 99% threshold matches the roadmap row 12 spec ("CI fails when
  * any locale is < 99% of EN"). Per-locale overrides via
@@ -24,6 +25,13 @@
  * without softening FR, which is the row-12 deliverable. Do not lower a
  * threshold permanently to mask regression — the gate's value is the floor
  * it pins against backsliding.
+ *
+ * --strict (task 22, key-parity gate): now that every locale is backfilled
+ * to 100%, thresholds alone would still let a locale drift one key at a
+ * time and would never flag orphans. Strict mode fails on ANY missing key
+ * and on ANY orphan key (present in a locale but absent from EN — usually
+ * a leftover after an EN key was renamed). CI runs this mode; the
+ * threshold machinery stays for local triage during a future backfill.
  */
 
 import { readFileSync, readdirSync } from 'node:fs';
@@ -35,6 +43,7 @@ const I18N_DIR = resolve(SCRIPT_DIR, '..', 'src', 'assets', 'i18n');
 const BASELINE_LOCALE = 'en';
 
 const REPORT_ONLY = process.argv.includes('--report-only');
+const STRICT = process.argv.includes('--strict');
 const DEFAULT_THRESHOLD = Number(process.env.I18N_COVERAGE_THRESHOLD ?? '99');
 
 if (Number.isNaN(DEFAULT_THRESHOLD) || DEFAULT_THRESHOLD < 0 || DEFAULT_THRESHOLD > 100) {
@@ -144,7 +153,11 @@ function main() {
     }
 
     console.log(`Baseline (${BASELINE_LOCALE}): ${baselineKeyCount} translatable keys`);
-    console.log(`Default threshold: ${DEFAULT_THRESHOLD}% ${REPORT_ONLY ? '(report-only)' : ''}`);
+    console.log(
+        STRICT
+            ? `Mode: strict key parity (any missing or orphan key fails) ${REPORT_ONLY ? '(report-only)' : ''}`
+            : `Default threshold: ${DEFAULT_THRESHOLD}% ${REPORT_ONLY ? '(report-only)' : ''}`
+    );
     if (LOCALE_THRESHOLDS.size > 0) {
         const overrides = [...LOCALE_THRESHOLDS.entries()].map(([k, v]) => `${k}=${v}%`).join(', ');
         console.log(`Per-locale overrides: ${overrides}`);
@@ -178,7 +191,11 @@ function main() {
         }
         const coveragePct = (covered / baselineKeyCount) * 100;
         const localeThreshold = thresholdFor(locale);
-        const passes = coveragePct >= localeThreshold;
+        // Strict parity: any missing or orphan key fails, regardless of
+        // percentage thresholds.
+        const passes = STRICT
+            ? missing.length === 0 && extras.length === 0
+            : coveragePct >= localeThreshold;
         if (!passes) failed = true;
         rows.push([
             locale,
@@ -186,8 +203,8 @@ function main() {
             String(missing.length),
             String(extras.length),
             coveragePct.toFixed(2),
-            `${localeThreshold}`,
-            passes ? '✓' : '✗ BELOW THRESHOLD'
+            STRICT ? 'strict' : `${localeThreshold}`,
+            passes ? '✓' : STRICT ? '✗ PARITY BROKEN' : '✗ BELOW THRESHOLD'
         ]);
 
         if (missing.length > 0) {
