@@ -1,5 +1,7 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { PatientDetailComponent } from './patient-detail';
@@ -73,6 +75,8 @@ describe('PatientDetailComponent', () => {
       imports: [PatientDetailComponent, TranslateModule.forRoot()],
       providers: [
         provideRouter([]),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: { get: () => 'p1' } } },

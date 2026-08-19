@@ -58,6 +58,16 @@
       >
         {{ 'PATIENTS.MEDICAL' | translate }}
       </button>
+      @if (canViewChart()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'chart'"
+          (click)="setTab('chart')"
+          [title]="'CHART.TAB_TITLE' | translate"
+        >
+          {{ 'CHART.TAB' | translate }}
+        </button>
+      }
       @if (canViewVitals()) {
         <button
           class="tab"
@@ -98,6 +108,11 @@
         </button>
       }
     </div>
+
+    <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
+    @if (activeTab() === 'chart' && canViewChart()) {
+      <app-patient-chart [patientId]="patient()!.id" />
+    }
 
     <!-- ═══ Overview Tab ═══ -->
     @if (activeTab() === 'overview') {

@@ -16,14 +16,23 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { PatientChartComponent } from './patient-chart/patient-chart.component';
 
-type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' | 'sharing';
+type TabKey =
+  | 'overview'
+  | 'medical'
+  | 'chart'
+  | 'vitals'
+  | 'encounters'
+  | 'appointments'
+  | 'sharing';
 
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, PatientChartComponent],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',
 })
@@ -39,6 +48,7 @@ export class PatientDetailComponent implements OnInit {
   private readonly toast = inject(ToastService);
   protected readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
@@ -103,6 +113,21 @@ export class PatientDetailComponent implements OnInit {
   /** Whether the current user can view clinical encounters */
   canViewEncounters(): boolean {
     return this.permissions.hasPermission('Create Encounters');
+  }
+
+  /** Whether the current user can view the structured Chart tab (roles that can
+   *  access at least one of allergies / diagnoses / chart updates). */
+  canViewChart(): boolean {
+    const roles = [
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_PHARMACIST',
+    ];
+    const active = this.roleContext.activeRole;
+    if (active) return roles.includes(active);
+    return this.auth.hasAnyRole(roles);
   }
 
   /** Whether the current user can view the Record Sharing tab */
