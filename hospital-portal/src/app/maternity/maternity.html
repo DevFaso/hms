@@ -1,0 +1,1175 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'MATERNITY.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'MATERNITY.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (activeTab() === 'board' && canManageHistory) {
+        <button class="btn-primary" (click)="openCreateHistory()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MATERNITY.NEW_HISTORY' | translate }}
+        </button>
+      }
+      @if (activeTab() === 'referrals' && canCreateReferral) {
+        <button class="btn-primary" (click)="openCreateReferral()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MATERNITY.NEW_REFERRAL' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tabs">
+      @if (canManageHistory) {
+        <button class="tab-btn" [class.active]="activeTab() === 'board'" (click)="setTab('board')">
+          {{ 'MATERNITY.BOARD_TAB' | translate }}
+        </button>
+      }
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'referrals'"
+        (click)="setTab('referrals')"
+      >
+        {{ 'MATERNITY.REFERRALS_TAB' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ Board tab ══ -->
+  @if (activeTab() === 'board' && canManageHistory) {
+    <div class="filter-bar">
+      <div class="tabs">
+        @for (w of visibleWorklists(); track w) {
+          <button class="tab-btn" [class.active]="worklist() === w" (click)="setWorklist(w)">
+            {{ 'MATERNITY.WORKLIST_' + w.toUpperCase().replaceAll('-', '_') | translate }}
+          </button>
+        }
+      </div>
+      <span class="muted">{{ boardTotal() }} {{ 'MATERNITY.RECORDS' | translate }}</span>
+    </div>
+
+    @if (historiesLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!historiesLoading() && histories().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
+        <h3>{{ 'MATERNITY.NO_HISTORIES' | translate }}</h3>
+        <p>{{ 'MATERNITY.NO_HISTORIES_HINT' | translate }}</p>
+      </div>
+    }
+    @if (!historiesLoading() && histories().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.RECORDED' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.VERSION' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.RISK' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.FLAGS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (h of histories(); track h.id) {
+              <tr class="data-row">
+                <td>{{ patientName(h.patientId) }}</td>
+                <td>{{ h.recordedDate | date: 'medium' }}</td>
+                <td>v{{ h.versionNumber ?? 1 }}</td>
+                <td>
+                  <span class="{{ riskClass(h.riskCategory) }}">
+                    {{
+                      h.riskCategory
+                        ? ('MATERNITY.RISK_' + h.riskCategory | translate)
+                        : ('MATERNITY.RISK_UNSCORED' | translate)
+                    }}
+                  </span>
+                  @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
+                    <span class="muted score">{{ h.calculatedRiskScore }}</span>
+                  }
+                </td>
+                <td class="flags-cell">
+                  @if (h.requiresSpecialistReferral) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MATERNITY.FLAG_SPECIALIST' | translate"
+                      >medical_services</span
+                    >
+                  }
+                  @if (h.needsPsychosocialSupport) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MATERNITY.FLAG_PSYCHOSOCIAL' | translate"
+                      >psychology</span
+                    >
+                  }
+                  @if (h.hasChronicMedicalConditions) {
+                    <span
+                      class="material-symbols-outlined flag"
+                      [title]="'MATERNITY.FLAG_CHRONIC' | translate"
+                      >monitor_heart</span
+                    >
+                  }
+                </td>
+                <td>
+                  @if (h.reviewedByProvider) {
+                    <span class="status-badge status-completed">
+                      {{ 'MATERNITY.REVIEWED' | translate }}
+                    </span>
+                  } @else {
+                    <span class="status-badge status-submitted">
+                      {{ 'MATERNITY.PENDING_REVIEW' | translate }}
+                    </span>
+                  }
+                </td>
+                <td class="actions-cell">
+                  <button
+                    class="btn-secondary btn-sm"
+                    [title]="'COMMON.VIEW' | translate"
+                    (click)="openHistoryDetail(h)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  @if (canManageHistory) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditHistory(h)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canReview) {
+                    <button
+                      class="btn-secondary btn-sm"
+                      [title]="'MATERNITY.CALCULATE_RISK' | translate"
+                      [disabled]="reviewBusyId() === h.id"
+                      (click)="calculateRisk(h)"
+                    >
+                      <span class="material-symbols-outlined">calculate</span>
+                    </button>
+                    @if (!h.reviewedByProvider) {
+                      <button
+                        class="btn-secondary btn-sm"
+                        [title]="'MATERNITY.MARK_REVIEWED' | translate"
+                        [disabled]="reviewBusyId() === h.id"
+                        (click)="markReviewed(h)"
+                      >
+                        <span class="material-symbols-outlined">task_alt</span>
+                      </button>
+                    }
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (boardTotalPages() > 1) {
+        <div class="pager">
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="boardPage() === 0"
+            (click)="boardPrev()"
+            [title]="'COMMON.PREVIOUS' | translate"
+          >
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <span class="muted">{{ boardPage() + 1 }} / {{ boardTotalPages() }}</span>
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="boardPage() + 1 >= boardTotalPages()"
+            (click)="boardNext()"
+            [title]="'COMMON.NEXT' | translate"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      }
+    }
+  }
+
+  <!-- ══ Referrals tab ══ -->
+  @if (activeTab() === 'referrals') {
+    @if (summary(); as s) {
+      <div class="summary-strip">
+        <div class="summary-item">
+          <span class="summary-value">{{ s.submitted }}</span>
+          <span class="summary-label">{{ 'MATERNITY.SUM_SUBMITTED' | translate }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-value">{{ s.acknowledged }}</span>
+          <span class="summary-label">{{ 'MATERNITY.SUM_ACKNOWLEDGED' | translate }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-value">{{ s.inProgress }}</span>
+          <span class="summary-label">{{ 'MATERNITY.SUM_IN_PROGRESS' | translate }}</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-value">{{ s.completed }}</span>
+          <span class="summary-label">{{ 'MATERNITY.SUM_COMPLETED' | translate }}</span>
+        </div>
+        <div class="summary-item summary-overdue">
+          <span class="summary-value">{{ s.overdue }}</span>
+          <span class="summary-label">{{ 'MATERNITY.SUM_OVERDUE' | translate }}</span>
+        </div>
+      </div>
+    }
+
+    <div class="filter-bar">
+      <div class="tabs">
+        @if (canListHospitalReferrals) {
+          <button
+            class="tab-btn"
+            [class.active]="referralMode() === 'hospital'"
+            (click)="setReferralMode('hospital')"
+          >
+            {{ 'MATERNITY.MODE_HOSPITAL' | translate }}
+          </button>
+        }
+        @if (canListAssigned) {
+          <button
+            class="tab-btn"
+            [class.active]="referralMode() === 'assigned'"
+            (click)="setReferralMode('assigned')"
+          >
+            {{ 'MATERNITY.MODE_ASSIGNED' | translate }}
+          </button>
+        }
+        <button
+          class="tab-btn"
+          [class.active]="referralMode() === 'patient'"
+          (click)="setReferralMode('patient')"
+        >
+          {{ 'MATERNITY.MODE_PATIENT' | translate }}
+        </button>
+      </div>
+      @if (referralMode() === 'patient') {
+        <div class="mode-picker">
+          <app-patient-picker
+            inputId="referral-filter-patient"
+            [selected]="referralPatient()"
+            (selectedChange)="onReferralPatientPicked($event)"
+          />
+        </div>
+      }
+    </div>
+
+    @if (referralsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    }
+    @if (!referralsLoading() && referrals().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">outbound</span>
+        <h3>{{ 'MATERNITY.NO_REFERRALS' | translate }}</h3>
+        <p>
+          {{
+            (referralMode() === 'patient' && !referralPatient()
+              ? 'MATERNITY.PICK_PATIENT_HINT'
+              : 'MATERNITY.NO_REFERRALS_HINT'
+            ) | translate
+          }}
+        </p>
+      </div>
+    }
+    @if (!referralsLoading() && referrals().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.CARE_CONTEXT' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.URGENCY' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.TRANSFER_TYPE' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.SLA_DUE' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (r of referrals(); track r.id) {
+              <tr class="data-row" [class.row-overdue]="isOverdue(r)">
+                <td>{{ patientDisplay(r) }}</td>
+                <td>{{ 'MATERNITY.CONTEXT_' + r.careContext | translate }}</td>
+                <td>
+                  <span class="{{ urgencyClass(r.urgency) }}">
+                    {{ 'MATERNITY.URGENCY_' + r.urgency | translate }}
+                  </span>
+                </td>
+                <td>{{ 'MATERNITY.TRANSFER_' + r.transferType | translate }}</td>
+                <td>
+                  {{ r.slaDueAt ? (r.slaDueAt | date: 'short') : '—' }}
+                  @if (isOverdue(r)) {
+                    <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  <span class="{{ referralStatusClass(r.status) }}">
+                    {{ 'MATERNITY.STATUS_' + r.status | translate }}
+                  </span>
+                </td>
+                <td class="actions-cell">
+                  <button
+                    class="btn-secondary btn-sm"
+                    [title]="'COMMON.VIEW' | translate"
+                    (click)="openReferral(r)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (referralTotalPages() > 1) {
+        <div class="pager">
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="referralPage() === 0"
+            (click)="referralPrev()"
+            [title]="'COMMON.PREVIOUS' | translate"
+          >
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <span class="muted">{{ referralPage() + 1 }} / {{ referralTotalPages() }}</span>
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="referralPage() + 1 >= referralTotalPages()"
+            (click)="referralNext()"
+            [title]="'COMMON.NEXT' | translate"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      }
+    }
+  }
+</div>
+
+<!-- ══ History detail modal ══ -->
+@if (viewedHistory(); as h) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeHistoryDetail()"
+    (keydown.escape)="closeHistoryDetail()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeHistoryDetail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="risk-banner {{ riskClass(h.riskCategory) }}">
+          <span class="material-symbols-outlined">monitor_heart</span>
+          <span>
+            {{
+              h.riskCategory
+                ? ('MATERNITY.RISK_' + h.riskCategory | translate)
+                : ('MATERNITY.RISK_UNSCORED' | translate)
+            }}
+            @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
+              — {{ 'MATERNITY.SCORE' | translate }}: {{ h.calculatedRiskScore }}
+            }
+          </span>
+        </div>
+        @if (h.identifiedRiskFactors) {
+          <div class="view-section">
+            <h3>{{ 'MATERNITY.RISK_FACTORS' | translate }}</h3>
+            <p>{{ h.identifiedRiskFactors }}</p>
+          </div>
+        }
+        <div class="view-section">
+          <h3>{{ 'MATERNITY.SECTION_OBSTETRIC' | translate }}</h3>
+          <p class="gtpal">
+            G{{ h.obstetricHistory?.gravida ?? '—' }} P{{ h.obstetricHistory?.para ?? '—' }} · T{{
+              h.obstetricHistory?.termBirths ?? '—'
+            }}
+            P{{ h.obstetricHistory?.pretermBirths ?? '—' }} A{{
+              h.obstetricHistory?.abortions ?? '—'
+            }}
+            L{{ h.obstetricHistory?.livingChildren ?? '—' }} · C/S:
+            {{ h.obstetricHistory?.previousCesareanSections ?? '—' }}
+          </p>
+          @if (h.obstetricHistory?.previousPregnancyComplications) {
+            <p class="muted">{{ h.obstetricHistory?.previousPregnancyComplications }}</p>
+          }
+        </div>
+        @if (h.menstrualHistory?.lastMenstrualPeriod || h.menstrualHistory?.estimatedDueDate) {
+          <div class="view-section">
+            <h3>{{ 'MATERNITY.SECTION_DATES' | translate }}</h3>
+            <p>
+              {{ 'MATERNITY.LMP' | translate }}:
+              {{
+                h.menstrualHistory?.lastMenstrualPeriod
+                  ? (h.menstrualHistory?.lastMenstrualPeriod | date: 'mediumDate')
+                  : '—'
+              }}
+              · {{ 'MATERNITY.EDD' | translate }}:
+              {{
+                h.menstrualHistory?.estimatedDueDate
+                  ? (h.menstrualHistory?.estimatedDueDate | date: 'mediumDate')
+                  : '—'
+              }}
+            </p>
+          </div>
+        }
+        @if (h.clinicalNotes) {
+          <div class="view-section">
+            <h3>{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</h3>
+            <p>{{ h.clinicalNotes }}</p>
+          </div>
+        }
+        @if (h.requiresSpecialistReferral) {
+          <div class="view-section">
+            <h3>{{ 'MATERNITY.FLAG_SPECIALIST' | translate }}</h3>
+            <p>{{ h.specialistReferralReason || '—' }}</p>
+          </div>
+        }
+        <div class="view-section">
+          <h3>{{ 'MATERNITY.VERSIONS' | translate }}</h3>
+          @if (historyVersions().length === 0) {
+            <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else {
+            <ul class="version-list">
+              @for (v of historyVersions(); track v.id) {
+                <li>
+                  v{{ v.versionNumber ?? 1 }} — {{ v.recordedDate | date: 'medium' }}
+                  @if (v.updateReason) {
+                    <span class="muted">({{ v.updateReason }})</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+      <div class="modal-actions">
+        @if (canReview && !h.reviewedByProvider) {
+          <button
+            class="btn-primary"
+            [disabled]="reviewBusyId() === h.id"
+            (click)="markReviewed(h)"
+          >
+            {{ 'MATERNITY.MARK_REVIEWED' | translate }}
+          </button>
+        }
+        @if (canReview) {
+          <button
+            class="btn-secondary"
+            [disabled]="reviewBusyId() === h.id"
+            (click)="calculateRisk(h)"
+          >
+            {{ 'MATERNITY.CALCULATE_RISK' | translate }}
+          </button>
+        }
+        <button class="btn-secondary" (click)="closeHistoryDetail()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ History create/edit modal ══ -->
+@if (showHistoryModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeHistoryModal()"
+    (keydown.escape)="closeHistoryModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingHistoryId() ? 'MATERNITY.EDIT_HISTORY' : 'MATERNITY.NEW_HISTORY') | translate
+          }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeHistoryModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editingHistoryId()) {
+          <div class="field">
+            <label for="history-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="history-patient"
+              [selected]="selectedPatient()"
+              (selectedChange)="onHistoryPatientPicked($event)"
+            />
+          </div>
+        }
+        <div class="form-row">
+          <div class="field">
+            <label for="history-recorded">{{ 'MATERNITY.RECORDED' | translate }} *</label>
+            <input
+              id="history-recorded"
+              type="datetime-local"
+              [(ngModel)]="historyForm.recordedDate"
+            />
+          </div>
+          <div class="field">
+            <label for="history-reason">{{ 'MATERNITY.UPDATE_REASON' | translate }}</label>
+            <input id="history-reason" type="text" [(ngModel)]="historyForm.updateReason" />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_DATES' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="history-lmp">{{ 'MATERNITY.LMP' | translate }}</label>
+            <input
+              id="history-lmp"
+              type="date"
+              [(ngModel)]="historyForm.menstrualHistory!.lastMenstrualPeriod"
+            />
+          </div>
+          <div class="field">
+            <label for="history-edd">{{ 'MATERNITY.EDD' | translate }}</label>
+            <input
+              id="history-edd"
+              type="date"
+              [(ngModel)]="historyForm.menstrualHistory!.estimatedDueDate"
+            />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_OBSTETRIC' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="ob-gravida">{{ 'MATERNITY.GRAVIDA' | translate }}</label>
+            <input
+              id="ob-gravida"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.gravida"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-para">{{ 'MATERNITY.PARA' | translate }}</label>
+            <input
+              id="ob-para"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.para"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-term">{{ 'MATERNITY.TERM_BIRTHS' | translate }}</label>
+            <input
+              id="ob-term"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.termBirths"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-preterm">{{ 'MATERNITY.PRETERM_BIRTHS' | translate }}</label>
+            <input
+              id="ob-preterm"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.pretermBirths"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-abortions">{{ 'MATERNITY.ABORTIONS' | translate }}</label>
+            <input
+              id="ob-abortions"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.abortions"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-living">{{ 'MATERNITY.LIVING_CHILDREN' | translate }}</label>
+            <input
+              id="ob-living"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.livingChildren"
+            />
+          </div>
+          <div class="field">
+            <label for="ob-csections">{{ 'MATERNITY.CSECTIONS' | translate }}</label>
+            <input
+              id="ob-csections"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.obstetricHistory!.previousCesareanSections"
+            />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_COMPLICATIONS' | translate }}</h3>
+        <div class="checkbox-grid">
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.gestationalDiabetesHistory"
+            />
+            {{ 'MATERNITY.COMP_GDM' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.preeclampsiaHistory"
+            />
+            {{ 'MATERNITY.COMP_PREECLAMPSIA' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.eclampsiaHistory"
+            />
+            {{ 'MATERNITY.COMP_ECLAMPSIA' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.hellpSyndromeHistory"
+            />
+            {{ 'MATERNITY.COMP_HELLP' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.pretermLaborHistory"
+            />
+            {{ 'MATERNITY.COMP_PRETERM_LABOR' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.postpartumHemorrhageHistory"
+            />
+            {{ 'MATERNITY.COMP_PPH' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.placentaPreviaHistory"
+            />
+            {{ 'MATERNITY.COMP_PREVIA' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.placentalAbruptionHistory"
+            />
+            {{ 'MATERNITY.COMP_ABRUPTION' | translate }}
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="historyForm.complicationsHistory!.fetalAnomalyHistory"
+            />
+            {{ 'MATERNITY.COMP_FETAL_ANOMALY' | translate }}
+          </label>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_MEDICAL' | translate }}</h3>
+        <div class="checkbox-grid">
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.diabetes" />
+            {{ 'MATERNITY.MED_DIABETES' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.hypertension" />
+            {{ 'MATERNITY.MED_HYPERTENSION' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.thyroidDisorder" />
+            {{ 'MATERNITY.MED_THYROID' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.cardiacDisease" />
+            {{ 'MATERNITY.MED_CARDIAC' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.renalDisease" />
+            {{ 'MATERNITY.MED_RENAL' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="historyForm.medicalHistory!.autoimmuneDisorder" />
+            {{ 'MATERNITY.MED_AUTOIMMUNE' | translate }}
+          </label>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="med-chronic">{{ 'MATERNITY.CHRONIC_CONDITIONS' | translate }}</label>
+            <input
+              id="med-chronic"
+              type="text"
+              [(ngModel)]="historyForm.medicalHistory!.chronicConditions"
+            />
+          </div>
+          <div class="field">
+            <label for="med-allergies">{{ 'MATERNITY.ALLERGIES' | translate }}</label>
+            <input
+              id="med-allergies"
+              type="text"
+              [(ngModel)]="historyForm.medicalHistory!.allergies"
+            />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_LIFESTYLE' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="life-smoking">{{ 'MATERNITY.SMOKING' | translate }}</label>
+            <select id="life-smoking" [(ngModel)]="historyForm.lifestyleFactors!.smokingStatus">
+              <option [ngValue]="undefined">—</option>
+              <option value="NEVER">{{ 'MATERNITY.SMOKING_NEVER' | translate }}</option>
+              <option value="FORMER">{{ 'MATERNITY.SMOKING_FORMER' | translate }}</option>
+              <option value="CURRENT">{{ 'MATERNITY.SMOKING_CURRENT' | translate }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="life-alcohol">{{ 'MATERNITY.ALCOHOL' | translate }}</label>
+            <select id="life-alcohol" [(ngModel)]="historyForm.lifestyleFactors!.alcoholUse">
+              <option [ngValue]="undefined">—</option>
+              <option value="NONE">{{ 'MATERNITY.ALCOHOL_NONE' | translate }}</option>
+              <option value="OCCASIONAL">{{ 'MATERNITY.ALCOHOL_OCCASIONAL' | translate }}</option>
+              <option value="REGULAR">{{ 'MATERNITY.ALCOHOL_REGULAR' | translate }}</option>
+              <option value="FREQUENT">{{ 'MATERNITY.ALCOHOL_FREQUENT' | translate }}</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'MATERNITY.SECTION_PSYCHOSOCIAL' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="psy-score">{{ 'MATERNITY.DEPRESSION_SCORE' | translate }}</label>
+            <input
+              id="psy-score"
+              type="number"
+              min="0"
+              [(ngModel)]="historyForm.psychosocialFactors!.depressionScreeningScore"
+            />
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="historyForm.psychosocialFactors!.anxietyPresent"
+              />
+              {{ 'MATERNITY.ANXIETY' | translate }}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="historyForm.psychosocialFactors!.domesticViolenceConcerns"
+              />
+              {{ 'MATERNITY.DV_CONCERNS' | translate }}
+            </label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="history-notes">{{ 'MATERNITY.CLINICAL_NOTES' | translate }}</label>
+          <textarea id="history-notes" rows="3" [(ngModel)]="historyForm.clinicalNotes"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="historyForm.dataComplete" />
+              {{ 'MATERNITY.DATA_COMPLETE' | translate }}
+            </label>
+            <label>
+              <input type="checkbox" [(ngModel)]="historyForm.requiresSpecialistReferral" />
+              {{ 'MATERNITY.FLAG_SPECIALIST' | translate }}
+            </label>
+          </div>
+          @if (historyForm.requiresSpecialistReferral) {
+            <div class="field">
+              <label for="history-ref-reason">{{ 'MATERNITY.REFERRAL_REASON' | translate }}</label>
+              <input
+                id="history-ref-reason"
+                type="text"
+                [(ngModel)]="historyForm.specialistReferralReason"
+              />
+            </div>
+          }
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeHistoryModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="historySaving() || !historyForm.patientId"
+          (click)="submitHistory()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Referral create modal ══ -->
+@if (showReferralModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReferralModal()"
+    (keydown.escape)="closeReferralModal()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'MATERNITY.NEW_REFERRAL' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReferralModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="referral-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
+          <app-patient-picker
+            inputId="referral-patient"
+            [selected]="referralFormPatient()"
+            (selectedChange)="onReferralFormPatientPicked($event)"
+          />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="referral-context">{{ 'MATERNITY.CARE_CONTEXT' | translate }} *</label>
+            <select id="referral-context" [(ngModel)]="referralForm.careContext">
+              @for (c of careContexts; track c) {
+                <option [value]="c">{{ 'MATERNITY.CONTEXT_' + c | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="referral-urgency">{{ 'MATERNITY.URGENCY' | translate }} *</label>
+            <select id="referral-urgency" [(ngModel)]="referralForm.urgency">
+              @for (u of urgencies; track u) {
+                <option [value]="u">{{ 'MATERNITY.URGENCY_' + u | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="referral-transfer">{{ 'MATERNITY.TRANSFER_TYPE' | translate }} *</label>
+            <select id="referral-transfer" [(ngModel)]="referralForm.transferType">
+              @for (t of transferTypes; track t) {
+                <option [value]="t">{{ 'MATERNITY.TRANSFER_' + t | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="referral-ga">{{ 'MATERNITY.GESTATIONAL_AGE' | translate }}</label>
+            <input
+              id="referral-ga"
+              type="number"
+              min="0"
+              max="45"
+              [(ngModel)]="referralForm.gestationalAgeWeeks"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="referral-reason">{{ 'MATERNITY.REFERRAL_REASON' | translate }} *</label>
+          <textarea
+            id="referral-reason"
+            rows="3"
+            [(ngModel)]="referralForm.referralReason"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="referral-indication">
+            {{ 'MATERNITY.CLINICAL_INDICATION' | translate }}
+          </label>
+          <textarea
+            id="referral-indication"
+            rows="2"
+            [(ngModel)]="referralForm.clinicalIndication"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="referral-history">{{ 'MATERNITY.HISTORY_SUMMARY' | translate }}</label>
+          <textarea
+            id="referral-history"
+            rows="2"
+            [(ngModel)]="referralForm.historySummary"
+          ></textarea>
+        </div>
+        <div class="field checkbox-field">
+          <label>
+            <input type="checkbox" [(ngModel)]="referralForm.ongoingMidwiferyCare" />
+            {{ 'MATERNITY.ONGOING_MIDWIFERY' | translate }}
+          </label>
+          <label>
+            <input type="checkbox" [(ngModel)]="referralForm.generateLetter" />
+            {{ 'MATERNITY.GENERATE_LETTER' | translate }}
+          </label>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReferralModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          [disabled]="referralSaving() || !referralForm.patientId || !referralForm.referralReason"
+          (click)="submitReferral()"
+        >
+          {{ 'MATERNITY.SUBMIT_REFERRAL' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Referral detail modal ══ -->
+@if (viewedReferral(); as r) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReferral()"
+    (keydown.escape)="closeReferral()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{ patientDisplay(r) }}
+          <span class="{{ referralStatusClass(r.status) }}">
+            {{ 'MATERNITY.STATUS_' + r.status | translate }}
+          </span>
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeReferral()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="view-section">
+          <p>
+            <span class="{{ urgencyClass(r.urgency) }}">
+              {{ 'MATERNITY.URGENCY_' + r.urgency | translate }}
+            </span>
+            · {{ 'MATERNITY.CONTEXT_' + r.careContext | translate }} ·
+            {{ 'MATERNITY.TRANSFER_' + r.transferType | translate }}
+            @if (r.gestationalAgeWeeks !== null && r.gestationalAgeWeeks !== undefined) {
+              · {{ r.gestationalAgeWeeks }} {{ 'MATERNITY.WEEKS' | translate }}
+            }
+          </p>
+          @if (r.slaDueAt) {
+            <p class="muted">
+              {{ 'MATERNITY.SLA_DUE' | translate }}: {{ r.slaDueAt | date: 'medium' }}
+              @if (isOverdue(r)) {
+                <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
+              }
+            </p>
+          }
+          @if (r.midwife?.displayName) {
+            <p class="muted">
+              {{ 'MATERNITY.REFERRED_BY' | translate }}: {{ r.midwife?.displayName }}
+            </p>
+          }
+          @if (r.obgyn?.displayName) {
+            <p class="muted">
+              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}: {{ r.obgyn?.displayName }}
+            </p>
+          }
+        </div>
+        <div class="view-section">
+          <h3>{{ 'MATERNITY.REFERRAL_REASON' | translate }}</h3>
+          <p>{{ r.referralReason }}</p>
+          @if (r.clinicalIndication) {
+            <h3>{{ 'MATERNITY.CLINICAL_INDICATION' | translate }}</h3>
+            <p>{{ r.clinicalIndication }}</p>
+          }
+          @if (r.historySummary) {
+            <h3>{{ 'MATERNITY.HISTORY_SUMMARY' | translate }}</h3>
+            <p>{{ r.historySummary }}</p>
+          }
+          @if (r.planSummary) {
+            <h3>{{ 'MATERNITY.PLAN_SUMMARY' | translate }}</h3>
+            <p>{{ r.planSummary }}</p>
+          }
+          @if (r.cancellationReason) {
+            <h3>{{ 'MATERNITY.CANCELLATION_REASON' | translate }}</h3>
+            <p>{{ r.cancellationReason }}</p>
+          }
+        </div>
+
+        @if (referralAction(); as action) {
+          <div class="view-section action-form">
+            <h3>
+              {{
+                (action === 'acknowledge'
+                  ? 'MATERNITY.ACKNOWLEDGE_TITLE'
+                  : action === 'complete'
+                    ? 'MATERNITY.COMPLETE_TITLE'
+                    : 'MATERNITY.CANCEL_TITLE'
+                ) | translate
+              }}
+            </h3>
+            <div class="field">
+              <label for="referral-action-text">
+                {{
+                  (action === 'cancel' ? 'MATERNITY.CANCELLATION_REASON' : 'MATERNITY.PLAN_SUMMARY')
+                    | translate
+                }}
+                *
+              </label>
+              <textarea
+                id="referral-action-text"
+                rows="3"
+                [(ngModel)]="referralActionText"
+              ></textarea>
+            </div>
+            @if (action === 'complete') {
+              <div class="field checkbox-field">
+                <label>
+                  <input type="checkbox" [(ngModel)]="referralActionUpdateCareTeam" />
+                  {{ 'MATERNITY.UPDATE_CARE_TEAM' | translate }}
+                </label>
+              </div>
+            }
+            <div class="modal-actions">
+              <button class="btn-secondary" (click)="cancelReferralAction()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+              <button
+                class="btn-primary"
+                [disabled]="referralActionBusy() || !referralActionText.trim()"
+                (click)="submitReferralAction()"
+              >
+                {{ 'COMMON.CONFIRM' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+
+        <div class="view-section">
+          <h3>{{ 'MATERNITY.MESSAGES' | translate }}</h3>
+          @if (messagesLoading()) {
+            <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+          } @else if (messages().length === 0) {
+            <p class="muted">{{ 'MATERNITY.NO_MESSAGES' | translate }}</p>
+          } @else {
+            <div class="message-thread">
+              @for (m of messages(); track m.id) {
+                <div class="message">
+                  <div class="message-meta">
+                    <strong>{{
+                      m.senderDisplayName || ('MATERNITY.UNKNOWN_SENDER' | translate)
+                    }}</strong>
+                    <span class="muted">{{ m.sentAt | date: 'short' }}</span>
+                  </div>
+                  <p>{{ m.body }}</p>
+                </div>
+              }
+            </div>
+          }
+          @if (canMessage && r.status !== 'CANCELLED' && r.status !== 'COMPLETED') {
+            <div class="message-composer">
+              <textarea
+                rows="2"
+                [(ngModel)]="messageDraft"
+                [placeholder]="'MATERNITY.MESSAGE_PLACEHOLDER' | translate"
+                [attr.aria-label]="'MATERNITY.MESSAGE_PLACEHOLDER' | translate"
+              ></textarea>
+              <button
+                class="btn-primary btn-sm"
+                [disabled]="messageSending() || !messageDraft.trim()"
+                (click)="sendMessage()"
+                [title]="'MATERNITY.SEND' | translate"
+              >
+                <span class="material-symbols-outlined">send</span>
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+      <div class="modal-actions">
+        @if (canDecideReferral && r.status === 'SUBMITTED') {
+          <button class="btn-primary" (click)="openReferralAction('acknowledge')">
+            {{ 'MATERNITY.ACKNOWLEDGE' | translate }}
+          </button>
+        }
+        @if (canDecideReferral && r.status === 'ACKNOWLEDGED') {
+          <button class="btn-primary" [disabled]="referralActionBusy()" (click)="startReferral()">
+            {{ 'MATERNITY.START' | translate }}
+          </button>
+        }
+        @if (canDecideReferral && r.status === 'IN_PROGRESS') {
+          <button class="btn-primary" (click)="openReferralAction('complete')">
+            {{ 'MATERNITY.COMPLETE' | translate }}
+          </button>
+        }
+        @if (canCancelReferral && r.status !== 'COMPLETED' && r.status !== 'CANCELLED') {
+          <button class="btn-danger" (click)="openReferralAction('cancel')">
+            {{ 'MATERNITY.CANCEL_REFERRAL' | translate }}
+          </button>
+        }
+        <button class="btn-secondary" (click)="closeReferral()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

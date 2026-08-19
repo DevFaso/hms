@@ -684,6 +684,22 @@ export const routes: Routes = [
         loadComponent: () => import('./discharge/discharge').then((m) => m.DischargeComponent),
       },
 
+      // Maternity (maternal history board + OB/GYN referrals)
+      {
+        path: 'maternity',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./maternity/maternity').then((m) => m.MaternityComponent),
+      },
+
       // Prescriptions
       {
         path: 'prescriptions',
