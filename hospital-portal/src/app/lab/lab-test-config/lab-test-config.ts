@@ -12,6 +12,7 @@ import {
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
+import { RoleContextService } from '../../core/role-context.service';
 
 @Component({
   selector: 'app-lab-test-config',
@@ -25,6 +26,23 @@ export class LabTestConfigComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly profileService = inject(ProfileService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** GET /lab-reflex-rules backend role list (LAB_DIRECTOR/QUALITY_MANAGER 403 today). */
+  readonly canViewReflexRules = this.roleContext.hasAnyActiveRole([
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  /** POST/PUT /lab-reflex-rules backend role list. */
+  readonly canEditReflexRules = this.roleContext.hasAnyActiveRole([
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   loading = signal(true);
   error = signal<string | null>(null);

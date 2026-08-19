@@ -66,9 +66,14 @@ describe('PatientDetailComponent', () => {
       'hasPermission',
       'hasAnyPermission',
     ]);
-    roleContextSpy = jasmine.createSpyObj('RoleContextService', ['isSuperAdmin'], {
-      activeHospitalId: 'h1',
-    });
+    roleContextSpy = jasmine.createSpyObj(
+      'RoleContextService',
+      ['isSuperAdmin', 'hasAnyActiveRole'],
+      {
+        activeHospitalId: 'h1',
+      },
+    );
+    roleContextSpy.hasAnyActiveRole.and.returnValue(false);
     bpaServiceSpy = jasmine.createSpyObj('BpaService', ['evaluate']);
     const cdsAckSpy = jasmine.createSpyObj<CdsAcknowledgementService>('CdsAcknowledgementService', [
       'record',

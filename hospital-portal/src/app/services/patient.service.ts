@@ -258,24 +258,6 @@ export class PatientService {
     return this.http.get<PatientResponse[]>('/patients/lookup', { params: httpParams });
   }
 
-  /** Server-side criteria search (GET /patients/search). */
-  search(params: {
-    mrn?: string;
-    name?: string;
-    dob?: string;
-    phone?: string;
-    email?: string;
-    hospitalId?: string;
-    page?: number;
-    size?: number;
-  }): Observable<PatientResponse[]> {
-    let httpParams = new HttpParams();
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined && value !== '') httpParams = httpParams.set(key, String(value));
-    }
-    return this.http.get<PatientResponse[]>('/patients/search', { params: httpParams });
-  }
-
   /* ── Allergies ── */
 
   listAllergies(patientId: string, hospitalId?: string): Observable<PatientAllergy[]> {

@@ -27,6 +27,7 @@ import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadc
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { NavOrderService } from './nav-order.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 
 interface NavItem {
   icon: string;
@@ -1030,6 +1031,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   logout(): void {
     this.permissions.clear();
+    clearReportedSilent403s();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }
@@ -1048,6 +1050,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private tearDownAndRedirect(): void {
     this.idle.stop();
     this.permissions.clear();
+    clearReportedSilent403s();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }

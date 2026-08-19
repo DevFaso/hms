@@ -33,6 +33,13 @@ export class PermissionService {
   private readonly backendPermissions = signal<ReadonlySet<string> | null>(null);
 
   /**
+   * Bumped by clear()/loadFromBackend() so a dashboard-config response that
+   * lands AFTER a logout (or a newer reload) is discarded instead of
+   * repopulating permissions for a session that no longer exists.
+   */
+  private loadGeneration = 0;
+
+  /**
    * Static fallback only — the authoritative source is the backend
    * (loadFromBackend()). Kept so the UI still renders a sensible nav when the
    * dashboard-config call fails or has not resolved yet. Backend grants are
@@ -457,8 +464,14 @@ export class PermissionService {
   loadFromBackend(): void {
     this.backendPermissions.set(null);
     if (!this.auth.isAuthenticated()) return;
+    const generation = ++this.loadGeneration;
     this.http.get<DashboardConfigResponse>('/me/dashboard-config').subscribe({
       next: (cfg) => {
+        if (generation !== this.loadGeneration) return; // clear()/reload happened meanwhile
+        // NOTE: the backend unions permissions across ALL of the user's active
+        // assignments regardless of hospital, so grants here can be broader
+        // than the active hospital's role. Route guards + backend authz remain
+        // the enforcement layer; this only drives nav visibility.
         const merged = cfg?.mergedPermissions ?? [];
         if (merged.length === 0) return;
         const expanded = new Set<string>(merged);
@@ -477,6 +490,7 @@ export class PermissionService {
 
   /** Drop backend-loaded permissions (call on logout / user switch). */
   clear(): void {
+    this.loadGeneration++;
     this.backendPermissions.set(null);
   }
 

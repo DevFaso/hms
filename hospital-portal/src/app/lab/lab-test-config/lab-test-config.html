@@ -12,10 +12,12 @@
         <span class="material-symbols-outlined">add</span>
         {{ 'LAB_TEST_CONFIG.CREATE' | translate }}
       </button>
-      <button class="btn-export" (click)="openReflexRules()">
-        <span class="material-symbols-outlined">alt_route</span>
-        {{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}
-      </button>
+      @if (canViewReflexRules) {
+        <button class="btn-export" (click)="openReflexRules()">
+          <span class="material-symbols-outlined">alt_route</span>
+          {{ 'LAB_TEST_CONFIG.REFLEX_RULES' | translate }}
+        </button>
+      }
       <button class="btn-export" (click)="exportCsv()">
         <span class="material-symbols-outlined">download</span>
         {{ 'LAB_TEST_CONFIG.EXPORT_CSV' | translate }}
@@ -544,27 +546,29 @@
                       </span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        class="btn-link"
-                        (click)="editReflexRule(rule)"
-                        [title]="'COMMON.EDIT' | translate"
-                      >
-                        {{ 'COMMON.EDIT' | translate }}
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-link"
-                        (click)="toggleReflexRule(rule)"
-                        [title]="'LAB_TEST_CONFIG.REFLEX_TOGGLE' | translate"
-                      >
-                        {{
-                          (rule.active
-                            ? 'LAB_TEST_CONFIG.REFLEX_DEACTIVATE'
-                            : 'LAB_TEST_CONFIG.REFLEX_ACTIVATE'
-                          ) | translate
-                        }}
-                      </button>
+                      @if (canEditReflexRules) {
+                        <button
+                          type="button"
+                          class="btn-link"
+                          (click)="editReflexRule(rule)"
+                          [title]="'COMMON.EDIT' | translate"
+                        >
+                          {{ 'COMMON.EDIT' | translate }}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-link"
+                          (click)="toggleReflexRule(rule)"
+                          [title]="'LAB_TEST_CONFIG.REFLEX_TOGGLE' | translate"
+                        >
+                          {{
+                            (rule.active
+                              ? 'LAB_TEST_CONFIG.REFLEX_DEACTIVATE'
+                              : 'LAB_TEST_CONFIG.REFLEX_ACTIVATE'
+                            ) | translate
+                          }}
+                        </button>
+                      }
                     </td>
                   </tr>
                 }
@@ -572,13 +576,15 @@
             </table>
           }
 
-          <h3 class="reflex-form-title">
-            {{
-              (editingRuleId() ? 'LAB_TEST_CONFIG.REFLEX_EDIT' : 'LAB_TEST_CONFIG.REFLEX_NEW')
-                | translate
-            }}
-          </h3>
-          <div class="def-form-grid">
+          @if (canEditReflexRules) {
+            <h3 class="reflex-form-title">
+              {{
+                (editingRuleId() ? 'LAB_TEST_CONFIG.REFLEX_EDIT' : 'LAB_TEST_CONFIG.REFLEX_NEW')
+                  | translate
+              }}
+            </h3>
+          }
+          <div class="def-form-grid" [hidden]="!canEditReflexRules">
             <div class="form-group">
               <label for="reflexTrigger">{{ 'LAB_TEST_CONFIG.REFLEX_TRIGGER' | translate }}</label>
               <select id="reflexTrigger" [(ngModel)]="reflexForm.triggerTestDefinitionId">
@@ -657,9 +663,11 @@
           <button class="btn-secondary" (click)="closeReflexRules()">
             {{ 'COMMON.CLOSE' | translate }}
           </button>
-          <button class="btn-primary" (click)="submitReflexRule()" [disabled]="reflexSaving()">
-            {{ (editingRuleId() ? 'COMMON.SAVE' : 'LAB_TEST_CONFIG.REFLEX_ADD') | translate }}
-          </button>
+          @if (canEditReflexRules) {
+            <button class="btn-primary" (click)="submitReflexRule()" [disabled]="reflexSaving()">
+              {{ (editingRuleId() ? 'COMMON.SAVE' : 'LAB_TEST_CONFIG.REFLEX_ADD') | translate }}
+            </button>
+          }
         </div>
       </div>
     </div>

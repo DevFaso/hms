@@ -1,121 +1,8 @@
 @use '../../shared/styles/page-common';
 
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.summary-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1.25rem;
-}
-
-.card-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-
-  &.admitted {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-  &.discharged {
-    background: #d1fae5;
-    color: #065f46;
-  }
-  &.pending {
-    background: #fef3c7;
-    color: #92400e;
-  }
-  &.total {
-    background: #e0e7ff;
-    color: #3730a3;
-  }
-}
-.card-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.card-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #111827;
-}
-
-.card-label {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  flex-wrap: wrap;
-}
-
 .tabs {
   display: flex;
   gap: 0.5rem;
-}
-
-.tab-btn {
-  padding: 0.5rem 1.25rem;
-  border-radius: 20px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &.active {
-    background: #2563eb;
-    color: #fff;
-    border-color: #2563eb;
-  }
-
-  &:hover:not(.active) {
-    background: #f3f4f6;
-  }
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
-  min-width: 250px;
-
-  input {
-    border: none;
-    outline: none;
-    font-size: 0.9rem;
-    width: 100%;
-    background: transparent;
-  }
-
-  .material-symbols-outlined {
-    color: #9ca3af;
-    font-size: 1.2rem;
-  }
 }
 
 .data-table {
@@ -153,18 +40,6 @@
   }
 }
 
-.cell-primary {
-  font-weight: 600;
-  color: #111827;
-}
-
-.complaint-cell {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .status-badge {
   display: inline-block;
   padding: 0.25rem 0.75rem;
@@ -194,60 +69,9 @@
   }
 }
 
-.acuity-badge {
-  display: inline-block;
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.78rem;
-  font-weight: 600;
-
-  &.acuity-critical {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-  &.acuity-high {
-    background: #fef3c7;
-    color: #92400e;
-  }
-  &.acuity-moderate {
-    background: #dbeafe;
-    color: #1e40af;
-  }
-  &.acuity-low {
-    background: #d1fae5;
-    color: #065f46;
-  }
-}
-
 /* ── Page actions ── */
-.page-actions {
-  display: flex;
-  gap: 0.75rem;
-  .btn-primary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1.25rem;
-    background: #6366f1;
-    color: #fff;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    &:hover {
-      background: #4f46e5;
-    }
-    .material-symbols-outlined {
-      font-size: 1.15rem;
-    }
-  }
-}
 
 /* ── Action group in table ── */
-.actions-col {
-  width: 90px;
-  text-align: right;
-}
 .action-group {
   display: flex;
   gap: 0.25rem;
@@ -391,16 +215,6 @@
   }
 }
 
-.delete-warning {
-  text-align: center;
-  padding: 1rem 0;
-  color: #475569;
-  line-height: 1.6;
-  strong {
-    color: #0f172a;
-  }
-}
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -465,21 +279,6 @@
   .modal {
     width: 98vw;
   }
-}
-
-.modal-title-icon {
-  vertical-align: middle;
-  margin-right: 0.25rem;
-}
-
-.discharge-info {
-  padding: 0.75rem 1rem;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
-  color: #166534;
 }
 
 /* ── Chart-specific additions ───────────────────────────────── */

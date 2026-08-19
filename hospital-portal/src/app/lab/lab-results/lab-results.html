@@ -64,14 +64,16 @@
     >
       {{ 'LAB_RESULTS.PENDING_RELEASE' | translate }} ({{ stats().pending }})
     </button>
-    <button
-      class="tab tab-critical"
-      [class.active]="activeTab() === 'critical'"
-      (click)="setTab('critical')"
-      [title]="'LAB_RESULTS.CRITICAL_QUEUE' | translate"
-    >
-      {{ 'LAB_RESULTS.CRITICAL_QUEUE' | translate }}
-    </button>
+    @if (canSeeCritical) {
+      <button
+        class="tab tab-critical"
+        [class.active]="activeTab() === 'critical'"
+        (click)="setTab('critical')"
+        [title]="'LAB_RESULTS.CRITICAL_QUEUE' | translate"
+      >
+        {{ 'LAB_RESULTS.CRITICAL_QUEUE' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-box">
@@ -184,7 +186,7 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
-                  @if (!r.acknowledged) {
+                  @if (canAcknowledge && !r.acknowledged) {
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"

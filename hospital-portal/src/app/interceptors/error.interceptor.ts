@@ -44,6 +44,14 @@ const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 const reportedSilent403s = new Set<string>();
 
 /**
+ * Reset the once-per-URL dedup on logout so the next session's authorization
+ * drift is reported again (module state outlives the Angular injector).
+ */
+export function clearReportedSilent403s(): void {
+  reportedSilent403s.clear();
+}
+
+/**
  * A 403 on a SILENT_403_PATTERNS URL skips the /error/403 redirect so
  * background widgets fail quietly — but the failure must not be invisible.
  * Report it once per URL to the backend audit sink so authorization drift

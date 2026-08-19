@@ -1,8 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -20,6 +18,7 @@ import { ProfileService } from '../services/profile.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -27,7 +26,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 @Component({
   selector: 'app-discharge',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './discharge.html',
   styleUrl: './discharge.scss',
 })
@@ -46,15 +45,27 @@ export class DischargeComponent implements OnInit {
   private staffId: string | null = null;
   private assignmentId: string | null = null;
 
-  readonly canDecide = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
-  readonly canRequest = this.hasAnyRole([
+  readonly canDecide = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  readonly canRequest = this.roleContext.hasAnyActiveRole([
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canEditSummaries = this.hasAnyRole([
+  readonly canEditSummaries = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
+  /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */
+  readonly canViewSummaries = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
@@ -114,11 +125,7 @@ export class DischargeComponent implements OnInit {
   deleteSubmitting = signal(false);
 
   /* ── Patient picker (shared by request + summary modals) ── */
-  patientQuery = signal('');
-  patientSuggestions = signal<PatientResponse[]>([]);
-  patientDropdownOpen = signal(false);
   selectedPatient = signal<PatientResponse | null>(null);
-  private readonly patientSearch$ = new Subject<string>();
 
   readonly dispositions: DischargeDisposition[] = [
     'HOME',
@@ -150,18 +157,19 @@ export class DischargeComponent implements OnInit {
     this.hospitalId = this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
     this.staffId = this.auth.getUserProfile()?.staffId ?? null;
     this.resolveAssignment();
-    this.initPatientSearch();
     this.loadApprovals();
     if (!this.canDecide && !this.canRequest) {
       this.activeTab.set('summaries');
     }
-    this.loadSummaries();
-  }
-
-  private hasAnyRole(roles: string[]): boolean {
-    const active = this.roleContext.activeRole;
-    if (active) return roles.includes(active);
-    return this.auth.hasAnyRole(roles);
+    // The unfinalized-summaries endpoint is doctor/admin-only; calling it as
+    // NURSE/MIDWIFE would hard-redirect the whole page to /error/403, so
+    // non-editors start on the nurse-visible pending-results filter.
+    if (!this.canEditSummaries) {
+      this.summaryFilter.set('pending-results');
+    }
+    if (this.canViewSummaries) {
+      this.loadSummaries();
+    }
   }
 
   private resolveAssignment(): void {
@@ -177,10 +185,13 @@ export class DischargeComponent implements OnInit {
     });
   }
 
+  /** Local-timezone yyyy-MM-dd (toISOString would shift the date around midnight). */
   private isoDaysAgo(days: number): string {
     const d = new Date();
     d.setDate(d.getDate() - days);
-    return d.toISOString().substring(0, 10);
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${month}-${day}`;
   }
 
   setTab(tab: 'approvals' | 'summaries'): void {
@@ -213,7 +224,7 @@ export class DischargeComponent implements OnInit {
   }
 
   openDecision(approval: DischargeApproval, mode: 'approve' | 'reject'): void {
-    if (!this.requireStaffContext()) return;
+    if (!this.requireStaffContext(true)) return;
     this.decisionTarget.set(approval);
     this.decisionMode.set(mode);
     this.decisionNote = '';
@@ -227,7 +238,7 @@ export class DischargeComponent implements OnInit {
 
   submitDecision(): void {
     const target = this.decisionTarget();
-    if (!target || !this.staffId || !this.assignmentId) return;
+    if (!target || !this.requireStaffContext(true)) return;
     const mode = this.decisionMode();
     if (mode === 'reject' && !this.decisionNote.trim()) {
       this.toast.error(this.translate.instant('DISCHARGE.REJECTION_REASON_REQUIRED'));
@@ -235,8 +246,8 @@ export class DischargeComponent implements OnInit {
     }
     this.decisionSubmitting.set(true);
     const decision = {
-      doctorStaffId: this.staffId,
-      doctorAssignmentId: this.assignmentId,
+      doctorStaffId: this.staffId!,
+      doctorAssignmentId: this.assignmentId!,
       doctorNote: mode === 'approve' ? this.decisionNote.trim() || undefined : undefined,
       rejectionReason: mode === 'reject' ? this.decisionNote.trim() : undefined,
     };
@@ -295,7 +306,7 @@ export class DischargeComponent implements OnInit {
   }
 
   openRequest(): void {
-    if (!this.requireStaffContext()) return;
+    if (!this.requireStaffContext(true)) return;
     this.resetPatientPicker();
     this.requestSummaryText = '';
     this.showRequestModal.set(true);
@@ -307,9 +318,9 @@ export class DischargeComponent implements OnInit {
 
   submitRequest(): void {
     const patient = this.selectedPatient();
-    if (!patient || !this.hospitalId || !this.staffId || !this.assignmentId) return;
+    if (!patient || !this.requireStaffContext(true)) return;
     this.requestSubmitting.set(true);
-    this.dischargeService.findActiveRegistration(patient.id, this.hospitalId).subscribe({
+    this.dischargeService.findActiveRegistration(patient.id, this.hospitalId!).subscribe({
       next: (page) => {
         const registration = page?.content?.[0];
         if (!registration) {
@@ -352,9 +363,10 @@ export class DischargeComponent implements OnInit {
   }
 
   loadSummaries(): void {
-    if (!this.hospitalId) return;
-    this.summariesLoading.set(true);
+    if (!this.hospitalId || !this.canViewSummaries) return;
     const filter = this.summaryFilter();
+    if (filter === 'unfinalized' && !this.canEditSummaries) return;
+    this.summariesLoading.set(true);
     const source =
       filter === 'unfinalized'
         ? this.dischargeService.unfinalizedSummaries(this.hospitalId)
@@ -394,7 +406,7 @@ export class DischargeComponent implements OnInit {
   }
 
   openCreateSummary(): void {
-    if (!this.requireStaffContext()) return;
+    if (!this.requireStaffContext(true)) return;
     this.summaryForm = this.emptySummaryForm();
     this.editingSummaryId.set(null);
     this.resetPatientPicker();
@@ -403,7 +415,7 @@ export class DischargeComponent implements OnInit {
   }
 
   openEditSummary(summary: DischargeSummary): void {
-    if (!this.requireStaffContext()) return;
+    if (!this.requireStaffContext(true)) return;
     this.summaryForm = {
       patientId: summary.patientId,
       encounterId: summary.encounterId,
@@ -444,7 +456,7 @@ export class DischargeComponent implements OnInit {
   }
 
   submitSummary(): void {
-    if (!this.hospitalId || !this.staffId || !this.assignmentId) return;
+    if (!this.requireStaffContext(true)) return;
     const form = this.summaryForm;
     if (
       !form.patientId ||
@@ -455,10 +467,10 @@ export class DischargeComponent implements OnInit {
       this.toast.error(this.translate.instant('DISCHARGE.SUMMARY_REQUIRED_FIELDS'));
       return;
     }
-    form.hospitalId = this.hospitalId;
+    form.hospitalId = this.hospitalId!;
     if (!this.editingSummaryId()) {
-      form.dischargingProviderId = this.staffId;
-      form.assignmentId = this.assignmentId;
+      form.dischargingProviderId = this.staffId!;
+      form.assignmentId = this.assignmentId!;
     }
     this.summarySaving.set(true);
     const op = this.editingSummaryId()
@@ -591,51 +603,24 @@ export class DischargeComponent implements OnInit {
 
   /* ── Patient picker ── */
 
-  private initPatientSearch(): void {
-    this.patientSearch$
-      .pipe(
-        debounceTime(220),
-        distinctUntilChanged(),
-        switchMap((q) => this.patientService.list(this.hospitalId ?? undefined, q)),
-      )
-      .subscribe({
-        next: (list) => {
-          this.patientSuggestions.set((list ?? []).slice(0, 8));
-          this.patientDropdownOpen.set((list ?? []).length > 0);
-        },
-      });
+  /** Hospital scope handed to the shared picker (template binding). */
+  get pickerHospitalId(): string | null {
+    return this.hospitalId;
   }
 
-  onPatientQueryChange(q: string): void {
-    this.patientQuery.set(q);
-    if (q.length >= 2) this.patientSearch$.next(q);
-    else {
-      this.patientSuggestions.set([]);
-      this.patientDropdownOpen.set(false);
-    }
-  }
-
-  selectPatient(p: PatientResponse): void {
+  onPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
-    this.summaryForm.patientId = p.id;
+    this.summaryForm.patientId = p?.id ?? '';
     this.summaryForm.encounterId = '';
-    this.patientDropdownOpen.set(false);
-    this.patientQuery.set('');
-    this.loadEncountersFor(p.id);
-  }
-
-  clearPatient(): void {
-    this.resetPatientPicker();
-    this.summaryForm.patientId = '';
-    this.summaryForm.encounterId = '';
-    this.patientEncounters.set([]);
+    if (p) {
+      this.loadEncountersFor(p.id);
+    } else {
+      this.patientEncounters.set([]);
+    }
   }
 
   private resetPatientPicker(): void {
     this.selectedPatient.set(null);
-    this.patientQuery.set('');
-    this.patientSuggestions.set([]);
-    this.patientDropdownOpen.set(false);
   }
 
   private loadEncountersFor(patientId: string): void {
@@ -650,14 +635,10 @@ export class DischargeComponent implements OnInit {
     return `${date} — ${e.encounterType ?? ''} (${e.status ?? ''})`.trim();
   }
 
-  patientInitials(p: PatientResponse): string {
-    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
-  }
-
   /* ── Helpers ── */
 
-  private requireStaffContext(): boolean {
-    if (!this.staffId || !this.hospitalId) {
+  private requireStaffContext(needsAssignment = false): boolean {
+    if (!this.staffId || !this.hospitalId || (needsAssignment && !this.assignmentId)) {
       this.toast.error(this.translate.instant('DISCHARGE.NO_STAFF_CONTEXT'));
       return false;
     }
@@ -675,9 +656,5 @@ export class DischargeComponent implements OnInit {
       default:
         return 'status-cancelled';
     }
-  }
-
-  countByStatus(status: DischargeStatus): number {
-    return this.approvals().filter((a) => a.status === status).length;
   }
 }

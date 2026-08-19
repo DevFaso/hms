@@ -61,13 +61,29 @@ export class LabResultsComponent implements OnInit {
   comparison = signal<LabResultComparison | null>(null);
   comparisonLoading = signal(false);
 
-  readonly canSign = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST']);
-
-  private hasAnyRole(roles: string[]): boolean {
-    const active = this.roleContext.activeRole;
-    if (active) return roles.includes(active);
-    return this.auth.hasAnyRole(roles);
-  }
+  readonly canSign = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+  ]);
+  /** GET /lab-results/hospital/{id}/critical/unacknowledged backend role list. */
+  readonly canSeeCritical = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_QUALITY_MANAGER',
+    'ROLE_HOSPITAL_ADMIN',
+  ]);
+  /** POST /{id}/acknowledge — intersection of @PreAuthorize and SecurityConfig matcher. */
+  readonly canAcknowledge = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_MANAGER',
+  ]);
 
   private hospitalId(): string | null {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
@@ -270,7 +286,7 @@ export class LabResultsComponent implements OnInit {
 
   loadCritical(): void {
     const hospitalId = this.hospitalId();
-    if (!hospitalId) return;
+    if (!hospitalId || !this.canSeeCritical) return;
     this.criticalLoading.set(true);
     this.labService.criticalUnacknowledged(hospitalId).subscribe({
       next: (list) => {
@@ -405,10 +421,12 @@ export class LabResultsComponent implements OnInit {
     this.labService.acknowledgeResult(r.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('LAB_RESULTS.ACKNOWLEDGED'));
-        if (this.activeTab() === 'critical') {
-          this.loadCritical();
-        }
-        this.loadResults();
+        // Patch the row in place — no need to refetch 200 results for one flag.
+        const patch = (list: LabResultResponse[]): LabResultResponse[] =>
+          list.map((row) => (row.id === r.id ? { ...row, acknowledged: true } : row));
+        this.results.update(patch);
+        this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
+        this.applyFilter();
       },
       error: () => this.toast.error(this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR')),
     });

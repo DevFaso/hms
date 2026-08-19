@@ -29,13 +29,15 @@
       >
         {{ 'DISCHARGE.APPROVALS_TAB' | translate }}
       </button>
-      <button
-        class="tab-btn"
-        [class.active]="activeTab() === 'summaries'"
-        (click)="setTab('summaries')"
-      >
-        {{ 'DISCHARGE.SUMMARIES_TAB' | translate }}
-      </button>
+      @if (canViewSummaries) {
+        <button
+          class="tab-btn"
+          [class.active]="activeTab() === 'summaries'"
+          (click)="setTab('summaries')"
+        >
+          {{ 'DISCHARGE.SUMMARIES_TAB' | translate }}
+        </button>
+      }
     </div>
   </div>
 
@@ -137,13 +139,15 @@
   @if (activeTab() === 'summaries') {
     <div class="filter-bar">
       <div class="tabs">
-        <button
-          class="tab-btn"
-          [class.active]="summaryFilter() === 'unfinalized'"
-          (click)="setSummaryFilter('unfinalized')"
-        >
-          {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
-        </button>
+        @if (canEditSummaries) {
+          <button
+            class="tab-btn"
+            [class.active]="summaryFilter() === 'unfinalized'"
+            (click)="setSummaryFilter('unfinalized')"
+          >
+            {{ 'DISCHARGE.FILTER_UNFINALIZED' | translate }}
+          </button>
+        }
         <button
           class="tab-btn"
           [class.active]="summaryFilter() === 'pending-results'"
@@ -403,57 +407,12 @@
       <div class="modal-body">
         <div class="field">
           <label for="request-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
-          @if (selectedPatient()) {
-            <div class="picker-chip">
-              <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
-              <div class="chip-info">
-                <span class="chip-name"
-                  >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                >
-                <span class="chip-sub">{{ selectedPatient()!.email }}</span>
-              </div>
-              <button
-                type="button"
-                class="chip-clear"
-                (click)="clearPatient()"
-                [title]="'COMMON.CHANGE_PATIENT' | translate"
-              >
-                <span class="material-symbols-outlined">close</span>
-              </button>
-            </div>
-          } @else {
-            <div class="patient-picker-wrap">
-              <span class="material-symbols-outlined picker-search-icon">person_search</span>
-              <input
-                id="request-patient"
-                class="picker-input"
-                type="text"
-                [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
-                [value]="patientQuery()"
-                (input)="onPatientQueryChange($any($event.target).value)"
-                (blur)="patientDropdownOpen.set(false)"
-                autocomplete="off"
-              />
-              @if (patientDropdownOpen()) {
-                <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
-                  @for (p of patientSuggestions(); track p.id) {
-                    <div
-                      class="picker-option"
-                      role="option"
-                      [attr.aria-selected]="selectedPatient()?.id === p.id"
-                      (mousedown)="selectPatient(p)"
-                    >
-                      <div class="opt-avatar">{{ patientInitials(p) }}</div>
-                      <div class="opt-info">
-                        <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                        <span class="opt-meta">{{ p.email }}</span>
-                      </div>
-                    </div>
-                  }
-                </div>
-              }
-            </div>
-          }
+          <app-patient-picker
+            inputId="request-patient"
+            [hospitalId]="pickerHospitalId"
+            [selected]="selectedPatient()"
+            (selectedChange)="onPatientPicked($event)"
+          />
         </div>
         <div class="field">
           <label for="request-summary">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</label>
@@ -510,57 +469,12 @@
         @if (!editingSummaryId()) {
           <div class="field">
             <label for="summary-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
-            @if (selectedPatient()) {
-              <div class="picker-chip">
-                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
-                <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
-                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
-                </div>
-                <button
-                  type="button"
-                  class="chip-clear"
-                  (click)="clearPatient()"
-                  [title]="'COMMON.CHANGE_PATIENT' | translate"
-                >
-                  <span class="material-symbols-outlined">close</span>
-                </button>
-              </div>
-            } @else {
-              <div class="patient-picker-wrap">
-                <span class="material-symbols-outlined picker-search-icon">person_search</span>
-                <input
-                  id="summary-patient"
-                  class="picker-input"
-                  type="text"
-                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
-                  [value]="patientQuery()"
-                  (input)="onPatientQueryChange($any($event.target).value)"
-                  (blur)="patientDropdownOpen.set(false)"
-                  autocomplete="off"
-                />
-                @if (patientDropdownOpen()) {
-                  <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
-                    @for (p of patientSuggestions(); track p.id) {
-                      <div
-                        class="picker-option"
-                        role="option"
-                        [attr.aria-selected]="selectedPatient()?.id === p.id"
-                        (mousedown)="selectPatient(p)"
-                      >
-                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
-                        <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                          <span class="opt-meta">{{ p.email }}</span>
-                        </div>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            }
+            <app-patient-picker
+              inputId="summary-patient"
+              [hospitalId]="pickerHospitalId"
+              [selected]="selectedPatient()"
+              (selectedChange)="onPatientPicked($event)"
+            />
           </div>
           <div class="field">
             <label for="summary-encounter">{{ 'DISCHARGE.ENCOUNTER' | translate }} *</label>

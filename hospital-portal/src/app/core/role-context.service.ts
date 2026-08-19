@@ -117,6 +117,17 @@ export class RoleContextService {
   }
 
   /**
+   * Active-role-aware check for gating page actions. When the user picked an
+   * active role at login only that role counts (a multi-role user scoped to
+   * NURSE must not see doctor-only actions); otherwise all JWT roles apply.
+   */
+  hasAnyActiveRole(roles: string[]): boolean {
+    const active = this._activeRole();
+    if (active) return roles.includes(active);
+    return roles.some((r) => this._activeRoles().includes(r));
+  }
+
+  /**
    * Switch the super-admin's cross-tenant scope to "all hospitals".
    *
    * Clears `_selectedHospitalId` so a subsequent navigation that reads it

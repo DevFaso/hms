@@ -21,6 +21,7 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { CHART_ROLES } from './chart-access';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline';
 
@@ -42,30 +43,14 @@ export class PatientChartComponent implements OnInit {
 
   section = signal<ChartSection>('allergies');
 
-  /* ── Role gates (mirror backend @PreAuthorize) ── */
-  readonly canViewAllergies = this.hasAnyRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_PHARMACIST',
-  ]);
-  readonly canEditAllergies = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST']);
-  readonly canViewProblems = this.hasAnyRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_MIDWIFE',
-  ]);
-  readonly canEditProblems = this.hasAnyRole(['ROLE_DOCTOR']);
-  readonly canViewUpdates = this.hasAnyRole([
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
-  ]);
-  readonly canCreateUpdates = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
-  readonly canViewTimeline = this.hasAnyRole(['ROLE_DOCTOR']);
+  /* ── Role gates (single source: chart-access.ts, mirrors backend @PreAuthorize) ── */
+  readonly canViewAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]);
+  readonly canEditAllergies = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]);
+  readonly canViewProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]);
+  readonly canEditProblems = this.roleContext.hasAnyActiveRole([...CHART_ROLES.editProblems]);
+  readonly canViewUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewUpdates]);
+  readonly canCreateUpdates = this.roleContext.hasAnyActiveRole([...CHART_ROLES.createUpdates]);
+  readonly canViewTimeline = this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewTimeline]);
 
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
@@ -149,12 +134,6 @@ export class PatientChartComponent implements OnInit {
       this.section.set(this.canViewProblems ? 'problems' : 'updates');
     }
     this.loadCurrentSection();
-  }
-
-  private hasAnyRole(roles: string[]): boolean {
-    const active = this.roleContext.activeRole;
-    if (active) return roles.includes(active);
-    return this.auth.hasAnyRole(roles);
   }
 
   private hospitalId(): string {
