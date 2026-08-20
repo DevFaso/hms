@@ -281,6 +281,11 @@ public class UserServiceImpl implements UserService {
             // Only reject if the same patient is already at the *target* hospital.
             checkPatientAlreadyAtHospital(username, email, phone, request);
         } else {
+            // Phone-first relaxation applies to PATIENTS only — staff and admin
+            // accounts still need an email (welcome mail, credential delivery).
+            if (email == null || email.isBlank()) {
+                throw new IllegalArgumentException("Email is required for staff and admin accounts.");
+            }
             // Non-patient roles: strict global uniqueness.
             if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
                 throw new ConflictException("username:Username '" + username + "' is already taken.");
@@ -316,8 +321,7 @@ public class UserServiceImpl implements UserService {
         // ---- 3) Resolve/Create User ----
         final String lic = resolveLicenseNumber(request, requiresLicense);
 
-        final Optional<User> existingByIdentity = userRepository
-                .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+        final Optional<User> existingByIdentity = findExistingByIdentity(username, email, phone);
         final Optional<User> existingByLicense = requiresLicense
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
@@ -611,10 +615,20 @@ public class UserServiceImpl implements UserService {
      * For patient registrations, allow reuse of existing users across hospitals.
      * Only reject if the patient already has an active assignment at the target hospital.
      */
+    /**
+     * A null email must NEVER reach the 3-way derived query: Spring Data turns a
+     * null argument into an {@code email IS NULL} predicate, matching every
+     * email-less (phone-first) user — cross-patient account merges would follow.
+     */
+    private Optional<User> findExistingByIdentity(String username, String email, String phone) {
+        return (email == null || email.isBlank())
+            ? userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber(username, phone)
+            : userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+    }
+
     private void checkPatientAlreadyAtHospital(String username, String email, String phone,
                                                 AdminSignupRequest request) {
-        Optional<User> existing = userRepository
-                .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+        Optional<User> existing = findExistingByIdentity(username, email, phone);
         if (existing.isEmpty()) {
             return;
         }

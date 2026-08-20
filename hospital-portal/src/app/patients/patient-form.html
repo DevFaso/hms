@@ -39,15 +39,18 @@
         />
       </div>
       <div class="form-group">
-        <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
+        <label for="email">
+          {{ 'PATIENTS.EMAIL' | translate }}
+          <span class="optional-hint">({{ 'PATIENTS.OPTIONAL' | translate }})</span>
+        </label>
         <input
           id="email"
           type="email"
           [(ngModel)]="form.email"
           name="email"
-          required
           (ngModelChange)="onIdentifierChange()"
         />
+        <small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
       </div>
       <div class="form-group">
         <label for="phonePrimary">{{ 'PATIENTS.PHONE' | translate }} *</label>
@@ -59,6 +62,63 @@
           required
           (ngModelChange)="onIdentifierChange()"
         />
+        <!-- SMS OTP phone verification (hidden when the SMS provider is off) -->
+        @if (otpAvailable) {
+          <div class="otp-verify-row">
+            @if (phoneVerified) {
+              <span class="phone-verified-badge">
+                <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+                {{ 'PATIENTS.PHONE_VERIFIED' | translate }}
+              </span>
+            } @else if (otpChallengeId) {
+              <span class="otp-sent-hint">
+                {{ 'PATIENTS.CODE_SENT_TO' | translate }} {{ otpMaskedPhone }}
+              </span>
+              <input
+                type="text"
+                class="otp-code-input"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="8"
+                [(ngModel)]="otpCode"
+                name="otpCode"
+                [attr.aria-label]="'PATIENTS.ENTER_SMS_CODE' | translate"
+                [placeholder]="'PATIENTS.ENTER_SMS_CODE' | translate"
+              />
+              <button
+                type="button"
+                class="btn-secondary btn-otp"
+                [disabled]="otpConfirming || otpCode.trim().length < 4"
+                (click)="confirmPhoneVerification()"
+              >
+                @if (otpConfirming) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.VERIFY_CODE' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-link"
+                [disabled]="otpSending"
+                (click)="sendPhoneVerification()"
+              >
+                {{ 'PATIENTS.RESEND_CODE' | translate }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn-secondary btn-otp"
+                [disabled]="otpSending || (form.phoneNumberPrimary || '').trim().length < 8"
+                (click)="sendPhoneVerification()"
+              >
+                @if (otpSending) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.SEND_VERIFICATION_CODE' | translate }}
+              </button>
+            }
+          </div>
+        }
       </div>
       <div class="form-group">
         <label for="phoneSecondary">{{ 'PATIENTS.SECONDARY_PHONE' | translate }}</label>

@@ -30,8 +30,10 @@ public class AdminSignupRequest {
     @NotBlank(message = "Username is required.")
     private String username;
 
+    // Optional for PATIENT registrations (phone-first: most patients have no
+    // email). Staff/admin roles still require it — enforced in UserServiceImpl
+    // because the requirement depends on roleNames.
     @Email
-    @NotBlank(message = "Email is required.")
     private String email;
 
     // Password is optional for non-patient staff registrations: when omitted the service

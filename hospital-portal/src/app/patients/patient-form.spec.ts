@@ -6,7 +6,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { PatientFormComponent } from './patient-form';
-import { PatientService, PatientResponse, RegistrationMatch } from '../services/patient.service';
+import {
+  PatientService,
+  PatientResponse,
+  PhoneVerificationChallenge,
+  RegistrationMatch,
+} from '../services/patient.service';
 import { UserService, UserDetail } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -40,9 +45,16 @@ describe('PatientFormComponent', () => {
   let routerSpy: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    patientSpy = jasmine.createSpyObj('PatientService', ['registrationMatch', 'create']);
+    patientSpy = jasmine.createSpyObj('PatientService', [
+      'registrationMatch',
+      'create',
+      'phoneVerificationAvailability',
+      'requestPhoneVerification',
+      'confirmPhoneVerification',
+    ]);
     patientSpy.registrationMatch.and.returnValue(of([]));
     patientSpy.create.and.returnValue(of({ id: 'p9' } as PatientResponse));
+    patientSpy.phoneVerificationAvailability.and.returnValue(of({ available: false }));
     userSpy = jasmine.createSpyObj('UserService', ['adminRegister', 'delete']);
     userSpy.adminRegister.and.returnValue(of({ id: 'u1' } as UserDetail));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -168,6 +180,76 @@ describe('PatientFormComponent', () => {
     component.onSubmit();
     expect(toastSpy.error).toHaveBeenCalled();
     expect(userSpy.adminRegister).not.toHaveBeenCalled();
+  });
+
+  it('registers a patient without an email (phone-first) and omits it from both payloads', () => {
+    Object.assign(component.form, {
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      email: '',
+      phoneNumberPrimary: '+22670707070',
+      gender: 'FEMALE',
+      dateOfBirth: '1992-05-04',
+      country: 'Burkina Faso',
+      city: 'Ouagadougou',
+      hospitalId: 'h1',
+    });
+    component.onSubmit();
+    expect(userSpy.adminRegister).toHaveBeenCalledWith(
+      jasmine.objectContaining({ email: undefined, roleNames: ['PATIENT'] }),
+    );
+    expect(patientSpy.create).toHaveBeenCalledWith(jasmine.objectContaining({ email: undefined }));
+    expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);
+  });
+
+  it('sends and confirms an SMS verification code, then attaches the challenge to the create payload', () => {
+    patientSpy.requestPhoneVerification.and.returnValue(
+      of({
+        challengeId: 'ch1',
+        maskedPhone: '+•••••••••70',
+        expiresAt: '2026-08-20T00:05:00',
+        verified: false,
+      } as PhoneVerificationChallenge),
+    );
+    patientSpy.confirmPhoneVerification.and.returnValue(
+      of({
+        challengeId: 'ch1',
+        maskedPhone: '+•••••••••70',
+        expiresAt: '2026-08-20T00:05:00',
+        verified: true,
+      } as PhoneVerificationChallenge),
+    );
+    component.form.phoneNumberPrimary = '+22670707070';
+    component.sendPhoneVerification();
+    expect(component.otpChallengeId).toBe('ch1');
+    component.otpCode = '123456';
+    component.confirmPhoneVerification();
+    expect(component.phoneVerified).toBeTrue();
+
+    Object.assign(component.form, {
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      email: '',
+      gender: 'FEMALE',
+      dateOfBirth: '1992-05-04',
+      country: 'Burkina Faso',
+      city: 'Ouagadougou',
+      hospitalId: 'h1',
+    });
+    component.onSubmit();
+    expect(patientSpy.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({ phoneVerificationId: 'ch1' }),
+    );
+  });
+
+  it('invalidates a completed verification when the phone number changes', () => {
+    component.ngOnInit();
+    component.phoneVerified = true;
+    component.otpChallengeId = 'ch1';
+    component.form.phoneNumberPrimary = '+22670000000';
+    component.onIdentifierChange();
+    expect(component.phoneVerified).toBeFalse();
+    expect(component.otpChallengeId).toBeNull();
   });
 
   it('proceeds with a fresh registration once the match is dismissed', () => {

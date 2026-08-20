@@ -55,6 +55,16 @@ export class PatientFormComponent implements OnInit {
   linking = false;
   private matchCheckSubject = new Subject<{ email: string; phone: string }>();
 
+  // ── SMS phone verification (IKODDI OTP; hidden when not configured) ─────
+  otpAvailable = false;
+  otpChallengeId: string | null = null;
+  otpMaskedPhone: string | null = null;
+  otpCode = '';
+  otpSending = false;
+  otpConfirming = false;
+  phoneVerified = false;
+  private otpRequestedForPhone = '';
+
   form: PatientCreateRequest = {
     userId: '',
     hospitalId: this.auth.getHospitalId() ?? '',
@@ -81,6 +91,15 @@ export class PatientFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.hasContextHospital = !!this.auth.getHospitalId();
+
+    // Phone verification is optional infrastructure — hide the action entirely
+    // when the SMS provider is not configured for this deployment.
+    this.patientService.phoneVerificationAvailability().subscribe({
+      next: (res) => (this.otpAvailable = res.available),
+      error: () => {
+        /* silent — treat as unavailable */
+      },
+    });
     // ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ──
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
@@ -173,7 +192,67 @@ export class PatientFormComponent implements OnInit {
       email: (this.form.email ?? '').trim().toLowerCase(),
       phone: (this.form.phoneNumberPrimary ?? '').trim(),
     });
+    // Editing the PHONE invalidates any code sent to the previous number
+    // (email edits leave a completed verification intact).
+    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    if ((this.phoneVerified || this.otpChallengeId) && phone !== this.otpRequestedForPhone) {
+      this.phoneVerified = false;
+      this.otpChallengeId = null;
+      this.otpMaskedPhone = null;
+      this.otpCode = '';
+    }
     this.onNameOrDobChange();
+  }
+
+  /** Send (or re-send) the SMS verification code to the typed primary phone. */
+  sendPhoneVerification(): void {
+    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    if (phone.length < 8) {
+      this.toast.error(this.translate.instant('PATIENTS.PHONE_TOO_SHORT'));
+      return;
+    }
+    this.otpSending = true;
+    this.otpRequestedForPhone = phone;
+    this.patientService.requestPhoneVerification(phone).subscribe({
+      next: (challenge) => {
+        this.otpSending = false;
+        this.otpChallengeId = challenge.challengeId;
+        this.otpMaskedPhone = challenge.maskedPhone;
+        this.otpCode = '';
+        this.toast.success(
+          this.translate.instant('PATIENTS.CODE_SENT_TO') + ' ' + (challenge.maskedPhone ?? ''),
+        );
+      },
+      error: (err) => {
+        this.otpSending = false;
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PATIENTS.CODE_SEND_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Confirm the code the patient read back from their phone. */
+  confirmPhoneVerification(): void {
+    if (!this.otpChallengeId || this.otpCode.trim().length < 4) {
+      return;
+    }
+    this.otpConfirming = true;
+    this.patientService
+      .confirmPhoneVerification(this.otpChallengeId, this.otpCode.trim())
+      .subscribe({
+        next: () => {
+          this.otpConfirming = false;
+          this.phoneVerified = true;
+          this.toast.success(this.translate.instant('PATIENTS.PHONE_VERIFIED'));
+        },
+        error: (err) => {
+          this.otpConfirming = false;
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PATIENTS.PHONE_VERIFY_FAILED'),
+          );
+        },
+      });
   }
 
   /** Register the matched existing patient at THIS hospital instead of duplicating. */
@@ -213,10 +292,10 @@ export class PatientFormComponent implements OnInit {
   }
 
   onSubmit(): void {
+    // Phone-first: email is OPTIONAL — most patients only have a phone number.
     if (
       !this.form.firstName ||
       !this.form.lastName ||
-      !this.form.email ||
       !this.form.phoneNumberPrimary ||
       !this.form.gender ||
       !this.form.dateOfBirth ||
@@ -254,11 +333,14 @@ export class PatientFormComponent implements OnInit {
     // Step 2: Use the returned userId to create the Patient entity
     // If Step 2 fails, delete the orphaned user to avoid dangling accounts.
     const username = this.generateUsername(this.form.firstName, this.form.lastName);
+    // Blank email stays OFF the wire (phone-first); a confirmed OTP challenge
+    // rides along so the backend can stamp phoneVerifiedAt.
+    const email = this.form.email?.trim() || undefined;
     let createdUserId: string | null = null;
     this.userService
       .adminRegister({
         username,
-        email: this.form.email,
+        email,
         firstName: this.form.firstName,
         lastName: this.form.lastName,
         phoneNumber: this.form.phoneNumberPrimary,
@@ -270,7 +352,13 @@ export class PatientFormComponent implements OnInit {
         switchMap((user) => {
           createdUserId = user.id;
           this.form.userId = user.id;
-          return this.patientService.create(this.form).pipe(
+          const payload: PatientCreateRequest = {
+            ...this.form,
+            email,
+            phoneVerificationId:
+              this.phoneVerified && this.otpChallengeId ? this.otpChallengeId : undefined,
+          };
+          return this.patientService.create(payload).pipe(
             catchError((patientErr) => {
               // Compensate: remove the orphaned user account
               this.userService.delete(createdUserId!).subscribe();
@@ -283,9 +371,14 @@ export class PatientFormComponent implements OnInit {
       )
       .subscribe({
         next: (patient) => {
-          this.toast.success(
-            'Patient registered successfully. A verification email has been sent.',
-          );
+          // Only claim a delivery channel that actually exists: email if given,
+          // SMS only when the SMS provider is configured for this deployment.
+          const successKey = email
+            ? 'PATIENTS.REGISTERED_EMAIL_SENT'
+            : this.otpAvailable
+              ? 'PATIENTS.REGISTERED_SMS_SENT'
+              : 'PATIENTS.REGISTERED_SUCCESS';
+          this.toast.success(this.translate.instant(successKey));
           this.router.navigate(['/patients', patient.id]);
         },
         error: (err) => {

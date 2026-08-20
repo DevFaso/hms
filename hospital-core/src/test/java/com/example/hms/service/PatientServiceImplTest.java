@@ -164,6 +164,8 @@ class PatientServiceImplTest {
     private ObjectMapper objectMapper;
     @Mock
     private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock
+    private PhoneVerificationService phoneVerificationService;
 
     @InjectMocks
     private PatientServiceImpl patientService;
@@ -286,6 +288,67 @@ class PatientServiceImplTest {
         assertThat(result).isEqualTo(responseDTO);
         verify(patientRepository).save(savedPatient);
         verify(patientInsuranceService).addInsuranceToPatient(argThat(dto -> patientId.equals(dto.getPatientId())), eq(Locale.ENGLISH));
+    }
+
+    @Test
+    void createPatientByStaffStampsPhoneVerifiedWhenChallengeConsumes() {
+        UUID userId = UUID.randomUUID();
+        UUID challengeId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .phoneVerificationId(challengeId)
+            .build();
+
+        User user = new User();
+        user.setId(userId);
+        user.setActive(true);
+
+        patient.setPhoneNumberPrimary("+22670707070");
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+        when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "+22670707070")).thenReturn(true);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatientByStaff(request, Locale.ENGLISH);
+
+        assertThat(patient.getPhoneVerifiedAt()).isNotNull();
+        verify(patientRepository).save(patient);
+    }
+
+    @Test
+    void createPatientByStaffLeavesPhoneUnverifiedWhenChallengeRejected() {
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .phoneVerificationId(UUID.randomUUID())
+            .build();
+
+        User user = new User();
+        user.setId(userId);
+        user.setActive(true);
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+        when(phoneVerificationService.consumeVerifiedChallenge(any(), any())).thenReturn(false);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatientByStaff(request, Locale.ENGLISH);
+
+        assertThat(patient.getPhoneVerifiedAt()).isNull();
+        verify(patientRepository, never()).save(patient);
     }
 
     @Test
