@@ -9,14 +9,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>Default {@code false}. When off, the candidate-match endpoint
  * ({@code POST /api/empi/candidates}) returns {@code 404} and
  * {@link EmpiProbabilisticMatcher#findCandidates} short-circuits to
- * an empty list. <strong>Even when the flag is on, the foundation
- * pass still returns an empty list</strong> — the Fellegi-Sunter
- * scorer body is the named row-25 follow-on, deferred deliberately
- * so threshold tuning happens against a labelled audit set rather
- * than intuition. The wire contract + DTO shape are stable today so
- * the receptionist UI can be wired against the empty response.
- * There is no auto-merge or auto-link behaviour at any flag setting.
- * (Javadoc accuracy fix from PR #349 Copilot review.)
+ * an empty list. When the flag is on, the Fellegi-Sunter scorer
+ * returns real scored candidates (weights: name 0.40, DOB 0.25,
+ * national-ID 0.25, sex 0.10), scoped to the caller's active
+ * hospital. There is no auto-merge or auto-link behaviour at any
+ * flag setting — merges are the explicit admin-only /empi endpoints.
+ * (Earlier "returns empty even when on" wording described the
+ * pre-scorer foundation pass and became stale when the scorer body
+ * shipped in 020719d2 — corrected with P1 #8.)
  *
  * <p>Companion to the deterministic EMPI path (see
  * {@code empi-identity} skill): the deterministic alias resolver

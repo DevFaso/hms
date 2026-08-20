@@ -52,6 +52,8 @@ public class EmpiServiceImpl implements EmpiService {
     private static final String MSG_ALIAS_NOT_FOUND = "empi.alias.notFound";
     private static final String MSG_MERGE_SAME_IDENTITY = "empi.merge.sameIdentity";
     private static final String MSG_MERGE_ALREADY_MERGED = "empi.merge.alreadyMerged";
+    private static final String MSG_MERGE_CROSS_TENANT = "empi.merge.crossTenant";
+    private static final String MSG_MERGE_SAME_PATIENT = "empi.merge.samePatient";
     private static final String MSG_LINK_MISSING_PATIENT = "empi.link.missingPatient";
     private static final String MSG_LINK_ALIAS_INCOMPLETE = "empi.link.aliasIncomplete";
     private static final String MSG_ALIAS_INVALID = "empi.alias.invalid";
@@ -61,6 +63,8 @@ public class EmpiServiceImpl implements EmpiService {
     private final EmpiMasterIdentityRepository masterIdentityRepository;
     private final EmpiIdentityAliasRepository aliasRepository;
     private final EmpiMergeEventRepository mergeEventRepository;
+    private final com.example.hms.repository.PatientRepository patientRepository;
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
     private final EmpiMapper empiMapper;
     private final com.example.hms.config.KafkaProperties kafkaProperties;
     private final ObjectProvider<KafkaTemplate<String, EmpiEventPayload>> empiKafkaTemplateProvider;
@@ -171,6 +175,12 @@ public class EmpiServiceImpl implements EmpiService {
         if (secondary.getStatus() == EmpiIdentityStatus.MERGED) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_ALREADY_MERGED, secondary.getEmpiNumber()));
         }
+        // ── Tenant isolation (empi-identity skill: v0 merges are intra-tenant).
+        // Identities with no hospital stamp (legacy/system rows) are exempt. ──
+        if (primary.getHospitalId() != null && secondary.getHospitalId() != null
+            && !primary.getHospitalId().equals(secondary.getHospitalId())) {
+            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+        }
 
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         EmpiMergeEvent mergeEvent = buildMergeEvent(request, primary, secondary, context);
@@ -181,12 +191,97 @@ public class EmpiServiceImpl implements EmpiService {
         secondary.setUpdatedBy(context.getPrincipalUserId());
         primary.setUpdatedBy(context.getPrincipalUserId());
 
+        // Skill merge-step 2 (previously unimplemented): reassign the
+        // secondary's aliases to the surviving identity so post-merge
+        // lookups (e.g. MLLP by MRN) resolve to the primary instead of the
+        // merged-away row. Duplicates on (type, value) are deactivated.
+        reassignAliases(primary, secondary, context);
+
         mergeEventRepository.save(mergeEvent);
         masterIdentityRepository.save(secondary);
         masterIdentityRepository.save(primary);
 
         publishEvent(buildMergeEventPayload(primary, secondary, mergeEvent));
+        emitMergeAudit(primary, secondary, mergeEvent);
         return empiMapper.toMergeEventDto(mergeEvent);
+    }
+
+    @Override
+    @Transactional
+    public EmpiMergeEventResponseDTO mergePatients(UUID primaryPatientId, UUID secondaryPatientId,
+                                                   com.example.hms.enums.empi.EmpiMergeType mergeType, String notes) {
+        if (primaryPatientId == null || secondaryPatientId == null) {
+            throw new BusinessException(MessageUtil.resolve(MSG_LINK_MISSING_PATIENT));
+        }
+        if (primaryPatientId.equals(secondaryPatientId)) {
+            throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_PATIENT));
+        }
+        EmpiMasterIdentity primary = ensureIdentityForPatient(primaryPatientId);
+        EmpiMasterIdentity secondary = ensureIdentityForPatient(secondaryPatientId);
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(mergeType != null ? mergeType : com.example.hms.enums.empi.EmpiMergeType.MANUAL);
+        request.setNotes(notes);
+        return mergeIdentities(primary.getId(), request);
+    }
+
+    /**
+     * Find or provision the master identity for a patient — the explicit
+     * admin provisioning flow the empi-identity skill permits (never the
+     * unknown-alias auto-create path). Reuses {@link #linkIdentity} so the
+     * IDENTITY_LINKED event and hospital stamping behave identically.
+     */
+    private EmpiMasterIdentity ensureIdentityForPatient(UUID patientId) {
+        Optional<EmpiMasterIdentity> existing = masterIdentityRepository.findByPatientId(patientId);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+        com.example.hms.model.Patient patient = patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        EmpiIdentityLinkRequestDTO link = new EmpiIdentityLinkRequestDTO();
+        link.setPatientId(patient.getId());
+        link.setHospitalId(patient.getHospitalId());
+        link.setOrganizationId(patient.getOrganizationId());
+        link.setSourceSystem("HMS_MERGE_PROVISION");
+        linkIdentity(link);
+        return masterIdentityRepository.findByPatientId(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, patientId));
+    }
+
+    /** Move active aliases to the primary; deactivate (type, value) duplicates. */
+    private void reassignAliases(EmpiMasterIdentity primary, EmpiMasterIdentity secondary, HospitalContext context) {
+        java.util.List<EmpiIdentityAlias> primaryAliases = aliasRepository.findByMasterIdentity_Id(primary.getId());
+        for (EmpiIdentityAlias alias : aliasRepository.findByMasterIdentity_Id(secondary.getId())) {
+            boolean duplicate = primaryAliases.stream().anyMatch(existing ->
+                existing.getAliasType() == alias.getAliasType()
+                    && existing.getAliasValue() != null
+                    && existing.getAliasValue().equalsIgnoreCase(alias.getAliasValue()));
+            if (duplicate) {
+                alias.setActive(false);
+            } else {
+                alias.setMasterIdentity(primary);
+            }
+            alias.setUpdatedBy(context.getPrincipalUserId());
+            aliasRepository.save(alias);
+        }
+    }
+
+    /** Skill merge-step 5: PATIENT_MERGE audit trail — best-effort, never rolls back the merge. */
+    private void emitMergeAudit(EmpiMasterIdentity primary, EmpiMasterIdentity secondary, EmpiMergeEvent mergeEvent) {
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.PATIENT_MERGE)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .eventDescription("EMPI merge: " + secondary.getEmpiNumber()
+                    + " merged into " + primary.getEmpiNumber()
+                    + " (" + mergeEvent.getMergeType() + ")")
+                .entityType("EmpiMasterIdentity")
+                .resourceId(primary.getId() != null ? primary.getId().toString() : null)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit PATIENT_MERGE audit event: {}", ex.getMessage());
+        }
     }
 
     private void validateLinkRequest(EmpiIdentityLinkRequestDTO request) {
