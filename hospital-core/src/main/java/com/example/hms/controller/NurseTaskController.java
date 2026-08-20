@@ -11,8 +11,7 @@ import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -166,6 +165,22 @@ public class NurseTaskController {
         return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit));
     }
 
+    @PostMapping("/handoffs")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Record a new SBAR handoff for a patient")
+    public ResponseEntity<NurseHandoffSummaryDTO> createHandoff(
+        @Valid @RequestBody NurseHandoffCreateRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        NurseHandoffSummaryDTO created = nurseTaskService.createHandoff(nurseId, scopedHospital, request);
+        return ResponseEntity.status(201).body(created);
+    }
+
     @PutMapping("/handoffs/{handoffId}/complete")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Mark a patient transfer or handoff as completed")
@@ -176,7 +191,9 @@ public class NurseTaskController {
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
-        UUID nurseId = resolveAssignee(auth, assignee);
+        // The completer is always the authenticated user, regardless of the
+        // list-filter assignee param this endpoint historically accepted.
+        UUID nurseId = authUtils.resolveUserId(auth).orElse(null);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         try {
             nurseTaskService.completeHandoff(handoffId, nurseId, scopedHospital);
@@ -184,31 +201,6 @@ public class NurseTaskController {
             // Treat missing handoffs as already completed to keep the operation idempotent.
         }
         return ResponseEntity.noContent().build();
-    }
-
-    @PatchMapping("/handoffs/{handoffId}/tasks/{taskId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Update completion status for a handoff checklist item")
-    public ResponseEntity<NurseHandoffChecklistUpdateResponseDTO> updateHandoffChecklist(
-        @PathVariable UUID handoffId,
-        @PathVariable UUID taskId,
-        @Valid @RequestBody NurseHandoffChecklistUpdateRequestDTO request,
-        @RequestParam(name = "assignee", required = false) String assignee,
-        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
-        Authentication auth
-    ) {
-        authUtils.requireAuth(auth);
-        UUID nurseId = resolveAssignee(auth, assignee);
-        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        boolean completed = Boolean.TRUE.equals(request.getCompleted());
-        NurseHandoffChecklistUpdateResponseDTO response = nurseTaskService.updateHandoffChecklistItem(
-            handoffId,
-            taskId,
-            nurseId,
-            scopedHospital,
-            completed
-        );
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/announcements")

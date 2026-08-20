@@ -24,6 +24,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
     List<LabOrder> findByOrderingStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId);
     List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
+    List<LabOrder> findByHospital_IdAndStatusIn(UUID hospitalId, java.util.Collection<LabOrderStatus> statuses);
 
     @Query(value = """
     SELECT * FROM lab_orders l
