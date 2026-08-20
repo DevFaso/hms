@@ -63,6 +63,11 @@
           {{ 'MATERNITY.PRENATAL_TAB' | translate }}
         </button>
       }
+      @if (canSeeLabor) {
+        <button class="tab-btn" [class.active]="activeTab() === 'labor'" (click)="setTab('labor')">
+          {{ 'MATERNITY.LABOR_TAB' | translate }}
+        </button>
+      }
       @if (canSeePostpartum) {
         <button
           class="tab-btn"
@@ -83,6 +88,9 @@
   }
   @if (activeTab() === 'prenatal' && canSeePrenatal) {
     <app-prenatal-tab />
+  }
+  @if (activeTab() === 'labor' && canSeeLabor) {
+    <app-labor-tab />
   }
   @if (activeTab() === 'postpartum' && canSeePostpartum) {
     <app-postpartum-tab />
