@@ -122,3 +122,24 @@
 .btn-danger-sm .material-symbols-outlined {
   font-size: 16px;
 }
+.btn-view-data {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.btn-view-data:hover {
+  background: #dbeafe;
+}
+.btn-view-data .material-symbols-outlined {
+  font-size: 16px;
+}

@@ -19,6 +19,8 @@ describe('PreCheckinFormComponent', () => {
     date: '2025-08-15',
     startTime: '09:00',
     endTime: '09:30',
+    rawStartTime: '09:00',
+    rawEndTime: '09:30',
     providerName: 'Dr. Smith',
     department: 'Cardiology',
     reason: 'Checkup',

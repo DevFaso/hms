@@ -166,6 +166,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'my-family-access/:patientId',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import(
+            './patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component'
+          ).then((m) => m.ProxyDataViewerComponent),
+      },
+      {
         path: 'my-summaries',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },

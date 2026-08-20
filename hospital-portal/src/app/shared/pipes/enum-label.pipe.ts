@@ -527,6 +527,13 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       VITALS: 'Vitals',
       BILLING: 'Billing',
       'APPOINTMENTS,LAB_RESULTS,MEDICATIONS': 'Appointments, Lab Results & Medications',
+      VIEW_APPOINTMENTS: 'Appointments',
+      VIEW_MEDICATIONS: 'Medications',
+      VIEW_LAB_RESULTS: 'Lab Results',
+      VIEW_BILLING: 'Billing',
+      VIEW_RECORDS: 'Health Records',
+      'VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS':
+        'Appointments, Medications & Lab Results',
     },
 
     /* ── Payment methods ──────────────────────────────────── */
