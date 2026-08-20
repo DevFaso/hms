@@ -668,6 +668,17 @@ export const routes: Routes = [
         loadComponent: () => import('./admissions/admissions').then((m) => m.AdmissionsComponent),
       },
 
+      // Bed management (P0 #4 — ward/bed CRUD + occupancy)
+      {
+        path: 'bed-management',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./bed-management/bed-management').then((m) => m.BedManagementComponent),
+      },
+
       // Discharge (approvals + summaries)
       {
         path: 'discharge',
