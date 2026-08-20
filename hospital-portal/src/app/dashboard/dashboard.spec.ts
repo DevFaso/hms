@@ -9,7 +9,11 @@ import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
 import { signal } from '@angular/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
+import {
+  PatientTrackerWsService,
+  PatientTrackerEvent,
+} from '../services/patient-tracker-ws.service';
 
 /**
  * Lightweight unit tests for dashboard navigation and RBAC fixes.
@@ -843,5 +847,89 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(() => c.ngOnDestroy()).not.toThrow();
     // Idempotent — second call must not blow up either.
     expect(() => c.ngOnDestroy()).not.toThrow();
+  });
+});
+
+/**
+ * Task 24: the clinician dashboard subscribes to the shared patient-tracker
+ * STOMP stream and refreshes its encounter-driven panels on events.
+ */
+describe('Dashboard live tracker refresh', () => {
+  let trackerWsSpy: jasmine.SpyObj<PatientTrackerWsService>;
+  let wsEvents$: Subject<PatientTrackerEvent>;
+
+  function createComponent(roles: string[], hospitalId: string | null): DashboardComponent {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(roles);
+    authStub.hasAnyRole.and.callFake((r: string[]) => roles.some((role) => r.includes(role)));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getHospitalId.and.returnValue(hospitalId);
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles,
+      staffId: 's1',
+      active: true,
+    } as any);
+
+    const permStub: Partial<PermissionService> = {
+      hasPermission: () => false,
+      hasAnyPermission: () => false,
+    };
+
+    wsEvents$ = new Subject<PatientTrackerEvent>();
+    trackerWsSpy = jasmine.createSpyObj('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    trackerWsSpy.getEvents.and.returnValue(wsEvents$.asObservable());
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: permStub },
+        { provide: PatientTrackerWsService, useValue: trackerWsSpy },
+      ],
+    });
+
+    return TestBed.createComponent(DashboardComponent).componentInstance;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('connects the shared socket for clinicians with an active hospital', () => {
+    const c = createComponent(['ROLE_DOCTOR'], 'h1');
+    c.ngOnInit();
+    expect(trackerWsSpy.connect).toHaveBeenCalledWith('h1');
+    c.ngOnDestroy();
+    expect(trackerWsSpy.disconnect).toHaveBeenCalled();
+  });
+
+  it('does not connect for non-clinical roles', () => {
+    const c = createComponent(['ROLE_RECEPTIONIST'], 'h1');
+    c.ngOnInit();
+    expect(trackerWsSpy.connect).not.toHaveBeenCalled();
+    c.ngOnDestroy();
+    expect(trackerWsSpy.disconnect).not.toHaveBeenCalled();
+  });
+
+  it('does not connect without an active hospital', () => {
+    const c = createComponent(['ROLE_DOCTOR'], null);
+    c.ngOnInit();
+    expect(trackerWsSpy.connect).not.toHaveBeenCalled();
+    c.ngOnDestroy();
   });
 });
