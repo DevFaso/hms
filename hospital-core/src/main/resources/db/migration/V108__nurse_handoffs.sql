@@ -2,9 +2,14 @@
 -- P0 #1: Nurse handoffs — real SBAR handoff records replacing the synthetic
 -- rows NurseTaskServiceImpl used to fabricate ("entity arrives in MVP 2").
 -- Mirrors the clinical.nursing_tasks shape (V21).
+--
+-- IF NOT EXISTS throughout: the first dev deployment created the table but
+-- died before Liquibase recorded the changeset, so the redeploy re-ran it
+-- and crashed on "relation nurse_handoffs already exists". Idempotent
+-- statements let the re-run no-op and finally record the changeset.
 -- ─────────────────────────────────────────────────────────────────────────────
 
-CREATE TABLE clinical.nurse_handoffs (
+CREATE TABLE IF NOT EXISTS clinical.nurse_handoffs (
     id                UUID            NOT NULL DEFAULT gen_random_uuid(),
     patient_id        UUID            NOT NULL,
     hospital_id       UUID            NOT NULL,
@@ -25,6 +30,6 @@ CREATE TABLE clinical.nurse_handoffs (
     CONSTRAINT fk_nurse_handoffs_hospital FOREIGN KEY (hospital_id) REFERENCES hospital.hospitals(id)
 );
 
-CREATE INDEX idx_nurse_handoffs_patient  ON clinical.nurse_handoffs (patient_id);
-CREATE INDEX idx_nurse_handoffs_hospital ON clinical.nurse_handoffs (hospital_id);
-CREATE INDEX idx_nurse_handoffs_status   ON clinical.nurse_handoffs (status);
+CREATE INDEX IF NOT EXISTS idx_nurse_handoffs_patient  ON clinical.nurse_handoffs (patient_id);
+CREATE INDEX IF NOT EXISTS idx_nurse_handoffs_hospital ON clinical.nurse_handoffs (hospital_id);
+CREATE INDEX IF NOT EXISTS idx_nurse_handoffs_status   ON clinical.nurse_handoffs (status);
