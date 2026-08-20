@@ -17,8 +17,7 @@ import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
 import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
@@ -375,20 +374,21 @@ class NurseTaskControllerTest {
     @Test
     void completeHandoffSuccess() {
         UUID handoffId = UUID.randomUUID();
-        doNothing().when(nurseTaskService).completeHandoff(handoffId, null, HOSPITAL_ID);
+        doNothing().when(nurseTaskService).completeHandoff(handoffId, NURSE_ID, HOSPITAL_ID);
 
         ResponseEntity<Void> response =
             controller.completeHandoff(handoffId, null, null, auth);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
-        verify(nurseTaskService).completeHandoff(handoffId, null, HOSPITAL_ID);
+        // The completer is the authenticated user, not the assignee filter.
+        verify(nurseTaskService).completeHandoff(handoffId, NURSE_ID, HOSPITAL_ID);
     }
 
     @Test
     void completeHandoffSwallowsNotFoundException() {
         UUID handoffId = UUID.randomUUID();
         doThrow(new ResourceNotFoundException("Not found"))
-            .when(nurseTaskService).completeHandoff(handoffId, null, HOSPITAL_ID);
+            .when(nurseTaskService).completeHandoff(handoffId, NURSE_ID, HOSPITAL_ID);
 
         // Should not throw — controller catches ResourceNotFoundException
         ResponseEntity<Void> response =
@@ -397,45 +397,39 @@ class NurseTaskControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
+    /* ═══════════════════════════════════════════════════════════════════
+       POST /nurse/handoffs
+       ═══════════════════════════════════════════════════════════════════ */
+
     @Test
-    void updateHandoffChecklistComplete() {
-        UUID handoffId = UUID.randomUUID();
-        UUID taskId = UUID.randomUUID();
+    void createHandoffReturns201() {
+        UUID patientId = UUID.randomUUID();
+        NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId)
+            .direction("Shift change")
+            .situation("Post-op day 1, stable.")
+            .build();
+        NurseHandoffSummaryDTO created = NurseHandoffSummaryDTO.builder()
+            .id(UUID.randomUUID()).patientId(patientId).patientName("Alice Doe")
+            .direction("Shift change").note("Post-op day 1, stable.")
+            .status("PENDING").updatedAt(LocalDateTime.now()).build();
+        when(nurseTaskService.createHandoff(NURSE_ID, HOSPITAL_ID, request)).thenReturn(created);
 
-        NurseHandoffChecklistUpdateRequestDTO request = new NurseHandoffChecklistUpdateRequestDTO();
-        request.setCompleted(true);
+        ResponseEntity<NurseHandoffSummaryDTO> response =
+            controller.createHandoff(request, null, auth);
 
-        NurseHandoffChecklistUpdateResponseDTO serviceResponse = NurseHandoffChecklistUpdateResponseDTO.builder()
-            .handoffId(handoffId).taskId(taskId).completed(true)
-            .completedAt(LocalDateTime.now()).build();
-        when(nurseTaskService.updateHandoffChecklistItem(handoffId, taskId, null, HOSPITAL_ID, true))
-            .thenReturn(serviceResponse);
-
-        ResponseEntity<NurseHandoffChecklistUpdateResponseDTO> response =
-            controller.updateHandoffChecklist(handoffId, taskId, request, null, null, auth);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().isCompleted()).isTrue();
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody().getPatientName()).isEqualTo("Alice Doe");
     }
 
     @Test
-    void updateHandoffChecklistIncomplete() {
-        UUID handoffId = UUID.randomUUID();
-        UUID taskId = UUID.randomUUID();
+    void createHandoffRequiresResolvableUser() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.empty());
+        NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
+            .patientId(UUID.randomUUID()).direction("Shift change").build();
 
-        NurseHandoffChecklistUpdateRequestDTO request = new NurseHandoffChecklistUpdateRequestDTO();
-        request.setCompleted(null); // null → treated as false
-
-        NurseHandoffChecklistUpdateResponseDTO serviceResponse = NurseHandoffChecklistUpdateResponseDTO.builder()
-            .handoffId(handoffId).taskId(taskId).completed(false).build();
-        when(nurseTaskService.updateHandoffChecklistItem(handoffId, taskId, null, HOSPITAL_ID, false))
-            .thenReturn(serviceResponse);
-
-        ResponseEntity<NurseHandoffChecklistUpdateResponseDTO> response =
-            controller.updateHandoffChecklist(handoffId, taskId, request, null, null, auth);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody().isCompleted()).isFalse();
+        assertThatThrownBy(() -> controller.createHandoff(request, null, auth))
+            .isInstanceOf(BusinessException.class);
     }
 
     /* ═══════════════════════════════════════════════════════════════════

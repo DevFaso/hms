@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
+import com.example.hms.service.CriticalValueNotificationService;
 import com.example.hms.service.LabResultService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,7 +44,22 @@ import java.util.UUID;
 public class LabResultController {
 
     private final LabResultService labResultService;
+    private final CriticalValueNotificationService criticalValueNotificationService;
     private final MessageSource messageSource;
+
+    /**
+     * Manual twin of the CriticalValueEscalationScheduler sweep (P0 #5) —
+     * same pattern as the referral-expiry manual trigger. Returns the
+     * number of results escalated.
+     */
+    @PostMapping("/critical-escalation/run")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Run the critical-value escalation sweep now",
+        description = "Mirrors the scheduled sweep; escalates unacknowledged critical results past the configured delay.")
+    public ResponseEntity<java.util.Map<String, Integer>> runCriticalEscalationSweep() {
+        int escalated = criticalValueNotificationService.escalateOverdue();
+        return ResponseEntity.ok(java.util.Map.of("escalated", escalated));
+    }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
@@ -71,15 +87,6 @@ public class LabResultController {
             @PageableDefault(size = 20) Pageable pageable,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
-    }
-
-    @GetMapping("/pending-review")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
-    @Operation(summary = "Get Lab Results Pending Review", description = "Retrieves a curated list of lab results awaiting clinician review.")
-    public ResponseEntity<List<LabResultResponseDTO>> getPendingReview(
-            @RequestParam(name = "providerId", required = false) UUID providerId,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.getPendingReviewResults(providerId, locale));
     }
 
     @PutMapping("/{id}")
@@ -113,7 +120,7 @@ public class LabResultController {
 
     @PostMapping("/{id}/acknowledge")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
-    @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged. Currently idempotent for synthetic dashboard data.")
+    @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged.")
     public ResponseEntity<Void> acknowledgeLabResult(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

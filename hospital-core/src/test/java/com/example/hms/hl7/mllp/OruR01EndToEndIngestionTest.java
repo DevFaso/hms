@@ -71,6 +71,7 @@ class OruR01EndToEndIngestionTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
 
     private Hl7MessageDispatcher dispatcher;
     private Hospital hospital;
@@ -81,7 +82,8 @@ class OruR01EndToEndIngestionTest {
     void setUp() {
         // Real service, real parser; mocked I/O collaborators only.
         MllpInboundLabServiceImpl labService = new MllpInboundLabServiceImpl(
-            specimenRepository, labResultRepository, messageRecorder, auditEventLogService);
+            specimenRepository, labResultRepository, messageRecorder, auditEventLogService,
+            criticalValueNotificationService);
         dispatcher = new Hl7MessageDispatcher(
             new Hl7v2MessageBuilder(), allowlist, labService, inboundAdt, messageRecorder);
 

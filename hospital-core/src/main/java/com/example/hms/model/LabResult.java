@@ -140,6 +140,20 @@ public class LabResult extends BaseEntity {
     @Column(name = "acknowledged_by_display", length = 255)
     private String acknowledgedByDisplay;
 
+    /**
+     * When the ordering provider was notified that this result is critical
+     * (P0 #5). Null for non-critical results; guards against re-notifying.
+     */
+    @Column(name = "critical_notified_at")
+    private LocalDateTime criticalNotifiedAt;
+
+    /**
+     * When the unacknowledged critical result was escalated by the sweep.
+     * Null until escalation; set exactly once.
+     */
+    @Column(name = "critical_escalated_at")
+    private LocalDateTime criticalEscalatedAt;
+
     @Builder.Default
     @Column(name = "released", nullable = false)
     private boolean released = false;

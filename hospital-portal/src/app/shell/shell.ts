@@ -323,6 +323,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'Admit Patients',
       },
       {
+        icon: 'bed',
+        label: 'Bed Management',
+        translationKey: 'NAV.BED_MANAGEMENT',
+        route: '/bed-management',
+        // Roles only (no permission key): 'Manage Bed Capacity' is in
+        // HOSPITAL_ADMIN's defaults but not guaranteed for SUPER_ADMIN's
+        // merged permission set, and the route guard uses the same roles.
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'medication_liquid',
         label: 'Medication History',
         translationKey: 'NAV.MEDICATION_HISTORY',

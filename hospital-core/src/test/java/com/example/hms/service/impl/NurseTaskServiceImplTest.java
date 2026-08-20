@@ -20,15 +20,20 @@ import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
+import com.example.hms.model.NurseHandoff;
 import com.example.hms.model.NursingNote;
 import com.example.hms.model.NursingTask;
+import com.example.hms.model.ProcedureOrder;
+import com.example.hms.enums.ProcedureUrgency;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientVitalSign;
@@ -44,7 +49,7 @@ import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -60,13 +65,17 @@ import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.ImagingOrderRepository;
+import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.NurseHandoffRepository;
 import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.NursingTaskRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
@@ -106,6 +115,10 @@ class NurseTaskServiceImplTest {
     @Mock private NursingNoteRepository nursingNoteRepository;
     @Mock private NotificationRepository notificationRepository;
     @Mock private UserRepository userRepository;
+    @Mock private NurseHandoffRepository nurseHandoffRepository;
+    @Mock private LabOrderRepository labOrderRepository;
+    @Mock private ImagingOrderRepository imagingOrderRepository;
+    @Mock private ProcedureOrderRepository procedureOrderRepository;
 
     private NurseTaskServiceImpl service;
     private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
@@ -118,6 +131,7 @@ class NurseTaskServiceImplTest {
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, notificationRepository, userRepository,
+            nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
@@ -216,40 +230,142 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getOrderTasksAppliesPriorityFilterAndClamp() {
+    void getOrderTasksDerivesFromRealOrdersScopedToAssignedPatients() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
+        UUID assignedPatientId = UUID.randomUUID();
+        UUID otherPatientId = UUID.randomUUID();
 
-        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
-            List.of(
-                patient(UUID.randomUUID(), "One", "First", "Last"),
-                patient(UUID.randomUUID(), "Two", "First", "Last"),
-                patient(UUID.randomUUID(), "Three", "First", "Last"),
-                patient(UUID.randomUUID(), "Four", "First", "Last"),
-                patient(UUID.randomUUID(), "Five", "First", "Last")
-            )
-        );
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(assignedPatientId, "Ann Assigned", "Ann", "Assigned")));
 
-        List<NurseOrderTaskResponseDTO> tasks = service.getOrderTasks(nurseId, hospitalId, " stat ", 50);
+        Patient assigned = Mockito.mock(Patient.class);
+        when(assigned.getId()).thenReturn(assignedPatientId);
+        when(assigned.getFullName()).thenReturn("Ann Assigned");
+        Patient other = Mockito.mock(Patient.class);
+        when(other.getId()).thenReturn(otherPatientId);
 
-        assertThat(tasks)
-            .isNotEmpty()
-            .allMatch(task -> "STAT".equalsIgnoreCase(task.getPriority()));
+        LabOrder statDraw = Mockito.mock(LabOrder.class);
+        when(statDraw.getId()).thenReturn(UUID.randomUUID());
+        when(statDraw.getPatient()).thenReturn(assigned);
+        when(statDraw.getPriority()).thenReturn(" stat ");
+        when(statDraw.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 8, 20, 8, 0));
+        LabOrder otherPatientsDraw = Mockito.mock(LabOrder.class);
+        when(otherPatientsDraw.getPatient()).thenReturn(other);
+        when(labOrderRepository.findByHospital_IdAndStatusIn(
+            eq(hospitalId), argThat(s -> s.contains(LabOrderStatus.ORDERED))))
+            .thenReturn(List.of(statDraw, otherPatientsDraw));
+
+        ProcedureOrder procedure = Mockito.mock(ProcedureOrder.class);
+        when(procedure.getId()).thenReturn(UUID.randomUUID());
+        when(procedure.getPatient()).thenReturn(assigned);
+        when(procedure.getUrgency()).thenReturn(ProcedureUrgency.URGENT);
+        when(procedure.getScheduledDatetime()).thenReturn(LocalDateTime.of(2026, 8, 20, 10, 0));
+        when(procedureOrderRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any()))
+            .thenReturn(List.of(procedure));
+
+        List<NurseOrderTaskResponseDTO> all = service.getOrderTasks(nurseId, hospitalId, null, 20);
+        assertThat(all)
+            .extracting(NurseOrderTaskResponseDTO::getOrderType)
+            .containsExactly("Lab", "Procedure"); // sorted by due time; other patient's order filtered
+        assertThat(all.get(0).getPriority()).isEqualTo("STAT");
+        assertThat(all.get(0).getPatientName()).isEqualTo("Ann Assigned");
+
+        List<NurseOrderTaskResponseDTO> statOnly = service.getOrderTasks(nurseId, hospitalId, " stat ", 20);
+        assertThat(statOnly)
+            .singleElement()
+            .extracting(NurseOrderTaskResponseDTO::getOrderType)
+            .isEqualTo("Lab");
     }
 
     @Test
-    void getHandoffSummariesClampsLimit() {
-        UUID nurseId = UUID.randomUUID();
+    void getHandoffSummariesReadsPendingRowsAndClampsLimit() {
         UUID hospitalId = UUID.randomUUID();
 
-        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
-            List.of(patient(UUID.randomUUID(), "One", "First", "Last"),
-                patient(UUID.randomUUID(), "Two", "First", "Last"))
-        );
+        Patient patientEntity = Mockito.mock(Patient.class);
+        when(patientEntity.getId()).thenReturn(UUID.randomUUID());
+        when(patientEntity.getFullName()).thenReturn("Bea Ward");
 
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(nurseId, hospitalId, 0);
+        NurseHandoff first = NurseHandoff.builder()
+            .patient(patientEntity)
+            .direction("Shift change")
+            .situation("Post-op day 1, afebrile.")
+            .recommendation("Continue q4h vitals.")
+            .createdByName("Nina Nurse")
+            .build();
+        NurseHandoff second = NurseHandoff.builder()
+            .patient(patientEntity)
+            .direction("Transfer to Radiology")
+            .build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(first, second));
+
+        // limit 0 clamps to 1 — nurseUserId null means no assignee scope
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0);
 
         assertThat(handoffs).hasSize(1);
+        NurseHandoffSummaryDTO dto = handoffs.get(0);
+        assertThat(dto.getPatientName()).isEqualTo("Bea Ward");
+        assertThat(dto.getDirection()).isEqualTo("Shift change");
+        assertThat(dto.getNote()).isEqualTo("Post-op day 1, afebrile.");
+        assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
+        assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
+        assertThat(dto.getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void createHandoffPersistsSbarRecord() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Hospital hospital = Mockito.mock(Hospital.class);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        Patient patientEntity = Mockito.mock(Patient.class);
+        when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        when(patientEntity.getId()).thenReturn(patientId);
+        when(patientEntity.getFullName()).thenReturn("Bea Ward");
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
+        when(nurseHandoffRepository.save(any(NurseHandoff.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId)
+            .direction("  Shift change  ")
+            .situation(" Stable overnight. ")
+            .background("")
+            .build();
+
+        NurseHandoffSummaryDTO created = service.createHandoff(nurseId, hospitalId, request);
+
+        assertThat(created.getDirection()).isEqualTo("Shift change");
+        assertThat(created.getNote()).isEqualTo("Stable overnight.");
+        assertThat(created.getBackground()).isNull(); // blank trimmed to null
+        assertThat(created.getStatus()).isEqualTo("PENDING");
+        assertThat(created.getPatientId()).isEqualTo(patientId);
+
+        ArgumentCaptor<NurseHandoff> captor = ArgumentCaptor.forClass(NurseHandoff.class);
+        verify(nurseHandoffRepository).save(captor.capture());
+        assertThat(captor.getValue().getStatus()).isEqualTo("PENDING");
+    }
+
+    @Test
+    void createHandoffRejectsUnregisteredPatient() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(Mockito.mock(Hospital.class)));
+        Patient patientEntity = Mockito.mock(Patient.class);
+        when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(false);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
+
+        NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId).direction("Shift change").build();
+
+        assertThatThrownBy(() -> service.createHandoff(nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class);
     }
 
     @Test
@@ -282,17 +398,48 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void completeHandoffReturnsSilentlyWhenNotFound() {
+    void completeHandoffThrowsWhenNotFound() {
         UUID handoffId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(UUID.randomUUID()).build()))
-            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.completeHandoff(handoffId, nurseId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void completeHandoffMarksPendingRowCompleted() {
+        UUID handoffId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        NurseHandoff handoff = NurseHandoff.builder().direction("Shift change").build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId))
+            .thenReturn(Optional.of(handoff));
 
         service.completeHandoff(handoffId, nurseId, hospitalId);
 
-        verify(service).getHandoffSummaries(nurseId, hospitalId, 6);
+        assertThat(handoff.getStatus()).isEqualTo("COMPLETED");
+        assertThat(handoff.getCompletedAt()).isNotNull();
+        assertThat(handoff.getCompletedByName()).isEqualTo("Nurse"); // no user row stubbed
+        verify(nurseHandoffRepository).save(handoff);
+    }
+
+    @Test
+    void completeHandoffIsIdempotentForCompletedRows() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        NurseHandoff handoff = NurseHandoff.builder().direction("Shift change").status("COMPLETED").build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId))
+            .thenReturn(Optional.of(handoff));
+
+        service.completeHandoff(handoffId, UUID.randomUUID(), hospitalId);
+
+        verify(nurseHandoffRepository, Mockito.never()).save(any(NurseHandoff.class));
     }
 
     @Test
@@ -359,70 +506,6 @@ class NurseTaskServiceImplTest {
         UUID randomId = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordMedicationAdministration(taskId, randomId, id2, null))
-            .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    void updateHandoffChecklistItemRequiresIdentifiers() {
-        UUID nurseId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-
-        UUID randomId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(null, randomId, nurseId, hospitalId, true))
-            .isInstanceOf(BusinessException.class);
-        UUID id1 = UUID.randomUUID();
-        UUID id2 = UUID.randomUUID();
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(id1, id2, nurseId, null, true))
-            .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
-    void updateHandoffChecklistItemReturnsResponseWhenHandoffExists() {
-        UUID handoffId = UUID.randomUUID();
-        UUID taskId = UUID.randomUUID();
-        UUID nurseId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-
-        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(handoffId).updatedAt(LocalDateTime.now()).build()))
-            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
-
-        NurseHandoffChecklistUpdateResponseDTO response = service.updateHandoffChecklistItem(
-            handoffId,
-            taskId,
-            nurseId,
-            hospitalId,
-            true
-        );
-
-        assertThat(response.getHandoffId()).isEqualTo(handoffId);
-        assertThat(response.getTaskId()).isEqualTo(taskId);
-        assertThat(response.isCompleted()).isTrue();
-        assertThat(response.getCompletedAt()).isNotNull();
-    }
-
-    @Test
-    void updateHandoffChecklistItemThrowsWhenHandoffMissing() {
-        UUID nurseId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        UUID handoffId = UUID.randomUUID();
-
-        doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
-
-        UUID randomId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
-            .isInstanceOf(ResourceNotFoundException.class);
-    }
-
-    @Test
-    void updateHandoffChecklistItemWrapsLookupErrors() {
-        UUID nurseId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        UUID handoffId = UUID.randomUUID();
-
-        doThrow(new RuntimeException("boom")).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
-
-        UUID randomId = UUID.randomUUID();
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1108,10 +1191,6 @@ class NurseTaskServiceImplTest {
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
 
-            // Stub handoff/order synthetic generators to avoid LocalDate.atStartOfDay() NPE under MockedStatic
-            doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 20);
-            doReturn(List.of()).when(service).getOrderTasks(nurseId, hospitalId, null, 20);
-
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
 
             assertThat(summary.getAssignedPatients()).isEqualTo(1);
@@ -1157,10 +1236,6 @@ class NurseTaskServiceImplTest {
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
-
-            // Stub handoff/order synthetic generators to avoid LocalDate.atStartOfDay() NPE under MockedStatic
-            doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 20);
-            doReturn(List.of()).when(service).getOrderTasks(nurseId, hospitalId, null, 20);
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
 
@@ -1213,28 +1288,6 @@ class NurseTaskServiceImplTest {
         request.setOverrideReason("Edge-case test: anonymous nurse path.");
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, null, hospitalId, request);
         assertThat(result.getStatus()).isEqualTo("GIVEN");
-    }
-
-    /* ════════════════════════════════════════════════════════════════════
-       Uncomplete checklist item (completed=false)
-       ════════════════════════════════════════════════════════════════════ */
-
-    @Test
-    void updateHandoffChecklistItemWithCompletedFalse() {
-        UUID handoffId = UUID.randomUUID();
-        UUID taskId = UUID.randomUUID();
-        UUID nurseId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-
-        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(handoffId).updatedAt(LocalDateTime.now()).build()))
-            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
-
-        NurseHandoffChecklistUpdateResponseDTO response = service.updateHandoffChecklistItem(
-            handoffId, taskId, nurseId, hospitalId, false
-        );
-
-        assertThat(response.isCompleted()).isFalse();
-        assertThat(response.getCompletedAt()).isNull();
     }
 
     /* ════════════════════════════════════════════════════════════════════

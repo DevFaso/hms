@@ -374,12 +374,6 @@ export class LabService {
       .pipe(map((res) => res.data));
   }
 
-  getPendingReviewResults(): Observable<LabResultResponse[]> {
-    return this.http
-      .get<ApiWrapper<LabResultResponse[]>>('/lab-results/pending-review')
-      .pipe(map((res) => res?.data ?? []));
-  }
-
   createOrder(req: LabOrderRequest): Observable<LabOrderResponse> {
     return this.http
       .post<ApiWrapper<LabOrderResponse>>('/lab-orders', req)

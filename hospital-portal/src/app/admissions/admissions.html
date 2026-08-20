@@ -176,6 +176,23 @@
                     >
                       <span class="material-symbols-outlined">playlist_add_check</span>
                     </button>
+                    <button
+                      class="action-link"
+                      (click)="openBedAssign(a)"
+                      [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
+                      data-testid="open-bed-assign"
+                    >
+                      <span class="material-symbols-outlined">bed</span>
+                    </button>
+                    @if (a.bedId) {
+                      <button
+                        class="action-link"
+                        (click)="unassignBed(a)"
+                        [attr.title]="'ADMISSIONS.UNASSIGN_BED' | translate"
+                      >
+                        <span class="material-symbols-outlined">bed_off</span>
+                      </button>
+                    }
                   }
                   <button class="action-link edit-link" (click)="openEdit(a)">
                     <span class="material-symbols-outlined">edit</span>
@@ -215,6 +232,73 @@
         (closed)="closeOrderSetPicker()"
         (applied)="onOrderSetApplied($event)"
       />
+    </div>
+  </div>
+}
+
+<!-- ═══ ASSIGN BED MODAL (P0 #4) ═══ -->
+@if (bedAssignFor(); as adm) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeBedAssign()"
+    (keydown.escape)="closeBedAssign()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'ADMISSIONS.ASSIGN_BED' | translate }}</h2>
+        <button class="modal-close" (click)="closeBedAssign()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="bed-assign-patient">
+          {{ adm.patientName }}
+          @if (adm.roomBed) {
+            <span class="bed-current">— {{ adm.roomBed }}</span>
+          }
+        </p>
+        @if (bedsLoading()) {
+          <p>{{ 'COMMON.LOADING' | translate }}</p>
+        } @else if (availableBeds().length === 0) {
+          <p class="no-beds-hint">{{ 'ADMISSIONS.NO_AVAILABLE_BEDS' | translate }}</p>
+        } @else {
+          <div class="form-row">
+            <div class="field">
+              <label for="adm-bed-select">{{ 'ADMISSIONS.SELECT_BED' | translate }}</label>
+              <select
+                id="adm-bed-select"
+                [ngModel]="selectedBedId()"
+                (ngModelChange)="selectedBedId.set($event)"
+              >
+                <option value="">—</option>
+                @for (b of availableBeds(); track b.id) {
+                  <option [value]="b.id">
+                    {{ b.label }} · {{ b.wardName }}{{ b.roomNumber ? ' · ' + b.roomNumber : '' }}
+                  </option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeBedAssign()" [disabled]="bedAssigning()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="submitBedAssign()"
+          [disabled]="bedAssigning() || !selectedBedId()"
+        >
+          {{ 'ADMISSIONS.ASSIGN_BED' | translate }}
+        </button>
+      </div>
     </div>
   </div>
 }

@@ -28,11 +28,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -56,7 +53,6 @@ public class LabResultServiceImpl implements LabResultService {
     private static final String CRITICAL_FLAG = "CRITICAL";
 
 
-    private static final String DEFAULT_SYNTHETIC_HOSPITAL = "Riverbend Medical Center";
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
@@ -71,6 +67,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final InstrumentOutboxService instrumentOutboxService;
     private final LabReflexRuleRepository labReflexRuleRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
+    private final CriticalValueNotificationService criticalValueNotificationService;
 
     @Override
     @Transactional
@@ -92,6 +89,9 @@ public class LabResultServiceImpl implements LabResultService {
         performAutoVerification(saved);
         triggerReflexOrders(saved);
         instrumentOutboxService.enqueueResultObservation(saved);
+        // P0 #5 — critical values must reach the ordering provider; the
+        // service swallows its own failures so the result write never rolls back.
+        criticalValueNotificationService.notifyIfCritical(saved);
 
         return labResultMapper.toResponseDTO(saved);
     }
@@ -159,55 +159,6 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<LabResultResponseDTO> getPendingReviewResults(UUID providerId, Locale locale) {
-        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.MINUTES);
-        String providerSegment = providerId != null ? providerId.toString().substring(0, 8) : "general";
-
-        return List.of(
-            buildSyntheticResult(SyntheticLabResultDescriptor.builder()
-                .labOrderCode("CMP-" + providerSegment.toUpperCase(Locale.ROOT))
-                .labOrderName("Comprehensive Metabolic Panel")
-                .patientName("Ava Johnson")
-                .patientEmail("ava.johnson@example.org")
-                .hospitalName(DEFAULT_SYNTHETIC_HOSPITAL)
-                .labTestName("Metabolic Panel")
-                .resultValue("142")
-                .resultUnit("mmol/L")
-                .resultDate(now.minusMinutes(18))
-                .createdAt(now.minusHours(5))
-                .notes("Sodium remains elevated; confirm hydration plan.")
-                .build()),
-            buildSyntheticResult(SyntheticLabResultDescriptor.builder()
-                .labOrderCode("CBC-" + providerSegment.toUpperCase(Locale.ROOT))
-                .labOrderName("Complete Blood Count")
-                .patientName("Michael Chen")
-                .patientEmail("michael.chen@example.org")
-                .hospitalName(DEFAULT_SYNTHETIC_HOSPITAL)
-                .labTestName("CBC with Differential")
-                .resultValue("12.4")
-                .resultUnit("g/dL")
-                .resultDate(now.minusMinutes(42))
-                .createdAt(now.minusHours(7))
-                .notes("Hemoglobin trending low; review transfusion threshold.")
-                .build()),
-            buildSyntheticResult(SyntheticLabResultDescriptor.builder()
-                .labOrderCode("CRP-" + providerSegment.toUpperCase(Locale.ROOT))
-                .labOrderName("C-Reactive Protein")
-                .patientName("Priya Patel")
-                .patientEmail("priya.patel@example.org")
-                .hospitalName(DEFAULT_SYNTHETIC_HOSPITAL)
-                .labTestName("CRP")
-                .resultValue("8.7")
-                .resultUnit("mg/L")
-                .resultDate(now.minusMinutes(67))
-                .createdAt(now.minusHours(10))
-                .notes("Inflammatory marker elevated; correlate with vitals.")
-                .build())
-        );
-    }
-
-    @Override
     @Transactional
     public LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO request, Locale locale) {
     LabResult labResult = labResultRepository.findById(id)
@@ -260,10 +211,12 @@ public class LabResultServiceImpl implements LabResultService {
     @Transactional
     public void acknowledgeLabResult(UUID id, Locale locale) {
         UUID currentUserId = authService.getCurrentUserId();
-        labResultRepository.findById(id).ifPresentOrElse(
-            result -> acknowledgeResult(result, currentUserId),
-            () -> LOG.trace("Synthetic lab result {} acknowledged; no persistence required", id)
-        );
+        // Unknown ids used to be silently swallowed to accommodate the
+        // synthetic pending-review rows; those are gone, so a missing
+        // result is a real 404 again.
+        LabResult labResult = labResultRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        acknowledgeResult(labResult, currentUserId);
     }
 
     @Override
@@ -599,91 +552,6 @@ public class LabResultServiceImpl implements LabResultService {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
-    }
-
-    private LabResultResponseDTO buildSyntheticResult(SyntheticLabResultDescriptor descriptor) {
-        String rawIdSeed = descriptor.labOrderCode() + ":" + descriptor.patientEmail();
-        UUID stableId = UUID.nameUUIDFromBytes(rawIdSeed.getBytes(StandardCharsets.UTF_8));
-        return LabResultResponseDTO.builder()
-            .id(stableId.toString())
-            .labOrderCode(descriptor.labOrderCode())
-            .patientFullName(descriptor.patientName())
-            .patientEmail(descriptor.patientEmail())
-            .hospitalName(descriptor.hospitalName())
-            .labTestName(descriptor.labOrderName() + " - " + descriptor.labTestName())
-            .resultValue(descriptor.resultValue())
-            .resultUnit(descriptor.resultUnit())
-            .resultDate(descriptor.resultDate())
-            .notes(descriptor.notes())
-            .createdAt(descriptor.createdAt())
-            .updatedAt(descriptor.resultDate())
-            .severityFlag(LabResultMapper.FLAG_UNSPECIFIED)
-            .referenceRanges(Collections.emptyList())
-            .build();
-    }
-
-    private record SyntheticLabResultDescriptor(
-        String labOrderCode,
-        String labOrderName,
-        String patientName,
-        String patientEmail,
-        String hospitalName,
-        String labTestName,
-        String resultValue,
-        String resultUnit,
-        LocalDateTime resultDate,
-        LocalDateTime createdAt,
-        String notes
-    ) {
-        public static Builder builder() {
-            return new Builder();
-        }
-
-        static final class Builder {
-            private final SyntheticLabResultDescriptorBuilder delegate = new SyntheticLabResultDescriptorBuilder();
-
-            Builder labOrderCode(String labOrderCode) { delegate.labOrderCode = labOrderCode; return this; }
-            Builder labOrderName(String labOrderName) { delegate.labOrderName = labOrderName; return this; }
-            Builder patientName(String patientName) { delegate.patientName = patientName; return this; }
-            Builder patientEmail(String patientEmail) { delegate.patientEmail = patientEmail; return this; }
-            Builder hospitalName(String hospitalName) { delegate.hospitalName = hospitalName; return this; }
-            Builder labTestName(String labTestName) { delegate.labTestName = labTestName; return this; }
-            Builder resultValue(String resultValue) { delegate.resultValue = resultValue; return this; }
-            Builder resultUnit(String resultUnit) { delegate.resultUnit = resultUnit; return this; }
-            Builder resultDate(LocalDateTime resultDate) { delegate.resultDate = resultDate; return this; }
-            Builder createdAt(LocalDateTime createdAt) { delegate.createdAt = createdAt; return this; }
-            Builder notes(String notes) { delegate.notes = notes; return this; }
-
-            SyntheticLabResultDescriptor build() {
-                return new SyntheticLabResultDescriptor(
-                    delegate.labOrderCode,
-                    delegate.labOrderName,
-                    delegate.patientName,
-                    delegate.patientEmail,
-                    delegate.hospitalName,
-                    delegate.labTestName,
-                    delegate.resultValue,
-                    delegate.resultUnit,
-                    delegate.resultDate,
-                    delegate.createdAt,
-                    delegate.notes
-                );
-            }
-
-            private static final class SyntheticLabResultDescriptorBuilder {
-                private String labOrderCode;
-                private String labOrderName;
-                private String patientName;
-                private String patientEmail;
-                private String hospitalName;
-                private String labTestName;
-                private String resultValue;
-                private String resultUnit;
-                private LocalDateTime resultDate;
-                private LocalDateTime createdAt;
-                private String notes;
-            }
-        }
     }
 
     // ==================== Enhanced Trending Methods (Story #5) ====================

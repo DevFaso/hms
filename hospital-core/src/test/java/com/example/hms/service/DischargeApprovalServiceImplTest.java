@@ -47,6 +47,7 @@ class DischargeApprovalServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private DischargeApprovalMapper mapper;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
+    @Mock private BedAssignmentService bedAssignmentService;
 
     @InjectMocks private DischargeApprovalServiceImpl service;
 
@@ -283,6 +284,8 @@ class DischargeApprovalServiceImplTest {
         // The approval flow is a discharge in its own right — it must also
         // complete the patient's active encounters.
         verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+        // …and free any structured beds the patient's admissions still hold (P0 #4).
+        verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
     }
 
     @Test
