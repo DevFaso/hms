@@ -1631,4 +1631,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V110 — Repair clinical.nurse_handoffs schema drift on dev: the
+         original V108 deploy died mid-changeset leaving a table that
+         does not match the entity (validate failed on missing columns).
+         ADD COLUMN IF NOT EXISTS for every mapped column; no-op on
+         databases where V108 created the full table.
+         ================================================================= -->
+    <changeSet id="V110-nurse-handoffs-schema-repair" author="hms-team" runOnChange="false">
+        <sqlFile path="V110__nurse_handoffs_schema_repair.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
