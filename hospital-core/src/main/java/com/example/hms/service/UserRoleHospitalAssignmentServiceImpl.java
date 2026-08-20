@@ -175,6 +175,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final PatientRepository patientRepository;
     private final UserRoleHospitalAssignmentMapper mapper;
     private final MessageSource messageSource;
+    private final com.example.hms.utility.RoleValidator roleValidator;
     private final ApplicationEventPublisher eventPublisher;
 
     /* ===================== Create ===================== */
@@ -449,16 +450,19 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     @Transactional(readOnly = true)
     public Page<UserRoleHospitalAssignmentResponseDTO> getAllAssignments(Pageable pageable) {
-        log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
-            pageable.getPageSize());
-        return assignmentRepository.findAll(pageable).map(this::toDtoWithLinks);
+        return getAllAssignments(pageable, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserRoleHospitalAssignmentResponseDTO> getAllAssignments(Pageable pageable,
                                                                          AssignmentSearchCriteria criteria) {
-        UUID hospitalId = criteria != null ? parseUuid(criteria.getHospitalId()) : null;
+        // ── Tenant isolation: non-super-admin callers only see their own hospital's
+        //    assignments; the caller-supplied hospitalId filter is honoured only for
+        //    super-admin (requireActiveHospitalId() == null) ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID requestedHospitalId = criteria != null ? parseUuid(criteria.getHospitalId()) : null;
+        UUID hospitalId = activeHospitalId != null ? activeHospitalId : requestedHospitalId;
         Boolean active = criteria != null ? criteria.getActive() : null;
         String search = criteria != null ? criteria.getSearch() : null;
         String assignmentCode = criteria != null ? criteria.getAssignmentCode() : null;

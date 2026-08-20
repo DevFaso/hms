@@ -124,7 +124,11 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<EducationResourceResponseDTO> getAllResources(UUID hospitalId) {
-        return resourceRepository.findByHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(hospitalId).stream()
+        // hospitalId == null -> super-admin global view: list across all hospitals.
+        var resources = hospitalId != null
+            ? resourceRepository.findByHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(hospitalId)
+            : resourceRepository.findByIsActiveTrueOrderByCreatedAtDesc();
+        return resources.stream()
             .map(resourceMapper::toResponseDTO)
             .toList();
     }
@@ -140,7 +144,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<EducationResourceResponseDTO> getResourcesByCategory(EducationCategory category, UUID hospitalId) {
-        return resourceRepository.findByCategoryAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(category, hospitalId).stream()
+        var resources = hospitalId != null
+            ? resourceRepository.findByCategoryAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(category, hospitalId)
+            : resourceRepository.findByCategoryAndIsActiveTrueOrderByCreatedAtDesc(category);
+        return resources.stream()
             .map(resourceMapper::toResponseDTO)
             .toList();
     }
@@ -148,7 +155,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<EducationResourceResponseDTO> getResourcesByType(EducationResourceType type, UUID hospitalId) {
-        return resourceRepository.findByResourceTypeAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(type, hospitalId).stream()
+        var resources = hospitalId != null
+            ? resourceRepository.findByResourceTypeAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(type, hospitalId)
+            : resourceRepository.findByResourceTypeAndIsActiveTrueOrderByCreatedAtDesc(type);
+        return resources.stream()
             .map(resourceMapper::toResponseDTO)
             .toList();
     }
@@ -156,7 +166,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<EducationResourceResponseDTO> getResourcesByLanguage(String languageCode, UUID hospitalId) {
-        return resourceRepository.findByPrimaryLanguageAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(languageCode, hospitalId).stream()
+        var resources = hospitalId != null
+            ? resourceRepository.findByPrimaryLanguageAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(languageCode, hospitalId)
+            : resourceRepository.findByPrimaryLanguageAndIsActiveTrueOrderByCreatedAtDesc(languageCode);
+        return resources.stream()
             .map(resourceMapper::toResponseDTO)
             .toList();
     }
@@ -499,7 +512,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientEducationQuestionResponseDTO> getUnansweredQuestions(UUID hospitalId) {
-        return questionRepository.findByIsAnsweredFalseAndHospitalIdOrderByIsUrgentDescCreatedAtDesc(hospitalId).stream()
+        var questions = hospitalId != null
+            ? questionRepository.findByIsAnsweredFalseAndHospitalIdOrderByIsUrgentDescCreatedAtDesc(hospitalId)
+            : questionRepository.findByIsAnsweredFalseOrderByIsUrgentDescCreatedAtDesc();
+        return questions.stream()
             .map(questionMapper::toResponseDTO)
             .toList();
     }
@@ -507,7 +523,10 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientEducationQuestionResponseDTO> getUrgentQuestions(UUID hospitalId) {
-        return questionRepository.findByHospitalIdAndIsUrgentTrueAndIsAnsweredFalseOrderByCreatedAtAsc(hospitalId).stream()
+        var questions = hospitalId != null
+            ? questionRepository.findByHospitalIdAndIsUrgentTrueAndIsAnsweredFalseOrderByCreatedAtAsc(hospitalId)
+            : questionRepository.findByIsUrgentTrueAndIsAnsweredFalseOrderByCreatedAtAsc();
+        return questions.stream()
             .map(questionMapper::toResponseDTO)
             .toList();
     }

@@ -321,6 +321,12 @@ fieldset.field {
       cursor: not-allowed;
     }
   }
+  &.impersonate {
+    color: #7c3aed;
+    &:hover {
+      background: #f5f3ff;
+    }
+  }
 }
 .delete-warning {
   text-align: center;

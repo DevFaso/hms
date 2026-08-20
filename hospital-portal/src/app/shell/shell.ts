@@ -907,6 +907,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.routerSub = this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe(() => {
+        // A successful navigation proves the chunk graph is healthy — re-arm
+        // the one-shot stale-chunk reload guard (see app.config.ts).
+        sessionStorage.removeItem('hms-chunk-reload');
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.

@@ -41,6 +41,13 @@ public interface EducationResourceRepository extends JpaRepository<EducationReso
         UUID hospitalId
     );
 
+    // Unscoped variants for super-admin global view (null hospital scope).
+    List<EducationResource> findByCategoryAndIsActiveTrueOrderByCreatedAtDesc(EducationCategory category);
+
+    List<EducationResource> findByResourceTypeAndIsActiveTrueOrderByCreatedAtDesc(EducationResourceType resourceType);
+
+    List<EducationResource> findByPrimaryLanguageAndIsActiveTrueOrderByCreatedAtDesc(String primaryLanguage);
+
     @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND " +
            "(er.organizationId = :organizationId OR er.hospitalId = :hospitalId OR " +
            "(er.organizationId IS NULL AND er.hospitalId IS NULL)) " +
@@ -50,7 +57,8 @@ public interface EducationResourceRepository extends JpaRepository<EducationReso
         @Param("hospitalId") UUID hospitalId
     );
 
-    @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND er.hospitalId = :hospitalId AND (" +
+    @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND " +
+           "(:hospitalId IS NULL OR er.hospitalId = :hospitalId) AND (" +
            "LOWER(er.title) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(er.description) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
            "ORDER BY er.createdAt DESC")
@@ -59,7 +67,8 @@ public interface EducationResourceRepository extends JpaRepository<EducationReso
         @Param("hospitalId") UUID hospitalId
     );
 
-    @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND er.hospitalId = :hospitalId AND er.category = :category " +
+    @Query("SELECT er FROM EducationResource er WHERE er.isActive = true AND " +
+           "(:hospitalId IS NULL OR er.hospitalId = :hospitalId) AND er.category = :category " +
            "ORDER BY er.viewCount DESC, er.averageRating DESC")
     List<EducationResource> findPopularResourcesByCategory(
         @Param("category") EducationCategory category,

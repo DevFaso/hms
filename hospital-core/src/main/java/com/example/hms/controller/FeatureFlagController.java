@@ -43,6 +43,15 @@ public class FeatureFlagController {
             .body(payload);
     }
 
+    @GetMapping("/overrides")
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all persisted feature-flag overrides (global and per-tenant)")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.featureflag.FeatureFlagOverrideResponseDTO>> listOverrides() {
+        return ResponseEntity.ok()
+            .cacheControl(CacheControl.noCache())
+            .body(featureFlagService.listOverrides());
+    }
+
     @PutMapping("/{flagKey}")
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     @Operation(summary = "Override a feature flag (optionally scoped to one organization)")

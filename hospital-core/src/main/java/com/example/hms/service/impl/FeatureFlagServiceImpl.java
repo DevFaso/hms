@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.model.platform.FeatureFlagOverride;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.featureflag.FeatureFlagOverrideResponseDTO;
 import com.example.hms.repository.platform.FeatureFlagOverrideRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -12,6 +13,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FeatureFlagService;
 import com.example.hms.service.SubscriptionFeatureGateService;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -457,5 +459,21 @@ public class FeatureFlagServiceImpl implements FeatureFlagService {
             return null;
         }
         return trimmed.length() > 255 ? trimmed.substring(0, 255) : trimmed;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<FeatureFlagOverrideResponseDTO> listOverrides() {
+        return overrideRepository.findAllByOrderByFlagKeyAsc().stream()
+            .map(o -> FeatureFlagOverrideResponseDTO.builder()
+                .id(o.getId())
+                .flagKey(o.getFlagKey())
+                .enabled(o.isEnabled())
+                .description(o.getDescription())
+                .updatedBy(o.getUpdatedBy())
+                .organizationId(o.getOrganizationId())
+                .updatedAt(o.getUpdatedAt())
+                .build())
+            .toList();
     }
 }

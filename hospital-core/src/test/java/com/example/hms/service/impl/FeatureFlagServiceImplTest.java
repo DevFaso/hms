@@ -312,4 +312,24 @@ class FeatureFlagServiceImplTest {
 
         assertThat(service.planGateAuditDedupSize()).isZero();
     }
+
+    @Test
+    void listOverridesMapsRowsInFlagKeyOrder() {
+        UUID orgId = UUID.randomUUID();
+        FeatureFlagOverride globalRow = FeatureFlagOverride.builder()
+            .flagKey("feature.alpha").enabled(true).updatedBy("root").build();
+        FeatureFlagOverride tenantRow = FeatureFlagOverride.builder()
+            .flagKey("feature.beta").enabled(false).organizationId(orgId).build();
+        when(overrideRepository.findAllByOrderByFlagKeyAsc())
+            .thenReturn(List.of(globalRow, tenantRow));
+
+        var result = service.listOverrides();
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getFlagKey()).isEqualTo("feature.alpha");
+        assertThat(result.get(0).isEnabled()).isTrue();
+        assertThat(result.get(0).getUpdatedBy()).isEqualTo("root");
+        assertThat(result.get(0).getOrganizationId()).isNull();
+        assertThat(result.get(1).getOrganizationId()).isEqualTo(orgId);
+    }
 }
