@@ -56,7 +56,8 @@ import java.util.Set;
     }
 )
 @EqualsAndHashCode(callSuper = true, exclude = {
-    "patient", "hospital", "registration", "recordedByStaff", "documentedBy", "alerts", "followUpActions", "parentEducationTopics"
+    "patient", "hospital", "registration", "recordedByStaff", "documentedBy", "deliveryRecord",
+    "alerts", "followUpActions", "parentEducationTopics"
 })
 public class NewbornAssessment extends BaseEntity {
 
@@ -84,6 +85,17 @@ public class NewbornAssessment extends BaseEntity {
     @JoinColumn(name = "documented_by_user_id",
         foreignKey = @ForeignKey(name = "fk_newborn_assessment_user"))
     private User documentedBy;
+
+    /**
+     * Back-link to the delivery event this assessment belongs to (V111,
+     * P1 #6). Nullable: assessments may exist for infants born before the
+     * L&amp;D module shipped, or born elsewhere and transferred in. Many
+     * assessments per delivery (repeat scorings, multiple births).
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "delivery_record_id",
+        foreignKey = @ForeignKey(name = "fk_newborn_assessment_delivery_record"))
+    private com.example.hms.model.labor.DeliveryRecord deliveryRecord;
 
     @Column(name = "assessment_time", nullable = false)
     private LocalDateTime assessmentTime;
