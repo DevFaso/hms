@@ -39,8 +39,18 @@
         />
       </div>
       <div class="form-group">
-        <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
-        <input id="email" type="email" [(ngModel)]="form.email" name="email" required />
+        <label for="email">
+          {{ 'PATIENTS.EMAIL' | translate }}
+          <span class="optional-hint">({{ 'PATIENTS.OPTIONAL' | translate }})</span>
+        </label>
+        <input
+          id="email"
+          type="email"
+          [(ngModel)]="form.email"
+          name="email"
+          (ngModelChange)="onIdentifierChange()"
+        />
+        <small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
       </div>
       <div class="form-group">
         <label for="phonePrimary">{{ 'PATIENTS.PHONE' | translate }} *</label>
@@ -50,7 +60,65 @@
           [(ngModel)]="form.phoneNumberPrimary"
           name="phoneNumberPrimary"
           required
+          (ngModelChange)="onIdentifierChange()"
         />
+        <!-- SMS OTP phone verification (hidden when the SMS provider is off) -->
+        @if (otpAvailable) {
+          <div class="otp-verify-row">
+            @if (phoneVerified) {
+              <span class="phone-verified-badge">
+                <span class="material-symbols-outlined" aria-hidden="true">verified</span>
+                {{ 'PATIENTS.PHONE_VERIFIED' | translate }}
+              </span>
+            } @else if (otpChallengeId) {
+              <span class="otp-sent-hint">
+                {{ 'PATIENTS.CODE_SENT_TO' | translate }} {{ otpMaskedPhone }}
+              </span>
+              <input
+                type="text"
+                class="otp-code-input"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="8"
+                [(ngModel)]="otpCode"
+                name="otpCode"
+                [attr.aria-label]="'PATIENTS.ENTER_SMS_CODE' | translate"
+                [placeholder]="'PATIENTS.ENTER_SMS_CODE' | translate"
+              />
+              <button
+                type="button"
+                class="btn-secondary btn-otp"
+                [disabled]="otpConfirming || otpCode.trim().length < 4"
+                (click)="confirmPhoneVerification()"
+              >
+                @if (otpConfirming) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.VERIFY_CODE' | translate }}
+              </button>
+              <button
+                type="button"
+                class="btn-link"
+                [disabled]="otpSending"
+                (click)="sendPhoneVerification()"
+              >
+                {{ 'PATIENTS.RESEND_CODE' | translate }}
+              </button>
+            } @else {
+              <button
+                type="button"
+                class="btn-secondary btn-otp"
+                [disabled]="otpSending || (form.phoneNumberPrimary || '').trim().length < 8"
+                (click)="sendPhoneVerification()"
+              >
+                @if (otpSending) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.SEND_VERIFICATION_CODE' | translate }}
+              </button>
+            }
+          </div>
+        }
       </div>
       <div class="form-group">
         <label for="phoneSecondary">{{ 'PATIENTS.SECONDARY_PHONE' | translate }}</label>
@@ -225,6 +293,61 @@
         ></textarea>
       </div>
     </div>
+
+    <!-- Cross-hospital existing-patient match: offer LINK instead of a duplicate -->
+    @if (registrationMatches.length > 0 && !matchDismissed) {
+      <div class="existing-match-card" role="status">
+        <div class="existing-match-header">
+          <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
+          <div>
+            <strong>{{ 'PATIENTS.EXISTING_MATCH_TITLE' | translate }}</strong>
+            <p>{{ 'PATIENTS.EXISTING_MATCH_DESC' | translate }}</p>
+          </div>
+        </div>
+        @for (m of registrationMatches; track m.patientId) {
+          <div class="existing-match-row">
+            <div class="existing-match-info">
+              <span class="match-name">{{ m.fullName ?? '—' }}</span>
+              <span class="match-meta">
+                @if (m.birthYear) {
+                  {{ 'PATIENTS.BORN' | translate }} {{ m.birthYear }} ·
+                }
+                {{ m.matchedOn === 'PHONE' ? (m.maskedPhone ?? '') : (m.maskedEmail ?? '') }}
+                · {{ 'PATIENTS.REGISTERED_AT' | translate }} {{ m.hospitalCount }}
+                {{
+                  m.hospitalCount === 1
+                    ? ('PATIENTS.HOSPITAL_ONE' | translate)
+                    : ('PATIENTS.HOSPITAL_MANY' | translate)
+                }}
+              </span>
+            </div>
+            @if (m.alreadyRegisteredHere) {
+              <span class="match-here-badge">
+                {{ 'PATIENTS.ALREADY_REGISTERED_HERE' | translate }}
+              </span>
+              <a class="btn-secondary" [routerLink]="['/patients', m.patientId]">
+                {{ 'PATIENTS.VIEW_RECORD' | translate }}
+              </a>
+            } @else {
+              <button
+                type="button"
+                class="btn-primary"
+                [disabled]="linking"
+                (click)="linkExistingPatient(m)"
+              >
+                @if (linking) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.LINK_TO_HOSPITAL' | translate }}
+              </button>
+            }
+          </div>
+        }
+        <button type="button" class="btn-link dismiss-match" (click)="dismissMatch()">
+          {{ 'PATIENTS.NOT_SAME_PERSON' | translate }}
+        </button>
+      </div>
+    }
 
     <div class="form-actions">
       <!-- MVP 11: Inline duplicate warning strip -->

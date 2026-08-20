@@ -288,6 +288,15 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("staff/admin accounts still require an email (phone-first applies to patients only)")
+        void rejectsStaffWithoutEmail() {
+            AdminSignupRequest req = buildRequest("newuser", null, "+1234567890");
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Email is required");
+        }
+
+        @Test
         @DisplayName("throws ConflictException with 'username' field when username already exists")
         void rejectsDuplicateUsername() {
             when(userRepository.existsByUsername("johndoe")).thenReturn(Boolean.TRUE);
@@ -415,6 +424,38 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("patient:Patient is already registered at this hospital.");
+        }
+
+        @Test
+        @DisplayName("null email uses the phone-safe lookup — never the 3-way query's email IS NULL predicate")
+        void nullEmailUsesPhoneSafeLookup() {
+            UUID hospitalId = UUID.fromString("00000000-0000-0000-0000-000000000007");
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital P");
+
+            when(userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber("patient.awa", "+22670707070"))
+                .thenReturn(Optional.of(user));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
+            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(true);
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("patient.awa");
+            req.setEmail(null);
+            req.setPhoneNumber("+22670707070");
+            req.setFirstName("Awa");
+            req.setLastName("Ouedraogo");
+            req.setPassword("Temp@1234");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(hospitalId);
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("already registered at this hospital");
+            verify(userRepository, never())
+                .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any());
         }
 
         @Test

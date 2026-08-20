@@ -58,9 +58,16 @@ public class PatientRequestDTO {
 
     private String phoneNumberSecondary;
 
+    // Optional since V107 — phone-first: most patients have no email address.
     @Email(message = "Email should be valid.")
-    @NotBlank(message = "Email is required.")
     private String email;
+
+    /**
+     * Optional id of a confirmed SMS OTP challenge for phoneNumberPrimary
+     * (POST /patients/phone-verification/confirm). When it checks out the
+     * patient is stamped phoneVerifiedAt.
+     */
+    private UUID phoneVerificationId;
 
     // Guardian/emergency contact info - optional here, validated manually if under 18
     private String emergencyContactName;

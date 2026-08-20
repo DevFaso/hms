@@ -37,6 +37,8 @@ class PatientHospitalRegistrationServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private PatientHospitalRegistrationMapper mapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private AuditEventLogService auditService;
 
     @InjectMocks private PatientHospitalRegistrationServiceImpl service;
 
@@ -119,6 +121,68 @@ class PatientHospitalRegistrationServiceImplTest {
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(PatientAlreadyRegisteredException.class);
+    }
+
+    // ---- tenant isolation ----
+
+    @Test
+    void registerPatient_foreignHospitalTarget_throwsAccessDenied() {
+        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).build();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        // Caller is pinned to a DIFFERENT hospital than the write target
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.registerPatient(dto))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(registrationRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void registerPatient_ownHospitalTarget_succeeds() {
+        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).build();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
+        when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        assertThat(service.registerPatient(dto)).isEqualTo(responseDTO);
+    }
+
+    @Test
+    void getRegistrationsByPatient_scopedToActiveHospitalForNonSuperAdmin() {
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        PatientHospitalRegistration foreignReg = PatientHospitalRegistration.builder().active(true).build();
+        foreignReg.setId(UUID.randomUUID());
+        foreignReg.setPatient(patient);
+        foreignReg.setHospital(otherHospital);
+
+        when(registrationRepository.findByPatientId(patientId))
+            .thenReturn(java.util.List.of(registration, foreignReg));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        var result = service.getRegistrationsByPatient(patientId, 0, 10, null);
+
+        assertThat(result).containsExactly(responseDTO);
+    }
+
+    @Test
+    void getById_crossHospitalRowReadsAs404ForPinnedCaller() {
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.getById(registrationId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test

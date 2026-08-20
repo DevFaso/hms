@@ -110,6 +110,17 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     List<Patient> findByEmailContainingIgnoreCase(String email);
 
+    // ── Registration-time exact matchers (cross-hospital by design) ──────────
+    // Derived finders bypass tenant scoping: a receptionist at hospital B must be
+    // able to discover that the person standing at the desk already exists at
+    // hospital A, so the record can be LINKED instead of duplicated. Callers must
+    // only expose minimal, masked fields (see RegistrationMatchDTO).
+    List<Patient> findAllByEmailIgnoreCase(String email);
+
+    List<Patient> findAllByPhoneNumberPrimary(String phoneNumberPrimary);
+
+    List<Patient> findAllByPhoneNumberSecondary(String phoneNumberSecondary);
+
     /**
      * Retrieves all patients registered to a specific hospital with active registrations.
      */

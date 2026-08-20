@@ -43,7 +43,10 @@ public class PatientHospitalRegistrationController {
 
     // ---------- Create (Reception / Admin) ----------
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN')")
+    // NURSE/MIDWIFE may create patients (POST /patients auto-registers), so they can
+    // also link an existing one; super-admin follows the house unscoped convention.
+    // The service pins non-super-admin writes to the caller's active hospital.
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE', T(com.example.hms.config.SecurityConstants).ROLE_SUPER_ADMIN)")
     @Operation(
         summary = "Assign patient to a hospital (staff only)",
         description = "Receptionist/admin assigns an existing patient to their hospital. " +

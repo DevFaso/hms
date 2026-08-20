@@ -33,6 +33,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -112,9 +113,14 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "phone_number_secondary", length = 100)
     private String phoneNumberSecondary;
 
-    @Email @NotBlank @Size(max = 150)
-    @Column(name = "email", length = 150, nullable = false, unique = true)
+    // Nullable since V107: phone-first patients have no email address.
+    @Email @Size(max = 150)
+    @Column(name = "email", length = 150, unique = true)
     private String email;
+
+    /** Set when a registration SMS OTP was confirmed for the primary phone (V107). */
+    @Column(name = "phone_verified_at")
+    private LocalDateTime phoneVerifiedAt;
 
     @Size(max = 100)
     @Column(name = "emergency_contact_name", columnDefinition = "TEXT")

@@ -54,6 +54,7 @@ import com.example.hms.payload.dto.PatientTimelineResponseDTO;
 import com.example.hms.payload.dto.PatientAllergyResponseDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO;
+import com.example.hms.payload.dto.RegistrationMatchDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.nurse.NursingNoteResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
@@ -209,6 +210,7 @@ public class PatientServiceImpl implements PatientService {
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
+    private final PhoneVerificationService phoneVerificationService;
     private final PatientMapper patientMapper;
     private final MessageSource messageSource;
     private final UserRepository userRepository;
@@ -551,6 +553,17 @@ public class PatientServiceImpl implements PatientService {
         Patient patient = patientRepository.findByUserId(user.getId())
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
+        // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
+        // this exact number. Single-use server-side check — a forged/mismatched
+        // challenge id simply leaves the phone unverified.
+        if (dto.getPhoneVerificationId() != null
+            && patient.getPhoneVerifiedAt() == null
+            && phoneVerificationService.consumeVerifiedChallenge(
+                dto.getPhoneVerificationId(), patient.getPhoneNumberPrimary())) {
+            patient.setPhoneVerifiedAt(LocalDateTime.now());
+            patientRepository.save(patient);
+        }
+
         // Mirror User's activation state: patients pending email verification start inactive
         if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {
             patient.setActive(false);
@@ -612,7 +625,10 @@ public class PatientServiceImpl implements PatientService {
 
         List<Patient> results;
         if (normEmail != null && !normEmail.isBlank()) {
-            results = patientRepository.findByEmailContainingIgnoreCase(normEmail);
+            // Exact match only: this endpoint is cross-hospital by design, so a
+            // substring email match would let any staff role enumerate other
+            // hospitals' patients two characters at a time.
+            results = patientRepository.findAllByEmailIgnoreCase(normEmail);
         } else if (normUsername != null && !normUsername.isBlank()) {
             results = patientRepository.findByUserUsername(normUsername).map(List::of).orElse(List.of());
         } else if (normPhone != null && !normPhone.isBlank()) {
@@ -628,7 +644,8 @@ public class PatientServiceImpl implements PatientService {
             if (phoneHit.isPresent()) {
                 results = List.of(phoneHit.get());
             } else {
-                Optional<Patient> emailResult = patientRepository.findByEmailContainingIgnoreCase(normIdentifier).stream().findFirst();
+                // Exact email match — see the email branch above for why no substring.
+                Optional<Patient> emailResult = patientRepository.findAllByEmailIgnoreCase(normIdentifier).stream().findFirst();
                 if (emailResult.isPresent()) {
                     results = List.of(emailResult.get());
                 } else {
@@ -646,6 +663,73 @@ public class PatientServiceImpl implements PatientService {
         return results.stream()
             .map(p -> buildPatientDto(p, hospitalId))
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId) {
+        final String normEmail = email != null ? email.trim().toLowerCase(Locale.ROOT) : null;
+        final String normPhone = phone != null ? phone.trim() : null;
+
+        // LinkedHashMap keeps phone hits (the primary identifier in practice) ahead of email hits.
+        Map<UUID, RegistrationMatchDTO> matches = new LinkedHashMap<>();
+        if (normPhone != null && !normPhone.isBlank()) {
+            Stream.concat(
+                    patientRepository.findAllByPhoneNumberPrimary(normPhone).stream(),
+                    patientRepository.findAllByPhoneNumberSecondary(normPhone).stream())
+                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE")));
+        }
+        if (normEmail != null && !normEmail.isBlank()) {
+            patientRepository.findAllByEmailIgnoreCase(normEmail)
+                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL")));
+        }
+        return List.copyOf(matches.values());
+    }
+
+    private RegistrationMatchDTO toRegistrationMatch(Patient patient, UUID hospitalId, String matchedOn) {
+        int hospitalCount = patient.getHospitalRegistrations() == null ? 0
+            : (int) patient.getHospitalRegistrations().stream()
+                .filter(reg -> reg != null && reg.isActive())
+                .count();
+        // ANY registration row (active or not) counts as "already here": the
+        // POST /registrations duplicate guard rejects on any row, so offering a
+        // Link button for a deactivated registration would dead-end in a 409.
+        boolean alreadyRegisteredHere = hospitalId != null
+            && patient.getHospitalRegistrations() != null
+            && patient.getHospitalRegistrations().stream()
+                .anyMatch(reg -> reg != null && reg.getHospital() != null
+                    && hospitalId.equals(reg.getHospital().getId()));
+        return RegistrationMatchDTO.builder()
+            .patientId(patient.getId())
+            .fullName(patient.getFullName())
+            .birthYear(patient.getDateOfBirth() != null ? patient.getDateOfBirth().getYear() : null)
+            .gender(patient.getGender())
+            .maskedPhone(maskPhone(patient.getPhoneNumberPrimary()))
+            .maskedEmail(maskEmail(patient.getEmail()))
+            .hospitalCount(hospitalCount)
+            .alreadyRegisteredHere(alreadyRegisteredHere)
+            .matchedOn(matchedOn)
+            .build();
+    }
+
+    /** Display-safe phone: keep a leading '+' and the last two digits, mask the rest. */
+    static String maskPhone(String phone) {
+        if (phone == null || phone.isBlank()) return null;
+        String trimmed = phone.trim();
+        if (trimmed.length() <= 4) return "••••";
+        boolean plus = trimmed.startsWith("+");
+        String last = trimmed.substring(trimmed.length() - 2);
+        int maskedCount = trimmed.length() - 2 - (plus ? 1 : 0);
+        return (plus ? "+" : "") + "•".repeat(Math.max(0, maskedCount)) + last;
+    }
+
+    /** Display-safe email: first character + mask + full domain ({@code j•••@example.com}). */
+    static String maskEmail(String email) {
+        if (email == null || email.isBlank()) return null;
+        String trimmed = email.trim();
+        int at = trimmed.indexOf('@');
+        if (at <= 0) return "•••";
+        return trimmed.charAt(0) + "•••" + trimmed.substring(at);
     }
 
     @Override
