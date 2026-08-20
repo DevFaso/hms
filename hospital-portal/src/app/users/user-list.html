@@ -201,7 +201,9 @@
                       [attr.data-test]="'impersonate-' + user.username"
                       (click)="openImpersonate(user)"
                     >
-                      <span class="material-symbols-outlined">visibility</span>
+                      <!-- switch_account, not an eye: QA mistook the old
+                           visibility glyph for a "view details" action. -->
+                      <span class="material-symbols-outlined">switch_account</span>
                     </button>
                   }
                 </div>
