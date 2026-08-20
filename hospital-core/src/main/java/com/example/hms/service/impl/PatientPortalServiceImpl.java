@@ -566,6 +566,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
             throw new BusinessException("Cannot reschedule a cancelled appointment");
         }
+        if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
+            throw new BusinessException("End time must be after start time");
+        }
 
         appointment.setAppointmentDate(dto.getNewDate());
         appointment.setStartTime(dto.getNewStartTime());
@@ -1055,6 +1058,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
         return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
+        // Expired-but-ACTIVE rows still list for the grantor (with EXPIRED shown
+        // as the effective status in the DTO) so they can see and clean them up.
     }
 
     @Override
@@ -1082,7 +1087,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .proxyUser(proxyUser)
                 .relationship(dto.getRelationship())
                 .status(ProxyStatus.ACTIVE)
-                .permissions(dto.getPermissions())
+                .permissions(canonicalPermissionsCsv(dto.getPermissions()))
                 .expiresAt(dto.getExpiresAt())
                 .notes(dto.getNotes())
                 .build();
@@ -1111,8 +1116,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<ProxyResponseDTO> getMyProxyAccess(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        // An expired grant is unusable — don't offer it to the proxy holder.
         return patientProxyRepository.findByProxyUser_IdAndStatus(userId, ProxyStatus.ACTIVE)
-                .stream().map(this::toProxyResponseDTO).toList();
+                .stream()
+                .filter(p -> !isProxyExpired(p))
+                .map(this::toProxyResponseDTO).toList();
     }
 
     private ProxyResponseDTO toProxyResponseDTO(PatientProxy p) {
@@ -1126,7 +1134,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .proxyUsername(proxy.getUsername())
                 .proxyDisplayName(proxy.getFirstName() + " " + proxy.getLastName())
                 .relationship(p.getRelationship())
-                .status(p.getStatus())
+                .status(isProxyExpired(p) && p.getStatus() == ProxyStatus.ACTIVE ? ProxyStatus.EXPIRED : p.getStatus())
                 .permissions(p.getPermissions())
                 .expiresAt(p.getExpiresAt())
                 .revokedAt(p.getRevokedAt())
@@ -1138,8 +1146,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // ── Proxy data-viewing implementations ───────────────────────────────
 
     /**
-     * Validate that the authenticated user has an active proxy grant for the
-     * given patient with the required permission scope.
+     * Validate that the authenticated user has an active, unexpired proxy grant
+     * for the given patient with the required permission scope.
      */
     private Patient verifyProxyAccess(Authentication auth, UUID patientId, String requiredPermission) {
         UUID userId = authUtils.resolveUserId(auth)
@@ -1149,14 +1157,50 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .findByGrantorPatient_IdAndProxyUser_IdAndStatus(patientId, userId, ProxyStatus.ACTIVE)
                 .orElseThrow(() -> new AccessDeniedException("You do not have proxy access to this patient's data"));
 
-        // Check permission scope
-        String perms = proxy.getPermissions() != null ? proxy.getPermissions().toUpperCase() : "";
-        if (!perms.contains("ALL") && !perms.contains(requiredPermission.toUpperCase())) {
+        if (isProxyExpired(proxy)) {
+            throw new AccessDeniedException("Your proxy access has expired");
+        }
+
+        Set<String> perms = normalizedPermissions(proxy.getPermissions());
+        if (!perms.contains("ALL") && !perms.contains(requiredPermission.toUpperCase(Locale.ROOT))) {
             throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
         }
 
         return patientRepository.findById(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+    }
+
+    private static boolean isProxyExpired(PatientProxy proxy) {
+        return proxy.getExpiresAt() != null && proxy.getExpiresAt().isBefore(java.time.LocalDateTime.now());
+    }
+
+    /**
+     * Older clients (and the web grant form prior to this change) stored the
+     * scope vocabulary without the VIEW_ prefix; the check vocabulary is the
+     * VIEW_* form. Normalize so legacy grants keep working.
+     */
+    private static final Map<String, String> LEGACY_PERMISSION_ALIASES = Map.of(
+            "APPOINTMENTS", "VIEW_APPOINTMENTS",
+            "MEDICATIONS", "VIEW_MEDICATIONS",
+            "LAB_RESULTS", "VIEW_LAB_RESULTS",
+            "BILLING", "VIEW_BILLING",
+            "RECORDS", "VIEW_RECORDS");
+
+    private static Set<String> normalizedPermissions(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptySet();
+        }
+        return Arrays.stream(raw.toUpperCase(Locale.ROOT).split(","))
+                .map(String::trim)
+                .filter(token -> !token.isEmpty())
+                .map(token -> LEGACY_PERMISSION_ALIASES.getOrDefault(token, token))
+                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** Store grants in the canonical VIEW_* vocabulary regardless of client. */
+    private static String canonicalPermissionsCsv(String raw) {
+        Set<String> normalized = normalizedPermissions(raw);
+        return normalized.isEmpty() ? raw : String.join(",", normalized);
     }
 
     @Override

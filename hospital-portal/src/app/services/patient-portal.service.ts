@@ -202,6 +202,9 @@ export interface PortalAppointment {
   date: string;
   startTime: string;
   endTime: string;
+  /** Unformatted "HH:mm" values — needed to prefill the reschedule form. */
+  rawStartTime: string;
+  rawEndTime: string;
   providerName: string;
   department: string;
   reason: string;
@@ -240,6 +243,30 @@ function formatTime(raw: string | null | undefined): string {
   return `${h}:${m} ${ampm}`;
 }
 
+/** Truncate "HH:mm:ss" → "HH:mm" (the shape `<input type="time">` expects). */
+function rawTime(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const parts = raw.split(':');
+  return parts.length < 2 ? raw : `${parts[0]}:${parts[1]}`;
+}
+
+function mapAppointment(a: AppointmentApiResponse): PortalAppointment {
+  return {
+    id: a.id,
+    date: a.appointmentDate ?? '',
+    startTime: formatTime(a.startTime),
+    endTime: formatTime(a.endTime),
+    rawStartTime: rawTime(a.startTime),
+    rawEndTime: rawTime(a.endTime),
+    providerName: a.staffName ?? '',
+    department: a.departmentName ?? '',
+    reason: a.reason ?? '',
+    status: a.status ?? '',
+    location: a.hospitalName ?? '',
+    preCheckedIn: a.preCheckedIn ?? false,
+  };
+}
+
 /**
  * Determine if a lab result is abnormal by comparing to the reference range.
  * Reference ranges are typically formatted as "low-high" (e.g., "70-100").
@@ -256,6 +283,48 @@ function isLabResultAbnormal(
   const low = Number.parseFloat(match[1]);
   const high = Number.parseFloat(match[2]);
   return num < low || num > high;
+}
+
+function mapLabResult(l: LabResultApiResponse): LabResultSummary {
+  return {
+    id: l.id,
+    testName: l.testName ?? '',
+    result: l.value ?? '',
+    referenceRange: l.referenceRange ?? '',
+    status: l.status ?? '',
+    collectedDate: l.collectedAt ?? '',
+    isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+    unit: l.unit ?? '',
+    orderedBy: l.orderedBy ?? '',
+    performedBy: l.performedBy ?? '',
+    category: l.category ?? '',
+    notes: l.notes ?? '',
+    resultedAt: l.resultedAt ?? '',
+  };
+}
+
+function mapHealthSummary(d: HealthSummaryRaw | null | undefined): HealthSummaryDTO {
+  return {
+    profile: d?.profile ?? ({} as PatientProfileDTO),
+    latestVitals: flattenVitals(d?.recentVitals ?? []),
+    recentLabResults: (d?.recentLabResults ?? []).map(mapLabResult),
+    currentMedications: d?.currentMedications ?? [],
+    immunizations: (d?.immunizations ?? []).map((im) => ({
+      id: im.id,
+      vaccineName: im.vaccineDisplay ?? im.vaccineType ?? '',
+      dateAdministered: im.administrationDate ?? '',
+      provider: im.administeredByName ?? '',
+      status: im.status ?? '',
+      site: im.site ?? '',
+      route: im.route ?? '',
+      lotNumber: im.lotNumber ?? '',
+      manufacturer: im.manufacturer ?? '',
+      doseNumber: im.doseNumber ?? null,
+      totalDosesInSeries: im.totalDosesInSeries ?? null,
+    })),
+    allergies: d?.allergies ?? [],
+    activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
+  };
 }
 
 export interface PortalEncounter {
@@ -739,64 +808,14 @@ export class PatientPortalService {
   }
 
   getHealthSummary(): Observable<HealthSummaryDTO> {
-    return this.http.get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`).pipe(
-      map((r) => {
-        const d = r.data;
-        return {
-          profile: d?.profile ?? ({} as PatientProfileDTO),
-          latestVitals: flattenVitals(d?.recentVitals ?? []),
-          recentLabResults: (d?.recentLabResults ?? []).map((l) => ({
-            id: l.id,
-            testName: l.testName ?? '',
-            result: l.value ?? '',
-            referenceRange: l.referenceRange ?? '',
-            status: l.status ?? '',
-            collectedDate: l.collectedAt ?? '',
-            isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
-            unit: l.unit ?? '',
-            orderedBy: l.orderedBy ?? '',
-            performedBy: l.performedBy ?? '',
-            category: l.category ?? '',
-            notes: l.notes ?? '',
-            resultedAt: l.resultedAt ?? '',
-          })),
-          currentMedications: d?.currentMedications ?? [],
-          immunizations: (d?.immunizations ?? []).map((im) => ({
-            id: im.id,
-            vaccineName: im.vaccineDisplay ?? im.vaccineType ?? '',
-            dateAdministered: im.administrationDate ?? '',
-            provider: im.administeredByName ?? '',
-            status: im.status ?? '',
-            site: im.site ?? '',
-            route: im.route ?? '',
-            lotNumber: im.lotNumber ?? '',
-            manufacturer: im.manufacturer ?? '',
-            doseNumber: im.doseNumber ?? null,
-            totalDosesInSeries: im.totalDosesInSeries ?? null,
-          })),
-          allergies: d?.allergies ?? [],
-          activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
-        };
-      }),
-    );
+    return this.http
+      .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)
+      .pipe(map((r) => mapHealthSummary(r.data)));
   }
 
   getMyAppointments(): Observable<PortalAppointment[]> {
     return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
-      map((r) =>
-        (r.data ?? []).map((a) => ({
-          id: a.id,
-          date: a.appointmentDate ?? '',
-          startTime: formatTime(a.startTime),
-          endTime: formatTime(a.endTime),
-          providerName: a.staffName ?? '',
-          department: a.departmentName ?? '',
-          reason: a.reason ?? '',
-          status: a.status ?? '',
-          location: a.hospitalName ?? '',
-          preCheckedIn: a.preCheckedIn ?? false,
-        })),
-      ),
+      map((r) => (r.data ?? []).map(mapAppointment)),
       catchError(() => of([])),
     );
   }
@@ -831,23 +850,7 @@ export class PatientPortalService {
     return this.http
       .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, { params: { limit } })
       .pipe(
-        map((r) =>
-          (r.data ?? []).map((l) => ({
-            id: l.id,
-            testName: l.testName ?? '',
-            result: l.value ?? '',
-            referenceRange: l.referenceRange ?? '',
-            status: l.status ?? '',
-            collectedDate: l.collectedAt ?? '',
-            isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
-            unit: l.unit ?? '',
-            orderedBy: l.orderedBy ?? '',
-            performedBy: l.performedBy ?? '',
-            category: l.category ?? '',
-            notes: l.notes ?? '',
-            resultedAt: l.resultedAt ?? '',
-          })),
-        ),
+        map((r) => (r.data ?? []).map(mapLabResult)),
         catchError(() => of([])),
       );
   }
@@ -1041,23 +1044,7 @@ export class PatientPortalService {
   bookAppointment(dto: BookAppointmentRequest): Observable<PortalAppointment> {
     return this.http
       .post<ApiWrapper<AppointmentApiResponse>>(`${this.base}/appointments`, dto)
-      .pipe(
-        map((r) => {
-          const a = r.data;
-          return {
-            id: a.id,
-            date: a.appointmentDate ?? '',
-            startTime: formatTime(a.startTime),
-            endTime: formatTime(a.endTime),
-            providerName: a.staffName ?? '',
-            department: a.departmentName ?? '',
-            reason: a.reason ?? '',
-            status: a.status ?? '',
-            location: a.hospitalName ?? '',
-            preCheckedIn: a.preCheckedIn ?? false,
-          };
-        }),
-      );
+      .pipe(map((r) => mapAppointment(r.data)));
   }
 
   getSchedulingHospitals(): Observable<SchedulingHospital[]> {
@@ -1151,6 +1138,55 @@ export class PatientPortalService {
       map((r) => r.data ?? []),
       catchError(() => of([])),
     );
+  }
+
+  // ── Proxy data viewing ─────────────────────────────────────────────
+  // Errors deliberately propagate (no catchError) so the viewer can render
+  // an explicit error state — a 403 (missing scope) must not look like
+  // "this patient has no data".
+
+  getProxyAppointments(patientId: string): Observable<PortalAppointment[]> {
+    return this.http
+      .get<
+        ApiWrapper<AppointmentApiResponse[]>
+      >(`${this.base}/proxy-access/${patientId}/appointments`)
+      .pipe(map((r) => (r.data ?? []).map(mapAppointment)));
+  }
+
+  getProxyMedications(patientId: string, limit = 50): Observable<MedicationSummary[]> {
+    return this.http
+      .get<ApiWrapper<MedicationSummary[]>>(`${this.base}/proxy-access/${patientId}/medications`, {
+        params: { limit },
+      })
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  getProxyLabResults(patientId: string, limit = 50): Observable<LabResultSummary[]> {
+    return this.http
+      .get<ApiWrapper<LabResultApiResponse[]>>(
+        `${this.base}/proxy-access/${patientId}/lab-results`,
+        {
+          params: { limit },
+        },
+      )
+      .pipe(map((r) => (r.data ?? []).map(mapLabResult)));
+  }
+
+  getProxyBilling(patientId: string): Observable<PortalInvoice[]> {
+    return this.http
+      .get<ApiWrapper<{ content: PortalInvoice[] }>>(
+        `${this.base}/proxy-access/${patientId}/billing`,
+        {
+          params: { page: 0, size: 20 },
+        },
+      )
+      .pipe(map((r) => r.data?.content ?? []));
+  }
+
+  getProxyRecords(patientId: string): Observable<HealthSummaryDTO> {
+    return this.http
+      .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/proxy-access/${patientId}/records`)
+      .pipe(map((r) => mapHealthSummary(r.data)));
   }
 
   // ── Documents (Phase 3) ────────────────────────────────────────────────

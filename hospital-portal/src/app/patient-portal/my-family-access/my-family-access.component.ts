@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
@@ -13,7 +14,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, FormsModule, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './my-family-access.component.html',
   styleUrls: ['./my-family-access.component.scss', '../patient-portal-pages.scss'],
 })

@@ -1,0 +1,274 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">supervisor_account</span>
+      @if (grant(); as g) {
+        {{ 'PORTAL.FAMILY.VIEWER.TITLE' | translate: { name: g.grantorName } }}
+      } @else {
+        {{ 'PORTAL.FAMILY.VIEWER.TITLE_FALLBACK' | translate }}
+      }
+    </h1>
+    <a class="btn-back" routerLink="/my-family-access">
+      <span class="material-symbols-outlined">arrow_back</span>
+      {{ 'PORTAL.FAMILY.VIEWER.BACK' | translate }}
+    </a>
+  </div>
+
+  @if (grantLoading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.FAMILY.LOADING' | translate }}</span>
+    </div>
+  } @else if (grantMissing()) {
+    <div class="portal-empty" data-testid="proxy-no-access">
+      <span class="material-symbols-outlined empty-icon">lock</span>
+      <p>{{ 'PORTAL.FAMILY.VIEWER.NO_ACCESS' | translate }}</p>
+    </div>
+  } @else {
+    @if (grant(); as g) {
+      <p class="viewer-grant-info">
+        <span class="badge">{{ g.relationship | enumLabel: 'relationship' }}</span>
+        {{ 'PORTAL.FAMILY.VIEWER.READ_ONLY_NOTE' | translate }}
+      </p>
+    }
+
+    <!-- Permission-driven tabs -->
+    <div class="rec-tabs">
+      @for (tab of tabs(); track tab.key) {
+        <button
+          class="rec-tab"
+          [class.active]="activeTab() === tab.key"
+          [attr.data-testid]="'proxy-tab-' + tab.key"
+          (click)="selectTab(tab.key)"
+        >
+          <span class="material-symbols-outlined">{{ tab.icon }}</span>
+          {{ tab.labelKey | translate }}
+        </button>
+      }
+    </div>
+
+    @if (tabLoading()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>{{ 'PORTAL.FAMILY.LOADING' | translate }}</span>
+      </div>
+    } @else if (tabError()) {
+      <div class="portal-empty" data-testid="proxy-tab-error">
+        <span class="material-symbols-outlined empty-icon">error</span>
+        <p>{{ 'PORTAL.FAMILY.VIEWER.LOAD_FAILED' | translate }}</p>
+        <button class="btn-primary" (click)="retryActiveTab()">
+          {{ 'COMMON.RETRY' | translate }}
+        </button>
+      </div>
+    } @else {
+      <!-- Appointments -->
+      @if (activeTab() === 'appointments') {
+        @if (!appointments().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined empty-icon">event_busy</span>
+            <p>{{ 'PORTAL.FAMILY.VIEWER.NO_APPOINTMENTS' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-table-wrapper">
+            <table class="portal-table" data-testid="proxy-appointments-table">
+              <thead>
+                <tr>
+                  <th>{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}</th>
+                  <th>{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</th>
+                  <th>{{ 'PORTAL.APPOINTMENTS.PROVIDER' | translate }}</th>
+                  <th>{{ 'PORTAL.APPOINTMENTS.DEPARTMENT' | translate }}</th>
+                  <th>{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of appointments(); track a.id) {
+                  <tr>
+                    <td>{{ a.date | date: 'mediumDate' }}</td>
+                    <td>{{ a.startTime }}</td>
+                    <td>{{ a.providerName || '—' }}</td>
+                    <td>{{ a.department || '—' }}</td>
+                    <td>
+                      <span class="portal-status-chip" [attr.data-status]="a.status">{{
+                        a.status | enumLabel: 'status'
+                      }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- Medications -->
+      @if (activeTab() === 'medications') {
+        @if (!medications().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined empty-icon">medication</span>
+            <p>{{ 'PORTAL.FAMILY.VIEWER.NO_MEDICATIONS' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-table-wrapper">
+            <table class="portal-table" data-testid="proxy-medications-table">
+              <thead>
+                <tr>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.MEDICATION' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.DOSAGE' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.FREQUENCY' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.STATUS' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of medications(); track m.id) {
+                  <tr>
+                    <td>{{ m.medicationName }}</td>
+                    <td>{{ m.dosage || '—' }}</td>
+                    <td>{{ m.frequency || '—' }}</td>
+                    <td>
+                      <span class="portal-status-chip" [attr.data-status]="m.status">{{
+                        m.status | enumLabel: 'status'
+                      }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- Lab results -->
+      @if (activeTab() === 'labResults') {
+        @if (!labResults().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined empty-icon">labs</span>
+            <p>{{ 'PORTAL.FAMILY.VIEWER.NO_LAB_RESULTS' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-table-wrapper">
+            <table class="portal-table" data-testid="proxy-labs-table">
+              <thead>
+                <tr>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.TEST' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.RESULT' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.REFERENCE' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.COLLECTED' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (l of labResults(); track l.id) {
+                  <tr [class.abnormal-row]="l.isAbnormal">
+                    <td>{{ l.testName }}</td>
+                    <td>
+                      {{ l.result }} {{ l.unit }}
+                      @if (l.isAbnormal) {
+                        <span class="material-symbols-outlined abnormal-flag">warning</span>
+                      }
+                    </td>
+                    <td>{{ l.referenceRange || '—' }}</td>
+                    <td>{{ l.collectedDate | date: 'mediumDate' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- Billing -->
+      @if (activeTab() === 'billing') {
+        @if (!invoices().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined empty-icon">receipt_long</span>
+            <p>{{ 'PORTAL.FAMILY.VIEWER.NO_INVOICES' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-table-wrapper">
+            <table class="portal-table" data-testid="proxy-billing-table">
+              <thead>
+                <tr>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.INVOICE' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.DATE' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.AMOUNT' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.BALANCE' | translate }}</th>
+                  <th>{{ 'PORTAL.FAMILY.VIEWER.STATUS' | translate }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (inv of invoices(); track inv.id) {
+                  <tr>
+                    <td>{{ inv.invoiceNumber }}</td>
+                    <td>{{ inv.date | date: 'mediumDate' }}</td>
+                    <td>{{ inv.amount | number: '1.0-2' }}</td>
+                    <td>{{ inv.balance | number: '1.0-2' }}</td>
+                    <td>
+                      <span class="portal-status-chip" [attr.data-status]="inv.status">{{
+                        inv.status | enumLabel: 'status'
+                      }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- Health records summary -->
+      @if (activeTab() === 'records') {
+        @if (records(); as summary) {
+          <div class="records-grid" data-testid="proxy-records">
+            <div class="portal-card">
+              <h3>{{ 'PORTAL.FAMILY.VIEWER.ALLERGIES' | translate }}</h3>
+              @if (!summary.allergies.length) {
+                <p class="text-muted">{{ 'PORTAL.FAMILY.VIEWER.NONE_RECORDED' | translate }}</p>
+              } @else {
+                <ul>
+                  @for (a of summary.allergies; track a) {
+                    <li>{{ a }}</li>
+                  }
+                </ul>
+              }
+            </div>
+            <div class="portal-card">
+              <h3>{{ 'PORTAL.FAMILY.VIEWER.CONDITIONS' | translate }}</h3>
+              @if (!summary.activeDiagnoses.length) {
+                <p class="text-muted">{{ 'PORTAL.FAMILY.VIEWER.NONE_RECORDED' | translate }}</p>
+              } @else {
+                <ul>
+                  @for (c of summary.activeDiagnoses; track c) {
+                    <li>{{ c }}</li>
+                  }
+                </ul>
+              }
+            </div>
+            <div class="portal-card">
+              <h3>{{ 'PORTAL.FAMILY.VIEWER.CURRENT_MEDICATIONS' | translate }}</h3>
+              @if (!summary.currentMedications.length) {
+                <p class="text-muted">{{ 'PORTAL.FAMILY.VIEWER.NONE_RECORDED' | translate }}</p>
+              } @else {
+                <ul>
+                  @for (m of summary.currentMedications; track m.id) {
+                    <li>{{ m.medicationName }} {{ m.dosage ? '— ' + m.dosage : '' }}</li>
+                  }
+                </ul>
+              }
+            </div>
+            <div class="portal-card">
+              <h3>{{ 'PORTAL.FAMILY.VIEWER.RECENT_LABS' | translate }}</h3>
+              @if (!summary.recentLabResults.length) {
+                <p class="text-muted">{{ 'PORTAL.FAMILY.VIEWER.NONE_RECORDED' | translate }}</p>
+              } @else {
+                <ul>
+                  @for (l of summary.recentLabResults; track l.id) {
+                    <li>{{ l.testName }}: {{ l.result }} {{ l.unit }}</li>
+                  }
+                </ul>
+              }
+            </div>
+          </div>
+        }
+      }
+    }
+  }
+</div>

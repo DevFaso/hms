@@ -53,7 +53,12 @@ public class PatientProxy extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     private ProxyStatus status;
 
-    /** Comma-separated permission scopes: APPOINTMENTS,LAB_RESULTS,MEDICATIONS,VITALS,BILLING,ALL */
+    /**
+     * Comma-separated permission scopes, canonical vocabulary:
+     * VIEW_APPOINTMENTS, VIEW_MEDICATIONS, VIEW_LAB_RESULTS, VIEW_BILLING,
+     * VIEW_RECORDS, ALL. Legacy un-prefixed tokens may persist in old rows and
+     * are normalized at check time.
+     */
     @Column(name = "permissions", nullable = false, length = 500)
     private String permissions;
 

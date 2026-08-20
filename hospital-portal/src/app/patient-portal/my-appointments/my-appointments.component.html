@@ -263,26 +263,44 @@
                   }}</span>
                 </div>
               </div>
-              <!-- Pre-Check-In action -->
-              @if (
-                (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') && !appt.preCheckedIn
-              ) {
+              @if (canModify(appt) || appt.preCheckedIn) {
                 <div class="appt-detail-actions">
-                  <button
-                    class="precheckin-btn"
-                    (click)="openPreCheckIn(appt); $event.stopPropagation()"
-                  >
-                    <span class="material-symbols-outlined">fact_check</span>
-                    {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
-                  </button>
-                </div>
-              }
-              @if (appt.preCheckedIn) {
-                <div class="appt-detail-actions">
-                  <span class="precheckin-done">
-                    <span class="material-symbols-outlined">check_circle</span>
-                    {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_DONE' | translate }}
-                  </span>
+                  @if (
+                    (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
+                    !appt.preCheckedIn
+                  ) {
+                    <button
+                      class="precheckin-btn"
+                      (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                    >
+                      <span class="material-symbols-outlined">fact_check</span>
+                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
+                    </button>
+                  }
+                  @if (appt.preCheckedIn) {
+                    <span class="precheckin-done">
+                      <span class="material-symbols-outlined">check_circle</span>
+                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_DONE' | translate }}
+                    </span>
+                  }
+                  @if (canModify(appt)) {
+                    <button
+                      class="appt-reschedule-btn"
+                      data-testid="appt-reschedule"
+                      (click)="openReschedule(appt); $event.stopPropagation()"
+                    >
+                      <span class="material-symbols-outlined">edit_calendar</span>
+                      {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.BTN' | translate }}
+                    </button>
+                    <button
+                      class="appt-cancel-btn"
+                      data-testid="appt-cancel"
+                      (click)="openCancel(appt); $event.stopPropagation()"
+                    >
+                      <span class="material-symbols-outlined">event_busy</span>
+                      {{ 'PORTAL.APPOINTMENTS.CANCEL.BTN' | translate }}
+                    </button>
+                  }
                 </div>
               }
             </div>
@@ -371,6 +389,189 @@
         }
       </section>
     }
+  }
+
+  <!-- Cancel Confirmation Overlay -->
+  @if (cancelTarget(); as target) {
+    <div
+      class="booking-overlay"
+      data-testid="cancel-overlay"
+      (click)="closeCancel()"
+      (keydown.escape)="closeCancel()"
+      tabindex="-1"
+    >
+      <div
+        class="booking-form-card"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeCancel()"
+      >
+        <div class="booking-header">
+          <h2>
+            <span class="material-symbols-outlined">event_busy</span>
+            {{ 'PORTAL.APPOINTMENTS.CANCEL.TITLE' | translate }}
+          </h2>
+          <button
+            class="booking-close"
+            (click)="closeCancel()"
+            [attr.aria-label]="'PORTAL.APPOINTMENTS.BOOKING.CLOSE_LABEL' | translate"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="booking-body">
+          @if (cancelError()) {
+            <div class="booking-error">
+              <span class="material-symbols-outlined">error</span>
+              {{ cancelError() }}
+            </div>
+          }
+
+          <p class="appt-modal-summary">
+            {{ 'PORTAL.APPOINTMENTS.CANCEL.CONFIRM_TEXT' | translate }}
+          </p>
+          <p class="appt-modal-target">
+            <strong>{{ target.date | date: 'fullDate' }}</strong>
+            {{ target.startTime }}
+            {{ target.providerName ? '· ' + target.providerName : '' }}
+          </p>
+
+          <div class="booking-field">
+            <label for="cancelReason">{{ 'PORTAL.APPOINTMENTS.CANCEL.REASON' | translate }}</label>
+            <textarea
+              id="cancelReason"
+              [(ngModel)]="cancelReason"
+              [placeholder]="'PORTAL.APPOINTMENTS.CANCEL.REASON_PLACEHOLDER' | translate"
+              maxlength="500"
+              rows="2"
+            ></textarea>
+          </div>
+
+          <div class="booking-actions">
+            <button class="booking-cancel-btn" (click)="closeCancel()">
+              {{ 'PORTAL.APPOINTMENTS.CANCEL.KEEP' | translate }}
+            </button>
+            <button
+              class="appt-cancel-confirm-btn"
+              data-testid="cancel-confirm"
+              (click)="submitCancel()"
+              [disabled]="cancelLoading()"
+            >
+              @if (cancelLoading()) {
+                <span class="btn-spinner"></span>
+                {{ 'PORTAL.APPOINTMENTS.CANCEL.CANCELLING' | translate }}
+              } @else {
+                {{ 'PORTAL.APPOINTMENTS.CANCEL.CONFIRM_BTN' | translate }}
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Reschedule Overlay -->
+  @if (rescheduleTarget(); as target) {
+    <div
+      class="booking-overlay"
+      data-testid="reschedule-overlay"
+      (click)="closeReschedule()"
+      (keydown.escape)="closeReschedule()"
+      tabindex="-1"
+    >
+      <div
+        class="booking-form-card"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeReschedule()"
+      >
+        <div class="booking-header">
+          <h2>
+            <span class="material-symbols-outlined">edit_calendar</span>
+            {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.TITLE' | translate }}
+          </h2>
+          <button
+            class="booking-close"
+            (click)="closeReschedule()"
+            [attr.aria-label]="'PORTAL.APPOINTMENTS.BOOKING.CLOSE_LABEL' | translate"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="booking-body">
+          @if (rescheduleError()) {
+            <div class="booking-error">
+              <span class="material-symbols-outlined">error</span>
+              {{ rescheduleError() }}
+            </div>
+          }
+
+          <p class="appt-modal-target">
+            <strong>{{ target.date | date: 'fullDate' }}</strong>
+            {{ target.startTime }}
+            {{ target.providerName ? '· ' + target.providerName : '' }}
+          </p>
+
+          <div class="booking-row">
+            <div class="booking-field">
+              <label for="reschedDate"
+                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE' | translate }}
+                <span class="required">*</span></label
+              >
+              <input type="date" id="reschedDate" [(ngModel)]="rescheduleDate" [min]="todayDate" />
+            </div>
+            <div class="booking-field">
+              <label for="reschedStart"
+                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START' | translate }}
+                <span class="required">*</span></label
+              >
+              <input type="time" id="reschedStart" [(ngModel)]="rescheduleStartTime" />
+            </div>
+            <div class="booking-field">
+              <label for="reschedEnd"
+                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_END' | translate }}
+                <span class="required">*</span></label
+              >
+              <input type="time" id="reschedEnd" [(ngModel)]="rescheduleEndTime" />
+            </div>
+          </div>
+
+          <div class="booking-field">
+            <label for="reschedReason">{{
+              'PORTAL.APPOINTMENTS.RESCHEDULE.REASON' | translate
+            }}</label>
+            <textarea
+              id="reschedReason"
+              [(ngModel)]="rescheduleReason"
+              [placeholder]="'PORTAL.APPOINTMENTS.RESCHEDULE.REASON_PLACEHOLDER' | translate"
+              maxlength="500"
+              rows="2"
+            ></textarea>
+          </div>
+
+          <div class="booking-actions">
+            <button class="booking-cancel-btn" (click)="closeReschedule()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              class="booking-submit-btn"
+              data-testid="reschedule-confirm"
+              (click)="submitReschedule()"
+              [disabled]="rescheduleLoading()"
+            >
+              @if (rescheduleLoading()) {
+                <span class="btn-spinner"></span>
+                {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.SAVING' | translate }}
+              } @else {
+                {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.SUBMIT' | translate }}
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   }
 
   <!-- Pre-Check-In Overlay -->
