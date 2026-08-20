@@ -67,6 +67,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final InstrumentOutboxService instrumentOutboxService;
     private final LabReflexRuleRepository labReflexRuleRepository;
     private final LabTestDefinitionRepository labTestDefinitionRepository;
+    private final CriticalValueNotificationService criticalValueNotificationService;
 
     @Override
     @Transactional
@@ -88,6 +89,9 @@ public class LabResultServiceImpl implements LabResultService {
         performAutoVerification(saved);
         triggerReflexOrders(saved);
         instrumentOutboxService.enqueueResultObservation(saved);
+        // P0 #5 — critical values must reach the ordering provider; the
+        // service swallows its own failures so the result write never rolls back.
+        criticalValueNotificationService.notifyIfCritical(saved);
 
         return labResultMapper.toResponseDTO(saved);
     }

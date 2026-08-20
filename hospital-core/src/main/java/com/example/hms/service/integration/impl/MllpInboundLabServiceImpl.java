@@ -39,6 +39,8 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final LabResultRepository labResultRepository;
     private final IntegrationMessageRecorder messageRecorder;
     private final AuditEventLogService auditEventLogService;
+    // Last so existing positional constructor calls in tests only append.
+    private final com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
 
     @Override
     @Transactional
@@ -143,6 +145,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         recordInboundMessage(integrationId, organizationId, rawMessageBody,
             IntegrationMessageStatus.RECEIVED, null);
         emitAudit(saved, hospitalId, integrationId, controlId);
+        // P0 #5 — analyzer-reported criticals (HL7 abnormal flag) notify the
+        // ordering provider; never rolls back the ingest.
+        criticalValueNotificationService.notifyIfCritical(saved);
         return MllpInboundOutcome.ACCEPTED;
     }
 

@@ -16,6 +16,19 @@ import java.util.UUID;
 @Repository
 public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
+    /**
+     * Escalation sweep feed (P0 #5): critical results whose provider was
+     * notified, that are still unacknowledged past the cutoff, and that
+     * have not been escalated yet. Unscoped by design — the sweep is a
+     * system actor covering every hospital.
+     */
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT r FROM LabResult r WHERE r.acknowledged = false "
+        + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
+        + "AND r.criticalEscalatedAt IS NULL")
+    java.util.List<LabResult> findCriticalAwaitingEscalation(
+        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
+
     @Override
     @EntityGraph(attributePaths = {
         "labOrder",
