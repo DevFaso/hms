@@ -47,6 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -854,5 +855,31 @@ class PatientEducationServiceImplTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getTopicDiscussed()).isEqualTo("Nutrition");
         verify(documentationRepository).findRecentByProvider(eq(staffId), any(LocalDateTime.class));
+    }
+
+    // ---- Super-admin global view (null hospital scope) ----
+
+    @Test
+    void getAllResources_nullHospitalListsAcrossAllHospitals() {
+        when(resourceRepository.findByIsActiveTrueOrderByCreatedAtDesc())
+            .thenReturn(List.of(resource));
+
+        List<EducationResourceResponseDTO> results = service.getAllResources(null);
+
+        assertThat(results).hasSize(1);
+        verify(resourceRepository).findByIsActiveTrueOrderByCreatedAtDesc();
+        verify(resourceRepository, never())
+            .findByHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void getUnansweredQuestions_nullHospitalListsAcrossAllHospitals() {
+        when(questionRepository.findByIsAnsweredFalseOrderByIsUrgentDescCreatedAtDesc())
+            .thenReturn(List.of());
+
+        assertThat(service.getUnansweredQuestions(null)).isEmpty();
+        verify(questionRepository).findByIsAnsweredFalseOrderByIsUrgentDescCreatedAtDesc();
+        verify(questionRepository, never())
+            .findByIsAnsweredFalseAndHospitalIdOrderByIsUrgentDescCreatedAtDesc(any());
     }
 }
