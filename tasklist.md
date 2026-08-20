@@ -515,7 +515,7 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 
 ## P1 — Complete the specialty core + turn on what's already built
 
-- [ ] 6. **Labor & delivery: partograph + delivery record** — the one missing organ of the OB specialty (already scoped in `docs/runbooks/obgyn-pediatrics-finish-scope-audit.md`; `DOCUMENT_DELIVERY_NOTES` permission exists with no feature behind it). WHO partograph model + entry UI + newborn linkage.
+- [x] 6. **Labor & delivery: partograph + delivery record** — ✅ DONE (`feature/labor-delivery-partograph`): `clinical.labor_episodes` + `labor_partograph_entries` + `delivery_records` (V111), WHO alert/action-line evaluation with URGENT notifications, PPH/APGAR/stillbirth alerts, Labor & Delivery tab with SVG partograph chart, `NewbornAssessment.delivery_record_id` back-link (the audit's deferred pregnancy FK), episode outcome = the audit's missing `Pregnancy.outcome`.
 - [ ] 7. **Appointment reminders over SMS** — reminder enum exists, nothing ever sends; wire a scheduled sender through the now-live IKODDI channel (respect `deliversRealSms()` guard).
 - [ ] 8. **EMPI: finish probabilistic matching + merge** — Fellegi-Sunter scorer + review UI are complete behind `EMPI_PROBABILISTIC_ENABLED:false`, but "confirm match" is a toast-only placeholder and `EmpiServiceImpl.mergeIdentities` has no REST caller. Implement confirm → merge endpoint (HL7 A40 semantics) + enable-flag runbook.
 - [ ] 9. **Web parity: cancel/reschedule + proxy views** — backend APIs proven by the Android app; small Angular lifts to close the loop on web.

@@ -559,3 +559,13 @@
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
 }
+
+/* ── Labor & Delivery tab (P1 #6) ─────────────────────────── */
+
+.labor-row-urgent td {
+  background: #fef2f2;
+}
+
+.labor-row-caution td {
+  background: #fffbeb;
+}
