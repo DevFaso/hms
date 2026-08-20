@@ -65,6 +65,93 @@
   border-top: 1px solid #e2e8f0;
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.appt-reschedule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #fff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #eff6ff;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.appt-cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #fff;
+  color: #dc2626;
+  border: 1px solid #dc2626;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #fef2f2;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.appt-cancel-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #dc2626;
+  color: #f0f0f0;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #b91c1c;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.appt-modal-summary {
+  margin: 0 0 8px;
+  color: #334155;
+}
+
+.appt-modal-target {
+  margin: 0 0 16px;
+  color: #64748b;
+  font-size: 14px;
+
+  strong {
+    color: #0f172a;
+  }
 }
 
 .precheckin-btn {
