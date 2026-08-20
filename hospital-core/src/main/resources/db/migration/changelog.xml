@@ -1645,4 +1645,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V111 — Labor & Delivery (P1 #6, roadmap row 41 "antepartum /
+         partogram"). clinical.labor_episodes + labor_partograph_entries
+         (+alerts) + delivery_records (+alerts), and the nullable
+         newborn_assessments.delivery_record_id back-link the OB scope
+         audit deferred. Purely additive; IF NOT EXISTS throughout.
+         ================================================================= -->
+    <!-- splitStatements=false: the file contains a DO $$…$$ block whose
+         internal semicolons the default splitter would break (V106 precedent);
+         the whole file executes as one atomic statement batch. -->
+    <changeSet id="V111-labor-partograph" author="hms-team" runOnChange="false">
+        <sqlFile path="V111__labor_partograph.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

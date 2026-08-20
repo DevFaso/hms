@@ -37,6 +37,7 @@ import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
+import { LaborTabComponent } from './labor-tab';
 
 type BoardWorklist =
   | 'high-risk'
@@ -51,6 +52,7 @@ type MaternityTab =
   | 'ultrasound'
   | 'birth-plans'
   | 'prenatal'
+  | 'labor'
   | 'postpartum';
 
 @Component({
@@ -65,6 +67,7 @@ type MaternityTab =
     BirthPlanTabComponent,
     PrenatalTabComponent,
     PostpartumTabComponent,
+    LaborTabComponent,
   ],
   templateUrl: './maternity.html',
   styleUrl: './maternity.scss',
@@ -148,6 +151,7 @@ export class MaternityComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canSeePostpartum = this.canSeeBirthPlans;
+  readonly canSeeLabor = this.canSeeBirthPlans;
 
   activeTab = signal<MaternityTab>('board');
 

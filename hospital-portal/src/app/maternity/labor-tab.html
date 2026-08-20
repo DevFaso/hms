@@ -1,0 +1,618 @@
+<div class="filter-bar">
+  <div class="mode-picker">
+    <app-patient-picker
+      inputId="labor-patient"
+      [selected]="patient()"
+      (selectedChange)="onPatientChange($event)"
+    />
+  </div>
+  @if (patient() && !activeEpisode() && !episodesLoading()) {
+    <button class="btn-primary" (click)="openStartForm()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'LABOR.START_EPISODE' | translate }}
+    </button>
+  }
+</div>
+
+@if (!patient()) {
+  <div class="empty-state">
+    <span class="material-symbols-outlined empty-icon">pregnant_woman</span>
+    <h3>{{ 'MATERNITY.PICK_PATIENT_HINT' | translate }}</h3>
+  </div>
+}
+
+@if (patient()) {
+  @if (episodesLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (episodes().length === 0 && !startFormOpen()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+      <h3>{{ 'LABOR.NO_EPISODES' | translate }}</h3>
+      <p>{{ 'LABOR.NO_EPISODES_HINT' | translate }}</p>
+    </div>
+  }
+
+  <!-- ══ Start episode form ══ -->
+  @if (startFormOpen()) {
+    <div class="view-section action-form">
+      <h3 class="section-heading">{{ 'LABOR.START_EPISODE' | translate }}</h3>
+      <div class="form-row">
+        <div class="field">
+          <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }}</label>
+          <input id="labor-onset" type="datetime-local" [(ngModel)]="startForm.laborOnsetAt" />
+        </div>
+        <div class="field">
+          <label for="labor-membranes">{{ 'LABOR.MEMBRANE_STATUS' | translate }}</label>
+          <select id="labor-membranes" [(ngModel)]="startForm.membraneStatus">
+            <option [ngValue]="undefined">—</option>
+            @for (status of membraneStatuses; track status) {
+              <option [ngValue]="status">{{ 'LABOR.MEMBRANE_' + status | translate }}</option>
+            }
+          </select>
+        </div>
+      </div>
+      <div class="form-row gtpal-row">
+        <div class="field">
+          <label for="labor-ga">{{ 'MATERNITY.GESTATIONAL_AGE' | translate }}</label>
+          <input
+            id="labor-ga"
+            type="number"
+            min="20"
+            max="45"
+            [(ngModel)]="startForm.gestationalAgeWeeks"
+          />
+        </div>
+        <div class="field">
+          <label for="labor-gravida">{{ 'MATERNITY.GRAVIDA' | translate }}</label>
+          <input id="labor-gravida" type="number" min="1" [(ngModel)]="startForm.gravida" />
+        </div>
+        <div class="field">
+          <label for="labor-para">{{ 'MATERNITY.PARA' | translate }}</label>
+          <input id="labor-para" type="number" min="0" [(ngModel)]="startForm.para" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="labor-risk">{{ 'LABOR.RISK_NOTES' | translate }}</label>
+        <textarea id="labor-risk" rows="2" [(ngModel)]="startForm.riskNotes"></textarea>
+      </div>
+      <p class="muted">{{ 'LABOR.SNAPSHOT_HINT' | translate }}</p>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitStart()" [disabled]="saving()">
+          {{ 'LABOR.START_EPISODE' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Active episode ══ -->
+  @if (activeEpisode(); as episode) {
+    <div class="view-section action-form">
+      <div class="filter-bar">
+        <h3 class="section-heading">
+          {{ 'LABOR.ACTIVE_EPISODE' | translate }}
+          <span class="risk-badge risk-moderate">{{ 'LABOR.STATUS_ACTIVE' | translate }}</span>
+        </h3>
+        <div>
+          <button class="btn-secondary" (click)="entryFormOpen.set(true)">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'LABOR.NEW_ENTRY' | translate }}
+          </button>
+          <button class="btn-primary" (click)="openDeliveryForm()">
+            <span class="material-symbols-outlined">child_care</span>
+            {{ 'LABOR.RECORD_DELIVERY' | translate }}
+          </button>
+        </div>
+      </div>
+      <p class="muted">
+        {{ 'LABOR.ADMITTED' | translate }}: {{ episode.admittedAt | date: 'short' }}
+        @if (episode.gestationalAgeWeeks) {
+          · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}: {{ episode.gestationalAgeWeeks }}
+          {{ 'MATERNITY.WEEKS' | translate }}
+        }
+        @if (episode.gravida !== null) {
+          · G{{ episode.gravida }}
+          @if (episode.para !== null) {
+            P{{ episode.para }}
+          }
+        }
+        @if (episode.membraneStatus) {
+          · {{ 'LABOR.MEMBRANE_' + episode.membraneStatus | translate }}
+        }
+        @if (episode.activePhaseStartAt) {
+          · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}:
+          {{ episode.activePhaseStartAt | date: 'shortTime' }}
+        } @else {
+          · {{ 'LABOR.LATENT_PHASE' | translate }}
+        }
+      </p>
+    </div>
+  }
+
+  <!-- ══ Delivered summary ══ -->
+  @if (!activeEpisode() && latestEpisode(); as episode) {
+    @if (episode.status === 'DELIVERED' && delivery(); as record) {
+      <div class="view-section action-form">
+        <h3 class="section-heading">
+          {{ 'LABOR.DELIVERY_SUMMARY' | translate }}
+          <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
+        </h3>
+        <p>
+          {{ record.birthDateTime | date: 'medium' }} ·
+          {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
+          @if (record.infantSex) {
+            · {{ 'LABOR.SEX_' + record.infantSex | translate }}
+          }
+          @if (record.birthWeightGrams) {
+            · {{ record.birthWeightGrams }} g
+          }
+          @if (record.apgarOneMinute !== null && record.apgarFiveMinute !== null) {
+            · APGAR {{ record.apgarOneMinute }}/{{ record.apgarFiveMinute }}
+          }
+          @if (record.estimatedBloodLossMl !== null) {
+            · {{ 'LABOR.BLOOD_LOSS' | translate }}: {{ record.estimatedBloodLossMl }} ml
+          }
+        </p>
+        @for (alert of record.alerts ?? []; track $index) {
+          <p>
+            <span class="risk-badge risk-high" [title]="alert.triggeredBy">{{
+              alert.message
+            }}</span>
+          </p>
+        }
+      </div>
+    }
+  }
+
+  <!-- ══ Partograph chart + entries ══ -->
+  @if (entries().length > 0) {
+    <div class="view-section">
+      <h3 class="section-heading">{{ 'LABOR.PARTOGRAPH' | translate }}</h3>
+      <app-partograph-chart [entries]="entries()" />
+    </div>
+
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'LABOR.TIME' | translate }}</th>
+            <th scope="col">{{ 'LABOR.FHR' | translate }}</th>
+            <th scope="col">{{ 'LABOR.LIQUOR' | translate }}</th>
+            <th scope="col">{{ 'LABOR.DILATION' | translate }}</th>
+            <th scope="col">{{ 'LABOR.DESCENT' | translate }}</th>
+            <th scope="col">{{ 'LABOR.CONTRACTIONS' | translate }}</th>
+            <th scope="col">{{ 'LABOR.MATERNAL_VITALS' | translate }}</th>
+            <th scope="col">{{ 'LABOR.ALERTS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of entries(); track entry.id) {
+            <tr class="data-row {{ entryAlertClass(entry) }}">
+              <td>{{ entry.observationTime | date: 'shortTime' }}</td>
+              <td>{{ entry.fetalHeartRateBpm ?? '—' }}</td>
+              <td>
+                {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
+              </td>
+              <td>
+                {{ entry.cervicalDilationCm !== null ? entry.cervicalDilationCm + ' cm' : '—' }}
+              </td>
+              <td>{{ entry.descentFifths !== null ? entry.descentFifths + '/5' : '—' }}</td>
+              <td>
+                @if (entry.contractionsPerTenMinutes !== null) {
+                  {{ entry.contractionsPerTenMinutes }}/10min
+                  @if (entry.contractionDurationSeconds !== null) {
+                    · {{ entry.contractionDurationSeconds }}s
+                  }
+                } @else {
+                  —
+                }
+              </td>
+              <td>
+                {{ entry.systolicBpMmHg ?? '—' }}/{{ entry.diastolicBpMmHg ?? '—' }} ·
+                {{ entry.pulseBpm ?? '—' }} · {{ entry.temperatureCelsius ?? '—' }}°C
+              </td>
+              <td>
+                @for (alert of entry.alerts ?? []; track $index) {
+                  <span
+                    class="risk-badge {{
+                      alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate'
+                    }}"
+                    [title]="alert.message"
+                  >
+                    {{ 'LABOR.ALERT_' + alert.type | translate }}
+                  </span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ══ Episode history ══ -->
+  @if (episodes().length > 1) {
+    <div class="view-section">
+      <h3 class="section-heading">{{ 'LABOR.EPISODE_HISTORY' | translate }}</h3>
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'LABOR.ADMITTED' | translate }}</th>
+              <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+              <th scope="col">{{ 'LABOR.OUTCOME' | translate }}</th>
+              <th scope="col">{{ 'LABOR.ENTRIES' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (episode of episodes(); track episode.id) {
+              <tr class="data-row">
+                <td>{{ episode.admittedAt | date: 'short' }}</td>
+                <td>{{ 'LABOR.STATUS_' + episode.status | translate }}</td>
+                <td>
+                  {{ episode.outcome ? ('LABOR.OUTCOME_' + episode.outcome | translate) : '—' }}
+                </td>
+                <td>{{ episode.entryCount }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  }
+}
+
+<!-- ══ Partograph entry modal ══ -->
+@if (entryFormOpen()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="entryFormOpen.set(false)"
+    (keydown.escape)="entryFormOpen.set(false)"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="entryFormOpen.set(false)"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="pe-time">{{ 'LABOR.TIME' | translate }}</label>
+            <input id="pe-time" type="datetime-local" [(ngModel)]="entryForm.observationTime" />
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="entryForm.lateEntry" />
+              {{ 'LABOR.LATE_ENTRY' | translate }}
+            </label>
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'LABOR.FETAL_CONDITION' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="pe-fhr">{{ 'LABOR.FHR' | translate }}</label>
+            <input
+              id="pe-fhr"
+              type="number"
+              min="0"
+              max="300"
+              [(ngModel)]="entryForm.fetalHeartRateBpm"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-liquor">{{ 'LABOR.LIQUOR' | translate }}</label>
+            <select id="pe-liquor" [(ngModel)]="entryForm.liquorColour">
+              <option [ngValue]="undefined">—</option>
+              @for (colour of liquorColours; track colour) {
+                <option [ngValue]="colour">{{ 'LABOR.LIQUOR_' + colour | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="pe-moulding">{{ 'LABOR.MOULDING' | translate }}</label>
+            <select id="pe-moulding" [(ngModel)]="entryForm.mouldingDegree">
+              <option [ngValue]="undefined">—</option>
+              @for (degree of mouldingDegrees; track degree) {
+                <option [ngValue]="degree">{{ 'LABOR.MOULDING_' + degree | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'LABOR.PROGRESS' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="pe-dilation">{{ 'LABOR.DILATION' | translate }}</label>
+            <input
+              id="pe-dilation"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="entryForm.cervicalDilationCm"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-descent">{{ 'LABOR.DESCENT' | translate }}</label>
+            <input
+              id="pe-descent"
+              type="number"
+              min="0"
+              max="5"
+              [(ngModel)]="entryForm.descentFifths"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-contractions">{{ 'LABOR.CONTRACTIONS_TEN' | translate }}</label>
+            <input
+              id="pe-contractions"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="entryForm.contractionsPerTenMinutes"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-duration">{{ 'LABOR.CONTRACTION_SECONDS' | translate }}</label>
+            <input
+              id="pe-duration"
+              type="number"
+              min="0"
+              max="600"
+              [(ngModel)]="entryForm.contractionDurationSeconds"
+            />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'LABOR.MATERNAL_CONDITION' | translate }}</h3>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="pe-pulse">{{ 'LABOR.PULSE' | translate }}</label>
+            <input id="pe-pulse" type="number" min="0" max="300" [(ngModel)]="entryForm.pulseBpm" />
+          </div>
+          <div class="field">
+            <label for="pe-sys">SYS</label>
+            <input
+              id="pe-sys"
+              type="number"
+              min="0"
+              max="350"
+              [(ngModel)]="entryForm.systolicBpMmHg"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-dia">DIA</label>
+            <input
+              id="pe-dia"
+              type="number"
+              min="0"
+              max="250"
+              [(ngModel)]="entryForm.diastolicBpMmHg"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-temp">°C</label>
+            <input
+              id="pe-temp"
+              type="number"
+              step="0.1"
+              [(ngModel)]="entryForm.temperatureCelsius"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-urine">{{ 'LABOR.URINE_ML' | translate }}</label>
+            <input id="pe-urine" type="number" min="0" [(ngModel)]="entryForm.urineOutputMl" />
+          </div>
+        </div>
+
+        <h3 class="section-heading">{{ 'LABOR.THERAPIES' | translate }}</h3>
+        <div class="form-row">
+          <div class="field">
+            <label for="pe-oxytocin">{{ 'LABOR.OXYTOCIN_DROPS' | translate }}</label>
+            <input
+              id="pe-oxytocin"
+              type="number"
+              min="0"
+              max="120"
+              [(ngModel)]="entryForm.oxytocinDropsPerMinute"
+            />
+          </div>
+          <div class="field">
+            <label for="pe-drugs">{{ 'LABOR.DRUGS_GIVEN' | translate }}</label>
+            <input id="pe-drugs" type="text" [(ngModel)]="entryForm.drugsGiven" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="pe-notes">{{ 'LABOR.NOTES' | translate }}</label>
+          <textarea id="pe-notes" rows="2" [(ngModel)]="entryForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="entryFormOpen.set(false)" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitEntry()" [disabled]="saving()">
+          {{ 'LABOR.SAVE_ENTRY' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Delivery modal ══ -->
+@if (deliveryFormOpen()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelivery()"
+    (keydown.escape)="cancelDelivery()"
+  >
+    <div
+      class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelDelivery()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="dl-time">{{ 'LABOR.BIRTH_TIME' | translate }}</label>
+            <input id="dl-time" type="datetime-local" [(ngModel)]="deliveryForm.birthDateTime" />
+          </div>
+          <div class="field">
+            <label for="dl-mode">{{ 'LABOR.DELIVERY_MODE' | translate }} *</label>
+            <select id="dl-mode" [(ngModel)]="deliveryForm.deliveryMode">
+              <option [ngValue]="undefined">—</option>
+              @for (mode of deliveryModes; track mode) {
+                <option [ngValue]="mode">{{ 'LABOR.MODE_' + mode | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row gtpal-row">
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="deliveryForm.liveBirth" />
+              {{ 'LABOR.LIVE_BIRTH' | translate }}
+            </label>
+          </div>
+          <div class="field">
+            <label for="dl-infants">{{ 'LABOR.NUMBER_OF_INFANTS' | translate }}</label>
+            <input
+              id="dl-infants"
+              type="number"
+              min="1"
+              max="5"
+              [(ngModel)]="deliveryForm.numberOfInfants"
+            />
+          </div>
+          <div class="field">
+            <label for="dl-sex">{{ 'LABOR.INFANT_SEX' | translate }}</label>
+            <select id="dl-sex" [(ngModel)]="deliveryForm.infantSex">
+              <option [ngValue]="undefined">—</option>
+              @for (sex of infantSexes; track sex) {
+                <option [ngValue]="sex">{{ 'LABOR.SEX_' + sex | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="dl-weight">{{ 'LABOR.BIRTH_WEIGHT' | translate }}</label>
+            <input
+              id="dl-weight"
+              type="number"
+              min="200"
+              max="9000"
+              [(ngModel)]="deliveryForm.birthWeightGrams"
+            />
+          </div>
+        </div>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="dl-apgar1">APGAR 1'</label>
+            <input
+              id="dl-apgar1"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="deliveryForm.apgarOneMinute"
+            />
+          </div>
+          <div class="field">
+            <label for="dl-apgar5">APGAR 5'</label>
+            <input
+              id="dl-apgar5"
+              type="number"
+              min="0"
+              max="10"
+              [(ngModel)]="deliveryForm.apgarFiveMinute"
+            />
+          </div>
+          <div class="field">
+            <label for="dl-ebl">{{ 'LABOR.BLOOD_LOSS' | translate }}</label>
+            <input
+              id="dl-ebl"
+              type="number"
+              min="0"
+              max="5000"
+              [(ngModel)]="deliveryForm.estimatedBloodLossMl"
+            />
+          </div>
+          <div class="field">
+            <label for="dl-tear">{{ 'LABOR.PERINEUM' | translate }}</label>
+            <select id="dl-tear" [(ngModel)]="deliveryForm.perinealTear">
+              <option [ngValue]="undefined">—</option>
+              @for (tear of perinealTears; track tear) {
+                <option [ngValue]="tear">{{ 'LABOR.TEAR_' + tear | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row gtpal-row">
+          <div class="field">
+            <label for="dl-placenta-time">{{ 'LABOR.PLACENTA_TIME' | translate }}</label>
+            <input
+              id="dl-placenta-time"
+              type="datetime-local"
+              [(ngModel)]="deliveryForm.placentaDeliveredAt"
+            />
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="deliveryForm.placentaComplete" />
+              {{ 'LABOR.PLACENTA_COMPLETE' | translate }}
+            </label>
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="deliveryForm.uterotonicGiven" />
+              {{ 'LABOR.UTEROTONIC_GIVEN' | translate }}
+            </label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="dl-notes">{{ 'LABOR.NOTES' | translate }}</label>
+          <textarea id="dl-notes" rows="2" [(ngModel)]="deliveryForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitDelivery()" [disabled]="saving()">
+          {{ 'LABOR.SAVE_DELIVERY' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
