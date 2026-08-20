@@ -3,9 +3,14 @@ import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, Subscription } from 'rxjs';
 import { NurseStationComponent } from './nurse-station';
-import { NurseTaskService } from '../services/nurse-task.service';
+import { NurseTaskService, NurseFlowBoard } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
+import { AuthService } from '../auth/auth.service';
+import {
+  PatientTrackerWsService,
+  PatientTrackerEvent,
+} from '../services/patient-tracker-ws.service';
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
@@ -13,6 +18,9 @@ describe('NurseStationComponent — two-tier polling', () => {
   let toastSpy: jasmine.SpyObj<ToastService>;
   let routerSpy: jasmine.SpyObj<Router>;
   let encounterSpy: jasmine.SpyObj<EncounterService>;
+  let authSpy: jasmine.SpyObj<AuthService>;
+  let trackerWsSpy: jasmine.SpyObj<PatientTrackerWsService>;
+  let wsEvents$: Subject<PatientTrackerEvent>;
 
   beforeEach(async () => {
     nurseServiceSpy = jasmine.createSpyObj('NurseTaskService', [
@@ -48,6 +56,18 @@ describe('NurseStationComponent — two-tier polling', () => {
     nurseServiceSpy.getPatientFlow.and.returnValue(of(null as any));
     nurseServiceSpy.getPendingAdmissions.and.returnValue(of([]));
 
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
+    authSpy.getHospitalId.and.returnValue('h1');
+    wsEvents$ = new Subject<PatientTrackerEvent>();
+    trackerWsSpy = jasmine.createSpyObj('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    trackerWsSpy.getEvents.and.returnValue(wsEvents$.asObservable());
+    trackerWsSpy.getConnectionState.and.returnValue(of(false));
+
     await TestBed.configureTestingModule({
       imports: [NurseStationComponent, TranslateModule.forRoot()],
       providers: [
@@ -55,6 +75,8 @@ describe('NurseStationComponent — two-tier polling', () => {
         { provide: ToastService, useValue: toastSpy },
         { provide: Router, useValue: routerSpy },
         { provide: EncounterService, useValue: encounterSpy },
+        { provide: AuthService, useValue: authSpy },
+        { provide: PatientTrackerWsService, useValue: trackerWsSpy },
       ],
     }).compileComponents();
 
@@ -181,5 +203,69 @@ describe('NurseStationComponent — two-tier polling', () => {
     pendingAdmissions$.complete();
 
     expect(component.loading()).toBeFalse();
+  });
+
+  /* ── Task 24: live tracker events ─────────────────────────── */
+
+  function mockTrackerEvent(): PatientTrackerEvent {
+    return {
+      hospitalId: 'h1',
+      departmentId: null,
+      encounterId: 'e1',
+      patientId: 'p1',
+      previousStatus: 'IN_PROGRESS',
+      newStatus: 'READY_FOR_DISCHARGE',
+      emittedAt: '2026-08-20T10:00:00',
+    };
+  }
+
+  it('ngOnInit connects the shared tracker socket for the active hospital', () => {
+    component.ngOnInit();
+    expect(trackerWsSpy.getEvents).toHaveBeenCalled();
+    expect(trackerWsSpy.connect).toHaveBeenCalledWith('h1');
+  });
+
+  it('does not touch the socket when no hospital is active', () => {
+    authSpy.getHospitalId.and.returnValue(null);
+    component.ngOnInit();
+    expect(trackerWsSpy.connect).not.toHaveBeenCalled();
+  });
+
+  it('ngOnDestroy releases the shared socket', () => {
+    component.ngOnInit();
+    component.ngOnDestroy();
+    expect(trackerWsSpy.disconnect).toHaveBeenCalled();
+  });
+
+  it('a tracker event triggers one debounced flow-panel refetch', (done) => {
+    component.ngOnInit();
+    nurseServiceSpy.getPatientFlow.calls.reset();
+    nurseServiceSpy.getWorkboard.calls.reset();
+    nurseServiceSpy.getPendingAdmissions.calls.reset();
+
+    // Burst of transitions (e.g. discharge auto-completes several
+    // encounters) must collapse into a single refetch.
+    wsEvents$.next(mockTrackerEvent());
+    wsEvents$.next(mockTrackerEvent());
+    wsEvents$.next(mockTrackerEvent());
+
+    expect(nurseServiceSpy.getPatientFlow).not.toHaveBeenCalled(); // debounced
+
+    setTimeout(() => {
+      expect(nurseServiceSpy.getPatientFlow).toHaveBeenCalledTimes(1);
+      expect(nurseServiceSpy.getWorkboard).toHaveBeenCalledTimes(1);
+      expect(nurseServiceSpy.getPendingAdmissions).toHaveBeenCalledTimes(1);
+      done();
+    }, 2_300);
+  });
+
+  it('loadFlow$ patches the flow-facing signals', () => {
+    const board = { columns: [] } as unknown as NurseFlowBoard;
+    nurseServiceSpy.getPatientFlow.and.returnValue(of(board));
+    nurseServiceSpy.getWorkboard.and.returnValue(of([{ patientId: 'p1' } as never]));
+    component.loadFlow$().subscribe();
+    expect(component.flowBoard()).toBe(board);
+    expect(component.workboard().length).toBe(1);
+    expect(component.lastRefreshed()).toBeTruthy();
   });
 });

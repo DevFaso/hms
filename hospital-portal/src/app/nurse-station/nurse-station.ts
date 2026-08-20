@@ -14,7 +14,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { defer, forkJoin, Observable, of, Subscription, interval } from 'rxjs';
-import { catchError, exhaustMap, tap, finalize, map } from 'rxjs/operators';
+import { catchError, debounceTime, exhaustMap, tap, finalize, map } from 'rxjs/operators';
 import {
   NurseTaskService,
   NurseVitalTask,
@@ -36,6 +36,8 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
+import { AuthService } from '../auth/auth.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -73,8 +75,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly router = inject(Router);
   private readonly encounterService = inject(EncounterService);
   private readonly translate = inject(TranslateService);
+  private readonly trackerWs = inject(PatientTrackerWsService);
+  private readonly auth = inject(AuthService);
   private refreshSub?: Subscription;
   private slowRefreshSub?: Subscription;
+  private wsEventsSub?: Subscription;
 
   @ViewChild('reasonDialog') reasonDialogRef?: ElementRef<HTMLElement>;
   private dialogFocused = false;
@@ -129,6 +134,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   private static readonly FAST_REFRESH_MS = 60_000;
   private static readonly SLOW_REFRESH_MS = 300_000;
+  /** Collapse bursts of tracker events into a single flow-panel refetch. */
+  private static readonly WS_REFRESH_DEBOUNCE_MS = 2_000;
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
@@ -158,17 +165,43 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   ngOnInit(): void {
     this.loadFast$().subscribe();
     this.loadSlow$().subscribe();
+    // Polling stays as the heartbeat: vitals-due and MAR lists are
+    // time-driven (items become due as the clock advances), so no server
+    // event can replace the fast tier — the STOMP stream below only adds
+    // immediacy for encounter-flow changes (task 24).
     this.refreshSub = interval(NurseStationComponent.FAST_REFRESH_MS)
       .pipe(exhaustMap(() => this.loadFast$()))
       .subscribe();
     this.slowRefreshSub = interval(NurseStationComponent.SLOW_REFRESH_MS)
       .pipe(exhaustMap(() => this.loadSlow$()))
       .subscribe();
+
+    // Task 24: live encounter-status transitions from
+    // /topic/patient-tracker/{hospitalId} refresh the flow-facing panels
+    // (flow board, workboard, pending admissions, summary) within seconds
+    // instead of waiting up to 5 min for the slow tier. Debounced so a
+    // burst of transitions (e.g. discharge auto-completing several
+    // encounters) triggers one refetch.
+    const hospitalId = this.auth.getHospitalId();
+    if (hospitalId) {
+      this.wsEventsSub = this.trackerWs
+        .getEvents()
+        .pipe(
+          debounceTime(NurseStationComponent.WS_REFRESH_DEBOUNCE_MS),
+          exhaustMap(() => this.loadFlow$()),
+        )
+        .subscribe();
+      this.trackerWs.connect(hospitalId);
+    }
   }
 
   ngOnDestroy(): void {
     this.refreshSub?.unsubscribe();
     this.slowRefreshSub?.unsubscribe();
+    if (this.wsEventsSub) {
+      this.wsEventsSub.unsubscribe();
+      this.trackerWs.disconnect();
+    }
   }
 
   /* ── Data loading ──────────────────────────────────────── */
@@ -259,6 +292,42 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         }),
       ),
     ).pipe(map(() => void 0));
+  }
+
+  /**
+   * Flow tier (event-driven, task 24): the panels an encounter-status
+   * transition can invalidate. Refetched when a tracker STOMP event
+   * arrives; errors stay silent because this is a background refresh on
+   * top of still-running polls.
+   */
+  loadFlow$(): Observable<void> {
+    const mode = this.filterMode();
+    const assignee = mode === 'me' ? 'me' : 'all';
+    const params = { assignee } as { assignee?: string };
+
+    return forkJoin({
+      summary: this.nurseService
+        .getDashboardSummary(params)
+        .pipe(catchError(() => of(null as NurseDashboardSummary | null))),
+      workboard: this.nurseService
+        .getWorkboard(params)
+        .pipe(catchError(() => of([] as NurseWorkboardPatient[]))),
+      flowBoard: this.nurseService
+        .getPatientFlow()
+        .pipe(catchError(() => of(null as NurseFlowBoard | null))),
+      pendingAdmissions: this.nurseService
+        .getPendingAdmissions()
+        .pipe(catchError(() => of([] as NurseAdmissionSummary[]))),
+    }).pipe(
+      tap((results) => {
+        if (results.summary) this.summary.set(results.summary);
+        this.workboard.set(results.workboard ?? []);
+        if (results.flowBoard) this.flowBoard.set(results.flowBoard);
+        this.pendingAdmissions.set(results.pendingAdmissions ?? []);
+        this.lastRefreshed.set(new Date());
+      }),
+      map(() => void 0),
+    );
   }
 
   private trackLoading<T>(source$: Observable<T>): Observable<T> {
