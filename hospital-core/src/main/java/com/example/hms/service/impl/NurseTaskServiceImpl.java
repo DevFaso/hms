@@ -5,8 +5,11 @@ import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.FiveRightsCheck;
 import com.example.hms.enums.FiveRightsStatus;
+import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Announcement;
@@ -14,14 +17,18 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.ImagingOrder;
+import com.example.hms.model.LabOrder;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
+import com.example.hms.model.NurseHandoff;
 import com.example.hms.model.NursingNote;
 import com.example.hms.model.NursingNoteTemplate;
 import com.example.hms.model.NursingTask;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.ProcedureOrder;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
@@ -34,7 +41,7 @@ import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowPatientCardDTO;
-import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -50,6 +57,9 @@ import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.ImagingOrderRepository;
+import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.NurseHandoffRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationAdministrationRecordRepository;
@@ -58,6 +68,7 @@ import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.NursingTaskRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
@@ -74,7 +85,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -87,14 +97,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.IntStream;
 
 /**
- * MVP-1 implementation of NurseTaskService.
+ * Implementation of NurseTaskService.
  * <p>
- * Wires <b>Medication Administration</b>, <b>Vitals</b>, and <b>Announcements</b>
- * to real database tables while keeping Orders and Handoffs as derived queue
- * entries over real patient assignments until their backing entities arrive.
+ * Every queue is backed by real data: vitals, MAR, and announcements query
+ * their own tables; the order queue is derived from pending lab/imaging/
+ * procedure orders; handoffs are persisted {@link NurseHandoff} SBAR records
+ * (P0 #1 — the previous synthetic order/handoff generators are gone).
  */
 @Slf4j
 @Service
@@ -112,17 +122,29 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_PENDING = "PENDING";
     private static final String MSG_PATIENT_NOT_FOUND = "Patient not found: ";
     private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
-    private static final String SEED_PATIENT = "PATIENT";
-    private static final String SEED_ORDER = "ORDER";
-    private static final String SEED_HANDOFF = "HANDOFF";
-    private static final String DEFAULT_HOSPITAL_SEED = "HOSPITAL";
     private static final String DEFAULT_PATIENT_NAME = "Patient";
     private static final String DEFAULT_ADMINISTRATION_STATUS = "GIVEN";
     private static final String ADMISSION_OWNER = "Admission";
     private static final String ASSOCIATION_PATIENT = "patient";
     private static final String ASSOCIATION_DEPARTMENT = "department";
+    private static final String PRIORITY_ROUTINE = "ROUTINE";
+
+    /** How many pending handoff rows to scan when filtering by assignee. */
+    private static final int HANDOFF_SCAN_PAGE = 100;
+
+    /** Lab orders where the specimen has not been collected yet — nursing action. */
+    private static final Set<LabOrderStatus> NURSE_ACTION_LAB_STATUSES =
+        Set.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING);
+    /** Imaging orders still in the prep phase (NPO, consent, transport). */
+    private static final List<ImagingOrderStatus> NURSE_ACTION_IMAGING_STATUSES =
+        List.of(ImagingOrderStatus.ORDERED, ImagingOrderStatus.PENDING_AUTHORIZATION, ImagingOrderStatus.SCHEDULED);
+    /** Procedure orders not yet under way — consent, site marking, pre-op prep. */
+    private static final Set<ProcedureOrderStatus> NURSE_ACTION_PROCEDURE_STATUSES =
+        Set.of(ProcedureOrderStatus.ORDERED, ProcedureOrderStatus.SCHEDULED,
+            ProcedureOrderStatus.PRE_OP_CLEARANCE_PENDING);
 
     /** Statuses accepted on the administer endpoint. */
     private static final Set<String> SUPPORTED_ADMINISTRATION_STATUSES = Set.of(
@@ -153,6 +175,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final NursingNoteRepository nursingNoteRepository;
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final NurseHandoffRepository nurseHandoffRepository;
+    private final LabOrderRepository labOrderRepository;
+    private final ImagingOrderRepository imagingOrderRepository;
+    private final ProcedureOrderRepository procedureOrderRepository;
     private final FiveRightsVerificationService fiveRightsVerificationService;
     private final ObjectMapper objectMapper;
 
@@ -483,37 +509,144 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /* ═══════════════════════════════════════════════════════════════════
-       Orders — still synthetic (entity arrives in MVP 3)
+       Orders — derived from the real lab / imaging / procedure order tables
        ═══════════════════════════════════════════════════════════════════ */
 
     @Override
     public List<NurseOrderTaskResponseDTO> getOrderTasks(UUID nurseUserId, UUID hospitalId, String statusFilter, int limit) {
-        List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
         int effectiveLimit = clampLimit(limit);
-        LocalDateTime now = LocalDateTime.now();
         String normalized = statusFilter != null && !statusFilter.isBlank()
             ? statusFilter.trim().toUpperCase(Locale.ROOT) : null;
 
-        return IntStream.range(0, Math.min(effectiveLimit, patients.size()))
-            .mapToObj(i -> createOrderTask(patients.get(i), hospitalId, now, i))
+        return deriveOrderTasks(nurseUserId, hospitalId).stream()
             .filter(t -> normalized == null
                 || (t.getPriority() != null && normalized.equals(t.getPriority().toUpperCase(Locale.ROOT))))
+            .limit(effectiveLimit)
             .toList();
     }
 
+    /**
+     * Nurse-actionable orders: lab draws not yet collected, imaging studies
+     * still in prep, procedures not yet under way. Three hospital-level
+     * queries, then an in-memory filter to the nurse's assigned patients —
+     * never per-patient queries (N+1 with the all-hospital fallback).
+     */
+    private List<NurseOrderTaskResponseDTO> deriveOrderTasks(UUID nurseUserId, UUID hospitalId) {
+        if (hospitalId == null) return List.of();
+        Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
+
+        List<NurseOrderTaskResponseDTO> tasks = new ArrayList<>();
+        for (LabOrder order : labOrderRepository.findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_LAB_STATUSES)) {
+            Patient patient = order.getPatient();
+            if (!inScope(patient, scope)) continue;
+            tasks.add(orderTask(order.getId(), patient, "Lab",
+                normalizePriority(order.getPriority()), order.getOrderDatetime()));
+        }
+        for (ImagingOrder order : imagingOrderRepository
+                .findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, NURSE_ACTION_IMAGING_STATUSES)) {
+            Patient patient = order.getPatient();
+            if (!inScope(patient, scope)) continue;
+            tasks.add(orderTask(order.getId(), patient, "Imaging",
+                order.getPriority() != null ? order.getPriority().name() : PRIORITY_ROUTINE,
+                order.getOrderedAt()));
+        }
+        for (ProcedureOrder order : procedureOrderRepository
+                .findByHospital_IdAndStatusIn(hospitalId, NURSE_ACTION_PROCEDURE_STATUSES)) {
+            Patient patient = order.getPatient();
+            if (!inScope(patient, scope)) continue;
+            tasks.add(orderTask(order.getId(), patient, "Procedure",
+                order.getUrgency() != null ? order.getUrgency().name() : PRIORITY_ROUTINE,
+                order.getScheduledDatetime() != null ? order.getScheduledDatetime() : order.getOrderedAt()));
+        }
+
+        tasks.sort(Comparator.comparing(NurseOrderTaskResponseDTO::getDueTime,
+            Comparator.nullsLast(Comparator.naturalOrder())));
+        return tasks;
+    }
+
+    private NurseOrderTaskResponseDTO orderTask(
+        UUID id, Patient patient, String orderType, String priority, LocalDateTime dueTime
+    ) {
+        return NurseOrderTaskResponseDTO.builder()
+            .id(id)
+            .patientId(patient.getId())
+            .patientName(patient.getFullName())
+            .orderType(orderType)
+            .priority(priority)
+            .dueTime(dueTime)
+            .build();
+    }
+
+    private boolean inScope(Patient patient, Set<UUID> scope) {
+        return patient != null && (scope == null || scope.contains(patient.getId()));
+    }
+
+    private String normalizePriority(String raw) {
+        return raw == null || raw.isBlank() ? PRIORITY_ROUTINE : raw.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * Patient-ID scope for assignee=me queries. {@code null} means "no
+     * filter": either the caller asked for the whole unit (assignee=all) or
+     * the nurse has no explicit assignments — mirroring the all-hospital
+     * fallback in {@link #resolvePatients}.
+     */
+    private Set<UUID> assignedPatientIds(UUID nurseUserId, UUID hospitalId) {
+        if (nurseUserId == null || hospitalId == null) return null;
+        List<PatientResponseDTO> assigned = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+        Set<UUID> ids = new HashSet<>();
+        for (PatientResponseDTO p : assigned) {
+            if (p.getId() != null) ids.add(p.getId());
+        }
+        return ids.isEmpty() ? null : ids;
+    }
+
     /* ═══════════════════════════════════════════════════════════════════
-       Handoffs — still synthetic (entity arrives in MVP 2)
+       Handoffs — persisted SBAR records (P0 #1)
        ═══════════════════════════════════════════════════════════════════ */
 
     @Override
     public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit) {
-        List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
+        if (hospitalId == null) return List.of();
         int effectiveLimit = clampLimit(limit);
-        LocalDate today = LocalDate.now();
+        Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
 
-        return IntStream.range(0, Math.min(effectiveLimit, patients.size()))
-            .mapToObj(i -> createHandoffSummary(patients.get(i), hospitalId, today, i))
+        // Scan page is larger than the display limit so the assignee filter
+        // can still fill it.
+        return nurseHandoffRepository
+            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING,
+                PageRequest.of(0, HANDOFF_SCAN_PAGE))
+            .stream()
+            .filter(h -> inScope(h.getPatient(), scope))
+            .limit(effectiveLimit)
+            .map(this::toHandoffSummary)
             .toList();
+    }
+
+    @Override
+    @Transactional
+    public NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request) {
+        Hospital hospital = hospitalRepository.findById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
+
+        NurseHandoff handoff = NurseHandoff.builder()
+            .hospital(hospital)
+            .patient(patient)
+            .direction(request.getDirection().trim())
+            .situation(trimToNull(request.getSituation()))
+            .background(trimToNull(request.getBackground()))
+            .assessment(trimToNull(request.getAssessment()))
+            .recommendation(trimToNull(request.getRecommendation()))
+            .createdByName(resolveNurseName(nurseUserId))
+            .build();
+
+        return toHandoffSummary(nurseHandoffRepository.save(handoff));
     }
 
     @Override
@@ -525,37 +658,40 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (hospitalId == null) {
             throw new BusinessException("Hospital context required to complete handoff.");
         }
-        // Validate handoff exists (synthetic for now)
-        getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
+        // ── Tenant isolation: id + hospital lookup — a handoff from another
+        // hospital reads as not-found. ──
+        NurseHandoff handoff = nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Handoff not found: " + handoffId));
+        if (STATUS_COMPLETED.equals(handoff.getStatus())) {
+            return; // already completed — keep the endpoint idempotent
+        }
+        handoff.setStatus(STATUS_COMPLETED);
+        handoff.setCompletedAt(LocalDateTime.now());
+        handoff.setCompletedByName(resolveNurseName(nurseUserId));
+        nurseHandoffRepository.save(handoff);
     }
 
-    @Override
-    @Transactional
-    public NurseHandoffChecklistUpdateResponseDTO updateHandoffChecklistItem(
-        UUID handoffId, UUID taskId, UUID nurseUserId, UUID hospitalId, boolean completed
-    ) {
-        if (handoffId == null) {
-            throw new BusinessException("Handoff identifier is required.");
-        }
-        if (hospitalId == null) {
-            throw new BusinessException("Hospital context required to update handoff checklist.");
-        }
-        try {
-            List<NurseHandoffSummaryDTO> handoffs = getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
-            boolean exists = handoffs.stream().anyMatch(h -> handoffId.equals(h.getId()));
-            if (!exists) {
-                throw new ResourceNotFoundException("Handoff not found for checklist update.");
-            }
-        } catch (RuntimeException e) {
-            throw new ResourceNotFoundException("Handoff not found for checklist update.");
-        }
-
-        return NurseHandoffChecklistUpdateResponseDTO.builder()
-            .handoffId(handoffId)
-            .taskId(taskId)
-            .completed(completed)
-            .completedAt(completed ? LocalDateTime.now() : null)
+    private NurseHandoffSummaryDTO toHandoffSummary(NurseHandoff h) {
+        Patient patient = h.getPatient();
+        return NurseHandoffSummaryDTO.builder()
+            .id(h.getId())
+            .patientId(patient != null ? patient.getId() : null)
+            .patientName(patient != null ? patient.getFullName() : DEFAULT_PATIENT_NAME)
+            .direction(h.getDirection())
+            .updatedAt(h.getUpdatedAt() != null ? h.getUpdatedAt() : h.getCreatedAt())
+            .note(h.getSituation())
+            .background(h.getBackground())
+            .assessment(h.getAssessment())
+            .recommendation(h.getRecommendation())
+            .status(h.getStatus())
+            .createdByName(h.getCreatedByName())
             .build();
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -603,9 +739,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long vitalsDue = countVitalsDue(patients, hospitalId, overdueThreshold);
         long[] medCounts = countMedicationStatuses(patients, hospitalId, now);
 
-        // Orders and handoffs pending — count from synthetic lists for now
-        long ordersPending = getOrderTasks(nurseUserId, hospitalId, null, MAX_LIMIT).size();
-        long handoffsPending = getHandoffSummaries(nurseUserId, hospitalId, MAX_LIMIT).size();
+        long ordersPending = deriveOrderTasks(nurseUserId, hospitalId).size();
+        long handoffsPending = countPendingHandoffs(nurseUserId, hospitalId);
 
         // Announcement count
         long announcementCount = hospitalId != null ? announcementRepository.countByHospital_Id(hospitalId) : 0L;
@@ -619,6 +754,21 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .handoffsPending(handoffsPending)
             .announcements(announcementCount)
             .build();
+    }
+
+    /** Pending-handoff count matching the same assignee scope as the list endpoint. */
+    private long countPendingHandoffs(UUID nurseUserId, UUID hospitalId) {
+        if (hospitalId == null) return 0L;
+        Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
+        if (scope == null) {
+            return nurseHandoffRepository.countByHospital_IdAndStatus(hospitalId, STATUS_PENDING);
+        }
+        return nurseHandoffRepository
+            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING,
+                PageRequest.of(0, HANDOFF_SCAN_PAGE))
+            .stream()
+            .filter(h -> inScope(h.getPatient(), scope))
+            .count();
     }
 
     /** Count patients whose vitals are overdue (no vitals or last recording before threshold). */
@@ -754,36 +904,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /* ═══════════════════════════════════════════════════════════════════
-       Private helpers — derived queue entries
-       ═══════════════════════════════════════════════════════════════════ */
-
-    private NurseOrderTaskResponseDTO createOrderTask(
-        PatientContext patient, UUID hospitalId, LocalDateTime now, int index
-    ) {
-        return NurseOrderTaskResponseDTO.builder()
-            .id(generateStableId(patient.displayName(), hospitalId, SEED_ORDER, index))
-            .patientId(patient.patientId())
-            .patientName(patient.displayName())
-            .orderType(selectOrderCategory(index))
-            .priority(index % 3 == 0 ? "STAT" : TYPE_ROUTINE)
-            .dueTime(now.plusMinutes(45L * (index + 1)))
-            .build();
-    }
-
-    private NurseHandoffSummaryDTO createHandoffSummary(
-        PatientContext patient, UUID hospitalId, LocalDate today, int index
-    ) {
-        return NurseHandoffSummaryDTO.builder()
-            .id(generateStableId(patient.displayName(), hospitalId, SEED_HANDOFF, index))
-            .patientId(patient.patientId())
-            .patientName(patient.displayName())
-            .direction(index % 2 == 0 ? "Transfer to Radiology" : "Return from OR")
-            .updatedAt(today.atStartOfDay().plusHours(7L + index))
-            .note(index % 3 == 0 ? "High fall risk." : "Ready for handoff discussion.")
-            .build();
-    }
-
-    /* ═══════════════════════════════════════════════════════════════════
     Private helpers — patient resolution
        ═══════════════════════════════════════════════════════════════════ */
 
@@ -859,12 +979,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        Private helpers — misc
        ═══════════════════════════════════════════════════════════════════ */
 
-    private UUID generateStableId(String patientName, UUID hospitalId, String suffix, int index) {
-        String patientSeed = patientName == null ? SEED_PATIENT : patientName;
-        String hospitalSeed = hospitalId == null ? DEFAULT_HOSPITAL_SEED : hospitalId.toString();
-        return UUID.nameUUIDFromBytes((patientSeed + ':' + hospitalSeed + ':' + suffix + ':' + index).getBytes());
-    }
-
     private String normalizeAdministrationStatus(NurseMedicationAdministrationRequestDTO request) {
         if (request == null || request.getStatus() == null) return DEFAULT_ADMINISTRATION_STATUS;
         String normalized = request.getStatus().trim().toUpperCase(Locale.ROOT);
@@ -873,12 +987,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("Unsupported medication administration status: " + request.getStatus());
         }
         return normalized;
-    }
-
-    private String selectOrderCategory(int index) {
-        return switch (Math.floorMod(index, 4)) {
-            case 0 -> "Lab"; case 1 -> "Radiology"; case 2 -> "Consult"; default -> "Medication";
-        };
     }
 
     private int clampInt(int value, int min, int max) {

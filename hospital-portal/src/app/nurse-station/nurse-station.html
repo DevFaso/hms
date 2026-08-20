@@ -352,6 +352,13 @@
 
       <!-- ═══════════ HANDOFFS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'handoffs') {
+        <div class="task-board-header">
+          <h3>{{ 'NURSE.HANDOFFS' | translate }}</h3>
+          <button class="btn-small btn-primary" (click)="openHandoffCreate()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'NURSE.NEW_HANDOFF' | translate }}
+          </button>
+        </div>
         @if (handoffs().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">swap_horiz</span>
@@ -375,8 +382,31 @@
                   <span class="handoff-dir">{{ h.direction }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
+                @if (h.background) {
+                  <p class="handoff-sbar">
+                    <strong>{{ 'NURSE.HANDOFF_BACKGROUND' | translate }}:</strong>
+                    {{ h.background }}
+                  </p>
+                }
+                @if (h.assessment) {
+                  <p class="handoff-sbar">
+                    <strong>{{ 'NURSE.HANDOFF_ASSESSMENT' | translate }}:</strong>
+                    {{ h.assessment }}
+                  </p>
+                }
+                @if (h.recommendation) {
+                  <p class="handoff-sbar">
+                    <strong>{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate }}:</strong>
+                    {{ h.recommendation }}
+                  </p>
+                }
                 <div class="handoff-footer">
-                  <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                  <span class="handoff-time">
+                    @if (h.createdByName) {
+                      {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
+                    }
+                    {{ h.updatedAt | date: 'medium' }}
+                  </span>
                   <button
                     class="action-btn action-complete"
                     (click)="completeHandoff(h.id)"
@@ -1202,6 +1232,116 @@
           } @else {
             <span class="material-symbols-outlined">add_task</span>
             {{ 'NURSE.CREATE_TASK' | translate }}
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ HANDOFF CREATE MODAL (P0 #1) ═══════════ -->
+@if (handoffCreateOpen()) {
+  <div
+    class="modal-backdrop"
+    (click)="closeHandoffCreate()"
+    (keydown.enter)="closeHandoffCreate()"
+    tabindex="0"
+    role="button"
+  >
+    <div
+      class="modal-card modal-medium"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+      role="dialog"
+    >
+      <div class="modal-header">
+        <h3>{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
+        <button class="modal-close" (click)="closeHandoffCreate()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label for="ho-patient">{{ 'PATIENTS.PATIENT' | translate }}</label>
+          <app-patient-picker
+            inputId="ho-patient"
+            [hospitalId]="hospitalId()"
+            [selected]="handoffPatient()"
+            (selectedChange)="onHandoffPatientChange($event)"
+          />
+        </div>
+        <div class="form-row">
+          <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>
+          <input
+            id="ho-direction"
+            type="text"
+            class="reason-input"
+            [placeholder]="'NURSE.HANDOFF_DIRECTION_PLACEHOLDER' | translate"
+            [value]="handoffForm().direction ?? ''"
+            (input)="updateHandoffField('direction', $any($event.target).value)"
+          />
+        </div>
+        <div class="form-row">
+          <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }}</label>
+          <textarea
+            id="ho-situation"
+            class="reason-input"
+            rows="2"
+            [value]="handoffForm().situation ?? ''"
+            (input)="updateHandoffField('situation', $any($event.target).value)"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <label for="ho-background">{{ 'NURSE.HANDOFF_BACKGROUND' | translate }}</label>
+          <textarea
+            id="ho-background"
+            class="reason-input"
+            rows="2"
+            [value]="handoffForm().background ?? ''"
+            (input)="updateHandoffField('background', $any($event.target).value)"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <label for="ho-assessment">{{ 'NURSE.HANDOFF_ASSESSMENT' | translate }}</label>
+          <textarea
+            id="ho-assessment"
+            class="reason-input"
+            rows="2"
+            [value]="handoffForm().assessment ?? ''"
+            (input)="updateHandoffField('assessment', $any($event.target).value)"
+          ></textarea>
+        </div>
+        <div class="form-row">
+          <label for="ho-recommendation">{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate }}</label>
+          <textarea
+            id="ho-recommendation"
+            class="reason-input"
+            rows="2"
+            [value]="handoffForm().recommendation ?? ''"
+            (input)="updateHandoffField('recommendation', $any($event.target).value)"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button
+          class="modal-btn modal-cancel"
+          (click)="closeHandoffCreate()"
+          [disabled]="handoffCreating()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitCreateHandoff()"
+          [disabled]="handoffCreating() || !handoffForm().patientId || !handoffForm().direction"
+        >
+          @if (handoffCreating()) {
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            {{ 'NURSE.CREATING' | translate }}
+          } @else {
+            <span class="material-symbols-outlined">swap_horiz</span>
+            {{ 'NURSE.SUBMIT_HANDOFF' | translate }}
           }
         </button>
       </div>

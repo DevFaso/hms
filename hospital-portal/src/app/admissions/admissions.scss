@@ -481,3 +481,24 @@
   font-size: 0.95rem;
   color: #166534;
 }
+
+/* ── Assign-bed modal (P0 #4) ─────────────────────────────── */
+
+.bed-assign-patient {
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 0.75rem;
+
+  .bed-current {
+    font-weight: 400;
+    color: #64748b;
+  }
+}
+
+.no-beds-hint {
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+}

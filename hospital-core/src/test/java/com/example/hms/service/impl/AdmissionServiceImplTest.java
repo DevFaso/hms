@@ -48,6 +48,7 @@ class AdmissionServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
+    @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private AdmissionMapper admissionMapper;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
@@ -271,5 +272,87 @@ class AdmissionServiceImplTest {
         service.dischargePatient(admissionId, request);
 
         verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+    }
+
+    /* ── P0 #4: structured bed assignment ─────────────────────────────── */
+
+    @Test
+    void dischargePatient_releasesBed() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        service.dischargePatient(admissionId, request);
+
+        verify(bedAssignmentService).releaseBed(admission);
+    }
+
+    @Test
+    void cancelAdmission_releasesBed() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+
+        service.cancelAdmission(admissionId);
+
+        verify(bedAssignmentService).releaseBed(admission);
+        verify(admissionRepository).save(admission);
+    }
+
+    @Test
+    void assignBed_delegatesAndSaves() {
+        UUID bedId = UUID.randomUUID();
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setHospital(hospital);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
+
+        assertThat(service.assignBed(admissionId, bedId)).isEqualTo(response);
+        verify(bedAssignmentService).assignBed(admission, bedId);
+    }
+
+    @Test
+    void assignBed_crossTenantReadsAsNotFound() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setHospital(hospital);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.assignBed(admissionId, UUID.randomUUID()))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void unassignBed_delegatesAndSaves() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setHospital(hospital);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        service.unassignBed(admissionId);
+
+        verify(bedAssignmentService).unassignBed(admission);
     }
 }

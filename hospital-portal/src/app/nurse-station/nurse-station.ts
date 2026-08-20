@@ -21,6 +21,7 @@ import {
   NurseMedicationTask,
   NurseOrderTask,
   NurseHandoff,
+  NurseHandoffCreateRequest,
   NurseAnnouncement,
   NurseDashboardSummary,
   NurseWorkboardPatient,
@@ -33,6 +34,8 @@ import {
   NurseCareNoteRequest,
   NurseCareNoteResponse,
 } from '../services/nurse-task.service';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
@@ -65,6 +68,7 @@ type SectionType =
     TriageFormComponent,
     NursingIntakeFormComponent,
     EnumLabelPipe,
+    PatientPickerComponent,
   ],
   templateUrl: './nurse-station.html',
   styleUrl: './nurse-station.scss',
@@ -117,6 +121,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   taskForm = signal<Partial<NurseTaskCreateRequest>>({});
   taskCreating = signal(false);
 
+  /* Handoff create dialog (P0 #1 — real SBAR handoffs) */
+  handoffCreateOpen = signal(false);
+  handoffForm = signal<Partial<NurseHandoffCreateRequest>>({});
+  handoffPatient = signal<PatientResponse | null>(null);
+  handoffCreating = signal(false);
+
   /* Care note dialog */
   careNoteFor = signal<{ patientId: string; patientName: string } | null>(null);
   careNoteForm = signal<NurseCareNoteRequest>({ template: 'DAR' });
@@ -147,6 +157,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.cancelHoldRefuse();
     } else if (this.vitalsCaptureFor()) {
       this.closeVitalsDialog();
+    } else if (this.handoffCreateOpen()) {
+      this.closeHandoffCreate();
     }
   }
 
@@ -528,7 +540,55 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     return map[level] ?? '';
   }
 
-  /* ── Handoff: complete ─────────────────────────────────── */
+  /* ── Handoffs: create + complete ───────────────────────── */
+
+  openHandoffCreate(): void {
+    this.handoffForm.set({});
+    this.handoffPatient.set(null);
+    this.handoffCreateOpen.set(true);
+  }
+
+  closeHandoffCreate(): void {
+    this.handoffCreateOpen.set(false);
+    this.handoffForm.set({});
+    this.handoffPatient.set(null);
+  }
+
+  updateHandoffField(field: keyof NurseHandoffCreateRequest, value: string): void {
+    this.handoffForm.update((f) => ({ ...f, [field]: value }));
+  }
+
+  onHandoffPatientChange(patient: PatientResponse | null): void {
+    this.handoffPatient.set(patient);
+    this.handoffForm.update((f) => ({ ...f, patientId: patient?.id }));
+  }
+
+  hospitalId(): string | null {
+    return this.auth.getHospitalId();
+  }
+
+  submitCreateHandoff(): void {
+    const form = this.handoffForm();
+    if (!form.patientId || !form.direction?.trim()) {
+      this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_REQUIRED'));
+      return;
+    }
+    this.handoffCreating.set(true);
+    this.nurseService.createHandoff(form as NurseHandoffCreateRequest).subscribe({
+      next: (handoff) => {
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.HANDOFF_CREATED', { patient: handoff.patientName }),
+        );
+        this.handoffCreating.set(false);
+        this.closeHandoffCreate();
+        this.loadAll();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'));
+        this.handoffCreating.set(false);
+      },
+    });
+  }
 
   completeHandoff(handoffId: string): void {
     this.actionInProgress.set(handoffId);

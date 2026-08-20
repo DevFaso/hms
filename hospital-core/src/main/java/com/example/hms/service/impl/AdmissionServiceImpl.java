@@ -24,6 +24,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AdmissionService;
+import com.example.hms.service.BedAssignmentService;
 import com.example.hms.service.EncounterAutoCompletionService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final EncounterAutoCompletionService encounterAutoCompletion;
+    private final BedAssignmentService bedAssignmentService;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
 
@@ -211,6 +213,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         // Auto-complete any active encounters for this patient + hospital
         completeActiveEncounters(admission);
 
+        // Free the structured bed (the admission keeps bed/roomBed as history)
+        bedAssignmentService.releaseBed(admission);
+
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -232,7 +237,40 @@ public class AdmissionServiceImpl implements AdmissionService {
         Admission admission = admissionRepository.findById(admissionId)
             .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
         admission.cancel();
+        // A cancelled admission must not keep its bed occupied
+        bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+    }
+
+    @Override
+    @Transactional
+    public AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId) {
+        Admission admission = loadTenantScopedAdmission(admissionId);
+        bedAssignmentService.assignBed(admission, bedId);
+        admission = admissionRepository.save(admission);
+        return admissionMapper.toResponseDTO(admission);
+    }
+
+    @Override
+    @Transactional
+    public AdmissionResponseDTO unassignBed(UUID admissionId) {
+        Admission admission = loadTenantScopedAdmission(admissionId);
+        bedAssignmentService.unassignBed(admission);
+        admission = admissionRepository.save(admission);
+        return admissionMapper.toResponseDTO(admission);
+    }
+
+    /** Load with the same tenant guard as {@link #getAdmission}. */
+    private Admission loadTenantScopedAdmission(UUID admissionId) {
+        Admission admission = admissionRepository.findById(admissionId)
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && admission.getHospital() != null
+                && !activeHospitalId.equals(admission.getHospital().getId())) {
+            throw new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG);
+        }
+        return admission;
     }
 
     @Override

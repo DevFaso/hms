@@ -45,6 +45,8 @@ export interface AdmissionResponse {
   attendingPhysicianId: string;
   attendingPhysicianName: string;
   roomBed: string;
+  /** Structured bed reference (P0 #4); null when only free-text roomBed is set. */
+  bedId?: string | null;
   admissionType: AdmissionType;
   acuityLevel: AcuityLevel;
   status: AdmissionStatus;
@@ -131,6 +133,14 @@ export class AdmissionService {
     return this.http.post<AdmissionResponse>(`${this.baseUrl}/${id}/apply-order-sets`, {
       orderSetIds,
     });
+  }
+
+  assignBed(id: string, bedId: string): Observable<AdmissionResponse> {
+    return this.http.post<AdmissionResponse>(`${this.baseUrl}/${id}/assign-bed`, { bedId });
+  }
+
+  unassignBed(id: string): Observable<AdmissionResponse> {
+    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`);
   }
 
   getByPatient(patientId: string): Observable<AdmissionResponse[]> {

@@ -412,6 +412,15 @@
   color: #374151;
   margin: 0.5rem 0;
 }
+.handoff-sbar {
+  font-size: 0.85rem;
+  color: #4b5563;
+  margin: 0.25rem 0;
+
+  strong {
+    color: #374151;
+  }
+}
 .handoff-footer {
   display: flex;
   justify-content: space-between;

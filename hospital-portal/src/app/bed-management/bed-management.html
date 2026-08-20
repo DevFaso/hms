@@ -1,0 +1,322 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'BEDS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'BEDS.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <label class="toggle-inactive">
+        <input type="checkbox" [checked]="showInactive()" (change)="toggleInactive()" />
+        {{ 'BEDS.SHOW_INACTIVE' | translate }}
+      </label>
+      <button class="btn-primary" (click)="openCreateWard()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'BEDS.NEW_WARD' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- ═══════════ WARDS ═══════════ -->
+  @if (!loading() && wards().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">domain</span>
+      <h3>{{ 'BEDS.NO_WARDS' | translate }}</h3>
+      <p>{{ 'BEDS.NO_WARDS_HINT' | translate }}</p>
+    </div>
+  }
+  @if (wards().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'BEDS.WARD_CODE' | translate }}</th>
+            <th scope="col">{{ 'BEDS.WARD_NAME' | translate }}</th>
+            <th scope="col">{{ 'BEDS.WARD_TYPE' | translate }}</th>
+            <th scope="col">{{ 'BEDS.FLOOR' | translate }}</th>
+            <th scope="col">{{ 'BEDS.TOTAL_BEDS' | translate }}</th>
+            <th scope="col">{{ 'BEDS.AVAILABLE' | translate }}</th>
+            <th scope="col">{{ 'BEDS.OCCUPIED' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (w of wards(); track w.id) {
+            <tr
+              class="data-row ward-row"
+              [class.selected]="selectedWardId() === w.id"
+              (click)="selectWard(w)"
+              (keydown.enter)="selectWard(w)"
+              tabindex="0"
+            >
+              <td class="cell-primary">{{ w.code }}</td>
+              <td>{{ w.name }}</td>
+              <td>{{ w.wardType | enumLabel: 'wardType' }}</td>
+              <td>{{ w.floor ?? '—' }}</td>
+              <td>{{ w.totalBeds }}</td>
+              <td class="count-available">{{ w.availableBeds }}</td>
+              <td class="count-occupied">{{ w.occupiedBeds }}</td>
+              <td>
+                <span class="status-pill" [class.pill-inactive]="!w.active">
+                  {{ (w.active ? 'BEDS.ACTIVE' : 'BEDS.INACTIVE') | translate }}
+                </span>
+              </td>
+              <td>
+                <div class="action-group">
+                  <button
+                    class="icon-btn"
+                    (click)="openEditWard(w); $event.stopPropagation()"
+                    [title]="'COMMON.EDIT' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  @if (w.totalBeds === 0) {
+                    <button
+                      class="icon-btn icon-danger"
+                      (click)="deleteWard(w); $event.stopPropagation()"
+                      [title]="'COMMON.DELETE' | translate"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ═══════════ BEDS OF SELECTED WARD ═══════════ -->
+  @if (selectedWard(); as ward) {
+    <div class="beds-section">
+      <div class="beds-header">
+        <h2>{{ 'BEDS.BEDS_IN' | translate: { ward: ward.name } }}</h2>
+        <button class="btn-primary" (click)="openCreateBed()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'BEDS.NEW_BED' | translate }}
+        </button>
+      </div>
+
+      @if (!bedsLoading() && beds().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">bed</span>
+          <h3>{{ 'BEDS.NO_BEDS' | translate }}</h3>
+        </div>
+      }
+      @if (beds().length > 0) {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">{{ 'BEDS.BED_NUMBER' | translate }}</th>
+                <th scope="col">{{ 'BEDS.ROOM_NUMBER' | translate }}</th>
+                <th scope="col">{{ 'BEDS.BED_TYPE' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'BEDS.SET_STATUS' | translate }}</th>
+                <th scope="col">{{ 'BEDS.NOTES' | translate }}</th>
+                <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (b of beds(); track b.id) {
+                <tr class="data-row" [class.row-inactive]="!b.active">
+                  <td class="cell-primary">{{ b.bedNumber }}</td>
+                  <td>{{ b.roomNumber || '—' }}</td>
+                  <td>{{ b.bedType || '—' }}</td>
+                  <td>
+                    <span class="bed-status-badge {{ bedStatusClass(b.status) }}">
+                      {{ b.status | enumLabel: 'bedStatus' }}
+                    </span>
+                  </td>
+                  <td>
+                    @if (b.status !== 'OCCUPIED') {
+                      <select
+                        class="status-select"
+                        [value]="b.status"
+                        (change)="setBedStatus(b, $any($event.target).value)"
+                        [attr.aria-label]="'BEDS.SET_STATUS' | translate"
+                      >
+                        @for (s of manualBedStatuses; track s) {
+                          <option [value]="s">{{ s | enumLabel: 'bedStatus' }}</option>
+                        }
+                      </select>
+                    } @else {
+                      <span class="occupied-hint">{{ 'BEDS.OCCUPIED_HINT' | translate }}</span>
+                    }
+                  </td>
+                  <td class="notes-cell">{{ b.notes || '—' }}</td>
+                  <td>
+                    <div class="action-group">
+                      <button
+                        class="icon-btn"
+                        (click)="openEditBed(b)"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                      @if (b.status !== 'OCCUPIED') {
+                        <button
+                          class="icon-btn icon-danger"
+                          (click)="deleteBed(b)"
+                          [title]="'COMMON.DELETE' | translate"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  }
+</div>
+
+<!-- ═══════════ WARD MODAL ═══════════ -->
+@if (wardModalOpen()) {
+  <div
+    class="modal-backdrop"
+    (click)="closeWardModal()"
+    (keydown.escape)="closeWardModal()"
+    tabindex="0"
+    role="button"
+  >
+    <div
+      class="modal-card"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+      role="dialog"
+    >
+      <div class="modal-header">
+        <h3>{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | translate }}</h3>
+        <button class="modal-close" (click)="closeWardModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label for="ward-name">{{ 'BEDS.WARD_NAME' | translate }} *</label>
+          <input id="ward-name" type="text" [(ngModel)]="wardForm.name" />
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="ward-code">{{ 'BEDS.WARD_CODE' | translate }} *</label>
+            <input
+              id="ward-code"
+              type="text"
+              maxlength="20"
+              [(ngModel)]="wardForm.code"
+              [placeholder]="'BEDS.WARD_CODE_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="form-row">
+            <label for="ward-type">{{ 'BEDS.WARD_TYPE' | translate }} *</label>
+            <select id="ward-type" [(ngModel)]="wardForm.wardType">
+              @for (t of wardTypes; track t) {
+                <option [value]="t">{{ t | enumLabel: 'wardType' }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="ward-floor">{{ 'BEDS.FLOOR' | translate }}</label>
+            <input id="ward-floor" type="number" [(ngModel)]="wardForm.floor" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="ward-description">{{ 'BEDS.DESCRIPTION' | translate }}</label>
+          <textarea id="ward-description" rows="2" [(ngModel)]="wardForm.description"></textarea>
+        </div>
+        @if (editingWardId()) {
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="wardForm.active" />
+              {{ 'BEDS.ACTIVE' | translate }}
+            </label>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="closeWardModal()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="modal-btn modal-confirm" (click)="submitWard()" [disabled]="saving()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ BED MODAL ═══════════ -->
+@if (bedModalOpen()) {
+  <div
+    class="modal-backdrop"
+    (click)="closeBedModal()"
+    (keydown.escape)="closeBedModal()"
+    tabindex="0"
+    role="button"
+  >
+    <div
+      class="modal-card"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+      role="dialog"
+    >
+      <div class="modal-header">
+        <h3>{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | translate }}</h3>
+        <button class="modal-close" (click)="closeBedModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="bed-number">{{ 'BEDS.BED_NUMBER' | translate }} *</label>
+            <input id="bed-number" type="text" maxlength="20" [(ngModel)]="bedForm.bedNumber" />
+          </div>
+          <div class="form-row">
+            <label for="bed-room">{{ 'BEDS.ROOM_NUMBER' | translate }}</label>
+            <input id="bed-room" type="text" maxlength="20" [(ngModel)]="bedForm.roomNumber" />
+          </div>
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="bed-type">{{ 'BEDS.BED_TYPE' | translate }}</label>
+            <input id="bed-type" type="text" maxlength="50" [(ngModel)]="bedForm.bedType" />
+          </div>
+          <div class="form-row">
+            <label for="bed-floor">{{ 'BEDS.FLOOR' | translate }}</label>
+            <input id="bed-floor" type="number" [(ngModel)]="bedForm.floor" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label for="bed-notes">{{ 'BEDS.NOTES' | translate }}</label>
+          <textarea id="bed-notes" rows="2" [(ngModel)]="bedForm.notes"></textarea>
+        </div>
+        @if (editingBedId()) {
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="bedForm.active" />
+              {{ 'BEDS.ACTIVE' | translate }}
+            </label>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="closeBedModal()" [disabled]="saving()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="modal-btn modal-confirm" (click)="submitBed()" [disabled]="saving()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -50,6 +50,9 @@ public class AdmissionResponseDTO {
 
     private String roomBed;
 
+    /** Structured bed reference (P0 #4); null when only free-text roomBed is set. */
+    private UUID bedId;
+
     private AdmissionType admissionType;
     private AdmissionStatus status;
     private AcuityLevel acuityLevel;
