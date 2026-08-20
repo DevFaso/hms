@@ -116,6 +116,14 @@ public class Appointment extends BaseEntity {
     @Column(name = "pre_checkin_timestamp")
     private LocalDateTime preCheckinTimestamp;
 
+    /**
+     * When the upcoming-appointment reminder was dispatched (V112, P1 #7).
+     * Null until the reminder sweep processes the appointment; stamped
+     * exactly once so a restarted sweep never double-texts a patient.
+     */
+    @Column(name = "reminder_sent_at")
+    private LocalDateTime reminderSentAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by",
         foreignKey = @ForeignKey(name = "fk_appointment_created_by"))
