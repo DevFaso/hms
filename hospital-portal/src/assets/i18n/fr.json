@@ -2048,6 +2048,14 @@
     "COL_AMOUNT": "Montant refacturé"
   },
   "EMPI": {
+    "MERGE_BUTTON": "Fusionner les doublons",
+    "MERGE_CONFIRM_BUTTON": "Confirmer la fusion irréversible",
+    "MERGE_DESELECT": "Désélectionner",
+    "MERGE_HINT": "La fusion est irréversible et porte uniquement sur l'identité — les dossiers cliniques des deux patients sont conservés.",
+    "MERGE_PRIMARY_LABEL": "Dossier conservé",
+    "MERGE_SECONDARY_LABEL": "Doublon à fusionner",
+    "MERGE_SELECT": "Sélectionner pour fusion",
+    "MERGE_SWAP": "Inverser",
     "TITLE": "Correspondance EMPI",
     "SUBTITLE": "Rechercher dans l'index principal des patients par nom + date de naissance + sexe + identifiant national. Confirmez la correspondance si la ventilation semble correcte, ou créez un nouveau patient si aucun candidat ne correspond.",
     "SEARCH": "Rechercher des candidats",
@@ -2079,6 +2087,8 @@
     },
     "TOAST": {
       "CONFIRMED": "Correspondance confirmée : {{name}}.",
+      "MERGED": "Identités fusionnées — {name} est conservé",
+      "MERGE_FAILED": "Échec de la fusion des identités",
       "NEW_PATIENT_HANDOFF": "Transfert vers le formulaire nouveau patient (à venir)."
     }
   },

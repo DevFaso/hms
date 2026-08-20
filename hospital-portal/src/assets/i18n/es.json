@@ -2048,6 +2048,14 @@
     "COL_AMOUNT": "Monto a facturar"
   },
   "EMPI": {
+    "MERGE_BUTTON": "Fusionar duplicados",
+    "MERGE_CONFIRM_BUTTON": "Confirmar fusión irreversible",
+    "MERGE_DESELECT": "Deseleccionar",
+    "MERGE_HINT": "La fusión es irreversible y solo a nivel de identidad — se conservan los registros clínicos de ambos pacientes.",
+    "MERGE_PRIMARY_LABEL": "Registro que se conserva",
+    "MERGE_SECONDARY_LABEL": "Duplicado a fusionar",
+    "MERGE_SELECT": "Seleccionar para fusión",
+    "MERGE_SWAP": "Intercambiar",
     "TITLE": "Coincidencia EMPI",
     "SUBTITLE": "Buscar en el índice maestro de pacientes por nombre + fecha de nacimiento + sexo + identificación nacional. Confirme la coincidencia si el desglose se ve correcto, o cree un nuevo paciente si ningún candidato corresponde.",
     "SEARCH": "Buscar candidatos",
@@ -2079,6 +2087,8 @@
     },
     "TOAST": {
       "CONFIRMED": "Coincidencia confirmada: {{name}}.",
+      "MERGED": "Identidades fusionadas — se conserva {name}",
+      "MERGE_FAILED": "Error al fusionar las identidades",
       "NEW_PATIENT_HANDOFF": "Transferencia al formulario de nuevo paciente (próximo)."
     }
   },
