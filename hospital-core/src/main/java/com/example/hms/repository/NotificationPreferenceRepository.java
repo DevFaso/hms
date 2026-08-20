@@ -12,5 +12,8 @@ public interface NotificationPreferenceRepository extends JpaRepository<Notifica
 
     List<NotificationPreference> findByUser_Id(UUID userId);
 
+    List<NotificationPreference> findByUser_IdAndNotificationType(
+        UUID userId, com.example.hms.enums.NotificationType notificationType);
+
     void deleteByUser_Id(UUID userId);
 }

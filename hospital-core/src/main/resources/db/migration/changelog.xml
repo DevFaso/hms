@@ -1662,4 +1662,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V112 — SMS appointment reminders (P1 #7): reminder_sent_at
+         idempotency stamp + partial sweep index on clinical.appointments.
+         Purely additive; IF NOT EXISTS throughout.
+         ================================================================= -->
+    <changeSet id="V112-appointment-reminders" author="hms-team" runOnChange="false">
+        <sqlFile path="V112__appointment_reminders.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
