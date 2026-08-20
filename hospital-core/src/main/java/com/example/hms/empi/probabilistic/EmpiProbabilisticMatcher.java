@@ -64,15 +64,18 @@ public class EmpiProbabilisticMatcher {
     private final EmpiProbabilisticProperties properties;
     private final PatientRepository patientRepository;
     private final EmpiService empiService;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     public EmpiProbabilisticMatcher(
         EmpiProbabilisticProperties properties,
         PatientRepository patientRepository,
-        EmpiService empiService
+        EmpiService empiService,
+        com.example.hms.utility.RoleValidator roleValidator
     ) {
         this.properties = properties;
         this.patientRepository = patientRepository;
         this.empiService = empiService;
+        this.roleValidator = roleValidator;
     }
 
     public boolean isEnabled() {
@@ -84,6 +87,17 @@ public class EmpiProbabilisticMatcher {
 
         UUID nationalIdMatch = resolveNationalIdAliasOnce(query);
         List<Patient> candidates = collectCandidates(query, nationalIdMatch);
+
+        // ── Tenant isolation (empi-identity skill: "scope the matcher to a
+        // single hospital's PatientHospitalRegistration set"). Null scope =
+        // super-admin unscoped; scoped callers never see cross-hospital
+        // demographics in the candidate list. ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            candidates = candidates.stream()
+                .filter(candidate -> candidate.isRegisteredInHospital(activeHospitalId))
+                .toList();
+        }
         if (candidates.isEmpty()) return Collections.emptyList();
 
         return rankCandidates(candidates, query, nationalIdMatch);

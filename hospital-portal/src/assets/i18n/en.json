@@ -2048,6 +2048,14 @@
     "COL_AMOUNT": "Chargeback amount"
   },
   "EMPI": {
+    "MERGE_BUTTON": "Merge duplicates",
+    "MERGE_CONFIRM_BUTTON": "Confirm irreversible merge",
+    "MERGE_DESELECT": "Deselect",
+    "MERGE_HINT": "Merging is irreversible and identity-level only — clinical records of both patients are kept.",
+    "MERGE_PRIMARY_LABEL": "Surviving record",
+    "MERGE_SECONDARY_LABEL": "Duplicate to merge away",
+    "MERGE_SELECT": "Select for merge",
+    "MERGE_SWAP": "Swap",
     "TITLE": "EMPI candidate match",
     "SUBTITLE": "Search the master patient index by name + DOB + sex + national ID. Confirm the match if the breakdown looks right, or create a new patient if no candidate is the same person.",
     "SEARCH": "Search candidates",
@@ -2079,6 +2087,8 @@
     },
     "TOAST": {
       "CONFIRMED": "Match confirmed: {{name}}.",
+      "MERGED": "Identities merged — {name} survives",
+      "MERGE_FAILED": "Failed to merge identities",
       "NEW_PATIENT_HANDOFF": "Hand-off to new-patient form (follow-on)."
     }
   },

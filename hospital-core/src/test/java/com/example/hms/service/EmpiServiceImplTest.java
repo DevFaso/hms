@@ -37,6 +37,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.MessageSource;
 import org.springframework.kafka.core.KafkaTemplate;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,6 +79,12 @@ class EmpiServiceImplTest {
     @Mock
     private MessageSource messageSource;
 
+    @Mock
+    private com.example.hms.repository.PatientRepository patientRepository;
+
+    @Mock
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
     private EmpiServiceImpl empiService;
 
     private KafkaProperties kafkaProperties;
@@ -98,6 +105,8 @@ class EmpiServiceImplTest {
             masterIdentityRepository,
             aliasRepository,
             mergeEventRepository,
+            patientRepository,
+            auditEventLogService,
             new EmpiMapper(),
             kafkaProperties,
             kafkaTemplateProvider
@@ -303,6 +312,112 @@ class EmpiServiceImplTest {
         ArgumentCaptor<EmpiMergeEvent> mergeCaptor = ArgumentCaptor.forClass(EmpiMergeEvent.class);
         Mockito.verify(mergeEventRepository).save(mergeCaptor.capture());
         assertThat(mergeCaptor.getValue().getMergeType()).isEqualTo(EmpiMergeType.MANUAL);
+        // Skill merge-step 5 (P1 #8): PATIENT_MERGE audit trail
+        Mockito.verify(auditEventLogService).logEvent(any());
+    }
+
+    /* ── P1 #8: merge hardening ─────────────────────────────────────────── */
+
+    private EmpiMasterIdentity activeIdentity(String empiNumber, UUID hospitalId) {
+        EmpiMasterIdentity identity = EmpiMasterIdentity.builder()
+            .empiNumber(empiNumber)
+            .status(EmpiIdentityStatus.ACTIVE)
+            .hospitalId(hospitalId)
+            .build();
+        identity.setId(UUID.randomUUID());
+        return identity;
+    }
+
+    @Test
+    void mergeIdentities_reassignsAliasesAndDeactivatesDuplicates() {
+        EmpiMasterIdentity primary = activeIdentity("EMP-A", null);
+        EmpiMasterIdentity secondary = activeIdentity("EMP-B", null);
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+        when(mergeEventRepository.save(any(EmpiMergeEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdentityRepository.save(any(EmpiMasterIdentity.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        EmpiIdentityAlias primaryMrn = EmpiIdentityAlias.builder()
+            .aliasType(EmpiAliasType.MRN).aliasValue("MRN-1").masterIdentity(primary).active(true).build();
+        EmpiIdentityAlias duplicateMrn = EmpiIdentityAlias.builder()
+            .aliasType(EmpiAliasType.MRN).aliasValue("mrn-1").masterIdentity(secondary).active(true).build();
+        EmpiIdentityAlias movableNationalId = EmpiIdentityAlias.builder()
+            .aliasType(EmpiAliasType.NATIONAL_ID).aliasValue("BF-42").masterIdentity(secondary).active(true).build();
+
+        when(aliasRepository.findByMasterIdentity_Id(primary.getId())).thenReturn(List.of(primaryMrn));
+        when(aliasRepository.findByMasterIdentity_Id(secondary.getId()))
+            .thenReturn(List.of(duplicateMrn, movableNationalId));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        empiService.mergeIdentities(primary.getId(), request);
+
+        // The case-insensitive duplicate is deactivated; the unique alias moves.
+        assertThat(duplicateMrn.isActive()).isFalse();
+        assertThat(movableNationalId.getMasterIdentity()).isSameAs(primary);
+        Mockito.verify(aliasRepository).save(duplicateMrn);
+        Mockito.verify(aliasRepository).save(movableNationalId);
+    }
+
+    @Test
+    void mergeIdentities_rejectsCrossTenantMerge() {
+        EmpiMasterIdentity primary = activeIdentity("EMP-A", UUID.randomUUID());
+        EmpiMasterIdentity secondary = activeIdentity("EMP-B", UUID.randomUUID());
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        UUID primaryId = primary.getId();
+        assertThatThrownBy(() -> empiService.mergeIdentities(primaryId, request))
+            .isInstanceOf(BusinessException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergePatients_provisionsMissingIdentitiesThenMerges() {
+        UUID primaryPatientId = UUID.randomUUID();
+        UUID secondaryPatientId = UUID.randomUUID();
+
+        // Primary already has an identity; secondary needs provisioning.
+        EmpiMasterIdentity primary = activeIdentity("EMP-A", null);
+        primary.setPatientId(primaryPatientId);
+        EmpiMasterIdentity provisioned = activeIdentity("EMP-B", null);
+        provisioned.setPatientId(secondaryPatientId);
+
+        when(masterIdentityRepository.findByPatientId(primaryPatientId)).thenReturn(Optional.of(primary));
+        // First lookup: absent (triggers provisioning); after linkIdentity: present.
+        when(masterIdentityRepository.findByPatientId(secondaryPatientId))
+            .thenReturn(Optional.empty(), Optional.of(provisioned));
+
+        com.example.hms.model.Patient duplicatePatient = new com.example.hms.model.Patient();
+        duplicatePatient.setId(secondaryPatientId);
+        when(patientRepository.findByIdUnscoped(secondaryPatientId)).thenReturn(Optional.of(duplicatePatient));
+
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(provisioned.getId())).thenReturn(Optional.of(provisioned));
+        when(masterIdentityRepository.save(any(EmpiMasterIdentity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mergeEventRepository.save(any(EmpiMergeEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(masterIdentityRepository.existsByEmpiNumberIgnoreCase(any())).thenReturn(false);
+
+        EmpiMergeEventResponseDTO response = empiService.mergePatients(
+            primaryPatientId, secondaryPatientId, EmpiMergeType.MANUAL, "duplicate registration");
+
+        assertThat(response).isNotNull();
+        assertThat(provisioned.getStatus()).isEqualTo(EmpiIdentityStatus.MERGED);
+        assertThat(provisioned.isActive()).isFalse();
+    }
+
+    @Test
+    void mergePatients_rejectsSelfMerge() {
+        UUID patientId = UUID.randomUUID();
+        assertThatThrownBy(() ->
+            empiService.mergePatients(patientId, patientId, EmpiMergeType.MANUAL, null))
+            .isInstanceOf(BusinessException.class);
     }
 
     @Test

@@ -1,10 +1,20 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  Output,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../services/empi.service';
 import { ToastService } from '../../core/toast.service';
+import { RoleContextService } from '../../core/role-context.service';
 
 interface CandidateFormState {
   firstName: string;
@@ -191,10 +201,52 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
                 >
                   {{ 'EMPI.CONFIRM_MATCH' | translate }}
                 </button>
+                <button
+                  *ngIf="isAdmin"
+                  type="button"
+                  class="btn-secondary"
+                  (click)="toggleMergeSelection(match)"
+                  [attr.data-testid]="'empi-select-' + match.patientId"
+                >
+                  {{
+                    (isSelectedForMerge(match.patientId)
+                      ? 'EMPI.MERGE_DESELECT'
+                      : 'EMPI.MERGE_SELECT'
+                    ) | translate
+                  }}
+                </button>
               </td>
             </tr>
           </tbody>
         </table>
+
+        <div
+          *ngIf="isAdmin && mergeSelection().length === 2"
+          class="empi-panel__merge-bar"
+          data-testid="empi-merge-bar"
+        >
+          <p>
+            {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+            <strong>{{ mergeSelection()[0].displayName }}</strong>
+            · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+            {{ mergeSelection()[1].displayName }}
+          </p>
+          <div class="actions">
+            <button type="button" class="btn-secondary" (click)="swapMergeSelection()">
+              {{ 'EMPI.MERGE_SWAP' | translate }}
+            </button>
+            <button
+              type="button"
+              class="btn-primary"
+              (click)="executeMerge()"
+              [disabled]="merging()"
+              data-testid="empi-merge"
+            >
+              {{ (mergeArmed() ? 'EMPI.MERGE_CONFIRM_BUTTON' : 'EMPI.MERGE_BUTTON') | translate }}
+            </button>
+          </div>
+          <p class="empi-panel__merge-hint">{{ 'EMPI.MERGE_HINT' | translate }}</p>
+        </div>
 
         <div *ngIf="results().length > 0" class="empi-panel__new-patient">
           <p>{{ 'EMPI.NOT_THIS_ONE' | translate }}</p>
@@ -283,6 +335,18 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         background: var(--muted-bg, #f8fafc);
         border-radius: 4px;
       }
+      .empi-panel__merge-bar {
+        margin-top: 1rem;
+        padding: 0.75rem;
+        border: 1px solid var(--warning, #b45309);
+        background: #fffbeb;
+        border-radius: 4px;
+      }
+      .empi-panel__merge-hint {
+        margin: 0.5rem 0 0;
+        font-size: 0.85em;
+        color: var(--warning, #b45309);
+      }
       .actions {
         display: flex;
         gap: 0.5rem;
@@ -298,11 +362,32 @@ export class EmpiCandidatesPanelComponent {
   protected readonly searched = signal(false);
   protected readonly error = signal(false);
 
+  /* ── P1 #8: admin duplicate-merge mode ── */
+  protected readonly mergeSelection = signal<EmpiCandidateMatch[]>([]);
+  protected readonly merging = signal(false);
+  protected readonly mergeArmed = signal(false);
+  protected readonly selectedMergeIds = computed(
+    () => new Set(this.mergeSelection().map((match) => match.patientId)),
+  );
+
+  /** Confirmed match — emitted for embedding parents (walk-in flow). */
+  @Output() confirm = new EventEmitter<EmpiCandidateMatch>();
+  /** New-patient handoff — emitted for embedding parents. */
+  @Output() newPatient = new EventEmitter<EmpiCandidateQuery>();
+
   protected form: CandidateFormState = { ...EMPTY_FORM };
 
   private readonly empi = inject(EmpiService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** Only admins may execute the irreversible identity merge. */
+  protected readonly isAdmin = this.roleContext.hasAnyActiveRole([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   protected search(event: Event): void {
     event.preventDefault();
@@ -336,17 +421,80 @@ export class EmpiCandidatesPanelComponent {
   }
 
   protected confirmMatch(match: EmpiCandidateMatch): void {
-    // The cell-text says "the operator confirms" — surfacing the
-    // confirmation as a toast keeps this component self-contained
-    // for the foundation pass. The named follow-on is to route the
-    // confirmed patientId into the walk-in / appointment flow
-    // (parent component @Output binding) once embedded inside the
-    // walk-in dialog.
     this.toast.success(this.translate.instant('EMPI.TOAST.CONFIRMED', { name: match.displayName }));
+    this.confirm.emit(match);
+    // Self-contained default when nothing is embedding the panel: the
+    // confirmed patient IS the person at the desk — open their chart
+    // instead of letting a duplicate be created.
+    if (!this.confirm.observed) {
+      this.router.navigate(['/patients', match.patientId]);
+    }
   }
 
   protected newPatientFromForm(): void {
     this.toast.info(this.translate.instant('EMPI.TOAST.NEW_PATIENT_HANDOFF'));
+    const query = this.toQuery();
+    this.newPatient.emit(query);
+    if (!this.newPatient.observed) {
+      this.router.navigate(['/patients/new']);
+    }
+  }
+
+  /* ── P1 #8: admin duplicate merge ── */
+
+  protected isSelectedForMerge(patientId: string): boolean {
+    return this.selectedMergeIds().has(patientId);
+  }
+
+  protected toggleMergeSelection(match: EmpiCandidateMatch): void {
+    this.mergeArmed.set(false);
+    this.mergeSelection.update((selection) => {
+      if (selection.some((selected) => selected.patientId === match.patientId)) {
+        return selection.filter((selected) => selected.patientId !== match.patientId);
+      }
+      if (selection.length >= 2) {
+        return selection; // at most two — deselect one first
+      }
+      return [...selection, match];
+    });
+  }
+
+  protected swapMergeSelection(): void {
+    this.mergeArmed.set(false);
+    this.mergeSelection.update((selection) =>
+      selection.length === 2 ? [selection[1], selection[0]] : selection,
+    );
+  }
+
+  /** Two-click confirmation: first click arms, second executes. */
+  protected executeMerge(): void {
+    const selection = this.mergeSelection();
+    if (selection.length !== 2) return;
+    if (!this.mergeArmed()) {
+      this.mergeArmed.set(true);
+      return;
+    }
+    this.merging.set(true);
+    const [primary, secondary] = selection;
+    this.empi.mergeByPatient(primary.patientId, secondary.patientId).subscribe({
+      next: () => {
+        this.toast.success(
+          this.translate.instant('EMPI.TOAST.MERGED', { name: primary.displayName }),
+        );
+        this.merging.set(false);
+        this.mergeArmed.set(false);
+        this.mergeSelection.set([]);
+        // Drop the merged-away duplicate from the current result list.
+        this.results.update((matches) =>
+          matches.filter((match) => match.patientId !== secondary.patientId),
+        );
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
+        this.merging.set(false);
+        this.mergeArmed.set(false);
+      },
+    });
   }
 
   protected trackByPatientId(_index: number, match: EmpiCandidateMatch): string {

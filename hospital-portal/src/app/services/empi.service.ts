@@ -32,6 +32,15 @@ export interface EmpiCandidateMatch {
   nationalIdMatched: boolean;
 }
 
+/** Result of an identity-graph merge (P1 #8). */
+export interface EmpiMergeEventResponse {
+  id: string;
+  primaryIdentityId: string;
+  secondaryIdentityId: string;
+  mergeType: string;
+  mergedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class EmpiService {
   private readonly http = inject(HttpClient);
@@ -45,5 +54,21 @@ export class EmpiService {
    */
   findCandidates(query: EmpiCandidateQuery): Observable<EmpiCandidateMatch[]> {
     return this.http.post<EmpiCandidateMatch[]>('/empi/candidates', query);
+  }
+
+  /**
+   * Admin-only irreversible identity-graph merge of two duplicate
+   * patients (HOSPITAL_ADMIN/SUPER_ADMIN). Clinical rows are untouched.
+   */
+  mergeByPatient(
+    primaryPatientId: string,
+    secondaryPatientId: string,
+    notes?: string,
+  ): Observable<EmpiMergeEventResponse> {
+    return this.http.post<EmpiMergeEventResponse>('/empi/merge-by-patient', {
+      primaryPatientId,
+      secondaryPatientId,
+      notes,
+    });
   }
 }

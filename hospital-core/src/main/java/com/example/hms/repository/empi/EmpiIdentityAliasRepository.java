@@ -14,4 +14,6 @@ public interface EmpiIdentityAliasRepository extends JpaRepository<EmpiIdentityA
     boolean existsByAliasTypeAndAliasValueIgnoreCase(EmpiAliasType aliasType, String aliasValue);
 
     Optional<EmpiIdentityAlias> findByAliasTypeAndAliasValueIgnoreCase(EmpiAliasType aliasType, String aliasValue);
+
+    java.util.List<EmpiIdentityAlias> findByMasterIdentity_Id(UUID masterIdentityId);
 }

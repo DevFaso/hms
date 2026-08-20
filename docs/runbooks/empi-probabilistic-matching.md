@@ -17,7 +17,7 @@ Default OFF. When off:
 - `POST /api/empi/candidates` → `404 Not Found`
 - `EmpiProbabilisticMatcher.findCandidates(...)` returns an empty list
 
-When on (foundation pass): the endpoint reaches the matcher, the matcher returns an empty list. **No false positives, no auto-merge, no auto-link** — the receptionist UI can be wired against the stable contract today and start producing real candidates once the scorer body lands in the follow-on.
+When on: the endpoint reaches the matcher and the Fellegi-Sunter scorer returns real scored candidates (weights: name 0.40, DOB 0.25, national-ID 0.25, sex 0.10; `min-score` cut-off, `max-candidates` truncation), scoped to the caller's active hospital. **No auto-merge, no auto-link** at any flag setting — the receptionist confirms a match to navigate to the existing patient, and identity merges are the separate admin-only `/empi` endpoints (`POST /empi/merge-by-patient`, `POST /empi/identities/{id}/merge`), which are independent of this flag. *(An earlier version of this runbook described the pre-scorer foundation pass, which returned an empty list even when enabled; the scorer body shipped in `020719d2`.)*
 
 ---
 

@@ -35,6 +35,14 @@ public interface EmpiService {
     @Transactional
     void removeAlias(UUID identityId, UUID aliasId);
 
+    /**
+     * Merge two duplicate patients at the identity-graph level, provisioning
+     * master identities for either patient when absent (admin flow, P1 #8).
+     */
+    @Transactional
+    EmpiMergeEventResponseDTO mergePatients(UUID primaryPatientId, UUID secondaryPatientId,
+                                            com.example.hms.enums.empi.EmpiMergeType mergeType, String notes);
+
     @Transactional
     EmpiMergeEventResponseDTO mergeIdentities(UUID primaryIdentityId, EmpiMergeRequestDTO request);
 }
