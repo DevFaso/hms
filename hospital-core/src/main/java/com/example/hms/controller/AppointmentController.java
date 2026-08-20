@@ -63,7 +63,22 @@ public class AppointmentController {
     }
 
     private final AppointmentService appointmentService;
+    private final com.example.hms.service.AppointmentReminderService appointmentReminderService;
     private final MessageSource messageSource;
+
+    /**
+     * Manual twin of the AppointmentReminderScheduler sweep (P1 #7) — same
+     * pattern as the referral-expiry and critical-escalation triggers.
+     * Returns the number of patients reminded.
+     */
+    @PostMapping("/reminders/run")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Run the appointment reminder sweep now",
+        description = "Mirrors the scheduled sweep; reminds patients of appointments starting within the lead window.")
+    public ResponseEntity<java.util.Map<String, Integer>> runReminderSweep() {
+        int reminded = appointmentReminderService.sendDueReminders();
+        return ResponseEntity.ok(java.util.Map.of("reminded", reminded));
+    }
 
     // Helper to get username (or a custom UserPrincipal with more info)
     private String getUsername(Authentication auth) {
