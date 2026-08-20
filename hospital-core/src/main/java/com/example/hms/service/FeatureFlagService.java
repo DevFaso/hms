@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.featureflag.FeatureFlagOverrideResponseDTO;
+
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -56,4 +59,10 @@ public interface FeatureFlagService {
         UUID organizationId,
         Locale locale
     );
+
+    /**
+     * All persisted overrides (global and per-tenant) for the super-admin
+     * console, ordered by flag key.
+     */
+    List<FeatureFlagOverrideResponseDTO> listOverrides();
 }
