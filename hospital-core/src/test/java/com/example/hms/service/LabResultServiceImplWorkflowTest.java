@@ -295,6 +295,36 @@ class LabResultServiceImplWorkflowTest {
             () -> labResultService.releaseLabResult(labResultId, Locale.US));
     }
 
+    @Test
+    void acknowledgeLabResultThrowsWhenResultMissing() {
+        // Unknown ids were previously swallowed to keep the synthetic
+        // pending-review rows acknowledgeable; that endpoint is gone, so a
+        // missing result must surface as a 404 again.
+        UUID labResultId = UUID.randomUUID();
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    void acknowledgeLabResultStampsAcknowledgementFields() {
+        UUID labResultId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+
+        labResultService.acknowledgeLabResult(labResultId, Locale.US);
+
+        assertThat(labResult.isAcknowledged()).isTrue();
+        assertThat(labResult.getAcknowledgedAt()).isNotNull();
+        assertThat(labResult.getAcknowledgedByUserId()).isEqualTo(actorId);
+        verify(labResultRepository).save(labResult);
+    }
+
     private LabResult buildLabResult(UUID labResultId) {
         LabResult labResult = new LabResult();
         labResult.setId(labResultId);

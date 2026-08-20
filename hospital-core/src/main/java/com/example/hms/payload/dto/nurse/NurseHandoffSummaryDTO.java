@@ -19,5 +19,11 @@ public class NurseHandoffSummaryDTO {
     private String patientName;
     private String direction;
     private LocalDateTime updatedAt;
+    /** Situation line — kept under the legacy name the card UI already renders. */
     private String note;
+    private String background;
+    private String assessment;
+    private String recommendation;
+    private String status;
+    private String createdByName;
 }
