@@ -32,6 +32,7 @@ class EmpiProbabilisticMatcherTest {
 
     @Mock private PatientRepository patientRepository;
     @Mock private EmpiService empiService;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     private EmpiProbabilisticProperties properties;
     private EmpiProbabilisticMatcher matcher;
@@ -39,7 +40,7 @@ class EmpiProbabilisticMatcherTest {
     @BeforeEach
     void setUp() {
         properties = new EmpiProbabilisticProperties();
-        matcher = new EmpiProbabilisticMatcher(properties, patientRepository, empiService);
+        matcher = new EmpiProbabilisticMatcher(properties, patientRepository, empiService, roleValidator);
     }
 
     @Test
@@ -118,6 +119,23 @@ class EmpiProbabilisticMatcherTest {
         // weight), sex = 1.0 (0.10 weight), nationalId = 0 → composite
         // 0.50 — below the default 0.70 threshold, no candidate.
         assertThat(matches).isEmpty();
+    }
+
+    @Test
+    @DisplayName("P1 #8: scoped callers only see patients registered at their active hospital")
+    void scopedCallerNeverSeesCrossHospitalCandidates() {
+        properties.setEnabled(true);
+        Patient p = patient(UUID.randomUUID(), "Awa", "Diallo",
+            LocalDate.of(1990, 1, 15), "F"); // would score 1.0 unscoped
+        when(patientRepository
+                .findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(any(), any()))
+            .thenReturn(List.of(p));
+        when(empiService.findIdentityByAlias(any(), any())).thenReturn(Optional.empty());
+        // Caller is pinned to a hospital the candidate is NOT registered at
+        // (the fixture patient carries no hospital registrations).
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThat(matcher.findCandidates(sampleQuery())).isEmpty();
     }
 
     @Test
