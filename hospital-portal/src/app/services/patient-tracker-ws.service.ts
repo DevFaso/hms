@@ -22,12 +22,20 @@ export interface PatientTrackerEvent {
  *
  * <p>Auth uses the same {@code /auth/ws-ticket} short-lived ticket flow as
  * {@link NotificationService} so we don't reuse a stale JWT in reconnects.
+ *
+ * <p>Shared connection (task 24): the tracker board, the clinician
+ * dashboard, and the nurse station all consume this one socket. Calls to
+ * {@link #connect}/{@link #disconnect} are reference-counted per consumer —
+ * the socket only tears down when the LAST consumer releases it, so
+ * navigating away from one surface never kills the stream for the others.
+ * Every consumer must pair one connect() with one disconnect().
  */
 @Injectable({ providedIn: 'root' })
 export class PatientTrackerWsService {
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
+  private refCount = 0;
   private stompClient: Client | null = null;
   private subscription: StompSubscription | null = null;
   private currentHospitalId: string | null = null;
@@ -52,6 +60,15 @@ export class PatientTrackerWsService {
   }
 
   connect(hospitalId: string): void {
+    // Count the consumer even when the guards below no-op the attempt, so
+    // connect/disconnect stay symmetrical per consumer regardless of
+    // environment (SSR, expired token at wiring time, ...).
+    this.refCount++;
+    this.beginConnect(hospitalId);
+  }
+
+  /** Connection attempt without ref-counting — reconnects re-enter here. */
+  private beginConnect(hospitalId: string): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
     const token = this.auth.getToken();
     if (!token || this.auth.isExpired(token)) return;
@@ -60,7 +77,7 @@ export class PatientTrackerWsService {
       return;
     }
 
-    this.disconnect();
+    this.teardown();
     this.currentHospitalId = hospitalId;
     const generation = ++this.connectGeneration;
 
@@ -75,7 +92,19 @@ export class PatientTrackerWsService {
     });
   }
 
+  /**
+   * Release one consumer's claim on the shared socket. The connection is
+   * only torn down when the last consumer releases it.
+   */
   disconnect(): void {
+    this.refCount = Math.max(0, this.refCount - 1);
+    if (this.refCount === 0) {
+      this.teardown();
+    }
+  }
+
+  /** Hard teardown of the socket — internal failure paths land here too. */
+  private teardown(): void {
     this.connectGeneration++;
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
@@ -104,7 +133,7 @@ export class PatientTrackerWsService {
 
           beforeConnect: () => {
             if (this.auth.isExpired()) {
-              this.disconnect();
+              this.teardown();
               throw new Error('Token expired');
             }
           },
@@ -148,7 +177,7 @@ export class PatientTrackerWsService {
   private scheduleReconnect(generation: number): void {
     if (generation !== this.connectGeneration) return;
     if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
-      this.disconnect();
+      this.teardown();
       return;
     }
     this.reconnectAttempts++;
@@ -165,7 +194,7 @@ export class PatientTrackerWsService {
       if (!hospitalId) return;
       this.stompClient?.deactivate().catch(() => undefined);
       this.stompClient = null;
-      this.connect(hospitalId);
+      this.beginConnect(hospitalId);
     }, delay);
   }
 }
