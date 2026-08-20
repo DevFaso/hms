@@ -80,11 +80,6 @@ GET {{baseUrl}}/lab-results/{{labResultId}}
 Authorization: Bearer {{accessToken}}
 Accept: application/json
 
-### Get pending review results
-GET {{baseUrl}}/lab-results/pending-review
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
 ### Update lab result
 PUT {{baseUrl}}/lab-results/{{labResultId}}
 Authorization: Bearer {{accessToken}}

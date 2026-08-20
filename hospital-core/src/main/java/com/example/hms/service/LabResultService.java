@@ -22,8 +22,6 @@ public interface LabResultService {
 
     Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale);
 
-    List<LabResultResponseDTO> getPendingReviewResults(UUID providerId, Locale locale);
-
     LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO requestDTO, Locale locale);
 
     void deleteLabResult(UUID id, Locale locale);

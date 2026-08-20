@@ -73,15 +73,6 @@ public class LabResultController {
         return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
     }
 
-    @GetMapping("/pending-review")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
-    @Operation(summary = "Get Lab Results Pending Review", description = "Retrieves a curated list of lab results awaiting clinician review.")
-    public ResponseEntity<List<LabResultResponseDTO>> getPendingReview(
-            @RequestParam(name = "providerId", required = false) UUID providerId,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.getPendingReviewResults(providerId, locale));
-    }
-
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
@@ -113,7 +104,7 @@ public class LabResultController {
 
     @PostMapping("/{id}/acknowledge")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
-    @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged. Currently idempotent for synthetic dashboard data.")
+    @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged.")
     public ResponseEntity<Void> acknowledgeLabResult(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
