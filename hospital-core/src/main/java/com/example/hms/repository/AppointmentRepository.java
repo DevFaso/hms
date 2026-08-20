@@ -101,4 +101,24 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "staff"})
     java.util.List<com.example.hms.model.Appointment> findByHospital_IdAndStaff_IdAndAppointmentDateBetween(
         java.util.UUID hospitalId, java.util.UUID staffId, java.time.LocalDate startDate, java.time.LocalDate endDate);
+
+    /**
+     * Reminder-sweep feed (P1 #7): un-reminded appointments in the given
+     * date range and statuses. Unscoped by design — the sweep is a system
+     * actor covering every hospital. The exact "next N hours" window is
+     * narrowed in Java because appointment date and start time are
+     * separate columns. EntityGraph pulls what the reminder needs:
+     * patient (+user for the in-app push), staff, hospital.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(
+        attributePaths = {"patient", "patient.user", "staff", "staff.user", "hospital"})
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT a FROM Appointment a WHERE a.reminderSentAt IS NULL "
+        + "AND a.status IN :statuses "
+        + "AND a.appointmentDate BETWEEN :fromDate AND :toDate")
+    java.util.List<com.example.hms.model.Appointment> findAwaitingReminder(
+        @org.springframework.data.repository.query.Param("statuses")
+        java.util.Collection<com.example.hms.enums.AppointmentStatus> statuses,
+        @org.springframework.data.repository.query.Param("fromDate") java.time.LocalDate fromDate,
+        @org.springframework.data.repository.query.Param("toDate") java.time.LocalDate toDate);
 }

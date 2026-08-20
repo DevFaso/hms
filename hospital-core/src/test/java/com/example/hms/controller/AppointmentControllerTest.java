@@ -72,11 +72,17 @@ class AppointmentControllerTest {
         public MessageSource messageSource() {
             return mock(MessageSource.class);
         }
+
+        @Bean
+        public com.example.hms.service.AppointmentReminderService appointmentReminderService() {
+            return mock(com.example.hms.service.AppointmentReminderService.class);
+        }
     }
 
     @Autowired private MockMvc mockMvc;
     @Autowired private AppointmentService appointmentService;
     @Autowired private MessageSource messageSource;
+    @Autowired private com.example.hms.service.AppointmentReminderService appointmentReminderService;
 
     private ObjectMapper objectMapper;
     private UUID appointmentId;
@@ -90,7 +96,7 @@ class AppointmentControllerTest {
 
     @BeforeEach
     void setUp() {
-        reset(appointmentService, messageSource);
+        reset(appointmentService, messageSource, appointmentReminderService);
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
@@ -717,5 +723,16 @@ class AppointmentControllerTest {
                 .param("staffId", provider.toString())
                 .principal(auth))
             .andExpect(status().isOk());
+    }
+
+    // ---- P1 #7: manual reminder-sweep trigger ----
+
+    @Test
+    void runReminderSweepReturnsCount() throws Exception {
+        when(appointmentReminderService.sendDueReminders()).thenReturn(4);
+
+        mockMvc.perform(post("/appointments/reminders/run").principal(auth))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.reminded").value(4));
     }
 }
