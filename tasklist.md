@@ -492,3 +492,55 @@ Top-down priority. Each item ships as one PR per the foundation-pass pattern in 
 P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-gaps.md`.
 
 *Last updated: 2026-04-28 — P0 shipped to main via #139/#140/#141*
+
+---
+---
+
+# Epic Parity Gap Tasklist — 2026-08-20
+
+> Derived from the **HMS × Epic Parity Ledger** audit (13 inspection agents, develop @ 63ddd536,
+> 197 present / 113 absent capabilities verified with file-level evidence):
+> <https://claude.ai/code/artifact/a2d071f3-8b46-49a6-b2f1-10ad85ae87f2>
+> Ranked by risk-to-clinical-truth first, then leverage. One item = one PR into develop unless noted.
+> Deliberate LMIC non-goals (NOT tasks): Surescripts/NCPDP, X12 837/835, US registries, SNOMED,
+> video visits, full revenue cycle (roadmap: partner with a billing vendor).
+
+## P0 — Clinical-truth risks (fabricated or dead-end data in production UI)
+
+- [ ] 1. **Nurse handoffs: real entity or removal** — `NurseTaskServiceImpl` fabricates handoff rows ("still synthetic, entity arrives in MVP 2"); completion buttons operate on generated data. Build the handoff entity (SBAR/I-PASS fields) + endpoints + wire the existing UI, or pull the surface until it's real.
+- [ ] 2. **Nurse order-task queue: real entity or removal** — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
+- [ ] 3. **Lab pending-review: delete the hardcoded endpoint** — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
+- [ ] 4. **Bed/ward decision** — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
+- [ ] 5. **Critical-value escalation chain** — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
+
+## P1 — Complete the specialty core + turn on what's already built
+
+- [ ] 6. **Labor & delivery: partograph + delivery record** — the one missing organ of the OB specialty (already scoped in `docs/runbooks/obgyn-pediatrics-finish-scope-audit.md`; `DOCUMENT_DELIVERY_NOTES` permission exists with no feature behind it). WHO partograph model + entry UI + newborn linkage.
+- [ ] 7. **Appointment reminders over SMS** — reminder enum exists, nothing ever sends; wire a scheduled sender through the now-live IKODDI channel (respect `deliversRealSms()` guard).
+- [ ] 8. **EMPI: finish probabilistic matching + merge** — Fellegi-Sunter scorer + review UI are complete behind `EMPI_PROBABILISTIC_ENABLED:false`, but "confirm match" is a toast-only placeholder and `EmpiServiceImpl.mergeIdentities` has no REST caller. Implement confirm → merge endpoint (HL7 A40 semantics) + enable-flag runbook.
+- [ ] 9. **Web parity: cancel/reschedule + proxy views** — backend APIs proven by the Android app; small Angular lifts to close the loop on web.
+- [ ] 10. **Patient-facing education delivery** — rich staff-side library exists (`/patient-education`); surface assigned resources in the patient portal (and apps later).
+
+## P2 — Structural gaps with high leverage
+
+- [ ] 11. **Slot inventory for scheduling** — visit types → session templates → searchable open slots. Unlocks real self-scheduling, waitlist auto-offer, and utilization reporting in one model. (Biggest single build in this list — consider a foundation-pass PR series.)
+- [ ] 12. **Referral → appointment linkage** — referral completion stores a timestamp + free-text location but never creates the Appointment row; create + link it.
+- [ ] 13. **Orphan-read writers** — on-call schedule (read by `GET /me/on-call-status`, written by nothing) and advance directives (read by storyboard/record-sharing, no controller): add minimal CRUD for each.
+- [ ] 14. **Drug-interaction KB expansion** — checking pipeline is real at prescribe/dispense/CDS-Hooks layers but the local KB is a 12-pair seed; curate a WHO-essential-medicines-scale interaction set.
+- [ ] 15. **Controlled-substance enforcement** — flags, two-factor and co-sign columns exist; nothing enforces them. Add the prescribe/dispense gates.
+- [ ] 16. **Server-side prescription signing ceremony** — "signed" is currently a client-supplied status; require an authenticated server-side sign action (reuse the hash-based e-signature layer).
+- [ ] 17. **HL7 outbound transport** — OML/ORU messages are built and queued in the instrument outbox but never transmitted; add the MLLP sender (mirror of the inbound listener).
+
+## P3 — Broader parity, pick by demand
+
+- [ ] 18. Growth charts (needs a height column on vitals) + flowsheets/I&O grids
+- [ ] 19. Microbiology (cultures, susceptibilities) — biggest lab-domain absence
+- [ ] 20. Note co-sign workflow (student/resident attestation)
+- [ ] 21. Registration extras: patient photo capture, consent-to-treat e-sign at check-in, guarantor accounts
+- [ ] 22. Recall lists + waitlist auto-offer (depends on #11)
+- [ ] 23. Downtime/read-only continuity mode; wristband & label printing (scanning exists, printing doesn't)
+- [ ] 24. FHIR bulk `$export` completion (foundation pass never finishes a job); FHIR write/$everything enable-runbook
+- [ ] 25. Analytics: report builder / scheduled reports; NEWS2/MEWS early-warning scores
+
+*Source audit + full evidence: artifact above. Related work already landed: PR #429 (cross-hospital
+link-at-registration), PR #430 (phone-first registration + IKODDI SMS OTP).*
