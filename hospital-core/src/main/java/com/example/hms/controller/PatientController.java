@@ -19,6 +19,7 @@ import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientProfileUpdateRequestDTO;
 import com.example.hms.payload.dto.PatientRequestDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.RegistrationMatchDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
 import com.example.hms.payload.dto.PatientTimelineAccessRequestDTO;
 import com.example.hms.payload.dto.PatientTimelineResponseDTO;
@@ -259,7 +260,9 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    // LAB_SCIENTIST/PHARMACIST reach this through the shared patient picker
+    // (e.g. /medication-history), which previously used the broader GET /patients.
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientResponseDTO>> searchPatients(
         @RequestParam(required = false) String mrn,
         @RequestParam(required = false) String name,
@@ -299,7 +302,9 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/lookup")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    // LAB_SCIENTIST/PHARMACIST reach this through the shared patient picker
+    // (e.g. /medication-history), which previously used the broader GET /patients.
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientResponseDTO>> lookupPatients(
         @RequestParam(required = false) String identifier,
         @RequestParam(required = false) String email,
@@ -318,6 +323,33 @@ public class PatientController {
         List<PatientResponseDTO> list =
             patientService.lookupPatients(identifier, email, phone, username, effectiveMrn, resolvedHospitalId, locale);
         return ResponseEntity.ok(list);
+    }
+
+    // ----------------------------------------------------------
+    // Registration-time existing-patient match (cross-hospital)
+    // ----------------------------------------------------------
+    @Operation(
+        summary = "Exact email/phone match against ALL hospitals for the registration form",
+        description = "Returns a masked, privacy-minimal projection so the desk can link an existing patient "
+            + "to this hospital (POST /registrations) instead of creating a duplicate record.",
+        security = @SecurityRequirement(name = "bearerAuth")
+    )
+    @ApiResponse(responseCode = "200", description = "Match check completed",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = RegistrationMatchDTO.class)))
+    @GetMapping("/registration-match")
+    // Every role that can register a patient (POST /patients) must be able to run
+    // the anti-duplicate match check, or the feature silently never fires for them.
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<List<RegistrationMatchDTO>> registrationMatch(
+        @RequestParam(required = false) String email,
+        @RequestParam(required = false) String phone,
+        @RequestParam(required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
+        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, resolvedHospitalId));
     }
 
     @Operation(

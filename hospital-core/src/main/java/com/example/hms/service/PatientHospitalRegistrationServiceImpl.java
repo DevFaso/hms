@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.PatientAlreadyRegisteredException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -7,14 +9,18 @@ import com.example.hms.mapper.PatientHospitalRegistrationMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
 import com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +40,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationMapper mapper;
+    private final RoleValidator roleValidator;
+    private final AuditEventLogService auditService;
 
     private static final String MRN_PREFIX = "mrn-";
     private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -67,6 +75,14 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         log.info("Hospital retrieved: name={}", hospital.getName());
 
+        // ── Tenant isolation: a non-super-admin caller may only link patients to
+        // their own active hospital — the client-supplied hospitalId/hospitalName
+        // would otherwise be a cross-tenant write vector. Null = super-admin, unscoped. ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospital.getId())) {
+            throw new AccessDeniedException("Cannot register a patient at another hospital.");
+        }
+
         // Prevent duplicate registration for same hospital
         if (registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
             throw new PatientAlreadyRegisteredException(
@@ -95,7 +111,44 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         log.info("✅ Registered Patient '{}' to Hospital '{}' with mrn '{}'", patient.getId(), hospital.getId(), mrn);
 
+        emitRegistrationAudit(saved, patient, hospital);
+
         return mapper.toResponseDTO(saved);
+    }
+
+    /** Linking a patient grants this hospital ongoing chart access — auditable. */
+    private void emitRegistrationAudit(PatientHospitalRegistration saved, Patient patient, Hospital hospital) {
+        try {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType("PatientHospitalRegistration")
+                .resourceId(saved.getId() != null ? saved.getId().toString() : null)
+                .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
+                .hospitalName(hospital.getName())
+                .resourceName(patient.getId() != null ? patient.getId().toString() : null)
+                .eventDescription("Patient linked to hospital '" + hospital.getName() + "' (mrn " + saved.getMrn() + ")")
+                .build());
+        } catch (RuntimeException ex) {
+            // Audit failure must never break the registration flow
+            log.warn("Failed to emit audit for registration {}: {}", saved.getId(), ex.getMessage());
+        }
+    }
+
+    /**
+     * ── Tenant isolation: by-patient reads disclose the patient's full
+     * cross-hospital affiliation history (incl. per-hospital MRNs), so
+     * non-super-admin callers only see rows at their own active hospital.
+     * Null active hospital = super-admin, unscoped. ──
+     */
+    private List<PatientHospitalRegistration> scopeToActiveHospital(List<PatientHospitalRegistration> registrations) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null) {
+            return registrations;
+        }
+        return registrations.stream()
+            .filter(r -> r.getHospital() != null && activeHospitalId.equals(r.getHospital().getId()))
+            .toList();
     }
 
     // -------------------- READ --------------------
@@ -104,6 +157,12 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public PatientHospitalRegistrationResponseDTO getById(UUID id) {
         PatientHospitalRegistration reg = registrationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id));
+        // ── Tenant isolation: cross-hospital rows read as 404, not 403 ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null
+            && (reg.getHospital() == null || !activeHospitalId.equals(reg.getHospital().getId()))) {
+            throw new ResourceNotFoundException(MSG_REG_NOT_FOUND_ID + id);
+        }
         return mapper.toResponseDTO(reg);
     }
 
@@ -112,7 +171,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(String patientUsername, int page, int size, Boolean active) {
         log.debug("Fetching registrations for patient username: {}, page: {}, size: {}, active: {}", patientUsername, page, size, active);
 
-        List<PatientHospitalRegistration> registrations = registrationRepository.findByPatientUsername(patientUsername);
+        List<PatientHospitalRegistration> registrations =
+            scopeToActiveHospital(registrationRepository.findByPatientUsername(patientUsername));
         if (active != null) {
             registrations = registrations.stream()
                 .filter(r -> r.isActive() == active)
@@ -132,7 +192,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     @Transactional(readOnly = true)
     public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(UUID patientId, int page, int size, Boolean active) {
         log.debug("Fetch by patientId={} page={} size={} active={}", patientId, page, size, active);
-        List<PatientHospitalRegistration> registrations = registrationRepository.findByPatientId(patientId);
+        List<PatientHospitalRegistration> registrations =
+            scopeToActiveHospital(registrationRepository.findByPatientId(patientId));
         if (active != null) {
             registrations = registrations.stream()
                 .filter(r -> r.isActive() == active)

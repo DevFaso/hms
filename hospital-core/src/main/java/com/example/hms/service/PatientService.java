@@ -14,6 +14,7 @@ import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientSearchCriteria;
 import com.example.hms.payload.dto.PatientTimelineAccessRequestDTO;
 import com.example.hms.payload.dto.PatientTimelineResponseDTO;
+import com.example.hms.payload.dto.RegistrationMatchDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
@@ -68,6 +69,16 @@ public interface PatientService {
         UUID hospitalId,
         Locale locale
     );
+
+    /**
+     * Exact-match search across ALL hospitals used by the registration form to
+     * offer "link existing patient" instead of creating a duplicate. Returns a
+     * privacy-minimal, masked projection — never the full patient record.
+     *
+     * @param hospitalId the registering hospital, used only to flag
+     *     {@code alreadyRegisteredHere}; may be null (super-admin, no pin).
+     */
+    List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId);
 
     PatientTimelineResponseDTO getDoctorTimeline(
         UUID patientId,

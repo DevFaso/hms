@@ -40,7 +40,14 @@
       </div>
       <div class="form-group">
         <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
-        <input id="email" type="email" [(ngModel)]="form.email" name="email" required />
+        <input
+          id="email"
+          type="email"
+          [(ngModel)]="form.email"
+          name="email"
+          required
+          (ngModelChange)="onIdentifierChange()"
+        />
       </div>
       <div class="form-group">
         <label for="phonePrimary">{{ 'PATIENTS.PHONE' | translate }} *</label>
@@ -50,6 +57,7 @@
           [(ngModel)]="form.phoneNumberPrimary"
           name="phoneNumberPrimary"
           required
+          (ngModelChange)="onIdentifierChange()"
         />
       </div>
       <div class="form-group">
@@ -225,6 +233,61 @@
         ></textarea>
       </div>
     </div>
+
+    <!-- Cross-hospital existing-patient match: offer LINK instead of a duplicate -->
+    @if (registrationMatches.length > 0 && !matchDismissed) {
+      <div class="existing-match-card" role="status">
+        <div class="existing-match-header">
+          <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
+          <div>
+            <strong>{{ 'PATIENTS.EXISTING_MATCH_TITLE' | translate }}</strong>
+            <p>{{ 'PATIENTS.EXISTING_MATCH_DESC' | translate }}</p>
+          </div>
+        </div>
+        @for (m of registrationMatches; track m.patientId) {
+          <div class="existing-match-row">
+            <div class="existing-match-info">
+              <span class="match-name">{{ m.fullName ?? '—' }}</span>
+              <span class="match-meta">
+                @if (m.birthYear) {
+                  {{ 'PATIENTS.BORN' | translate }} {{ m.birthYear }} ·
+                }
+                {{ m.matchedOn === 'PHONE' ? (m.maskedPhone ?? '') : (m.maskedEmail ?? '') }}
+                · {{ 'PATIENTS.REGISTERED_AT' | translate }} {{ m.hospitalCount }}
+                {{
+                  m.hospitalCount === 1
+                    ? ('PATIENTS.HOSPITAL_ONE' | translate)
+                    : ('PATIENTS.HOSPITAL_MANY' | translate)
+                }}
+              </span>
+            </div>
+            @if (m.alreadyRegisteredHere) {
+              <span class="match-here-badge">
+                {{ 'PATIENTS.ALREADY_REGISTERED_HERE' | translate }}
+              </span>
+              <a class="btn-secondary" [routerLink]="['/patients', m.patientId]">
+                {{ 'PATIENTS.VIEW_RECORD' | translate }}
+              </a>
+            } @else {
+              <button
+                type="button"
+                class="btn-primary"
+                [disabled]="linking"
+                (click)="linkExistingPatient(m)"
+              >
+                @if (linking) {
+                  <span class="spinner-sm"></span>
+                }
+                {{ 'PATIENTS.LINK_TO_HOSPITAL' | translate }}
+              </button>
+            }
+          </div>
+        }
+        <button type="button" class="btn-link dismiss-match" (click)="dismissMatch()">
+          {{ 'PATIENTS.NOT_SAME_PERSON' | translate }}
+        </button>
+      </div>
+    }
 
     <div class="form-actions">
       <!-- MVP 11: Inline duplicate warning strip -->
