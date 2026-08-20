@@ -306,4 +306,22 @@ class GlobalExceptionHandlerTest {
                 .contains("sources").contains("PLATFORM_CONFIG");
         }
     }
+
+    @Nested
+    @DisplayName("handlePatientAlreadyRegistered")
+    class HandlePatientAlreadyRegistered {
+
+        @Test
+        @DisplayName("duplicate hospital registration returns 409, not the 500 catch-all")
+        void returns409ForDuplicateRegistration() {
+            var ex = new PatientAlreadyRegisteredException(
+                "Patient 'p1' is already registered to Hospital 'h1'.");
+
+            ResponseEntity<Object> response = handler.handlePatientAlreadyRegistered(ex, request);
+
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+            org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
+                .contains("already registered");
+        }
+    }
 }

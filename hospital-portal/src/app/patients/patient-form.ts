@@ -2,16 +2,21 @@ import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { PatientService, PatientCreateRequest } from '../services/patient.service';
+import {
+  PatientService,
+  PatientCreateRequest,
+  RegistrationMatch,
+} from '../services/patient.service';
 import { UserService } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { RegistrationService } from '../services/registration.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { switchMap, catchError, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
-import { EMPTY } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 
 @Component({
   selector: 'app-patient-form',
@@ -29,6 +34,8 @@ export class PatientFormComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
   private readonly receptionService = inject(ReceptionService);
+  private readonly registrationService = inject(RegistrationService);
+  private readonly translate = inject(TranslateService);
 
   saving = false;
   hospitals: HospitalResponse[] = [];
@@ -39,7 +46,14 @@ export class PatientFormComponent implements OnInit {
   duplicateCandidates: DuplicateCandidate[] = [];
   showDuplicateWarning = false;
   private lastDuplicateCheck = '';
-  private duplicateCheckSubject = new Subject<{ name: string; dob: string }>();
+  private duplicateCheckSubject = new Subject<{ name: string; dob: string; phone: string }>();
+
+  // ── Cross-hospital existing-patient match (link instead of duplicate) ───
+  registrationMatches: RegistrationMatch[] = [];
+  /** Staff confirmed "not the same person" — allows a fresh registration. */
+  matchDismissed = false;
+  linking = false;
+  private matchCheckSubject = new Subject<{ email: string; phone: string }>();
 
   form: PatientCreateRequest = {
     userId: '',
@@ -83,25 +97,57 @@ export class PatientFormComponent implements OnInit {
       });
     }
 
-    // ── MVP 11: debounce duplicate check on name + dob changes ────────────
+    // ── MVP 11: debounce duplicate check on name + dob + phone changes ────
     this.duplicateCheckSubject
       .pipe(
         debounceTime(600),
-        distinctUntilChanged((a, b) => a.name === b.name && a.dob === b.dob),
+        distinctUntilChanged((a, b) => a.name === b.name && a.dob === b.dob && a.phone === b.phone),
       )
-      .subscribe(({ name, dob }) => {
+      .subscribe(({ name, dob, phone }) => {
         if (name.length < 3) {
           this.duplicateCandidates = [];
           return;
         }
-        this.receptionService.getDuplicateCandidates({ name, dob }).subscribe({
-          next: (candidates) => {
-            this.duplicateCandidates = candidates;
-          },
-          error: () => {
-            /* silent — don't block registration */
-          },
-        });
+        this.receptionService
+          .getDuplicateCandidates({ name, dob, phone: phone || undefined })
+          .subscribe({
+            next: (candidates) => {
+              this.duplicateCandidates = candidates;
+            },
+            error: () => {
+              /* silent — don't block registration */
+            },
+          });
+      });
+
+    // ── Cross-hospital exact match on email/phone: offer LINK, not duplicate ──
+    // switchMap cancels in-flight checks so a stale response can never overwrite
+    // the state for the values currently on screen.
+    this.matchCheckSubject
+      .pipe(
+        debounceTime(500),
+        distinctUntilChanged((a, b) => a.email === b.email && a.phone === b.phone),
+        switchMap(({ email, phone }) => {
+          // A new identifier pair re-arms the card: a dismissal only ever
+          // applies to the values that were on screen when it was clicked.
+          this.matchDismissed = false;
+          const phoneQuery = phone.length >= 6 ? phone : '';
+          const emailQuery = email.includes('@') ? email : '';
+          if (!phoneQuery && !emailQuery) {
+            return of([] as RegistrationMatch[]);
+          }
+          return this.patientService
+            .registrationMatch({
+              email: emailQuery || undefined,
+              phone: phoneQuery || undefined,
+              hospitalId: this.form.hospitalId || undefined,
+            })
+            .pipe(catchError(() => of(null))); // silent — don't block registration
+        }),
+      )
+      .subscribe((matches) => {
+        if (matches === null) return; // check failed — keep the previous state
+        this.registrationMatches = matches;
       });
   }
 
@@ -113,11 +159,51 @@ export class PatientFormComponent implements OnInit {
     return !this.roleContext.isSuperAdmin();
   }
 
-  /** Called when first name, last name, or date of birth changes. */
+  /** Called when first name, last name, date of birth, or primary phone changes. */
   onNameOrDobChange(): void {
     const name = `${this.form.firstName} ${this.form.lastName}`.trim();
     const dob = this.form.dateOfBirth ?? '';
-    this.duplicateCheckSubject.next({ name, dob });
+    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    this.duplicateCheckSubject.next({ name, dob, phone });
+  }
+
+  /** Called when email or primary phone changes — exact cross-hospital match. */
+  onIdentifierChange(): void {
+    this.matchCheckSubject.next({
+      email: (this.form.email ?? '').trim().toLowerCase(),
+      phone: (this.form.phoneNumberPrimary ?? '').trim(),
+    });
+    this.onNameOrDobChange();
+  }
+
+  /** Register the matched existing patient at THIS hospital instead of duplicating. */
+  linkExistingPatient(match: RegistrationMatch): void {
+    if (!this.form.hospitalId) {
+      this.toast.error(this.translate.instant('PATIENTS.SELECT_HOSPITAL_FIRST'));
+      return;
+    }
+    this.linking = true;
+    this.registrationService
+      .create({ patientId: match.patientId, hospitalId: this.form.hospitalId })
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('PATIENTS.LINKED_SUCCESS'));
+          this.router.navigate(['/patients', match.patientId]);
+        },
+        error: (err) => {
+          this.linking = false;
+          const msg =
+            err?.status === 409
+              ? this.translate.instant('PATIENTS.ALREADY_REGISTERED_HERE')
+              : this.translate.instant('PATIENTS.LINK_ERROR');
+          this.toast.error(msg);
+        },
+      });
+  }
+
+  /** Staff confirmed the match is a different person (e.g. a shared family phone). */
+  dismissMatch(): void {
+    this.matchDismissed = true;
   }
 
   /** Dismiss the duplicate warning and allow submission to continue. */
@@ -142,6 +228,13 @@ export class PatientFormComponent implements OnInit {
     }
     if (!this.form.hospitalId) {
       this.toast.error('Please select a hospital');
+      return;
+    }
+
+    // ── Existing patient matched by email/phone: force an explicit decision ──
+    // (link them, or dismiss as "different person" — e.g. a shared family phone)
+    if (this.registrationMatches.length > 0 && !this.matchDismissed) {
+      this.toast.error(this.translate.instant('PATIENTS.MATCH_DECIDE'));
       return;
     }
 

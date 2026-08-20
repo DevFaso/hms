@@ -63,6 +63,11 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler(PatientAlreadyRegisteredException.class)
+    public ResponseEntity<Object> handlePatientAlreadyRegistered(PatientAlreadyRegisteredException ex, WebRequest request) {
+        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage(), request);
+    }
+
     @ExceptionHandler(com.example.hms.cdshooks.CdsCriticalBlockException.class)
     public ResponseEntity<Object> handleCdsCriticalBlock(
             com.example.hms.cdshooks.CdsCriticalBlockException ex, WebRequest request) {

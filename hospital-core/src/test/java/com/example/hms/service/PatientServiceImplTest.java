@@ -824,4 +824,96 @@ class PatientServiceImplTest {
         assertThatThrownBy(() -> patientService.getPatientById(patientId, hospitalCId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ═══════════════ findRegistrationMatches (cross-hospital link-at-registration) ═══════════════
+
+    private PatientHospitalRegistration activeRegistrationAt(Hospital h) {
+        PatientHospitalRegistration reg = new PatientHospitalRegistration();
+        reg.setHospital(h);
+        reg.setActive(true);
+        return reg;
+    }
+
+    @Test
+    void findRegistrationMatchesByPhoneReturnsMaskedProjection() {
+        patient.setPhoneNumberPrimary("+22670707070");
+        patient.setEmail("jane@example.com");
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        patient.getHospitalRegistrations().add(activeRegistrationAt(otherHospital));
+
+        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+
+        var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
+
+        assertThat(matches).hasSize(1);
+        var match = matches.get(0);
+        assertThat(match.getPatientId()).isEqualTo(patientId);
+        assertThat(match.getMatchedOn()).isEqualTo("PHONE");
+        assertThat(match.getFullName()).isEqualTo("Jane Doe");
+        assertThat(match.getBirthYear()).isEqualTo(1990);
+        assertThat(match.getMaskedPhone()).startsWith("+").endsWith("70").contains("•");
+        assertThat(match.getMaskedPhone()).doesNotContain("2267070");
+        assertThat(match.getMaskedEmail()).isEqualTo("j•••@example.com");
+        assertThat(match.getHospitalCount()).isEqualTo(1);
+        assertThat(match.isAlreadyRegisteredHere()).isFalse();
+    }
+
+    @Test
+    void findRegistrationMatchesFlagsAlreadyRegisteredHere() {
+        patient.setPhoneNumberPrimary("+22670707070");
+        patient.getHospitalRegistrations().add(activeRegistrationAt(hospital));
+
+        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+
+        var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
+
+        assertThat(matches).hasSize(1);
+        assertThat(matches.get(0).isAlreadyRegisteredHere()).isTrue();
+    }
+
+    @Test
+    void findRegistrationMatchesFlagsInactiveRegistrationHereToo() {
+        // POST /registrations rejects on ANY existing row (active or not), so the
+        // card must not offer a Link that would dead-end in a 409.
+        patient.setPhoneNumberPrimary("+22670707070");
+        PatientHospitalRegistration inactive = activeRegistrationAt(hospital);
+        inactive.setActive(false);
+        patient.getHospitalRegistrations().add(inactive);
+
+        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+
+        var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
+
+        assertThat(matches).hasSize(1);
+        assertThat(matches.get(0).isAlreadyRegisteredHere()).isTrue();
+        assertThat(matches.get(0).getHospitalCount()).isZero();
+    }
+
+    @Test
+    void findRegistrationMatchesDedupesPhoneAndEmailHitsPreferringPhone() {
+        patient.setPhoneNumberPrimary("+22670707070");
+        patient.setEmail("jane@example.com");
+
+        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByEmailIgnoreCase("jane@example.com")).thenReturn(List.of(patient));
+
+        var matches = patientService.findRegistrationMatches("jane@example.com", "+22670707070", hospitalId);
+
+        assertThat(matches).hasSize(1);
+        assertThat(matches.get(0).getMatchedOn()).isEqualTo("PHONE");
+    }
+
+    @Test
+    void findRegistrationMatchesReturnsEmptyForBlankInputsWithoutQuerying() {
+        var matches = patientService.findRegistrationMatches("  ", null, hospitalId);
+
+        assertThat(matches).isEmpty();
+        verify(patientRepository, never()).findAllByEmailIgnoreCase(any());
+        verify(patientRepository, never()).findAllByPhoneNumberPrimary(any());
+    }
 }

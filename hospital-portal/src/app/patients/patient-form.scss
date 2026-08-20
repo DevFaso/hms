@@ -34,6 +34,75 @@
   }
 }
 
+// ── Cross-hospital existing-patient match card ──────────────────────────────
+.existing-match-card {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.existing-match-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #1e40af;
+
+  .material-symbols-outlined {
+    font-size: 22px;
+    color: #2563eb;
+  }
+  strong {
+    display: block;
+    font-size: 0.95rem;
+  }
+  p {
+    margin: 2px 0 0;
+    font-size: 0.82rem;
+    color: #1e3a8a;
+  }
+}
+.existing-match-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.existing-match-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 180px;
+
+  .match-name {
+    font-weight: 600;
+  }
+  .match-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #64748b);
+  }
+}
+.match-here-badge {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.dismiss-match {
+  align-self: flex-start;
+  font-size: 0.82rem;
+}
+
 // ── MVP 11: Duplicate warning ────────────────────────────────────────────────
 .duplicate-warning-strip {
   display: flex;
