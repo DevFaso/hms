@@ -55,6 +55,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_QUALITY_MANAGER;
 import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+import static com.example.hms.config.SecurityConstants.ROLE_PHARMACIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
@@ -374,10 +375,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).permitAll()
 
                 // -------------------- Patients --------------------
+                // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
+                // backs pharmacist-reachable pages such as /medication-history.
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN)
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -401,8 +404,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_REGISTRATIONS, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
+                // Mirrors the controller @PreAuthorize: every role that can create a
+                // patient (which auto-registers) can also link an existing one; the
+                // service pins non-super-admin writes to the caller's hospital.
                 .requestMatchers(HttpMethod.POST, API_REGISTRATIONS)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PUT, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
