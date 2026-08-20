@@ -16,11 +16,14 @@ import com.example.hms.payload.dto.OrganizationSecurityPolicyRequestDTO;
 import com.example.hms.payload.dto.OrganizationSecurityPolicyResponseDTO;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.OrganizationSecurityPolicyRepository;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -60,6 +63,27 @@ class OrganizationSecurityPolicyServiceImplTest {
             .organization(organization)
             .build();
         policy.setId(policyId);
+
+        // Default context for the pre-existing tests: super-admin (unscoped).
+        // The tenant-guard tests below install their own scoped contexts.
+        superAdminContext();
+    }
+
+    @AfterEach
+    void clearContext() {
+        HospitalContextHolder.clear();
+    }
+
+    private void superAdminContext() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+    }
+
+    private void scopedContext(UUID organizationId) {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(false)
+            .principalUsername("admin1")
+            .activeOrganizationId(organizationId)
+            .build());
     }
 
     @Test
@@ -109,9 +133,11 @@ class OrganizationSecurityPolicyServiceImplTest {
 
     @Test
     void deletePolicyDelegatesToRepository() {
+        when(policyRepository.findById(policyId)).thenReturn(Optional.of(policy));
+
         service.deletePolicy(policyId);
 
-        verify(policyRepository).deleteById(policyId);
+        verify(policyRepository).delete(policy);
     }
 
     // ---- DTO-based operation tests ----
@@ -274,6 +300,81 @@ class OrganizationSecurityPolicyServiceImplTest {
 
         assertThatThrownBy(() -> service.updatePolicyFromDto(policyId, dto))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---- Tenant isolation (organization scoping) ----
+
+    @Test
+    void getAllPoliciesAsDtoScopesToCallerOrganization() {
+        scopedContext(orgId);
+        when(policyRepository.findByOrganizationId(orgId)).thenReturn(List.of(policy));
+
+        List<OrganizationSecurityPolicyResponseDTO> result = service.getAllPoliciesAsDto();
+
+        assertThat(result).hasSize(1);
+        verify(policyRepository).findByOrganizationId(orgId);
+        verify(policyRepository, org.mockito.Mockito.never()).findAll();
+    }
+
+    @Test
+    void getAllPoliciesAsDtoFailsClosedWithoutOrganizationScope() {
+        scopedContext(null);
+
+        assertThat(service.getAllPoliciesAsDto()).isEmpty();
+        verify(policyRepository, org.mockito.Mockito.never()).findAll();
+    }
+
+    @Test
+    void getPolicyByIdAsDtoHidesCrossOrganizationPolicy() {
+        scopedContext(UUID.randomUUID()); // caller belongs to a different org
+        when(policyRepository.findById(policyId)).thenReturn(Optional.of(policy));
+
+        assertThatThrownBy(() -> service.getPolicyByIdAsDto(policyId))
+            .isInstanceOf(ResourceNotFoundException.class); // 404, not 403
+    }
+
+    @Test
+    void createPolicyFromDtoRejectsForeignOrganizationTarget() {
+        scopedContext(UUID.randomUUID());
+        OrganizationSecurityPolicyRequestDTO dto = OrganizationSecurityPolicyRequestDTO.builder()
+            .name("X").code("x").policyType(SecurityPolicyType.PASSWORD_POLICY).organizationId(orgId).build();
+
+        assertThatThrownBy(() -> service.createPolicyFromDto(dto))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(policyRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void createPolicyFromDtoAllowsOwnOrganization() {
+        scopedContext(orgId);
+        OrganizationSecurityPolicyRequestDTO dto = OrganizationSecurityPolicyRequestDTO.builder()
+            .name("Own").code("own").policyType(SecurityPolicyType.PASSWORD_POLICY).organizationId(orgId).build();
+        when(organizationRepository.findById(orgId)).thenReturn(Optional.of(organization));
+        when(policyRepository.save(any(OrganizationSecurityPolicy.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service.createPolicyFromDto(dto).getName()).isEqualTo("Own");
+    }
+
+    @Test
+    void updatePolicyFromDtoHidesCrossOrganizationPolicy() {
+        scopedContext(UUID.randomUUID());
+        when(policyRepository.findById(policyId)).thenReturn(Optional.of(policy));
+        OrganizationSecurityPolicyRequestDTO dto = OrganizationSecurityPolicyRequestDTO.builder()
+            .name("X").code("x").policyType(SecurityPolicyType.PASSWORD_POLICY).organizationId(orgId).build();
+
+        assertThatThrownBy(() -> service.updatePolicyFromDto(policyId, dto))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(policyRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void deletePolicyHidesCrossOrganizationPolicy() {
+        scopedContext(UUID.randomUUID());
+        when(policyRepository.findById(policyId)).thenReturn(Optional.of(policy));
+
+        assertThatThrownBy(() -> service.deletePolicy(policyId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(policyRepository, org.mockito.Mockito.never()).delete(any(OrganizationSecurityPolicy.class));
     }
 
     @Test

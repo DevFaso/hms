@@ -26,7 +26,13 @@ public interface PatientEducationQuestionRepository extends JpaRepository<Patien
         UUID hospitalId
     );
 
-    @Query("SELECT peq FROM PatientEducationQuestion peq WHERE peq.hospitalId = :hospitalId AND peq.isAnswered = false AND " +
+    // Unscoped variants for super-admin global view (null hospital scope).
+    List<PatientEducationQuestion> findByIsAnsweredFalseOrderByIsUrgentDescCreatedAtDesc();
+
+    List<PatientEducationQuestion> findByIsUrgentTrueAndIsAnsweredFalseOrderByCreatedAtAsc();
+
+    @Query("SELECT peq FROM PatientEducationQuestion peq WHERE " +
+           "(:hospitalId IS NULL OR peq.hospitalId = :hospitalId) AND peq.isAnswered = false AND " +
            "peq.requiresInPersonDiscussion = true AND peq.appointmentScheduled = false " +
            "ORDER BY peq.isUrgent DESC, peq.createdAt ASC")
     List<PatientEducationQuestion> findUnansweredRequiringAppointment(@Param("hospitalId") UUID hospitalId);

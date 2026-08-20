@@ -18,6 +18,7 @@ import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AuthService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final HospitalRepository hospitalRepository;
     private final DigitalSignatureMapper signatureMapper;
     private final AuthService authService;
+    private final RoleValidator roleValidator;
 
     @Override
     public SignatureResponseDTO signReport(SignatureRequestDTO request) {
@@ -204,8 +206,15 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     @Override
     @Transactional(readOnly = true)
     public List<SignatureResponseDTO> getAllSignatures() {
-        log.debug("Fetching all signatures for admin listing");
-        return signatureRepository.findAll().stream()
+        // ── Tenant isolation: hospital admins list their own hospital's signatures;
+        //    only super-admin (null) sees all hospitals ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<DigitalSignature> signatures = activeHospitalId != null
+            ? signatureRepository.findByHospital_IdOrderBySignatureDateTimeDesc(activeHospitalId)
+            : signatureRepository.findAll();
+        log.debug("Fetching signatures for admin listing (hospital scope: {})",
+            activeHospitalId != null ? activeHospitalId : "ALL");
+        return signatures.stream()
             .map(signatureMapper::toResponseDTO)
             .toList();
     }

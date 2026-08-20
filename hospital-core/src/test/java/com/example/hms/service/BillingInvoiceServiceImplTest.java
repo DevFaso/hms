@@ -25,6 +25,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -250,5 +251,33 @@ class BillingInvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+    }
+
+    // ---- Tenant isolation: GET /billing-invoices/hospital/{hospitalId} ----
+
+    @org.junit.jupiter.api.Test
+    void getInvoicesByHospitalId_scopedCallerIsPinnedToOwnHospital() {
+        UUID ownHospital = UUID.randomUUID();
+        UUID foreignHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ownHospital);
+        when(invoiceRepository.findByHospital_Id(eq(ownHospital), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+        billingInvoiceService.getInvoicesByHospitalId(foreignHospital, PageRequest.of(0, 20), Locale.ENGLISH);
+
+        // The requested (foreign) hospital id is overridden by the caller's scope.
+        verify(invoiceRepository).findByHospital_Id(eq(ownHospital), any(Pageable.class));
+    }
+
+    @org.junit.jupiter.api.Test
+    void getInvoicesByHospitalId_superAdminReadsTheRequestedHospital() {
+        UUID requestedHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null); // super-admin
+        when(invoiceRepository.findByHospital_Id(eq(requestedHospital), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+        billingInvoiceService.getInvoicesByHospitalId(requestedHospital, PageRequest.of(0, 20), Locale.ENGLISH);
+
+        verify(invoiceRepository).findByHospital_Id(eq(requestedHospital), any(Pageable.class));
     }
 }

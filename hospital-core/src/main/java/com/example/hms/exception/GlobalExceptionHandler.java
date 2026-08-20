@@ -16,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
@@ -203,6 +204,24 @@ public class GlobalExceptionHandler {
             "A referenced record could not be found. This may indicate a data integrity issue. " +
             "Please contact support if this persists.",
             request);
+    }
+
+    /**
+     * Parameter-binding failures (e.g. an enum query param the deployed jar
+     * does not know, a non-UUID path variable) are client errors. Without
+     * this handler they fall through to the RuntimeException catch-all below
+     * and surface as 500 — exactly what happened when a stale backend
+     * received {@code sources=PLATFORM_CONFIG} on the aggregated audit search.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Object> handleTypeMismatch(
+            MethodArgumentTypeMismatchException ex, WebRequest request) {
+        String requiredType = ex.getRequiredType() != null
+                ? ex.getRequiredType().getSimpleName()
+                : "value";
+        String message = "Invalid value '" + ex.getValue() + "' for parameter '"
+                + ex.getName() + "' (expected " + requiredType + ")";
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
     @ExceptionHandler(RuntimeException.class)

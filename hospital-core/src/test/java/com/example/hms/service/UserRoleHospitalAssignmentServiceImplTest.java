@@ -49,6 +49,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private OrganizationRepository organizationRepository;
     @Mock private UserRoleHospitalAssignmentMapper mapper;
     @Mock private MessageSource messageSource;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -184,5 +185,56 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         // Plaintext must be cleared from the entity before the final save
         assertThat(assignment.getTempPlainPassword()).isNull();
+    }
+
+    // ---- Tenant isolation: GET /assignments listing ----
+
+    @Test
+    void getAllAssignments_scopedAdminNeverGetsTheUnfilteredListing() {
+        UUID ownHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ownHospital);
+        when(assignmentRepository.findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+                any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        // Caller probes another hospital explicitly — the scope must win.
+        com.example.hms.payload.dto.assignment.AssignmentSearchCriteria criteria =
+            com.example.hms.payload.dto.assignment.AssignmentSearchCriteria.builder()
+                .hospitalId(UUID.randomUUID().toString())
+                .build();
+
+        service.getAllAssignments(org.springframework.data.domain.PageRequest.of(0, 10), criteria);
+
+        // Filtered (Specification) path taken; the unscoped findAll(pageable) never runs.
+        verify(assignmentRepository).findAll(
+            org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+            any(org.springframework.data.domain.Pageable.class));
+        verify(assignmentRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void getAllAssignments_scopedAdminWithNoFiltersIsStillScoped() {
+        UUID ownHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ownHospital);
+        when(assignmentRepository.findAll(
+                org.mockito.ArgumentMatchers.<org.springframework.data.jpa.domain.Specification<UserRoleHospitalAssignment>>any(),
+                any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        service.getAllAssignments(org.springframework.data.domain.PageRequest.of(0, 10));
+
+        verify(assignmentRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+    }
+
+    @Test
+    void getAllAssignments_superAdminWithoutFiltersGetsTheFullListing() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null); // super-admin
+        when(assignmentRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+        service.getAllAssignments(org.springframework.data.domain.PageRequest.of(0, 10), null);
+
+        verify(assignmentRepository).findAll(any(org.springframework.data.domain.Pageable.class));
     }
 }

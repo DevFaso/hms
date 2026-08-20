@@ -285,4 +285,25 @@ class GlobalExceptionHandlerTest {
                 .containsEntry("status", 400);
         }
     }
+
+    @Nested
+    @DisplayName("handleTypeMismatch")
+    class HandleTypeMismatch {
+
+        @Test
+        @DisplayName("parameter-binding failures return 400, not the 500 catch-all")
+        void returns400ForUnconvertibleParam() throws NoSuchMethodException {
+            var param = new org.springframework.core.MethodParameter(
+                Object.class.getMethod("equals", Object.class), 0);
+            var ex = new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException(
+                "PLATFORM_CONFIG", com.example.hms.enums.AuditSource.class, "sources", param,
+                new IllegalArgumentException("No enum constant"));
+
+            var response = handler.handleTypeMismatch(ex, request);
+
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
+                .contains("sources").contains("PLATFORM_CONFIG");
+        }
+    }
 }
