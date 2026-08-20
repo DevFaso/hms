@@ -124,7 +124,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getInvoicesByHospitalId(UUID hospitalId, Pageable pageable, Locale locale) {
-        return invoiceRepository.findByHospital_Id(hospitalId, pageable)
+        // ── Tenant isolation: the caller's active hospital overrides the requested
+        //    path variable; only super-admin (null) may read the hospital they asked for ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        return invoiceRepository.findByHospital_Id(effectiveHospitalId, pageable)
             .map(invoiceMapper::toBillingInvoiceResponseDTO);
     }
 
