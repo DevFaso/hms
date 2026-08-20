@@ -23,6 +23,7 @@ import { AuthService } from '../auth/auth.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { BedService, BedResponse } from '../services/bed.service';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -56,6 +57,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
+  private readonly bedService = inject(BedService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -103,6 +105,13 @@ export class AdmissionsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingAdm = signal<AdmissionResponse | null>(null);
   deleting = signal(false);
+
+  /* ── Bed assignment (P0 #4) ── */
+  bedAssignFor = signal<AdmissionResponse | null>(null);
+  availableBeds = signal<BedResponse[]>([]);
+  bedsLoading = signal(false);
+  selectedBedId = signal<string>('');
+  bedAssigning = signal(false);
 
   /* ── Discharge signals ── */
   showDischargeModal = signal(false);
@@ -460,6 +469,61 @@ export class AdmissionsComponent implements OnInit {
           this.discharging.set(false);
         },
       });
+  }
+
+  /* ── Bed assignment (P0 #4) ─────────────────────────────── */
+
+  openBedAssign(adm: AdmissionResponse): void {
+    this.bedAssignFor.set(adm);
+    this.selectedBedId.set('');
+    this.availableBeds.set([]);
+    this.bedsLoading.set(true);
+    this.bedService.getAvailableBeds().subscribe({
+      next: (beds) => {
+        this.availableBeds.set(beds);
+        this.bedsLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('ADMISSIONS.BEDS_LOAD_FAILED'));
+        this.bedsLoading.set(false);
+      },
+    });
+  }
+
+  closeBedAssign(): void {
+    this.bedAssignFor.set(null);
+    this.selectedBedId.set('');
+  }
+
+  submitBedAssign(): void {
+    const adm = this.bedAssignFor();
+    const bedId = this.selectedBedId();
+    if (!adm || !bedId) return;
+    this.bedAssigning.set(true);
+    this.admissionService.assignBed(adm.id, bedId).subscribe({
+      next: (updated) => {
+        this.toast.success(
+          this.translate.instant('ADMISSIONS.BED_ASSIGNED', { bed: updated.roomBed }),
+        );
+        this.bedAssigning.set(false);
+        this.closeBedAssign();
+        this.load();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'));
+        this.bedAssigning.set(false);
+      },
+    });
+  }
+
+  unassignBed(adm: AdmissionResponse): void {
+    this.admissionService.unassignBed(adm.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('ADMISSIONS.BED_UNASSIGNED'));
+        this.load();
+      },
+      error: () => this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED')),
+    });
   }
 
   /** Re-fetch under the new cross-tenant scope when the chip emits. */

@@ -41,6 +41,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final DischargeApprovalMapper mapper;
     private final EncounterAutoCompletionService encounterAutoCompletion;
+    private final BedAssignmentService bedAssignmentService;
 
     @Override
     @Transactional
@@ -117,6 +118,12 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         // active encounters — otherwise they linger In Progress unless the
         // separate POST /admissions/{id}/discharge is called afterwards.
         encounterAutoCompletion.completeActiveEncounters(
+                registration.getPatient().getId(),
+                registration.getHospital().getId());
+
+        // This path works off the registration, not the Admission row — free
+        // any structured beds still held by the patient's admissions.
+        bedAssignmentService.releaseBedsForPatient(
                 registration.getPatient().getId(),
                 registration.getHospital().getId());
 

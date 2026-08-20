@@ -1,0 +1,378 @@
+@use '../shared/styles/page-common';
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.page-subtitle {
+  margin: 0.25rem 0 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.toggle-inactive {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #374151;
+  cursor: pointer;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: none;
+  background: #2563eb;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #1d4ed8;
+  }
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
+
+.data-table {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th {
+    text-align: left;
+    padding: 0.7rem 1rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.7rem 1rem;
+    font-size: 0.9rem;
+    color: #374151;
+    border-bottom: 1px solid #f3f4f6;
+  }
+}
+
+.ward-row {
+  cursor: pointer;
+
+  &:hover {
+    background: #f9fafb;
+  }
+
+  &.selected {
+    background: #eff6ff;
+  }
+}
+
+.row-inactive td {
+  opacity: 0.55;
+}
+
+.cell-primary {
+  font-weight: 600;
+  color: #111827;
+}
+
+.count-available {
+  color: #059669;
+  font-weight: 600;
+}
+
+.count-occupied {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.notes-cell {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Badges / pills ───────────────────────────────────────── */
+
+.status-pill {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #d1fae5;
+  color: #065f46;
+
+  &.pill-inactive {
+    background: #e5e7eb;
+    color: #6b7280;
+  }
+}
+
+.bed-status-badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  &.bed-status-available {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  &.bed-status-occupied {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  &.bed-status-reserved {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+
+  &.bed-status-maintenance,
+  &.bed-status-out_of_service {
+    background: #fef3c7;
+    color: #92400e;
+  }
+}
+
+.occupied-hint {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.status-select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.85rem;
+}
+
+/* ── Beds section ─────────────────────────────────────────── */
+
+.beds-section {
+  margin-top: 0.5rem;
+}
+
+.beds-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.15rem;
+  }
+}
+
+/* ── Actions ──────────────────────────────────────────────── */
+
+.action-group {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+
+  &.icon-danger {
+    color: #b91c1c;
+
+    &:hover {
+      background: #fee2e2;
+    }
+  }
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
+/* ── Empty state ──────────────────────────────────────────── */
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #6b7280;
+
+  .empty-icon {
+    font-size: 3rem;
+    color: #d1d5db;
+  }
+
+  h3 {
+    margin: 0.5rem 0 0.25rem;
+    color: #374151;
+  }
+
+  p {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+}
+
+/* ── Modals ───────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 12px;
+  width: min(560px, 92vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+
+  h3 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+}
+
+.modal-close {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+
+  &:hover {
+    color: #111827;
+  }
+}
+
+.modal-body {
+  padding: 1rem 1.25rem;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.85rem;
+  flex: 1;
+
+  label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  input,
+  select,
+  textarea {
+    padding: 0.5rem 0.65rem;
+    border-radius: 8px;
+    border: 1px solid #d1d5db;
+    font-size: 0.9rem;
+    font-family: inherit;
+  }
+}
+
+.form-row-inline {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.9rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.modal-btn {
+  padding: 0.5rem 1.1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.modal-cancel {
+  background: #fff;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.modal-confirm {
+  background: #2563eb;
+  color: #fff;
+}

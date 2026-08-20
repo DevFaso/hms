@@ -26,6 +26,9 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByPatientIdOrderByAdmissionDateTimeDesc(UUID patientId);
 
+    List<Admission> findByPatient_IdAndHospital_IdAndStatusIn(
+        UUID patientId, UUID hospitalId, java.util.Collection<AdmissionStatus> statuses);
+
     /**
      * Find admissions by hospital
      */

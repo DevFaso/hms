@@ -48,6 +48,16 @@ public interface AdmissionService {
     void cancelAdmission(UUID admissionId);
 
     /**
+     * Assign a structured bed to an admission (P0 #4)
+     */
+    AdmissionResponseDTO assignBed(UUID admissionId, UUID bedId);
+
+    /**
+     * Detach the admission's bed and make it available again
+     */
+    AdmissionResponseDTO unassignBed(UUID admissionId);
+
+    /**
      * Get admissions by patient
      */
     List<AdmissionResponseDTO> getAdmissionsByPatient(UUID patientId);

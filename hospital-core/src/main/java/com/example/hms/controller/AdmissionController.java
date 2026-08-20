@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.AdmissionOrderSetResponseDTO;
 import com.example.hms.payload.dto.AdmissionRequestDTO;
 import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
+import com.example.hms.payload.dto.bed.BedAssignmentRequestDTO;
 import com.example.hms.service.AdmissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -84,6 +85,23 @@ public class AdmissionController {
         @Valid @RequestBody AdmissionOrderExecutionRequestDTO request
     ) {
         return ResponseEntity.ok(admissionService.applyOrderSets(admissionId, request));
+    }
+
+    @PostMapping("/{admissionId}/assign-bed")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Assign a bed", description = "Assign a structured bed to an admission; releases any previously held bed")
+    public ResponseEntity<AdmissionResponseDTO> assignBed(
+        @PathVariable UUID admissionId,
+        @Valid @RequestBody BedAssignmentRequestDTO request
+    ) {
+        return ResponseEntity.ok(admissionService.assignBed(admissionId, request.getBedId()));
+    }
+
+    @DeleteMapping("/{admissionId}/bed")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Unassign the bed", description = "Detach the admission's bed and make it available again")
+    public ResponseEntity<AdmissionResponseDTO> unassignBed(@PathVariable UUID admissionId) {
+        return ResponseEntity.ok(admissionService.unassignBed(admissionId));
     }
 
     @PostMapping("/{admissionId}/discharge")
