@@ -61,7 +61,10 @@ export interface PatientCreateRequest {
   country?: string;
   phoneNumberPrimary: string;
   phoneNumberSecondary?: string;
-  email: string;
+  /** Optional — phone-first: most patients register with a phone number only. */
+  email?: string;
+  /** Id of a confirmed SMS OTP challenge for phoneNumberPrimary (stamps phoneVerifiedAt). */
+  phoneVerificationId?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
@@ -219,6 +222,14 @@ export interface PatientTimeline {
   generatedAt: string;
 }
 
+/** SMS OTP challenge issued by POST /patients/phone-verification. */
+export interface PhoneVerificationChallenge {
+  challengeId: string;
+  maskedPhone: string | null;
+  expiresAt: string;
+  verified: boolean;
+}
+
 /** Masked cross-hospital match returned by GET /patients/registration-match. */
 export interface RegistrationMatch {
   patientId: string;
@@ -288,6 +299,28 @@ export class PatientService {
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
       params: httpParams,
+    });
+  }
+
+  /* ── SMS phone verification (IKODDI OTP) ── */
+
+  phoneVerificationAvailability(): Observable<{ available: boolean }> {
+    return this.http.get<{ available: boolean }>('/patients/phone-verification/availability');
+  }
+
+  requestPhoneVerification(phoneNumber: string): Observable<PhoneVerificationChallenge> {
+    return this.http.post<PhoneVerificationChallenge>('/patients/phone-verification', {
+      phoneNumber,
+    });
+  }
+
+  confirmPhoneVerification(
+    challengeId: string,
+    code: string,
+  ): Observable<PhoneVerificationChallenge> {
+    return this.http.post<PhoneVerificationChallenge>('/patients/phone-verification/confirm', {
+      challengeId,
+      code,
     });
   }
 

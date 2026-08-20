@@ -34,6 +34,59 @@
   }
 }
 
+// ── Phone-first: optional email + SMS OTP verification ──────────────────────
+.optional-hint {
+  font-weight: 400;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.8rem;
+}
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #64748b);
+}
+.otp-verify-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.otp-sent-hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #64748b);
+  width: 100%;
+}
+.otp-code-input {
+  width: 140px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  letter-spacing: 0.25em;
+}
+.btn-otp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.phone-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+}
+
 // ── Cross-hospital existing-patient match card ──────────────────────────────
 .existing-match-card {
   background: #eff6ff;
