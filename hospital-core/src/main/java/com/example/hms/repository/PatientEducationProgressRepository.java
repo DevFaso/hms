@@ -51,4 +51,8 @@ public interface PatientEducationProgressRepository extends JpaRepository<Patien
     @Query("SELECT AVG(pep.rating) FROM PatientEducationProgress pep WHERE pep.resourceId = :resourceId AND " +
            "pep.rating IS NOT NULL")
     Double calculateAverageRating(@Param("resourceId") UUID resourceId);
+
+    @Query("SELECT COUNT(pep) FROM PatientEducationProgress pep WHERE pep.resourceId = :resourceId AND " +
+           "pep.rating IS NOT NULL")
+    Long countRatings(@Param("resourceId") UUID resourceId);
 }

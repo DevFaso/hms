@@ -1,0 +1,414 @@
+/* ── Buttons ─────────────────────────────────────────────────────── */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.btn-ghost {
+  padding: 10px 16px;
+  background: #fff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #f8fafc;
+  }
+}
+
+/* ── Warning-sign banner ─────────────────────────────────────────── */
+
+.edu-warning-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 10px;
+
+  .material-symbols-outlined {
+    color: #dc2626;
+  }
+
+  strong {
+    color: #991b1b;
+    font-size: 14px;
+  }
+
+  p {
+    margin: 2px 0 0;
+    color: #7f1d1d;
+    font-size: 13px;
+  }
+}
+
+/* ── Resource cards ──────────────────────────────────────────────── */
+
+.edu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.edu-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 5%);
+
+  &.warning {
+    border-left: 4px solid #dc2626;
+  }
+
+  h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+}
+
+.edu-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.edu-type-icon {
+  color: #2563eb;
+}
+
+.edu-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #475569;
+}
+
+.edu-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.edu-progress {
+  height: 6px;
+  background: #e2e8f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.edu-progress-fill {
+  height: 100%;
+  background: #2563eb;
+}
+
+.edu-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/* ── Completed / questions lists ─────────────────────────────────── */
+
+.edu-confirmed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #16a34a;
+  font-size: 13px;
+  font-weight: 600;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.edu-question .pli-body {
+  gap: 6px;
+}
+
+.edu-answer {
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  border-left: 3px solid #16a34a;
+  border-radius: 6px;
+
+  strong {
+    font-size: 12px;
+    color: #15803d;
+  }
+
+  p {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: #14532d;
+  }
+}
+
+.edu-awaiting {
+  font-size: 12px;
+  font-style: italic;
+  color: #94a3b8;
+}
+
+/* ── Reader ──────────────────────────────────────────────────────── */
+
+.edu-reader-card {
+  max-width: 680px;
+}
+
+.edu-content {
+  white-space: pre-wrap;
+  line-height: 1.6;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.edu-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2563eb;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.edu-no-content {
+  margin: 0;
+  color: #64748b;
+  font-style: italic;
+}
+
+.edu-reader-rate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.edu-rate-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.edu-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.edu-star {
+  padding: 2px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  line-height: 1;
+
+  &.filled {
+    color: #f59e0b;
+  }
+
+  &:hover {
+    color: #f59e0b;
+  }
+}
+
+.edu-ask-about {
+  margin: 0;
+  font-size: 14px;
+  color: #475569;
+}
+
+.edu-urgent-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #475569;
+}
+
+/* ── Modal overlay (mirrors the booking-overlay idiom) ───────────── */
+
+.booking-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 40%);
+}
+
+.booking-form-card {
+  background: #fff;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
+}
+
+.booking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 12px;
+  border-bottom: 1px solid #e2e8f0;
+
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1e293b;
+  }
+}
+
+.booking-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #64748b;
+
+  &:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+  }
+}
+
+.booking-body {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.booking-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #475569;
+  }
+
+  textarea {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #1e293b;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 60px;
+
+    &:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgb(37 99 235 / 10%);
+    }
+  }
+}
+
+.booking-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 8px;
+}
+
+.booking-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: #f8fafc;
+  }
+}
+
+.booking-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}

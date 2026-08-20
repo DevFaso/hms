@@ -1,0 +1,364 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">school</span>
+      {{ 'PORTAL.EDUCATION.TITLE' | translate }}
+    </h1>
+    <button class="btn-primary" data-testid="ask-general" (click)="openAsk(null)">
+      <span class="material-symbols-outlined">help</span>
+      {{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.EDUCATION.LOADING' | translate }}</span>
+    </div>
+  } @else {
+    <!-- Warning-sign material is safety content: surface it above the tabs -->
+    @if (warningSigns().length > 0) {
+      <div class="edu-warning-banner" data-testid="edu-warning-banner">
+        <span class="material-symbols-outlined">emergency_home</span>
+        <div>
+          <strong>{{ 'PORTAL.EDUCATION.WARNING_TITLE' | translate }}</strong>
+          <p>{{ 'PORTAL.EDUCATION.WARNING_DESC' | translate }}</p>
+        </div>
+      </div>
+    }
+
+    <div class="rec-tabs">
+      <button
+        class="rec-tab"
+        [class.active]="activeTab() === 'assigned'"
+        data-testid="tab-assigned"
+        (click)="selectTab('assigned')"
+      >
+        <span class="material-symbols-outlined">menu_book</span>
+        {{ 'PORTAL.EDUCATION.ASSIGNED_TAB' | translate }} ({{ assigned().length }})
+      </button>
+      <button
+        class="rec-tab"
+        [class.active]="activeTab() === 'completed'"
+        data-testid="tab-completed"
+        (click)="selectTab('completed')"
+      >
+        <span class="material-symbols-outlined">task_alt</span>
+        {{ 'PORTAL.EDUCATION.COMPLETED_TAB' | translate }} ({{ completed().length }})
+      </button>
+      <button
+        class="rec-tab"
+        [class.active]="activeTab() === 'questions'"
+        data-testid="tab-questions"
+        (click)="selectTab('questions')"
+      >
+        <span class="material-symbols-outlined">forum</span>
+        {{ 'PORTAL.EDUCATION.QUESTIONS_TAB' | translate }}
+      </button>
+    </div>
+
+    <!-- ASSIGNED -->
+    @if (activeTab() === 'assigned') {
+      @if (!assigned().length) {
+        <div class="portal-empty" data-testid="edu-empty">
+          <span class="material-symbols-outlined">school</span>
+          <h3>{{ 'PORTAL.EDUCATION.EMPTY_TITLE' | translate }}</h3>
+          <p>{{ 'PORTAL.EDUCATION.EMPTY_DESC' | translate }}</p>
+        </div>
+      } @else {
+        <div class="edu-grid" data-testid="edu-assigned-list">
+          @for (item of assigned(); track item.resourceId) {
+            <article class="edu-card" [class.warning]="item.isWarningSignContent">
+              <div class="edu-card-head">
+                <span class="material-symbols-outlined edu-type-icon">
+                  {{ item.resourceType === 'VIDEO' ? 'play_circle' : 'article' }}
+                </span>
+                <span class="portal-status-chip" [attr.data-status]="item.comprehensionStatus">
+                  {{ item.comprehensionStatus | enumLabel: 'status' }}
+                </span>
+              </div>
+              <h3>{{ item.title }}</h3>
+              @if (item.description) {
+                <p class="edu-desc">{{ item.description }}</p>
+              }
+              <div class="edu-meta">
+                <span>{{ item.category | enumLabel: 'educationCategory' }}</span>
+                @if (item.estimatedDuration) {
+                  <span>
+                    {{
+                      'PORTAL.EDUCATION.DURATION' | translate: { minutes: item.estimatedDuration }
+                    }}
+                  </span>
+                }
+              </div>
+              @if ((item.progressPercentage ?? 0) > 0) {
+                <div
+                  class="edu-progress"
+                  role="progressbar"
+                  [attr.aria-valuenow]="item.progressPercentage"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  [attr.aria-label]="'PORTAL.EDUCATION.PROGRESS_LABEL' | translate"
+                >
+                  <div class="edu-progress-fill" [style.width.%]="item.progressPercentage"></div>
+                </div>
+              }
+              <div class="edu-card-actions">
+                <button
+                  class="btn-primary"
+                  [attr.data-testid]="'edu-open-' + item.resourceId"
+                  (click)="openReader(item)"
+                >
+                  {{ 'PORTAL.EDUCATION.OPEN' | translate }}
+                </button>
+                <button class="btn-ghost" (click)="openAsk(item)">
+                  {{ 'PORTAL.EDUCATION.ASK' | translate }}
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    }
+
+    <!-- COMPLETED -->
+    @if (activeTab() === 'completed') {
+      @if (!completed().length) {
+        <div class="portal-empty">
+          <span class="material-symbols-outlined">task_alt</span>
+          <p>{{ 'PORTAL.EDUCATION.NO_COMPLETED' | translate }}</p>
+        </div>
+      } @else {
+        <div class="portal-list" data-testid="edu-completed-list">
+          @for (item of completed(); track item.resourceId) {
+            <div class="portal-list-item">
+              <span class="material-symbols-outlined pli-icon">task_alt</span>
+              <div class="pli-body">
+                <span class="pli-title">{{ item.title }}</span>
+                <span class="pli-sub">
+                  {{ 'PORTAL.EDUCATION.COMPLETED_ON' | translate }}
+                  {{ item.completedAt | date: 'mediumDate' }}
+                </span>
+              </div>
+              <div class="pli-meta">
+                @if (item.confirmedUnderstanding) {
+                  <span class="edu-confirmed">
+                    <span class="material-symbols-outlined">verified</span>
+                    {{ 'PORTAL.EDUCATION.CONFIRMED' | translate }}
+                  </span>
+                }
+                <button class="btn-ghost" (click)="openReader(item)">
+                  {{ 'PORTAL.EDUCATION.REVIEW' | translate }}
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+
+    <!-- QUESTIONS -->
+    @if (activeTab() === 'questions') {
+      @if (!questions().length) {
+        <div class="portal-empty" data-testid="edu-no-questions">
+          <span class="material-symbols-outlined">forum</span>
+          <p>{{ 'PORTAL.EDUCATION.NO_QUESTIONS' | translate }}</p>
+        </div>
+      } @else {
+        <div class="portal-list" data-testid="edu-questions-list">
+          @for (q of questions(); track q.id) {
+            <div class="portal-list-item edu-question">
+              <span class="material-symbols-outlined pli-icon">
+                {{ q.isAnswered ? 'mark_chat_read' : 'schedule' }}
+              </span>
+              <div class="pli-body">
+                <span class="pli-title">{{ q.questionText }}</span>
+                <span class="pli-sub">{{ q.createdAt | date: 'medium' }}</span>
+                @if (q.isAnswered && q.answerText) {
+                  <div class="edu-answer">
+                    <strong>{{ 'PORTAL.EDUCATION.ANSWER' | translate }}</strong>
+                    <p>{{ q.answerText }}</p>
+                  </div>
+                } @else {
+                  <span class="edu-awaiting">{{
+                    'PORTAL.EDUCATION.AWAITING_ANSWER' | translate
+                  }}</span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  }
+
+  <!-- Reader overlay -->
+  @if (reading(); as item) {
+    <div
+      class="booking-overlay"
+      data-testid="edu-reader"
+      (click)="closeReader()"
+      (keydown.escape)="closeReader()"
+      tabindex="-1"
+    >
+      <div
+        class="booking-form-card edu-reader-card"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeReader()"
+      >
+        <div class="booking-header">
+          <h2>{{ item.title }}</h2>
+          <button
+            class="booking-close"
+            (click)="closeReader()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="booking-body">
+          @if (item.textContent) {
+            <div class="edu-content">{{ item.textContent }}</div>
+          }
+          @if (item.videoUrl) {
+            <a
+              class="edu-external"
+              [href]="item.videoUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="material-symbols-outlined">play_circle</span>
+              {{ 'PORTAL.EDUCATION.WATCH_VIDEO' | translate }}
+            </a>
+          }
+          @if (item.contentUrl) {
+            <a
+              class="edu-external"
+              [href]="item.contentUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <span class="material-symbols-outlined">open_in_new</span>
+              {{ 'PORTAL.EDUCATION.OPEN_MATERIAL' | translate }}
+            </a>
+          }
+          @if (!item.textContent && !item.videoUrl && !item.contentUrl) {
+            <p class="edu-no-content">{{ 'PORTAL.EDUCATION.NO_CONTENT' | translate }}</p>
+          }
+
+          <div class="edu-reader-rate">
+            <span class="edu-rate-label">{{ 'PORTAL.EDUCATION.RATE_PROMPT' | translate }}</span>
+            <div class="edu-stars">
+              @for (star of stars; track star) {
+                <button
+                  class="edu-star"
+                  [class.filled]="(item.rating ?? 0) >= star"
+                  [attr.data-testid]="'edu-star-' + star"
+                  [attr.aria-label]="'PORTAL.EDUCATION.RATE_STAR' | translate: { star: star }"
+                  (click)="rate(item, star)"
+                >
+                  <span class="material-symbols-outlined">star</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="booking-actions">
+            <button class="booking-cancel-btn" (click)="openAsk(item)">
+              {{ 'PORTAL.EDUCATION.ASK' | translate }}
+            </button>
+            @if (!item.completedAt) {
+              <button
+                class="booking-submit-btn"
+                data-testid="edu-mark-complete"
+                [disabled]="savingProgress()"
+                (click)="markComplete(item)"
+              >
+                {{ 'PORTAL.EDUCATION.MARK_COMPLETE' | translate }}
+              </button>
+            } @else if (!item.confirmedUnderstanding) {
+              <button
+                class="booking-submit-btn"
+                data-testid="edu-confirm-understanding"
+                [disabled]="savingProgress()"
+                (click)="confirmUnderstanding(item)"
+              >
+                {{ 'PORTAL.EDUCATION.CONFIRM_UNDERSTANDING' | translate }}
+              </button>
+            } @else {
+              <span class="edu-confirmed">
+                <span class="material-symbols-outlined">verified</span>
+                {{ 'PORTAL.EDUCATION.CONFIRMED' | translate }}
+              </span>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Ask-a-question overlay -->
+  @if (askOpen) {
+    <div
+      class="booking-overlay"
+      data-testid="edu-ask-overlay"
+      (click)="closeAsk()"
+      (keydown.escape)="closeAsk()"
+      tabindex="-1"
+    >
+      <div
+        class="booking-form-card"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeAsk()"
+      >
+        <div class="booking-header">
+          <h2>{{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}</h2>
+          <button
+            class="booking-close"
+            (click)="closeAsk()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="booking-body">
+          @if (askTarget(); as target) {
+            <p class="edu-ask-about">
+              {{ 'PORTAL.EDUCATION.ASK_ABOUT' | translate }} <strong>{{ target.title }}</strong>
+            </p>
+          }
+          <div class="booking-field">
+            <label for="askText">{{ 'PORTAL.EDUCATION.YOUR_QUESTION' | translate }}</label>
+            <textarea
+              id="askText"
+              [(ngModel)]="askText"
+              [placeholder]="'PORTAL.EDUCATION.QUESTION_PLACEHOLDER' | translate"
+              maxlength="2000"
+              rows="4"
+            ></textarea>
+          </div>
+          <label class="edu-urgent-check">
+            <input type="checkbox" [(ngModel)]="askUrgent" />
+            {{ 'PORTAL.EDUCATION.MARK_URGENT' | translate }}
+          </label>
+          <div class="booking-actions">
+            <button class="booking-cancel-btn" (click)="closeAsk()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              class="booking-submit-btn"
+              data-testid="edu-submit-question"
+              [disabled]="askSubmitting()"
+              (click)="submitQuestion()"
+            >
+              {{ 'PORTAL.EDUCATION.SEND_QUESTION' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

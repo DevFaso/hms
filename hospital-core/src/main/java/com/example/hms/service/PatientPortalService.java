@@ -219,4 +219,28 @@ public interface PatientPortalService {
 
     /** Current active social history for the authenticated patient. */
     com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO getMySocialHistory(Authentication auth);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Patient Education (self-service delivery)
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Education resources assigned to the authenticated patient, with their progress. */
+    List<com.example.hms.payload.dto.portal.PatientEducationItemDTO> getMyEducation(Authentication auth);
+
+    /** One assigned education resource — 404 unless it is assigned to this patient. */
+    com.example.hms.payload.dto.portal.PatientEducationItemDTO getMyEducationItem(
+            Authentication auth, UUID resourceId);
+
+    /** Record the patient's own progress / rating / understanding on an assigned resource. */
+    com.example.hms.payload.dto.portal.PatientEducationItemDTO updateMyEducationProgress(
+            Authentication auth, UUID resourceId,
+            com.example.hms.payload.dto.portal.PatientEducationProgressUpdateDTO dto);
+
+    /** Questions the authenticated patient has asked about their education material. */
+    List<com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO> getMyEducationQuestions(
+            Authentication auth);
+
+    /** Submit a question about education material as the authenticated patient. */
+    com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO submitMyEducationQuestion(
+            Authentication auth, com.example.hms.payload.dto.portal.PatientEducationQuestionSubmitDTO dto);
 }
