@@ -210,6 +210,7 @@ public class PatientServiceImpl implements PatientService {
     private static final String LOG_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
+    private final PhoneVerificationService phoneVerificationService;
     private final PatientMapper patientMapper;
     private final MessageSource messageSource;
     private final UserRepository userRepository;
@@ -551,6 +552,17 @@ public class PatientServiceImpl implements PatientService {
 
         Patient patient = patientRepository.findByUserId(user.getId())
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
+
+        // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
+        // this exact number. Single-use server-side check — a forged/mismatched
+        // challenge id simply leaves the phone unverified.
+        if (dto.getPhoneVerificationId() != null
+            && patient.getPhoneVerifiedAt() == null
+            && phoneVerificationService.consumeVerifiedChallenge(
+                dto.getPhoneVerificationId(), patient.getPhoneNumberPrimary())) {
+            patient.setPhoneVerifiedAt(LocalDateTime.now());
+            patientRepository.save(patient);
+        }
 
         // Mirror User's activation state: patients pending email verification start inactive
         if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {

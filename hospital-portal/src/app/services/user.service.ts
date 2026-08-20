@@ -40,7 +40,8 @@ export interface UserDetail {
 
 export interface AdminRegisterRequest {
   username: string;
-  email: string;
+  /** Optional for PATIENT registrations (phone-first); required for staff roles. */
+  email?: string;
   password?: string;
   firstName: string;
   lastName: string;

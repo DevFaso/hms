@@ -184,6 +184,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         String username, String email, String phoneNumber
     );
 
+    /**
+     * Null-safe identity lookup for phone-first (email-less) registrations.
+     * NEVER pass a null email to the 3-way variant above — Spring Data rewrites
+     * a null argument into an {@code email IS NULL} predicate, which matches
+     * EVERY email-less user in the system.
+     */
+    Optional<User> findFirstByUsernameIgnoreCaseOrPhoneNumber(String username, String phoneNumber);
+
     @Query("select (count(u) > 0) from User u where u.phoneNumber = :phone")
     Boolean existsByPhoneNumber(@Param("phone") String phone);
 

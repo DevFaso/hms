@@ -374,6 +374,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).permitAll()
 
+                // Phone-first registration: SMS OTP verification shares the
+                // registration role set (see PhoneVerificationController).
+                .requestMatchers("/patients/phone-verification", "/patients/phone-verification/**")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
                 // backs pharmacist-reachable pages such as /medication-history.

@@ -1578,6 +1578,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         smsService.send(phoneNumber, message);
     }
 
+    /** One-time credentials for email-less (phone-first) accounts, sent by SMS. */
+    private void sendCredentialsSmsFallback(UserRoleHospitalAssignment assignment, User user) {
+        String tempPassword = assignment.getTempPlainPassword();
+        if (tempPassword == null || tempPassword.isBlank()) {
+            return;
+        }
+        // Credentials must NEVER reach the mock SMS channel — it logs full
+        // message bodies, which would put the temp password into plaintext logs.
+        if (!smsService.deliversRealSms()) {
+            log.warn("⚠️ No real SMS channel configured — one-time credentials for assignment '{}' were NOT delivered; "
+                + "the patient can still activate via the staff-read confirmation code.", assignment.getId());
+            return;
+        }
+        String message = String.format(
+            "🔐 HMS account created. Username: %s Temp password: %s — change it at first login.",
+            user.getUsername(),
+            tempPassword
+        );
+        sendSmsSilently(user.getPhoneNumber(), message);
+    }
+
     private void sendAssignmentEmailNotification(UserRoleHospitalAssignment assignment) {
         try {
             User user = assignment.getUser();
@@ -1587,6 +1608,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
             String email = user.getEmail();
             if (email == null || email.isBlank()) {
+                // Phone-first patients have no email: deliver the one-time
+                // credentials over SMS instead. The confirmation code already
+                // goes out separately via sendAssignmentSmsNotifications.
+                sendCredentialsSmsFallback(assignment, user);
                 return;
             }
 

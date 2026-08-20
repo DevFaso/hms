@@ -309,19 +309,26 @@ public class AppointmentServiceImpl implements AppointmentService {
         // Build reschedule/cancel links
         String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + saved.getId();
         String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + saved.getId();
-        // Send confirmation email to patient
-        emailService.sendAppointmentConfirmationEmail(
-            patient.getEmail(),
-            patient.getFirstName() + " " + patient.getLastName(),
-            hospital.getName(),
-            staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
-            saved.getAppointmentDate().toString(),
-            saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
-            hospital.getEmail(),
-            hospital.getPhoneNumber(),
-            rescheduleLink,
-            cancelLink
-        );
+        // Send confirmation email to patient. Phone-first patients have no email,
+        // and a notification failure must never roll back the booking itself.
+        if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
+            try {
+                emailService.sendAppointmentConfirmationEmail(
+                    patient.getEmail(),
+                    patient.getFirstName() + " " + patient.getLastName(),
+                    hospital.getName(),
+                    staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
+                    saved.getAppointmentDate().toString(),
+                    saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
+                    hospital.getEmail(),
+                    hospital.getPhoneNumber(),
+                    rescheduleLink,
+                    cancelLink
+                );
+            } catch (RuntimeException ex) {
+                log.warn("Failed to send appointment confirmation email for {}: {}", saved.getId(), ex.getMessage());
+            }
+        }
 
         // --- Return lean summary (no null bloat) ---
         Patient p = saved.getPatient();
@@ -635,24 +642,32 @@ public class AppointmentServiceImpl implements AppointmentService {
         String rescheduleLink = frontendBaseUrl + appointmentLinks.getReschedulePath() + appointment.getId();
         String cancelLink = frontendBaseUrl + appointmentLinks.getCancelPath() + appointment.getId();
 
-        switch (newStatus) {
-            case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
-                patient.getEmail(), patientName, hospital.getName(), staffName,
-                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
-            case RESCHEDULED -> emailService.sendAppointmentRescheduledEmail(
-                patient.getEmail(), patientName, hospital.getName(), staffName,
-                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
-            case CANCELLED -> emailService.sendAppointmentCancelledEmail(
-                patient.getEmail(), patientName, hospital.getName(), staffName,
-                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-            case COMPLETED -> emailService.sendAppointmentCompletedEmail(
-                patient.getEmail(), patientName, hospital.getName(), staffName,
-                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-            case NO_SHOW -> emailService.sendAppointmentNoShowEmail(
-                patient.getEmail(), patientName, hospital.getName(), staffName,
-                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
-            default -> {
-                // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
+        // Phone-first patients have no email, and a notification failure must
+        // never roll back the status change itself.
+        if (patient.getEmail() != null && !patient.getEmail().isBlank()) {
+            try {
+                switch (newStatus) {
+                    case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
+                        patient.getEmail(), patientName, hospital.getName(), staffName,
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
+                    case RESCHEDULED -> emailService.sendAppointmentRescheduledEmail(
+                        patient.getEmail(), patientName, hospital.getName(), staffName,
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
+                    case CANCELLED -> emailService.sendAppointmentCancelledEmail(
+                        patient.getEmail(), patientName, hospital.getName(), staffName,
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                    case COMPLETED -> emailService.sendAppointmentCompletedEmail(
+                        patient.getEmail(), patientName, hospital.getName(), staffName,
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                    case NO_SHOW -> emailService.sendAppointmentNoShowEmail(
+                        patient.getEmail(), patientName, hospital.getName(), staffName,
+                        appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
+                    default -> {
+                        // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
+                    }
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Failed to send appointment status email for {}: {}", appointment.getId(), ex.getMessage());
             }
         }
 

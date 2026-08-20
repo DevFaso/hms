@@ -1590,4 +1590,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V107 — Phone-first registration + IKODDI SMS OTP. New
+         security.phone_otp_challenges table (one row per OTP send holding
+         the opaque IKODDI verification key), clinical.patients
+         .phone_verified_at, and email DROP NOT NULL on clinical.patients
+         + security.users: most patients have a phone number but no email
+         address. Additive plus two constraint relaxations; the unique
+         email indexes stay valid (Postgres unique indexes ignore NULLs).
+         ================================================================= -->
+    <changeSet id="V107-phone-otp-and-optional-email" author="hms-team" runOnChange="false">
+        <sqlFile path="V107__phone_otp_and_optional_email.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
