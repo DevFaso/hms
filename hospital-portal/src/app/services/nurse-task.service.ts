@@ -57,7 +57,22 @@ export interface NurseHandoff {
   patientName: string;
   direction: string;
   updatedAt: string;
-  note: string;
+  /** SBAR situation line. */
+  note: string | null;
+  background: string | null;
+  assessment: string | null;
+  recommendation: string | null;
+  status: string;
+  createdByName: string | null;
+}
+
+export interface NurseHandoffCreateRequest {
+  patientId: string;
+  direction: string;
+  situation?: string;
+  background?: string;
+  assessment?: string;
+  recommendation?: string;
 }
 
 export interface NurseAnnouncement {
@@ -281,12 +296,14 @@ export class NurseTaskService {
     return this.http.get<NurseHandoff[]>(`${this.baseUrl}/handoffs`, { params: httpParams });
   }
 
-  completeHandoff(handoffId: string): Observable<void> {
-    return this.http.put<void>(`${this.baseUrl}/handoffs/${handoffId}/complete`, {});
+  createHandoff(data: NurseHandoffCreateRequest, hospitalId?: string): Observable<NurseHandoff> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.post<NurseHandoff>(`${this.baseUrl}/handoffs`, data, { params: httpParams });
   }
 
-  updateHandoffTask(handoffId: string, taskId: string, completed: boolean): Observable<unknown> {
-    return this.http.patch(`${this.baseUrl}/handoffs/${handoffId}/tasks/${taskId}`, { completed });
+  completeHandoff(handoffId: string): Observable<void> {
+    return this.http.put<void>(`${this.baseUrl}/handoffs/${handoffId}/complete`, {});
   }
 
   getAnnouncements(params?: { hospitalId?: string }): Observable<NurseAnnouncement[]> {

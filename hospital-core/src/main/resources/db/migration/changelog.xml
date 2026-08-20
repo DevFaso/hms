@@ -1606,4 +1606,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V108 — Nurse handoffs (P0 #1). New clinical.nurse_handoffs table
+         backing real SBAR shift/transfer handoff records; replaces the
+         synthetic rows the nurse-station handoffs tab used to render.
+         Purely additive.
+         ================================================================= -->
+    <changeSet id="V108-nurse-handoffs" author="hms-team" runOnChange="false">
+        <sqlFile path="V108__nurse_handoffs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

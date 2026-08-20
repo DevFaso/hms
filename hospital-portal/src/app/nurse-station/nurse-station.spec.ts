@@ -3,7 +3,8 @@ import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, Subscription } from 'rxjs';
 import { NurseStationComponent } from './nurse-station';
-import { NurseTaskService, NurseFlowBoard } from '../services/nurse-task.service';
+import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
+import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
 import { AuthService } from '../auth/auth.service';
@@ -31,6 +32,8 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getNurseInbox',
       'getOrders',
       'getHandoffs',
+      'createHandoff',
+      'completeHandoff',
       'getAnnouncements',
       'getWorkboard',
       'getPatientFlow',
@@ -267,5 +270,54 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(component.flowBoard()).toBe(board);
     expect(component.workboard().length).toBe(1);
     expect(component.lastRefreshed()).toBeTruthy();
+  });
+
+  /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
+
+  it('submitCreateHandoff requires patient and direction before posting', () => {
+    component.openHandoffCreate();
+    component.submitCreateHandoff();
+    expect(toastSpy.error).toHaveBeenCalled();
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+  });
+
+  it('submitCreateHandoff posts the SBAR form, toasts, and closes the dialog', () => {
+    const created: NurseHandoff = {
+      id: 'h9',
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'Shift change',
+      updatedAt: '2026-08-20T10:00:00',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'PENDING',
+      createdByName: 'Nina Nurse',
+    };
+    nurseServiceSpy.createHandoff.and.returnValue(of(created));
+
+    component.openHandoffCreate();
+    component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
+    component.updateHandoffField('direction', 'Shift change');
+    component.updateHandoffField('situation', 'Stable.');
+    component.submitCreateHandoff();
+
+    expect(nurseServiceSpy.createHandoff).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        patientId: 'p1',
+        direction: 'Shift change',
+        situation: 'Stable.',
+      }),
+    );
+    expect(toastSpy.success).toHaveBeenCalled();
+    expect(component.handoffCreateOpen()).toBeFalse();
+  });
+
+  it('completeHandoff calls the service and refreshes', () => {
+    nurseServiceSpy.completeHandoff.and.returnValue(of(void 0));
+    component.completeHandoff('h1');
+    expect(nurseServiceSpy.completeHandoff).toHaveBeenCalledWith('h1');
+    expect(toastSpy.success).toHaveBeenCalled();
   });
 });
