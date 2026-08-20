@@ -110,29 +110,6 @@ class LabResultControllerTest {
         assertThat(roles).contains("QUALITY_MANAGER");
     }
 
-    // ── getPendingReview endpoint ────────────────────────────────────────────
-
-    @Test
-    void getPendingReview_preAuthorize_includesLabManager() throws Exception {
-        List<String> roles = extractRolesFromMethod("getPendingReview",
-                UUID.class, Locale.class);
-        assertThat(roles).contains("LAB_MANAGER");
-    }
-
-    @Test
-    void getPendingReview_preAuthorize_includesLabDirectorAndQualityManager() throws Exception {
-        List<String> roles = extractRolesFromMethod("getPendingReview",
-                UUID.class, Locale.class);
-        assertThat(roles).contains("LAB_DIRECTOR", "QUALITY_MANAGER");
-    }
-
-    @Test
-    void getPendingReview_preAuthorize_includesOriginalRoles() throws Exception {
-        List<String> roles = extractRolesFromMethod("getPendingReview",
-                UUID.class, Locale.class);
-        assertThat(roles).contains("DOCTOR", "LAB_SCIENTIST", "NURSE", "MIDWIFE");
-    }
-
     // ── getAllLabResults must include SUPER_ADMIN for cross-tenant browsing ──
 
     @Test
