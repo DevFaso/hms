@@ -46,7 +46,9 @@ public class User extends BaseEntity {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
-    @Column(nullable = false, unique = true, length = 100)
+    // Nullable since V107: phone-first patients have no email address. The
+    // uq_user_email unique index stays valid — Postgres ignores NULLs there.
+    @Column(unique = true, length = 100)
     private String email;
 
     @Column(length = 100)

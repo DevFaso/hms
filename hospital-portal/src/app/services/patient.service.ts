@@ -61,7 +61,10 @@ export interface PatientCreateRequest {
   country?: string;
   phoneNumberPrimary: string;
   phoneNumberSecondary?: string;
-  email: string;
+  /** Optional — phone-first: most patients register with a phone number only. */
+  email?: string;
+  /** Id of a confirmed SMS OTP challenge for phoneNumberPrimary (stamps phoneVerifiedAt). */
+  phoneVerificationId?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;
@@ -219,6 +222,27 @@ export interface PatientTimeline {
   generatedAt: string;
 }
 
+/** SMS OTP challenge issued by POST /patients/phone-verification. */
+export interface PhoneVerificationChallenge {
+  challengeId: string;
+  maskedPhone: string | null;
+  expiresAt: string;
+  verified: boolean;
+}
+
+/** Masked cross-hospital match returned by GET /patients/registration-match. */
+export interface RegistrationMatch {
+  patientId: string;
+  fullName: string | null;
+  birthYear: number | null;
+  gender: string | null;
+  maskedPhone: string | null;
+  maskedEmail: string | null;
+  hospitalCount: number;
+  alreadyRegisteredHere: boolean;
+  matchedOn: 'PHONE' | 'EMAIL';
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -245,17 +269,78 @@ export class PatientService {
   }
 
   lookup(params: {
+    identifier?: string;
     email?: string;
     phone?: string;
     mrn?: string;
     hospitalId?: string;
   }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
+    if (params.identifier) httpParams = httpParams.set('identifier', params.identifier);
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     return this.http.get<PatientResponse[]>('/patients/lookup', { params: httpParams });
+  }
+
+  /**
+   * Exact email/phone match across ALL hospitals for the registration form.
+   * Returns a masked, privacy-minimal projection — link via POST /registrations.
+   */
+  registrationMatch(params: {
+    email?: string;
+    phone?: string;
+    hospitalId?: string;
+  }): Observable<RegistrationMatch[]> {
+    let httpParams = new HttpParams();
+    if (params.email) httpParams = httpParams.set('email', params.email);
+    if (params.phone) httpParams = httpParams.set('phone', params.phone);
+    if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
+      params: httpParams,
+    });
+  }
+
+  /* ── SMS phone verification (IKODDI OTP) ── */
+
+  phoneVerificationAvailability(): Observable<{ available: boolean }> {
+    return this.http.get<{ available: boolean }>('/patients/phone-verification/availability');
+  }
+
+  requestPhoneVerification(phoneNumber: string): Observable<PhoneVerificationChallenge> {
+    return this.http.post<PhoneVerificationChallenge>('/patients/phone-verification', {
+      phoneNumber,
+    });
+  }
+
+  confirmPhoneVerification(
+    challengeId: string,
+    code: string,
+  ): Observable<PhoneVerificationChallenge> {
+    return this.http.post<PhoneVerificationChallenge>('/patients/phone-verification/confirm', {
+      challengeId,
+      code,
+    });
+  }
+
+  /** Hospital-scoped free search (GET /patients/search) — name/MRN/phone/email patterns. */
+  search(params: {
+    name?: string;
+    mrn?: string;
+    phone?: string;
+    email?: string;
+    hospitalId?: string;
+    size?: number;
+  }): Observable<PatientResponse[]> {
+    let httpParams = new HttpParams();
+    if (params.name) httpParams = httpParams.set('name', params.name);
+    if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
+    if (params.phone) httpParams = httpParams.set('phone', params.phone);
+    if (params.email) httpParams = httpParams.set('email', params.email);
+    if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params.size) httpParams = httpParams.set('size', params.size);
+    return this.http.get<PatientResponse[]>('/patients/search', { params: httpParams });
   }
 
   /* ── Allergies ── */

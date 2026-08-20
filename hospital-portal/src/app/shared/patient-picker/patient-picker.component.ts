@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, Subject, Subscription } from 'rxjs';
+import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 
@@ -32,7 +32,10 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   /** id for the input element so an external <label for> keeps working. */
   @Input() inputId = 'patient-picker-input';
-  /** Restrict the lookup to one hospital (omit for cross-hospital search). */
+  /**
+   * Hospital scope for name search. Exact identifiers (phone/email/MRN) also
+   * query the cross-hospital lookup regardless of this input.
+   */
   @Input() hospitalId: string | null = null;
   @Input() set selected(value: PatientResponse | null) {
     this.selectedPatient.set(value);
@@ -58,15 +61,31 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         debounceTime(220),
         distinctUntilChanged(),
         // catchError INSIDE switchMap: a failed lookup must not kill the stream.
+        // Two sources merged: /patients/search matches names within the hospital
+        // scope, /patients/lookup matches exact identifiers (phone/email/MRN)
+        // across hospitals — the previous /patients?search call was silently
+        // unfiltered because the backend never implemented that param.
         switchMap((q) => {
           this.searchLoading.set(true);
-          return this.patientService
-            .list(this.hospitalId ?? undefined, q)
+          const scoped = this.patientService
+            .search({ name: q, hospitalId: this.hospitalId ?? undefined, size: 8 })
             .pipe(catchError(() => of([] as PatientResponse[])));
+          // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
+          // MRN) — free-text name fragments must never leave the hospital scope.
+          const exact = this.looksLikeIdentifier(q)
+            ? this.patientService
+                .lookup({ identifier: q, hospitalId: this.hospitalId ?? undefined })
+                .pipe(catchError(() => of([] as PatientResponse[])))
+            : of([] as PatientResponse[]);
+          return forkJoin([scoped, exact]);
         }),
       )
-      .subscribe((list) => {
-        const items = (list ?? []).slice(0, 8);
+      .subscribe(([scoped, exact]) => {
+        const merged: PatientResponse[] = [];
+        for (const p of [...(exact ?? []), ...(scoped ?? [])]) {
+          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+        }
+        const items = merged.slice(0, 8);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
         this.searchLoading.set(false);
@@ -75,6 +94,12 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.searchSub?.unsubscribe();
+  }
+
+  /** Phone-like (6+ digits/symbols), email-like, or MRN-prefixed input. */
+  private looksLikeIdentifier(q: string): boolean {
+    const trimmed = q.trim();
+    return trimmed.includes('@') || /^mrn-/i.test(trimmed) || /^\+?[\d\s().-]{6,}$/.test(trimmed);
   }
 
   onQueryChange(q: string): void {
