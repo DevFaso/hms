@@ -42,16 +42,22 @@
         </label>
         <label>
           {{ 'PORTAL.FAMILY.PERMISSIONS' | translate }}
+          <!-- Values MUST be the backend's canonical VIEW_* scope vocabulary —
+               un-prefixed tokens used to silently fail every scope check. -->
           <select [(ngModel)]="form.permissions">
             <option value="ALL">{{ 'PORTAL.FAMILY.ALL_ACCESS' | translate }}</option>
-            <option value="APPOINTMENTS">
+            <option value="VIEW_APPOINTMENTS">
               {{ 'PORTAL.FAMILY.APPOINTMENTS_ONLY' | translate }}
             </option>
-            <option value="LAB_RESULTS">{{ 'PORTAL.FAMILY.LAB_RESULTS_ONLY' | translate }}</option>
-            <option value="MEDICATIONS">{{ 'PORTAL.FAMILY.MEDICATIONS_ONLY' | translate }}</option>
-            <option value="VITALS">{{ 'PORTAL.FAMILY.VITALS_ONLY' | translate }}</option>
-            <option value="BILLING">{{ 'PORTAL.FAMILY.BILLING_ONLY' | translate }}</option>
-            <option value="APPOINTMENTS,LAB_RESULTS,MEDICATIONS">
+            <option value="VIEW_LAB_RESULTS">
+              {{ 'PORTAL.FAMILY.LAB_RESULTS_ONLY' | translate }}
+            </option>
+            <option value="VIEW_MEDICATIONS">
+              {{ 'PORTAL.FAMILY.MEDICATIONS_ONLY' | translate }}
+            </option>
+            <option value="VIEW_BILLING">{{ 'PORTAL.FAMILY.BILLING_ONLY' | translate }}</option>
+            <option value="VIEW_RECORDS">{{ 'PORTAL.FAMILY.RECORDS_ONLY' | translate }}</option>
+            <option value="VIEW_APPOINTMENTS,VIEW_MEDICATIONS,VIEW_LAB_RESULTS">
               {{ 'PORTAL.FAMILY.APPT_LAB_MED' | translate }}
             </option>
           </select>
@@ -176,6 +182,7 @@
               <th>{{ 'PORTAL.FAMILY.PERMISSIONS' | translate }}</th>
               <th>{{ 'PORTAL.FAMILY.SINCE' | translate }}</th>
               <th>{{ 'PORTAL.FAMILY.EXPIRES' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -195,6 +202,16 @@
                       ? (p.expiresAt | date: 'mediumDate')
                       : ('PORTAL.FAMILY.NEVER' | translate)
                   }}
+                </td>
+                <td>
+                  <a
+                    class="btn-primary btn-view-data"
+                    [attr.data-testid]="'view-data-' + p.grantorPatientId"
+                    [routerLink]="['/my-family-access', p.grantorPatientId]"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                    {{ 'PORTAL.FAMILY.VIEW_DATA' | translate }}
+                  </a>
                 </td>
               </tr>
             }

@@ -47,6 +47,21 @@ export class MyAppointmentsComponent implements OnInit {
   showPreCheckIn = signal(false);
   preCheckInAppointment = signal<PortalAppointment | null>(null);
 
+  // ── Cancel state ────────────────────────────────────────────────
+  cancelTarget = signal<PortalAppointment | null>(null);
+  cancelLoading = signal(false);
+  cancelError = signal<string | null>(null);
+  cancelReason = '';
+
+  // ── Reschedule state ────────────────────────────────────────────
+  rescheduleTarget = signal<PortalAppointment | null>(null);
+  rescheduleLoading = signal(false);
+  rescheduleError = signal<string | null>(null);
+  rescheduleDate = '';
+  rescheduleStartTime = '';
+  rescheduleEndTime = '';
+  rescheduleReason = '';
+
   hospitals = signal<SchedulingHospital[]>([]);
   departments = signal<SchedulingDepartment[]>([]);
   providers = signal<SchedulingProvider[]>([]);
@@ -70,7 +85,13 @@ export class MyAppointmentsComponent implements OnInit {
         this.appointments.set(appts);
         const now = new Date();
         this.upcoming.set(appts.filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now));
-        this.past.set(appts.filter((a) => a.status === 'COMPLETED' || new Date(a.date) < now));
+        // Cancelled appointments land in Past (whatever their date) so they
+        // stay visible after the patient cancels instead of vanishing.
+        this.past.set(
+          appts.filter(
+            (a) => a.status === 'COMPLETED' || a.status === 'CANCELLED' || new Date(a.date) < now,
+          ),
+        );
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
@@ -96,6 +117,108 @@ export class MyAppointmentsComponent implements OnInit {
   onPreCheckInCompleted(): void {
     this.closePreCheckIn();
     this.loadAppointments();
+  }
+
+  // ── Cancel / reschedule actions ──────────────────────────────────
+
+  /**
+   * The backend rejects only COMPLETED and CANCELLED, but only offer the
+   * actions on states a patient can sensibly act on.
+   */
+  canModify(appt: PortalAppointment): boolean {
+    return ['SCHEDULED', 'CONFIRMED', 'PENDING', 'RESCHEDULED'].includes(appt.status);
+  }
+
+  openCancel(appt: PortalAppointment): void {
+    this.cancelTarget.set(appt);
+    this.cancelReason = '';
+    this.cancelError.set(null);
+  }
+
+  closeCancel(): void {
+    this.cancelTarget.set(null);
+    this.cancelLoading.set(false);
+  }
+
+  submitCancel(): void {
+    const appt = this.cancelTarget();
+    if (!appt) return;
+    this.cancelLoading.set(true);
+    this.cancelError.set(null);
+    this.portal.cancelAppointment({ appointmentId: appt.id, reason: this.cancelReason }).subscribe({
+      next: () => {
+        this.closeCancel();
+        this.loadAppointments();
+      },
+      error: (err) => {
+        this.cancelLoading.set(false);
+        const msg =
+          err?.error?.message ||
+          err?.error?.error ||
+          this.translate.instant('PORTAL.APPOINTMENTS.CANCEL.FAILED');
+        this.cancelError.set(msg);
+      },
+    });
+  }
+
+  openReschedule(appt: PortalAppointment): void {
+    this.rescheduleTarget.set(appt);
+    this.rescheduleDate = appt.date;
+    this.rescheduleStartTime = appt.rawStartTime;
+    this.rescheduleEndTime = appt.rawEndTime;
+    this.rescheduleReason = '';
+    this.rescheduleError.set(null);
+  }
+
+  closeReschedule(): void {
+    this.rescheduleTarget.set(null);
+    this.rescheduleLoading.set(false);
+  }
+
+  submitReschedule(): void {
+    const appt = this.rescheduleTarget();
+    if (!appt) return;
+    if (!this.rescheduleDate || !this.rescheduleStartTime || !this.rescheduleEndTime) {
+      this.rescheduleError.set(
+        this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.MISSING_FIELDS'),
+      );
+      return;
+    }
+    if (this.rescheduleEndTime <= this.rescheduleStartTime) {
+      this.rescheduleError.set(
+        this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.END_AFTER_START'),
+      );
+      return;
+    }
+    if (this.rescheduleDate < this.todayDate) {
+      this.rescheduleError.set(this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.PAST_DATE'));
+      return;
+    }
+
+    this.rescheduleLoading.set(true);
+    this.rescheduleError.set(null);
+    this.portal
+      .rescheduleAppointment({
+        appointmentId: appt.id,
+        newDate: this.rescheduleDate,
+        newStartTime: this.rescheduleStartTime,
+        newEndTime: this.rescheduleEndTime,
+        reason: this.rescheduleReason,
+      })
+      .subscribe({
+        next: () => {
+          this.closeReschedule();
+          this.loadAppointments();
+        },
+        error: (err) => {
+          this.rescheduleLoading.set(false);
+          const msg =
+            err?.error?.message ||
+            err?.error?.error ||
+            this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.FAILED');
+          this.rescheduleError.set(msg);
+        },
+      });
   }
 
   // ── Booking form actions ─────────────────────────────────────────

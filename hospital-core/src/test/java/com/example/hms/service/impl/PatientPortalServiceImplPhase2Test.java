@@ -453,6 +453,29 @@ class PatientPortalServiceImplPhase2Test {
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Cannot reschedule a cancelled");
         }
+
+        @Test
+        @DisplayName("should throw when end time is not after start time")
+        void endBeforeStart_throws() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newStartTime(LocalTime.of(14, 30))
+                    .newEndTime(LocalTime.of(14, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("End time must be after start time");
+
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

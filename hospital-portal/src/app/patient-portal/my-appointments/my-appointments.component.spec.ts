@@ -141,3 +141,163 @@ describe('MyAppointmentsComponent', () => {
     });
   });
 });
+
+/* ── P1 #9: cancel + reschedule ── */
+
+describe('MyAppointmentsComponent — cancel and reschedule', () => {
+  let fixture: ComponentFixture<MyAppointmentsComponent>;
+  let component: MyAppointmentsComponent;
+  let portal: jasmine.SpyObj<PatientPortalService>;
+
+  function appt(overrides: Partial<PortalAppointment>): PortalAppointment {
+    return {
+      id: 'a-1',
+      date: '2027-01-15',
+      startTime: '9:00 AM',
+      endTime: '9:30 AM',
+      rawStartTime: '09:00',
+      rawEndTime: '09:30',
+      providerName: 'Dr. Traore',
+      department: 'Cardiology',
+      reason: 'Follow-up',
+      status: 'SCHEDULED',
+      location: 'CHU Bogodogo',
+      preCheckedIn: false,
+      ...overrides,
+    };
+  }
+
+  beforeEach(async () => {
+    portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
+      'getMyAppointments',
+      'cancelAppointment',
+      'rescheduleAppointment',
+      'getSchedulingHospitals',
+      'getSchedulingDepartments',
+      'getSchedulingProviders',
+      'bookAppointment',
+    ]);
+    portal.getMyAppointments.and.returnValue(of([]));
+
+    await TestBed.configureTestingModule({
+      imports: [MyAppointmentsComponent, TranslateModule.forRoot()],
+      providers: [{ provide: PatientPortalService, useValue: portal }],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(MyAppointmentsComponent);
+    component = fixture.componentInstance;
+  });
+
+  it('buckets a cancelled future appointment into Past so it stays visible', () => {
+    portal.getMyAppointments.and.returnValue(
+      of([appt({ id: 'up-1', status: 'SCHEDULED' }), appt({ id: 'gone-1', status: 'CANCELLED' })]),
+    );
+    fixture.detectChanges();
+
+    expect(component.upcoming().map((a) => a.id)).toEqual(['up-1']);
+    expect(component.past().map((a) => a.id)).toEqual(['gone-1']);
+  });
+
+  it('offers cancel/reschedule only on actionable statuses', () => {
+    expect(component.canModify(appt({ status: 'SCHEDULED' }))).toBeTrue();
+    expect(component.canModify(appt({ status: 'CONFIRMED' }))).toBeTrue();
+    expect(component.canModify(appt({ status: 'PENDING' }))).toBeTrue();
+    expect(component.canModify(appt({ status: 'RESCHEDULED' }))).toBeTrue();
+    expect(component.canModify(appt({ status: 'COMPLETED' }))).toBeFalse();
+    expect(component.canModify(appt({ status: 'CANCELLED' }))).toBeFalse();
+    expect(component.canModify(appt({ status: 'IN_PROGRESS' }))).toBeFalse();
+  });
+
+  it('submitCancel sends the id + reason and reloads on success', () => {
+    fixture.detectChanges();
+    portal.cancelAppointment.and.returnValue(of({}));
+    portal.getMyAppointments.calls.reset();
+    portal.getMyAppointments.and.returnValue(of([]));
+
+    component.openCancel(appt({ id: 'a-9' }));
+    component.cancelReason = 'Travel conflict';
+    component.submitCancel();
+
+    expect(portal.cancelAppointment).toHaveBeenCalledWith({
+      appointmentId: 'a-9',
+      reason: 'Travel conflict',
+    });
+    expect(component.cancelTarget()).toBeNull();
+    expect(portal.getMyAppointments).toHaveBeenCalled();
+  });
+
+  it('submitCancel keeps the modal open and shows the error on failure', () => {
+    fixture.detectChanges();
+    portal.cancelAppointment.and.returnValue(
+      throwError(() => ({ error: { message: 'Appointment is already cancelled' } })),
+    );
+
+    component.openCancel(appt({ id: 'a-9' }));
+    component.submitCancel();
+
+    expect(component.cancelTarget()).not.toBeNull();
+    expect(component.cancelError()).toBe('Appointment is already cancelled');
+  });
+
+  it('openReschedule prefills the form from the raw HH:mm times', () => {
+    component.openReschedule(
+      appt({ date: '2027-02-01', rawStartTime: '10:00', rawEndTime: '10:30' }),
+    );
+    expect(component.rescheduleDate).toBe('2027-02-01');
+    expect(component.rescheduleStartTime).toBe('10:00');
+    expect(component.rescheduleEndTime).toBe('10:30');
+  });
+
+  it('submitReschedule rejects an end time not after the start time', () => {
+    component.openReschedule(appt({}));
+    component.rescheduleStartTime = '10:00';
+    component.rescheduleEndTime = '09:30';
+    component.submitReschedule();
+
+    expect(portal.rescheduleAppointment).not.toHaveBeenCalled();
+    expect(component.rescheduleError()).toBeTruthy();
+  });
+
+  it('submitReschedule rejects a past date', () => {
+    component.openReschedule(appt({}));
+    component.rescheduleDate = '2020-01-01';
+    component.submitReschedule();
+
+    expect(portal.rescheduleAppointment).not.toHaveBeenCalled();
+    expect(component.rescheduleError()).toBeTruthy();
+  });
+
+  it('submitReschedule sends all four required fields and reloads on success', () => {
+    fixture.detectChanges();
+    portal.rescheduleAppointment.and.returnValue(of({}));
+    portal.getMyAppointments.calls.reset();
+    portal.getMyAppointments.and.returnValue(of([]));
+
+    component.openReschedule(appt({ id: 'a-7' }));
+    component.rescheduleDate = '2027-03-10';
+    component.rescheduleStartTime = '14:00';
+    component.rescheduleEndTime = '14:30';
+    component.rescheduleReason = 'Afternoon works better';
+    component.submitReschedule();
+
+    expect(portal.rescheduleAppointment).toHaveBeenCalledWith({
+      appointmentId: 'a-7',
+      newDate: '2027-03-10',
+      newStartTime: '14:00',
+      newEndTime: '14:30',
+      reason: 'Afternoon works better',
+    });
+    expect(component.rescheduleTarget()).toBeNull();
+    expect(portal.getMyAppointments).toHaveBeenCalled();
+  });
+
+  it('renders cancel and reschedule buttons in an expanded upcoming card', () => {
+    portal.getMyAppointments.and.returnValue(of([appt({ id: 'up-2', status: 'CONFIRMED' })]));
+    fixture.detectChanges();
+    component.toggleExpand('up-2');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="appt-cancel"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="appt-reschedule"]')).not.toBeNull();
+  });
+});

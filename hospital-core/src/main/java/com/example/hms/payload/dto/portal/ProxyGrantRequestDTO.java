@@ -25,7 +25,12 @@ public class ProxyGrantRequestDTO {
     @NotNull
     private ProxyRelationship relationship;
 
-    /** Comma-separated scopes: APPOINTMENTS,LAB_RESULTS,MEDICATIONS,VITALS,BILLING,ALL */
+    /**
+     * Comma-separated scopes — canonical vocabulary:
+     * VIEW_APPOINTMENTS, VIEW_MEDICATIONS, VIEW_LAB_RESULTS, VIEW_BILLING,
+     * VIEW_RECORDS, or ALL. Legacy un-prefixed tokens (APPOINTMENTS, …) are
+     * normalized to the VIEW_* form on save and on check.
+     */
     @NotBlank
     private String permissions;
 
