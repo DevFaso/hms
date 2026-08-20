@@ -38,6 +38,9 @@ class LabResultControllerTest {
     private LabResultService labResultService;
 
     @Mock
+    private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+
+    @Mock
     private MessageSource messageSource;
 
     @InjectMocks
@@ -131,6 +134,23 @@ class LabResultControllerTest {
         List<String> roles = extractRolesFromMethod("getPendingReview",
                 UUID.class, Locale.class);
         assertThat(roles).contains("DOCTOR", "LAB_SCIENTIST", "NURSE", "MIDWIFE");
+    }
+
+    // ── critical-escalation manual trigger (P0 #5) ───────────────────────────
+
+    @Test
+    void runCriticalEscalationSweep_returnsCount() {
+        when(criticalValueNotificationService.escalateOverdue()).thenReturn(3);
+
+        var response = controller.runCriticalEscalationSweep();
+
+        assertThat(response.getBody()).containsEntry("escalated", 3);
+    }
+
+    @Test
+    void runCriticalEscalationSweep_preAuthorize_isAdminOnly() throws Exception {
+        List<String> roles = extractRolesFromMethod("runCriticalEscalationSweep");
+        assertThat(roles).containsExactlyInAnyOrder("HOSPITAL_ADMIN", "SUPER_ADMIN");
     }
 
     // ── getAllLabResults must include SUPER_ADMIN for cross-tenant browsing ──

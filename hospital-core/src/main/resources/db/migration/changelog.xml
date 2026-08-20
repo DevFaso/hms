@@ -1606,4 +1606,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V109 — Critical-value escalation (P0 #5). Notification/escalation
+         stamps on lab.lab_results + partial index for the sweep. Purely
+         additive. (V108 is the nurse-handoffs table on a parallel branch;
+         Liquibase runs changeSets in changelog order, so the numbering
+         gap is harmless whichever merges first.)
+         ================================================================= -->
+    <changeSet id="V109-lab-critical-escalation" author="hms-team" runOnChange="false">
+        <sqlFile path="V109__lab_critical_escalation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

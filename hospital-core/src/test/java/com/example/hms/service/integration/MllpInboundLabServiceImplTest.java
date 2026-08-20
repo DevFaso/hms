@@ -43,6 +43,7 @@ class MllpInboundLabServiceImplTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
 
     @InjectMocks private MllpInboundLabServiceImpl service;
 
