@@ -70,6 +70,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'my-education',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-education/my-education.component').then(
+            (m) => m.MyEducationComponent,
+          ),
+      },
+      {
         path: 'my-medications',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },

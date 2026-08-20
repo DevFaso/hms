@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.EducationComprehensionStatus;
 import com.example.hms.enums.ProxyStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
@@ -12,6 +13,9 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientProxy;
+import com.example.hms.model.education.EducationResource;
+import com.example.hms.model.education.PatientEducationProgress;
+import com.example.hms.model.education.PatientEducationQuestion;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
@@ -44,6 +48,10 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
+import com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO;
+import com.example.hms.payload.dto.portal.PatientEducationItemDTO;
+import com.example.hms.payload.dto.portal.PatientEducationProgressUpdateDTO;
+import com.example.hms.payload.dto.portal.PatientEducationQuestionSubmitDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
@@ -167,6 +175,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.mapper.FamilyHistoryMapper familyHistoryMapper;
     private final com.example.hms.mapper.SocialHistoryMapper socialHistoryMapper;
     private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
+
+    // Patient education (self-service delivery)
+    private final com.example.hms.repository.PatientEducationProgressRepository educationProgressRepository;
+    private final com.example.hms.repository.PatientEducationQuestionRepository educationQuestionRepository;
+    private final com.example.hms.repository.EducationResourceRepository educationResourceRepository;
+    private final com.example.hms.mapper.PatientEducationQuestionMapper educationQuestionMapper;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -1246,6 +1260,232 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .immunizations(safeImmunizations(patient.getId()))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
+                .build();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Patient Education — self-service delivery
+    // ══════════════════════════════════════════════════════════════════════
+    // IDOR-safe: the patient id always comes from the JWT via resolvePatientId.
+    // A PatientEducationProgress row IS the assignment record (staff create one
+    // via POST /patient-education/progress), so "assigned to me" == "a progress
+    // row exists for (me, resource)". Anything without such a row is a 404 here,
+    // which also keeps the resource library itself unreadable by patients.
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientEducationItemDTO> getMyEducation(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        List<PatientEducationProgress> progressRows =
+                educationProgressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId);
+        if (progressRows.isEmpty()) {
+            return List.of();
+        }
+
+        // One batch fetch instead of N+1 round-trips per assigned resource.
+        Set<UUID> resourceIds = progressRows.stream()
+                .map(PatientEducationProgress::getResourceId)
+                .collect(java.util.stream.Collectors.toSet());
+        Map<UUID, EducationResource> resources = educationResourceRepository.findAllById(resourceIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(EducationResource::getId, r -> r));
+
+        return progressRows.stream()
+                .map(p -> {
+                    EducationResource resource = resources.get(p.getResourceId());
+                    // Skip rows whose resource was deleted or retired — a patient
+                    // should not see a card for material that no longer exists.
+                    if (resource == null || Boolean.FALSE.equals(resource.getIsActive())) {
+                        return null;
+                    }
+                    return toEducationItemDTO(p, resource);
+                })
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PatientEducationItemDTO getMyEducationItem(Authentication auth, UUID resourceId) {
+        UUID patientId = resolvePatientId(auth);
+        PatientEducationProgress progress = requireAssignedEducation(patientId, resourceId);
+        EducationResource resource = requireActiveEducationResource(resourceId);
+        return toEducationItemDTO(progress, resource);
+    }
+
+    @Override
+    @Transactional
+    public PatientEducationItemDTO updateMyEducationProgress(Authentication auth,
+                                                             UUID resourceId,
+                                                             PatientEducationProgressUpdateDTO dto) {
+        UUID patientId = resolvePatientId(auth);
+        PatientEducationProgress progress = requireAssignedEducation(patientId, resourceId);
+        EducationResource resource = requireActiveEducationResource(resourceId);
+
+        if (dto.getProgressPercentage() != null) {
+            progress.setProgressPercentage(dto.getProgressPercentage());
+        }
+        if (dto.getRating() != null) {
+            progress.setRating(dto.getRating());
+        }
+        if (dto.getFeedback() != null) {
+            progress.setFeedback(dto.getFeedback());
+        }
+        if (dto.getConfirmedUnderstanding() != null) {
+            progress.setConfirmedUnderstanding(dto.getConfirmedUnderstanding());
+        }
+        if (dto.getNeedsClarification() != null) {
+            progress.setNeedsClarification(dto.getNeedsClarification());
+        }
+        if (dto.getClarificationRequest() != null) {
+            progress.setClarificationRequest(dto.getClarificationRequest());
+        }
+
+        boolean newlyCompleted = progress.getCompletedAt() == null
+                && progress.getProgressPercentage() != null
+                && progress.getProgressPercentage() >= 100;
+        if (newlyCompleted) {
+            progress.setCompletedAt(java.time.LocalDateTime.now());
+        }
+
+        progress.setComprehensionStatus(deriveComprehensionStatus(progress));
+        progress.setLastAccessedAt(java.time.LocalDateTime.now());
+        progress.setAccessCount((progress.getAccessCount() == null ? 0 : progress.getAccessCount()) + 1);
+        progress.setUpdatedAt(java.time.LocalDateTime.now());
+        PatientEducationProgress saved = educationProgressRepository.save(progress);
+
+        // Keep the library's roll-up counters honest. Before patients could
+        // complete or rate anything, completionCount and ratingCount were
+        // declared but never written and sat permanently at 0.
+        if (newlyCompleted) {
+            resource.setCompletionCount(
+                    (resource.getCompletionCount() == null ? 0 : resource.getCompletionCount()) + 1);
+        }
+        if (dto.getRating() != null) {
+            Double average = educationProgressRepository.calculateAverageRating(resourceId);
+            if (average != null) {
+                resource.setAverageRating(average);
+            }
+            resource.setRatingCount(educationProgressRepository.countRatings(resourceId));
+        }
+        if (newlyCompleted || dto.getRating() != null) {
+            resource.setUpdatedAt(java.time.LocalDateTime.now());
+            educationResourceRepository.save(resource);
+        }
+
+        return toEducationItemDTO(saved, resource);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientEducationQuestionResponseDTO> getMyEducationQuestions(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return educationQuestionRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
+                .stream()
+                .map(educationQuestionMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public PatientEducationQuestionResponseDTO submitMyEducationQuestion(
+            Authentication auth, PatientEducationQuestionSubmitDTO dto) {
+        Patient patient = findPatient(auth);
+
+        // A question about a specific resource is only allowed for material the
+        // patient was actually assigned; a general question needs no resource.
+        UUID hospitalId;
+        if (dto.getResourceId() != null) {
+            PatientEducationProgress progress = requireAssignedEducation(patient.getId(), dto.getResourceId());
+            hospitalId = progress.getHospitalId();
+        } else {
+            hospitalId = resolvePatientHospitalId(patient);
+            if (hospitalId == null) {
+                throw new BusinessException("No hospital registration found for this patient");
+            }
+        }
+
+        PatientEducationQuestion question = PatientEducationQuestion.builder()
+                .patientId(patient.getId())
+                .resourceId(dto.getResourceId())
+                .hospitalId(hospitalId)
+                .question(dto.getQuestionText())
+                .isUrgent(Boolean.TRUE.equals(dto.getIsUrgent()))
+                .isAnswered(false)
+                .requiresInPersonDiscussion(Boolean.TRUE.equals(dto.getRequiresInPersonDiscussion()))
+                .appointmentScheduled(false)
+                .build();
+
+        PatientEducationQuestion saved = educationQuestionRepository.save(question);
+        log.info("Patient {} submitted education question {}", patient.getId(), saved.getId());
+        return educationQuestionMapper.toResponseDTO(saved);
+    }
+
+    /** The assignment check: no progress row for (patient, resource) means not assigned. */
+    private PatientEducationProgress requireAssignedEducation(UUID patientId, UUID resourceId) {
+        return educationProgressRepository
+                .findTopByPatientIdAndResourceIdOrderByCreatedAtDesc(patientId, resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No education resource assigned to you with id " + resourceId));
+    }
+
+    private EducationResource requireActiveEducationResource(UUID resourceId) {
+        EducationResource resource = educationResourceRepository.findById(resourceId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Education resource not found: " + resourceId));
+        if (Boolean.FALSE.equals(resource.getIsActive())) {
+            throw new ResourceNotFoundException("Education resource not found: " + resourceId);
+        }
+        return resource;
+    }
+
+    /**
+     * Status is derived, never client-supplied — a patient cannot stamp
+     * themselves CONFIRMED_UNDERSTANDING without confirming.
+     */
+    private static EducationComprehensionStatus deriveComprehensionStatus(PatientEducationProgress p) {
+        if (Boolean.TRUE.equals(p.getNeedsClarification())) {
+            return EducationComprehensionStatus.NEEDS_CLARIFICATION;
+        }
+        if (Boolean.TRUE.equals(p.getConfirmedUnderstanding())) {
+            return EducationComprehensionStatus.CONFIRMED_UNDERSTANDING;
+        }
+        if (p.getCompletedAt() != null) {
+            return EducationComprehensionStatus.COMPLETED;
+        }
+        int percent = p.getProgressPercentage() == null ? 0 : p.getProgressPercentage();
+        return percent > 0
+                ? EducationComprehensionStatus.IN_PROGRESS
+                : EducationComprehensionStatus.NOT_STARTED;
+    }
+
+    private static PatientEducationItemDTO toEducationItemDTO(PatientEducationProgress p,
+                                                              EducationResource r) {
+        return PatientEducationItemDTO.builder()
+                .progressId(p.getId())
+                .comprehensionStatus(p.getComprehensionStatus())
+                .progressPercentage(p.getProgressPercentage())
+                .startedAt(p.getStartedAt())
+                .completedAt(p.getCompletedAt())
+                .lastAccessedAt(p.getLastAccessedAt())
+                .rating(p.getRating())
+                .feedback(p.getFeedback())
+                .needsClarification(p.getNeedsClarification())
+                .clarificationRequest(p.getClarificationRequest())
+                .confirmedUnderstanding(p.getConfirmedUnderstanding())
+                .resourceId(r.getId())
+                .title(r.getTitle())
+                .description(r.getDescription())
+                .resourceType(r.getResourceType())
+                .category(r.getCategory())
+                .contentUrl(r.getContentUrl())
+                .textContent(r.getTextContent())
+                .thumbnailUrl(r.getThumbnailUrl())
+                .videoUrl(r.getVideoUrl())
+                .estimatedDuration(r.getEstimatedDuration())
+                .tags(r.getTags() == null ? List.of() : List.copyOf(r.getTags()))
+                .primaryLanguage(r.getPrimaryLanguage())
+                .isWarningSignContent(r.getIsWarningSignContent())
                 .build();
     }
 

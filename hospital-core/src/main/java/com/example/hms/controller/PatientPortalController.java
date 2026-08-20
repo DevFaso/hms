@@ -36,6 +36,10 @@ import com.example.hms.payload.dto.portal.PatientDocumentResponseDTO;
 import com.example.hms.payload.dto.portal.PreCheckInRequestDTO;
 import com.example.hms.payload.dto.portal.PreCheckInResponseDTO;
 import com.example.hms.payload.dto.portal.QuestionnaireDTO;
+import com.example.hms.payload.dto.portal.PatientEducationItemDTO;
+import com.example.hms.payload.dto.portal.PatientEducationProgressUpdateDTO;
+import com.example.hms.payload.dto.portal.PatientEducationQuestionSubmitDTO;
+import com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.pharmacy.PharmacyClaimResponseDTO;
@@ -762,5 +766,58 @@ public class PatientPortalController {
         UUID patientId = portalService.resolvePatientId(auth);
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 pharmacyClaimService.listByPatientForSelf(patientId, pageable)));
+    }
+
+    // ── Patient education (self-service delivery) ────────────────────────
+    // IDOR-safe: patient ID resolved from the JWT. The staff-facing
+    // /patient-education endpoints exclude ROLE_PATIENT and take patientId as a
+    // path variable; patients read their assigned material only through here,
+    // and only material that has actually been assigned to them.
+
+    @Operation(summary = "List the education resources assigned to me, with my progress")
+    @GetMapping("/education")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientEducationItemDTO>>> getMyEducation(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyEducation(auth)));
+    }
+
+    @Operation(summary = "Read one education resource assigned to me")
+    @GetMapping("/education/{resourceId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PatientEducationItemDTO>> getMyEducationItem(
+            Authentication auth, @PathVariable UUID resourceId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEducationItem(auth, resourceId)));
+    }
+
+    @Operation(summary = "Record my progress, rating or understanding on assigned material")
+    @PutMapping("/education/{resourceId}/progress")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PatientEducationItemDTO>> updateMyEducationProgress(
+            Authentication auth,
+            @PathVariable UUID resourceId,
+            @Valid @RequestBody PatientEducationProgressUpdateDTO dto) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.updateMyEducationProgress(auth, resourceId, dto)));
+    }
+
+    @Operation(summary = "List the education questions I have asked")
+    @GetMapping("/education/questions")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientEducationQuestionResponseDTO>>> getMyEducationQuestions(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEducationQuestions(auth)));
+    }
+
+    @Operation(summary = "Ask a question about my education material")
+    @PostMapping("/education/questions")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PatientEducationQuestionResponseDTO>> submitMyEducationQuestion(
+            Authentication auth,
+            @Valid @RequestBody PatientEducationQuestionSubmitDTO dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(
+                portalService.submitMyEducationQuestion(auth, dto)));
     }
 }
