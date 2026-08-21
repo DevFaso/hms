@@ -2615,7 +2615,14 @@
     "CURRENT_RESULT": "Resultado actual",
     "PREVIOUS_RESULT": "Resultado anterior",
     "BASELINE": "Referencia (sin resultado anterior)",
-    "DAYS_BETWEEN": "días de diferencia"
+    "DAYS_BETWEEN": "días de diferencia",
+    "READ_BACK": "Relectura",
+    "READ_BACK_PROMPT": "Repita el valor crítico que le comunicaron para",
+    "READ_BACK_VALUE": "Valor tal como lo recibió",
+    "READ_BACK_HINT": "Escriba el valor que le comunicaron — no lo copie del expediente. El sistema lo compara con el resultado informado.",
+    "READ_BACK_CONFIRM": "Confirmar relectura",
+    "READ_BACK_CONFIRMED": "Relectura confirmada",
+    "READ_BACK_ERROR": "No se pudo registrar la relectura"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",

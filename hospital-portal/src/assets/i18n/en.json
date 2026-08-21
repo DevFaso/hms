@@ -2615,7 +2615,14 @@
     "CURRENT_RESULT": "Current result",
     "PREVIOUS_RESULT": "Previous result",
     "BASELINE": "Baseline (no previous result)",
-    "DAYS_BETWEEN": "days between"
+    "DAYS_BETWEEN": "days between",
+    "READ_BACK": "Read back",
+    "READ_BACK_PROMPT": "Repeat the critical value you were given for",
+    "READ_BACK_VALUE": "Value as you received it",
+    "READ_BACK_HINT": "Type the value you were told — do not copy it from the chart. The system checks it against the reported result.",
+    "READ_BACK_CONFIRM": "Confirm read-back",
+    "READ_BACK_CONFIRMED": "Read-back confirmed",
+    "READ_BACK_ERROR": "Read-back could not be recorded"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",

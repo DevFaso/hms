@@ -42,6 +42,11 @@ export interface LabResultResponse {
   acknowledged: boolean;
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
+  criticalNotifiedAt?: string | null;
+  criticalEscalatedAt?: string | null;
+  criticalEscalationLevel?: number;
+  criticalReadBackAt?: string | null;
+  criticalReadBackBy?: string | null;
   released: boolean;
   releasedAt: string | null;
   releasedByFullName: string | null;
@@ -568,6 +573,20 @@ export class LabService {
 
   acknowledgeResult(id: string): Observable<void> {
     return this.http.post<void>(`/lab-results/${id}/acknowledge`, null);
+  }
+
+  /**
+   * Read back a critical value (P0 #5).
+   *
+   * <p>Deliberately separate from acknowledgeResult. Acknowledge sends no body,
+   * so it records only that somebody clicked; a read-back sends what the
+   * clinician heard and the server checks it, which is what catches a
+   * transcription error. A mismatch comes back 400 and is recorded.
+   */
+  readBackCriticalValue(id: string, repeatedValue: string): Observable<LabResultResponse> {
+    return this.http.post<LabResultResponse>(`/lab-results/${id}/critical-read-back`, {
+      repeatedValue,
+    });
   }
 
   compareResult(id: string): Observable<LabResultComparison> {

@@ -221,6 +221,44 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     @Transactional
+    public LabResultResponseDTO recordCriticalReadBack(
+            UUID id,
+            com.example.hms.payload.dto.CriticalValueReadBackRequestDTO request,
+            Locale locale) {
+        LabResult labResult = labResultRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+
+        UUID actorId = authService.getCurrentUserId();
+        LabResult updated = criticalValueNotificationService.recordReadBack(
+            labResult, request.getRepeatedValue(), actorId, resolveActorDisplay(actorId));
+        return labResultMapper.toResponseDTO(updated);
+    }
+
+    /**
+     * Best-effort human name for the read-back record. A missing display name
+     * must not block a clinician confirming a critical value.
+     */
+    private String resolveActorDisplay(UUID actorId) {
+        if (actorId == null) {
+            return null;
+        }
+        try {
+            return userRepository.findById(actorId)
+                .map(u -> {
+                    String first = u.getFirstName() == null ? "" : u.getFirstName();
+                    String last = u.getLastName() == null ? "" : u.getLastName();
+                    String full = (first + " " + last).trim();
+                    return full.isEmpty() ? u.getUsername() : full;
+                })
+                .orElse(null);
+        } catch (RuntimeException ex) {
+            LOG.warn("Could not resolve display name for read-back actor {}: {}", actorId, ex.getMessage());
+            return null;
+        }
+    }
+
+    @Override
+    @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));

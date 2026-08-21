@@ -18,14 +18,24 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
 
     /**
      * Escalation sweep feed (P0 #5): critical results whose provider was
-     * notified, that are still unacknowledged past the cutoff, and that
-     * have not been escalated yet. Unscoped by design — the sweep is a
-     * system actor covering every hospital.
+     * notified and that are still unresolved past the cutoff. Unscoped by
+     * design — the sweep is a system actor covering every hospital.
+     *
+     * <p>The last clause used to be {@code criticalEscalatedAt IS NULL}, which
+     * made escalation one-shot: after a single nudge the row left the feed
+     * forever, so a critical result nobody acknowledged went permanently quiet.
+     * It now compares the LAST escalation against the same cutoff, so the sweep
+     * re-fires on the configured interval until the result is resolved.
+     *
+     * <p>Resolved means acknowledged OR read back. Read-back is the stronger
+     * act, but requiring it outright would strand results acknowledged before
+     * V116 existed.
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT r FROM LabResult r WHERE r.acknowledged = false "
+        + "AND r.criticalReadBackAt IS NULL "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
-        + "AND r.criticalEscalatedAt IS NULL")
+        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
     java.util.List<LabResult> findCriticalAwaitingEscalation(
         @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
 
