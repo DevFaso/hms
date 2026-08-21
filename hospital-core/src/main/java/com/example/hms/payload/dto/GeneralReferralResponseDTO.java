@@ -70,6 +70,13 @@ public class GeneralReferralResponseDTO {
     private LocalDateTime scheduledAppointmentAt;
     private String appointmentLocation;
 
+    /**
+     * The appointment this referral produced, when one could be created.
+     * Null for referrals to an external facility, which have no receiving
+     * provider or department to book against.
+     */
+    private java.util.UUID appointmentId;
+
     private LocalDateTime startedAt;
 
     private LocalDateTime completedAt;
