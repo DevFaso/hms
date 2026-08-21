@@ -3,12 +3,14 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.StockTransactionType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.DispenseMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.RefillRequest;
 import com.example.hms.model.User;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.Dispense;
@@ -21,6 +23,7 @@ import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
@@ -41,6 +44,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -58,6 +64,7 @@ public class DispenseServiceImpl implements DispenseService {
     private final StockTransactionRepository stockTransactionRepository;
     private final UserRepository userRepository;
     private final MedicationCatalogItemRepository medicationCatalogItemRepository;
+    private final RefillRequestRepository refillRequestRepository;
     private final DispenseMapper dispenseMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
@@ -444,10 +451,30 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return prescriptionRepository
+        Page<Prescription> page = prescriptionRepository
                 .findByHospital_IdAndStatusIn(hospitalId,
-                        java.util.List.copyOf(DISPENSABLE_STATUSES), pageable)
-                .map(this::toWorkQueueDTO);
+                        List.copyOf(DISPENSABLE_STATUSES), pageable);
+        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(page.getContent());
+        return page.map(p -> toWorkQueueDTO(p, latestRefills.get(p.getId())));
+    }
+
+    /**
+     * One query for the whole page rather than a lookup per row — the queue is
+     * a hot pharmacy screen and this decoration is not worth an N+1.
+     */
+    private Map<UUID, RefillRequest> latestRefillsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, RefillRequest> latest = new HashMap<>();
+        // Ordered newest-first by the query, so the first row per prescription wins.
+        for (RefillRequest refill : refillRequestRepository.findByPrescription_IdInOrderByUpdatedAtDesc(ids)) {
+            if (refill.getPrescription() != null) {
+                latest.putIfAbsent(refill.getPrescription().getId(), refill);
+            }
+        }
+        return latest;
     }
 
     // ── Private helpers ──
@@ -480,8 +507,7 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     private void updatePrescriptionStatusFromHistory(Prescription prescription) {
-        BigDecimal requested = prescription.getQuantity() != null
-                ? prescription.getQuantity() : BigDecimal.ZERO;
+        BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
         if (dispensedToDate == null) {
@@ -492,7 +518,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispensedToDate.signum() <= 0) {
             // All dispenses cancelled — return to a dispensable state
             nextStatus = PrescriptionStatus.SIGNED;
-        } else if (requested.signum() > 0 && dispensedToDate.compareTo(requested) >= 0) {
+        } else if (expected.signum() > 0 && dispensedToDate.compareTo(expected) >= 0) {
             nextStatus = PrescriptionStatus.DISPENSED;
         } else {
             nextStatus = PrescriptionStatus.PARTIALLY_FILLED;
@@ -502,9 +528,57 @@ public class DispenseServiceImpl implements DispenseService {
             prescription.setStatus(nextStatus);
             prescriptionRepository.save(prescription);
         }
+
+        if (nextStatus == PrescriptionStatus.DISPENSED) {
+            closeOutApprovedRefill(prescription);
+        }
     }
 
-    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p) {
+    /**
+     * Total quantity this prescription is entitled to across its whole life:
+     * the prescribed quantity once for the original fill, plus once more for
+     * every refill an approval has released.
+     *
+     * <p>The comparison used to be against {@code quantity} alone, which was
+     * right only while a prescription could be filled once. Now that approving
+     * a refill returns the prescription to the work queue, a lifetime sum is
+     * already ≥ quantity before the refill fill even starts, so a partial
+     * second fill would have reported as fully DISPENSED.
+     */
+    private BigDecimal expectedLifetimeQuantity(Prescription prescription) {
+        BigDecimal perFill = prescription.getQuantity() != null
+                ? prescription.getQuantity() : BigDecimal.ZERO;
+        int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
+        return perFill.multiply(BigDecimal.valueOf(1L + refillsUsed));
+    }
+
+    /**
+     * Marks the refill request this fill satisfied as DISPENSED. The enum value
+     * has existed since the feature shipped and nothing ever wrote it, so a
+     * patient's refill history showed "Approved" forever — even after they had
+     * collected the medication.
+     *
+     * <p>Best-effort: a bookkeeping miss here must never fail a dispense that
+     * physically happened.
+     */
+    private void closeOutApprovedRefill(Prescription prescription) {
+        try {
+            refillRequestRepository
+                    .findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc(
+                            prescription.getId(), RefillStatus.APPROVED)
+                    .ifPresent(refill -> {
+                        refill.setStatus(RefillStatus.DISPENSED);
+                        refillRequestRepository.save(refill);
+                        log.info("Refill {} closed out as DISPENSED for prescription {}",
+                                refill.getId(), prescription.getId());
+                    });
+        } catch (RuntimeException ex) {
+            log.warn("Could not close out the approved refill for prescription {}: {}",
+                    prescription.getId(), ex.getMessage());
+        }
+    }
+
+    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p, RefillRequest latestRefill) {
         WorkQueuePrescriptionDTO.Patient patient = null;
         if (p.getPatient() != null) {
             patient = WorkQueuePrescriptionDTO.Patient.builder()
@@ -539,6 +613,30 @@ public class DispenseServiceImpl implements DispenseService {
                 .frequency(p.getFrequency())
                 .patient(patient)
                 .staff(staff)
+                .refill(toRefillContext(p, latestRefill))
+                .build();
+    }
+
+    /**
+     * Null for a prescription that has never had a refill request AND carries no
+     * refill allowance — the common first-fill case, whose payload is unchanged.
+     */
+    private WorkQueuePrescriptionDTO.Refill toRefillContext(Prescription p, RefillRequest latest) {
+        boolean hasAllowance = p.getRefillsAllowed() != null
+                || (p.getRefillsUsed() != null && p.getRefillsUsed() > 0);
+        if (latest == null && !hasAllowance) {
+            return null;
+        }
+        return WorkQueuePrescriptionDTO.Refill.builder()
+                .allowed(p.getRefillsAllowed())
+                .remaining(p.getRefillsRemaining())
+                .used(p.getRefillsUsed())
+                .lastStatus(latest != null && latest.getStatus() != null ? latest.getStatus().name() : null)
+                .lastProviderNotes(latest != null ? latest.getProviderNotes() : null)
+                .lastDecidedAt(latest != null ? latest.getUpdatedAt() : null)
+                // An APPROVED request that has not yet been dispensed is precisely
+                // "the patient is coming to collect a refill".
+                .awaitingRefillPickup(latest != null && latest.getStatus() == RefillStatus.APPROVED)
                 .build();
     }
 

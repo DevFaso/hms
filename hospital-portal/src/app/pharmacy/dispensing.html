@@ -196,6 +196,7 @@
               <th>{{ 'PHARMACY.DOSAGE' | translate }}</th>
               <th>{{ 'PHARMACY.QUANTITY' | translate }}</th>
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+              <th>{{ 'PHARMACY.REFILL' | translate }}</th>
               <th>{{ 'PHARMACY.PRESCRIBER' | translate }}</th>
               <th>{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
@@ -211,6 +212,33 @@
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'
                   }}</span>
+                </td>
+                <td class="refill-cell">
+                  @if (rx.refill; as refill) {
+                    @if (refill.lastStatus) {
+                      <span
+                        [class]="refillBadgeClass(refill.lastStatus)"
+                        [attr.data-testid]="'rx-refill-status-' + rx.id"
+                        [title]="refill.lastProviderNotes || ''"
+                        >{{ 'REFILLS.STATUS_' + refill.lastStatus | translate }}</span
+                      >
+                    }
+                    @if (refill.awaitingRefillPickup) {
+                      <span class="refill-note" [attr.data-testid]="'rx-refill-pickup-' + rx.id">{{
+                        'PHARMACY.REFILL_AWAITING_PICKUP' | translate
+                      }}</span>
+                    }
+                    <span class="refill-note">{{
+                      'PHARMACY.REFILL_REMAINING' | translate: { count: refill.remaining ?? 0 }
+                    }}</span>
+                    @if (refill.lastProviderNotes) {
+                      <span class="refill-note refill-note--quote">{{
+                        refill.lastProviderNotes
+                      }}</span>
+                    }
+                  } @else {
+                    <span class="refill-note">{{ 'PHARMACY.REFILL_NONE' | translate }}</span>
+                  }
                 </td>
                 <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
                 <td>

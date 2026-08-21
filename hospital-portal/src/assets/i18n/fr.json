@@ -2697,7 +2697,11 @@
     "SESSION_LOCKED": "Session Verrouillée",
     "SWITCH_USER": "Changer d'utilisateur",
     "UNLOCK": "Déverrouiller",
-    "VERIFYING": "Vérification…"
+    "VERIFYING": "Vérification…",
+    "ERROR_WRONG_PASSWORD": "Mot de passe incorrect. Veuillez réessayer.",
+    "ERROR_SESSION_EXPIRED": "Votre session a expiré. Veuillez vous reconnecter.",
+    "ERROR_SESSION_MISMATCH": "Cette session appartient à un autre utilisateur. Veuillez vous reconnecter.",
+    "ERROR_VERIFY_FAILED": "Impossible de vérifier votre mot de passe. Veuillez réessayer."
   },
   "LOGIN": {
     "BOOTSTRAP_SUBTITLE": "Créez votre compte Super Administrateur pour commencer",
@@ -6038,7 +6042,11 @@
     "PARTNER_REJECTED": "Pharmacie partenaire a rejeté",
     "PARTNER_DISPENSED": "Pharmacie partenaire a confirmé la dispensation",
     "STOCK_CHECK_FAILED": "Échec de la vérification du stock",
-    "ROUTING_FAILED": "Échec de l'opération de routage"
+    "ROUTING_FAILED": "Échec de l'opération de routage",
+    "REFILL": "Renouvellement",
+    "REFILL_NONE": "Première délivrance",
+    "REFILL_REMAINING": "{{count}} renouvellement(s) restant(s)",
+    "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

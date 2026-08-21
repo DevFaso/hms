@@ -142,6 +142,17 @@ public class Prescription extends BaseEntity {
     @Column(name = "refills_remaining")
     private Integer refillsRemaining;
 
+    /**
+     * How many refills have actually been authorized and released back to the
+     * pharmacy. Drives the fill accounting in {@code DispenseServiceImpl}:
+     * the expected lifetime quantity is {@code quantity * (1 + refillsUsed)},
+     * so a partial second fill reports PARTIALLY_FILLED rather than being
+     * mistaken for a completed one by the original single-fill comparison.
+     */
+    @Column(name = "refills_used", nullable = false)
+    @Builder.Default
+    private Integer refillsUsed = 0;
+
     @Size(max = 2048)
     @Column(name = "instructions", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)
@@ -298,6 +309,10 @@ public class Prescription extends BaseEntity {
     private void normalizeQuantities() {
         if (refillsAllowed != null && (refillsRemaining == null || refillsRemaining > refillsAllowed)) {
             refillsRemaining = refillsAllowed;
+        }
+        // Rows written before V114 load with a null here; the column is NOT NULL.
+        if (refillsUsed == null) {
+            refillsUsed = 0;
         }
     }
 

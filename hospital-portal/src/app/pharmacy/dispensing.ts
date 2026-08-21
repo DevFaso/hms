@@ -12,6 +12,7 @@ import {
   DispenseRequest,
   DispenseResponse,
   WorkQueuePrescription,
+  RefillDecisionStatus,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -268,6 +269,23 @@ export class DispensingComponent implements OnInit, OnDestroy {
         return 'badge-danger';
       default:
         return 'badge-info';
+    }
+  }
+
+  /**
+   * The refill decision drives whether medication should be handed over at all,
+   * so DENIED and PAUSED are styled as stop signals rather than neutral chips.
+   */
+  refillBadgeClass(status: RefillDecisionStatus): string {
+    switch (status) {
+      case 'APPROVED':
+        return 'badge badge-success';
+      case 'DENIED':
+        return 'badge badge-danger';
+      case 'PAUSED':
+        return 'badge badge-warning';
+      default:
+        return 'badge badge-info';
     }
   }
 

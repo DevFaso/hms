@@ -270,7 +270,33 @@ export interface WorkQueuePrescription {
       lastName?: string;
     };
   };
+  /** Absent on a first fill with no refill allowance and no request history. */
+  refill?: WorkQueueRefillContext;
 }
+
+/**
+ * What the prescriber last decided about this patient's refill request, plus the
+ * remaining allowance. A denial or hold matters as much as an approval at the
+ * counter: a patient can arrive asking for a refill their doctor refused.
+ */
+export interface WorkQueueRefillContext {
+  allowed?: number;
+  remaining?: number;
+  used?: number;
+  lastStatus?: RefillDecisionStatus;
+  lastProviderNotes?: string;
+  lastDecidedAt?: string;
+  /** An approved request not yet dispensed — the patient is here to collect. */
+  awaitingRefillPickup?: boolean;
+}
+
+export type RefillDecisionStatus =
+  | 'REQUESTED'
+  | 'PAUSED'
+  | 'APPROVED'
+  | 'DENIED'
+  | 'DISPENSED'
+  | 'CANCELLED';
 
 /* ───────────────────────────── Stock-Out Routing ───────────────────────────── */
 

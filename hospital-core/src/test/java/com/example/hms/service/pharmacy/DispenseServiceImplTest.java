@@ -4,12 +4,14 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.DispenseMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.RefillRequest;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.InventoryItem;
@@ -21,6 +23,7 @@ import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
@@ -48,6 +51,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
@@ -68,6 +72,7 @@ class DispenseServiceImplTest {
     @Mock private StockTransactionRepository stockTransactionRepository;
     @Mock private UserRepository userRepository;
     @Mock private MedicationCatalogItemRepository medicationCatalogItemRepository;
+    @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DispenseMapper dispenseMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
@@ -289,6 +294,101 @@ class DispenseServiceImplTest {
             service.createDispense(dto);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        @Test
+        @DisplayName("refill fill: a partial second fill is PARTIALLY_FILLED, not DISPENSED")
+        void refillPartialFillIsNotMistakenForComplete() {
+            // Approving a refill returns the prescription to the queue, so the
+            // lifetime dispensed sum already covers the first fill. Comparing
+            // against `quantity` alone would call this second, partial fill
+            // complete. Entitlement is quantity * (1 + refillsUsed).
+            prescription.setRefillsUsed(1);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(3));
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            // 10 from the original fill + 3 of the refill's 10.
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(13));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(
+                    DispenseResponseDTO.builder().id(dispenseId).status("PARTIAL").build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("refill fill: completing it closes the approved refill out as DISPENSED")
+        void completedRefillFillClosesOutTheRequest() {
+            // RefillStatus.DISPENSED was declared when the feature shipped and
+            // nothing ever wrote it, so a collected refill still read "Approved".
+            prescription.setRefillsUsed(1);
+            RefillRequest approved = new RefillRequest();
+            approved.setId(UUID.randomUUID());
+            approved.setStatus(RefillStatus.APPROVED);
+
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(20));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(
+                    DispenseResponseDTO.builder().id(dispenseId).status("COMPLETED").build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(refillRequestRepository.findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc(
+                    prescriptionId, RefillStatus.APPROVED)).thenReturn(Optional.of(approved));
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            assertThat(approved.getStatus()).isEqualTo(RefillStatus.DISPENSED);
+            verify(refillRequestRepository).save(approved);
+        }
+
+        @Test
+        @DisplayName("refill bookkeeping never fails a dispense that physically happened")
+        void refillCloseOutFailureDoesNotFailTheDispense() {
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(10));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(
+                    DispenseResponseDTO.builder().id(dispenseId).status("COMPLETED").build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(refillRequestRepository.findFirstByPrescription_IdAndStatusOrderByUpdatedAtDesc(
+                    prescriptionId, RefillStatus.APPROVED)).thenThrow(new RuntimeException("db down"));
+
+            assertThatCode(() -> service.createDispense(dto)).doesNotThrowAnyException();
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
         }
 
         @Test
