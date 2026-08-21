@@ -164,6 +164,18 @@
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
+                  @if (canSign(p)) {
+                    <button
+                      class="action-link sign-link"
+                      (click)="signPrescription(p)"
+                      [disabled]="signingId() === p.id"
+                      [title]="'PRESCRIPTIONS.SIGN' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.SIGN' | translate"
+                      [attr.data-testid]="'rx-sign-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">draw</span>
+                    </button>
+                  }
                   <button
                     class="action-link"
                     (click)="openDispatchModal(p)"

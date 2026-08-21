@@ -4597,8 +4597,11 @@
       "DELETE_FAILED": "Échec de la suppression",
       "LOAD_FAILED": "Échec du chargement des prescriptions",
       "SMS_SENT": "SMS envoyé à {pharmacy}",
-      "SMS_FAILED": "Impossible d'envoyer le SMS de prescription"
-    }
+      "SMS_FAILED": "Impossible d'envoyer le SMS de prescription",
+      "SIGNED": "Prescription signée",
+      "SIGN_FAILED": "Échec de la signature"
+    },
+    "SIGN": "Signer"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
