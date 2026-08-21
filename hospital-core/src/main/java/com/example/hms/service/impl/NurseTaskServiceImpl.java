@@ -606,15 +606,22 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        ═══════════════════════════════════════════════════════════════════ */
 
     @Override
-    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit) {
+    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit, String status) {
         if (hospitalId == null) return List.of();
         int effectiveLimit = clampLimit(limit);
         Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
 
+        // Only the two statuses that exist; anything else is a caller bug and
+        // silently returning [] for a typo would read as "no handoffs".
+        String effectiveStatus = status == null || status.isBlank() ? STATUS_PENDING : status.trim().toUpperCase();
+        if (!STATUS_PENDING.equals(effectiveStatus) && !STATUS_COMPLETED.equals(effectiveStatus)) {
+            throw new BusinessException("Unknown handoff status: " + status);
+        }
+
         // Scan page is larger than the display limit so the assignee filter
         // can still fill it.
         return nurseHandoffRepository
-            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING,
+            .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, effectiveStatus,
                 PageRequest.of(0, HANDOFF_SCAN_PAGE))
             .stream()
             .filter(h -> inScope(h.getPatient(), scope))
@@ -685,6 +692,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .recommendation(h.getRecommendation())
             .status(h.getStatus())
             .createdByName(h.getCreatedByName())
+            .completedAt(h.getCompletedAt())
+            .completedByName(h.getCompletedByName())
             .build();
     }
 

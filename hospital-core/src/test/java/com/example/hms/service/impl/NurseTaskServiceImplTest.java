@@ -302,7 +302,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(first, second));
 
         // limit 0 clamps to 1 — nurseUserId null means no assignee scope
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0);
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0, null);
 
         assertThat(handoffs).hasSize(1);
         NurseHandoffSummaryDTO dto = handoffs.get(0);

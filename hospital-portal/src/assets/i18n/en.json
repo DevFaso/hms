@@ -3923,7 +3923,7 @@
       "NO_RECEIVED": "No one has granted you proxy access yet.",
       "PERSON": "Person",
       "GRANTED_DATE": "Granted",
-      "EXPIRES": "Expires",
+      "EXPIRES": "Access expires (optional)",
       "NEVER": "Never",
       "ACTIONS": "Actions",
       "REVOKE": "Revoke",
@@ -6955,7 +6955,10 @@
     "SLEEP_EXHAUSTED": "Exhausted",
     "SLEEP_UNKNOWN": "Unknown",
     "OBSERVATIONS_LOAD_ERROR": "Failed to load observations",
-    "ASSESSMENTS_LOAD_ERROR": "Failed to load newborn assessments"
+    "ASSESSMENTS_LOAD_ERROR": "Failed to load newborn assessments",
+    "DELIVERY_LINK": "Delivery",
+    "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
+    "DELIVERY_LINKED": "linked to delivery"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",

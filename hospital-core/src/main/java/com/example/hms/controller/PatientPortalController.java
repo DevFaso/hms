@@ -773,6 +773,9 @@ public class PatientPortalController {
     // /patient-education endpoints exclude ROLE_PATIENT and take patientId as a
     // path variable; patients read their assigned material only through here,
     // and only material that has actually been assigned to them.
+    // (That exclusion was a claim, not a fact, until 2026-08-21: the library
+    // reads were isAuthenticated(), so any patient token could browse the
+    // whole resource catalogue. They now carry explicit staff role lists.)
 
     @Operation(summary = "List the education resources assigned to me, with my progress")
     @GetMapping("/education")

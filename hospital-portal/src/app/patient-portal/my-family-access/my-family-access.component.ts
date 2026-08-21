@@ -37,6 +37,16 @@ export class MyFamilyAccessComponent implements OnInit {
     permissions: 'ALL',
   };
 
+  /**
+   * Optional expiry, as the date input's yyyy-MM-dd. Kept separate from the
+   * form because the backend wants a LocalDateTime; converted on submit to
+   * end-of-day so "expires 2026-09-01" means the whole of that day, not
+   * midnight the night before.
+   */
+  expiresOn = '';
+  /** Earliest selectable expiry — a grant that expires in the past is a revoke. */
+  readonly minExpiry = new Date().toISOString().slice(0, 10);
+
   ngOnInit(): void {
     this.loadProxies();
   }
@@ -77,12 +87,14 @@ export class MyFamilyAccessComponent implements OnInit {
       this.toast.error(this.translate.instant('PORTAL.FAMILY.REQUIRED_FIELDS'));
       return;
     }
+    this.form.expiresAt = this.expiresOn ? `${this.expiresOn}T23:59:59` : undefined;
     this.granting.set(true);
     this.portalService.grantProxy(this.form).subscribe({
       next: (proxy) => {
         this.proxies.update((list) => [proxy, ...list]);
         this.showGrantForm.set(false);
         this.form = { proxyUsername: '', relationship: '', permissions: 'ALL' };
+        this.expiresOn = '';
         this.granting.set(false);
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_GRANTED'));
       },

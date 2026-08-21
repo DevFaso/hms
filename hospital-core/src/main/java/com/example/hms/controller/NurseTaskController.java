@@ -156,13 +156,14 @@ public class NurseTaskController {
         @RequestParam(name = "assignee", required = false) String assignee,
         @RequestParam(name = "limit", required = false) Integer limit,
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        @RequestParam(name = "status", required = false) String status,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
-        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit));
+        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit, status));
     }
 
     @PostMapping("/handoffs")

@@ -67,6 +67,15 @@ public class CriticalValueNotificationService {
     private final LabResultMapper labResultMapper;
     private final com.example.hms.repository.StaffRepository staffRepository;
 
+    /**
+     * Commits the mismatch record even though the caller's transaction is about
+     * to roll back. See {@link #recordReadBack}: a mismatched read-back throws,
+     * and without REQUIRES_NEW the throw would erase the very row that proves
+     * the mismatch happened — which is what it silently did until the 2026-08-21
+     * reassessment caught the write-only column.
+     */
+    private final org.springframework.transaction.support.TransactionTemplate mismatchTx;
+
     /** Minutes an unacknowledged critical result waits before escalation. */
     @Value("${hms.lab.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
@@ -76,13 +85,17 @@ public class CriticalValueNotificationService {
         SmsService smsService,
         LabResultRepository labResultRepository,
         LabResultMapper labResultMapper,
-        com.example.hms.repository.StaffRepository staffRepository
+        com.example.hms.repository.StaffRepository staffRepository,
+        org.springframework.transaction.PlatformTransactionManager transactionManager
     ) {
         this.notificationService = notificationService;
         this.smsService = smsService;
         this.labResultRepository = labResultRepository;
         this.labResultMapper = labResultMapper;
         this.staffRepository = staffRepository;
+        this.mismatchTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.mismatchTx.setPropagationBehavior(
+            org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -215,7 +228,11 @@ public class CriticalValueNotificationService {
      * before somebody treats the wrong number.
      *
      * <p>A mismatch is REJECTED but still persisted, because a clinician reading
-     * back the wrong value is precisely the event worth having a record of.
+     * back the wrong value is precisely the event worth having a record of. The
+     * persistence runs in its OWN transaction ({@code REQUIRES_NEW}): the
+     * BusinessException below rolls back the caller's transaction, and until the
+     * 2026-08-21 reassessment that rollback silently erased the mismatch row this
+     * method had just written — the audit record existed only in the log line.
      *
      * @return the updated result
      * @throws com.example.hms.exception.BusinessException when the repeated
@@ -232,7 +249,19 @@ public class CriticalValueNotificationService {
         result.setCriticalReadBackByDisplay(byDisplay);
 
         if (reported == null || repeated == null || !reported.equals(repeated)) {
-            labResultRepository.save(result);
+            // Copy the mismatch onto a fresh row loaded inside the inner
+            // transaction rather than saving the caller's managed entity: the
+            // outer session still owns `result`, and committing it here while
+            // the outer transaction rolls back would leave the two sessions
+            // disagreeing about the entity's state.
+            UUID resultId = result.getId();
+            mismatchTx.executeWithoutResult(status ->
+                labResultRepository.findById(resultId).ifPresent(row -> {
+                    row.setCriticalReadBackValue(repeatedValue);
+                    row.setCriticalReadBackByUserId(byUserId);
+                    row.setCriticalReadBackByDisplay(byDisplay);
+                    labResultRepository.save(row);
+                }));
             log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
                 result.getId(), result.getResultValue(), repeatedValue);
             throw new com.example.hms.exception.BusinessException(
