@@ -26,6 +26,16 @@ public class NewbornAssessmentRequestDTO {
     private UUID registrationId;
     private UUID recordedByStaffId;
 
+    /**
+     * The delivery this newborn came from, when the birth was recorded in the
+     * Labor &amp; Delivery module.
+     *
+     * <p>Optional on purpose: a newborn may be transferred in already born, or
+     * predate the L&amp;D module. An assessment without it is complete, it simply
+     * has no partograph to trace back to.
+     */
+    private UUID deliveryRecordId;
+
     private LocalDateTime assessmentTime;
     private Boolean lateEntry;
     private LocalDateTime originalEntryTime;

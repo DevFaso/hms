@@ -591,8 +591,14 @@
     </changeSet>
 
     <!-- =================================================================
-         V47–V49: Reserved for future pharmacy phases (dispense, inventory, claims).
-         Empty SQL files exist but are not included until populated.
+         V47–V49: reservation cancelled. The three phases they were held
+         for — dispense, inventory and claims — all shipped in V43
+         (clinical.dispenses, clinical.inventory_items,
+         billing.pharmacy_claims, billing.pharmacy_payments), so the
+         reservation was stale and the placeholder files were empty. They
+         have been deleted rather than left as three zero-byte migrations
+         that look registered-but-inert: writing SQL into one would have
+         run nothing, silently, because no changeSet referenced it.
          ================================================================= -->
 
     <!-- =================================================================
@@ -1698,6 +1704,123 @@
          ================================================================= -->
     <changeSet id="V114-prescription-refills-used" author="hms-team" runOnChange="false">
         <sqlFile path="V114__prescription_refills_used.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V115 — clinical.patient_hospital_registrations.patient_id FK.
+         The schema has no foreign keys at all (V1 came from Hibernate
+         SchemaExport, which emits none), so a registration could point at
+         a deleted patient. One such row returned 500 for the entire
+         registrations desk. ON DELETE CASCADE mirrors the orphanRemoval
+         already on Patient.hospitalRegistrations, so it changes no ORM
+         behaviour and can never block a delete; NOT VALID lets the
+         surviving orphan stay for reconciliation instead of failing the
+         deploy. splitStatements=false: the file is a single DO $$ block.
+         ================================================================= -->
+    <changeSet id="V115-registration-patient-fk" author="hms-team" runOnChange="false">
+        <sqlFile path="V115__registration_patient_fk.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V116 — lab_results critical-value read-back + escalation levels.
+         Shipped in PR #451 but never registered here, so the columns were
+         never created while the entity mapping already declared them.
+         ddl-auto=validate then refused to build the SessionFactory and the
+         whole application failed to start: "missing column
+         [critical_escalation_level] in table [lab.lab_results]". A
+         migration file on disk is inert until it appears in this file —
+         that is the only thing that makes it run.
+         ================================================================= -->
+    <changeSet id="V116-critical-value-readback" author="hms-team" runOnChange="false">
+        <sqlFile path="V116__critical_value_readback_and_escalation_levels.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V117 — general_referrals.appointment_id. Same omission as V116
+         (PR #453): the column backs a real mapping that validate checks.
+         ================================================================= -->
+    <changeSet id="V117-referral-appointment-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V117__referral_appointment_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V118 — prescription signature columns. Same omission as V116
+         (PR #455). splitStatements=false: the file ends in a DO $$ block
+         that adds fk_prescription_signed_by.
+         ================================================================= -->
+    <changeSet id="V118-prescription-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V118__prescription_signature.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V119 — delivery tracking for lab.instrument_outbox.
+         OML/ORU messages were queued since the lab module shipped and
+         never transmitted, because no sender existed. A sender that
+         retries needs somewhere to record attempts, the last failure
+         text and the instant the backoff is measured from. Strictly
+         additive with defaults, so existing PENDING rows start at zero.
+         ================================================================= -->
+    <changeSet id="V119-instrument-outbox-delivery-tracking" author="hms-team" runOnChange="false">
+        <sqlFile path="V119__instrument_outbox_delivery_tracking.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V120 — drug-interaction knowledge-base expansion.
+         The checking pipeline is real at prescribe, dispense and CDS-Hooks,
+         but the KB behind it was V63's 12-pair seed — and a checker with
+         almost nothing to check against is worse than none, because green
+         reads as "no interaction" when it means "not in our twelve rows".
+         Adds the pairs a WHO-Essential-Medicines formulary most needs, each
+         citing its reference. splitStatements=false: DO $$ block.
+
+         Re-added after the develop merge dropped it: this branch and
+         develop both appended just before the closing tag, and resolving
+         that overlap kept develop's V116-V119 and lost this block. The
+         file stayed on disk, so the loss was invisible until
+         MigrationRegistrationTest and LiquibaseSchemaIT's 25-row seed
+         assertion both failed.
+         ================================================================= -->
+    <changeSet id="V120-drug-interaction-kb-expansion" author="hms-team" runOnChange="false">
+        <sqlFile path="V120__drug_interaction_kb_expansion.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V121 — slot inventory foundation (visit types, session templates,
+         generated slots). Scheduling could book an Appointment against an
+         arbitrary (staff, date, time) but nothing described what a clinic
+         session IS, so nothing could answer "when is this clinician next
+         free for a 30-minute follow-up?" — the question that blocks patient
+         self-scheduling, waitlist auto-offer and utilisation reporting
+         alike. New tables, so they carry REAL foreign keys.
+
+         Re-added for the THIRD time. Every migration's changeSet goes
+         immediately before </databaseChangeLog>, so any two branches that
+         add one collide on the same lines; resolving that collision by
+         taking develop drops the branch's own migration while leaving its
+         .sql on disk, which looks like nothing happened. GitHub's "Update
+         branch" button resolves it exactly that way. MigrationRegistrationTest
+         is what turns this from a silent production outage into a red build.
+         ================================================================= -->
+    <changeSet id="V121-slot-inventory-foundation" author="hms-team" runOnChange="false">
+        <sqlFile path="V121__slot_inventory_foundation.sql"
                  relativeToChangelogFile="true"
                  stripComments="false"/>
     </changeSet>

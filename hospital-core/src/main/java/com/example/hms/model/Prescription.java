@@ -251,6 +251,30 @@ public class Prescription extends BaseEntity {
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
 
+    /**
+     * SHA-256 digest over the canonical signed content (P2 #16).
+     *
+     * <p>Before this, {@code SIGNED} was a status string and nothing more —
+     * there was no digest, no signer and no timestamp anywhere on the
+     * prescription, while lab results and lab orders both kept theirs. Null on a
+     * SIGNED row means "signed before V118, unverifiable"; it is deliberately
+     * not backfilled, because manufacturing evidence for a ceremony that never
+     * happened is worse than recording that it is missing.
+     */
+    @Column(name = "signature_value", length = 128)
+    private String signatureValue;
+
+    @Column(name = "signature_algorithm", length = 32)
+    private String signatureAlgorithm;
+
+    @Column(name = "signed_at")
+    private LocalDateTime signedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "signed_by_staff_id",
+        foreignKey = @ForeignKey(name = "fk_prescription_signed_by"))
+    private Staff signedBy;
+
     @Size(max = 1024)
     @Column(name = "notes", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)

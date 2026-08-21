@@ -266,7 +266,45 @@ public class DispenseServiceImpl implements DispenseService {
                 || !prescription.getPatient().getId().equals(dto.getPatientId())) {
             throw new BusinessException("Patient does not match prescription");
         }
+
+        enforceControlledSubstanceGates(prescription);
         return prescription;
+    }
+
+    /**
+     * Refuse to dispense a controlled substance whose safeguards were never
+     * satisfied (P2 #15).
+     *
+     * <p>{@code controlledSubstance}, {@code twoFactorVerifiedAt},
+     * {@code requiresCosign} and {@code cosignedAt} have existed on Prescription
+     * since the pharmacy module shipped, and NOTHING read them except display
+     * mappers. A prescriber could flag a schedule-II opioid as controlled,
+     * declare it needs a co-sign, complete neither step, and the pharmacy would
+     * dispense it exactly like paracetamol. The columns described a control that
+     * did not exist.
+     *
+     * <p>Enforced at dispense rather than only at sign because dispense is the
+     * irreversible step: a prescription that should not have been signed can be
+     * cancelled, but medication handed to a patient cannot be recalled.
+     *
+     * <p>Both gates apply ONLY when the prescriber marked the prescription
+     * controlled or cosign-required. Nothing changes for ordinary prescriptions,
+     * and nothing retroactively blocks existing ones that were never flagged.
+     */
+    private void enforceControlledSubstanceGates(Prescription prescription) {
+        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
+            throw new BusinessException(
+                    "CONTROLLED_SUBSTANCE: this prescription is flagged as a controlled substance "
+                            + "and has no completed two-factor verification. It cannot be dispensed "
+                            + "until the prescriber verifies it.");
+        }
+
+        if (prescription.isRequiresCosign()
+                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
+            throw new BusinessException(
+                    "COSIGN_REQUIRED: this prescription requires a co-signature and has not been "
+                            + "co-signed. It cannot be dispensed until a second prescriber co-signs it.");
+        }
     }
 
     private ActorPair resolveActors(DispenseRequestDTO dto) {

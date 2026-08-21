@@ -10,6 +10,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -215,6 +216,19 @@ public class GeneralReferral {
      */
     @Column(length = 300)
     private String appointmentLocation;
+
+    /**
+     * The appointment this referral produced, when one could be created.
+     *
+     * <p>Null is a normal outcome, not a failure: a referral to an external
+     * facility has no receiving provider or department, and an Appointment
+     * cannot be built without both. Those referrals keep the timestamp and the
+     * free-text location and nothing more.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "appointment_id",
+        foreignKey = @ForeignKey(name = "fk_referral_appointment"))
+    private com.example.hms.model.Appointment appointment;
 
     /**
      * When the consultation/care actually began (status moved to IN_PROGRESS)

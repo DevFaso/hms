@@ -85,6 +85,12 @@ class EmpiServiceImplTest {
     @Mock
     private com.example.hms.service.AuditEventLogService auditEventLogService;
 
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
+
+    @Mock
+    private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+
     private EmpiServiceImpl empiService;
 
     private KafkaProperties kafkaProperties;
@@ -108,6 +114,8 @@ class EmpiServiceImplTest {
             patientRepository,
             auditEventLogService,
             new EmpiMapper(),
+            roleValidator,
+            registrationRepository,
             kafkaProperties,
             kafkaTemplateProvider
         );
@@ -622,5 +630,126 @@ class EmpiServiceImplTest {
 
     Mockito.verify(masterIdentityRepository).save(any(EmpiMasterIdentity.class));
     Mockito.verify(kafkaTemplateProvider).getIfAvailable();
+    }
+
+    // ── Caller-vs-tenant isolation ─────────────────────────────────────────
+    // The merge endpoints are HOSPITAL_ADMIN-or-better, but HOSPITAL_ADMIN is a
+    // PER-HOSPITAL role — "is an admin" was never the same question as "is an
+    // admin HERE". The pre-existing cross-tenant check only compared the two
+    // identities to EACH OTHER, which two identities at the same foreign
+    // hospital satisfy perfectly.
+
+    @Test
+    void mergeIdentities_rejectsWhenBothIdentitiesBelongToAnotherHospital() {
+        UUID callerHospital = UUID.randomUUID();
+        UUID foreignHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+
+        // Both at the SAME foreign hospital: the identity-to-identity guard is
+        // satisfied, so only a caller check can stop this.
+        EmpiMasterIdentity primary = activeIdentity("EMP-FA", foreignHospital);
+        EmpiMasterIdentity secondary = activeIdentity("EMP-FB", foreignHospital);
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        UUID primaryId = primary.getId();
+        assertThatThrownBy(() -> empiService.mergeIdentities(primaryId, request))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergeIdentities_rejectsUnstampedIdentityForAScopedCaller() {
+        UUID callerHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+
+        // A legacy row with no hospital stamp belongs to nobody in particular;
+        // handing it to whichever tenant asks first is disclosure by another
+        // route. Super-admin still reconciles these.
+        EmpiMasterIdentity primary = activeIdentity("EMP-LEGACY", null);
+        EmpiMasterIdentity secondary = activeIdentity("EMP-MINE", callerHospital);
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        UUID primaryId = primary.getId();
+        assertThatThrownBy(() -> empiService.mergeIdentities(primaryId, request))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
+    }
+
+    @Test
+    void mergeIdentities_allowsSuperAdminAcrossUnstampedRows() {
+        // Null active hospital = super-admin, unscoped.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        EmpiMasterIdentity primary = activeIdentity("EMP-SA", null);
+        EmpiMasterIdentity secondary = activeIdentity("EMP-SB", null);
+        when(masterIdentityRepository.findById(primary.getId())).thenReturn(Optional.of(primary));
+        when(masterIdentityRepository.findById(secondary.getId())).thenReturn(Optional.of(secondary));
+        when(mergeEventRepository.save(any(EmpiMergeEvent.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        EmpiMergeRequestDTO request = new EmpiMergeRequestDTO();
+        request.setSecondaryIdentityId(secondary.getId());
+        request.setMergeType(EmpiMergeType.MANUAL);
+
+        empiService.mergeIdentities(primary.getId(), request);
+
+        Mockito.verify(mergeEventRepository).save(any(EmpiMergeEvent.class));
+    }
+
+    @Test
+    void findIdentityByPatientId_hidesAnotherHospitalsIdentity() {
+        UUID patientId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        EmpiMasterIdentity foreign = activeIdentity("EMP-FOREIGN", UUID.randomUUID());
+        foreign.setPatientId(patientId);
+        when(masterIdentityRepository.findByPatientId(patientId)).thenReturn(Optional.of(foreign));
+
+        // Reads as absent, not as data: the row carries the EMPI number and the
+        // patient's cross-facility affiliation.
+        assertThat(empiService.findIdentityByPatientId(patientId)).isEmpty();
+    }
+
+    @Test
+    void findIdentityByPatientId_returnsOwnHospitalIdentity() {
+        UUID patientId = UUID.randomUUID();
+        UUID callerHospital = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+
+        EmpiMasterIdentity mine = activeIdentity("EMP-MINE", callerHospital);
+        mine.setPatientId(patientId);
+        when(masterIdentityRepository.findByPatientId(patientId)).thenReturn(Optional.of(mine));
+
+        assertThat(empiService.findIdentityByPatientId(patientId)).isPresent();
+    }
+
+    @Test
+    void mergePatients_rejectsPatientNotRegisteredAtCallerHospitalBeforeProvisioning() {
+        UUID callerHospital = UUID.randomUUID();
+        UUID primaryPatientId = UUID.randomUUID();
+        UUID secondaryPatientId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(callerHospital);
+        when(registrationRepository.existsByPatientIdAndHospitalId(primaryPatientId, callerHospital))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> empiService.mergePatients(
+                primaryPatientId, secondaryPatientId, EmpiMergeType.MANUAL, null))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+        // The guard must run BEFORE ensureIdentityForPatient, which provisions a
+        // master identity and emits IDENTITY_LINKED — a write against another
+        // tenant's patient that no later check could undo.
+        Mockito.verify(masterIdentityRepository, Mockito.never()).save(any());
+        Mockito.verify(mergeEventRepository, Mockito.never()).save(any());
     }
 }
