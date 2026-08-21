@@ -507,11 +507,11 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 
 ## P0 — Clinical-truth risks (fabricated or dead-end data in production UI)
 
-- [ ] 1. **Nurse handoffs: real entity or removal** — `NurseTaskServiceImpl` fabricates handoff rows ("still synthetic, entity arrives in MVP 2"); completion buttons operate on generated data. Build the handoff entity (SBAR/I-PASS fields) + endpoints + wire the existing UI, or pull the surface until it's real.
-- [ ] 2. **Nurse order-task queue: real entity or removal** — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
-- [ ] 3. **Lab pending-review: delete the hardcoded endpoint** — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
-- [ ] 4. **Bed/ward decision** — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
-- [ ] 5. **Critical-value escalation chain** — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
+- [x] 1. **Nurse handoffs: real entity or removal** — ✅ DONE (PR #431 `feature/nurse-station-real-data`, V108 + V110): — `NurseTaskServiceImpl` fabricates handoff rows ("still synthetic, entity arrives in MVP 2"); completion buttons operate on generated data. Build the handoff entity (SBAR/I-PASS fields) + endpoints + wire the existing UI, or pull the surface until it's real.
+- [x] 2. **Nurse order-task queue: real entity or removal** — ✅ DONE (PR #431): queue and dashboard counts now derive from real lab/imaging/procedure orders. — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
+- [x] 3. **Lab pending-review: delete the hardcoded endpoint** — ✅ DONE (PR #432 `fix/lab-pending-review-synthetic`): — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
+- [x] 4. **Bed/ward decision** — ✅ DONE (PR #433 `feature/bed-management`), built rather than dropped: — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
+- [x] 5. **Critical-value escalation chain** — ✅ DONE (PR #434, completed by PR #451 `feature/critical-value-readback-escalation`): — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
 
 ## P1 — Complete the specialty core + turn on what's already built
 
@@ -525,6 +525,38 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 
 - [x] **Refill approval queue was unreachable** — ✅ DONE (`fix/refill-approval-reachability`): the whole chain existed and worked — patient submits, `notifyCareTeamForRefillRequest` emails and in-app-notifies the prescriber, `GET /refills` returns their queue, approve/reject enforce prescriber + status — but no click anywhere in the portal reached `/refills`. No sidebar entry, both dashboard "Refills" tiles pointed at `/prescriptions`, and the one `router.navigate(['/refills'])` fired on an inbox category `ResultReviewServiceImpl` never emitted (its `RefillRequestRepository` was injected and unused). Added the sidebar entry, corrected both tile routes, added a doctor tile with the pending count, and wrote the missing `REFILL_REQUEST` inbox emitter. Also added the missing **pause/hold** state (`RefillStatus.PAUSED`, `PUT /refills/{id}/pause`, reason mandatory since the patient is told): a held request stays actionable, the patient can still cancel it, and it drops out of the inbox so the queue clears. The `pharmacy-refill.spec.ts` E2E masked all of this — it deep-links to `/refills`, and asserted a `PENDING` filter that neither the component nor the enum has.
   - **Still open, deliberately:** approval is terminal — it writes `APPROVED` and creates no downstream prescription or pharmacy order — and `DISPENSED` is declared but nothing ever writes it. That's a workflow decision, not a wiring bug.
+
+### Verification pass — 2026-08-21
+
+All ten P0/P1 items re-verified against develop with code evidence rather than
+checkboxes (the P0 boxes above were stale: every one of items 1–5 had shipped in
+PRs #431–#434 and none had been ticked). Seven were genuinely closed. Three were
+partial and have been completed:
+
+- **#5 critical-value escalation** — read-back did not exist (the acknowledge
+  endpoint takes no body, so nothing recorded *what* the clinician was told), and
+  the escalation re-notified the same provider once then stamped a flag the sweep
+  excluded on, so an unacknowledged critical result went permanently silent after
+  two alerts to one person. Closed by PR #451 (V116).
+- **#6 labor & delivery** — the `NewbornAssessment.delivery_record_id` back-link
+  was persistence-only: column, FK and `@ManyToOne` with nothing setting or
+  reading them. Closed by PR #450. Note the remaining half-bridge:
+  `DeliveryRecord` holds no reference to a newborn patient at all, so nothing can
+  populate the link automatically yet — that is a maternity-workflow design
+  decision, not wiring.
+- **#8 EMPI** — the merge panel shipped unclickable (no nav entry anywhere, the
+  same defect class as the refill queue), and the merge endpoints checked the two
+  identities against each other but never against the caller, so a hospital-A
+  admin could merge hospital-B patients. Closed by PR #449.
+
+Also landed alongside: PR #447 (one orphaned `patient_id` returned 500 for the
+entire registrations desk) and PR #448 (the foreign key that would have prevented
+it — the schema has none at all, because V1 came from Hibernate SchemaExport).
+
+Open decisions left for a human, all stated in the relevant PR bodies:
+`app.empi.probabilistic.enabled` still defaults to false; the surviving orphaned
+registration row is untouched; FK coverage beyond `patient_id` needs a call on
+what a hospital delete should do to its registrations.
 
 ## P2 — Structural gaps with high leverage
 
