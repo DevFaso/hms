@@ -1,15 +1,18 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.PatientMedicationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -38,6 +43,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
+    private final RefillRequestRepository refillRequestRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -64,14 +70,38 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             Comparator.nullsLast(Comparator.naturalOrder())
         );
 
-        return prescriptions.stream()
+        List<Prescription> visible = prescriptions.stream()
             .sorted(byCreatedAt.reversed())
             .limit(limitToApply)
-            .map(this::toResponse)
+            .toList();
+
+        Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
+
+        return visible.stream()
+            .map(p -> toResponse(p, latestRefills.get(p.getId())))
             .toList();
     }
 
-    private PatientMedicationResponseDTO toResponse(Prescription prescription) {
+    /**
+     * One query for the page rather than a lookup per medication. Returns the
+     * newest request per prescription — that is the one whose state the patient
+     * is waiting on.
+     */
+    private Map<UUID, RefillRequest> latestRefillsFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, RefillRequest> latest = new HashMap<>();
+        for (RefillRequest refill : refillRequestRepository.findByPrescription_IdInOrderByUpdatedAtDesc(ids)) {
+            if (refill.getPrescription() != null) {
+                latest.putIfAbsent(refill.getPrescription().getId(), refill);
+            }
+        }
+        return latest;
+    }
+
+    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill) {
         LocalDate startDate = Optional.ofNullable(prescription.getCreatedAt())
             .map(LocalDateTime::toLocalDate)
             .orElse(null);
@@ -89,7 +119,27 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
             .indication(prescription.getNotes())
             .instructions(prescription.getInstructions())
+            .refillsAllowed(prescription.getRefillsAllowed())
+            .refillsRemaining(prescription.getRefillsRemaining())
+            .refillsUsed(prescription.getRefillsUsed())
+            .refillable(prescription.getStatus() == null || prescription.getStatus().isRefillable())
+            .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
+                ? latestRefill.getStatus().name() : null)
+            .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
+            .refillProviderNotes(latestRefill != null ? latestRefill.getProviderNotes() : null)
+            .refillRequestOpen(isAwaitingDecision(latestRefill))
             .build();
+    }
+
+    /**
+     * REQUESTED and PAUSED both mean the patient is still waiting on an answer,
+     * so both suppress the request button. A held request is not a decided one.
+     */
+    private boolean isAwaitingDecision(RefillRequest refill) {
+        if (refill == null || refill.getStatus() == null) {
+            return false;
+        }
+        return refill.getStatus() == RefillStatus.REQUESTED || refill.getStatus() == RefillStatus.PAUSED;
     }
 
     private String resolveMedicationName(Prescription prescription) {

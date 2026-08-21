@@ -1,14 +1,17 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.PrescriptionStatus;
+import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.RefillRequest;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.RefillRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +34,7 @@ class PatientMedicationServiceImplTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
+    @Mock private RefillRequestRepository refillRequestRepository;
 
     @InjectMocks
     private PatientMedicationServiceImpl service;
@@ -170,5 +174,112 @@ class PatientMedicationServiceImplTest {
         List<PatientMedicationResponseDTO> result = service.getMedicationsForPatient(patientId, hospitalId, 10);
 
         assertThat(result.get(0).getStatus()).isEqualTo("COMPLETED");
+    }
+
+    // ── Refill visibility ────────────────────────────────────────────
+    // refills_allowed / refills_remaining had no consumer anywhere before
+    // this — the portal shipped REFILLS_REMAINING and REFILLS_COUNT
+    // translations with no data behind them.
+
+    private Prescription refillablePrescription() {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setCreatedAt(LocalDateTime.now());
+        p.setMedicationName("Metformin 500mg");
+        p.setStatus(PrescriptionStatus.DISPENSED);
+        p.setRefillsAllowed(3);
+        p.setRefillsRemaining(2);
+        p.setRefillsUsed(1);
+        return p;
+    }
+
+    private void stubMedicationsFor(Prescription p) {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of(p));
+    }
+
+    @Test
+    void getMedications_carriesRefillCounts() {
+        Prescription p = refillablePrescription();
+        stubMedicationsFor(p);
+
+        PatientMedicationResponseDTO dto =
+                service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
+
+        assertThat(dto.getRefillsAllowed()).isEqualTo(3);
+        assertThat(dto.getRefillsRemaining()).isEqualTo(2);
+        assertThat(dto.getRefillsUsed()).isEqualTo(1);
+    }
+
+    @Test
+    void getMedications_dispensedPrescriptionIsStillRefillable() {
+        // A patient asks for a refill precisely because they already collected
+        // the medication, so DISPENSED must not read as spent.
+        stubMedicationsFor(refillablePrescription());
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
+                .isTrue();
+    }
+
+    @Test
+    void getMedications_discontinuedPrescriptionIsNotRefillable() {
+        Prescription p = refillablePrescription();
+        p.setStatus(PrescriptionStatus.DISCONTINUED);
+        stubMedicationsFor(p);
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
+                .isFalse();
+    }
+
+    @Test
+    void getMedications_surfacesTheLatestRefillDecision() {
+        Prescription p = refillablePrescription();
+        RefillRequest denied = new RefillRequest();
+        denied.setId(UUID.randomUUID());
+        denied.setPrescription(p);
+        denied.setStatus(RefillStatus.DENIED);
+        denied.setProviderNotes("Discontinued — see clinic");
+        denied.setUpdatedAt(LocalDateTime.now());
+
+        stubMedicationsFor(p);
+        when(refillRequestRepository.findByPrescription_IdInOrderByUpdatedAtDesc(List.of(p.getId())))
+                .thenReturn(List.of(denied));
+
+        PatientMedicationResponseDTO dto =
+                service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
+
+        assertThat(dto.getRefillRequestStatus()).isEqualTo("DENIED");
+        assertThat(dto.getRefillProviderNotes()).isEqualTo("Discontinued — see clinic");
+        assertThat(dto.isRefillRequestOpen()).isFalse();
+    }
+
+    @Test
+    void getMedications_aHeldRequestStillCountsAsOpen() {
+        Prescription p = refillablePrescription();
+        RefillRequest paused = new RefillRequest();
+        paused.setId(UUID.randomUUID());
+        paused.setPrescription(p);
+        paused.setStatus(RefillStatus.PAUSED);
+        paused.setUpdatedAt(LocalDateTime.now());
+
+        stubMedicationsFor(p);
+        when(refillRequestRepository.findByPrescription_IdInOrderByUpdatedAtDesc(List.of(p.getId())))
+                .thenReturn(List.of(paused));
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0)
+                .isRefillRequestOpen()).isTrue();
+    }
+
+    @Test
+    void getMedications_noRequestHistoryLeavesTheDecisionBlank() {
+        stubMedicationsFor(refillablePrescription());
+
+        PatientMedicationResponseDTO dto =
+                service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
+
+        assertThat(dto.getRefillRequestStatus()).isNull();
+        assertThat(dto.isRefillRequestOpen()).isFalse();
     }
 }

@@ -3727,7 +3727,8 @@
       "REFILL_PENDING": "Demande de renouvellement en cours",
       "REFILL_HISTORY": "Historique des renouvellements",
       "REQUESTED": "Demandé",
-      "COMPLETED": "Terminé"
+      "COMPLETED": "Terminé",
+      "NOT_REFILLABLE": "Cette ordonnance ne peut plus être renouvelée — demandez-en une nouvelle à votre équipe soignante."
     },
     "LAB_RESULTS": {
       "TITLE": "Résultats d’analyses",

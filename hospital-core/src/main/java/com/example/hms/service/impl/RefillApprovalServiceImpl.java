@@ -27,7 +27,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -36,18 +35,6 @@ import java.util.UUID;
 public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";
-
-    /**
-     * Statuses that make a prescription un-refillable. Everything else — including
-     * DISPENSED and PARTIALLY_FILLED, which is the normal state of a prescription
-     * a patient is asking to refill — can be released back to the pharmacy.
-     */
-    private static final Set<PrescriptionStatus> NON_REFILLABLE_STATUSES = Set.of(
-            PrescriptionStatus.DRAFT,
-            PrescriptionStatus.PENDING_SIGNATURE,
-            PrescriptionStatus.CANCELLED,
-            PrescriptionStatus.DISCONTINUED
-    );
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -196,9 +183,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      * allowance, and {@code refillsUsed} records that it happened.
      */
     private void releaseRefillToPharmacy(Prescription prescription) {
-        if (NON_REFILLABLE_STATUSES.contains(prescription.getStatus())) {
+        PrescriptionStatus status = prescription.getStatus();
+        if (status != null && !status.isRefillable()) {
             throw new BusinessException(
-                "This prescription can no longer be refilled (status: " + prescription.getStatus()
+                "This prescription can no longer be refilled (status: " + status
                     + "). The patient needs a new prescription.");
         }
 
