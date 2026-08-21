@@ -31,6 +31,8 @@ public class NewbornAssessmentMapper {
             .patientId(assessment.getPatient() != null ? assessment.getPatient().getId() : null)
             .hospitalId(assessment.getHospital() != null ? assessment.getHospital().getId() : null)
             .registrationId(assessment.getRegistration() != null ? assessment.getRegistration().getId() : null)
+            .deliveryRecordId(assessment.getDeliveryRecord() != null
+                ? assessment.getDeliveryRecord().getId() : null)
             .assessmentTime(assessment.getAssessmentTime())
             .documentedAt(assessment.getDocumentedAt())
             .lateEntry(assessment.isLateEntry())
