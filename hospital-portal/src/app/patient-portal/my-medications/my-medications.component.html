@@ -80,6 +80,63 @@
                       med.status | enumLabel: 'status'
                     }}</span>
                   </div>
+                  @if (med.refillsRemaining !== undefined && med.refillsRemaining !== null) {
+                    <div class="detail-item">
+                      <span class="dl">{{
+                        'PORTAL.MEDICATIONS.REFILLS_REMAINING' | translate
+                      }}</span>
+                      <span class="dv" [attr.data-testid]="'med-refills-' + med.id">{{
+                        'PORTAL.MEDICATIONS.REFILLS_COUNT'
+                          | translate: { count: med.refillsRemaining }
+                      }}</span>
+                    </div>
+                  }
+                </div>
+
+                <div class="refill-action">
+                  @if (med.refillRequestStatus) {
+                    <span
+                      [class]="refillChipClass(med.refillRequestStatus)"
+                      [attr.data-testid]="'med-refill-status-' + med.id"
+                    >
+                      {{ 'REFILLS.STATUS_' + med.refillRequestStatus | translate }}
+                    </span>
+                  }
+                  @if (med.refillProviderNotes) {
+                    <p class="refill-provider-note">{{ med.refillProviderNotes }}</p>
+                  }
+
+                  @if (med.refillable === false) {
+                    <span
+                      class="refill-pending"
+                      [attr.data-testid]="'med-not-refillable-' + med.id"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                      {{ 'PORTAL.MEDICATIONS.NOT_REFILLABLE' | translate }}
+                    </span>
+                  } @else if (med.refillRequestOpen) {
+                    <span
+                      class="refill-pending"
+                      [attr.data-testid]="'med-refill-pending-' + med.id"
+                    >
+                      <span class="material-symbols-outlined">hourglass_top</span>
+                      {{ 'PORTAL.MEDICATIONS.REFILL_PENDING' | translate }}
+                    </span>
+                  } @else {
+                    <button
+                      class="refill-btn"
+                      [attr.data-testid]="'med-refill-btn-' + med.id"
+                      (click)="requestRefill(med); $event.stopPropagation()"
+                      [disabled]="requestingRefill() === med.id"
+                    >
+                      <span class="material-symbols-outlined">refresh</span>
+                      {{
+                        requestingRefill() === med.id
+                          ? ('PORTAL.MEDICATIONS.REQUESTING' | translate)
+                          : ('PORTAL.MEDICATIONS.REQUEST_REFILL' | translate)
+                      }}
+                    </button>
+                  }
                 </div>
               </div>
             }
@@ -149,29 +206,14 @@
                     }}</span>
                   </div>
                 </div>
-                @if (rx.status === 'ACTIVE' || rx.status === 'SIGNED') {
-                  <div class="refill-action">
-                    @if (hasActiveRefill(rx.id)) {
-                      <span class="refill-pending">
-                        <span class="material-symbols-outlined">hourglass_top</span>
-                        {{ 'PORTAL.MEDICATIONS.REFILL_PENDING' | translate }}
-                      </span>
-                    } @else {
-                      <button
-                        class="refill-btn"
-                        (click)="requestRefill(rx); $event.stopPropagation()"
-                        [disabled]="requestingRefill() === rx.id"
-                      >
-                        <span class="material-symbols-outlined">refresh</span>
-                        {{
-                          requestingRefill() === rx.id
-                            ? ('PORTAL.MEDICATIONS.REQUESTING' | translate)
-                            : ('PORTAL.MEDICATIONS.REQUEST_REFILL' | translate)
-                        }}
-                      </button>
-                    }
-                  </div>
-                }
+                <!--
+                  The refill action used to live here as well, gated on
+                  `status === 'ACTIVE' || 'SIGNED'` — which hid it on every
+                  DISPENSED prescription, i.e. on exactly the ones a patient
+                  needs a refill for. It now sits on the medication row above,
+                  where the API supplies the refill counts and the server's own
+                  refillable gate, rather than a duplicated client-side rule.
+                -->
               </div>
             }
           }

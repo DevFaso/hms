@@ -3727,7 +3727,8 @@
       "REFILL_PENDING": "Refill request pending",
       "REFILL_HISTORY": "Refill History",
       "REQUESTED": "Requested",
-      "COMPLETED": "Completed"
+      "COMPLETED": "Completed",
+      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one."
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",

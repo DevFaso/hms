@@ -57,12 +57,53 @@
   }
 }
 
+// Wraps and right-aligns: the decision chip and the provider's note read as
+// context, the button or pending state as the thing to act on.
 .refill-action {
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
+}
+
+.refill-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.refill-chip--ok {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.refill-chip--warn {
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.refill-chip--danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+// The reason a request was held or denied — the patient needs this more than
+// the chip itself, so it gets a full line rather than a tooltip.
+.refill-provider-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: #64748b;
+  text-align: right;
 }
 
 .refill-btn {

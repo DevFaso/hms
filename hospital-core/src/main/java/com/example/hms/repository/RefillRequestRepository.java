@@ -19,6 +19,10 @@ public interface RefillRequestRepository extends JpaRepository<RefillRequest, UU
 
     Page<RefillRequest> findByPatientIdAndStatus(UUID patientId, RefillStatus status, Pageable pageable);
 
+    /** Guards against a second live request on the same prescription. */
+    Optional<RefillRequest> findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+            UUID prescriptionId, UUID patientId, Collection<RefillStatus> statuses);
+
     Page<RefillRequest> findByPrescriptionId(UUID prescriptionId, Pageable pageable);
 
     // Count pending refill requests for prescriptions written by a specific doctor (staff)

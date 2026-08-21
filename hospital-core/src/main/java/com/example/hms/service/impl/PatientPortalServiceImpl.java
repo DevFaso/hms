@@ -125,6 +125,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
     private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
 
+    /**
+     * Refill states that still count as "the patient is waiting on an answer".
+     * PAUSED belongs here: a held request has not been decided, so letting the
+     * patient file another would put two live requests on one prescription.
+     */
+    private static final List<RefillStatus> OPEN_REFILL_STATUSES =
+            List.of(RefillStatus.REQUESTED, RefillStatus.PAUSED);
+
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
@@ -678,6 +686,31 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!prescription.getPatient().getId().equals(patient.getId())) {
             throw new AccessDeniedException("You do not have access to this prescription");
         }
+
+        // Refuse up front what approval would refuse anyway. Without this the
+        // patient's request is accepted, the whole care team is emailed, and the
+        // prescriber only discovers the prescription is dead when they try to
+        // approve it.
+        if (prescription.getStatus() != null && !prescription.getStatus().isRefillable()) {
+            throw new BusinessException(
+                    "This prescription can no longer be refilled. Please contact your care team "
+                            + "for a new prescription.");
+        }
+
+        // One open request per prescription. There was no guard at all, so a
+        // patient tapping twice fired a second care-team email and a second row
+        // in every prescriber's clinical inbox for the same medication.
+        refillRequestRepository
+                .findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                        prescription.getId(), patient.getId(), OPEN_REFILL_STATUSES)
+                .ifPresent(open -> {
+                    throw new BusinessException(
+                            open.getStatus() == RefillStatus.PAUSED
+                                    ? "Your provider has put this refill request on hold. "
+                                            + "They will follow up with you."
+                                    : "You already have a refill request awaiting review for this "
+                                            + "medication.");
+                });
 
         RefillRequest refill = RefillRequest.builder()
                 .patient(patient)
