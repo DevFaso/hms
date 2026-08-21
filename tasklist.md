@@ -591,6 +591,96 @@ All seven P2 items landed as PRs #453–#459. Notes that outlive the tickets:
   FROM the entities, so it can never catch a column a migration forgot, and prod
   runs ddl-auto=validate against the Liquibase-built schema.
 
+### Deploy incident — 2026-08-21
+
+Merging the P2 tier broke `develop` and took the dev deployment down. Two
+distinct faults, both of which reached develop through PRs whose CI was red.
+
+**1. Three migrations shipped unregistered.** V116, V117 and V118 were written,
+reviewed and merged (#451, #453, #455) and none was ever added to
+`changelog.xml`. A `.sql` file under `db/migration` is inert until the changelog
+lists it, so Liquibase ran 114 changesets, logged *"Database is up to date, no
+changesets to execute"*, and the entities then declared columns the database had
+never been told to create. `ddl-auto=validate` refused to build the
+SessionFactory:
+
+```text
+Schema-validation: missing column [critical_escalation_level] in table [lab.lab_results]
+```
+
+which fails `FhirConfig` → the application context → Tomcat. A total outage from
+three files that were present in the diff, in the directory listing and in the
+review. #457 carried the identical bug with V119.
+
+**2. `develop` did not compile.** PR #455 shipped `signPrescription` on the
+interface, the controller, the entity columns, the DTO, the mapper and six tests
+— but never `PrescriptionServiceImpl.signPrescription`. Every branch cut from
+develop failed the same way until PR #460 restored it, written against the tests
+that #455 had shipped, which were the real specification.
+
+**The structural cause, which is not fixed.** Every migration's `<changeSet>` is
+appended immediately before the closing tag of one ~1800-line `changelog.xml`, so
+any two branches that add a migration edit the same lines. Resolving that overlap
+by taking develop drops the branch's own changeset while leaving its `.sql` on
+disk — the file is plainly there and the diff looks untouched, so nothing reads as
+wrong. GitHub's **"Update branch" button resolves it exactly that way**: V120 was
+lost once and V121 twice, the second time minutes after being restored.
+
+> **Avoid "Update branch" on any branch carrying a migration.** Merge develop
+> locally and confirm the registered set afterwards.
+
+**The guard.** `hospital-core/src/test/java/com/example/hms/db/MigrationRegistrationTest.java`
+fails on any migration that is unregistered, referenced-but-absent, empty, or
+misnamed. Nothing else can catch this: the H2 test profile builds its schema FROM
+the entities with `create-drop`, so the columns always exist there regardless of
+what the changelog says. It caught V120 on #458 and V121 on #459 — in both cases
+converting what would have been a silent production defect into a red build. On
+PR #458 the loss would have left the drug-interaction checker running against
+V63's 12-pair seed while reporting green — worse than no checker at all.
+
+**Deferred, needs a decision:** the durable fix is to move *new* changesets into
+per-file fragments under an `includeAll` directory so two branches never touch the
+same lines. It is not done here because Liquibase identifies a changeset by
+`(id, author, file path)` — relocating the existing 119 would make it treat them
+all as new and **re-run every migration against production**. Applied to new
+migrations only it is safe, but it is a change to migration infrastructure and
+belongs in its own PR.
+
+**Two findings surfaced by the guard and by verifying the sign endpoint, both
+left unfixed on purpose:**
+
+- **`R__prod_role_grants.sql` has never run.** Its header says it is *"a Liquibase
+  'repeatable' changeset (R__ prefix)"*. `R__` is **Flyway's** convention;
+  Liquibase discovers nothing by filename and spells repeatable as
+  `runOnChange="true"` on a changeSet it lists. Nothing references the file, so
+  `hms_app` / `hms_readonly` / `hms_migrator` hold only whatever privileges were
+  granted by hand. Registering it would make every deploy attempt those `GRANT`s
+  and fail where the roles do not exist — an operational call.
+- **Only `ROLE_DOCTOR` can sign a prescription.** `ROLE_NURSE_PRACTITIONER`
+  appears in four `@PreAuthorize` expressions on `PrescriptionController` and
+  behind `RoleValidator.isNursePractitioner`, but that role is never seeded — it
+  exists only as a `JobTitle`. `ROLE_MIDWIFE` *is* seeded and midwives prescribe
+  throughout the OB module, but is not on the sign annotation. Doctors-only may be
+  correct; it should be a decision rather than an accident of an unseeded name.
+
+**Portal side of #16.** The prescription edit form offered `SIGNED` in its status
+`<select>` — which is how "signed" came to mean a clinician picked a word from a
+dropdown. With the backend now refusing a client-asserted signature, that option
+was a control that always fails; it is removed, and a sign action added, because
+the endpoint otherwise had no caller anywhere.
+
+### Promotion — 2026-08-21
+
+`develop dfc01f9e` → `uat 313b3e82` → `main 4952824c`, carrying #448–#460.
+
+Verified **before** promoting, not after: V115–V121 all registered in
+`changelog.xml`, `MigrationRegistrationTest` green, and `LiquibaseSchemaIT`
+applying the full changelog to a real `postgres:16-alpine`.
+
+Still red everywhere: the `Build and analyze` (SonarCloud) job fails on every PR
+with HTTP 403 because **`SONAR_TOKEN` is expired**. It is environmental — it never
+reaches the code — but it masks real Sonar findings until rotated.
+
 ## P3 — Broader parity, pick by demand
 
 - [ ] 18. Growth charts (needs a height column on vitals) + flowsheets/I&O grids
