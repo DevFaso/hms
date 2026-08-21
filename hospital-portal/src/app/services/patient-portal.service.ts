@@ -84,7 +84,31 @@ export interface MedicationSummary {
   endDate: string;
   indication: string;
   instructions: string;
+
+  /** Refills the prescriber authorized when writing the prescription. */
+  refillsAllowed?: number;
+  /** Refills still available under that original authorization. */
+  refillsRemaining?: number;
+  /** Fills already released by an approved refill request. */
+  refillsUsed?: number;
+  /** False once the prescription is cancelled, discontinued, or was never signed. */
+  refillable?: boolean;
+  /** Where the patient's most recent request stands; absent if they never asked. */
+  refillRequestStatus?: RefillRequestStatus;
+  refillRequestUpdatedAt?: string;
+  /** The provider's note — the reason for a hold or a denial. */
+  refillProviderNotes?: string;
+  /** True while REQUESTED or PAUSED: a decision is still outstanding. */
+  refillRequestOpen?: boolean;
 }
+
+export type RefillRequestStatus =
+  | 'REQUESTED'
+  | 'PAUSED'
+  | 'APPROVED'
+  | 'DENIED'
+  | 'DISPENSED'
+  | 'CANCELLED';
 
 export interface VitalSignSummary {
   id: string;

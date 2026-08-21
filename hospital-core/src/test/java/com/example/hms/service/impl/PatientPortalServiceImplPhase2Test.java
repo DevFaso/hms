@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.RefillStatus;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
@@ -86,6 +87,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
@@ -621,6 +623,11 @@ class PatientPortalServiceImplPhase2Test {
             rx.setId(prescriptionId);
             rx.setPatient(owner);
             rx.setMedicationName("Metformin 500mg");
+            // Prescription.status defaults to DRAFT, which is deliberately
+            // un-refillable — an unsigned prescription was never issued. A
+            // prescription a patient can request a refill against has been
+            // signed, so the fixture says so rather than relying on the default.
+            rx.setStatus(PrescriptionStatus.SIGNED);
             return rx;
         }
 
@@ -673,6 +680,90 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(saved.getPatient()).isEqualTo(patient);
             assertThat(saved.getPrescription()).isEqualTo(prescription);
             assertThat(saved.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — refuses a second request while one is under review")
+        void requestRefill_refusesDuplicate() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(refillRequestRepository
+                    .findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                            eq(rxId), eq(patient.getId()), any()))
+                    .thenReturn(Optional.of(
+                            buildRefillRequest(UUID.randomUUID(), patient, prescription,
+                                    RefillStatus.REQUESTED)));
+
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth,
+                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("already have a refill request");
+
+            // There was no guard at all before: a double tap fired a second
+            // care-team email and a second row in every prescriber's inbox.
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — a held request also blocks a new one")
+        void requestRefill_pausedAlsoBlocks() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(refillRequestRepository
+                    .findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                            eq(rxId), eq(patient.getId()), any()))
+                    .thenReturn(Optional.of(
+                            buildRefillRequest(UUID.randomUUID(), patient, prescription,
+                                    RefillStatus.PAUSED)));
+
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth,
+                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("on hold");
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — refuses a prescription that can no longer be refilled")
+        void requestRefill_refusesUnrefillablePrescription() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+
+            // Without this the request is accepted, the whole care team is
+            // emailed, and only the prescriber's approval attempt discovers the
+            // prescription is dead.
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth,
+                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("no longer be refilled");
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — a dispensed prescription is still refillable")
+        void requestRefill_allowsDispensedPrescription() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            // The normal state when a patient needs a refill: they already
+            // collected the first fill.
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
+                RefillRequest saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                return saved;
+            });
+
+            assertThat(service.requestMedicationRefill(auth,
+                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build())
+                    .getStatus()).isEqualTo("REQUESTED");
         }
 
         @Test

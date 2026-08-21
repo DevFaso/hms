@@ -3727,7 +3727,8 @@
       "REFILL_PENDING": "Solicitud de renovación pendiente",
       "REFILL_HISTORY": "Historial de renovaciones",
       "REQUESTED": "Solicitado",
-      "COMPLETED": "Completado"
+      "COMPLETED": "Completado",
+      "NOT_REFILLABLE": "Esta receta ya no puede renovarse — solicite una nueva a su equipo de atención."
     },
     "LAB_RESULTS": {
       "TITLE": "Resultados de pruebas",
