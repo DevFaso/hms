@@ -1780,17 +1780,25 @@
     </changeSet>
 
     <!-- =================================================================
-         V121 — slot inventory foundation (visit types, session templates,
-         generated slots). Scheduling could book an Appointment against an
-         arbitrary (staff, date, time) but nothing described what a clinic
-         session IS, so nothing could answer "when is this clinician next
-         free for a 30-minute follow-up?" — the question that blocks patient
-         self-scheduling, waitlist auto-offer and utilisation reporting
-         alike. New tables, so they carry REAL foreign keys.
+         V120 — drug-interaction knowledge-base expansion.
+         The checking pipeline is real at prescribe, dispense and CDS-Hooks,
+         but the KB behind it was V63's 12-pair seed — and a checker with
+         almost nothing to check against is worse than none, because green
+         reads as "no interaction" when it means "not in our twelve rows".
+         Adds the pairs a WHO-Essential-Medicines formulary most needs, each
+         citing its reference. splitStatements=false: DO $$ block.
+
+         Re-added after the develop merge dropped it: this branch and
+         develop both appended before </databaseChangeLog>, and resolving
+         that overlap kept develop's V116-V119 and lost this block. The
+         file stayed on disk, so the loss was invisible until
+         MigrationRegistrationTest and LiquibaseSchemaIT's 25-row seed
+         assertion both failed.
          ================================================================= -->
-    <changeSet id="V121-slot-inventory-foundation" author="hms-team" runOnChange="false">
-        <sqlFile path="V121__slot_inventory_foundation.sql"
+    <changeSet id="V120-drug-interaction-kb-expansion" author="hms-team" runOnChange="false">
+        <sqlFile path="V120__drug_interaction_kb_expansion.sql"
                  relativeToChangelogFile="true"
+                 splitStatements="false"
                  stripComments="false"/>
     </changeSet>
 

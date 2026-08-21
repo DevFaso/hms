@@ -81,7 +81,11 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "clinical", "drug_interactions");
             assertColumnExists(stmt, "clinical", "medication_catalog_items",
                 "pediatric_max_dose_mg_per_kg");
-            assertSeedRowsPresent(stmt, "clinical", "drug_interactions", 12);
+            // V120 widened this from V63's 12-pair seed. A checker with almost
+            // nothing to check against is worse than none, because green reads
+            // as "no interaction" when it means "not in our twelve rows".
+            // Asserted as a floor, not an equality: the admin API can add more.
+            assertSeedRowsPresent(stmt, "clinical", "drug_interactions", 25);
 
             // V68: DHIS2 ADX export integration tables
             assertSchemaExists(stmt, "integration");
