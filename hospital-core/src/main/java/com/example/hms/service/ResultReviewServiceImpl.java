@@ -10,6 +10,7 @@ import com.example.hms.enums.SignatureStatus;
 import com.example.hms.model.ChatMessage;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
+import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.ClinicalInboxItemDTO;
 import com.example.hms.payload.dto.clinical.DoctorResultQueueItemDTO;
@@ -204,6 +205,35 @@ public class ResultReviewServiceImpl implements ResultReviewService {
             }
         } catch (Exception e) {
             log.debug("Pharmacy clarification inbox query error: {}", e.getMessage());
+        }
+
+        // 6. Patient-initiated medication refill requests awaiting this prescriber's decision.
+        //    PAUSED requests are deliberately excluded — the prescriber has already
+        //    triaged those, so re-listing them would make the inbox un-clearable.
+        try {
+            refillRequestRepository
+                    .findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(staffId, RefillStatus.REQUESTED)
+                    .forEach(refill -> {
+                        String medication = refill.getPrescription() != null
+                                && refill.getPrescription().getMedicationName() != null
+                                ? refill.getPrescription().getMedicationName()
+                                : "Medication";
+                        Patient patient = refill.getPatient();
+                        items.add(ClinicalInboxItemDTO.builder()
+                                .id(refill.getId())
+                                .category("REFILL_REQUEST")
+                                .source("Patient Portal")
+                                .patientName(patient != null
+                                        ? patient.getFirstName() + " " + patient.getLastName() : null)
+                                .patientId(patient != null ? patient.getId() : null)
+                                .subject("Refill requested – " + truncate(medication, 80))
+                                .urgency(URGENCY_NORMAL)
+                                .timestamp(refill.getCreatedAt())
+                                .actionType("REVIEW")
+                                .build());
+                    });
+        } catch (Exception e) {
+            log.debug("Refill request inbox query error: {}", e.getMessage());
         }
 
         // Sort by urgency desc then timestamp desc

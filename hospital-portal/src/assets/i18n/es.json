@@ -934,6 +934,7 @@
   "REFILLS": {
     "QUEUE_TITLE": "Solicitudes de recarga",
     "STATUS_REQUESTED": "Pendiente",
+    "STATUS_PAUSED": "En espera",
     "STATUS_APPROVED": "Aprobada",
     "STATUS_DENIED": "Denegada",
     "STATUS_DISPENSED": "Dispensada",
@@ -946,9 +947,18 @@
     "FIELD_PREFERRED_PHARMACY": "Farmacia preferida",
     "FIELD_PATIENT_NOTES": "Notas del paciente",
     "FIELD_PROVIDER_NOTES": "Notas del médico",
-    "NOTES_PLACEHOLDER": "Opcional para aprobar, requerido para rechazar",
+    "NOTES_PLACEHOLDER": "Opcional al aprobar; obligatorio para denegar o poner en espera",
     "ACTION_APPROVE": "Aprobar",
-    "ACTION_REJECT": "Rechazar"
+    "ACTION_REJECT": "Rechazar",
+    "ACTION_PAUSE": "Poner en espera",
+    "NOTES_REQUIRED_REJECT": "Añada una nota explicando el rechazo.",
+    "NOTES_REQUIRED_PAUSE": "Añada una nota explicando la espera — el paciente la verá.",
+    "TOAST_APPROVED": "Reposición aprobada",
+    "TOAST_APPROVE_FAILED": "No se pudo aprobar la solicitud de reposición",
+    "TOAST_DENIED": "Reposición denegada",
+    "TOAST_DENY_FAILED": "No se pudo denegar la solicitud de reposición",
+    "TOAST_PAUSED": "Reposición puesta en espera",
+    "TOAST_PAUSE_FAILED": "No se pudo poner en espera la solicitud de reposición"
   },
   "ADMISSIONS": {
     "ACUITY": "Gravedad",
@@ -1761,7 +1771,7 @@
     "RECENT_PATIENTS": "Pacientes Recientes",
     "RECENT_TEST_RESULTS": "Recent Test Results",
     "RECENT_VITALS": "Recent Vitals",
-    "REFILL_REQUESTS": "Refill Requests",
+    "REFILL_REQUESTS": "Solicitudes de reposición",
     "REFRESH": "Refresh",
     "REGISTER_PATIENT": "Register Patient",
     "REPORTED_TODAY": "Reported Today",
@@ -2827,7 +2837,8 @@
     "MEDICATION_HISTORY": "Historial de Medicamentos",
     "PROCEDURE_ORDERS": "Órdenes de Procedimiento",
     "REGISTRATIONS": "Registros",
-    "MY_EDUCATION": "Mi educación"
+    "MY_EDUCATION": "Mi educación",
+    "REFILLS": "Solicitudes de reposición"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

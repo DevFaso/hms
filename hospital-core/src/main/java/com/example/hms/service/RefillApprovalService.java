@@ -24,4 +24,11 @@ public interface RefillApprovalService {
     MedicationRefillResponseDTO approve(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision);
 
     MedicationRefillResponseDTO reject(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision);
+
+    /**
+     * Defers the decision on a pending request without approving or denying it —
+     * used when the prescriber needs a visit, a lab result or a medication review
+     * first. The request stays in the queue and can still be approved or denied.
+     */
+    MedicationRefillResponseDTO pause(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision);
 }

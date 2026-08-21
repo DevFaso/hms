@@ -18,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -213,6 +214,125 @@ class RefillApprovalServiceImplTest {
                 .thenReturn(7L);
 
         assertThat(service.countPendingForProvider(auth)).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("pause — defers a REQUESTED refill and relays the reason to the patient")
+    void pause_happyPath() {
+        stubStaffResolution();
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MedicationRefillResponseDTO result = service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Need an A1c before renewing").build());
+
+        assertThat(result.getStatus()).isEqualTo("PAUSED");
+        assertThat(result.getProviderNotes()).isEqualTo("Need an A1c before renewing");
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService)
+                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        assertThat(message.getValue())
+                .contains("on hold")
+                .contains("Need an A1c before renewing");
+    }
+
+    @Test
+    @DisplayName("pause — refuses without a reason, since the patient is told about the hold")
+    void pause_requiresReason() {
+        assertThatThrownBy(() -> service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("   ").build()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("reason is required");
+        verify(refillRequestRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("pause — refuses a null decision body")
+    void pause_requiresBody() {
+        assertThatThrownBy(() -> service.pause(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("reason is required");
+    }
+
+    @Test
+    @DisplayName("approve — a paused refill can still be approved")
+    void approve_fromPaused() {
+        stubStaffResolution();
+        RefillRequest paused = pendingRefill();
+        paused.setStatus(RefillStatus.PAUSED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.approve(auth, refillId, null).getStatus()).isEqualTo("APPROVED");
+    }
+
+    @Test
+    @DisplayName("reject — a paused refill can still be denied")
+    void reject_fromPaused() {
+        stubStaffResolution();
+        RefillRequest paused = pendingRefill();
+        paused.setStatus(RefillStatus.PAUSED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(service.reject(auth, refillId, null).getStatus()).isEqualTo("DENIED");
+    }
+
+    @Test
+    @DisplayName("pause — refuses to re-pause, which would only re-notify the patient")
+    void pause_rejectsAlreadyPaused() {
+        stubStaffResolution();
+        RefillRequest paused = pendingRefill();
+        paused.setStatus(RefillStatus.PAUSED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(paused));
+
+        assertThatThrownBy(() -> service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("still waiting").build()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("PAUSED");
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("pause — refuses a refill already decided")
+    void pause_rejectsDecided() {
+        stubStaffResolution();
+        RefillRequest denied = pendingRefill();
+        denied.setStatus(RefillStatus.DENIED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(denied));
+
+        assertThatThrownBy(() -> service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("reconsidering").build()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("DENIED");
+    }
+
+    @Test
+    @DisplayName("pause — cannot act on another doctor's prescription")
+    void pause_rejectsForeignPrescription() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        Staff someoneElse = new Staff();
+        someoneElse.setId(UUID.randomUUID());
+        when(staffRepository.findByUserId(userId)).thenReturn(List.of(someoneElse));
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("hold").build()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("countPendingForProvider — a paused refill is no longer pending")
+    void count_pendingExcludesPaused() {
+        stubStaffResolution();
+        when(refillRequestRepository.countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.REQUESTED))
+                .thenReturn(2L);
+
+        assertThat(service.countPendingForProvider(auth)).isEqualTo(2L);
+        verify(refillRequestRepository, never())
+                .countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.PAUSED);
     }
 
     @Test

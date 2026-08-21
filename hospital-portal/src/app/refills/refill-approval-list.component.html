@@ -64,7 +64,7 @@
         </div>
       </dl>
 
-      <div *ngIf="r.status === 'REQUESTED'" class="refill-card__actions">
+      <div *ngIf="isOpen(r.status)" class="refill-card__actions">
         <label class="refill-card__notes">
           <span>{{ 'REFILLS.FIELD_PROVIDER_NOTES' | translate }}</span>
           <textarea
@@ -84,6 +84,16 @@
             [attr.data-testid]="'refill-approve-' + r.id"
           >
             {{ 'REFILLS.ACTION_APPROVE' | translate }}
+          </button>
+          <button
+            *ngIf="canPause(r.status)"
+            type="button"
+            class="btn-secondary"
+            [disabled]="busyId() !== null"
+            (click)="pause(r)"
+            [attr.data-testid]="'refill-pause-' + r.id"
+          >
+            {{ 'REFILLS.ACTION_PAUSE' | translate }}
           </button>
           <button
             type="button"
