@@ -115,6 +115,84 @@ class LiquibaseSchemaIT {
     }
 
     /**
+     * V115: the registrations table finally has the foreign key its JPA mapping
+     * has always named.
+     *
+     * <p>A registration pointing at a deleted patient returned 500 for the entire
+     * Hospital Registrations desk, because
+     * {@code PatientHospitalRegistration.patient} is {@code optional = false} and
+     * Hibernate therefore treats a missing target as an error rather than a null.
+     * Nothing had ever stopped that row being written: V1 came from Hibernate's
+     * SchemaExport, which emits no foreign keys at all.
+     *
+     * <p>Asserted here rather than in the H2 suite because H2 creates the
+     * constraint itself from the {@code @JoinColumn} — which is exactly why the
+     * gap survived so long. Only a real PostgreSQL run distinguishes "the ORM
+     * declares it" from "the database enforces it".
+     */
+    @Test
+    void v115RegistrationPatientForeignKeyExistsAndCascades() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery(
+                "SELECT c.confdeltype, c.convalidated "
+                    + "FROM pg_constraint c "
+                    + "JOIN pg_class t ON t.oid = c.conrelid "
+                    + "JOIN pg_namespace n ON n.oid = t.relnamespace "
+                    + "WHERE c.conname = 'fk_phr_patient' "
+                    + "  AND n.nspname = 'clinical' "
+                    + "  AND t.relname = 'patient_hospital_registrations'")) {
+
+                assertThat(rs.next())
+                    .as("fk_phr_patient must exist on clinical.patient_hospital_registrations")
+                    .isTrue();
+
+                // 'c' = ON DELETE CASCADE. This mirrors the orphanRemoval already on
+                // Patient.hospitalRegistrations, so it changes no ORM behaviour — and
+                // unlike RESTRICT it can never block a delete, so deploying it cannot
+                // wedge an existing flow.
+                assertThat(rs.getString("confdeltype"))
+                    .as("must be ON DELETE CASCADE — RESTRICT could block a delete path in production")
+                    .isEqualTo("c");
+
+                // NOT VALID: existing orphans are left for reconciliation rather than
+                // failing the deploy. New rows are still checked.
+                assertThat(rs.getBoolean("convalidated"))
+                    .as("must be NOT VALID so a surviving orphan cannot fail the deploy")
+                    .isFalse();
+            }
+        }
+    }
+
+    /**
+     * The constraint has to actually reject a new orphan — being present but
+     * unenforced would reproduce the original bug with extra steps. NOT VALID
+     * skips only the check of pre-existing rows; INSERTs are still checked.
+     */
+    @Test
+    void v115RejectsANewlyInsertedOrphanedRegistration() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            stmt.executeUpdate("INSERT INTO hospital.hospitals "
+                + "(id, name, code, active, created_at, updated_at) "
+                + "VALUES ('a0000000-0000-0000-0000-000000000115', "
+                + "'IT-Hospital-115', 'IT-FK115', TRUE, NOW(), NOW())");
+
+            assertThatCode(() -> stmt.executeUpdate("INSERT INTO clinical.patient_hospital_registrations "
+                + "(id, mrn, patient_id, hospital_id, registration_date, is_active, "
+                + " stay_status, created_at, updated_at) "
+                + "VALUES ('b0000000-0000-0000-0000-000000000115', 'mrn-FK115', "
+                + "'00000000-0000-0000-0000-0000000000ff', "
+                + "'a0000000-0000-0000-0000-000000000115', CURRENT_DATE, TRUE, "
+                + "'ADMITTED', NOW(), NOW())"))
+                .as("a registration referencing a non-existent patient must now be rejected")
+                .hasMessageContaining("fk_phr_patient");
+        }
+    }
+
+    /**
      * V68 regression: the outbox UNIQUE INDEX uses
      * {@code COALESCE(category_option_combo_uid, '__DEFAULT_COC__')} so two
      * "default-COC" rows for the same (run, period, orgUnit, dataElement)

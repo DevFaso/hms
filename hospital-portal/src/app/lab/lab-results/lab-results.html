@@ -186,7 +186,21 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
-                  @if (canAcknowledge && !r.acknowledged) {
+                  @if (canAcknowledge && !r.acknowledged && isCritical(r)) {
+                    <!--
+                      Critical values get a read-back instead of a bare
+                      acknowledge: the clinician repeats the value and the server
+                      checks it, which is what catches a transcription error.
+                    -->
+                    <button
+                      class="action-link ack-link"
+                      [attr.data-testid]="'read-back-' + r.id"
+                      [title]="'LAB_RESULTS.READ_BACK' | translate"
+                      (click)="openReadBack(r)"
+                    >
+                      <span class="material-symbols-outlined">record_voice_over</span>
+                    </button>
+                  } @else if (canAcknowledge && !r.acknowledged) {
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
@@ -659,6 +673,74 @@
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeCompare()">
           {{ 'COMMON.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Critical-value read-back ══ -->
+@if (readBackTarget(); as target) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReadBack()"
+    (keydown.escape)="closeReadBack()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeReadBack()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ 'LAB_RESULTS.READ_BACK_PROMPT' | translate }}
+          <strong>{{ target.patientFullName }}</strong> — {{ target.labTestName }}
+        </p>
+        <!--
+          The reported value is NOT shown here. Displaying it would let the
+          clinician copy it back, which defeats the entire check.
+        -->
+        <div class="field">
+          <label for="readBackValue">{{ 'LAB_RESULTS.READ_BACK_VALUE' | translate }}</label>
+          <input
+            id="readBackValue"
+            type="text"
+            data-testid="read-back-input"
+            [value]="readBackValue()"
+            (input)="readBackValue.set($any($event.target).value)"
+            [placeholder]="target.resultUnit"
+            autocomplete="off"
+          />
+        </div>
+        <p class="muted">{{ 'LAB_RESULTS.READ_BACK_HINT' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeReadBack()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="read-back-submit"
+          [disabled]="!readBackValue().trim() || readBackSubmitting()"
+          (click)="submitReadBack()"
+        >
+          {{ 'LAB_RESULTS.READ_BACK_CONFIRM' | translate }}
         </button>
       </div>
     </div>

@@ -62,4 +62,26 @@ public class InstrumentOutbox extends BaseEntity {
     /** Timestamp when the message was delivered to the instrument or middleware. */
     @Column(name = "sent_at")
     private LocalDateTime sentAt;
+
+    /**
+     * How many transmissions have been tried (V119).
+     *
+     * <p>A permanently unreachable analyser must stop being retried forever and
+     * start being visible instead — an outbox that retries silently until the
+     * heat death of the universe looks identical to one that is working.
+     */
+    @Column(name = "attempts", nullable = false)
+    @Builder.Default
+    private int attempts = 0;
+
+    /**
+     * Why the last attempt failed. {@code status = ERROR} with no reason is a
+     * dead end for whoever has to fix the interface at 3am.
+     */
+    @Column(name = "last_error", length = 2000)
+    private String lastError;
+
+    /** What the retry backoff is measured from. */
+    @Column(name = "last_attempt_at")
+    private LocalDateTime lastAttemptAt;
 }

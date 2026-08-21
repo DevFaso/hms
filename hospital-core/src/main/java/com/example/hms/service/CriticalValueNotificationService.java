@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Critical-value notification loop (P0 #5).
@@ -24,8 +25,22 @@ import java.util.List;
  * but nothing ever told the ordering provider — the loop that makes the flag
  * safe did not exist. Now: on result save, a critical value notifies the
  * ordering provider (in-app STOMP push, plus SMS when the IKODDI channel is
- * live); a sweep escalates results still unacknowledged after a configurable
- * delay. Acknowledgement (the existing acknowledge endpoint) is the read-back.
+ * live); a sweep escalates results still unresolved after a configurable delay.
+ * <p>
+ * The escalation is a CHAIN and it REPEATS. Both were previously untrue: it
+ * re-notified the same ordering provider who had already ignored the first
+ * alert, then stamped a flag the sweep query excluded on — so a critical result
+ * nobody acknowledged produced two notifications to one person and then went
+ * permanently quiet. Round 1 nudges the provider; from round 2 the hospital's
+ * admins are added; it keeps firing on the interval until somebody resolves it.
+ * Going silent on an unacknowledged critical value is the failure mode this
+ * whole service exists to prevent, so there is deliberately no round cap.
+ * <p>
+ * Acknowledgement is NOT the read-back — that claim used to sit in this javadoc
+ * and was simply false. A read-back is the receiver repeating the value so the
+ * system can check it, which is what catches a transcription error;
+ * "acknowledged: true" proves a button was clicked. See
+ * {@code recordReadBack}.
  * <p>
  * "Critical" matches the existing critical worklist endpoints: a persisted
  * HL7 {@link AbnormalFlag#CRITICAL}, or a computed severity of CRITICAL/HIGH.
@@ -37,10 +52,20 @@ public class CriticalValueNotificationService {
     private static final String NOTIFICATION_TYPE = "CRITICAL_LAB_RESULT";
     private static final String ESCALATION_TYPE = "CRITICAL_LAB_RESULT_ESCALATION";
 
+    /**
+     * Round at which the chain stops being a nudge and starts involving people
+     * who did not order the test.
+     */
+    private static final int TIER_TWO_ROUND = 2;
+
+    /** Tier-2 recipients: accountable for the desk, not for the order. */
+    private static final String TIER_TWO_ROLE = "ROLE_HOSPITAL_ADMIN";
+
     private final NotificationService notificationService;
     private final SmsService smsService;
     private final LabResultRepository labResultRepository;
     private final LabResultMapper labResultMapper;
+    private final com.example.hms.repository.StaffRepository staffRepository;
 
     /** Minutes an unacknowledged critical result waits before escalation. */
     @Value("${hms.lab.critical-escalation.escalate-after-minutes:30}")
@@ -50,12 +75,14 @@ public class CriticalValueNotificationService {
         NotificationService notificationService,
         SmsService smsService,
         LabResultRepository labResultRepository,
-        LabResultMapper labResultMapper
+        LabResultMapper labResultMapper,
+        com.example.hms.repository.StaffRepository staffRepository
     ) {
         this.notificationService = notificationService;
         this.smsService = smsService;
         this.labResultRepository = labResultRepository;
         this.labResultMapper = labResultMapper;
+        this.staffRepository = staffRepository;
     }
 
     /**
@@ -88,11 +115,13 @@ public class CriticalValueNotificationService {
     }
 
     /**
-     * Escalate critical results still unacknowledged past the configured
-     * delay. Each result is escalated exactly once; per-result failures are
-     * logged and skipped so one bad row never stalls the sweep.
+     * Escalate critical results still unresolved past the configured delay.
      *
-     * @return number of results escalated
+     * <p>Repeats on the interval rather than firing once, and widens the
+     * audience as rounds pass. Per-result failures are logged and skipped so one
+     * bad row never stalls the sweep.
+     *
+     * @return number of results escalated on this pass
      */
     @Transactional
     public int escalateOverdue() {
@@ -101,15 +130,7 @@ public class CriticalValueNotificationService {
         int escalated = 0;
         for (LabResult result : overdue) {
             try {
-                String username = resolveOrderingUsername(result);
-                if (username != null) {
-                    String message = buildMessage(result, true);
-                    notificationService.createNotification(message, username, ESCALATION_TYPE);
-                    sendSmsBestEffort(result, message);
-                }
-                // Stamp even without a resolvable user so the sweep converges.
-                result.setCriticalEscalatedAt(LocalDateTime.now());
-                labResultRepository.save(result);
+                escalateOne(result);
                 escalated++;
             } catch (RuntimeException ex) {
                 log.warn("Critical-value escalation failed for lab result {}: {}",
@@ -117,6 +138,132 @@ public class CriticalValueNotificationService {
             }
         }
         return escalated;
+    }
+
+    private void escalateOne(LabResult result) {
+        int round = result.getCriticalEscalationLevel() + 1;
+        String message = buildMessage(result, true);
+
+        for (String recipient : escalationRecipients(result, round)) {
+            notificationService.createNotification(message, recipient, ESCALATION_TYPE);
+        }
+        // SMS once per round, not once per recipient: the transport targets the
+        // result's chart context, so fanning it out would send the same text
+        // repeatedly for one event.
+        sendSmsBestEffort(result, message);
+
+        // Stamp even with no resolvable recipient, so the interval still
+        // advances and the sweep does not reconsider the row every pass.
+        result.setCriticalEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
+        result.setCriticalEscalatedAt(LocalDateTime.now());
+        labResultRepository.save(result);
+
+        if (round >= TIER_TWO_ROUND) {
+            log.warn("Critical lab result {} still unresolved after {} escalation round(s)",
+                result.getId(), round);
+        }
+    }
+
+    /**
+     * Who hears about round {@code round}.
+     *
+     * <p>Round 1 is a nudge to the ordering provider — they may simply not have
+     * looked yet. From round 2 the provider has demonstrably not responded, so
+     * the hospital's admins are added; re-notifying only the same person was the
+     * defect this replaces.
+     *
+     * <p>The provider stays on the list at every round rather than being
+     * dropped: they remain the person who can act clinically, and the point is
+     * to widen the net, not hand the problem off.
+     */
+    private java.util.Set<String> escalationRecipients(LabResult result, int round) {
+        java.util.Set<String> recipients = new java.util.LinkedHashSet<>();
+
+        String ordering = resolveOrderingUsername(result);
+        if (ordering != null) {
+            recipients.add(ordering);
+        }
+
+        if (round >= TIER_TWO_ROUND) {
+            UUID hospitalId = resolveHospitalId(result);
+            if (hospitalId != null) {
+                recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(
+                    hospitalId, TIER_TWO_ROLE));
+            } else {
+                log.warn("Critical lab result {} has no resolvable hospital; "
+                    + "tier-2 escalation has nobody to notify", result.getId());
+            }
+        }
+        return recipients;
+    }
+
+    private UUID resolveHospitalId(LabResult result) {
+        LabOrder order = result.getLabOrder();
+        if (order == null || order.getHospital() == null) {
+            return null;
+        }
+        return order.getHospital().getId();
+    }
+
+    /**
+     * Record the receiving clinician's read-back of a critical value.
+     *
+     * <p>This is the link P0 #5 asked for and never got. The acknowledge
+     * endpoint takes no body, so nothing recorded WHAT the clinician was told —
+     * only that they clicked. A read-back means the receiver repeats the value
+     * and the system checks it, which is what catches a transcription error
+     * before somebody treats the wrong number.
+     *
+     * <p>A mismatch is REJECTED but still persisted, because a clinician reading
+     * back the wrong value is precisely the event worth having a record of.
+     *
+     * @return the updated result
+     * @throws com.example.hms.exception.BusinessException when the repeated
+     *         value does not match the reported one
+     */
+    @Transactional
+    public LabResult recordReadBack(LabResult result, String repeatedValue,
+                                    UUID byUserId, String byDisplay) {
+        String reported = normalizeForComparison(result.getResultValue());
+        String repeated = normalizeForComparison(repeatedValue);
+
+        result.setCriticalReadBackValue(repeatedValue);
+        result.setCriticalReadBackByUserId(byUserId);
+        result.setCriticalReadBackByDisplay(byDisplay);
+
+        if (reported == null || repeated == null || !reported.equals(repeated)) {
+            labResultRepository.save(result);
+            log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
+                result.getId(), result.getResultValue(), repeatedValue);
+            throw new com.example.hms.exception.BusinessException(
+                "Read-back does not match the reported result. Confirm the value with the laboratory "
+                    + "before acting on it.");
+        }
+
+        // Only a MATCHING read-back resolves the result and stops escalation.
+        result.setCriticalReadBackAt(LocalDateTime.now());
+        result.setAcknowledged(true);
+        result.setAcknowledgedAt(LocalDateTime.now());
+        result.setAcknowledgedByUserId(byUserId);
+        result.setAcknowledgedByDisplay(byDisplay);
+        return labResultRepository.save(result);
+    }
+
+    /**
+     * Compare on trimmed, case-folded text with trailing zeros normalised, so
+     * "3.40" reads back "3.4" — a clinician repeating the number correctly must
+     * not be told they got it wrong.
+     */
+    private static String normalizeForComparison(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        try {
+            return new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
+        } catch (NumberFormatException notNumeric) {
+            return trimmed;
+        }
     }
 
     /** Same semantics as the /lab-results/hospital/{id}/critical endpoints. */

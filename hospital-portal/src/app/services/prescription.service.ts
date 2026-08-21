@@ -96,6 +96,16 @@ export class PrescriptionService {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 
+  /**
+   * The signing ceremony. `SIGNED` is deliberately not settable through
+   * `update()` — the backend rejects a client-asserted signature — because this
+   * is the only path that records who signed, when, and a digest of what they
+   * signed. Only the prescribing clinician can call it.
+   */
+  sign(id: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, {});
+  }
+
   dispatchSms(
     id: string,
     pharmacyId: string,
