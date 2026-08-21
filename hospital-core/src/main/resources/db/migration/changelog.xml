@@ -1674,4 +1674,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V113 — clinical.patients.user_id integrity.
+         Adds the unique index the @OneToOne(unique = true) mapping always
+         claimed but the schema never had (same defect V8 fixed for
+         hospital.staff). Conditional: never fails the deploy, and never
+         deletes patient rows — see the file header for why.
+         splitStatements=false: the file is a single DO $$ ... $$ block.
+         ================================================================= -->
+    <changeSet id="V113-patients-user-id-integrity" author="hms-team" runOnChange="false">
+        <sqlFile path="V113__patients_user_id_integrity.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
