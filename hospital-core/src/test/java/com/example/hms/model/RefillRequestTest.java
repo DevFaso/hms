@@ -134,9 +134,10 @@ class RefillRequestTest {
         @DisplayName("has all expected values")
         void allValues() {
             RefillStatus[] values = RefillStatus.values();
-            assertEquals(5, values.length);
+            assertEquals(6, values.length);
             assertAll(
                 () -> assertNotNull(RefillStatus.valueOf("REQUESTED")),
+                () -> assertNotNull(RefillStatus.valueOf("PAUSED")),
                 () -> assertNotNull(RefillStatus.valueOf("APPROVED")),
                 () -> assertNotNull(RefillStatus.valueOf("DENIED")),
                 () -> assertNotNull(RefillStatus.valueOf("DISPENSED")),

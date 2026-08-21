@@ -408,6 +408,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         permission: 'View Prescriptions',
       },
       {
+        icon: 'loop',
+        label: 'Refill Requests',
+        translationKey: 'NAV.REFILLS',
+        route: '/refills',
+        roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
+      },
+      {
         icon: 'monitor_heart',
         label: 'Nurse Station',
         translationKey: 'NAV.NURSE_STATION',

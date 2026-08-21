@@ -79,6 +79,18 @@ describe('RefillApprovalService', () => {
     req.flush({ data: { ...sampleRefill, status: 'DENIED', providerNotes: 'Discontinued' } });
   });
 
+  it('PUTs the pause endpoint with the mandatory reason', (done) => {
+    service.pause('r1', { providerNotes: 'Need an A1c first' }).subscribe((result) => {
+      expect(result.status).toBe('PAUSED');
+      done();
+    });
+
+    const req = httpMock.expectOne('/refills/r1/pause');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual({ providerNotes: 'Need an A1c first' });
+    req.flush({ data: { ...sampleRefill, status: 'PAUSED', providerNotes: 'Need an A1c first' } });
+  });
+
   it('returns 0 from pendingCount on HTTP error', (done) => {
     service.pendingCount().subscribe((count) => {
       expect(count).toBe(0);

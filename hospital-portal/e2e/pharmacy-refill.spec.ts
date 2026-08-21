@@ -7,21 +7,32 @@
  * it), but it is part of the dispense-path coverage T-71 calls out.
  *
  * The component reads from /api/refills (auto-mocked by the fixture as []
- * by default). Here we override it with a single PENDING row so the queue
+ * by default). Here we override it with a single pending row so the queue
  * table renders and the filter tabs have something to filter.
+ *
+ * NOTE: this file navigates straight to /refills, so it cannot prove the
+ * queue is *reachable*. It wasn't, for the whole life of the feature — no
+ * sidebar entry existed and both dashboard tiles pointed at /prescriptions.
+ * The sidebar entry is pinned by shell.spec.ts and the tile routes by
+ * dashboard.spec.ts, because this fixture does not seed a role-bearing token.
  */
 import { test, expect } from './fixtures/test-fixtures';
 
+// Mirrors MedicationRefillResponseDTO. The previous stub invented fields
+// (patientName, quantityRequested, requestedBy) the API never returns, and a
+// `PENDING` status that is not in the RefillStatus enum.
 const REFILL_ROWS = [
   {
     id: '00000000-0000-0000-0000-000000000501',
     prescriptionId: '00000000-0000-0000-0000-000000000502',
-    patientName: 'Compaoré, Jean',
     medicationName: 'Métformine 500 mg',
-    quantityRequested: 60,
-    status: 'PENDING',
+    patientId: '00000000-0000-0000-0000-000000000503',
+    status: 'REQUESTED',
+    preferredPharmacy: 'Pharmacie du Centre',
+    notes: 'Bientôt à court',
+    providerNotes: null,
     requestedAt: '2026-05-09T10:30:00Z',
-    requestedBy: 'PATIENT',
+    updatedAt: '2026-05-09T10:30:00Z',
   },
 ];
 
@@ -63,13 +74,28 @@ test.describe('Pharmacy — Refill approval queue', () => {
     await expect(page.locator('[data-testid="refill-approval-list"]')).toBeVisible();
   });
 
-  test('exposes status filter tabs (PENDING / APPROVED / REJECTED)', async ({ page }) => {
-    // The filter tabs have data-testid="refill-filter-<value>" attributes.
-    // Clicking PENDING is a no-op state-wise but confirms the tab is bound.
-    const pendingTab = page.locator('[data-testid="refill-filter-PENDING"]');
-    await expect(pendingTab).toBeVisible();
-    await pendingTab.click();
-    await expect(pendingTab).toHaveAttribute('aria-selected', 'true');
+  test('exposes a status filter tab per RefillStatus the queue triages', async ({ page }) => {
+    // The filter tabs have data-testid="refill-filter-<value>" attributes and
+    // are keyed on the enum, so a renamed status breaks this rather than
+    // silently rendering a tab that filters nothing.
+    const requestedTab = page.locator('[data-testid="refill-filter-REQUESTED"]');
+    await expect(requestedTab).toBeVisible();
+    await requestedTab.click();
+    await expect(requestedTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('offers a hold filter so deferred requests stay findable', async ({ page }) => {
+    const pausedTab = page.locator('[data-testid="refill-filter-PAUSED"]');
+    await expect(pausedTab).toBeVisible();
+    await pausedTab.click();
+    await expect(pausedTab).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('offers all three decisions on a pending request', async ({ page }) => {
+    const id = REFILL_ROWS[0].id;
+    await expect(page.locator(`[data-testid="refill-approve-${id}"]`)).toBeVisible();
+    await expect(page.locator(`[data-testid="refill-pause-${id}"]`)).toBeVisible();
+    await expect(page.locator(`[data-testid="refill-reject-${id}"]`)).toBeVisible();
   });
 
   test('does not show the load-error banner on a healthy fetch', async ({ page }) => {
