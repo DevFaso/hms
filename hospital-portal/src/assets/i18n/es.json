@@ -6355,6 +6355,7 @@
     "DELETE_TITLE": "Eliminar registro permanentemente",
     "DELETE_CONFIRM": "Eliminar permanentemente el registro de",
     "DELETE_WARNING": "Eliminación permanente e irreversible. Para terminar una estancia, use Desactivar.",
+    "UNKNOWN_PATIENT": "Paciente desconocido (registro faltante)",
     "DELETED": "Registro eliminado",
     "DELETE_ERROR": "Error al eliminar el registro",
     "MULTI_HOSPITAL": "Pacientes multihospital",

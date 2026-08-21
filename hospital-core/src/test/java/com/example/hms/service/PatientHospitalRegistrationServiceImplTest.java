@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.PatientAlreadyRegisteredException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientHospitalRegistrationMapper;
@@ -8,6 +9,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
+import com.example.hms.payload.dto.RegistrationDeskRow;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
@@ -287,11 +289,28 @@ class PatientHospitalRegistrationServiceImplTest {
 
     // ---- getRegistrationsByHospital ----
 
+    /**
+     * A desk-list projection row. {@code patientId == null} models a registration
+     * whose patient row no longer exists — the state that used to 500 the page.
+     */
+    private RegistrationDeskRow deskRow(boolean active, UUID rowPatientId) {
+        return new RegistrationDeskRow(
+            UUID.randomUUID(), "mrn-ABC1234",
+            rowPatientId, rowPatientId == null ? null : "jdoe",
+            rowPatientId == null ? null : "John", rowPatientId == null ? null : "Doe",
+            null, null, null,
+            hospitalId, "General Hospital", "GH", "1 Main St",
+            LocalDate.now(), active,
+            PatientStayStatus.ADMITTED, null,
+            null, null, null, null, null);
+    }
+
     @Test
     void getRegistrationsByHospital_success() {
+        RegistrationDeskRow row = deskRow(true, patientId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        when(registrationRepository.findDeskRowsByHospitalId(hospitalId)).thenReturn(List.of(row));
+        when(mapper.toDeskResponseDTO(row)).thenReturn(responseDTO);
 
         List<PatientHospitalRegistrationResponseDTO> result = service.getRegistrationsByHospital(hospitalId, 0, 10, null);
         assertThat(result).hasSize(1);
@@ -299,9 +318,9 @@ class PatientHospitalRegistrationServiceImplTest {
 
     @Test
     void getRegistrationsByHospital_activeFilter_appliesToFetchedRows() {
-        registration.setActive(false);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
+        when(registrationRepository.findDeskRowsByHospitalId(hospitalId))
+            .thenReturn(List.of(deskRow(false, patientId)));
 
         assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, true)).isEmpty();
     }
@@ -311,16 +330,36 @@ class PatientHospitalRegistrationServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, true)).isEmpty();
-        verify(registrationRepository, never()).findByHospitalIdWithDetails(any());
+        verify(registrationRepository, never()).findDeskRowsByHospitalId(any());
     }
 
     @Test
     void getRegistrationsByHospital_superAdmin_readsAnyHospital() {
+        RegistrationDeskRow row = deskRow(true, patientId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
-        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+        when(registrationRepository.findDeskRowsByHospitalId(hospitalId)).thenReturn(List.of(row));
+        when(mapper.toDeskResponseDTO(row)).thenReturn(responseDTO);
 
         assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, null)).hasSize(1);
+    }
+
+    /**
+     * The production failure: registration b4dcaa91 pointed at a patient_id with
+     * no matching clinical.patients row, and the whole desk 500'd. An orphan must
+     * list alongside the healthy rows, not replace them with an error.
+     */
+    @Test
+    void getRegistrationsByHospital_orphanedPatient_stillListsAlongsideHealthyRows() {
+        RegistrationDeskRow healthy = deskRow(true, patientId);
+        RegistrationDeskRow orphan = deskRow(true, null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.findDeskRowsByHospitalId(hospitalId))
+            .thenReturn(List.of(healthy, orphan));
+        when(mapper.toDeskResponseDTO(any(RegistrationDeskRow.class))).thenReturn(responseDTO);
+
+        assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, true))
+            .as("an orphaned registration degrades to null patient details, it does not fail the page")
+            .hasSize(2);
     }
 
     // ---- updateRegistration (UUID-based) ----
