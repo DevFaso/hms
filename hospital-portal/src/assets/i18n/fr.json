@@ -2697,7 +2697,11 @@
     "SESSION_LOCKED": "Session Verrouillée",
     "SWITCH_USER": "Changer d'utilisateur",
     "UNLOCK": "Déverrouiller",
-    "VERIFYING": "Vérification…"
+    "VERIFYING": "Vérification…",
+    "ERROR_WRONG_PASSWORD": "Mot de passe incorrect. Veuillez réessayer.",
+    "ERROR_SESSION_EXPIRED": "Votre session a expiré. Veuillez vous reconnecter.",
+    "ERROR_SESSION_MISMATCH": "Cette session appartient à un autre utilisateur. Veuillez vous reconnecter.",
+    "ERROR_VERIFY_FAILED": "Impossible de vérifier votre mot de passe. Veuillez réessayer."
   },
   "LOGIN": {
     "BOOTSTRAP_SUBTITLE": "Créez votre compte Super Administrateur pour commencer",

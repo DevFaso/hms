@@ -2697,7 +2697,11 @@
     "SESSION_LOCKED": "Session Locked",
     "SWITCH_USER": "Switch user",
     "UNLOCK": "Unlock",
-    "VERIFYING": "Verifying..."
+    "VERIFYING": "Verifying...",
+    "ERROR_WRONG_PASSWORD": "Incorrect password. Please try again.",
+    "ERROR_SESSION_EXPIRED": "Your session has expired. Please sign in again.",
+    "ERROR_SESSION_MISMATCH": "This session belongs to a different user. Please sign in again.",
+    "ERROR_VERIFY_FAILED": "Could not verify your password. Please try again."
   },
   "LOGIN": {
     "BOOTSTRAP_SUBTITLE": "Create your Super Admin account to get started",

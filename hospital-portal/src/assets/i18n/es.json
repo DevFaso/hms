@@ -2691,13 +2691,17 @@
     "LABEL": "Idioma"
   },
   "LOCK": {
-    "ENTER_PASSWORD": "Enter your password to unlock",
-    "NOT_USER": "Not {{name}}?",
-    "PASSWORD_PLACEHOLDER": "Password",
-    "SESSION_LOCKED": "Session Locked",
-    "SWITCH_USER": "Switch user",
-    "UNLOCK": "Unlock",
-    "VERIFYING": "Verifying..."
+    "ENTER_PASSWORD": "Introduzca su contraseña para desbloquear",
+    "NOT_USER": "¿No es {{name}}?",
+    "PASSWORD_PLACEHOLDER": "Contraseña",
+    "SESSION_LOCKED": "Sesión bloqueada",
+    "SWITCH_USER": "Cambiar de usuario",
+    "UNLOCK": "Desbloquear",
+    "VERIFYING": "Verificando…",
+    "ERROR_WRONG_PASSWORD": "Contraseña incorrecta. Inténtelo de nuevo.",
+    "ERROR_SESSION_EXPIRED": "Su sesión ha expirado. Vuelva a iniciar sesión.",
+    "ERROR_SESSION_MISMATCH": "Esta sesión pertenece a otro usuario. Vuelva a iniciar sesión.",
+    "ERROR_VERIFY_FAILED": "No se pudo verificar su contraseña. Inténtelo de nuevo."
   },
   "LOGIN": {
     "BOOTSTRAP_SUBTITLE": "Crea tu cuenta de Super Administrador para comenzar",
