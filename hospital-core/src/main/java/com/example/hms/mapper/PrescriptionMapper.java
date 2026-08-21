@@ -60,6 +60,10 @@ public class PrescriptionMapper {
             .notes(p.getNotes())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
+            .signatureValue(p.getSignatureValue())
+            .signatureAlgorithm(p.getSignatureAlgorithm())
+            .signedAt(p.getSignedAt())
+            .signedByStaffId(p.getSignedBy() != null ? p.getSignedBy().getId() : null)
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())

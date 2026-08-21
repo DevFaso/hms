@@ -47,6 +47,16 @@ public class PrescriptionResponseDTO {
 
     private String status;
 
+    /**
+     * Signature evidence (P2 #16). Null on a SIGNED prescription means it was
+     * signed before V118 and cannot be verified — deliberately distinguishable
+     * from a prescription that carries a real digest.
+     */
+    private String signatureValue;
+    private String signatureAlgorithm;
+    private java.time.LocalDateTime signedAt;
+    private java.util.UUID signedByStaffId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

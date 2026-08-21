@@ -504,5 +504,163 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         return advisories;
     }
-}
 
+    /**
+     * A prescription cannot become SIGNED by being told it is (P2 #16).
+     *
+     * <p>PrescriptionMapper writes {@code dto.getStatus()} straight onto the
+     * entity, so before this any caller able to POST a prescription could assert
+     * SIGNED — and there was nothing on the row to contradict them, because the
+     * table carried no digest, signer or timestamp. "Signed" meant "a client
+     * sent the string SIGNED".
+     *
+     * <p>SIGNED is now reachable only through {@link #signPrescription}, which
+     * records who signed, when, and a digest over what they signed. A request
+     * that asserts it is refused rather than silently downgraded: silently
+     * rewriting a caller's stated intent is how you end up with a prescriber who
+     * believes they signed something they did not.
+     *
+     * <p>Statuses beyond SIGNED are left alone — those are pharmacy and
+     * transmission transitions with their own paths, and this gate is about the
+     * signature, not about owning the whole lifecycle.
+     */
+    private static final String SIGNATURE_ALGORITHM = "SHA-256";
+
+    private void rejectClientAssertedSignature(Prescription prescription) {
+        if (prescription.getStatus() == com.example.hms.enums.PrescriptionStatus.SIGNED
+                && prescription.getSignatureValue() == null) {
+            throw new BusinessException(
+                    "SIGNATURE_REQUIRED: a prescription cannot be created or updated as SIGNED. "
+                            + "Use POST /prescriptions/{id}/sign, which records the signer, the time "
+                            + "and a digest of what was signed.");
+        }
+    }
+
+    /**
+     * The signing ceremony (P2 #16).
+     *
+     * <p>Verifies the signer is the prescription's own prescriber, applies the
+     * controlled-substance gates, then records a SHA-256 digest over a canonical
+     * payload — the same mechanism LabOrderServiceImpl already uses for lab
+     * orders. The digest is tamper-evidence, not a PKI credential: it proves the
+     * signed content has not changed since signing and ties it to a prescriber
+     * and an instant. Editing the prescription afterwards produces a different
+     * digest, which is what makes the edit visible.
+     */
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
+        Prescription prescription = prescriptionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound", id));
+
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null && (prescription.getHospital() == null
+                || !hospitalId.equals(prescription.getHospital().getId()))) {
+            // Cross-hospital reads as absent, matching the house convention.
+            throw new ResourceNotFoundException("prescription.notfound", id);
+        }
+
+        if (prescription.getSignatureValue() != null) {
+            throw new BusinessException("This prescription has already been signed.");
+        }
+
+        com.example.hms.enums.PrescriptionStatus status = prescription.getStatus();
+        if (status != null
+                && status != com.example.hms.enums.PrescriptionStatus.DRAFT
+                && status != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE) {
+            throw new BusinessException(
+                    "Only a DRAFT or PENDING_SIGNATURE prescription can be signed; this one is "
+                            + status + ".");
+        }
+
+        Staff signer = resolveSigningPrescriber(prescription);
+
+        // The controlled-substance safeguards apply to the ceremony too — signing
+        // IS the act of authorising, so it is the last place they can be checked
+        // before the prescription becomes actionable.
+        prescription.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        requireControlledSubstanceSafeguards(prescription);
+
+        LocalDateTime signedAt = LocalDateTime.now();
+        prescription.setSignedBy(signer);
+        prescription.setSignedAt(signedAt);
+        prescription.setSignatureAlgorithm(SIGNATURE_ALGORITHM);
+        prescription.setSignatureValue(computeSignatureDigest(prescription, signer, signedAt));
+
+        Prescription saved = prescriptionRepository.save(prescription);
+        return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * The signer must be the prescription's own prescriber.
+     *
+     * <p>A co-signature is a separate act with its own columns
+     * ({@code cosignedBy}/{@code cosignedAt}); this endpoint is the prescriber
+     * signing their own order, so borrowing it to sign somebody else's would
+     * make the signature attest to something it cannot know.
+     */
+    /**
+     * Signing IS the act of authorising, so the controlled-substance safeguards
+     * get their last check here.
+     *
+     * <p>Duplicated deliberately rather than shared: PR #454 (P2 #15) adds the
+     * same rule at create/update and at dispense, and neither covers this path —
+     * a prescription signed through this endpoint never passes through the
+     * create/update gate. When both land the two copies should be folded into
+     * one helper; until then, a signed controlled substance with no two-factor
+     * verification must not be reachable through ANY path.
+     */
+    private void requireControlledSubstanceSafeguards(Prescription prescription) {
+        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
+            throw new BusinessException(
+                    "CONTROLLED_SUBSTANCE: this prescription is flagged as a controlled substance "
+                            + "and cannot be signed until two-factor verification is complete.");
+        }
+        if (prescription.isRequiresCosign()
+                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
+            throw new BusinessException(
+                    "COSIGN_REQUIRED: this prescription requires a co-signature and cannot be "
+                            + "signed until a second prescriber co-signs it.");
+        }
+    }
+
+    private Staff resolveSigningPrescriber(Prescription prescription) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException("Unable to determine the signing user.");
+        }
+        Staff prescriber = prescription.getStaff();
+        if (prescriber == null || prescriber.getUser() == null) {
+            throw new BusinessException("This prescription has no resolvable prescriber to sign it.");
+        }
+        if (!currentUserId.equals(prescriber.getUser().getId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Only the prescribing clinician can sign this prescription.");
+        }
+        return prescriber;
+    }
+
+    /**
+     * Canonical payload, then SHA-256. Field order and separators are fixed:
+     * the digest is only meaningful if the same content always produces the same
+     * value.
+     */
+    private String computeSignatureDigest(Prescription prescription, Staff signer, LocalDateTime signedAt) {
+        String payload = String.join("|",
+                String.valueOf(prescription.getId()),
+                String.valueOf(prescription.getPatient() != null ? prescription.getPatient().getId() : null),
+                String.valueOf(prescription.getMedicationName()),
+                String.valueOf(prescription.getDosage()),
+                String.valueOf(prescription.getFrequency()),
+                String.valueOf(prescription.getQuantity()),
+                String.valueOf(signer.getId()),
+                signedAt.toString());
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(hash);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+}

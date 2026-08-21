@@ -1702,4 +1702,22 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V118 — prescription signature evidence.
+         PrescriptionStatus.SIGNED was a claim with nothing behind it: the
+         table had no digest, signer or timestamp, and the mapper wrote
+         dto.getStatus() straight onto the entity, so any caller could
+         assert SIGNED without a ceremony happening. Adds the columns the
+         sign endpoint records. Deliberately NOT backfilled — inventing a
+         digest for a ceremony that never took place is worse than
+         admitting the gap.
+         splitStatements=false: the file contains a DO $$ block.
+         ================================================================= -->
+    <changeSet id="V118-prescription-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V118__prescription_signature.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
