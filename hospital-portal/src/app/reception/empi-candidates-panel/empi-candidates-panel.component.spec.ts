@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 
 import { EmpiCandidatesPanelComponent } from './empi-candidates-panel.component';
@@ -104,6 +105,27 @@ describe('EmpiCandidatesPanelComponent', () => {
     component.search({ preventDefault: () => undefined } as unknown as Event);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="empi-error"]')).not.toBeNull();
+  });
+
+  it('distinguishes a disabled feature flag from a real failure', () => {
+    // app.empi.probabilistic.enabled defaults to false, and the endpoint then
+    // 404s. Rendering that as the generic error left an admin who had just
+    // clicked into the page staring at "something went wrong" for a deployment
+    // that is simply not configured.
+    empi.findCandidates.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+    );
+    fixture.detectChanges();
+    const component = fixture.componentInstance as unknown as {
+      form: Record<string, string>;
+      search: (e: Event) => void;
+    };
+    component.form['lastName'] = 'Anything';
+    component.search({ preventDefault: () => undefined } as unknown as Event);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-disabled"]')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="empi-error"]')).toBeNull();
   });
 
   /* ── P1 #8: confirm navigates; admin merge flow ── */
