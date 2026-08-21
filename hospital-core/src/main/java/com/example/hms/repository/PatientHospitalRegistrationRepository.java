@@ -22,6 +22,28 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
 
     List<PatientHospitalRegistration> findByHospitalId(UUID hospitalId);
 
+    /**
+     * List variant that fetch-joins everything the response mapper touches.
+     *
+     * <p>The mapper reads {@code patient.user.username}, and {@code Patient.user}
+     * is LAZY — so the plain finder returned rows whose proxies were initialised
+     * one-by-one during mapping. Besides being an N+1 (~6 statements per row,
+     * because {@code User.patientProfile}/{@code staffProfile} are forced EAGER
+     * by {@code @NotFound}), that initialisation is what surfaced dangling or
+     * duplicate {@code clinical.patients.user_id} rows as a bare 500.
+     *
+     * <p>LEFT JOIN, not INNER: a registration whose patient row is missing must
+     * still list (mapped to nulls) rather than silently vanish from the desk.
+     */
+    @Query("""
+           SELECT DISTINCT r FROM PatientHospitalRegistration r
+           LEFT JOIN FETCH r.patient p
+           LEFT JOIN FETCH p.user
+           LEFT JOIN FETCH r.hospital
+           WHERE r.hospital.id = :hospitalId
+           """)
+    List<PatientHospitalRegistration> findByHospitalIdWithDetails(@Param("hospitalId") UUID hospitalId);
+
     Optional<PatientHospitalRegistration> findByPatientUserIdAndHospitalIdAndActiveTrue(UUID userId, UUID hospitalId);
     // 🔍 Add a method to find active registrations by patient user ID(Could not create query for public abstract )
     List<PatientHospitalRegistration> findByPatientUserIdAndActiveTrue(UUID userId);

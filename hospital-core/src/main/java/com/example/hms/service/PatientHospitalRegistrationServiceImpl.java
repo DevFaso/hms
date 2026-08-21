@@ -212,7 +212,16 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         UUID hospitalId, int page, int size, Boolean active
     ) {
         log.debug("Fetch by hospitalId={} page={} size={} active={}", hospitalId, page, size, active);
-        List<PatientHospitalRegistration> registrations = registrationRepository.findByHospitalId(hospitalId);
+        // ── Tenant isolation: a caller may only list their own hospital's desk ──
+        // The hospitalId arrives as a client-supplied query param; without this
+        // the sibling by-patient/by-id reads were scoped but this one was not.
+        // Null active hospital = super-admin, who may read any hospital.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
+            return List.of();
+        }
+        List<PatientHospitalRegistration> registrations =
+            registrationRepository.findByHospitalIdWithDetails(hospitalId);
         if (active != null) {
             registrations = registrations.stream()
                 .filter(r -> r.isActive() == active)

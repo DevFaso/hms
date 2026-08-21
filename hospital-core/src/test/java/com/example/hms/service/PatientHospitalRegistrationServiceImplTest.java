@@ -25,8 +25,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -287,11 +289,38 @@ class PatientHospitalRegistrationServiceImplTest {
 
     @Test
     void getRegistrationsByHospital_success() {
-        when(registrationRepository.findByHospitalId(hospitalId)).thenReturn(List.of(registration));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
         when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
 
         List<PatientHospitalRegistrationResponseDTO> result = service.getRegistrationsByHospital(hospitalId, 0, 10, null);
         assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getRegistrationsByHospital_activeFilter_appliesToFetchedRows() {
+        registration.setActive(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
+
+        assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, true)).isEmpty();
+    }
+
+    @Test
+    void getRegistrationsByHospital_otherHospital_isNotReadable() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, true)).isEmpty();
+        verify(registrationRepository, never()).findByHospitalIdWithDetails(any());
+    }
+
+    @Test
+    void getRegistrationsByHospital_superAdmin_readsAnyHospital() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(registrationRepository.findByHospitalIdWithDetails(hospitalId)).thenReturn(List.of(registration));
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        assertThat(service.getRegistrationsByHospital(hospitalId, 0, 200, null)).hasSize(1);
     }
 
     // ---- updateRegistration (UUID-based) ----
