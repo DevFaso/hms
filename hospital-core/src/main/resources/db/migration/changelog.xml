@@ -591,8 +591,14 @@
     </changeSet>
 
     <!-- =================================================================
-         V47–V49: Reserved for future pharmacy phases (dispense, inventory, claims).
-         Empty SQL files exist but are not included until populated.
+         V47–V49: reservation cancelled. The three phases they were held
+         for — dispense, inventory and claims — all shipped in V43
+         (clinical.dispenses, clinical.inventory_items,
+         billing.pharmacy_claims, billing.pharmacy_payments), so the
+         reservation was stale and the placeholder files were empty. They
+         have been deleted rather than left as three zero-byte migrations
+         that look registered-but-inert: writing SQL into one would have
+         run nothing, silently, because no changeSet referenced it.
          ================================================================= -->
 
     <!-- =================================================================
@@ -1703,17 +1709,18 @@
     </changeSet>
 
     <!-- =================================================================
-         V117 — link a scheduled referral to the appointment it creates.
-         Scheduling stored a timestamp and a free-text location and created
-         no Appointment row, so a "booked" referral was invisible to the
-         receiving provider's calendar, reception check-in, the reminder
-         sweep and utilisation reporting. Nullable: a referral to an
-         external facility has no receiving provider or department, and an
-         Appointment cannot be built without both.
-         splitStatements=false: the file contains a DO $$ block.
+         V115 — clinical.patient_hospital_registrations.patient_id FK.
+         The schema has no foreign keys at all (V1 came from Hibernate
+         SchemaExport, which emits none), so a registration could point at
+         a deleted patient. One such row returned 500 for the entire
+         registrations desk. ON DELETE CASCADE mirrors the orphanRemoval
+         already on Patient.hospitalRegistrations, so it changes no ORM
+         behaviour and can never block a delete; NOT VALID lets the
+         surviving orphan stay for reconciliation instead of failing the
+         deploy. splitStatements=false: the file is a single DO $$ block.
          ================================================================= -->
-    <changeSet id="V117-referral-appointment-link" author="hms-team" runOnChange="false">
-        <sqlFile path="V117__referral_appointment_link.sql"
+    <changeSet id="V115-registration-patient-fk" author="hms-team" runOnChange="false">
+        <sqlFile path="V115__registration_patient_fk.sql"
                  relativeToChangelogFile="true"
                  splitStatements="false"
                  stripComments="false"/>

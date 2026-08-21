@@ -37,6 +37,15 @@ public class LabResultResponseDTO {
     private boolean acknowledged;
     private LocalDateTime acknowledgedAt;
     private String acknowledgedBy;
+
+    // ── Critical-value loop (P0 #5). Previously the escalation stamps existed
+    // on the entity but appeared in no DTO, so no surface could show that a
+    // critical result had been chased — or how many times. ──
+    private LocalDateTime criticalNotifiedAt;
+    private LocalDateTime criticalEscalatedAt;
+    private short criticalEscalationLevel;
+    private LocalDateTime criticalReadBackAt;
+    private String criticalReadBackBy;
     private boolean released;
     private LocalDateTime releasedAt;
     private String releasedByFullName;

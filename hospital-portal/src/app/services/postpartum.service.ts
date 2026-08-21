@@ -172,6 +172,11 @@ export type NewbornAlert = PostpartumAlert;
 export interface NewbornAssessmentRequest {
   hospitalId?: string;
   recordedByStaffId?: string;
+  /**
+   * The delivery this newborn came from, when one was recorded in Labor &
+   * Delivery. Optional — a newborn may be transferred in already born.
+   */
+  deliveryRecordId?: string;
   assessmentTime?: string;
   apgarOneMinute?: number;
   apgarFiveMinute?: number;
@@ -200,6 +205,7 @@ export interface NewbornAssessmentResponse {
   id: string;
   patientId: string;
   hospitalId?: string;
+  deliveryRecordId?: string | null;
   assessmentTime?: string;
   documentedAt?: string;
   apgarOneMinute?: number | null;
