@@ -25,4 +25,32 @@ public interface OnCallScheduleRepository extends JpaRepository<OnCallSchedule, 
             @Param("now") OffsetDateTime now);
 
     List<OnCallSchedule> findByStaff_IdOrderByStartTimeDesc(UUID staffId);
+
+    /**
+     * Roster for a hospital over a window. Scoped through {@code staff.hospital}
+     * because OnCallSchedule has no hospital of its own — the rota belongs to
+     * whoever is on it.
+     */
+    @Query("SELECT o FROM OnCallSchedule o "
+        + "WHERE o.staff.hospital.id = :hospitalId "
+        + "AND o.startTime <= :to AND o.endTime >= :from "
+        + "ORDER BY o.startTime ASC")
+    List<OnCallSchedule> findByHospitalAndWindow(@Param("hospitalId") UUID hospitalId,
+                                                 @Param("from") OffsetDateTime from,
+                                                 @Param("to") OffsetDateTime to);
+
+    /**
+     * Overlapping entries for the same staff member, excluding one id (so an
+     * update does not collide with itself). Double-booking a clinician on call
+     * is the failure this exists to prevent: two rotas both believing they have
+     * cover is worse than one rota believing it has none.
+     */
+    @Query("SELECT o FROM OnCallSchedule o "
+        + "WHERE o.staff.id = :staffId "
+        + "AND (:excludeId IS NULL OR o.id <> :excludeId) "
+        + "AND o.startTime < :end AND o.endTime > :start")
+    List<OnCallSchedule> findOverlapping(@Param("staffId") UUID staffId,
+                                         @Param("start") OffsetDateTime start,
+                                         @Param("end") OffsetDateTime end,
+                                         @Param("excludeId") UUID excludeId);
 }
