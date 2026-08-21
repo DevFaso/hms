@@ -61,6 +61,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final PatientRepository patientRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
@@ -82,7 +83,12 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
 
-        NewbornAssessment assessment = buildAssessment(patient, hospital, registration, staff, documentedBy, request);
+        com.example.hms.model.labor.DeliveryRecord deliveryRecord =
+            resolveDeliveryRecord(request.getDeliveryRecordId(), hospital);
+
+        NewbornAssessment assessment =
+            buildAssessment(patient, hospital, registration, staff, documentedBy, request);
+        assessment.setDeliveryRecord(deliveryRecord);
         evaluateAssessment(assessment);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
@@ -346,6 +352,32 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                     log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
                 }
             });
+    }
+
+    /**
+     * Resolve the delivery this newborn came from.
+     *
+     * <p>Optional: a newborn may be transferred in already born, or predate the
+     * L&amp;D module — the entity javadoc says as much. Null in, null out.
+     *
+     * <p>Validated against the HOSPITAL, deliberately not against the patient.
+     * A delivery record's patient is the MOTHER; this assessment's patient is the
+     * BABY. Comparing the two would reject every correct link.
+     */
+    private com.example.hms.model.labor.DeliveryRecord resolveDeliveryRecord(UUID deliveryRecordId,
+                                                                             Hospital hospital) {
+        if (deliveryRecordId == null) {
+            return null;
+        }
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.findById(deliveryRecordId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "Delivery record not found with ID: " + deliveryRecordId));
+
+        if (hospital != null && delivery.getHospital() != null
+            && !hospital.getId().equals(delivery.getHospital().getId())) {
+            throw new BusinessException("Delivery record belongs to a different hospital.");
+        }
+        return delivery;
     }
 
     private PatientHospitalRegistration resolveRegistration(Patient patient,

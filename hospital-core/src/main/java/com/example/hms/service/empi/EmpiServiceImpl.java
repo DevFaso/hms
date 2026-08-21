@@ -66,6 +66,8 @@ public class EmpiServiceImpl implements EmpiService {
     private final com.example.hms.repository.PatientRepository patientRepository;
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
     private final EmpiMapper empiMapper;
+    private final com.example.hms.utility.RoleValidator roleValidator;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     private final com.example.hms.config.KafkaProperties kafkaProperties;
     private final ObjectProvider<KafkaTemplate<String, EmpiEventPayload>> empiKafkaTemplateProvider;
 
@@ -111,8 +113,67 @@ public class EmpiServiceImpl implements EmpiService {
     @Override
     @Transactional(readOnly = true)
     public Optional<EmpiIdentityResponseDTO> findIdentityByPatientId(UUID patientId) {
+        // ── Tenant isolation: an identity row carries the patient's EMPI number
+        // and cross-facility affiliation, so another hospital's row must read as
+        // absent rather than as data. EmpiMasterIdentityRepository is an unscoped
+        // JpaRepository, so nothing below this filters by tenant. ──
         return masterIdentityRepository.findByPatientId(patientId)
+            .filter(this::isVisibleToCaller)
             .map(empiMapper::toIdentityDto);
+    }
+
+    /**
+     * Whether the caller's active hospital may see this identity.
+     *
+     * <p>Null active hospital = super-admin, unscoped. A scoped caller sees only
+     * identities stamped with their own hospital — and NOT unstamped ones: a
+     * legacy row with a null {@code hospitalId} belongs to nobody in particular,
+     * and handing it to whichever tenant asks first is the same disclosure by a
+     * different route. Super-admin remains able to reconcile those.
+     */
+    private boolean isVisibleToCaller(EmpiMasterIdentity identity) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        return activeHospitalId == null
+            || (identity.getHospitalId() != null && activeHospitalId.equals(identity.getHospitalId()));
+    }
+
+    /**
+     * Refuse a write against an identity the caller does not own.
+     *
+     * <p>The merge endpoints are {@code HOSPITAL_ADMIN}-or-better, but
+     * HOSPITAL_ADMIN is a PER-HOSPITAL role — so "is an admin" was never the same
+     * question as "is an admin HERE". Before this, the only tenant check on the
+     * merge path compared the two identities to each other and never to the
+     * caller, which let a hospital-A admin merge two hospital-B identities.
+     */
+    private void requireTenantAccess(EmpiMasterIdentity identity) {
+        if (!isVisibleToCaller(identity)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+        }
+    }
+
+    /**
+     * Refuse a merge against a patient not registered at the caller's hospital.
+     *
+     * <p>Needed in addition to {@link #requireTenantAccess} because
+     * {@code mergePatients} PROVISIONS a master identity for any patient that
+     * lacks one — a write against another tenant's patient that happened before
+     * any identity-level guard could run.
+     *
+     * <p>Registration, not {@code Patient.hospitalId}: a patient may legitimately
+     * be registered at several hospitals, and each of those hospitals may
+     * reconcile them.
+     */
+    private void requirePatientInTenant(UUID patientId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null) {
+            return;
+        }
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patientId, activeHospitalId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                MessageUtil.resolve(MSG_MERGE_CROSS_TENANT));
+        }
     }
 
     @Override
@@ -169,6 +230,13 @@ public class EmpiServiceImpl implements EmpiService {
         EmpiMasterIdentity secondary = masterIdentityRepository.findById(request.getSecondaryIdentityId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_IDENTITY_NOT_FOUND, request.getSecondaryIdentityId()));
 
+        // ── Tenant isolation: BOTH sides must belong to the caller. The
+        // identity-to-identity check further down only proves the two agree with
+        // each other; two hospital-B identities agree perfectly, and a hospital-A
+        // admin could merge them. ──
+        requireTenantAccess(primary);
+        requireTenantAccess(secondary);
+
         if (primary.getId().equals(secondary.getId())) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_IDENTITY));
         }
@@ -216,6 +284,13 @@ public class EmpiServiceImpl implements EmpiService {
         if (primaryPatientId.equals(secondaryPatientId)) {
             throw new BusinessException(MessageUtil.resolve(MSG_MERGE_SAME_PATIENT));
         }
+        // ── Tenant isolation BEFORE provisioning: ensureIdentityForPatient
+        // creates a master identity (and emits IDENTITY_LINKED) for any patient
+        // that lacks one. Deferring the check to mergeIdentities would leave that
+        // write already done against another tenant's patient. ──
+        requirePatientInTenant(primaryPatientId);
+        requirePatientInTenant(secondaryPatientId);
+
         EmpiMasterIdentity primary = ensureIdentityForPatient(primaryPatientId);
         EmpiMasterIdentity secondary = ensureIdentityForPatient(secondaryPatientId);
 

@@ -154,6 +154,39 @@ public class LabResult extends BaseEntity {
     @Column(name = "critical_escalated_at")
     private LocalDateTime criticalEscalatedAt;
 
+    /**
+     * How many escalation rounds have fired for this result.
+     *
+     * <p>Replaces the one-shot semantics {@code criticalEscalatedAt} used to
+     * carry. The sweep previously treated a non-null stamp as "done", so a
+     * critical result nobody ever acknowledged produced two notifications — both
+     * to the ordering provider who had already ignored the first — and then went
+     * quiet permanently. The level lets the sweep repeat while widening who it
+     * tells.
+     */
+    @Column(name = "critical_escalation_level", nullable = false)
+    @Builder.Default
+    private short criticalEscalationLevel = 0;
+
+    /**
+     * The value the receiving clinician repeated back, stored verbatim.
+     *
+     * <p>Kept even when it does not match, so a mismatch is auditable rather
+     * than merely rejected — a clinician reading back the wrong number is the
+     * exact event a read-back exists to catch.
+     */
+    @Column(name = "critical_readback_value", length = 255)
+    private String criticalReadBackValue;
+
+    @Column(name = "critical_readback_at")
+    private LocalDateTime criticalReadBackAt;
+
+    @Column(name = "critical_readback_by_user_id")
+    private UUID criticalReadBackByUserId;
+
+    @Column(name = "critical_readback_by_display", length = 255)
+    private String criticalReadBackByDisplay;
+
     @Builder.Default
     @Column(name = "released", nullable = false)
     private boolean released = false;

@@ -804,6 +804,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.FRONT_DESK',
         route: '/reception',
       });
+      // Duplicate-patient review. The panel and its whole backend shipped with
+      // no click anywhere reaching them — an admin had to hand-type the URL.
+      // Roles mirror the route guard on 'reception/empi-candidates'.
+      items.push({
+        icon: 'join_inner',
+        label: 'Duplicate Patients',
+        translationKey: 'NAV.EMPI_CANDIDATES',
+        route: '/reception/empi-candidates',
+        roles: [
+          'ROLE_RECEPTIONIST',
+          'ROLE_NURSE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      });
     }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar

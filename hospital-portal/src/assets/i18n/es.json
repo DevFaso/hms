@@ -2071,6 +2071,7 @@
     "SEARCH": "Buscar candidatos",
     "SEARCHING": "Buscando…",
     "ERROR": "La búsqueda EMPI falló. La bandera de coincidencia probabilística puede estar desactivada — consulte docs/runbooks/empi-probabilistic-matching.md.",
+    "DISABLED": "La detección de pacientes duplicados no está habilitada en esta instalación. Pida a un administrador que habilite app.empi.probabilistic.enabled.",
     "NO_MATCHES": "Ningún candidato alcanzó el umbral de puntuación configurado.",
     "NOT_THIS_ONE": "¿Ninguno de los candidatos anteriores es la misma persona?",
     "CREATE_NEW_PATIENT": "Crear un nuevo paciente en su lugar",
@@ -2614,7 +2615,14 @@
     "CURRENT_RESULT": "Resultado actual",
     "PREVIOUS_RESULT": "Resultado anterior",
     "BASELINE": "Referencia (sin resultado anterior)",
-    "DAYS_BETWEEN": "días de diferencia"
+    "DAYS_BETWEEN": "días de diferencia",
+    "READ_BACK": "Relectura",
+    "READ_BACK_PROMPT": "Repita el valor crítico que le comunicaron para",
+    "READ_BACK_VALUE": "Valor tal como lo recibió",
+    "READ_BACK_HINT": "Escriba el valor que le comunicaron — no lo copie del expediente. El sistema lo compara con el resultado informado.",
+    "READ_BACK_CONFIRM": "Confirmar relectura",
+    "READ_BACK_CONFIRMED": "Relectura confirmada",
+    "READ_BACK_ERROR": "No se pudo registrar la relectura"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -2784,6 +2792,7 @@
     "ENCOUNTERS": "Consultas",
     "FAMILY_ACCESS": "Acceso Familiar",
     "FRONT_DESK": "Recepción",
+    "EMPI_CANDIDATES": "Pacientes duplicados",
     "HOSPITALS": "Hospitales",
     "IMAGING": "Imagenología",
     "LAB_APPROVAL_QUEUE": "Cola de Aprobación de Laboratorio",

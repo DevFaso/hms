@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -128,11 +129,15 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         </div>
       </form>
 
+      <p *ngIf="disabled()" class="empi-panel__error" data-testid="empi-disabled">
+        {{ 'EMPI.DISABLED' | translate }}
+      </p>
+
       <p *ngIf="error()" class="empi-panel__error" data-testid="empi-error">
         {{ 'EMPI.ERROR' | translate }}
       </p>
 
-      <ng-container *ngIf="!error() && searched()">
+      <ng-container *ngIf="!error() && !disabled() && searched()">
         <p *ngIf="results().length === 0" class="empi-panel__empty" data-testid="empi-empty">
           {{ 'EMPI.NO_MATCHES' | translate }}
         </p>
@@ -361,6 +366,13 @@ export class EmpiCandidatesPanelComponent {
   protected readonly searching = signal(false);
   protected readonly searched = signal(false);
   protected readonly error = signal(false);
+  /**
+   * Probabilistic matching is behind app.empi.probabilistic.enabled, which
+   * defaults to false — the endpoint then 404s. Rendering that as the generic
+   * failure message left an admin staring at "something went wrong" for a
+   * deployment that is simply not configured, so it gets its own state.
+   */
+  protected readonly disabled = signal(false);
 
   /* ── P1 #8: admin duplicate-merge mode ── */
   protected readonly mergeSelection = signal<EmpiCandidateMatch[]>([]);
@@ -398,17 +410,21 @@ export class EmpiCandidatesPanelComponent {
     }
     this.searching.set(true);
     this.error.set(false);
+    this.disabled.set(false);
     this.empi.findCandidates(query).subscribe({
       next: (matches) => {
         this.results.set(matches ?? []);
         this.searching.set(false);
         this.searched.set(true);
       },
-      error: () => {
+      error: (err: HttpErrorResponse) => {
         this.results.set([]);
         this.searching.set(false);
         this.searched.set(true);
-        this.error.set(true);
+        // 404 here means the feature flag is off, not that the search failed.
+        const featureOff = err?.status === 404;
+        this.disabled.set(featureOff);
+        this.error.set(!featureOff);
       },
     });
   }
