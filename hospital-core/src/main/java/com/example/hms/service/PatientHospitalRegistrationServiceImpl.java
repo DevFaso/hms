@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
 import com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO;
+import com.example.hms.payload.dto.RegistrationDeskRow;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
@@ -220,18 +221,41 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
             return List.of();
         }
-        List<PatientHospitalRegistration> registrations =
-            registrationRepository.findByHospitalIdWithDetails(hospitalId);
+        List<RegistrationDeskRow> rows = registrationRepository.findDeskRowsByHospitalId(hospitalId);
+        warnOnOrphanedPatients(hospitalId, rows);
         if (active != null) {
-            registrations = registrations.stream()
-                .filter(r -> r.isActive() == active)
+            rows = rows.stream()
+                .filter(r -> Boolean.TRUE.equals(r.active()) == active)
                 .toList();
         }
-        int fromIndex = Math.min(page * size, registrations.size());
-        int toIndex = Math.min(fromIndex + size, registrations.size());
-        return registrations.subList(fromIndex, toIndex).stream()
-            .map(mapper::toResponseDTO)
+        int fromIndex = Math.min(page * size, rows.size());
+        int toIndex = Math.min(fromIndex + size, rows.size());
+        return rows.subList(fromIndex, toIndex).stream()
+            .map(mapper::toDeskResponseDTO)
             .toList();
+    }
+
+    /**
+     * A registration whose patient row no longer exists still lists, with null
+     * patient details — the desk is more useful degraded than absent, and that is
+     * what the LEFT JOIN was always for.
+     *
+     * <p>But the row is broken data and nothing else surfaces it. The schema
+     * carries no foreign keys, so nothing prevented it being created and nothing
+     * reports it afterwards; before this it announced itself only by 500ing the
+     * whole page. Warn once per load, naming the ids, so it stays reconcilable
+     * instead of invisible.
+     */
+    private void warnOnOrphanedPatients(UUID hospitalId, List<RegistrationDeskRow> rows) {
+        List<UUID> orphaned = rows.stream()
+            .filter(RegistrationDeskRow::hasOrphanedPatient)
+            .map(RegistrationDeskRow::id)
+            .toList();
+        if (!orphaned.isEmpty()) {
+            log.warn("Hospital {} has {} registration(s) whose patient row is missing; "
+                    + "listing them with null patient details. Registration ids: {}",
+                hospitalId, orphaned.size(), orphaned);
+        }
     }
 
     @Override

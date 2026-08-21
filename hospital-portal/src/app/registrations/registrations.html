@@ -230,7 +230,11 @@
           </div>
         } @else {
           <p class="muted">
-            {{ editingRegistration()?.patientFullName || editingRegistration()?.patientUsername }}
+            {{
+              editingRegistration()?.patientFullName ||
+                editingRegistration()?.patientUsername ||
+                ('REGISTRATIONS.UNKNOWN_PATIENT' | translate)
+            }}
             — {{ editingRegistration()?.mri }}
           </p>
         }
@@ -316,7 +320,17 @@
       <div class="modal-body">
         <p>
           {{ 'REGISTRATIONS.DELETE_CONFIRM' | translate }}
-          <strong>{{ target.patientFullName || target.patientUsername }}</strong>
+          <!--
+            An orphaned registration — one whose patient row no longer exists —
+            now lists instead of 500ing the page, and it is exactly the row
+            someone will reach for Delete on. Never leave the confirmation
+            reading "Permanently delete the registration for ?".
+          -->
+          <strong>{{
+            target.patientFullName ||
+              target.patientUsername ||
+              ('REGISTRATIONS.UNKNOWN_PATIENT' | translate)
+          }}</strong>
           ({{ target.mri }})?
         </p>
         <p class="muted">{{ 'REGISTRATIONS.DELETE_WARNING' | translate }}</p>

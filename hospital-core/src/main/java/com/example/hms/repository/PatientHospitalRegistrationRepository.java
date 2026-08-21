@@ -2,6 +2,7 @@ package com.example.hms.repository;
 
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.payload.dto.PatientMultiHospitalSummaryDTO;
+import com.example.hms.payload.dto.RegistrationDeskRow;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,26 +24,46 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     List<PatientHospitalRegistration> findByHospitalId(UUID hospitalId);
 
     /**
-     * List variant that fetch-joins everything the response mapper touches.
+     * Desk list for one hospital, as a flat column projection.
      *
-     * <p>The mapper reads {@code patient.user.username}, and {@code Patient.user}
-     * is LAZY — so the plain finder returned rows whose proxies were initialised
-     * one-by-one during mapping. Besides being an N+1 (~6 statements per row,
-     * because {@code User.patientProfile}/{@code staffProfile} are forced EAGER
-     * by {@code @NotFound}), that initialisation is what surfaced dangling or
-     * duplicate {@code clinical.patients.user_id} rows as a bare 500.
+     * <p>This replaced a {@code LEFT JOIN FETCH} of the entity graph. The fetch
+     * variant read correctly but could not survive the data: {@code r.patient} is
+     * mapped {@code optional = false}, so a registration whose {@code patient_id}
+     * points at a deleted row made Hibernate raise {@code FetchNotFoundException}
+     * while assembling the result set rather than yielding null — one orphan
+     * returned a bare 500 for the entire page, and because the throw happened
+     * inside this call, the mapper's per-row guards never ran. The schema has no
+     * foreign keys (V1 came from Hibernate SchemaExport, which emits none), so
+     * orphans are a reachable state, not a hypothetical.
      *
-     * <p>LEFT JOIN, not INNER: a registration whose patient row is missing must
-     * still list (mapped to nulls) rather than silently vanish from the desk.
+     * <p>Projecting also drops the fetch from ~6 statements per row to one. The
+     * entity path pulled {@code Patient} → {@code User} → ({@code userRoles} →
+     * {@code Role}, {@code patientProfile}, {@code staffProfile}) for every row,
+     * the last two forced EAGER by {@code @NotFound}.
+     *
+     * <p>Filtered on {@code r.hospital.id} rather than the joined {@code h.id}:
+     * the former reads the FK column directly, so a registration pointing at a
+     * missing hospital still lists (with null hospital fields) instead of being
+     * silently filtered out of the desk.
      */
     @Query("""
-           SELECT DISTINCT r FROM PatientHospitalRegistration r
-           LEFT JOIN FETCH r.patient p
-           LEFT JOIN FETCH p.user
-           LEFT JOIN FETCH r.hospital
+           SELECT new com.example.hms.payload.dto.RegistrationDeskRow(
+               r.id, r.mrn,
+               p.id, u.username, p.firstName, p.lastName,
+               p.email, p.phoneNumberPrimary, p.gender,
+               h.id, h.name, h.code, h.address,
+               r.registrationDate, r.active,
+               r.stayStatus, r.stayStatusUpdatedAt,
+               r.currentRoom, r.currentBed, r.attendingPhysicianName,
+               r.readyForDischargeNote, r.readyByStaffId
+           )
+           FROM PatientHospitalRegistration r
+           LEFT JOIN r.patient p
+           LEFT JOIN p.user u
+           LEFT JOIN r.hospital h
            WHERE r.hospital.id = :hospitalId
            """)
-    List<PatientHospitalRegistration> findByHospitalIdWithDetails(@Param("hospitalId") UUID hospitalId);
+    List<RegistrationDeskRow> findDeskRowsByHospitalId(@Param("hospitalId") UUID hospitalId);
 
     Optional<PatientHospitalRegistration> findByPatientUserIdAndHospitalIdAndActiveTrue(UUID userId, UUID hospitalId);
     // 🔍 Add a method to find active registrations by patient user ID(Could not create query for public abstract )
