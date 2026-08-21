@@ -1702,4 +1702,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V120 — drug-interaction knowledge-base expansion.
+         The checking pipeline is real at prescribe, dispense and CDS-Hooks,
+         but the KB behind it was V63's 12-pair seed — and a checker with
+         almost nothing to check against is worse than none, because green
+         reads as "no interaction" when it means "not in our twelve rows".
+         Adds the pairs a WHO-Essential-Medicines formulary most needs, each
+         citing its reference. splitStatements=false: DO $$ block.
+         ================================================================= -->
+    <changeSet id="V120-drug-interaction-kb-expansion" author="hms-team" runOnChange="false">
+        <sqlFile path="V120__drug_interaction_kb_expansion.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
