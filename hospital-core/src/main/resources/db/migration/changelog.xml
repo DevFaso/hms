@@ -1702,4 +1702,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V117 — link a scheduled referral to the appointment it creates.
+         Scheduling stored a timestamp and a free-text location and created
+         no Appointment row, so a "booked" referral was invisible to the
+         receiving provider's calendar, reception check-in, the reminder
+         sweep and utilisation reporting. Nullable: a referral to an
+         external facility has no receiving provider or department, and an
+         Appointment cannot be built without both.
+         splitStatements=false: the file contains a DO $$ block.
+         ================================================================= -->
+    <changeSet id="V117-referral-appointment-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V117__referral_appointment_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
