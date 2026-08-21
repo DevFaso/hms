@@ -2365,4 +2365,137 @@ class PrescriptionServiceImplTest {
         assertThat(result.getCdsAdvisories()).containsExactly(critical);
         verify(prescriptionRepository).save(mappedEntity);
     }
+
+    // ── The signing ceremony (P2 #16) ─────────────────────────────────────
+    // SIGNED was a status a client could simply assert. PrescriptionMapper
+    // wrote dto.getStatus() straight onto the entity, and the table carried no
+    // digest, signer or timestamp to contradict it — "signed" meant "a client
+    // sent the string SIGNED".
+
+    private Prescription signablePrescription(UUID prescriberUserId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(prescriberUserId);
+        com.example.hms.model.Staff prescriber = com.example.hms.model.Staff.builder().build();
+        prescriber.setId(UUID.randomUUID());
+        prescriber.setUser(user);
+
+        com.example.hms.model.Hospital hospital =
+            com.example.hms.model.Hospital.builder().name("CHU").code("CHU").build();
+        hospital.setId(UUID.randomUUID());
+
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        rx.setStaff(prescriber);
+        rx.setHospital(hospital);
+        rx.setPatient(patient);
+        rx.setMedicationName("Amoxicillin");
+        rx.setDosage(TEST_DOSAGE);
+        rx.setFrequency(TEST_FREQUENCY);
+        return rx;
+    }
+
+    @Test
+    void signPrescriptionRecordsSignerTimeAndDigest() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), java.util.Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getSignedAt()).isNotNull();
+        assertThat(rx.getSignedBy()).isNotNull();
+        assertThat(rx.getSignatureAlgorithm()).isEqualTo("SHA-256");
+        // 64 hex characters — a SHA-256 digest, not a placeholder.
+        assertThat(rx.getSignatureValue()).hasSize(64).matches("[0-9a-f]{64}");
+    }
+
+    @Test
+    void signPrescriptionRefusesSomebodyElsesPrescription() {
+        // A co-signature is a separate act with its own columns. Borrowing this
+        // endpoint to sign another clinician's order would make the signature
+        // attest to something it cannot know.
+        Prescription rx = signablePrescription(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void signPrescriptionRefusesToSignTwice() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setSignatureValue("deadbeef");
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("already been signed");
+    }
+
+    @Test
+    void signPrescriptionRefusesAControlledSubstanceWithoutTwoFactor() {
+        // Signing IS the act of authorising, so this is the last place the
+        // safeguard can be checked before the prescription becomes actionable.
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setControlledSubstance(true);
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void signPrescriptionRefusesAnAlreadyDispensedPrescription() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.DISPENSED);
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("DRAFT or PENDING_SIGNATURE");
+    }
+
+    @Test
+    void signPrescriptionIsNotReachableAcrossHospitals() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
 }

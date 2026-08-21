@@ -56,6 +56,31 @@ public class PrescriptionController {
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
+    /**
+     * The signing ceremony (P2 #16).
+     *
+     * <p>SIGNED used to be a status a client could simply assert, with nothing
+     * on the row to contradict it. This is now the only path that sets it, and
+     * it records who signed, when, and a SHA-256 digest of what they signed.
+     *
+     * <p>Roles are narrower than create on purpose: nurses and hospital admins
+     * may draft a prescription, but signing is the prescriber's own act and the
+     * service additionally requires the caller to BE the prescription's
+     * prescriber. The annotation is the coarse filter; the service is the real
+     * check.
+     */
+    @PostMapping("/{id}/sign")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE_PRACTITIONER')")
+    @Operation(summary = "Sign a prescription",
+        description = "Records the prescriber's signature: signer, timestamp and a digest of the "
+            + "signed content. Only the prescribing clinician can sign, and only a DRAFT or "
+            + "PENDING_SIGNATURE prescription can be signed.")
+    public ResponseEntity<PrescriptionResponseDTO> sign(
+        @PathVariable UUID id,
+        Locale locale) {
+        return ResponseEntity.ok(prescriptionService.signPrescription(id, locale));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT')")
     @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID.")
