@@ -1702,4 +1702,20 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V116 — critical-value read-back + repeating escalation.
+         P0 #5 required notify -> read-back -> escalate. Read-back was
+         never built (the acknowledge endpoint takes no body, so nothing
+         recorded WHAT the clinician was told), and the escalation
+         re-notified the same provider once then stamped a flag the sweep
+         excludes on — so an unacknowledged critical result went silent
+         after two alerts to one person. Adds the read-back columns and an
+         escalation level so the sweep repeats and widens.
+         ================================================================= -->
+    <changeSet id="V116-critical-value-readback-and-escalation-levels" author="hms-team" runOnChange="false">
+        <sqlFile path="V116__critical_value_readback_and_escalation_levels.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
