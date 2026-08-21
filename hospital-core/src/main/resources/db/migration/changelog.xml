@@ -1789,7 +1789,7 @@
          citing its reference. splitStatements=false: DO $$ block.
 
          Re-added after the develop merge dropped it: this branch and
-         develop both appended before </databaseChangeLog>, and resolving
+         develop both appended just before the closing tag, and resolving
          that overlap kept develop's V116-V119 and lost this block. The
          file stayed on disk, so the loss was invisible until
          MigrationRegistrationTest and LiquibaseSchemaIT's 25-row seed
@@ -1799,6 +1799,29 @@
         <sqlFile path="V120__drug_interaction_kb_expansion.sql"
                  relativeToChangelogFile="true"
                  splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V121 — slot inventory foundation (visit types, session templates,
+         generated slots). Scheduling could book an Appointment against an
+         arbitrary (staff, date, time) but nothing described what a clinic
+         session IS, so nothing could answer "when is this clinician next
+         free for a 30-minute follow-up?" — the question that blocks patient
+         self-scheduling, waitlist auto-offer and utilisation reporting
+         alike. New tables, so they carry REAL foreign keys.
+
+         Re-added for the THIRD time. Every migration's changeSet goes
+         immediately before </databaseChangeLog>, so any two branches that
+         add one collide on the same lines; resolving that collision by
+         taking develop drops the branch's own migration while leaving its
+         .sql on disk, which looks like nothing happened. GitHub's "Update
+         branch" button resolves it exactly that way. MigrationRegistrationTest
+         is what turns this from a silent production outage into a red build.
+         ================================================================= -->
+    <changeSet id="V121-slot-inventory-foundation" author="hms-team" runOnChange="false">
+        <sqlFile path="V121__slot_inventory_foundation.sql"
+                 relativeToChangelogFile="true"
                  stripComments="false"/>
     </changeSet>
 
