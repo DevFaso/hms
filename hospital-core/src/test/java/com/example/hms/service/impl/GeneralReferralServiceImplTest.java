@@ -34,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -46,6 +47,8 @@ class GeneralReferralServiceImplTest {
 
     @Mock
     private GeneralReferralRepository referralRepository;
+    @Mock
+    private com.example.hms.repository.AppointmentRepository appointmentRepository;
     @Mock
     private PatientRepository patientRepository;
     @Mock
@@ -928,5 +931,133 @@ class GeneralReferralServiceImplTest {
 
         // Critically: the events repo must NOT be hit when the parent is missing.
         verify(eventRepository, never()).findByReferralIdOrderByRecordedAtAsc(any(UUID.class));
+    }
+
+    // ── Referral -> Appointment linkage (P2 #12) ──────────────────────────
+    // Scheduling stored scheduledAppointmentAt plus a free-text location and
+    // created no Appointment row, so a "booked" referral was invisible to the
+    // receiving provider's calendar, reception check-in, the V112 reminder
+    // sweep and utilisation reporting. The referral said booked; the schedule
+    // disagreed.
+
+    @Test
+    void scheduleReferral_createsAndLinksAnAppointmentWhenTheTargetIsKnown() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+            com.example.hms.model.UserRoleHospitalAssignment.builder().build();
+        assignment.setId(UUID.randomUUID());
+        com.example.hms.model.Staff provider = com.example.hms.model.Staff.builder()
+            .assignment(assignment)
+            .build();
+        provider.setId(UUID.randomUUID());
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+
+        referral.setReceivingProvider(provider);
+        referral.setTargetDepartment(department);
+
+        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(5).withHour(9).withMinute(0);
+        com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(appointmentTime)
+                .location("Clinic 7")
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+        when(appointmentRepository.save(any(com.example.hms.model.Appointment.class)))
+            .thenAnswer(invocation -> {
+                com.example.hms.model.Appointment saved = invocation.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                return saved;
+            });
+
+        GeneralReferralResponseDTO response =
+            generalReferralService.scheduleReferral(referralId, request);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.Appointment> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.Appointment.class);
+        verify(appointmentRepository).save(captor.capture());
+        com.example.hms.model.Appointment created = captor.getValue();
+
+        assertEquals(appointmentTime.toLocalDate(), created.getAppointmentDate());
+        assertEquals(appointmentTime.toLocalTime(), created.getStartTime());
+        assertEquals(com.example.hms.enums.AppointmentStatus.SCHEDULED, created.getStatus());
+        assertEquals(provider, created.getStaff());
+        assertEquals(department, created.getDepartment());
+        assertNotNull(response.getAppointmentId());
+        assertEquals(created.getId(), referral.getAppointment().getId());
+    }
+
+    @Test
+    void scheduleReferral_withoutAReceivingProviderStillSchedules() {
+        // The commonest referral there is: out to an external facility, no known
+        // provider or department. Appointment requires staff, department AND
+        // assignment, all NOT NULL — so refusing to schedule here would break
+        // the majority case to serve the minority one.
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+        referral.setReceivingProvider(null);
+        referral.setTargetDepartment(null);
+
+        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(3);
+        com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(appointmentTime)
+                .location("St Mary's, external")
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO response =
+            generalReferralService.scheduleReferral(referralId, request);
+
+        assertEquals(ReferralStatus.SCHEDULED, response.getStatus());
+        assertEquals("St Mary's, external", referral.getAppointmentLocation());
+        assertNull(response.getAppointmentId());
+        verify(appointmentRepository, org.mockito.Mockito.never())
+            .save(any(com.example.hms.model.Appointment.class));
+    }
+
+    @Test
+    void scheduleReferral_appointmentFailureDoesNotBlockTheReferral() {
+        // The referral is the clinical record; the appointment is a convenience
+        // built on top of it. Losing the convenience must not lose the record.
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+            com.example.hms.model.UserRoleHospitalAssignment.builder().build();
+        assignment.setId(UUID.randomUUID());
+        com.example.hms.model.Staff provider = com.example.hms.model.Staff.builder()
+            .assignment(assignment)
+            .build();
+        provider.setId(UUID.randomUUID());
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        referral.setReceivingProvider(provider);
+        referral.setTargetDepartment(department);
+
+        com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(LocalDateTime.now().plusDays(2))
+                .build();
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+        when(appointmentRepository.save(any(com.example.hms.model.Appointment.class)))
+            .thenThrow(new RuntimeException("slot conflict"));
+
+        GeneralReferralResponseDTO response =
+            generalReferralService.scheduleReferral(referralId, request);
+
+        assertEquals(ReferralStatus.SCHEDULED, response.getStatus());
+        assertNull(response.getAppointmentId());
     }
 }

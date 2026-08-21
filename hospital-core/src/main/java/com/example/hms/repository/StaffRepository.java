@@ -66,6 +66,28 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(:license)")
     Optional<UUID> findUserIdByLicense(@Param("license") String license);
 
+    /**
+     * Usernames of active staff holding a role at a hospital.
+     *
+     * <p>Added for critical-value escalation (P0 #5), which has to reach
+     * somebody OTHER than the ordering provider once that provider has failed to
+     * respond — the previous escalation re-notified the same person and then
+     * went silent.
+     */
+    @Query("""
+        SELECT u.username FROM Staff s
+        JOIN s.user u
+        JOIN s.assignment a
+        JOIN a.role r
+        WHERE s.hospital.id = :hospitalId
+          AND s.active = true
+          AND u.isDeleted = false
+          AND u.isActive = true
+          AND UPPER(r.code) = UPPER(:roleCode)
+    """)
+    List<String> findActiveUsernamesByHospitalAndRole(@Param("hospitalId") UUID hospitalId,
+                                                      @Param("roleCode") String roleCode);
+
     @Query("""
         SELECT s FROM Staff s
         JOIN FETCH s.user u

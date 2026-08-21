@@ -41,6 +41,7 @@ import static org.mockito.Mockito.when;
 class GeneralReferralServiceImplTest {
 
     @Mock private GeneralReferralRepository referralRepository;
+    @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;

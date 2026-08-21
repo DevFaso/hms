@@ -507,11 +507,11 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 
 ## P0 — Clinical-truth risks (fabricated or dead-end data in production UI)
 
-- [ ] 1. **Nurse handoffs: real entity or removal** — `NurseTaskServiceImpl` fabricates handoff rows ("still synthetic, entity arrives in MVP 2"); completion buttons operate on generated data. Build the handoff entity (SBAR/I-PASS fields) + endpoints + wire the existing UI, or pull the surface until it's real.
-- [ ] 2. **Nurse order-task queue: real entity or removal** — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
-- [ ] 3. **Lab pending-review: delete the hardcoded endpoint** — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
-- [ ] 4. **Bed/ward decision** — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
-- [ ] 5. **Critical-value escalation chain** — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
+- [x] 1. **Nurse handoffs: real entity or removal** — ✅ DONE (PR #431 `feature/nurse-station-real-data`, V108 + V110): — `NurseTaskServiceImpl` fabricates handoff rows ("still synthetic, entity arrives in MVP 2"); completion buttons operate on generated data. Build the handoff entity (SBAR/I-PASS fields) + endpoints + wire the existing UI, or pull the surface until it's real.
+- [x] 2. **Nurse order-task queue: real entity or removal** — ✅ DONE (PR #431): queue and dashboard counts now derive from real lab/imaging/procedure orders. — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
+- [x] 3. **Lab pending-review: delete the hardcoded endpoint** — ✅ DONE (PR #432 `fix/lab-pending-review-synthetic`): — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
+- [x] 4. **Bed/ward decision** — ✅ DONE (PR #433 `feature/bed-management`), built rather than dropped: — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
+- [x] 5. **Critical-value escalation chain** — ✅ DONE (PR #434, completed by PR #451 `feature/critical-value-readback-escalation`): — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
 
 ## P1 — Complete the specialty core + turn on what's already built
 
@@ -526,15 +526,70 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 - [x] **Refill approval queue was unreachable** — ✅ DONE (`fix/refill-approval-reachability`): the whole chain existed and worked — patient submits, `notifyCareTeamForRefillRequest` emails and in-app-notifies the prescriber, `GET /refills` returns their queue, approve/reject enforce prescriber + status — but no click anywhere in the portal reached `/refills`. No sidebar entry, both dashboard "Refills" tiles pointed at `/prescriptions`, and the one `router.navigate(['/refills'])` fired on an inbox category `ResultReviewServiceImpl` never emitted (its `RefillRequestRepository` was injected and unused). Added the sidebar entry, corrected both tile routes, added a doctor tile with the pending count, and wrote the missing `REFILL_REQUEST` inbox emitter. Also added the missing **pause/hold** state (`RefillStatus.PAUSED`, `PUT /refills/{id}/pause`, reason mandatory since the patient is told): a held request stays actionable, the patient can still cancel it, and it drops out of the inbox so the queue clears. The `pharmacy-refill.spec.ts` E2E masked all of this — it deep-links to `/refills`, and asserted a `PENDING` filter that neither the component nor the enum has.
   - **Still open, deliberately:** approval is terminal — it writes `APPROVED` and creates no downstream prescription or pharmacy order — and `DISPENSED` is declared but nothing ever writes it. That's a workflow decision, not a wiring bug.
 
+### Verification pass — 2026-08-21
+
+All ten P0/P1 items re-verified against develop with code evidence rather than
+checkboxes (the P0 boxes above were stale: every one of items 1–5 had shipped in
+PRs #431–#434 and none had been ticked). Seven were genuinely closed. Three were
+partial and have been completed:
+
+- **#5 critical-value escalation** — read-back did not exist (the acknowledge
+  endpoint takes no body, so nothing recorded *what* the clinician was told), and
+  the escalation re-notified the same provider once then stamped a flag the sweep
+  excluded on, so an unacknowledged critical result went permanently silent after
+  two alerts to one person. Closed by PR #451 (V116).
+- **#6 labor & delivery** — the `NewbornAssessment.delivery_record_id` back-link
+  was persistence-only: column, FK and `@ManyToOne` with nothing setting or
+  reading them. Closed by PR #450. Note the remaining half-bridge:
+  `DeliveryRecord` holds no reference to a newborn patient at all, so nothing can
+  populate the link automatically yet — that is a maternity-workflow design
+  decision, not wiring.
+- **#8 EMPI** — the merge panel shipped unclickable (no nav entry anywhere, the
+  same defect class as the refill queue), and the merge endpoints checked the two
+  identities against each other but never against the caller, so a hospital-A
+  admin could merge hospital-B patients. Closed by PR #449.
+
+Also landed alongside: PR #447 (one orphaned `patient_id` returned 500 for the
+entire registrations desk) and PR #448 (the foreign key that would have prevented
+it — the schema has none at all, because V1 came from Hibernate SchemaExport).
+
+Open decisions left for a human, all stated in the relevant PR bodies:
+`app.empi.probabilistic.enabled` still defaults to false; the surviving orphaned
+registration row is untouched; FK coverage beyond `patient_id` needs a call on
+what a hospital delete should do to its registrations.
+
 ## P2 — Structural gaps with high leverage
 
-- [ ] 11. **Slot inventory for scheduling** — visit types → session templates → searchable open slots. Unlocks real self-scheduling, waitlist auto-offer, and utilization reporting in one model. (Biggest single build in this list — consider a foundation-pass PR series.)
-- [ ] 12. **Referral → appointment linkage** — referral completion stores a timestamp + free-text location but never creates the Appointment row; create + link it.
-- [ ] 13. **Orphan-read writers** — on-call schedule (read by `GET /me/on-call-status`, written by nothing) and advance directives (read by storyboard/record-sharing, no controller): add minimal CRUD for each.
-- [ ] 14. **Drug-interaction KB expansion** — checking pipeline is real at prescribe/dispense/CDS-Hooks layers but the local KB is a 12-pair seed; curate a WHO-essential-medicines-scale interaction set.
-- [ ] 15. **Controlled-substance enforcement** — flags, two-factor and co-sign columns exist; nothing enforces them. Add the prescribe/dispense gates.
-- [ ] 16. **Server-side prescription signing ceremony** — "signed" is currently a client-supplied status; require an authenticated server-side sign action (reuse the hash-based e-signature layer).
-- [ ] 17. **HL7 outbound transport** — OML/ORU messages are built and queued in the instrument outbox but never transmitted; add the MLLP sender (mirror of the inbound listener).
+- [x] 11. **Slot inventory for scheduling** — ✅ FOUNDATION DONE (PR #459 `feature/slot-inventory-foundation`, V121): visit types → session templates → generated slots, idempotent generation, open-slot search, hold/release/block, expired-hold reclaim. Real FKs (new tables). Deliberately deferred to follow-ups: booking an Appointment from a slot (the two models need reconciling on which owns the time), patient self-scheduling, waitlist auto-offer (#22), utilisation reporting. — visit types → session templates → searchable open slots. Unlocks real self-scheduling, waitlist auto-offer, and utilization reporting in one model. (Biggest single build in this list — consider a foundation-pass PR series.)
+- [x] 12. **Referral → appointment linkage** — ✅ DONE (PR #453, V117): scheduling a referral now creates and links a real Appointment. Null when the referral targets an external facility with no receiving provider or department — Appointment requires staff, department AND assignment. — referral completion stores a timestamp + free-text location but never creates the Appointment row; create + link it.
+- [x] 13. **Orphan-read writers** — ✅ DONE (PR #456): `/on-call` CRUD (overlap-refusing, HOSPITAL_ADMIN writes) and `/advance-directives` CRUD (revoke, never delete). No migration — both tables existed; only the writers were missing. — on-call schedule (read by `GET /me/on-call-status`, written by nothing) and advance directives (read by storyboard/record-sharing, no controller): add minimal CRUD for each.
+- [x] 14. **Drug-interaction KB expansion** — ✅ DONE (PR #458, V120): 12 → 29 pairs covering the warfarin, rifampicin-induction, QT, statin-myopathy, electrolyte and serotonergic sets, each citing BNF 86 / WHO Model Formulary 2024 / NICE. ⚠ THE SEED NEEDS A PHARMACIST'S SIGN-OFF. The durable half is the new `/drug-interactions` admin API so pharmacy can curate without a migration. — checking pipeline is real at prescribe/dispense/CDS-Hooks layers but the local KB is a 12-pair seed; curate a WHO-essential-medicines-scale interaction set.
+- [x] 15. **Controlled-substance enforcement** — ✅ DONE (PR #454): gates at prescribe (status-keyed) and dispense (irreversible step). Both needed — RefillApprovalServiceImpl writes SIGNED directly, bypassing the prescribe path. — flags, two-factor and co-sign columns exist; nothing enforces them. Add the prescribe/dispense gates.
+- [x] 16. **Server-side prescription signing ceremony** — ✅ DONE (PR #455, V118): `POST /prescriptions/{id}/sign` is the only path to SIGNED; records signer, instant and a SHA-256 digest. Create/update now REFUSE a client-asserted SIGNED. Pre-V118 rows deliberately NOT backfilled — `signature_value IS NULL` on a SIGNED row means "signed before V118, unverifiable". — "signed" is currently a client-supplied status; require an authenticated server-side sign action (reuse the hash-based e-signature layer).
+- [x] 17. **HL7 outbound transport** — ✅ DONE (PR #457, V119): MllpOutboundSender + dispatch sweep, mirroring the inbound listener and reusing MllpFrameCodec. MSA-1 parsed (AA/CA only); negative ACK terminal, transport failure retried to a ceiling. Off by default. — OML/ORU messages are built and queued in the instrument outbox but never transmitted; add the MLLP sender (mirror of the inbound listener).
+
+### P2 execution — 2026-08-21
+
+All seven P2 items landed as PRs #453–#459. Notes that outlive the tickets:
+
+- **#11 is a foundation pass, not the whole feature** — the tasklist anticipated
+  a series. What exists is the model and its inventory operations; what does not
+  is booking an Appointment from a slot, which needs a decision on whether the
+  slot or the appointment owns the time. Everything in #22 waits on that.
+- **#14's seed needs a pharmacist's sign-off** before anyone relies on it. The
+  rows are transcribed from standard references and each names its source, but
+  clinical content belongs to a pharmacist rather than to whoever wrote the
+  migration. The admin API is the part that makes the KB maintainable.
+- **#15 and #16 each carry a copy of the controlled-substance rule.** Neither
+  path covers the other — a prescription signed through #16's endpoint never
+  passes #15's create/update gate — so both are needed until they merge and can
+  be folded into one helper.
+- **New tables carry real foreign keys.** V117, V118, V119 and V121 all add
+  constraints, which the tables V1 generated cannot (V1 came from Hibernate
+  SchemaExport, which emits none). Every new migration is verified against a
+  real postgres:16-alpine in `LiquibaseSchemaIT` — the H2 suite builds tables
+  FROM the entities, so it can never catch a column a migration forgot, and prod
+  runs ddl-auto=validate against the Liquibase-built schema.
 
 ## P3 — Broader parity, pick by demand
 

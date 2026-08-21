@@ -2071,6 +2071,7 @@
     "SEARCH": "Search candidates",
     "SEARCHING": "Searching…",
     "ERROR": "EMPI candidate search failed. The probabilistic match flag may be off — see docs/runbooks/empi-probabilistic-matching.md.",
+    "DISABLED": "Duplicate-patient matching is not enabled for this deployment. Ask an administrator to enable app.empi.probabilistic.enabled.",
     "NO_MATCHES": "No candidates met the configured score threshold.",
     "NOT_THIS_ONE": "None of the candidates above is the same person?",
     "CREATE_NEW_PATIENT": "Create a new patient instead",
@@ -2614,7 +2615,14 @@
     "CURRENT_RESULT": "Current result",
     "PREVIOUS_RESULT": "Previous result",
     "BASELINE": "Baseline (no previous result)",
-    "DAYS_BETWEEN": "days between"
+    "DAYS_BETWEEN": "days between",
+    "READ_BACK": "Read back",
+    "READ_BACK_PROMPT": "Repeat the critical value you were given for",
+    "READ_BACK_VALUE": "Value as you received it",
+    "READ_BACK_HINT": "Type the value you were told — do not copy it from the chart. The system checks it against the reported result.",
+    "READ_BACK_CONFIRM": "Confirm read-back",
+    "READ_BACK_CONFIRMED": "Read-back confirmed",
+    "READ_BACK_ERROR": "Read-back could not be recorded"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -2784,6 +2792,7 @@
     "ENCOUNTERS": "Encounters",
     "FAMILY_ACCESS": "Family Access",
     "FRONT_DESK": "Front Desk",
+    "EMPI_CANDIDATES": "Duplicate Patients",
     "HOSPITALS": "Hospitals",
     "IMAGING": "Imaging",
     "LAB_APPROVAL_QUEUE": "Lab Approval Queue",
@@ -4588,8 +4597,11 @@
       "DELETE_FAILED": "Delete failed",
       "LOAD_FAILED": "Failed to load prescriptions",
       "SMS_SENT": "SMS sent to {pharmacy}",
-      "SMS_FAILED": "Could not dispatch the prescription SMS"
-    }
+      "SMS_FAILED": "Could not dispatch the prescription SMS",
+      "SIGNED": "Prescription signed",
+      "SIGN_FAILED": "Signing failed"
+    },
+    "SIGN": "Sign"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
