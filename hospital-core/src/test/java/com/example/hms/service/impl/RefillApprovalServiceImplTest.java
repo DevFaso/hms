@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -11,9 +12,11 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.RefillDecisionRequestDTO;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.NotificationService;
+import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,9 +51,11 @@ import static org.mockito.Mockito.when;
 class RefillApprovalServiceImplTest {
 
     @Mock private RefillRequestRepository refillRequestRepository;
+    @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private NotificationService notificationService;
     @Mock private ControllerAuthUtils authUtils;
+    @Mock private RoleValidator roleValidator;
     @Mock private Authentication auth;
 
     @InjectMocks private RefillApprovalServiceImpl service;
@@ -86,6 +91,13 @@ class RefillApprovalServiceImplTest {
         prescription.setMedicationName("Metformin 500mg");
         prescription.setStaff(prescriber);
         prescription.setPatient(patient);
+        // The realistic starting point for a refill request: the original fill
+        // has been collected, so the prescription sits in a terminal state that
+        // the pharmacist work queue no longer shows.
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setRefillsAllowed(3);
+        prescription.setRefillsRemaining(2);
+        prescription.setRefillsUsed(0);
     }
 
     private RefillRequest pendingRefill() {
@@ -333,6 +345,167 @@ class RefillApprovalServiceImplTest {
         assertThat(service.countPendingForProvider(auth)).isEqualTo(2L);
         verify(refillRequestRepository, never())
                 .countByPrescription_Staff_IdAndStatus(staffId, RefillStatus.PAUSED);
+    }
+
+    // ── Approval must produce something the pharmacy can dispense ──────
+    // Before this, approve() wrote APPROVED and stopped. The prescription
+    // stayed DISPENSED — a state the pharmacist work queue excludes — so the
+    // patient was told their refill was approved and could not collect it.
+
+    @Test
+    @DisplayName("approve — releases the prescription back into the pharmacy work queue")
+    void approve_releasesFillToPharmacy() {
+        stubStaffResolution();
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.approve(auth, refillId, null);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        assertThat(prescription.getRefillsRemaining()).isEqualTo(1);
+        assertThat(prescription.getRefillsUsed()).isEqualTo(1);
+        verify(prescriptionRepository).save(prescription);
+    }
+
+    @Test
+    @DisplayName("approve — tells the patient the medication is ready to collect")
+    void approve_notifiesPatientToCollect() {
+        stubStaffResolution();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.approve(auth, refillId, null);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService)
+                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        assertThat(message.getValue()).contains("ready to collect");
+    }
+
+    @Test
+    @DisplayName("approve — a prescriber may grant a fill past the original allowance")
+    void approve_grantsBeyondAllowance() {
+        stubStaffResolution();
+        // The counter set at prescribing time is spent, but the prescriber
+        // deciding this request is the one person entitled to authorize more.
+        prescription.setRefillsRemaining(0);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.approve(auth, refillId, null);
+
+        assertThat(prescription.getRefillsRemaining()).isZero();
+        assertThat(prescription.getRefillsUsed()).isEqualTo(1);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("approve — refuses a cancelled prescription and leaves the request undecided")
+    void approve_refusesCancelledPrescription() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.CANCELLED);
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no longer be refilled");
+
+        // The whole point: never leave a request APPROVED with nothing behind it.
+        assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+        verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("approve — refuses a discontinued prescription")
+    void approve_refusesDiscontinuedPrescription() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("new prescription");
+    }
+
+    @Test
+    @DisplayName("reject — leaves the prescription untouched")
+    void reject_doesNotReleaseAFill() {
+        stubStaffResolution();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.reject(auth, refillId, null);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        assertThat(prescription.getRefillsUsed()).isZero();
+        verify(prescriptionRepository, never()).save(any(Prescription.class));
+    }
+
+    @Test
+    @DisplayName("pause — leaves the prescription untouched")
+    void pause_doesNotReleaseAFill() {
+        stubStaffResolution();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.pause(auth, refillId,
+                RefillDecisionRequestDTO.builder().providerNotes("Need an A1c first").build());
+
+        assertThat(prescription.getRefillsUsed()).isZero();
+        verify(prescriptionRepository, never()).save(any(Prescription.class));
+    }
+
+    // ── Pharmacists read their hospital, not their own prescriptions ───
+
+    @Test
+    @DisplayName("listForProvider — a pharmacist sees the hospital's refill traffic")
+    void listForProvider_pharmacistIsHospitalScoped() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+        when(roleValidator.hasAnyAuthority("DOCTOR", "NURSE", "MIDWIFE")).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        Pageable pageable = PageRequest.of(0, 10);
+        when(refillRequestRepository.findByPrescription_Hospital_IdAndStatus(
+                hospitalId, RefillStatus.APPROVED, pageable))
+                .thenReturn(new PageImpl<>(List.of(pendingRefill())));
+
+        Page<MedicationRefillResponseDTO> result =
+                service.listForProvider(auth, RefillStatus.APPROVED, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        // The staff-scoped query would have returned nothing — a pharmacist is
+        // never the prescriber, which is why this endpoint was empty for them.
+        verify(refillRequestRepository, never())
+                .findByPrescription_Staff_IdAndStatus(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("listForProvider — a prescribing pharmacist still sees their own queue")
+    void listForProvider_clinicalRoleWins() {
+        when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+        when(roleValidator.hasAnyAuthority("DOCTOR", "NURSE", "MIDWIFE")).thenReturn(true);
+        stubStaffResolution();
+        Pageable pageable = PageRequest.of(0, 10);
+        when(refillRequestRepository.findByPrescription_Staff_Id(staffId, pageable))
+                .thenReturn(new PageImpl<>(List.of(pendingRefill())));
+
+        assertThat(service.listForProvider(auth, null, pageable).getContent()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("countPendingForProvider — a pharmacist counts their hospital's pending requests")
+    void count_pendingForPharmacy() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.hasAnyAuthority("PHARMACIST")).thenReturn(true);
+        when(roleValidator.hasAnyAuthority("DOCTOR", "NURSE", "MIDWIFE")).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(refillRequestRepository.countByPrescription_Hospital_IdAndStatus(
+                hospitalId, RefillStatus.REQUESTED)).thenReturn(4L);
+
+        assertThat(service.countPendingForProvider(auth)).isEqualTo(4L);
     }
 
     @Test

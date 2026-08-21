@@ -228,3 +228,158 @@ describe('DispensingComponent', () => {
     expect(component.queuePage).toBe(0); // Should not go below 0
   });
 });
+
+/**
+ * The pharmacist decides whether to hand medication over. Until the refill
+ * column existed, nothing on this screen said whether the prescriber had
+ * approved, denied or held the patient's refill request — a patient could
+ * arrive asking for a refill their doctor had refused and the counter had no
+ * way to know.
+ */
+describe('DispensingComponent — refill context on the work queue', () => {
+  let component: DispensingComponent;
+  let fixture: ComponentFixture<DispensingComponent>;
+  let pharmacySvc: jasmine.SpyObj<PharmacyService>;
+
+  function queueWith(refill: Record<string, unknown> | undefined) {
+    return {
+      data: {
+        content: [
+          {
+            id: 'rx-1',
+            medicationName: 'Metformin 500mg',
+            dosage: '500mg',
+            quantity: 30,
+            status: 'SIGNED',
+            patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
+            staff: { id: 'staff-1', user: { id: 'user-1', firstName: 'Dr.', lastName: 'Smith' } },
+            refill,
+          },
+        ],
+        totalElements: 1,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      },
+    };
+  }
+
+  async function render(refill: Record<string, unknown> | undefined) {
+    pharmacySvc = jasmine.createSpyObj('PharmacyService', [
+      'listPharmacies',
+      'getDispenseWorkQueue',
+      'listDispensesByPharmacy',
+      'listInventoryByPharmacy',
+      'createDispense',
+      'cancelDispense',
+    ]);
+    // The component only loads the work queue once a pharmacy is selected,
+    // so an empty pharmacy list would leave the queue permanently unrendered.
+    pharmacySvc.listPharmacies.and.returnValue(
+      of({
+        content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
+        totalElements: 1,
+        totalPages: 1,
+        size: 100,
+        number: 0,
+      }) as never,
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(of(queueWith(refill)) as never);
+    pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+
+    const offlineQueueStub: Pick<
+      OfflineDispenseQueueService,
+      'pending$' | 'pending' | 'enqueue' | 'replayAll' | 'clear'
+    > = {
+      pending$: new BehaviorSubject<number>(0).asObservable(),
+      pending: 0,
+      enqueue: () => Promise.resolve({ id: 'k', request: {} as never, enqueuedAt: 0, attempts: 0 }),
+      replayAll: () => Promise.resolve({ succeeded: 0, failed: 0, remaining: 0 }),
+      clear: () => Promise.resolve(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [DispensingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PharmacyService, useValue: pharmacySvc },
+        {
+          provide: AuthService,
+          useValue: jasmine.createSpyObj('AuthService', [], {
+            currentProfile: () => ({ id: 'user-1' }),
+          }),
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: OfflineDispenseQueueService, useValue: offlineQueueStub },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(DispensingComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('shows the approved decision and flags the patient as here to collect', async () => {
+    await render({
+      allowed: 3,
+      remaining: 1,
+      used: 2,
+      lastStatus: 'APPROVED',
+      awaitingRefillPickup: true,
+    });
+
+    const chip = fixture.nativeElement.querySelector('[data-testid="rx-refill-status-rx-1"]');
+    expect(chip).not.toBeNull();
+    expect(chip.textContent).toContain('APPROVED');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-refill-pickup-rx-1"]'),
+    ).not.toBeNull();
+  });
+
+  it('shows a denial at the counter so medication is not handed over', async () => {
+    await render({
+      allowed: 3,
+      remaining: 1,
+      used: 0,
+      lastStatus: 'DENIED',
+      lastProviderNotes: 'Discontinued — see clinic',
+    });
+
+    const chip = fixture.nativeElement.querySelector('[data-testid="rx-refill-status-rx-1"]');
+    expect(chip.textContent).toContain('DENIED');
+    expect(fixture.nativeElement.textContent).toContain('Discontinued — see clinic');
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-refill-pickup-rx-1"]')).toBeNull();
+  });
+
+  it('shows a hold, which is not a decision to dispense', async () => {
+    await render({ remaining: 2, lastStatus: 'PAUSED', lastProviderNotes: 'Need an A1c first' });
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-refill-status-rx-1"]').textContent,
+    ).toContain('PAUSED');
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-refill-pickup-rx-1"]')).toBeNull();
+  });
+
+  it('renders a plain first fill when no refill context is attached', async () => {
+    await render(undefined);
+
+    expect(fixture.nativeElement.querySelector('[data-testid="rx-refill-status-rx-1"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('PHARMACY.REFILL_NONE');
+  });
+
+  it('styles a denial and a hold as stop signals, an approval as a go signal', async () => {
+    await render(undefined);
+
+    expect(component.refillBadgeClass('APPROVED')).toContain('badge-success');
+    expect(component.refillBadgeClass('DENIED')).toContain('badge-danger');
+    expect(component.refillBadgeClass('PAUSED')).toContain('badge-warning');
+    expect(component.refillBadgeClass('REQUESTED')).toContain('badge-info');
+  });
+});

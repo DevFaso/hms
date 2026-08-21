@@ -6038,7 +6038,11 @@
     "PARTNER_REJECTED": "La farmacia asociada rechazó",
     "PARTNER_DISPENSED": "La farmacia asociada confirmó la dispensación",
     "STOCK_CHECK_FAILED": "Error al comprobar las existencias",
-    "ROUTING_FAILED": "Error en la operación de derivación"
+    "ROUTING_FAILED": "Error en la operación de derivación",
+    "REFILL": "Reposición",
+    "REFILL_NONE": "Primera dispensación",
+    "REFILL_REMAINING": "{{count}} reposición(es) restante(s)",
+    "REFILL_AWAITING_PICKUP": "Aprobada — pendiente de recogida"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

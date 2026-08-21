@@ -153,6 +153,27 @@
   color: #3b82f6;
 }
 
+// Refill context stacks: decision chip, then the supporting detail the
+// pharmacist reads only if the chip made them pause.
+.refill-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 11rem;
+}
+
+.refill-note {
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+.refill-note--quote {
+  font-style: italic;
+  max-width: 18rem;
+}
+
 .btn-action {
   background: none;
   border: 1px solid #e2e8f0;

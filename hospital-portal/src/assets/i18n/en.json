@@ -6038,7 +6038,11 @@
     "PARTNER_REJECTED": "Partner pharmacy rejected",
     "PARTNER_DISPENSED": "Partner pharmacy confirmed dispense",
     "STOCK_CHECK_FAILED": "Stock check failed",
-    "ROUTING_FAILED": "Routing operation failed"
+    "ROUTING_FAILED": "Routing operation failed",
+    "REFILL": "Refill",
+    "REFILL_NONE": "First fill",
+    "REFILL_REMAINING": "{{count}} refill(s) left",
+    "REFILL_AWAITING_PICKUP": "Approved — awaiting pickup"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

@@ -1689,4 +1689,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V114 — clinical.prescriptions.refills_used.
+         Closes the refill → dispense loop: approving a refill request now
+         returns the prescription to a dispensable state, and the fill
+         accounting needs to know how many times that has happened so a
+         partial refill fill is not mistaken for a completed one.
+         ================================================================= -->
+    <changeSet id="V114-prescription-refills-used" author="hms-team" runOnChange="false">
+        <sqlFile path="V114__prescription_refills_used.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
