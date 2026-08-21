@@ -4,12 +4,15 @@ import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientHospitalRegistrationRequestDTO;
 import com.example.hms.payload.dto.PatientHospitalRegistrationResponseDTO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
+@Slf4j
 @Component
 public class PatientHospitalRegistrationMapper {
 
@@ -47,11 +50,7 @@ public class PatientHospitalRegistrationMapper {
             .mri(entity.getMrn())
             // Patient
             .patientId(p != null ? p.getId() : null)
-            .patientUsername(
-                (p != null && p.getUser() != null && p.getUser().getUsername() != null)
-                    ? p.getUser().getUsername()
-                    : null
-            )
+            .patientUsername(resolveUsername(p))
             .patientFirstName(pFirst)
             .patientLastName(pLast)
             .patientEmail(p != null ? p.getEmail() : null)
@@ -76,6 +75,34 @@ public class PatientHospitalRegistrationMapper {
     }
 
     /* ---------------- helpers ---------------- */
+
+    /**
+     * Resolve the patient's login name without letting a bad row take down the
+     * whole list.
+     *
+     * <p>{@code Patient.user} is LAZY, so {@code getUser() != null} passes even
+     * for an uninitialised proxy — the guard it replaces was a no-op, and the
+     * real database hit happened on {@code getUsername()}. When
+     * {@code clinical.patients.user_id} is dangling or duplicated (the column
+     * has no FK and no unique index — see V113), that call throws and the
+     * caller gets a bare 500 for the entire page.
+     *
+     * <p>A missing username is not worth failing a desk worklist over: log it
+     * and render the row with a null username instead.
+     */
+    private static String resolveUsername(Patient p) {
+        if (p == null) {
+            return null;
+        }
+        try {
+            User user = p.getUser();
+            return user == null ? null : safeTrim(user.getUsername());
+        } catch (RuntimeException ex) {
+            log.warn("Could not resolve user for patient {} — rendering registration without a username: {}",
+                p.getId(), ex.getMessage());
+            return null;
+        }
+    }
 
     private static String safeTrim(String s) {
         return s == null ? null : s.trim();
