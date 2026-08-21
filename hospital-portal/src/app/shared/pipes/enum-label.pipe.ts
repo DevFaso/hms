@@ -128,6 +128,10 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       CONFIRMED: 'Confirmed',
       IN_PROGRESS: 'In Progress',
       COMPLETED: 'Completed',
+      NOT_STARTED: 'Not Started',
+      CONFIRMED_UNDERSTANDING: 'Understood',
+      NEEDS_CLARIFICATION: 'Needs Clarification',
+      FEEDBACK_PROVIDED: 'Feedback Given',
       CANCELLED: 'Cancelled',
       PENDING: 'Pending',
       ACTIVE: 'Active',
@@ -516,6 +520,24 @@ export class EnumLabelPipe implements PipeTransform, OnDestroy {
       LEGAL_GUARDIAN: 'Legal Guardian',
       SIBLING: 'Sibling',
       OTHER: 'Other',
+    },
+
+    /* ── Patient education categories ─────────────────────── */
+    educationCategory: {
+      PRENATAL_CARE: 'Prenatal Care',
+      NUTRITION: 'Nutrition',
+      EXERCISE: 'Exercise',
+      LABOR_AND_DELIVERY: 'Labor & Delivery',
+      POSTPARTUM_CARE: 'Postpartum Care',
+      BREASTFEEDING: 'Breastfeeding',
+      NEWBORN_CARE: 'Newborn Care',
+      MENTAL_HEALTH: 'Mental Health',
+      WARNING_SIGNS: 'Warning Signs',
+      BIRTH_PLAN: 'Birth Plan',
+      PRENATAL_VITAMINS: 'Prenatal Vitamins',
+      MANAGING_DISCOMFORT: 'Managing Discomfort',
+      HIGH_RISK_PREGNANCY: 'High-Risk Pregnancy',
+      ULTRASOUND_SCANS: 'Ultrasound & Scans',
     },
 
     /* ── Permissions ──────────────────────────────────────── */

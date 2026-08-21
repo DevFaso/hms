@@ -660,6 +660,64 @@ export interface ProxyGrantRequest {
   notes?: string;
 }
 
+/** One education resource assigned to the patient, joined with their progress. */
+export interface PatientEducationItem {
+  progressId: string;
+  comprehensionStatus: string;
+  progressPercentage: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastAccessedAt: string | null;
+  rating: number | null;
+  feedback: string | null;
+  needsClarification: boolean | null;
+  clarificationRequest: string | null;
+  confirmedUnderstanding: boolean | null;
+  resourceId: string;
+  title: string;
+  description: string | null;
+  resourceType: string;
+  category: string;
+  contentUrl: string | null;
+  textContent: string | null;
+  thumbnailUrl: string | null;
+  videoUrl: string | null;
+  estimatedDuration: number | null;
+  tags: string[];
+  primaryLanguage: string | null;
+  isWarningSignContent: boolean | null;
+}
+
+/** Patient-writable subset — comprehension status is derived server-side. */
+export interface PatientEducationProgressUpdate {
+  progressPercentage?: number;
+  rating?: number;
+  feedback?: string;
+  confirmedUnderstanding?: boolean;
+  needsClarification?: boolean;
+  clarificationRequest?: string;
+}
+
+export interface PatientEducationQuestion {
+  id: string;
+  resourceId: string | null;
+  questionText: string;
+  isUrgent: boolean | null;
+  isAnswered: boolean | null;
+  answerText: string | null;
+  answeredAt: string | null;
+  requiresInPersonDiscussion: boolean | null;
+  appointmentScheduled: boolean | null;
+  createdAt: string;
+}
+
+export interface PatientEducationQuestionSubmit {
+  resourceId?: string;
+  questionText: string;
+  isUrgent?: boolean;
+  requiresInPersonDiscussion?: boolean;
+}
+
 export type PatientDocumentType =
   | 'LAB_RESULT'
   | 'IMAGING_REPORT'
@@ -1138,6 +1196,52 @@ export class PatientPortalService {
       map((r) => r.data ?? []),
       catchError(() => of([])),
     );
+  }
+
+  // ── Patient education (self-service) ───────────────────────────────
+  // Backed by /me/patient/education — the staff /patient-education routes
+  // exclude ROLE_PATIENT. Only material actually assigned to this patient is
+  // readable; anything else 404s.
+
+  getMyEducation(): Observable<PatientEducationItem[]> {
+    return this.http.get<ApiWrapper<PatientEducationItem[]>>(`${this.base}/education`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getMyEducationItem(resourceId: string): Observable<PatientEducationItem> {
+    return this.http
+      .get<ApiWrapper<PatientEducationItem>>(`${this.base}/education/${resourceId}`)
+      .pipe(map((r) => r.data));
+  }
+
+  updateMyEducationProgress(
+    resourceId: string,
+    update: PatientEducationProgressUpdate,
+  ): Observable<PatientEducationItem> {
+    return this.http
+      .put<
+        ApiWrapper<PatientEducationItem>
+      >(`${this.base}/education/${resourceId}/progress`, update)
+      .pipe(map((r) => r.data));
+  }
+
+  getMyEducationQuestions(): Observable<PatientEducationQuestion[]> {
+    return this.http
+      .get<ApiWrapper<PatientEducationQuestion[]>>(`${this.base}/education/questions`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  submitMyEducationQuestion(
+    dto: PatientEducationQuestionSubmit,
+  ): Observable<PatientEducationQuestion> {
+    return this.http
+      .post<ApiWrapper<PatientEducationQuestion>>(`${this.base}/education/questions`, dto)
+      .pipe(map((r) => r.data));
   }
 
   // ── Proxy data viewing ─────────────────────────────────────────────

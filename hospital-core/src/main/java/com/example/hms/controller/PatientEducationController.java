@@ -176,8 +176,12 @@ public class PatientEducationController {
         return ResponseEntity.ok(response);
     }
 
+    // Staff-only: this reads another patient's progress by opaque id with no
+    // ownership check. It was isAuthenticated(), which became an IDOR the moment
+    // patients received tokens for the portal — patients read their own progress
+    // through GET /me/patient/education instead.
     @GetMapping("/progress/{progressId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get progress record by ID")
     public ResponseEntity<PatientEducationProgressResponseDTO> getProgressById(@PathVariable UUID progressId) {
         PatientEducationProgressResponseDTO response = educationService.getProgressById(progressId);
@@ -325,8 +329,10 @@ public class PatientEducationController {
         return ResponseEntity.ok(response);
     }
 
+    // Staff-only for the same reason as /progress/{progressId} — patients list
+    // their own questions via GET /me/patient/education/questions.
     @GetMapping("/questions/{questionId}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE')")
     @Operation(summary = "Get question by ID")
     public ResponseEntity<PatientEducationQuestionResponseDTO> getQuestionById(@PathVariable UUID questionId) {
         PatientEducationQuestionResponseDTO response = educationService.getQuestionById(questionId);

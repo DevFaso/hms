@@ -179,6 +179,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/my-care-team',
         },
         {
+          icon: 'school',
+          label: 'My Education',
+          translationKey: 'NAV.MY_EDUCATION',
+          route: '/my-education',
+        },
+        {
           icon: 'folder_shared',
           label: 'My Records',
           translationKey: 'NAV.MY_RECORDS',
