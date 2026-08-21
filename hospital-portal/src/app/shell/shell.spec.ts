@@ -192,6 +192,29 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.map((i) => i.route)).toContain('/refills');
   });
 
+  it('reaches the duplicate-patient panel from the sidebar', () => {
+    // The EMPI panel and its whole backend shipped with no click anywhere
+    // reaching them — an admin had to hand-type the URL. Same defect class as
+    // the refill queue, which is why both are pinned here.
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
+  });
+
+  it('hides the duplicate-patient panel from roles outside its route guard', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PHARMACIST',
+      roles: ['ROLE_PHARMACIST'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
   it('hides the refill queue from roles that cannot decide a refill', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_RECEPTIONIST',

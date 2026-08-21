@@ -417,6 +417,62 @@ export class LabResultsComponent implements OnInit {
       });
   }
 
+  /* ── Critical-value read-back (P0 #5) ── */
+
+  readBackTarget = signal<LabResultResponse | null>(null);
+  readBackValue = signal('');
+  readBackSubmitting = signal(false);
+
+  /**
+   * A critical result asks for a read-back rather than a bare acknowledge: the
+   * clinician repeats the value and the server checks it. Acknowledge stays for
+   * everything else, where there is no number worth verifying.
+   */
+  isCritical(r: LabResultResponse): boolean {
+    return (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
+  }
+
+  openReadBack(r: LabResultResponse): void {
+    this.readBackTarget.set(r);
+    // Deliberately blank, never prefilled with the result: the check only
+    // catches a transcription error if the clinician types what they heard.
+    this.readBackValue.set('');
+  }
+
+  closeReadBack(): void {
+    this.readBackTarget.set(null);
+    this.readBackValue.set('');
+    this.readBackSubmitting.set(false);
+  }
+
+  submitReadBack(): void {
+    const target = this.readBackTarget();
+    const value = this.readBackValue().trim();
+    if (!target || !value || this.readBackSubmitting()) {
+      return;
+    }
+    this.readBackSubmitting.set(true);
+    this.labService.readBackCriticalValue(target.id, value).subscribe({
+      next: (updated) => {
+        this.toast.success(this.translate.instant('LAB_RESULTS.READ_BACK_CONFIRMED'));
+        const patch = (list: LabResultResponse[]): LabResultResponse[] =>
+          list.map((row) => (row.id === target.id ? { ...row, ...updated } : row));
+        this.results.update(patch);
+        this.criticalList.update((list) => list.filter((row) => row.id !== target.id));
+        this.applyFilter();
+        this.closeReadBack();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // A mismatch is the interesting case, and the server explains it in
+        // clinical terms — show that rather than a generic failure.
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
+        );
+        this.readBackSubmitting.set(false);
+      },
+    });
+  }
+
   acknowledge(r: LabResultResponse): void {
     this.labService.acknowledgeResult(r.id).subscribe({
       next: () => {

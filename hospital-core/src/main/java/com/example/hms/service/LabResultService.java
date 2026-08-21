@@ -32,6 +32,18 @@ public interface LabResultService {
 
     void acknowledgeLabResult(UUID id, Locale locale);
 
+    /**
+     * Record the receiving clinician's read-back of a critical value (P0 #5).
+     *
+     * <p>A matching read-back acknowledges the result and stops escalation. A
+     * mismatch is rejected and recorded — that is the error the read-back exists
+     * to catch.
+     */
+    com.example.hms.payload.dto.LabResultResponseDTO recordCriticalReadBack(
+        UUID id,
+        com.example.hms.payload.dto.CriticalValueReadBackRequestDTO request,
+        Locale locale);
+
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
 
     LabResultResponseDTO signLabResult(UUID id, LabResultSignatureRequestDTO request, Locale locale);

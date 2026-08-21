@@ -45,10 +45,14 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@lombok.extern.slf4j.Slf4j
 @Transactional(readOnly = true)
 public class GeneralReferralServiceImpl implements GeneralReferralService {
 
+    private static final int REFERRAL_APPOINTMENT_MINUTES = 30;
+
     private final GeneralReferralRepository referralRepository;
+    private final com.example.hms.repository.AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
@@ -156,11 +160,86 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         GeneralReferral referral = findReferral(referralId);
         ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
+
+        com.example.hms.model.Appointment appointment =
+            createAppointmentForReferral(referral, request.getAppointmentTime());
+        if (appointment != null) {
+            referral.setAppointment(appointment);
+        }
+
         referral = referralRepository.save(referral);
         String note = "appointmentTime=" + request.getAppointmentTime()
-            + (request.getLocation() == null ? "" : ", location=" + request.getLocation());
+            + (request.getLocation() == null ? "" : ", location=" + request.getLocation())
+            + (appointment == null ? ", appointment=none" : ", appointmentId=" + appointment.getId());
         eventRecorder.recordUserEvent(referral, ReferralEventType.SCHEDULE, before, note);
         return toResponse(referral);
+    }
+
+    /**
+     * Create the appointment a scheduled referral implies.
+     *
+     * <p>Scheduling used to store {@code scheduledAppointmentAt} plus a free-text
+     * location and stop. No Appointment row existed, so a "booked" referral was
+     * invisible to everything that works off appointments — the receiving
+     * provider's calendar, reception check-in, the V112 reminder sweep,
+     * utilisation reporting. The referral said booked and the schedule
+     * disagreed.
+     *
+     * <p>Returns null when the referral cannot produce one, which is a NORMAL
+     * outcome rather than an error: Appointment requires staff, department and
+     * assignment (all NOT NULL), and a referral to an external facility has no
+     * receiving provider. Those referrals keep the old behaviour. Failing the
+     * schedule instead would break the commonest referral there is.
+     *
+     * <p>Never propagates. A referral must still schedule if appointment
+     * creation fails — the referral is the clinical record, the appointment is
+     * the convenience built on top of it.
+     */
+    private com.example.hms.model.Appointment createAppointmentForReferral(
+            GeneralReferral referral, java.time.LocalDateTime appointmentTime) {
+        if (appointmentTime == null) {
+            return null;
+        }
+        com.example.hms.model.Staff provider = referral.getReceivingProvider();
+        com.example.hms.model.Department department = referral.getTargetDepartment();
+        com.example.hms.model.Hospital hospital = referral.getReceivingHospital() != null
+            ? referral.getReceivingHospital()
+            : referral.getHospital();
+
+        if (provider == null || department == null || hospital == null
+            || provider.getAssignment() == null) {
+            log.debug("Referral {} scheduled without an appointment: "
+                    + "provider={}, department={}, hospital={}, assignment={}",
+                referral.getId(), provider != null, department != null, hospital != null,
+                provider != null && provider.getAssignment() != null);
+            return null;
+        }
+
+        try {
+            com.example.hms.model.Appointment appointment = com.example.hms.model.Appointment.builder()
+                .patient(referral.getPatient())
+                .staff(provider)
+                .assignment(provider.getAssignment())
+                .hospital(hospital)
+                .department(department)
+                .appointmentDate(appointmentTime.toLocalDate())
+                .startTime(appointmentTime.toLocalTime())
+                .endTime(appointmentTime.toLocalTime().plusMinutes(REFERRAL_APPOINTMENT_MINUTES))
+                .status(com.example.hms.enums.AppointmentStatus.SCHEDULED)
+                .reason(buildAppointmentReason(referral))
+                .build();
+            return appointmentRepository.save(appointment);
+        } catch (RuntimeException ex) {
+            log.warn("Could not create an appointment for referral {}: {}",
+                referral.getId(), ex.getMessage());
+            return null;
+        }
+    }
+
+    private String buildAppointmentReason(GeneralReferral referral) {
+        String reason = referral.getReferralReason();
+        String prefix = "Referral";
+        return (reason == null || reason.isBlank()) ? prefix : prefix + ": " + reason;
     }
 
     @Override
@@ -413,6 +492,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         dto.setAcknowledgementNotes(referral.getAcknowledgementNotes());
         dto.setScheduledAppointmentAt(referral.getScheduledAppointmentAt());
         dto.setAppointmentLocation(referral.getAppointmentLocation());
+        dto.setAppointmentId(referral.getAppointment() != null ? referral.getAppointment().getId() : null);
         dto.setStartedAt(referral.getStartedAt());
         dto.setCompletedAt(referral.getCompletedAt());
         dto.setCompletionSummary(referral.getCompletionSummary());

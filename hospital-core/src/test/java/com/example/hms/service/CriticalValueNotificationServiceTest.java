@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -40,6 +41,7 @@ class CriticalValueNotificationServiceTest {
     @Mock private SmsService smsService;
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultMapper labResultMapper;
+    @Mock private com.example.hms.repository.StaffRepository staffRepository;
 
     @InjectMocks private CriticalValueNotificationService service;
 
@@ -213,5 +215,128 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(escalated).isEqualTo(1); // broken row skipped, second processed
         verify(labResultRepository).save(result);
+    }
+
+    // ── The escalation is a CHAIN and it REPEATS (P0 #5) ───────────────────
+    // Both were previously untrue. escalateOverdue re-notified the SAME
+    // ordering provider who had already ignored the first alert, then stamped
+    // criticalEscalatedAt — which the sweep query excluded on. So a critical
+    // result nobody acknowledged produced two notifications to one person and
+    // then went permanently quiet.
+
+    private UUID givenHospital() {
+        UUID hospitalId = UUID.randomUUID();
+        com.example.hms.model.Hospital hospital =
+            com.example.hms.model.Hospital.builder().name("CHU").code("CHU").build();
+        hospital.setId(hospitalId);
+        result.getLabOrder().setHospital(hospital);
+        return hospitalId;
+    }
+
+    @Test
+    void secondRoundWidensBeyondTheProviderWhoAlreadyIgnoredIt() {
+        UUID hospitalId = givenHospital();
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
+        result.setCriticalEscalationLevel((short) 1);
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
+            .thenReturn(List.of("admin.kabore", "admin.sawadogo"));
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(result));
+
+        service.escalateOverdue();
+
+        // The provider stays on the list — they can still act clinically — but
+        // they are no longer the ONLY person told.
+        verify(notificationService).createNotification(
+            anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
+        verify(notificationService).createNotification(
+            anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
+        verify(notificationService).createNotification(
+            anyString(), eq("admin.sawadogo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
+    }
+
+    @Test
+    void firstRoundIsStillJustANudgeToTheProvider() {
+        givenHospital();
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(result));
+
+        service.escalateOverdue();
+
+        // Round 1: they may simply not have looked yet. No point waking the
+        // hospital's admins for that.
+        verify(staffRepository, never()).findActiveUsernamesByHospitalAndRole(any(), anyString());
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    void keepsEscalatingRatherThanGoingSilent() {
+        UUID hospitalId = givenHospital();
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(9));
+        result.setCriticalEscalationLevel((short) 8);
+        when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
+            .thenReturn(List.of("admin.kabore"));
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+            .thenReturn(List.of(result));
+
+        service.escalateOverdue();
+
+        // There is deliberately no round cap. Going quiet on an unacknowledged
+        // critical value is the exact failure this service exists to prevent, so
+        // a cap would reintroduce it with extra steps.
+        verify(notificationService).createNotification(
+            anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 9);
+    }
+
+    // ── Read-back (P0 #5) ─────────────────────────────────────────────────
+    // Never built. The acknowledge endpoint takes no body, so nothing recorded
+    // WHAT the clinician was told — the javadoc simply asserted that clicking
+    // acknowledge counted as a read-back.
+
+    @Test
+    void matchingReadBackResolvesTheResultAndStopsEscalation() {
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        UUID actor = UUID.randomUUID();
+
+        LabResult updated = service.recordReadBack(result, "7.1", actor, "Dr Diallo");
+
+        assertThat(updated.getCriticalReadBackAt()).isNotNull();
+        assertThat(updated.getCriticalReadBackValue()).isEqualTo("7.1");
+        assertThat(updated.getCriticalReadBackByDisplay()).isEqualTo("Dr Diallo");
+        assertThat(updated.isAcknowledged()).isTrue();
+    }
+
+    @Test
+    void mismatchedReadBackIsRejectedButStillRecorded() {
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        UUID actor = UUID.randomUUID();
+
+        // 1.7 instead of 7.1 — a transposition, which is the error a read-back
+        // exists to catch and the reason it is worth storing the wrong value.
+        assertThatThrownBy(() -> service.recordReadBack(result, "1.7", actor, "Dr Diallo"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        assertThat(result.getCriticalReadBackValue()).isEqualTo("1.7");
+        assertThat(result.getCriticalReadBackAt()).isNull();
+        assertThat(result.isAcknowledged()).isFalse();
+        verify(labResultRepository).save(result);
+    }
+
+    @Test
+    void readBackToleratesTrailingZeroFormatting() {
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+
+        // A clinician repeating the number correctly must not be told they got
+        // it wrong because the lab wrote it with a trailing zero.
+        LabResult updated = service.recordReadBack(result, "7.10", UUID.randomUUID(), "Dr Diallo");
+
+        assertThat(updated.getCriticalReadBackAt()).isNotNull();
+        assertThat(updated.isAcknowledged()).isTrue();
     }
 }

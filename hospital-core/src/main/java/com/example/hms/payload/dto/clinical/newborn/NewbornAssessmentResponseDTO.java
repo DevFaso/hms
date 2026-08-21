@@ -24,6 +24,9 @@ public class NewbornAssessmentResponseDTO {
     private UUID hospitalId;
     private UUID registrationId;
 
+    /** The delivery this newborn came from, when one was recorded. */
+    private UUID deliveryRecordId;
+
     private LocalDateTime assessmentTime;
     private LocalDateTime documentedAt;
     private boolean lateEntry;
