@@ -6042,7 +6042,11 @@
     "PARTNER_REJECTED": "Pharmacie partenaire a rejeté",
     "PARTNER_DISPENSED": "Pharmacie partenaire a confirmé la dispensation",
     "STOCK_CHECK_FAILED": "Échec de la vérification du stock",
-    "ROUTING_FAILED": "Échec de l'opération de routage"
+    "ROUTING_FAILED": "Échec de l'opération de routage",
+    "REFILL": "Renouvellement",
+    "REFILL_NONE": "Première délivrance",
+    "REFILL_REMAINING": "{{count}} renouvellement(s) restant(s)",
+    "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
