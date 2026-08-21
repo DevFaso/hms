@@ -511,14 +511,14 @@ P2 backlog (gaps #9, #11, #18, #19, #20, #23, #24) tracked in `claude/finding-ga
 - [x] 2. **Nurse order-task queue: real entity or removal** — ✅ DONE (PR #431): queue and dashboard counts now derive from real lab/imaging/procedure orders. — same file, "Orders — still synthetic (MVP 3)"; dashboard counts derive from fabricated lists. Same treatment as #1 (can share a PR if the entity work overlaps).
 - [x] 3. **Lab pending-review: delete the hardcoded endpoint** — ✅ DONE (PR #432 `fix/lab-pending-review-synthetic`): — `LabResultServiceImpl.getPendingReviewResults` returns invented patients ("Ava Johnson", "Michael Chen"); the real queue is `/me/results/review-queue`. Remove or redirect the fake path and any consumer.
 - [x] 4. **Bed/ward decision** — ✅ DONE (PR #433 `feature/bed-management`), built rather than dropped: — schema (V25), repositories, and an occupancy dashboard exist with **zero writers** (`bed_id` never populated; admissions use free-text `roomBed`). Either build bed CRUD + assignment workflow (unlocks census/bed board, in-app transfers) or drop the tables + occupancy tiles. Decide before any inpatient-logistics work.
-- [x] 5. **Critical-value escalation chain** — ✅ DONE (PR #434, completed by PR #451 `feature/critical-value-readback-escalation`): — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
+- [ ] 5. **Critical-value escalation chain** — ⚠ **REOPENED 2026-08-21** (see Reassessment): a mismatched read-back is *never persisted* — `recordReadBack` is `@Transactional` and throws `BusinessException` (a `RuntimeException`), so the row it just wrote rolls back, while `CriticalValueNotificationService.java:217-218` and `V116…sql:41-42` both assert the mismatch is stored "verbatim so a mismatch is auditable". `critical_readback_value` is therefore write-only. Read-back is also never *required*: `acknowledgeResult` sets `acknowledged=true` with no critical-value guard, and the sweep exits on `acknowledged=false`, so acknowledging still silences a critical result without any read-back. Previously recorded as: ✅ DONE (PR #434, completed by PR #451 `feature/critical-value-readback-escalation`): — results are flagged + acknowledgeable but nothing notifies the ordering provider; add the notify → read-back → timer/escalation loop (IKODDI SMS + in-app; PR #430 gives the transport).
 
 ## P1 — Complete the specialty core + turn on what's already built
 
 - [x] 6. **Labor & delivery: partograph + delivery record** — ✅ DONE (`feature/labor-delivery-partograph`): `clinical.labor_episodes` + `labor_partograph_entries` + `delivery_records` (V111), WHO alert/action-line evaluation with URGENT notifications, PPH/APGAR/stillbirth alerts, Labor & Delivery tab with SVG partograph chart, `NewbornAssessment.delivery_record_id` back-link (the audit's deferred pregnancy FK), episode outcome = the audit's missing `Pregnancy.outcome`.
 - [x] 7. **Appointment reminders over SMS** — ✅ DONE (`feature/appointment-sms-reminders`): 15-min sweep reminds patients of appointments starting within 24 h — in-app push + IKODDI SMS (`deliversRealSms()` guard), `reminder_sent_at` exactly-once stamp (V112), first dispatch path to honour the stored `APPOINTMENT_REMINDER` notification preferences, FR-default localized message, manual trigger `POST /appointments/reminders/run`.
 - [x] 8. **EMPI: finish probabilistic matching + merge** — ✅ DONE (`feature/empi-confirm-merge`): `/empi` admin controller (merge-by-patient w/ identity provisioning, identity merge, by-patient lookup); merge now reassigns aliases (fixes post-merge MRN lookups resolving to the dead identity), emits `PATIENT_MERGE` audit, rejects cross-tenant merges; matcher candidates scoped to the caller's hospital (tenant leak fixed); confirm-match navigates to the existing patient + `(confirm)` output; admin two-click merge mode in the panel; three stale "matcher returns empty" docs corrected. Out of scope (stated): clinical deep-merge, undo, HL7 A40 inbound.
-- [x] 9. **Web parity: cancel/reschedule + proxy views** — ✅ DONE (`feature/web-appointment-proxy-parity`): patient-portal cancel + reschedule modals wired to the previously dead `PUT /me/patient/appointments/{cancel,reschedule}` service methods (all four reschedule fields sent — Android omits `newEndTime` and silently 400s); cancelled appointments now stay visible in Past instead of vanishing; new proxy data viewer (`/my-family-access/:patientId`) consuming all five `proxy-access/{patientId}/…` endpoints with permission-driven tabs. Two bugs fixed: the web grant form emitted a scope vocabulary (`APPOINTMENTS`) the backend never matches (`VIEW_APPOINTMENTS`) so every non-`ALL` web grant 403'd — form corrected + legacy tokens normalized server-side; and `expiresAt`/`EXPIRED` were stored but never enforced, so expired grants still read PHI.
+- [ ] 9. **Web parity: cancel/reschedule + proxy views** — ⚠ **REOPENED 2026-08-21** (see Reassessment): the proxy viewer's Appointments tab throws at runtime. `PatientPortalServiceImpl.java:1259` passes a null username into `AppointmentServiceImpl.java:755`, which calls `getUserOrThrow(username)` unconditionally. `PatientPortalServiceImplProxyTest.java:114` stubs that call with `isNull()`, so the contract is *asserted* rather than exercised and no test fails. Cancel/reschedule themselves verify clean. Previously recorded as: ✅ DONE (`feature/web-appointment-proxy-parity`): patient-portal cancel + reschedule modals wired to the previously dead `PUT /me/patient/appointments/{cancel,reschedule}` service methods (all four reschedule fields sent — Android omits `newEndTime` and silently 400s); cancelled appointments now stay visible in Past instead of vanishing; new proxy data viewer (`/my-family-access/:patientId`) consuming all five `proxy-access/{patientId}/…` endpoints with permission-driven tabs. Two bugs fixed: the web grant form emitted a scope vocabulary (`APPOINTMENTS`) the backend never matches (`VIEW_APPOINTMENTS`) so every non-`ALL` web grant 403'd — form corrected + legacy tokens normalized server-side; and `expiresAt`/`EXPIRED` were stored but never enforced, so expired grants still read PHI.
 - [x] 10. **Patient-facing education delivery** — ✅ DONE (`feature/patient-education-delivery`): new `/me/patient/education*` self-service API (list assigned + read one + record progress/rating/understanding + ask & list questions), all IDOR-safe via `resolvePatientId`; a `PatientEducationProgress` row IS the assignment record, so no entity or migration was needed. New `/my-education` portal page: to-read / completed / questions tabs, warning-sign safety banner, reader with mark-read → confirm-understanding → rate, and patient-authored questions (the entity, service method and Swagger description existed but no patient could reach them). Security fix: `GET /patient-education/progress/{id}` and `/questions/{id}` were `isAuthenticated()` with no ownership check — an IDOR the moment patients hold tokens; now staff-only. Dead columns `completionCount`/`ratingCount` (always 0) are now written on patient completion/rating.
 
 ### Field-reported fixes (not numbered — found in production, outside the audit's scope)
@@ -560,12 +560,12 @@ what a hospital delete should do to its registrations.
 
 ## P2 — Structural gaps with high leverage
 
-- [x] 11. **Slot inventory for scheduling** — ✅ FOUNDATION DONE (PR #459 `feature/slot-inventory-foundation`, V121): visit types → session templates → generated slots, idempotent generation, open-slot search, hold/release/block, expired-hold reclaim. Real FKs (new tables). Deliberately deferred to follow-ups: booking an Appointment from a slot (the two models need reconciling on which owns the time), patient self-scheduling, waitlist auto-offer (#22), utilisation reporting. — visit types → session templates → searchable open slots. Unlocks real self-scheduling, waitlist auto-offer, and utilization reporting in one model. (Biggest single build in this list — consider a foundation-pass PR series.)
+- [ ] 11. **Slot inventory for scheduling** — ⚠ **REOPENED 2026-08-21** (see Reassessment): the model cannot be populated. There is no CRUD, service or seed for `visit_types` or `session_templates`, and `VisitTypeRepository` has zero callers — so no row can enter either parent table, `POST /slots/generate` can only ever return `slotsCreated=0`, and `GET /slots/search` only ever returns empty. All five `/slots` endpoints have no portal caller and no nav entry. `appointment_slots.appointment_id`, `SlotStatus.BOOKED`, `session_templates.capacity_per_slot` (unimplementable under `uq_slot_staff_start`) and `visit_types.patient_bookable` all ship dead. Previously recorded as: ✅ FOUNDATION DONE (PR #459 `feature/slot-inventory-foundation`, V121): visit types → session templates → generated slots, idempotent generation, open-slot search, hold/release/block, expired-hold reclaim. Real FKs (new tables). Deliberately deferred to follow-ups: booking an Appointment from a slot (the two models need reconciling on which owns the time), patient self-scheduling, waitlist auto-offer (#22), utilisation reporting. — visit types → session templates → searchable open slots. Unlocks real self-scheduling, waitlist auto-offer, and utilization reporting in one model. (Biggest single build in this list — consider a foundation-pass PR series.)
 - [x] 12. **Referral → appointment linkage** — ✅ DONE (PR #453, V117): scheduling a referral now creates and links a real Appointment. Null when the referral targets an external facility with no receiving provider or department — Appointment requires staff, department AND assignment. — referral completion stores a timestamp + free-text location but never creates the Appointment row; create + link it.
 - [x] 13. **Orphan-read writers** — ✅ DONE (PR #456): `/on-call` CRUD (overlap-refusing, HOSPITAL_ADMIN writes) and `/advance-directives` CRUD (revoke, never delete). No migration — both tables existed; only the writers were missing. — on-call schedule (read by `GET /me/on-call-status`, written by nothing) and advance directives (read by storyboard/record-sharing, no controller): add minimal CRUD for each.
 - [x] 14. **Drug-interaction KB expansion** — ✅ DONE (PR #458, V120): 12 → 29 pairs covering the warfarin, rifampicin-induction, QT, statin-myopathy, electrolyte and serotonergic sets, each citing BNF 86 / WHO Model Formulary 2024 / NICE. ⚠ THE SEED NEEDS A PHARMACIST'S SIGN-OFF. The durable half is the new `/drug-interactions` admin API so pharmacy can curate without a migration. — checking pipeline is real at prescribe/dispense/CDS-Hooks layers but the local KB is a 12-pair seed; curate a WHO-essential-medicines-scale interaction set.
-- [x] 15. **Controlled-substance enforcement** — ✅ DONE (PR #454): gates at prescribe (status-keyed) and dispense (irreversible step). Both needed — RefillApprovalServiceImpl writes SIGNED directly, bypassing the prescribe path. — flags, two-factor and co-sign columns exist; nothing enforces them. Add the prescribe/dispense gates.
-- [x] 16. **Server-side prescription signing ceremony** — ✅ DONE (PR #455, V118): `POST /prescriptions/{id}/sign` is the only path to SIGNED; records signer, instant and a SHA-256 digest. Create/update now REFUSE a client-asserted SIGNED. Pre-V118 rows deliberately NOT backfilled — `signature_value IS NULL` on a SIGNED row means "signed before V118, unverifiable". — "signed" is currently a client-supplied status; require an authenticated server-side sign action (reuse the hash-based e-signature layer).
+- [ ] 15. **Controlled-substance enforcement** — ⚠ **REOPENED 2026-08-21 — the gate can never fire** (see Reassessment): nothing in `src/main` ever calls `setControlledSubstance` or `setRequiresCosign`. `PrescriptionRequestDTO` has no such field and `PrescriptionMapper` never maps one, so no API path can flag a prescription as controlled; the gate's condition is unreachable by construction. There is also no writer for `twoFactorVerifiedAt`/`cosignedAt`/`cosignedBy` and no cosign or two-factor endpoint in any controller, so a row that *is* flagged (legacy or hand-edited) can never be cleared and is permanently unsignable. The gates themselves are correct — they simply guard a flag nothing can set. Previously recorded as: ✅ DONE (PR #454): gates at prescribe (status-keyed) and dispense (irreversible step). Both needed — RefillApprovalServiceImpl writes SIGNED directly, bypassing the prescribe path. — flags, two-factor and co-sign columns exist; nothing enforces them. Add the prescribe/dispense gates.
+- [ ] 16. **Server-side prescription signing ceremony** — ⚠ **REOPENED 2026-08-21** (see Reassessment): three separate comments claim this is "the only path" to a dispensable state, and it is not. `rejectClientAssertedSignature` blocks only `SIGNED`, while a client-asserted `TRANSMITTED` is still copied onto the entity by `PrescriptionMapper.java:96-98` — and `TRANSMITTED` is dispensable. So the ceremony is bypassable for the exact purpose it exists to serve. A prescription created as `TRANSMITTED` and later refill-approved also reaches `SIGNED` via `RefillApprovalServiceImpl.java:199` with `signature_value` NULL, making it indistinguishable from the documented "signed before V118, unverifiable" case. Signature evidence is dead on the wire (the mapper emits it; no portal file reads it). Previously recorded as: ✅ DONE (PR #455, V118): `POST /prescriptions/{id}/sign` is the only path to SIGNED; records signer, instant and a SHA-256 digest. Create/update now REFUSE a client-asserted SIGNED. Pre-V118 rows deliberately NOT backfilled — `signature_value IS NULL` on a SIGNED row means "signed before V118, unverifiable". — "signed" is currently a client-supplied status; require an authenticated server-side sign action (reuse the hash-based e-signature layer).
 - [x] 17. **HL7 outbound transport** — ✅ DONE (PR #457, V119): MllpOutboundSender + dispatch sweep, mirroring the inbound listener and reusing MllpFrameCodec. MSA-1 parsed (AA/CA only); negative ACK terminal, transport failure retried to a ceiling. Off by default. — OML/ORU messages are built and queued in the instrument outbox but never transmitted; add the MLLP sender (mirror of the inbound listener).
 
 ### P2 execution — 2026-08-21
@@ -590,6 +590,187 @@ All seven P2 items landed as PRs #453–#459. Notes that outlive the tickets:
   real postgres:16-alpine in `LiquibaseSchemaIT` — the H2 suite builds tables
   FROM the entities, so it can never catch a column a migration forgot, and prod
   runs ddl-auto=validate against the Liquibase-built schema.
+
+### Deploy incident — 2026-08-21
+
+Merging the P2 tier broke `develop` and took the dev deployment down. Two
+distinct faults, both of which reached develop through PRs whose CI was red.
+
+**1. Three migrations shipped unregistered.** V116, V117 and V118 were written,
+reviewed and merged (#451, #453, #455) and none was ever added to
+`changelog.xml`. A `.sql` file under `db/migration` is inert until the changelog
+lists it, so Liquibase ran 114 changesets, logged *"Database is up to date, no
+changesets to execute"*, and the entities then declared columns the database had
+never been told to create. `ddl-auto=validate` refused to build the
+SessionFactory:
+
+```text
+Schema-validation: missing column [critical_escalation_level] in table [lab.lab_results]
+```
+
+which fails `FhirConfig` → the application context → Tomcat. A total outage from
+three files that were present in the diff, in the directory listing and in the
+review. #457 carried the identical bug with V119.
+
+**2. `develop` did not compile.** PR #455 shipped `signPrescription` on the
+interface, the controller, the entity columns, the DTO, the mapper and six tests
+— but never `PrescriptionServiceImpl.signPrescription`. Every branch cut from
+develop failed the same way until PR #460 restored it, written against the tests
+that #455 had shipped, which were the real specification.
+
+**The structural cause, which is not fixed.** Every migration's `<changeSet>` is
+appended immediately before the closing tag of one ~1800-line `changelog.xml`, so
+any two branches that add a migration edit the same lines. Resolving that overlap
+by taking develop drops the branch's own changeset while leaving its `.sql` on
+disk — the file is plainly there and the diff looks untouched, so nothing reads as
+wrong. GitHub's **"Update branch" button resolves it exactly that way**: V120 was
+lost once and V121 twice, the second time minutes after being restored.
+
+> **Avoid "Update branch" on any branch carrying a migration.** Merge develop
+> locally and confirm the registered set afterwards.
+
+**The guard.** `hospital-core/src/test/java/com/example/hms/db/MigrationRegistrationTest.java`
+fails on any migration that is unregistered, referenced-but-absent, empty, or
+misnamed. Nothing else can catch this: the H2 test profile builds its schema FROM
+the entities with `create-drop`, so the columns always exist there regardless of
+what the changelog says. It caught V120 on #458 and V121 on #459 — in both cases
+converting what would have been a silent production defect into a red build. On
+PR #458 the loss would have left the drug-interaction checker running against
+V63's 12-pair seed while reporting green — worse than no checker at all.
+
+**Deferred, needs a decision:** the durable fix is to move *new* changesets into
+per-file fragments under an `includeAll` directory so two branches never touch the
+same lines. It is not done here because Liquibase identifies a changeset by
+`(id, author, file path)` — relocating the existing 119 would make it treat them
+all as new and **re-run every migration against production**. Applied to new
+migrations only it is safe, but it is a change to migration infrastructure and
+belongs in its own PR.
+
+**Two findings surfaced by the guard and by verifying the sign endpoint, both
+left unfixed on purpose:**
+
+- **`R__prod_role_grants.sql` has never run.** Its header says it is *"a Liquibase
+  'repeatable' changeset (R__ prefix)"*. `R__` is **Flyway's** convention;
+  Liquibase discovers nothing by filename and spells repeatable as
+  `runOnChange="true"` on a changeSet it lists. Nothing references the file, so
+  `hms_app` / `hms_readonly` / `hms_migrator` hold only whatever privileges were
+  granted by hand. Registering it would make every deploy attempt those `GRANT`s
+  and fail where the roles do not exist — an operational call.
+- **Only `ROLE_DOCTOR` can sign a prescription.** `ROLE_NURSE_PRACTITIONER`
+  appears in four `@PreAuthorize` expressions on `PrescriptionController` and
+  behind `RoleValidator.isNursePractitioner`, but that role is never seeded — it
+  exists only as a `JobTitle`. `ROLE_MIDWIFE` *is* seeded and midwives prescribe
+  throughout the OB module, but is not on the sign annotation. Doctors-only may be
+  correct; it should be a decision rather than an accident of an unseeded name.
+
+**Portal side of #16.** The prescription edit form offered `SIGNED` in its status
+`<select>` — which is how "signed" came to mean a clinician picked a word from a
+dropdown. With the backend now refusing a client-asserted signature, that option
+was a control that always fails; it is removed, and a sign action added, because
+the endpoint otherwise had no caller anywhere.
+
+### Reassessment — 2026-08-21 (code evidence, 23 agents)
+
+All seventeen P0/P1/P2 items re-verified against merged `develop`, with every
+non-DONE verdict handed to an adversarial challenger told to *refute* the gap.
+**No challenge overturned a finding.** Result: **6 clean, 11 partial**, five of
+which are reopened above because their central claim does not hold.
+
+| Tier | Clean | Partial |
+| --- | --- | --- |
+| P0 | #1 #2 #3 #4 | **#5** |
+| P1 | #7 | #6 #8 **#9** #10 |
+| P2 | #12 | **#11** #13 #14 **#15** **#16** #17 |
+
+Bold = checkbox reopened. The rest shipped and work; they carry gaps worth a
+follow-up, not a retraction.
+
+**The pattern is not that the work was not done — it is that the last mile was
+not.** Ten of the eleven partials are the same three shapes this list has been
+tracking all along: a surface with no caller, a column with no reader, and a
+comment asserting behaviour the code does not implement. The features are real;
+what is missing is the wiring that lets anyone use them.
+
+**Unreachable from the portal** — built, tested, merged, no way in:
+
+- `/on-call` and `/advance-directives` (#13) — no nav entry, no route, no portal
+  service. A HOSPITAL_ADMIN cannot create a rota entry and a clinician cannot
+  record a DNR from the UI; the tables are still read-only in practice, which is
+  the exact condition #13 existed to fix.
+- `/drug-interactions` admin API (#14) — the "durable half" of that PR, per its
+  own body, has no caller anywhere.
+- All five `/slots` endpoints (#11), `GET /lab-instrument-outbox/orders/{id}`
+  (#17), `GET /empi/identities/by-patient/{id}` and `POST
+  /empi/identities/{id}/merge` (#8), and `POST /appointments/reminders/run` (#7,
+  which the sweep otherwise passed clean).
+
+**Dead columns** — written, never read: `critical_readback_value` (#5),
+`last_error` (#17, the column V119's own header justifies as the fix for
+"status = ERROR with no reason is a dead end at 3am"),
+`NurseHandoff.completedAt`/`completedByName` (#1),
+`labor_partograph_entries.original_entry_time` (#6), plus the four dead fields
+listed under #11.
+
+**#6's linkage is still not wired.** PR #450 was supposed to close
+`NewbornAssessment.deliveryRecordId`; the column and mapping exist, but
+`postpartum-tab.ts:257-260` never sets it, no UI carries a delivery id from the
+Labor tab, and no template renders the field. It remains what the previous
+verification pass called it: persistence-only.
+
+#### Cross-cutting findings the per-item sweep could not see
+
+- **Two security issues.** `AdvanceDirectiveServiceImpl.java:50-51` resolves the
+  patient with a bare `findById` and no hospital scoping, while the same file's
+  `resolveHospital` (`:102-103`) explicitly warns a client-supplied id "would
+  otherwise be a cross-tenant write vector" — a clinician at hospital A can
+  record a DNR against hospital B's patient. And `LookupController.java:25` is
+  `isAuthenticated()` with no `SecurityConfig` rule; it returns `patientName`,
+  `patientEmail`, `patientPhone` and appointment `reason` for any supplied
+  email/phone/MRN. Pre-existing, but newly reachable now that patients hold
+  tokens.
+- **The drug-interaction KB is platform-global and tenant-writable.**
+  `DrugInteraction` has no `hospital_id` and the admin service has no tenant
+  scoping, yet writes are open to `ROLE_PHARMACIST`. With no reactivate path
+  (`deactivate()` exists; every read hard-filters `active = true`), one tenant's
+  pharmacist can permanently silence a MAJOR interaction for every hospital in
+  the deployment.
+- **No new P0–P2 write surface emits an audit event** — signing, read-back,
+  directives, on-call, slot holds, KB edits. EMPI merge is the sole exception,
+  and this list called that convention out at the time.
+- **Three check-then-act races.** Slot hold reads `isOfferable` then saves with
+  no `@Version` and no lock, so two receptionists both win. The reminder sweep
+  and its manual trigger have the same shape, under a javadoc asserting "each
+  appointment is stamped exactly once". There is no ShedLock anywhere.
+- **`LiquibaseSchemaIT` does not do what I wrote on it.** Its comment claims it
+  catches columns a migration forgot "because prod runs ddl-auto=validate while
+  H2 builds tables FROM the entities". It never boots Hibernate — it applies the
+  changelog and hand-checks five named objects. Every test profile is
+  `create-drop`; `validate` appears only in dev/local/prod/uat. **Nothing in CI
+  compares entities to the migrated schema**, which is precisely the second half
+  of the outage recorded above. `MigrationRegistrationTest` proves a file is
+  *listed*, never that its contents match the model. Defect class 3, on the file
+  written to prevent the recurrence.
+- **`docs/roadmap.csv` / `roadmap.md` were last touched 2026-05-17**, three
+  months before PRs #431–#460. The entire P0–P2 tier is absent from the file the
+  `roadmap-sync-workflow` skill designates as the status source of truth, and
+  `roadmap.csv:25` still records the stale "EMPI matcher returns empty" claim.
+- **Backend i18n is broadly unkeyed.** 27 of the 53 dotted keys thrown as
+  exception messages are missing from `messages.properties`, so
+  `GlobalExceptionHandler` returns the raw key to the client. The missing
+  `prescription.sign.ceremony.required` is the house norm, not a #16 regression.
+  The portal, by contrast, is clean: 6755 keys × 3 locales, zero drift.
+
+### Promotion — 2026-08-21
+
+`develop dfc01f9e` → `uat 313b3e82` → `main 4952824c`, carrying #448–#460.
+
+Verified **before** promoting, not after: V115–V121 all registered in
+`changelog.xml`, `MigrationRegistrationTest` green, and `LiquibaseSchemaIT`
+applying the full changelog to a real `postgres:16-alpine`.
+
+Still red everywhere: the `Build and analyze` (SonarCloud) job fails on every PR
+with HTTP 403 because **`SONAR_TOKEN` is expired**. It is environmental — it never
+reaches the code — but it masks real Sonar findings until rotated.
 
 ## P3 — Broader parity, pick by demand
 
