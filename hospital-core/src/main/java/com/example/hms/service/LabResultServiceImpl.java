@@ -303,10 +303,19 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setSignatureValue(normalizeSignatureValue(request));
         labResult.setSignatureNotes(normalizeSignatureNotes(request));
 
-        labResult.setAcknowledged(true);
-        labResult.setAcknowledgedAt(now);
-        labResult.setAcknowledgedByUserId(actorId);
-        labResult.setAcknowledgedByDisplay(actorDisplay);
+        // Signing is the LAB attesting its own result; acknowledging is the
+        // ORDERING CLINICIAN confirming receipt. Conflating them is mostly a
+        // harmless convenience — except on a critical result, where the
+        // auto-acknowledge would silence the escalation sweep with no read-back
+        // ever recorded, bypassing the guard on the acknowledge path. A signed
+        // critical result therefore stays unacknowledged (and the sweep keeps
+        // chasing) until someone reads the value back.
+        if (labResult.getCriticalNotifiedAt() == null || labResult.getCriticalReadBackAt() != null) {
+            labResult.setAcknowledged(true);
+            labResult.setAcknowledgedAt(now);
+            labResult.setAcknowledgedByUserId(actorId);
+            labResult.setAcknowledgedByDisplay(actorDisplay);
+        }
 
         labResultRepository.save(labResult);
         return labResultMapper.toResponseDTO(labResult);
@@ -539,6 +548,17 @@ public class LabResultServiceImpl implements LabResultService {
         if (result.isAcknowledged()) {
             LOG.debug("Lab result {} already acknowledged", result.getId());
             return;
+        }
+        // A critical result cannot be acknowledged without a read-back. Until
+        // the 2026-08-21 reassessment this path silenced the escalation sweep
+        // (which exits on acknowledged=false) with no read-back ever recorded —
+        // the whole ceremony was optional for exactly the results it exists
+        // for. The read-back path sets acknowledged itself on a match, so this
+        // guard never blocks it.
+        if (result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null) {
+            throw new BusinessException(
+                "This is a critical result: acknowledge it by reading the value back, not by "
+                    + "dismissing the alert. Use the read-back action.");
         }
         result.setAcknowledged(true);
         result.setAcknowledgedAt(LocalDateTime.now());

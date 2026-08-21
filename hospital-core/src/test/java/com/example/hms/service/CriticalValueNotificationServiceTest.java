@@ -42,6 +42,7 @@ class CriticalValueNotificationServiceTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultMapper labResultMapper;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks private CriticalValueNotificationService service;
 
@@ -314,7 +315,16 @@ class CriticalValueNotificationServiceTest {
 
     @Test
     void mismatchedReadBackIsRejectedButStillRecorded() {
-        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        // The mismatch is persisted in a REQUIRES_NEW transaction onto a row
+        // RELOADED inside it — never the caller's managed entity, whose
+        // transaction the BusinessException is about to roll back. The previous
+        // version of this test asserted on the in-memory entity against a
+        // mocked repository, which is exactly how the rollback that erased
+        // every mismatch record went unnoticed.
+        LabResult reloaded = new LabResult();
+        reloaded.setId(result.getId());
+        reloaded.setResultValue("7.1");
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(reloaded));
         UUID actor = UUID.randomUUID();
 
         // 1.7 instead of 7.1 — a transposition, which is the error a read-back
@@ -322,10 +332,19 @@ class CriticalValueNotificationServiceTest {
         assertThatThrownBy(() -> service.recordReadBack(result, "1.7", actor, "Dr Diallo"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
 
-        assertThat(result.getCriticalReadBackValue()).isEqualTo("1.7");
+        // The inner-transaction row carries the mismatch and was saved…
+        assertThat(reloaded.getCriticalReadBackValue()).isEqualTo("1.7");
+        assertThat(reloaded.getCriticalReadBackByUserId()).isEqualTo(actor);
+        assertThat(reloaded.getCriticalReadBackByDisplay()).isEqualTo("Dr Diallo");
+        verify(labResultRepository).save(reloaded);
+        // …and it went through the separate transaction, not the doomed one.
+        verify(transactionManager).getTransaction(any());
+
+        // Nothing on either row claims the read-back succeeded.
+        assertThat(reloaded.getCriticalReadBackAt()).isNull();
+        assertThat(reloaded.isAcknowledged()).isFalse();
         assertThat(result.getCriticalReadBackAt()).isNull();
         assertThat(result.isAcknowledged()).isFalse();
-        verify(labResultRepository).save(result);
     }
 
     @Test

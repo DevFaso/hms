@@ -32,6 +32,19 @@ public interface AppointmentService {
     // GET BY PATIENT ID, filtered/scoped by user
     List<AppointmentResponseDTO> getAppointmentsByPatientId(UUID patientId, Locale locale, String username);
 
+    /**
+     * A patient's appointments with NO authorization of its own — the caller
+     * has already established the right to read this patient (P1 #9 proxy
+     * access, verified per-grant by {@code verifyProxyAccess}).
+     *
+     * <p>Exists because the username-scoped variant above cannot express proxy
+     * access: the proxy is a patient-role user, so the hospital-scope branch
+     * rejects them, and passing {@code null} for username throws before any
+     * query runs — which is exactly what the proxy Appointments tab did in
+     * production while its test stubbed the null away.
+     */
+    List<AppointmentResponseDTO> getAppointmentsForVerifiedPatient(UUID patientId);
+
     // GET BY STAFF ID, filtered/scoped by user
     List<AppointmentResponseDTO> getAppointmentsByStaffId(UUID staffId, Locale locale, String username);
 

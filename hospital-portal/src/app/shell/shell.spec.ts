@@ -215,6 +215,30 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
   });
 
+  it('reaches the duplicate-patient panel as a NURSE with no reception role', () => {
+    // The regression the receptionist test above could never catch: the entry
+    // used to be pushed inside a receptionist/admin-only block, so its own
+    // roles list was never consulted for a nurse or doctor — they were in the
+    // route guard and locked out of the sidebar (found 2026-08-21).
+    const { items } = createComponent({
+      activeRole: 'ROLE_NURSE',
+      roles: ['ROLE_NURSE'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
+  });
+
+  it('reaches the duplicate-patient panel as a DOCTOR with no reception role', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_DOCTOR',
+      roles: ['ROLE_DOCTOR'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
+  });
+
   it('hides the refill queue from roles that cannot decide a refill', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_RECEPTIONIST',

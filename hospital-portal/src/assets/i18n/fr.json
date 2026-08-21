@@ -3923,7 +3923,7 @@
       "NO_RECEIVED": "Personne ne vous a encore accordé d'accès mandataire.",
       "PERSON": "Personne",
       "GRANTED_DATE": "Accordé",
-      "EXPIRES": "Expire",
+      "EXPIRES": "Expiration de l'accès (facultatif)",
       "NEVER": "Jamais",
       "ACTIONS": "Actions",
       "REVOKE": "Révoquer",
@@ -6955,7 +6955,10 @@
     "SLEEP_EXHAUSTED": "Épuisée",
     "SLEEP_UNKNOWN": "Inconnu",
     "OBSERVATIONS_LOAD_ERROR": "Échec du chargement des observations",
-    "ASSESSMENTS_LOAD_ERROR": "Échec du chargement des évaluations du nouveau-né"
+    "ASSESSMENTS_LOAD_ERROR": "Échec du chargement des évaluations du nouveau-né",
+    "DELIVERY_LINK": "Accouchement",
+    "DELIVERY_LINK_NONE": "Non lié (né ailleurs)",
+    "DELIVERY_LINKED": "lié à l'accouchement"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",

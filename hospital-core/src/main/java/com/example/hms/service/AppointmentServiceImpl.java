@@ -756,6 +756,19 @@ public class AppointmentServiceImpl implements AppointmentService {
         return getAppointmentsByPatientScoped(patientId, user);
     }
 
+    /**
+     * No authorization here on purpose — see the interface javadoc. The one
+     * caller is the proxy-access path, which has already verified a live,
+     * unexpired grant covering VIEW_APPOINTMENTS for exactly this patient.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<AppointmentResponseDTO> getAppointmentsForVerifiedPatient(UUID patientId) {
+        return appointmentRepository.findByPatient_Id(patientId).stream()
+            .map(appointmentMapper::toAppointmentResponseDTO)
+            .toList();
+    }
+
     private List<AppointmentResponseDTO> getAppointmentsByPatientScoped(UUID patientId, User user) {
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByPatient_Id(patientId).stream()

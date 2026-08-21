@@ -349,20 +349,20 @@ class NurseTaskControllerTest {
 
     @Test
     void getHandoffsDefault() {
-        when(nurseTaskService.getHandoffSummaries(null, HOSPITAL_ID, 6)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(null, HOSPITAL_ID, 6, null)).thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
-            controller.getHandoffs(null, null, null, auth);
+            controller.getHandoffs(null, null, null, null, auth);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     @Test
     void getHandoffsWithLimit() {
-        when(nurseTaskService.getHandoffSummaries(NURSE_ID, HOSPITAL_ID, 3)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(NURSE_ID, HOSPITAL_ID, 3, null)).thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
-            controller.getHandoffs("me", 3, null, auth);
+            controller.getHandoffs("me", 3, null, null, auth);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }

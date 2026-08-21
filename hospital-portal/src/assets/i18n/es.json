@@ -3923,7 +3923,7 @@
       "NO_RECEIVED": "Nadie le ha otorgado acceso de representante todavía.",
       "PERSON": "Persona",
       "GRANTED_DATE": "Otorgado",
-      "EXPIRES": "Vence",
+      "EXPIRES": "Expiración del acceso (opcional)",
       "NEVER": "Nunca",
       "ACTIONS": "Acciones",
       "REVOKE": "Revocar",
@@ -6955,7 +6955,10 @@
     "SLEEP_EXHAUSTED": "Agotada",
     "SLEEP_UNKNOWN": "Desconocido",
     "OBSERVATIONS_LOAD_ERROR": "Error al cargar las observaciones",
-    "ASSESSMENTS_LOAD_ERROR": "Error al cargar las evaluaciones del recién nacido"
+    "ASSESSMENTS_LOAD_ERROR": "Error al cargar las evaluaciones del recién nacido",
+    "DELIVERY_LINK": "Parto",
+    "DELIVERY_LINK_NONE": "Sin vincular (nacido en otro lugar)",
+    "DELIVERY_LINKED": "vinculado al parto"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",
