@@ -1702,4 +1702,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V119 — instrument-outbox delivery tracking.
+         OML/ORU messages have been built and queued since the lab module
+         shipped and never transmitted: there was no sender, so rows went
+         in PENDING and stayed there. Adds attempts / last_error /
+         last_attempt_at so the new MLLP sender can retry, back off, and
+         say why it failed.
+         ================================================================= -->
+    <changeSet id="V119-instrument-outbox-delivery-tracking" author="hms-team" runOnChange="false">
+        <sqlFile path="V119__instrument_outbox_delivery_tracking.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
