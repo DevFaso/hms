@@ -1726,4 +1726,57 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V116 — lab_results critical-value read-back + escalation levels.
+         Shipped in PR #451 but never registered here, so the columns were
+         never created while the entity mapping already declared them.
+         ddl-auto=validate then refused to build the SessionFactory and the
+         whole application failed to start: "missing column
+         [critical_escalation_level] in table [lab.lab_results]". A
+         migration file on disk is inert until it appears in this file —
+         that is the only thing that makes it run.
+         ================================================================= -->
+    <changeSet id="V116-critical-value-readback" author="hms-team" runOnChange="false">
+        <sqlFile path="V116__critical_value_readback_and_escalation_levels.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V117 — general_referrals.appointment_id. Same omission as V116
+         (PR #453): the column backs a real mapping that validate checks.
+         ================================================================= -->
+    <changeSet id="V117-referral-appointment-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V117__referral_appointment_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V118 — prescription signature columns. Same omission as V116
+         (PR #455). splitStatements=false: the file ends in a DO $$ block
+         that adds fk_prescription_signed_by.
+         ================================================================= -->
+    <changeSet id="V118-prescription-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V118__prescription_signature.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V119 — delivery tracking for lab.instrument_outbox.
+         OML/ORU messages were queued since the lab module shipped and
+         never transmitted, because no sender existed. A sender that
+         retries needs somewhere to record attempts, the last failure
+         text and the instant the backoff is measured from. Strictly
+         additive with defaults, so existing PENDING rows start at zero.
+         ================================================================= -->
+    <changeSet id="V119-instrument-outbox-delivery-tracking" author="hms-team" runOnChange="false">
+        <sqlFile path="V119__instrument_outbox_delivery_tracking.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

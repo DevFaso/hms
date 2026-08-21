@@ -5,6 +5,7 @@ import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.rules.CdsRuleEngine;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
@@ -29,11 +30,16 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.util.StringUtils;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import java.util.Locale;
@@ -49,6 +55,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
 
+    /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
+    private static final String SIGNATURE_ALGORITHM = "SHA-256";
+
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
     private final PatientAllergyRepository patientAllergyRepository;
@@ -63,6 +72,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale) {
+        rejectClientAssertedSignature(request);
         UUID currentUserId = authService.getCurrentUserId();
         Patient patient = resolvePatient(request, locale);
 
@@ -117,6 +127,153 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return prescriptionMapper.toResponseDTO(prescription);
     }
 
+    /**
+     * The signing ceremony (P2 #16).
+     *
+     * <p>Before this, {@code SIGNED} was a string a client could put in a
+     * request body: {@link PrescriptionMapper} wrote {@code dto.getStatus()}
+     * straight onto the entity, so "signed" meant nothing more than "somebody
+     * sent the word SIGNED". This is now the only path that reaches that status,
+     * and it leaves evidence behind — signer, instant, and a SHA-256 digest of
+     * what was signed.
+     *
+     * <p>The digest is tamper-evidence, not a PKI credential. Editing a signed
+     * prescription afterwards leaves the stored digest disagreeing with the row,
+     * so recomputing {@link #canonicalSignaturePayload} over the current values
+     * reveals the edit. Note what that does and does not give you: nothing in
+     * this codebase recomputes it yet, so the digest is evidence available to an
+     * audit, not an active guard. {@code updatePrescription} still permits edits
+     * to a signed prescription — it is the disagreement that makes them
+     * visible, not a refusal.
+     */
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+
+        // Same 404-not-403 idiom as getPrescriptionById: a prescription at
+        // another hospital must not be distinguishable from one that does not
+        // exist.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+
+        // Re-signing is refused rather than made idempotent. A second signature
+        // over altered content would silently replace the first, destroying the
+        // only record of what was originally authorised. Checked before the
+        // identity test so that "this is already signed" is the answer even when
+        // the caller is not the prescriber.
+        if (prescription.getSignatureValue() != null) {
+            throw new BusinessException(
+                "This prescription has already been signed. A signature cannot be reissued; "
+                    + "cancel it and write a new prescription instead.");
+        }
+
+        PrescriptionStatus status = prescription.getStatus();
+        if (status != null && status != PrescriptionStatus.DRAFT
+                && status != PrescriptionStatus.PENDING_SIGNATURE) {
+            throw new BusinessException(
+                "Only a prescription in DRAFT or PENDING_SIGNATURE can be signed; this one is "
+                    + status + ".");
+        }
+
+        Staff signer = resolveSigningPrescriber(prescription);
+
+        // Checked against the status we are about to move to, not the one the
+        // row still holds — a controlled substance must not become signable
+        // just because it is currently a draft.
+        enforceControlledSubstanceGates(prescription, PrescriptionStatus.SIGNED);
+
+        LocalDateTime signedAt = LocalDateTime.now();
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        prescription.setSignedBy(signer);
+        prescription.setSignedAt(signedAt);
+        prescription.setSignatureAlgorithm(SIGNATURE_ALGORITHM);
+        prescription.setSignatureValue(
+            computeSignatureDigest(canonicalSignaturePayload(prescription, signer, signedAt)));
+
+        logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * Signing is the prescriber's own act.
+     *
+     * <p>The controller's {@code @PreAuthorize} only establishes that the caller
+     * holds a prescribing role somewhere; it cannot express "and this is your
+     * prescription". Without this check any doctor in the hospital could sign a
+     * colleague's prescription, which is the one thing a signature is supposed
+     * to rule out. Co-signature is a separate act with its own columns and must
+     * not borrow this path.
+     *
+     * <p>AccessDeniedException rather than BusinessException: this is an
+     * authorization failure, not a workflow one, and the caller should get 403
+     * rather than 400.
+     */
+    private Staff resolveSigningPrescriber(Prescription prescription) {
+        Staff prescriber = prescription.getStaff();
+        UUID prescriberUserId = prescriber != null && prescriber.getUser() != null
+            ? prescriber.getUser().getId()
+            : null;
+
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null || prescriberUserId == null
+                || !prescriberUserId.equals(currentUserId)) {
+            throw new AccessDeniedException(
+                "Only the prescribing clinician can sign this prescription.");
+        }
+        return prescriber;
+    }
+
+    /**
+     * The content the signature attests to.
+     *
+     * <p>Field order and the separator are part of the contract: a digest is
+     * only comparable against one recomputed the same way. Nulls are rendered
+     * explicitly so that a missing dose and an empty dose cannot collide into
+     * the same digest.
+     */
+    private String canonicalSignaturePayload(Prescription prescription, Staff signer, LocalDateTime signedAt) {
+        return String.join("|",
+            String.valueOf(prescription.getId()),
+            String.valueOf(prescription.getPatient() != null ? prescription.getPatient().getId() : null),
+            String.valueOf(prescription.getMedicationName()),
+            String.valueOf(prescription.getMedicationCode()),
+            String.valueOf(prescription.getDosage()),
+            String.valueOf(prescription.getFrequency()),
+            String.valueOf(prescription.getDuration()),
+            String.valueOf(signer.getId()),
+            String.valueOf(signedAt));
+    }
+
+    private String computeSignatureDigest(String payload) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    /**
+     * A client cannot assert a signature by sending its name.
+     *
+     * <p>{@code PrescriptionMapper} copies {@code dto.getStatus()} onto the
+     * entity, which is how SIGNED came to mean nothing. Create and update both
+     * route through here so the only way to reach that status is
+     * {@link #signPrescription}. It refuses rather than silently downgrading:
+     * a caller that believed it was signing must not be told it succeeded.
+     */
+    private void rejectClientAssertedSignature(PrescriptionRequestDTO request) {
+        if (request.getStatus() == PrescriptionStatus.SIGNED) {
+            throw new BusinessException("prescription.sign.ceremony.required");
+        }
+    }
+
     @Override
     @Transactional
     public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale) {
@@ -156,6 +313,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
+        rejectClientAssertedSignature(request);
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -530,9 +688,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * status can be set by paths that never reach this service.
      */
     private void enforceControlledSubstanceGates(Prescription prescription) {
-        com.example.hms.enums.PrescriptionStatus status = prescription.getStatus();
-        if (status == null || status == com.example.hms.enums.PrescriptionStatus.DRAFT
-                || status == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE) {
+        enforceControlledSubstanceGates(prescription, prescription.getStatus());
+    }
+
+    /**
+     * The same gate, checked against a status the prescription has not been
+     * moved to yet.
+     *
+     * <p>Signing needs to know whether SIGNED would be permitted <em>before</em>
+     * it writes anything. Setting the status first and letting the throw roll
+     * the transaction back would work, but it leaves a window in which the
+     * in-memory entity claims a state its safeguards do not support — and any
+     * code that ran in between would read a lie.
+     */
+    private void enforceControlledSubstanceGates(Prescription prescription, PrescriptionStatus status) {
+        if (status == null || status == PrescriptionStatus.DRAFT
+                || status == PrescriptionStatus.PENDING_SIGNATURE) {
             return;
         }
 

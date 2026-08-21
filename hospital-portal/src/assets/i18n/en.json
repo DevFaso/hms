@@ -4597,8 +4597,11 @@
       "DELETE_FAILED": "Delete failed",
       "LOAD_FAILED": "Failed to load prescriptions",
       "SMS_SENT": "SMS sent to {pharmacy}",
-      "SMS_FAILED": "Could not dispatch the prescription SMS"
-    }
+      "SMS_FAILED": "Could not dispatch the prescription SMS",
+      "SIGNED": "Prescription signed",
+      "SIGN_FAILED": "Signing failed"
+    },
+    "SIGN": "Sign"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
