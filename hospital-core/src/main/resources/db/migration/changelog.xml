@@ -1702,4 +1702,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V121 — slot inventory foundation (visit types, session templates,
+         generated slots). Scheduling could book an Appointment against an
+         arbitrary (staff, date, time) but nothing described what a clinic
+         session IS, so nothing could answer "when is this clinician next
+         free for a 30-minute follow-up?" — the question that blocks patient
+         self-scheduling, waitlist auto-offer and utilisation reporting
+         alike. New tables, so they carry REAL foreign keys.
+         ================================================================= -->
+    <changeSet id="V121-slot-inventory-foundation" author="hms-team" runOnChange="false">
+        <sqlFile path="V121__slot_inventory_foundation.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
