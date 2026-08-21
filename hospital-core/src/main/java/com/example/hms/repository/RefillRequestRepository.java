@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -24,4 +25,7 @@ public interface RefillRequestRepository extends JpaRepository<RefillRequest, UU
     Page<RefillRequest> findByPrescription_Staff_Id(UUID staffId, Pageable pageable);
 
     Page<RefillRequest> findByPrescription_Staff_IdAndStatus(UUID staffId, RefillStatus status, Pageable pageable);
+
+    // Unpaged variant used to build the prescriber's clinical-inbox rows.
+    List<RefillRequest> findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(UUID staffId, RefillStatus status);
 }

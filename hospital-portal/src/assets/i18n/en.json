@@ -934,6 +934,7 @@
   "REFILLS": {
     "QUEUE_TITLE": "Refill requests",
     "STATUS_REQUESTED": "Pending",
+    "STATUS_PAUSED": "On hold",
     "STATUS_APPROVED": "Approved",
     "STATUS_DENIED": "Denied",
     "STATUS_DISPENSED": "Dispensed",
@@ -946,9 +947,18 @@
     "FIELD_PREFERRED_PHARMACY": "Preferred pharmacy",
     "FIELD_PATIENT_NOTES": "Patient notes",
     "FIELD_PROVIDER_NOTES": "Provider notes",
-    "NOTES_PLACEHOLDER": "Optional note for approval, required for rejection",
+    "NOTES_PLACEHOLDER": "Optional when approving; required to deny or hold",
     "ACTION_APPROVE": "Approve",
-    "ACTION_REJECT": "Reject"
+    "ACTION_REJECT": "Reject",
+    "ACTION_PAUSE": "Put on hold",
+    "NOTES_REQUIRED_REJECT": "Add a note explaining the rejection.",
+    "NOTES_REQUIRED_PAUSE": "Add a note explaining the hold — the patient will see it.",
+    "TOAST_APPROVED": "Refill approved",
+    "TOAST_APPROVE_FAILED": "Could not approve the refill request",
+    "TOAST_DENIED": "Refill denied",
+    "TOAST_DENY_FAILED": "Could not deny the refill request",
+    "TOAST_PAUSED": "Refill put on hold",
+    "TOAST_PAUSE_FAILED": "Could not put the refill request on hold"
   },
   "ADMISSIONS": {
     "ACUITY": "Acuity",
@@ -2827,7 +2837,8 @@
     "MEDICATION_HISTORY": "Medication History",
     "PROCEDURE_ORDERS": "Procedure Orders",
     "REGISTRATIONS": "Registrations",
-    "MY_EDUCATION": "My Education"
+    "MY_EDUCATION": "My Education",
+    "REFILLS": "Refill Requests"
   },
   "NOTIFICATIONS": {
     "ALL": "All",

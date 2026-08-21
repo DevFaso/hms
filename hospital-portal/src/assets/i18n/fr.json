@@ -934,6 +934,7 @@
   "REFILLS": {
     "QUEUE_TITLE": "Demandes de renouvellement",
     "STATUS_REQUESTED": "En attente",
+    "STATUS_PAUSED": "En attente",
     "STATUS_APPROVED": "Approuvée",
     "STATUS_DENIED": "Refusée",
     "STATUS_DISPENSED": "Délivrée",
@@ -946,9 +947,18 @@
     "FIELD_PREFERRED_PHARMACY": "Pharmacie préférée",
     "FIELD_PATIENT_NOTES": "Notes du patient",
     "FIELD_PROVIDER_NOTES": "Notes du prescripteur",
-    "NOTES_PLACEHOLDER": "Optionnel pour l'approbation, requis pour le refus",
+    "NOTES_PLACEHOLDER": "Facultatif pour approuver ; obligatoire pour refuser ou mettre en attente",
     "ACTION_APPROVE": "Approuver",
-    "ACTION_REJECT": "Refuser"
+    "ACTION_REJECT": "Refuser",
+    "ACTION_PAUSE": "Mettre en attente",
+    "NOTES_REQUIRED_REJECT": "Ajoutez une note expliquant le refus.",
+    "NOTES_REQUIRED_PAUSE": "Ajoutez une note expliquant la mise en attente — le patient la verra.",
+    "TOAST_APPROVED": "Renouvellement approuvé",
+    "TOAST_APPROVE_FAILED": "Impossible d’approuver la demande de renouvellement",
+    "TOAST_DENIED": "Renouvellement refusé",
+    "TOAST_DENY_FAILED": "Impossible de refuser la demande de renouvellement",
+    "TOAST_PAUSED": "Renouvellement mis en attente",
+    "TOAST_PAUSE_FAILED": "Impossible de mettre la demande de renouvellement en attente"
   },
   "ADMISSIONS": {
     "ACUITY": "Gravité",
@@ -2827,7 +2837,8 @@
     "MEDICATION_HISTORY": "Historique Médicamenteux",
     "PROCEDURE_ORDERS": "Ordres de Procédure",
     "REGISTRATIONS": "Enregistrements",
-    "MY_EDUCATION": "Mes documents"
+    "MY_EDUCATION": "Mes documents",
+    "REFILLS": "Demandes de renouvellement"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",

@@ -84,4 +84,18 @@ public class RefillApprovalController {
         MedicationRefillResponseDTO result = service.reject(auth, refillId, decision);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
+
+    @Operation(summary = "Put a refill request on hold",
+            description = "Defers the decision without approving or denying. The request stays in the "
+                    + "queue and can still be approved or denied later. Provider notes are required — "
+                    + "they are relayed to the patient as the reason for the hold.")
+    @PutMapping("/{refillId}/pause")
+    @PreAuthorize(PROVIDER_ROLES)
+    public ResponseEntity<ApiResponseWrapper<MedicationRefillResponseDTO>> pause(
+            Authentication auth,
+            @PathVariable UUID refillId,
+            @Valid @RequestBody RefillDecisionRequestDTO decision) {
+        MedicationRefillResponseDTO result = service.pause(auth, refillId, decision);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
 }

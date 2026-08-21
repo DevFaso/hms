@@ -717,7 +717,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!refill.getPatient().getId().equals(patientId)) {
             throw new AccessDeniedException("You do not have access to this refill request");
         }
-        if (refill.getStatus() != RefillStatus.REQUESTED) {
+        // A request the provider has put on hold has not been decided yet, so the
+        // patient can still withdraw it.
+        if (refill.getStatus() != RefillStatus.REQUESTED && refill.getStatus() != RefillStatus.PAUSED) {
             throw new BusinessException("Only pending refill requests can be cancelled. Current status: " + refill.getStatus());
         }
 

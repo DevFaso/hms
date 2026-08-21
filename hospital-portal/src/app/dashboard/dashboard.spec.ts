@@ -155,6 +155,24 @@ describe('Dashboard navigation & RBAC', () => {
     expect(routes).not.toContain('/nurse-station');
   });
 
+  // ── The refill queue must be reachable from the dashboard ───
+  // Both tiles used to point at /prescriptions, which meant the approval
+  // queue existed but no click anywhere in the portal reached it.
+
+  it('doctor workflow tiles link to the refill queue', () => {
+    const doctor = createComponent(['ROLE_DOCTOR'], []);
+    doctor.isDoctor.set(true);
+    expect(doctor.doctorWorkflowTiles().map((t) => t.route)).toContain('/refills');
+  });
+
+  it('the pharmacist refills tile no longer points at /prescriptions', () => {
+    const pharmacist = createComponent(['ROLE_PHARMACIST'], []);
+    // Matched on icon rather than label — the label goes through translation.
+    const refillTile = pharmacist.pharmacistWorkflowTiles().find((t) => t.icon === 'loop');
+    expect(refillTile).toBeDefined();
+    expect(refillTile?.route).toBe('/refills');
+  });
+
   // ── Nurse workflow tiles SHOULD include /nurse-station ──────
 
   it('nurse workflow tiles should include a nurse-station route', () => {
@@ -596,9 +614,9 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.hospitalAdminNavTiles().length).toBe(6);
   });
 
-  it('doctorWorkflowTiles returns 10 tiles', () => {
+  it('doctorWorkflowTiles returns 11 tiles', () => {
     const c = createComponent(['ROLE_DOCTOR']);
-    expect(c.doctorWorkflowTiles().length).toBe(10);
+    expect(c.doctorWorkflowTiles().length).toBe(11);
   });
 
   it('nurseWorkflowTiles returns 10 tiles', () => {

@@ -69,6 +69,17 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         return decide(auth, refillId, decision, RefillStatus.DENIED);
     }
 
+    @Override
+    @Transactional
+    public MedicationRefillResponseDTO pause(Authentication auth, UUID refillId, RefillDecisionRequestDTO decision) {
+        // A hold the patient can't interpret is worse than a denial, so the reason
+        // is mandatory here even though approve/reject leave it optional.
+        if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
+            throw new BusinessException("A reason is required when putting a refill request on hold.");
+        }
+        return decide(auth, refillId, decision, RefillStatus.PAUSED);
+    }
+
     private MedicationRefillResponseDTO decide(Authentication auth,
                                                UUID refillId,
                                                RefillDecisionRequestDTO decision,
@@ -84,7 +95,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
             throw new AccessDeniedException("You can only act on refill requests for your own prescriptions.");
         }
 
-        if (refill.getStatus() != RefillStatus.REQUESTED) {
+        if (!isActionable(refill.getStatus(), newStatus)) {
             throw new BusinessException(
                 "Only pending refill requests can be acted on. Current status: " + refill.getStatus());
         }
@@ -98,6 +109,18 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         notifyPatient(refill, newStatus);
         log.info("Staff {} marked refill {} as {}", staffId, refillId, newStatus);
         return toResponseDTO(refill);
+    }
+
+    /**
+     * A request awaiting review can go anywhere. A paused one can still be
+     * approved or denied — but it cannot be paused a second time, which would
+     * fire a redundant notification at the patient without changing anything.
+     */
+    private boolean isActionable(RefillStatus current, RefillStatus target) {
+        if (current == RefillStatus.REQUESTED) {
+            return true;
+        }
+        return current == RefillStatus.PAUSED && target != RefillStatus.PAUSED;
     }
 
     private UUID resolveStaffId(Authentication auth) {
@@ -123,14 +146,23 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         String medicationName = refill.getPrescription() != null && refill.getPrescription().getMedicationName() != null
                 ? refill.getPrescription().getMedicationName()
                 : "your prescription";
-        String verb = status == RefillStatus.APPROVED ? "approved" : "denied";
-        String message = "Your refill request for " + medicationName + " has been " + verb + ".";
+        String message = buildDecisionMessage(refill, medicationName, status);
         try {
             notificationService.createNotification(message, username, NOTIFICATION_TYPE);
         } catch (Exception ex) {
             log.warn("Failed to deliver refill decision notification to {} for refill {}",
                     username, refill.getId(), ex);
         }
+    }
+
+    private String buildDecisionMessage(RefillRequest refill, String medicationName, RefillStatus status) {
+        if (status == RefillStatus.PAUSED) {
+            // The reason is mandatory for a hold, so it is always worth surfacing.
+            return "Your refill request for " + medicationName
+                    + " is on hold: " + refill.getProviderNotes();
+        }
+        String verb = status == RefillStatus.APPROVED ? "approved" : "denied";
+        return "Your refill request for " + medicationName + " has been " + verb + ".";
     }
 
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {

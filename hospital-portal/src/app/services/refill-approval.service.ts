@@ -2,7 +2,13 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map, of, catchError } from 'rxjs';
 
-export type RefillStatus = 'REQUESTED' | 'APPROVED' | 'DENIED' | 'DISPENSED' | 'CANCELLED';
+export type RefillStatus =
+  | 'REQUESTED'
+  | 'PAUSED'
+  | 'APPROVED'
+  | 'DENIED'
+  | 'DISPENSED'
+  | 'CANCELLED';
 
 export interface RefillRequest {
   id: string;
@@ -68,6 +74,13 @@ export class RefillApprovalService {
   reject(refillId: string, decision: RefillDecisionRequest = {}): Observable<RefillRequest> {
     return this.http
       .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/reject`, decision)
+      .pipe(map((r) => r.data));
+  }
+
+  /** Defers a decision. The backend requires `providerNotes` here — it relays them to the patient. */
+  pause(refillId: string, decision: Required<RefillDecisionRequest>): Observable<RefillRequest> {
+    return this.http
+      .put<ApiWrapper<RefillRequest>>(`${this.base}/${refillId}/pause`, decision)
       .pipe(map((r) => r.data));
   }
 }
