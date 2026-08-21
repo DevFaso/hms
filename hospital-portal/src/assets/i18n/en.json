@@ -6355,6 +6355,7 @@
     "DELETE_TITLE": "Permanently delete registration",
     "DELETE_CONFIRM": "Permanently delete the registration for",
     "DELETE_WARNING": "This is a hard delete and cannot be undone. To end a stay, use Deactivate instead.",
+    "UNKNOWN_PATIENT": "Unknown patient (record missing)",
     "DELETED": "Registration deleted",
     "DELETE_ERROR": "Failed to delete the registration",
     "MULTI_HOSPITAL": "Multi-hospital patients",

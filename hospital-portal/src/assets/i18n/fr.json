@@ -6355,6 +6355,7 @@
     "DELETE_TITLE": "Supprimer définitivement l'enregistrement",
     "DELETE_CONFIRM": "Supprimer définitivement l'enregistrement de",
     "DELETE_WARNING": "Suppression définitive et irréversible. Pour terminer un séjour, utilisez Désactiver.",
+    "UNKNOWN_PATIENT": "Patient inconnu (dossier manquant)",
     "DELETED": "Enregistrement supprimé",
     "DELETE_ERROR": "Échec de la suppression",
     "MULTI_HOSPITAL": "Patients multi-hôpitaux",
