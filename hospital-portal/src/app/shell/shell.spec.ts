@@ -168,6 +168,40 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/dashboard');
   });
 
+  // The /refills queue and its backend were complete, but nothing in the
+  // portal linked to them — a prescriber notified about a refill had no way
+  // to reach the approval screen. These pin the sidebar entry in place.
+
+  it('shows the refill queue to a prescriber', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_DOCTOR',
+      roles: ['ROLE_DOCTOR'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/refills');
+  });
+
+  it('shows the refill queue to a pharmacist', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PHARMACIST',
+      roles: ['ROLE_PHARMACIST'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/refills');
+  });
+
+  it('hides the refill queue from roles that cannot decide a refill', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+    });
+
+    expect(items.map((i) => i.route)).not.toContain('/refills');
+  });
+
   it('shows patient parity nav entries on patient active role', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PATIENT',

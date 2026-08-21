@@ -5,6 +5,7 @@ import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.SignatureStatus;
 import com.example.hms.enums.SignatureType;
 import com.example.hms.model.Consultation;
@@ -14,6 +15,8 @@ import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.ClinicalInboxItemDTO;
 import com.example.hms.payload.dto.clinical.DoctorResultQueueItemDTO;
@@ -42,6 +45,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -417,6 +421,108 @@ class ResultReviewServiceImplTest {
         assertNotNull(taskItem);
         assertEquals("Bob Lee", taskItem.getPatientName());
         assertEquals("OPEN_CHART", taskItem.getActionType());
+    }
+
+    /**
+     * The refill queue was reachable by URL but nothing ever put it in front of the
+     * prescriber — these cover the inbox row that closes that gap.
+     */
+    private RefillRequest stubRefill(String medicationName, Patient patient) {
+        Prescription prescription = mock(Prescription.class);
+        lenient().when(prescription.getMedicationName()).thenReturn(medicationName);
+
+        RefillRequest refill = mock(RefillRequest.class);
+        lenient().when(refill.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(refill.getPrescription()).thenReturn(prescription);
+        lenient().when(refill.getPatient()).thenReturn(patient);
+        lenient().when(refill.getCreatedAt()).thenReturn(LocalDateTime.now());
+        return refill;
+    }
+
+    @Test
+    void getInboxItems_withPendingRefills_shouldAddRefillItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFirstName()).thenReturn("Carla");
+        lenient().when(patient.getLastName()).thenReturn("Diaz");
+
+        // Built before the when(...) call: stubbing a mock inside an unfinished
+        // stubbing is what Mockito rejects as UnfinishedStubbingException.
+        RefillRequest refill = stubRefill("Metformin 500mg", patient);
+        when(refillRequestRepository
+                .findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(staffId, RefillStatus.REQUESTED))
+                .thenReturn(List.of(refill));
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO refillItem = result.stream()
+                .filter(i -> "REFILL_REQUEST".equals(i.getCategory()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(refillItem);
+        assertEquals("Carla Diaz", refillItem.getPatientName());
+        assertEquals(patientId, refillItem.getPatientId());
+        assertEquals("REVIEW", refillItem.getActionType());
+        assertTrue(refillItem.getSubject().contains("Metformin 500mg"));
+    }
+
+    @Test
+    void getInboxItems_refillWithoutPrescriptionName_shouldStillListIt() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        RefillRequest refill = stubRefill(null, null);
+        when(refillRequestRepository
+                .findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(staffId, RefillStatus.REQUESTED))
+                .thenReturn(List.of(refill));
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO refillItem = result.stream()
+                .filter(i -> "REFILL_REQUEST".equals(i.getCategory()))
+                .findFirst()
+                .orElse(null);
+        assertNotNull(refillItem);
+        assertEquals("Refill requested – Medication", refillItem.getSubject());
+        assertNull(refillItem.getPatientName());
+    }
+
+    @Test
+    void getInboxItems_noPendingRefills_shouldNotAddRefillItem() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(refillRequestRepository
+                .findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(staffId, RefillStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        assertTrue(result.stream().noneMatch(i -> "REFILL_REQUEST".equals(i.getCategory())));
+    }
+
+    @Test
+    void getInboxItems_refillQueryFails_shouldStillReturnOtherItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(3L);
+        when(refillRequestRepository
+                .findByPrescription_Staff_IdAndStatusOrderByCreatedAtDesc(staffId, RefillStatus.REQUESTED))
+                .thenThrow(new RuntimeException("db down"));
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        assertTrue(result.stream().anyMatch(i -> "MESSAGE".equals(i.getCategory())));
+        assertTrue(result.stream().noneMatch(i -> "REFILL_REQUEST".equals(i.getCategory())));
     }
 
     @Test

@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Observable } from 'rxjs';
 
 import {
   RefillApprovalService,
@@ -13,10 +14,14 @@ import { ToastService } from '../core/toast.service';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
   { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
+  { value: 'PAUSED', labelKey: 'REFILLS.STATUS_PAUSED' },
   { value: 'APPROVED', labelKey: 'REFILLS.STATUS_APPROVED' },
   { value: 'DENIED', labelKey: 'REFILLS.STATUS_DENIED' },
   { value: 'ALL', labelKey: 'REFILLS.STATUS_ALL' },
 ];
+
+/** Statuses the prescriber can still act on — drives which cards show the action row. */
+const OPEN_STATUSES: RefillStatus[] = ['REQUESTED', 'PAUSED'];
 
 @Component({
   selector: 'app-refill-approval-list',
@@ -37,6 +42,7 @@ export class RefillApprovalListComponent implements OnInit {
 
   private readonly service = inject(RefillApprovalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   ngOnInit(): void {
     this.loadRefills();
@@ -65,39 +71,79 @@ export class RefillApprovalListComponent implements OnInit {
   }
 
   protected approve(refill: RefillRequest): void {
-    if (this.busyId()) return;
-    this.busyId.set(refill.id);
-    const providerNotes = (this.decisionNotes[refill.id] ?? '').trim();
-    this.service.approve(refill.id, providerNotes ? { providerNotes } : {}).subscribe({
-      next: () => {
-        this.busyId.set(null);
-        this.toast.success('Refill approved');
-        this.loadRefills();
-      },
-      error: () => {
-        this.busyId.set(null);
-        this.toast.error('Could not approve refill');
-      },
-    });
+    const providerNotes = this.notesFor(refill);
+    this.dispatch(
+      refill,
+      () => this.service.approve(refill.id, providerNotes ? { providerNotes } : {}),
+      'REFILLS.TOAST_APPROVED',
+      'REFILLS.TOAST_APPROVE_FAILED',
+    );
   }
 
   protected reject(refill: RefillRequest): void {
-    if (this.busyId()) return;
-    const providerNotes = (this.decisionNotes[refill.id] ?? '').trim();
+    const providerNotes = this.notesFor(refill);
     if (!providerNotes) {
-      this.toast.error('Please add a note explaining the rejection');
+      this.toast.error(this.translate.instant('REFILLS.NOTES_REQUIRED_REJECT'));
       return;
     }
+    this.dispatch(
+      refill,
+      () => this.service.reject(refill.id, { providerNotes }),
+      'REFILLS.TOAST_DENIED',
+      'REFILLS.TOAST_DENY_FAILED',
+    );
+  }
+
+  protected pause(refill: RefillRequest): void {
+    const providerNotes = this.notesFor(refill);
+    if (!providerNotes) {
+      this.toast.error(this.translate.instant('REFILLS.NOTES_REQUIRED_PAUSE'));
+      return;
+    }
+    this.dispatch(
+      refill,
+      () => this.service.pause(refill.id, { providerNotes }),
+      'REFILLS.TOAST_PAUSED',
+      'REFILLS.TOAST_PAUSE_FAILED',
+    );
+  }
+
+  /** True while the request is still open to a decision. */
+  protected isOpen(status: RefillStatus): boolean {
+    return OPEN_STATUSES.includes(status);
+  }
+
+  /** Pausing an already-paused request is a no-op the backend rejects, so hide the button. */
+  protected canPause(status: RefillStatus): boolean {
+    return status === 'REQUESTED';
+  }
+
+  private notesFor(refill: RefillRequest): string {
+    return (this.decisionNotes[refill.id] ?? '').trim();
+  }
+
+  /**
+   * Takes a factory rather than an observable so the in-flight guard runs
+   * before the service is touched at all — passing the observable in would
+   * mean the call had already been built by the time we decided to skip it.
+   */
+  private dispatch(
+    refill: RefillRequest,
+    call: () => Observable<RefillRequest>,
+    successKey: string,
+    errorKey: string,
+  ): void {
+    if (this.busyId()) return;
     this.busyId.set(refill.id);
-    this.service.reject(refill.id, { providerNotes }).subscribe({
+    call().subscribe({
       next: () => {
         this.busyId.set(null);
-        this.toast.success('Refill denied');
+        this.toast.success(this.translate.instant(successKey));
         this.loadRefills();
       },
       error: () => {
         this.busyId.set(null);
-        this.toast.error('Could not deny refill');
+        this.toast.error(this.translate.instant(errorKey));
       },
     });
   }
@@ -111,6 +157,7 @@ export class RefillApprovalListComponent implements OnInit {
       case 'CANCELLED':
         return 'badge badge--muted';
       case 'DISPENSED':
+      case 'PAUSED':
         return 'badge badge--info';
       default:
         return 'badge badge--warning';

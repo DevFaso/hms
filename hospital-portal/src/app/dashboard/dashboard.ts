@@ -1154,6 +1154,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
         bg: '#ede9fe',
       },
       {
+        // The prescriber is the only person who can decide a refill, so the
+        // queue needs a way in from the provider dashboard, not just the sidebar.
+        icon: 'loop',
+        label: this.t('DASHBOARD.TILE.REFILLS'),
+        route: '/refills',
+        color: '#2563eb',
+        bg: '#dbeafe',
+        count: this.inboxCounts()?.pendingRefills,
+      },
+      {
         icon: 'science',
         label: this.t('DASHBOARD.LAB_ORDERS'),
         route: '/lab',
@@ -1637,7 +1647,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'loop',
         label: this.t('DASHBOARD.TILE.REFILLS'),
-        route: '/prescriptions',
+        route: '/refills',
         color: '#2563eb',
         bg: '#dbeafe',
       },
