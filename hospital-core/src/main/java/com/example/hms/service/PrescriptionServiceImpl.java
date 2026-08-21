@@ -91,6 +91,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        enforceControlledSubstanceGates(entity);
 
         Prescription saved = prescriptionRepository.save(entity);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
@@ -187,6 +188,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        enforceControlledSubstanceGates(existing);
 
         Prescription saved = prescriptionRepository.save(existing);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
@@ -504,5 +506,47 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         return advisories;
     }
-}
 
+    /**
+     * Refuse to advance a controlled substance past DRAFT without its safeguards
+     * (P2 #15).
+     *
+     * <p>{@code controlledSubstance}, {@code twoFactorVerifiedAt},
+     * {@code requiresCosign} and {@code cosignedAt} have existed on Prescription
+     * since the pharmacy module shipped and nothing ever read them except
+     * display mappers. A prescriber could flag a schedule-II opioid as
+     * controlled, declare it needs a co-sign, complete neither, and the
+     * prescription would sail through as if it were paracetamol. The columns
+     * described a control that did not exist.
+     *
+     * <p>Gated on the STATUS, not on save: a controlled prescription can be
+     * drafted and saved freely, exactly as a paper one can be written before it
+     * is signed. What it cannot do is reach a state that authorises anybody to
+     * act on it — SIGNED and beyond — with a declared safeguard unmet.
+     *
+     * <p>The mirror of this gate lives in DispenseServiceImpl, because dispense
+     * is the irreversible step: a wrongly-signed prescription can be cancelled,
+     * medication handed to a patient cannot be recalled. Both are needed —
+     * status can be set by paths that never reach this service.
+     */
+    private void enforceControlledSubstanceGates(Prescription prescription) {
+        com.example.hms.enums.PrescriptionStatus status = prescription.getStatus();
+        if (status == null || status == com.example.hms.enums.PrescriptionStatus.DRAFT
+                || status == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE) {
+            return;
+        }
+
+        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
+            throw new BusinessException(
+                    "CONTROLLED_SUBSTANCE: a prescription flagged as a controlled substance cannot be "
+                            + "set to " + status + " until two-factor verification is complete.");
+        }
+
+        if (prescription.isRequiresCosign()
+                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
+            throw new BusinessException(
+                    "COSIGN_REQUIRED: a prescription that requires a co-signature cannot be set to "
+                            + status + " until a second prescriber co-signs it.");
+        }
+    }
+}
