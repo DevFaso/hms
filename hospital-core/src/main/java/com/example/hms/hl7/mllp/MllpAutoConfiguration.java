@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
  * downstream firewall + analyzer routing is in place.
  */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(MllpProperties.class)
+@EnableConfigurationProperties({MllpProperties.class, MllpOutboundProperties.class})
 @ConditionalOnProperty(prefix = "app.hl7.mllp", name = "enabled", havingValue = "true")
 public class MllpAutoConfiguration {
 

@@ -261,4 +261,78 @@ describe('LabResultsComponent', () => {
     component.closeDetail();
     expect(component.selectedResult()).toBeNull();
   });
+
+  /* ── Critical-value read-back (P0 #5) ── */
+
+  describe('critical-value read-back', () => {
+    it('asks a critical result to be read back rather than merely acknowledged', () => {
+      // canAcknowledge is role-derived and false in this harness; overriding it
+      // is what makes the assertion about CRITICAL-vs-normal rather than about
+      // whether the actions column renders at all.
+      (component as unknown as { canAcknowledge: boolean }).canAcknowledge = true;
+      fixture.detectChanges();
+      flushInit([mockResult({ severityFlag: 'CRITICAL' })]);
+      fixture.detectChanges();
+
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="read-back-result-1"]'),
+      ).not.toBeNull();
+    });
+
+    it('leaves a normal result with a plain acknowledge', () => {
+      (component as unknown as { canAcknowledge: boolean }).canAcknowledge = true;
+      fixture.detectChanges();
+      flushInit([mockResult({ severityFlag: 'NORMAL' })]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="read-back-result-1"]')).toBeNull();
+      expect(component.isCritical(component.results()[0])).toBeFalse();
+    });
+
+    it('never prefills the reported value into the read-back field', () => {
+      // Prefilling would let the clinician confirm the number by copying it,
+      // which defeats the entire check.
+      fixture.detectChanges();
+      flushInit([mockResult({ severityFlag: 'CRITICAL', resultValue: '7.1' })]);
+      component.openReadBack(component.results()[0]);
+      fixture.detectChanges();
+
+      expect(component.readBackValue()).toBe('');
+    });
+
+    it('posts the repeated value and resolves the row on a match', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ severityFlag: 'CRITICAL', resultValue: '7.1' })]);
+      component.openReadBack(component.results()[0]);
+      component.readBackValue.set('7.1');
+      component.submitReadBack();
+
+      const req = httpMock.expectOne('/lab-results/result-1/critical-read-back');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ repeatedValue: '7.1' });
+      req.flush(mockResult({ severityFlag: 'CRITICAL', acknowledged: true }));
+
+      expect(component.readBackTarget()).toBeNull();
+    });
+
+    it('surfaces the server message on a mismatch and keeps the dialog open', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ severityFlag: 'CRITICAL', resultValue: '7.1' })]);
+      component.openReadBack(component.results()[0]);
+      component.readBackValue.set('1.7');
+      component.submitReadBack();
+
+      httpMock
+        .expectOne('/lab-results/result-1/critical-read-back')
+        .flush(
+          { message: 'Read-back does not match the reported result.' },
+          { status: 400, statusText: 'Bad Request' },
+        );
+
+      // The clinician has to try again — silently closing would leave a
+      // critical value unresolved and look like success.
+      expect(component.readBackTarget()).not.toBeNull();
+      expect(component.readBackSubmitting()).toBeFalse();
+    });
+  });
 });

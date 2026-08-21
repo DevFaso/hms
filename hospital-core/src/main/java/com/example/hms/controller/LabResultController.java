@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
@@ -126,6 +127,29 @@ public class LabResultController {
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         labResultService.acknowledgeLabResult(id, locale);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Read-back of a critical value (P0 #5).
+     *
+     * <p>Distinct from acknowledge on purpose. Acknowledge takes no body, so it
+     * records only that somebody clicked; a read-back records WHAT they were
+     * told and checks it, which is the step that catches a transcription error
+     * before the wrong number is treated.
+     *
+     * <p>A mismatch returns 400 and is still persisted — a clinician reading
+     * back the wrong value is exactly the event worth having on the record.
+     */
+    @PostMapping("/{id}/critical-read-back")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @Operation(summary = "Read back a critical lab value",
+        description = "The receiving clinician repeats the value back; a match acknowledges the "
+            + "result and stops escalation, a mismatch is rejected and recorded.")
+    public ResponseEntity<LabResultResponseDTO> readBackCriticalValue(
+            @PathVariable UUID id,
+            @Valid @RequestBody CriticalValueReadBackRequestDTO request,
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(labResultService.recordCriticalReadBack(id, request, locale));
     }
 
     @DeleteMapping("/{id}")

@@ -15,6 +15,16 @@ public interface PrescriptionService {
 
     PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale);
 
+    /**
+     * Sign a prescription (P2 #16).
+     *
+     * <p>SIGNED used to be a client-supplied status with nothing behind it. This
+     * is the only path that can set it: it verifies the signer is the
+     * prescription's own prescriber, applies the controlled-substance gates, and
+     * records who signed, when, and a SHA-256 digest of what they signed.
+     */
+    PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
+
     Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);

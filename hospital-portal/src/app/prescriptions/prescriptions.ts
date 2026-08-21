@@ -78,6 +78,8 @@ export class PrescriptionsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingRx = signal<PrescriptionResponse | null>(null);
   deleting = signal(false);
+  /** Id of the prescription currently being signed, so only its button spins. */
+  signingId = signal<string | null>(null);
 
   /** CDS rule-engine cards from the most recent submit attempt. */
   cdsAdvisories = signal<CdsCard[]>([]);
@@ -112,15 +114,20 @@ export class PrescriptionsComponent implements OnInit {
     }
   }
 
-  // Status filter dropdown. The wire `value` is the raw enum (preserved for
-  // API/DB equality checks); `labelKey` points at the canonical
-  // PORTAL.ENUM.PRESCRIPTION_STATUS namespace introduced in
+  // Statuses a human may set directly on the edit form. The wire `value` is the
+  // raw enum (preserved for API/DB equality checks); `labelKey` points at the
+  // canonical PORTAL.ENUM.PRESCRIPTION_STATUS namespace introduced in
   // feat/i18n-enum-label-pipe-phase1, so this UI no longer carries its own
   // duplicate translation namespace (PR #256 keys removed in Phase 2/3).
+  //
+  // SIGNED is absent on purpose. It used to be offered here, which is how
+  // "signed" came to mean "somebody picked SIGNED from a dropdown" — no signer,
+  // no timestamp, no digest. It is now reachable only through the sign action,
+  // and the backend rejects it in a create/update body. Leaving it in this list
+  // would offer a control that always fails.
   prescriptionStatuses = [
     { value: 'DRAFT', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DRAFT' },
     { value: 'PENDING_SIGNATURE', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.PENDING_SIGNATURE' },
-    { value: 'SIGNED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.SIGNED' },
     { value: 'TRANSMITTED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.TRANSMITTED' },
     { value: 'CANCELLED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED' },
     { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
@@ -316,6 +323,36 @@ export class PrescriptionsComponent implements OnInit {
       error: () => {
         this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
+      },
+    });
+  }
+
+  /**
+   * Only a prescription still awaiting a signature can be signed, and only its
+   * own prescriber may do it. The backend is the real check — it compares the
+   * caller against the prescribing clinician, which no template expression can
+   * — so this is presentation only: it hides a button that would 403.
+   */
+  canSign(p: PrescriptionResponse): boolean {
+    return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
+  }
+
+  signPrescription(p: PrescriptionResponse): void {
+    this.signingId.set(p.id);
+    this.prescriptionService.sign(p.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        this.signingId.set(null);
+        this.load();
+      },
+      error: (err: unknown) => {
+        // The backend refuses for reasons the user needs to see verbatim — not
+        // your prescription, controlled substance missing two-factor, co-sign
+        // outstanding. Collapsing those into one generic string would leave a
+        // prescriber with no idea what to do next.
+        const msg = this.extractErrorMessage(err);
+        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.SIGN_FAILED'));
+        this.signingId.set(null);
       },
     });
   }

@@ -4,6 +4,7 @@ import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
 import com.example.hms.enums.NewbornFollowUpAction;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.NewbornAssessmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -32,6 +33,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,6 +56,8 @@ class NewbornAssessmentServiceImplTest {
     @Mock
     private HospitalRepository hospitalRepository;
     @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    @Mock
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
@@ -74,6 +78,7 @@ class NewbornAssessmentServiceImplTest {
             patientRepository,
             registrationRepository,
             hospitalRepository,
+            deliveryRecordRepository,
             staffRepository,
             userRepository,
             notificationService,
@@ -171,5 +176,92 @@ class NewbornAssessmentServiceImplTest {
         List<NewbornAssessmentResponseDTO> results = service.searchAssessments(patientId, hospitalId, null, null, 0, 25);
         assertNotNull(results);
         verify(assessmentRepository).findWithinRange(any(), any(), any(), any(), any());
+    }
+
+    // ── delivery-record back-link (P1 #6) ──────────────────────────────────
+    // V111 shipped the column, the FK and the @ManyToOne, and nothing ever set
+    // or read them: a newborn assessment could not be traced back to the labour
+    // it came from, which is the whole point of the back-link.
+
+    private com.example.hms.model.labor.DeliveryRecord deliveryRecordAt(UUID atHospitalId) {
+        Hospital owner = Hospital.builder().name("Owner").code("OWN").build();
+        owner.setId(atHospitalId);
+        com.example.hms.model.labor.DeliveryRecord delivery =
+            new com.example.hms.model.labor.DeliveryRecord();
+        delivery.setId(UUID.randomUUID());
+        delivery.setHospital(owner);
+        return delivery;
+    }
+
+    @Test
+    void recordAssessmentLinksTheDeliveryRecordWhenSupplied() {
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        when(deliveryRecordRepository.findById(delivery.getId())).thenReturn(Optional.of(delivery));
+
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .deliveryRecordId(delivery.getId())
+            .apgarOneMinute(8)
+            .apgarFiveMinute(9)
+            .build();
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
+
+        assertEquals(delivery.getId(), response.getDeliveryRecordId());
+
+        ArgumentCaptor<NewbornAssessment> captor = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getDeliveryRecord());
+        assertEquals(delivery.getId(), captor.getValue().getDeliveryRecord().getId());
+    }
+
+    @Test
+    void recordAssessmentWithoutDeliveryRecordStillSucceeds() {
+        // A newborn transferred in already born, or one predating the L&D module,
+        // has no delivery to link. The assessment is complete without it.
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .apgarOneMinute(8)
+            .apgarFiveMinute(9)
+            .build();
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
+
+        assertNull(response.getDeliveryRecordId());
+        verify(deliveryRecordRepository, org.mockito.Mockito.never()).findById(any());
+    }
+
+    @Test
+    void recordAssessmentRejectsADeliveryRecordFromAnotherHospital() {
+        com.example.hms.model.labor.DeliveryRecord foreign = deliveryRecordAt(UUID.randomUUID());
+        when(deliveryRecordRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .deliveryRecordId(foreign.getId())
+            .apgarOneMinute(8)
+            .apgarFiveMinute(9)
+            .build();
+
+        assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, request, recorderId));
+        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void recordAssessmentRejectsAnUnknownDeliveryRecord() {
+        UUID missing = UUID.randomUUID();
+        when(deliveryRecordRepository.findById(missing)).thenReturn(Optional.empty());
+
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .deliveryRecordId(missing)
+            .apgarOneMinute(8)
+            .apgarFiveMinute(9)
+            .build();
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> service.recordAssessment(patientId, request, recorderId));
+        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
     }
 }
