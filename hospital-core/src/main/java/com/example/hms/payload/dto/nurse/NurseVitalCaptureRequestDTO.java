@@ -22,5 +22,7 @@ public class NurseVitalCaptureRequestDTO {
     private Integer spo2Percent;
     private Integer bloodGlucoseMgDl;
     private Double weightKg;
+    private Double heightCm;
+    private Double headCircumferenceCm;
     private String notes;
 }

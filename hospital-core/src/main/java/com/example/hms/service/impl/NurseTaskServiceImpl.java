@@ -1184,6 +1184,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .spo2Percent(request.getSpo2Percent())
             .bloodGlucoseMgDl(request.getBloodGlucoseMgDl())
             .weightKg(request.getWeightKg())
+            .heightCm(request.getHeightCm())
+            .headCircumferenceCm(request.getHeadCircumferenceCm())
             .notes(request.getNotes())
             .clinicallySignificant(clinicallySig)
             .build();

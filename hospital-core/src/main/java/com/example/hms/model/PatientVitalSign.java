@@ -100,6 +100,12 @@ public class PatientVitalSign extends BaseEntity {
     @Column(name = "weight_kg")
     private Double weightKg;
 
+    @Column(name = "height_cm")
+    private Double heightCm;
+
+    @Column(name = "head_circumference_cm")
+    private Double headCircumferenceCm;
+
     @Size(max = 40)
     @Column(name = "body_position", length = 40)
     private String bodyPosition;

@@ -1,0 +1,223 @@
+<div class="fluid-tab">
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'FLUID_BALANCE.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && error()) {
+    <div class="error-state" data-testid="fluid-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'FLUID_BALANCE.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !error() && summary(); as s) {
+    <div class="fluid-toolbar">
+      <div
+        class="window-switch"
+        role="group"
+        [attr.aria-label]="'FLUID_BALANCE.WINDOW_SWITCH' | translate"
+      >
+        <button
+          type="button"
+          class="window-btn"
+          data-testid="window-24h"
+          [class.active]="windowPreset() === '24h'"
+          (click)="setWindow('24h')"
+        >
+          {{ 'FLUID_BALANCE.WINDOW_24H' | translate }}
+        </button>
+        <button
+          type="button"
+          class="window-btn"
+          data-testid="window-48h"
+          [class.active]="windowPreset() === '48h'"
+          (click)="setWindow('48h')"
+        >
+          {{ 'FLUID_BALANCE.WINDOW_48H' | translate }}
+        </button>
+        <button
+          type="button"
+          class="window-btn"
+          data-testid="window-7d"
+          [class.active]="windowPreset() === '7d'"
+          (click)="setWindow('7d')"
+        >
+          {{ 'FLUID_BALANCE.WINDOW_7D' | translate }}
+        </button>
+      </div>
+      <button type="button" class="btn-primary" data-testid="record-entry" (click)="openModal()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'FLUID_BALANCE.RECORD_ENTRY' | translate }}
+      </button>
+    </div>
+
+    <div class="totals-grid">
+      <div class="total-card intake">
+        <span class="total-label">{{ 'FLUID_BALANCE.TOTAL_INTAKE' | translate }}</span>
+        <strong data-testid="total-intake">{{ s.totalIntakeMl }} ml</strong>
+      </div>
+      <div class="total-card output">
+        <span class="total-label">{{ 'FLUID_BALANCE.TOTAL_OUTPUT' | translate }}</span>
+        <strong data-testid="total-output">{{ s.totalOutputMl }} ml</strong>
+      </div>
+      <div class="total-card balance" [class.negative]="!balancePositive()">
+        <span class="total-label">{{ 'FLUID_BALANCE.BALANCE' | translate }}</span>
+        <strong data-testid="balance">{{ s.balanceMl > 0 ? '+' : '' }}{{ s.balanceMl }} ml</strong>
+      </div>
+    </div>
+
+    @if (s.entries.length === 0) {
+      <div class="empty-state" data-testid="fluid-empty">
+        <span class="material-symbols-outlined">water_drop</span>
+        <p>{{ 'FLUID_BALANCE.NO_ENTRIES' | translate }}</p>
+        <p class="hint">{{ 'FLUID_BALANCE.NO_ENTRIES_HINT' | translate }}</p>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="fluid-table" data-testid="fluid-table">
+          <thead>
+            <tr>
+              <th>{{ 'FLUID_BALANCE.COL_TIME' | translate }}</th>
+              <th>{{ 'FLUID_BALANCE.COL_CATEGORY' | translate }}</th>
+              <th>{{ 'FLUID_BALANCE.COL_ROUTE' | translate }}</th>
+              <th>{{ 'FLUID_BALANCE.COL_VOLUME' | translate }}</th>
+              <th>{{ 'FLUID_BALANCE.COL_RECORDED_BY' | translate }}</th>
+              <th>{{ 'FLUID_BALANCE.COL_NOTES' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of s.entries; track entry.id) {
+              <tr>
+                <td>
+                  {{ entry.observationTime | date: 'MMM d, HH:mm' }}
+                  @if (entry.lateEntry) {
+                    <span class="late-chip">{{ 'FLUID_BALANCE.LATE_ENTRY' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  <span
+                    class="category-badge"
+                    [class.intake]="entry.category === 'INTAKE'"
+                    [class.output]="entry.category === 'OUTPUT'"
+                  >
+                    {{
+                      (entry.category === 'INTAKE'
+                        ? 'FLUID_BALANCE.CATEGORY_INTAKE'
+                        : 'FLUID_BALANCE.CATEGORY_OUTPUT'
+                      ) | translate
+                    }}
+                  </span>
+                </td>
+                <td>{{ routeLabel(entry.route) }}</td>
+                <td class="volume-cell">{{ entry.volumeMl }} ml</td>
+                <td>{{ entry.recordedByName || '—' }}</td>
+                <td class="notes-cell">{{ entry.notes || '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  @if (showModal()) {
+    <!-- Modal nested INSIDE the backdrop (the #442 lesson). -->
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeModal()"
+      >
+        <h3>{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}</h3>
+
+        <div class="form-field">
+          <label for="io-route">{{ 'FLUID_BALANCE.FIELD_ROUTE' | translate }}</label>
+          <select
+            id="io-route"
+            data-testid="io-route"
+            [ngModel]="formRoute()"
+            (ngModelChange)="formRoute.set($event)"
+          >
+            <option value="" disabled>{{ 'FLUID_BALANCE.ROUTE_PLACEHOLDER' | translate }}</option>
+            <optgroup [label]="'FLUID_BALANCE.GROUP_INTAKE' | translate">
+              @for (route of intakeRoutes; track route) {
+                <option [value]="route">{{ routeLabel(route) }}</option>
+              }
+            </optgroup>
+            <optgroup [label]="'FLUID_BALANCE.GROUP_OUTPUT' | translate">
+              @for (route of outputRoutes; track route) {
+                <option [value]="route">{{ routeLabel(route) }}</option>
+              }
+            </optgroup>
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="io-volume">{{ 'FLUID_BALANCE.FIELD_VOLUME' | translate }} (ml)</label>
+          <input
+            id="io-volume"
+            data-testid="io-volume"
+            type="number"
+            min="1"
+            max="10000"
+            [ngModel]="formVolume()"
+            (ngModelChange)="formVolume.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="io-time">{{ 'FLUID_BALANCE.FIELD_TIME' | translate }}</label>
+          <input
+            id="io-time"
+            data-testid="io-time"
+            type="datetime-local"
+            [ngModel]="formTime()"
+            (ngModelChange)="formTime.set($event)"
+          />
+          <small class="field-hint">{{ 'FLUID_BALANCE.TIME_HINT' | translate }}</small>
+        </div>
+
+        <div class="form-field">
+          <label for="io-notes">{{ 'FLUID_BALANCE.FIELD_NOTES' | translate }}</label>
+          <textarea
+            id="io-notes"
+            data-testid="io-notes"
+            rows="2"
+            maxlength="500"
+            [ngModel]="formNotes()"
+            (ngModelChange)="formNotes.set($event)"
+          ></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeModal()" [disabled]="saving()">
+            {{ 'FLUID_BALANCE.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="io-save"
+            (click)="submit()"
+            [disabled]="saving()"
+          >
+            {{ (saving() ? 'FLUID_BALANCE.SAVING' : 'FLUID_BALANCE.SAVE') | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

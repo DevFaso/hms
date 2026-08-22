@@ -817,7 +817,11 @@ LiquibaseSchemaIT verified green on develop `b1e26153` first).
 
 ## P3 — Broader parity, pick by demand
 
-- [ ] 18. Growth charts (needs a height column on vitals) + flowsheets/I&O grids
+With P0–P2 closed end-to-end (promoted 2026-08-22), this tier is the working
+list. Item 22 stays blocked on the slot-booking open decision (which model owns
+the time).
+
+- [ ] 18. Growth charts (needs a height column on vitals) + flowsheets/I&O grids — ⏳ IN PROGRESS 2026-08-22 (`feature/growth-charts-flowsheets`)
 - [ ] 19. Microbiology (cultures, susceptibilities) — biggest lab-domain absence
 - [ ] 20. Note co-sign workflow (student/resident attestation)
 - [ ] 21. Registration extras: patient photo capture, consent-to-treat e-sign at check-in, guarantor accounts

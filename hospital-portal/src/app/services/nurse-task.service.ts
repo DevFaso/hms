@@ -156,6 +156,8 @@ export interface NurseVitalCaptureRequest {
   spo2Percent?: number;
   bloodGlucoseMgDl?: number;
   weightKg?: number;
+  heightCm?: number;
+  headCircumferenceCm?: number;
   notes?: string;
 }
 

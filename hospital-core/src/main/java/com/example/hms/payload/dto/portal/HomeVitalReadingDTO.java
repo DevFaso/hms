@@ -48,9 +48,13 @@ public class HomeVitalReadingDTO {
     @Schema(description = "Blood glucose level (mg/dL)", example = "95")
     private Integer bloodGlucoseMgDl;
 
-    @DecimalMin("1.0") @DecimalMax("400.0")
+    @DecimalMin("0.2") @DecimalMax("400.0")
     @Schema(description = "Weight in kg", example = "72.5")
     private Double weightKg;
+
+    @DecimalMin("20.0") @DecimalMax("250.0")
+    @Schema(description = "Height in cm", example = "172.0")
+    private Double heightCm;
 
     @Size(max = 40)
     @Schema(description = "Body position during measurement", example = "Sitting")

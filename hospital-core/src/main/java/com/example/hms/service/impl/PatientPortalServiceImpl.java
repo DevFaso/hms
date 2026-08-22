@@ -662,6 +662,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .spo2Percent(dto.getSpo2Percent())
                 .bloodGlucoseMgDl(dto.getBloodGlucoseMgDl())
                 .weightKg(dto.getWeightKg())
+                .heightCm(dto.getHeightCm())
                 .bodyPosition(dto.getBodyPosition())
                 .notes(dto.getNotes())
                 .recordedAt(dto.getRecordedAt() != null ? dto.getRecordedAt() : java.time.LocalDateTime.now())

@@ -1122,11 +1122,39 @@
             id="vf-weight"
             type="number"
             step="0.1"
-            min="1"
-            max="500"
+            min="0.2"
+            max="400"
             [placeholder]="'NURSE.VITALS_PLACEHOLDER.WEIGHT' | translate"
             [value]="vitalsForm().weightKg ?? ''"
             (input)="updateVitalsField('weightKg', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-height">{{ 'NURSE.HEIGHT' | translate }} (cm)</label>
+          <input
+            id="vf-height"
+            type="number"
+            step="0.1"
+            min="20"
+            max="250"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.HEIGHT' | translate"
+            [value]="vitalsForm().heightCm ?? ''"
+            (input)="updateVitalsField('heightCm', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-head-circumference">
+            {{ 'NURSE.HEAD_CIRCUMFERENCE' | translate }} (cm)
+          </label>
+          <input
+            id="vf-head-circumference"
+            type="number"
+            step="0.1"
+            min="15"
+            max="70"
+            [placeholder]="'NURSE.VITALS_PLACEHOLDER.HEAD_CIRCUMFERENCE' | translate"
+            [value]="vitalsForm().headCircumferenceCm ?? ''"
+            (input)="updateVitalsField('headCircumferenceCm', $any($event.target).value)"
           />
         </div>
         <div class="vitals-field vitals-field-full">

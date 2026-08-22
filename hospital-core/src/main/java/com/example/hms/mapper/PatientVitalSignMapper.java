@@ -34,6 +34,8 @@ public class PatientVitalSignMapper {
             .spo2Percent(entity.getSpo2Percent())
             .bloodGlucoseMgDl(entity.getBloodGlucoseMgDl())
             .weightKg(entity.getWeightKg())
+            .heightCm(entity.getHeightCm())
+            .headCircumferenceCm(entity.getHeadCircumferenceCm())
             .bodyPosition(entity.getBodyPosition())
             .notes(entity.getNotes())
             .clinicallySignificant(entity.isClinicallySignificant())
@@ -54,7 +56,9 @@ public class PatientVitalSignMapper {
         entity.setDiastolicBpMmHg(request.getDiastolicBpMmHg());
         entity.setSpo2Percent(request.getSpo2Percent());
         entity.setBloodGlucoseMgDl(request.getBloodGlucoseMgDl());
-    entity.setWeightKg(request.getWeightKg());
+        entity.setWeightKg(request.getWeightKg());
+        entity.setHeightCm(request.getHeightCm());
+        entity.setHeadCircumferenceCm(request.getHeadCircumferenceCm());
         entity.setBodyPosition(request.getBodyPosition());
         entity.setNotes(request.getNotes());
         entity.setSource(request.getSource());
