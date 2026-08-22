@@ -122,6 +122,11 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "lab", "micro_susceptibilities");
             assertColumnExists(stmt, "lab", "micro_culture_results", "growth_result");
             assertColumnExists(stmt, "lab", "micro_susceptibilities", "interpretation");
+
+            // V125: encounter-note sign/co-sign ceremony columns
+            assertColumnExists(stmt, "clinical", "encounter_notes", "signature_value");
+            assertColumnExists(stmt, "clinical", "encounter_notes", "requires_cosign");
+            assertColumnExists(stmt, "clinical", "encounter_notes", "cosigned_by_staff_id");
         }
     }
 

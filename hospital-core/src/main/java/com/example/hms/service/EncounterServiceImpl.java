@@ -88,6 +88,9 @@ public class EncounterServiceImpl implements EncounterService {
     private static final String NOTE_HISTORY_CREATED = "NOTE_CREATED";
     private static final String NOTE_HISTORY_UPDATED = "NOTE_UPDATED";
     private static final String NOTE_HISTORY_ADDENDUM = "NOTE_ADDENDUM";
+    private static final String NOTE_HISTORY_SIGNED = "NOTE_SIGNED";
+    private static final String NOTE_HISTORY_COSIGNED = "NOTE_COSIGNED";
+    private static final String NOTE_SIGNATURE_ALGORITHM = "SHA-256";
 
     private static final String MSG_ENCOUNTER_NOT_FOUND = "encounter.notfound";
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notfound";
@@ -490,7 +493,9 @@ public class EncounterServiceImpl implements EncounterService {
             .content(request.getContent())
             .eventOccurredAt(request.getEventOccurredAt())
             .documentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now())
-            .signedAt(request.getSignedAt())
+            // Server-stamped, never client-asserted (P3 #20): an attested
+            // addendum is signed at the moment it is documented.
+            .signedAt(Boolean.TRUE.equals(request.getAttestAccuracy()) ? LocalDateTime.now() : null)
             .attestAccuracy(Boolean.TRUE.equals(request.getAttestAccuracy()))
             .attestNoAbbreviations(Boolean.TRUE.equals(request.getAttestNoAbbreviations()))
             .build();
@@ -514,6 +519,157 @@ public class EncounterServiceImpl implements EncounterService {
             .toList();
     }
 
+    /**
+     * The note signing ceremony (P3 #20), mirroring
+     * {@code PrescriptionServiceImpl.signPrescription}: 404-not-403 tenant
+     * guard, re-sign refused (a second signature over altered content would
+     * silently replace the only record of what was attested), author-only
+     * (the controller's {@code @PreAuthorize} cannot express "and this is
+     * your note"), SHA-256 digest over a canonical payload as
+     * tamper-evidence. Signing locks the note — content changes go through
+     * addenda.
+     */
+    @Override
+    @Transactional
+    public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale) {
+        EncounterNote note = loadNoteScoped(encounterId, locale);
+
+        if (note.isSigned() || note.getSignatureValue() != null) {
+            throw new BusinessException(
+                "This note has already been signed. A signature cannot be reissued; "
+                    + "append an addendum instead.");
+        }
+
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        UUID authorUserId = note.getAuthor() != null ? note.getAuthor().getId() : null;
+        if (currentUserId == null || authorUserId == null || !authorUserId.equals(currentUserId)) {
+            // 403, not 400: an authorization failure, not a workflow one.
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only the note's author can sign it.");
+        }
+
+        LocalDateTime signedAt = LocalDateTime.now();
+        note.setSignedAt(signedAt);
+        note.setSignedByUserId(currentUserId);
+        // Server-resolved display identity — never the request body's.
+        note.setSignedByName(resolveUserDisplayName(note.getAuthor()));
+        note.setSignedByCredentials(trimToNull(note.getAuthorCredentials()));
+        note.setSignatureAlgorithm(NOTE_SIGNATURE_ALGORITHM);
+        note.setSignatureValue(computeNoteSignatureDigest(canonicalNoteSignaturePayload(note, signedAt)));
+
+        EncounterNote saved = encounterNoteRepository.save(note);
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, String.valueOf(currentUserId));
+        return encounterMapper.toEncounterNoteResponseDTO(saved);
+    }
+
+    /**
+     * The attending co-signature (P3 #20): the author signs first, a second
+     * clinician attests the signed note. Unlike the prescription cosign
+     * shape, the co-signer's staff profile is resolved AT THE NOTE'S
+     * HOSPITAL — resolving "first staff row anywhere" would let a
+     * hospital-B doctor attest hospital-A documentation.
+     *
+     * <p>Who may co-sign is role-based (any attending-privileged DOCTOR at
+     * the hospital): no staff-to-staff supervision relation exists in the
+     * model, and inventing one silently is a data-model decision this PR
+     * deliberately does not make.
+     */
+    @Override
+    @Transactional
+    public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale) {
+        EncounterNote note = loadNoteScoped(encounterId, locale);
+
+        if (!note.isRequiresCosign()) {
+            throw new BusinessException("This note does not declare a co-signature requirement.");
+        }
+        if (note.getCosignedAt() != null || note.getCosignedBy() != null) {
+            throw new BusinessException("This note has already been co-signed.");
+        }
+        if (!note.isSigned()) {
+            throw new BusinessException(
+                "The author must sign the note before it can be co-signed.");
+        }
+
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Unable to determine the co-signing clinician.");
+        }
+        UUID noteHospitalId = note.getHospital() != null ? note.getHospital().getId() : null;
+        Staff cosigner = staffRepository.findByUserIdAndHospitalId(currentUserId, noteHospitalId)
+            .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                "Only a clinician with a staff profile at this hospital can co-sign the note."));
+
+        UUID authorUserId = note.getAuthor() != null ? note.getAuthor().getId() : null;
+        if (authorUserId != null && authorUserId.equals(currentUserId)) {
+            throw new BusinessException(
+                "A note cannot be co-signed by its own author; the co-signature exists to put "
+                    + "a second clinician's judgment on record.");
+        }
+
+        note.setCosignedBy(cosigner);
+        note.setCosignedAt(LocalDateTime.now());
+
+        EncounterNote saved = encounterNoteRepository.save(note);
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_COSIGNED, String.valueOf(currentUserId));
+        return encounterMapper.toEncounterNoteResponseDTO(saved);
+    }
+
+    /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
+    private EncounterNote loadNoteScoped(UUID encounterId, Locale locale) {
+        if (!encounterRepository.existsById(encounterId)) {
+            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+        }
+        EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage("encounter.note.notfound", null, locale)));
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+            && note.getHospital() != null
+            && !hospitalId.equals(note.getHospital().getId())) {
+            throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+        }
+        return note;
+    }
+
+    private String resolveUserDisplayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String combined = ((user.getFirstName() != null ? user.getFirstName().trim() : "")
+            + " " + (user.getLastName() != null ? user.getLastName().trim() : "")).trim();
+        return combined.isEmpty() ? user.getUsername() : combined;
+    }
+
+    /**
+     * The content the signature attests to. Field order and separator are
+     * part of the contract; nulls are rendered explicitly so a missing and
+     * an empty section cannot collide into the same digest.
+     */
+    private String canonicalNoteSignaturePayload(EncounterNote note, LocalDateTime signedAt) {
+        return String.join("|",
+            String.valueOf(note.getId()),
+            String.valueOf(note.getEncounter() != null ? note.getEncounter().getId() : null),
+            String.valueOf(note.getPatient() != null ? note.getPatient().getId() : null),
+            String.valueOf(note.getTemplate()),
+            String.valueOf(note.getChiefComplaint()),
+            String.valueOf(note.getAssessment()),
+            String.valueOf(note.getPlan()),
+            String.valueOf(note.getSummary()),
+            String.valueOf(note.getSignedByUserId()),
+            String.valueOf(signedAt));
+    }
+
+    private String computeNoteSignatureDigest(String payload) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance(NOTE_SIGNATURE_ALGORITHM);
+            return java.util.HexFormat.of().formatHex(
+                digest.digest(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
                                                       Staff defaultStaff,
                                                       EncounterNoteRequestDTO request,
@@ -530,6 +686,14 @@ public class EncounterServiceImpl implements EncounterService {
             .orElseGet(() -> encounterNoteRepository.findByEncounter_Id(encounter.getId()).orElse(new EncounterNote()));
 
         boolean isNew = note.getId() == null;
+        // The lock the sign ceremony creates (P3 #20). Includes pre-V125
+        // client-asserted signatures: the note form always promised signing
+        // "closes the note for further edits", and until now the upsert
+        // silently rewrote signed notes anyway.
+        if (!isNew && note.isSigned()) {
+            throw new BusinessException(
+                "This note is signed and can no longer be edited. Append an addendum instead.");
+        }
         if (isNew) {
             note.setEncounter(encounter);
             note.setPatient(encounter.getPatient());
@@ -722,12 +886,28 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
+    /**
+     * A signature cannot be asserted in the note body (P3 #20). Until V125
+     * this method copied signedAt/signedByName/signedByCredentials straight
+     * from the request — two free-text inputs and a browser timestamp — which
+     * is the pre-V118 anti-pattern the prescription ceremony was built to
+     * kill. Refused loudly rather than silently dropped, so an old client
+     * learns where the ceremony lives instead of believing it signed.
+     */
     private void applySignature(EncounterNote note, EncounterNoteRequestDTO request) {
-        if (request.getSignedAt() != null) {
-            note.setSignedAt(request.getSignedAt());
+        if (request.getSignedAt() != null
+            || trimToNull(request.getSignedByName()) != null
+            || trimToNull(request.getSignedByCredentials()) != null) {
+            throw new BusinessException(
+                "Note signatures are recorded by POST /encounters/{id}/notes/sign; "
+                    + "they cannot be asserted in the note body.");
         }
-        setStringIfPresent(request.getSignedByName(), value -> note.setSignedByName(trimToNull(value)));
-        setStringIfPresent(request.getSignedByCredentials(), value -> note.setSignedByCredentials(trimToNull(value)));
+        // Set-only, the prescription idiom: declaring the co-sign requirement
+        // is documentation; withdrawing it would be an attestation decision no
+        // upsert should make silently.
+        if (Boolean.TRUE.equals(request.getRequiresCosign())) {
+            note.setRequiresCosign(true);
+        }
     }
 
     private boolean shouldRebuildLinks(EncounterNoteRequestDTO request) {
@@ -898,6 +1078,9 @@ public class EncounterServiceImpl implements EncounterService {
         snapshot.put("signedAt", note.getSignedAt());
         snapshot.put("signedByName", note.getSignedByName());
         snapshot.put("signedByCredentials", note.getSignedByCredentials());
+        snapshot.put("signatureValue", note.getSignatureValue());
+        snapshot.put("requiresCosign", note.isRequiresCosign());
+        snapshot.put("cosignedAt", note.getCosignedAt());
         snapshot.put("linkedArtifacts", note.getLinks() != null
             ? note.getLinks().stream().map(EncounterNoteLink::getArtifactId).toList()
             : Collections.emptyList());

@@ -40,4 +40,6 @@ public abstract class EncounterNoteBaseDTO {
     private LocalDateTime signedAt;
     private String signedByName;
     private String signedByCredentials;
+    /** Set-only: once true, an upsert cannot withdraw the requirement. */
+    private Boolean requiresCosign;
 }

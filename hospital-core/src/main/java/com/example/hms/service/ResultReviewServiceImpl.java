@@ -57,6 +57,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final RefillRequestRepository refillRequestRepository;
     private final DigitalSignatureRepository digitalSignatureRepository;
     private final EncounterRepository encounterRepository;
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final PrescriptionRepository prescriptionRepository;
 
     @Override
@@ -172,6 +173,35 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                     });
         } catch (Exception e) {
             log.debug("Signature inbox query error: {}", e.getMessage());
+        }
+
+        // 3b. Encounter notes awaiting an attending co-signature (P3 #20).
+        // Role-based queue: no staff-to-staff supervision relation exists, so
+        // every clinician at the hospital sees the pending notes, minus their
+        // own (self-cosign is refused by the ceremony anyway).
+        try {
+            UUID hospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
+            if (hospitalId != null) {
+                encounterNoteRepository
+                        .findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(hospitalId)
+                        .stream()
+                        .filter(note -> note.getAuthor() == null || !userId.equals(note.getAuthor().getId()))
+                        .forEach(note -> items.add(ClinicalInboxItemDTO.builder()
+                                .id(note.getId())
+                                .category("DOCUMENT_TO_SIGN")
+                                .source(note.getAuthorName() != null ? note.getAuthorName() : "Encounter note")
+                                .patientName(note.getPatient() != null
+                                        ? note.getPatient().getFirstName() + " " + note.getPatient().getLastName()
+                                        : null)
+                                .patientId(note.getPatient() != null ? note.getPatient().getId() : null)
+                                .subject("Encounter note awaiting co-signature")
+                                .urgency(URGENCY_NORMAL)
+                                .timestamp(note.getSignedAt())
+                                .actionType("SIGN")
+                                .build()));
+            }
+        } catch (Exception e) {
+            log.debug("Note co-sign inbox query error: {}", e.getMessage());
         }
 
         // 4. Active encounters as tasks

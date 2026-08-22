@@ -658,3 +658,20 @@
   color: #6b6b8f;
   margin: 0 0 10px;
 }
+
+/* Note sign/co-sign ceremony (P3 #20) */
+.note-meta.cosign-pending {
+  color: #92400e;
+  font-weight: 600;
+}
+
+.cosign-pending-badge {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+}

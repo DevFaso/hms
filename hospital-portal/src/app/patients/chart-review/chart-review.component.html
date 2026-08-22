@@ -185,6 +185,21 @@
                       {{ 'CHART_REVIEW.LATE_ENTRY' | translate }}
                     </span>
                   }
+                  @if (n.requiresCosign) {
+                    <span
+                      class="chart-review__pill"
+                      data-testid="cosign-pill"
+                      [ngClass]="
+                        n.cosignedAt ? 'chart-review__pill--info' : 'chart-review__pill--warning'
+                      "
+                    >
+                      {{
+                        n.cosignedAt
+                          ? ('CHART_REVIEW.COSIGNED' | translate)
+                          : ('CHART_REVIEW.COSIGN_PENDING' | translate)
+                      }}
+                    </span>
+                  }
                 </header>
                 @if (n.authorName) {
                   <p class="chart-review__card-meta">

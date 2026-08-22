@@ -1864,4 +1864,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V125 — encounter-note sign/co-sign ceremony columns (P3 item 20).
+         Kills the client-asserted note signature (the pre-V118
+         anti-pattern): server-resolved signer + SHA-256 digest, plus the
+         requires_cosign/cosigned_by/cosigned_at attestation pair.
+         Contains a DO $$ block (guarded FK adds), so splitStatements
+         must be false.
+         ================================================================= -->
+    <changeSet id="V125-encounter-note-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V125__encounter_note_signature.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"
+                 splitStatements="false"/>
+    </changeSet>
+
 </databaseChangeLog>
