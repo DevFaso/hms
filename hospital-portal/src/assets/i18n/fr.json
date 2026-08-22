@@ -2622,7 +2622,9 @@
     "READ_BACK_HINT": "Saisissez la valeur qui vous a été communiquée — ne la copiez pas depuis le dossier. Le système la compare au résultat rapporté.",
     "READ_BACK_CONFIRM": "Confirmer la relecture",
     "READ_BACK_CONFIRMED": "Relecture confirmée",
-    "READ_BACK_ERROR": "La relecture n'a pas pu être enregistrée"
+    "READ_BACK_ERROR": "La relecture n'a pas pu être enregistrée",
+    "READ_BACK_RECORDED": "Relecture confirmée",
+    "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -3145,7 +3147,11 @@
       "GIVEN": "administré",
       "HELD": "mis en pause",
       "REFUSED": "refusé"
-    }
+    },
+    "HANDOFFS_PENDING": "En attente",
+    "HANDOFFS_COMPLETED": "Terminées",
+    "NO_COMPLETED_HANDOFFS": "Aucune transmission terminée pour l’instant",
+    "HANDOFF_COMPLETED_BY": "Terminée par"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",

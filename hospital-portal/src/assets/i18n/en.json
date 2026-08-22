@@ -2622,7 +2622,9 @@
     "READ_BACK_HINT": "Type the value you were told — do not copy it from the chart. The system checks it against the reported result.",
     "READ_BACK_CONFIRM": "Confirm read-back",
     "READ_BACK_CONFIRMED": "Read-back confirmed",
-    "READ_BACK_ERROR": "Read-back could not be recorded"
+    "READ_BACK_ERROR": "Read-back could not be recorded",
+    "READ_BACK_RECORDED": "Read back",
+    "READ_BACK_MISMATCH": "Read-back MISMATCH — not acknowledged"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -3145,7 +3147,11 @@
       "GIVEN": "given",
       "HELD": "held",
       "REFUSED": "refused"
-    }
+    },
+    "HANDOFFS_PENDING": "Pending",
+    "HANDOFFS_COMPLETED": "Completed",
+    "NO_COMPLETED_HANDOFFS": "No completed handoffs yet",
+    "HANDOFF_COMPLETED_BY": "Completed by"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",

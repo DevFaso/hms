@@ -354,20 +354,53 @@
       @if (!loading() && activeSection() === 'handoffs') {
         <div class="task-board-header">
           <h3>{{ 'NURSE.HANDOFFS' | translate }}</h3>
-          <button class="btn-small btn-primary" (click)="openHandoffCreate()">
-            <span class="material-symbols-outlined">add</span>
-            {{ 'NURSE.NEW_HANDOFF' | translate }}
-          </button>
-        </div>
-        @if (handoffs().length === 0) {
-          <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">swap_horiz</span>
-            <h3>{{ 'NURSE.NO_HANDOFFS' | translate }}</h3>
+          <div class="handoff-header-actions">
+            <!-- Completed handoffs became readable via ?status= in PR #462;
+                 this toggle is that parameter's first caller. -->
+            <div class="handoff-view-toggle">
+              <button
+                class="btn-small"
+                [class.btn-primary]="handoffView() === 'PENDING'"
+                (click)="setHandoffView('PENDING')"
+                data-testid="handoffs-view-pending"
+              >
+                {{ 'NURSE.HANDOFFS_PENDING' | translate }}
+              </button>
+              <button
+                class="btn-small"
+                [class.btn-primary]="handoffView() === 'COMPLETED'"
+                (click)="setHandoffView('COMPLETED')"
+                data-testid="handoffs-view-completed"
+              >
+                {{ 'NURSE.HANDOFFS_COMPLETED' | translate }}
+              </button>
+            </div>
+            <button class="btn-small btn-primary" (click)="openHandoffCreate()">
+              <span class="material-symbols-outlined">add</span>
+              {{ 'NURSE.NEW_HANDOFF' | translate }}
+            </button>
           </div>
-        }
-        @if (handoffs().length > 0) {
+        </div>
+        @if (handoffView() === 'COMPLETED' && completedHandoffsLoading()) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon spin">progress_activity</span>
+          </div>
+        } @else {
+          @if ((handoffView() === 'PENDING' ? handoffs() : completedHandoffs()).length === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon">swap_horiz</span>
+              <h3>
+                {{
+                  (handoffView() === 'PENDING'
+                    ? 'NURSE.NO_HANDOFFS'
+                    : 'NURSE.NO_COMPLETED_HANDOFFS'
+                  ) | translate
+                }}
+              </h3>
+            </div>
+          }
           <div class="handoff-list">
-            @for (h of handoffs(); track h.id) {
+            @for (h of handoffView() === 'PENDING' ? handoffs() : completedHandoffs(); track h.id) {
               <div class="handoff-card">
                 <div class="handoff-header">
                   @if (h.patientId) {
@@ -407,15 +440,26 @@
                     }
                     {{ h.updatedAt | date: 'medium' }}
                   </span>
-                  <button
-                    class="action-btn action-complete"
-                    (click)="completeHandoff(h.id)"
-                    [disabled]="actionInProgress() === h.id"
-                    [title]="'NURSE.COMPLETE_HANDOFF' | translate"
-                  >
-                    <span class="material-symbols-outlined">check_circle</span>
-                    {{ 'NURSE.COMPLETE' | translate }}
-                  </button>
+                  @if (h.completedAt) {
+                    <span
+                      class="handoff-completed"
+                      [attr.data-testid]="'handoff-completed-' + h.id"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                      {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
+                      {{ h.completedByName || '—' }} · {{ h.completedAt | date: 'medium' }}
+                    </span>
+                  } @else {
+                    <button
+                      class="action-btn action-complete"
+                      (click)="completeHandoff(h.id)"
+                      [disabled]="actionInProgress() === h.id"
+                      [title]="'NURSE.COMPLETE_HANDOFF' | translate"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                      {{ 'NURSE.COMPLETE' | translate }}
+                    </button>
+                  }
                 </div>
               </div>
             }

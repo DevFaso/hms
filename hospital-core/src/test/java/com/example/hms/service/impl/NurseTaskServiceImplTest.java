@@ -315,6 +315,46 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void getHandoffSummariesReadsCompletedRowsWithCompletionMetadata() {
+        // ?status=COMPLETED shipped in PR #462; until this test nothing pinned
+        // that the completion metadata actually rounds the trip.
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient patientEntity = Mockito.mock(Patient.class);
+        when(patientEntity.getId()).thenReturn(UUID.randomUUID());
+        when(patientEntity.getFullName()).thenReturn("Bea Ward");
+
+        NurseHandoff done = NurseHandoff.builder()
+            .patient(patientEntity)
+            .direction("Shift change")
+            .status("COMPLETED")
+            .completedAt(java.time.LocalDateTime.of(2026, 8, 22, 7, 30))
+            .completedByName("Nina Nurse")
+            .build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("COMPLETED"), any(Pageable.class)))
+            .thenReturn(List.of(done));
+
+        List<NurseHandoffSummaryDTO> handoffs =
+            service.getHandoffSummaries(null, hospitalId, 20, "COMPLETED");
+
+        assertThat(handoffs).singleElement().satisfies(dto -> {
+            assertThat(dto.getStatus()).isEqualTo("COMPLETED");
+            assertThat(dto.getCompletedAt())
+                .isEqualTo(java.time.LocalDateTime.of(2026, 8, 22, 7, 30));
+            assertThat(dto.getCompletedByName()).isEqualTo("Nina Nurse");
+        });
+    }
+
+    @Test
+    void getHandoffSummariesRefusesAnUnknownStatus() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.getHandoffSummaries(null, UUID.randomUUID(), 20, "ARCHIVED"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("ARCHIVED");
+    }
+
+    @Test
     void createHandoffPersistsSbarRecord() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();

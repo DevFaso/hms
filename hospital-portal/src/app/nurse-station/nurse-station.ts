@@ -94,6 +94,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   medications = signal<NurseMedicationTask[]>([]);
   orders = signal<NurseOrderTask[]>([]);
   handoffs = signal<NurseHandoff[]>([]);
+  /**
+   * Completed handoffs, fetched on demand. The ?status= endpoint parameter
+   * shipped in PR #462 with zero callers — the record of who handed off what,
+   * completed by whom, existed and was unreadable from any UI.
+   */
+  handoffView = signal<'PENDING' | 'COMPLETED'>('PENDING');
+  completedHandoffs = signal<NurseHandoff[]>([]);
+  completedHandoffsLoading = signal(false);
   announcements = signal<NurseAnnouncement[]>([]);
   summary = signal<NurseDashboardSummary | null>(null);
   private pendingLoads = signal(0);
@@ -586,6 +594,30 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       error: () => {
         this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'));
         this.handoffCreating.set(false);
+      },
+    });
+  }
+
+  setHandoffView(view: 'PENDING' | 'COMPLETED'): void {
+    this.handoffView.set(view);
+    if (view === 'COMPLETED') {
+      // Always refetched: the completed list changes with every completion,
+      // and it is outside the polling tiers.
+      this.loadCompletedHandoffs();
+    }
+  }
+
+  private loadCompletedHandoffs(): void {
+    const assignee = this.filterMode() === 'me' ? 'me' : 'all';
+    this.completedHandoffsLoading.set(true);
+    this.nurseService.getHandoffs({ assignee, status: 'COMPLETED' }).subscribe({
+      next: (rows) => {
+        this.completedHandoffs.set(rows);
+        this.completedHandoffsLoading.set(false);
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFFS_LOAD_FAILED'));
+        this.completedHandoffsLoading.set(false);
       },
     });
   }

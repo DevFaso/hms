@@ -1195,3 +1195,26 @@
 .care-note-fields {
   margin-top: 0.5rem;
 }
+
+.handoff-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.handoff-view-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.handoff-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #065f46;
+  font-size: 0.85rem;
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}

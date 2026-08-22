@@ -2622,7 +2622,9 @@
     "READ_BACK_HINT": "Escriba el valor que le comunicaron — no lo copie del expediente. El sistema lo compara con el resultado informado.",
     "READ_BACK_CONFIRM": "Confirmar relectura",
     "READ_BACK_CONFIRMED": "Relectura confirmada",
-    "READ_BACK_ERROR": "No se pudo registrar la relectura"
+    "READ_BACK_ERROR": "No se pudo registrar la relectura",
+    "READ_BACK_RECORDED": "Relectura confirmada",
+    "READ_BACK_MISMATCH": "DISCREPANCIA en la relectura — sin confirmar"
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -3145,7 +3147,11 @@
       "GIVEN": "administrado",
       "HELD": "pausado",
       "REFUSED": "rechazado"
-    }
+    },
+    "HANDOFFS_PENDING": "Pendientes",
+    "HANDOFFS_COMPLETED": "Completados",
+    "NO_COMPLETED_HANDOFFS": "Aún no hay traspasos completados",
+    "HANDOFF_COMPLETED_BY": "Completado por"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",

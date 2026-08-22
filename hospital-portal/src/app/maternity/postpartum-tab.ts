@@ -209,7 +209,17 @@ export class PostpartumTabComponent {
         for (const episode of episodes ?? []) {
           if (!episode.deliveryRecorded) continue;
           this.laborService.delivery(patientId, episode.id).subscribe({
-            next: (record) => this.deliveries.update((list) => [...list, record]),
+            // Guard against a stale response: re-picking a patient while the
+            // previous patient's requests are in flight must not put another
+            // mother's delivery in the selector — the hospital-only backend
+            // check would accept the link, and there is no edit path to undo
+            // it.
+            next: (record) => {
+              if (this.patient()?.id !== patientId) {
+                return;
+              }
+              this.deliveries.update((list) => [...list, record]);
+            },
             error: () => undefined,
           });
         }
