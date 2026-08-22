@@ -1,0 +1,234 @@
+<div class="on-call-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">phone_in_talk</span>
+      <div>
+        <h1 class="page-title">{{ 'ON_CALL.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'ON_CALL.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      @if (canManage()) {
+        <button class="btn-primary" (click)="openCreate()" data-testid="oncall-add">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'ON_CALL.ADD' | translate }}
+        </button>
+      }
+      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="filter-bar">
+    <label for="oncall-from"
+      >{{ 'ON_CALL.FROM' | translate }}
+      <input id="oncall-from" type="date" [(ngModel)]="filterFrom" (change)="load()" />
+    </label>
+    <label for="oncall-to"
+      >{{ 'ON_CALL.TO' | translate }}
+      <input id="oncall-to" type="date" [(ngModel)]="filterTo" (change)="load()" />
+    </label>
+    <span class="filter-hint">{{ 'ON_CALL.DEFAULT_WINDOW' | translate }}</span>
+  </div>
+
+  @if (loading()) {
+    <div class="state-block">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error">
+      <p>{{ error() }}</p>
+      <button class="btn-secondary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (entries().length === 0) {
+    <div class="state-block">
+      <span class="material-symbols-outlined">event_busy</span>
+      <p>{{ 'ON_CALL.EMPTY' | translate }}</p>
+      @if (canManage()) {
+        <p class="empty-hint">{{ 'ON_CALL.EMPTY_HINT' | translate }}</p>
+      }
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="on-call-table">
+        <thead>
+          <tr>
+            <th>{{ 'ON_CALL.STAFF' | translate }}</th>
+            <th>{{ 'ON_CALL.SCOPE' | translate }}</th>
+            <th>{{ 'ON_CALL.START' | translate }}</th>
+            <th>{{ 'ON_CALL.END' | translate }}</th>
+            <th>{{ 'ON_CALL.NOTES' | translate }}</th>
+            @if (canManage()) {
+              <th>{{ 'ON_CALL.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of entries(); track entry.id) {
+            <tr [attr.data-testid]="'oncall-row-' + entry.id">
+              <td>
+                {{ entry.staffName || entry.staffId }}
+                @if (entry.currentlyOnCall) {
+                  <span class="oncall-now-badge" data-testid="oncall-now-badge">
+                    {{ 'ON_CALL.NOW' | translate }}
+                  </span>
+                }
+              </td>
+              <td>{{ entry.departmentName || ('ON_CALL.HOSPITAL_WIDE' | translate) }}</td>
+              <td>{{ entry.startTime | date: 'short' }}</td>
+              <td>{{ entry.endTime | date: 'short' }}</td>
+              <td class="notes-cell" [title]="entry.notes ?? ''">{{ entry.notes || '—' }}</td>
+              @if (canManage()) {
+                <td class="actions-cell">
+                  <button
+                    class="btn-icon"
+                    (click)="openEdit(entry)"
+                    [attr.data-testid]="'oncall-edit-' + entry.id"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
+                    [title]="'COMMON.EDIT' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-icon btn-danger"
+                    (click)="confirmDelete(entry)"
+                    [attr.data-testid]="'oncall-delete-' + entry.id"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
+                    [title]="'COMMON.DELETE' | translate"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Create / edit modal — dialog nested INSIDE the backdrop (the #442 lesson). -->
+  @if (modalOpen()) {
+    <div
+      class="form-overlay"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+      data-testid="oncall-modal"
+    >
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ (editingId() ? 'ON_CALL.EDIT_TITLE' : 'ON_CALL.ADD_TITLE') | translate }}</h2>
+        <form (ngSubmit)="submit()">
+          <label for="oncall-staff"
+            >{{ 'ON_CALL.STAFF' | translate }} *
+            <select id="oncall-staff" [(ngModel)]="form.staffId" name="staffId">
+              <option value="">{{ 'ON_CALL.SELECT_STAFF' | translate }}</option>
+              @for (s of staffOptions(); track s.id) {
+                <option [value]="s.id">
+                  {{ s.name }}{{ s.jobTitle ? ' — ' + s.jobTitle : '' }}
+                </option>
+              }
+            </select>
+          </label>
+          <label for="oncall-department"
+            >{{ 'ON_CALL.SCOPE' | translate }}
+            <select id="oncall-department" [(ngModel)]="form.departmentId" name="departmentId">
+              <option value="">{{ 'ON_CALL.HOSPITAL_WIDE' | translate }}</option>
+              @for (d of departments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </label>
+          <div class="form-row">
+            <label for="oncall-start"
+              >{{ 'ON_CALL.START' | translate }} *
+              <input
+                id="oncall-start"
+                type="datetime-local"
+                [(ngModel)]="form.startLocal"
+                name="startLocal"
+              />
+            </label>
+            <label for="oncall-end"
+              >{{ 'ON_CALL.END' | translate }} *
+              <input
+                id="oncall-end"
+                type="datetime-local"
+                [(ngModel)]="form.endLocal"
+                name="endLocal"
+                [min]="form.startLocal"
+              />
+            </label>
+          </div>
+          <label for="oncall-notes"
+            >{{ 'ON_CALL.NOTES' | translate }}
+            <textarea
+              id="oncall-notes"
+              [(ngModel)]="form.notes"
+              name="notes"
+              rows="2"
+              maxlength="500"
+            ></textarea>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              data-testid="oncall-save"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Delete confirmation (on-call is the one hard-delete in this pair) -->
+  @if (deleteTarget(); as target) {
+    <div
+      class="form-overlay"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+      data-testid="oncall-delete-modal"
+    >
+      <div
+        class="form-card confirm-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
+        <p>
+          <strong>{{ target.staffName || target.staffId }}</strong>
+          — {{ target.startTime | date: 'short' }} → {{ target.endTime | date: 'short' }}
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger-solid"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+            data-testid="oncall-delete-confirm"
+          >
+            {{ 'COMMON.DELETE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -186,11 +186,14 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
-                  @if (canAcknowledge && !r.acknowledged && isCritical(r)) {
+                  @if (canReadBack && !r.acknowledged && isCritical(r)) {
                     <!--
                       Critical values get a read-back instead of a bare
                       acknowledge: the clinician repeats the value and the server
                       checks it, which is what catches a transcription error.
+                      Gated on the read-back roles, not the acknowledge roles —
+                      the backend excludes the lab roles here and includes the
+                      admins, and the button must match it in both directions.
                     -->
                     <button
                       class="action-link ack-link"
@@ -200,7 +203,7 @@
                     >
                       <span class="material-symbols-outlined">record_voice_over</span>
                     </button>
-                  } @else if (canAcknowledge && !r.acknowledged) {
+                  } @else if (canAcknowledge && !r.acknowledged && !isCritical(r)) {
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
@@ -312,6 +315,27 @@
                 <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
                 <span class="field-value"
                   >{{ r.acknowledgedAt | date: 'long' }} — {{ r.acknowledgedBy }}</span
+                >
+              </div>
+            }
+            @if (r.criticalReadBackAt) {
+              <div class="detail-field" data-testid="read-back-evidence">
+                <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
+                <span class="field-value"
+                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'long' }} —
+                  {{ r.criticalReadBackBy || '—' }}</span
+                >
+              </div>
+            } @else if (r.criticalReadBackValue) {
+              <!--
+                A repeated value with no read-back stamp is a persisted MISMATCH
+                — the event the REQUIRES_NEW write exists to preserve. Until
+                2026-08-22 this record was invisible to every UI.
+              -->
+              <div class="detail-field detail-mismatch" data-testid="read-back-mismatch">
+                <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_MISMATCH' | translate }}</span>
+                <span class="field-value"
+                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
             }

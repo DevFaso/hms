@@ -2,7 +2,9 @@ package com.example.hms.service;
 
 import com.example.hms.model.LabResult;
 import com.example.hms.model.LabSpecimen;
+import com.example.hms.payload.dto.InstrumentOutboxPageDTO;
 import com.example.hms.payload.dto.InstrumentOutboxResponseDTO;
+import com.example.hms.payload.dto.InstrumentOutboxTransportDTO;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,6 +23,30 @@ public interface InstrumentOutboxService {
      */
     void enqueueResultObservation(LabResult result);
 
-    /** Return pending messages for a given lab order (for monitoring/retry). */
-    List<InstrumentOutboxResponseDTO> getPendingMessagesByLabOrder(UUID labOrderId);
+    /**
+     * All outbox messages for a lab order, whatever their status.
+     *
+     * <p>Until 2026-08-22 this returned PENDING rows only — which meant the one
+     * monitoring read that existed silently dropped the ERROR rows an operator
+     * would be hunting for.
+     */
+    List<InstrumentOutboxResponseDTO> getMessagesByLabOrder(UUID labOrderId);
+
+    /** One page of the hospital-scoped outbox queue, payload elided, with status counts. */
+    InstrumentOutboxPageDTO search(String status, int page, int size);
+
+    /** One message including its full HL7 payload. Scoped 404 outside the caller's hospital. */
+    InstrumentOutboxResponseDTO getMessage(UUID id);
+
+    /**
+     * Put an ERROR row back in the dispatch queue.
+     *
+     * <p>ERROR is otherwise an absorbing state: the sweep only selects PENDING,
+     * so once a message is parked nothing in the system can ever move it again —
+     * even after the analyser comes back.
+     */
+    InstrumentOutboxResponseDTO retry(UUID id);
+
+    /** Read-only view of the outbound MLLP transport configuration. */
+    InstrumentOutboxTransportDTO getTransportStatus();
 }

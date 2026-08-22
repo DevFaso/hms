@@ -298,6 +298,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'phone_in_talk',
+        label: 'On-Call',
+        translationKey: 'NAV.ON_CALL',
+        route: '/on-call',
+        // Mirrors OnCallScheduleController.READ_ROLES — the route guard uses
+        // the same list. Kept OUT of /scheduling because doctorHiddenRoutes
+        // hides that route from doctors, who can read the rota.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'domain',
         label: 'Departments',
         translationKey: 'NAV.DEPARTMENTS',
@@ -337,6 +354,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // HOSPITAL_ADMIN's defaults but not guaranteed for SUPER_ADMIN's
         // merged permission set, and the route guard uses the same roles.
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
+        icon: 'calendar_view_week',
+        label: 'Slot Inventory',
+        translationKey: 'NAV.SLOT_ADMIN',
+        route: '/slot-admin',
+        // Backend writes are HOSPITAL_ADMIN/SUPER_ADMIN only (no ROLE_ADMIN);
+        // the route guard uses the same roles.
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'medication_liquid',
@@ -673,6 +699,28 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // Drug-interaction KB (P2 #14). Its own gate, not the pharmacy block above:
+    // the backend read set adds DOCTOR/NURSE/MIDWIFE, while the pharmacy block
+    // admits INVENTORY_CLERK/STORE_MANAGER, whom the API refuses — either
+    // reuse would show three roles a dead entry or hide it from three readers.
+    // The route guard uses these same roles.
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'medication_liquid',
+        label: 'Drug Interactions',
+        translationKey: 'NAV.DRUG_INTERACTIONS',
+        route: '/pharmacy/drug-interactions',
+      });
+    }
 
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
@@ -789,6 +837,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/lab-inventory',
         },
       );
+    }
+    // Instrument outbox (P2 #17). Separate gate: the backend read set also
+    // admits LAB_SCIENTIST and QUALITY_MANAGER, who are not in the
+    // instruments/inventory block above — the route guard uses these roles.
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'outbox',
+        label: 'Instrument Outbox',
+        translationKey: 'NAV.LAB_OUTBOX',
+        route: '/lab-outbox',
+      });
     }
     if (
       this.hasAnyRole([

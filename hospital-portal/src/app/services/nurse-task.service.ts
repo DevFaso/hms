@@ -64,6 +64,9 @@ export interface NurseHandoff {
   recommendation: string | null;
   status: string;
   createdByName: string | null;
+  /** Set once the handoff is completed — absent on PENDING rows. */
+  completedAt?: string | null;
+  completedByName?: string | null;
 }
 
 export interface NurseHandoffCreateRequest {
@@ -287,11 +290,14 @@ export class NurseTaskService {
   getHandoffs(params?: {
     hospitalId?: string;
     assignee?: string;
+    /** PENDING (server default) or COMPLETED. */
+    status?: 'PENDING' | 'COMPLETED';
     limit?: number;
   }): Observable<NurseHandoff[]> {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
+    if (params?.status) httpParams = httpParams.set('status', params.status);
     if (params?.limit != null) httpParams = httpParams.set('limit', params.limit);
     return this.http.get<NurseHandoff[]>(`${this.baseUrl}/handoffs`, { params: httpParams });
   }

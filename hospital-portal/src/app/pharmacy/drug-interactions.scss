@@ -1,0 +1,375 @@
+.drug-interactions-container {
+  padding: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .header-icon {
+    font-size: 2rem;
+    color: var(--color-primary, #2563eb);
+  }
+
+  .page-title {
+    margin: 0;
+    font-size: 1.4rem;
+  }
+
+  .page-subtitle {
+    margin: 0;
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.9rem;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
+.scope-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 0.9rem;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+
+  .search-input {
+    flex: 1 1 220px;
+    max-width: 340px;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--color-border, #d1d5db);
+    border-radius: 6px;
+  }
+
+  select {
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--color-border, #d1d5db);
+    border-radius: 6px;
+  }
+
+  .toggle-inactive {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.9rem;
+    color: var(--color-text-muted, #6b7280);
+  }
+}
+
+.state-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted, #6b7280);
+
+  &.state-error {
+    color: #991b1b;
+  }
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+}
+
+.ddi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+
+  th,
+  td {
+    padding: 0.55rem 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border, #e5e7eb);
+    vertical-align: top;
+  }
+
+  th {
+    background: var(--color-surface-alt, #f9fafb);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .row-inactive {
+    opacity: 0.65;
+  }
+
+  .recommendation-cell {
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-cell {
+    white-space: nowrap;
+  }
+
+  .actions-cell {
+    white-space: nowrap;
+  }
+}
+
+.pair-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+
+  .code {
+    color: var(--color-text-muted, #6b7280);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+  }
+
+  .pair-plus {
+    color: var(--color-text-muted, #9ca3af);
+    font-weight: 700;
+  }
+}
+
+.sev-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+
+  &.sev-high {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+
+  &.sev-mid {
+    background: #fef3c7;
+    color: #92400e;
+  }
+
+  &.sev-low {
+    background: #e0f2fe;
+    color: #075985;
+  }
+}
+
+.state-chip {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+
+  &.state-active {
+    background: #d1fae5;
+    color: #065f46;
+  }
+
+  &.state-retired {
+    background: #e5e7eb;
+    color: #4b5563;
+  }
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 6px;
+  color: var(--color-text-muted, #4b5563);
+
+  &:hover:not(:disabled) {
+    background: var(--color-surface-alt, #f3f4f6);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  &.btn-danger {
+    color: #b91c1c;
+  }
+
+  &.btn-restore {
+    color: #047857;
+  }
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-refresh,
+.btn-danger-solid {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: var(--color-surface, #fff);
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+.btn-primary {
+  background: var(--color-primary, #2563eb);
+  border-color: var(--color-primary, #2563eb);
+  color: #fff;
+}
+
+.btn-danger-solid {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
+.form-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 45%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.form-card {
+  background: var(--color-surface, #fff);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  width: min(720px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+
+  h2 {
+    margin-top: 0;
+  }
+
+  .code-hint {
+    color: var(--color-text-muted, #6b7280);
+    font-size: 0.85rem;
+    margin-top: -0.25rem;
+  }
+
+  form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+
+  input,
+  select,
+  textarea {
+    padding: 0.45rem 0.55rem;
+    border: 1px solid var(--color-border, #d1d5db);
+    border-radius: 6px;
+    font: inherit;
+
+    &.invalid {
+      border-color: #b91c1c;
+      background: #fef2f2;
+    }
+  }
+}
+
+.confirm-card {
+  width: min(480px, 92vw);
+
+  .sev-badge {
+    margin-left: 0.5rem;
+  }
+}
+
+.derived-flags {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0;
+
+  .flag-chip {
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    background: var(--color-surface-alt, #f3f4f6);
+    color: var(--color-text-muted, #4b5563);
+    font-size: 0.78rem;
+  }
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+
+  @media (width <= 560px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.spin {
+  animation: ddi-spin 1s linear infinite;
+}
+
+@keyframes ddi-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

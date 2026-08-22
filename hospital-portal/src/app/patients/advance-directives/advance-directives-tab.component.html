@@ -1,0 +1,253 @@
+<section class="directives-section">
+  <div class="section-head">
+    <h3>{{ 'DIRECTIVES.TITLE' | translate }}</h3>
+    <div class="section-actions">
+      <label class="toggle-inactive">
+        <input
+          type="checkbox"
+          [ngModel]="showInactive()"
+          (ngModelChange)="showInactive.set($event)"
+          data-testid="directives-show-inactive"
+        />
+        {{ 'DIRECTIVES.SHOW_INACTIVE' | translate }}
+      </label>
+      <button class="btn-primary" (click)="openCreate()" data-testid="directive-add">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'DIRECTIVES.ADD' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="state-block">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error">
+      <p>{{ error() }}</p>
+      <button class="btn-secondary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (visible().length === 0) {
+    <div class="state-block">
+      <span class="material-symbols-outlined">heart_broken</span>
+      <p>{{ 'DIRECTIVES.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="directives-table">
+        <thead>
+          <tr>
+            <th>{{ 'DIRECTIVES.TYPE' | translate }}</th>
+            <th>{{ 'DIRECTIVES.STATUS' | translate }}</th>
+            <th>{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }}</th>
+            <th>{{ 'DIRECTIVES.EXPIRATION_DATE' | translate }}</th>
+            <th>{{ 'DIRECTIVES.PHYSICIAN' | translate }}</th>
+            <th>{{ 'DIRECTIVES.COL_ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of visible(); track d.id) {
+            <tr [attr.data-testid]="'directive-row-' + d.id">
+              <td>{{ 'DIRECTIVES.TYPE_' + d.directiveType | translate }}</td>
+              <td>
+                <span class="status-badge" [attr.data-status]="d.status">
+                  {{ 'DIRECTIVES.STATUS_' + d.status | translate }}
+                </span>
+                @if (d.status === 'REVOKED' && d.lastReviewedAt) {
+                  <span class="reviewed-at">
+                    {{ 'DIRECTIVES.LAST_REVIEWED' | translate }}
+                    {{ d.lastReviewedAt | date: 'short' }}
+                  </span>
+                }
+              </td>
+              <td>{{ d.effectiveDate ? (d.effectiveDate | date: 'mediumDate') : '—' }}</td>
+              <td>{{ d.expirationDate ? (d.expirationDate | date: 'mediumDate') : '—' }}</td>
+              <td>{{ d.physicianName || '—' }}</td>
+              <td class="actions-cell">
+                @if (d.status !== 'REVOKED') {
+                  <button
+                    class="btn-icon"
+                    (click)="openEdit(d)"
+                    [attr.data-testid]="'directive-edit-' + d.id"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
+                    [title]="'COMMON.EDIT' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-icon btn-danger"
+                    (click)="confirmRevoke(d)"
+                    [attr.data-testid]="'directive-revoke-' + d.id"
+                    [attr.aria-label]="'DIRECTIVES.REVOKE' | translate"
+                    [title]="'DIRECTIVES.REVOKE' | translate"
+                  >
+                    <span class="material-symbols-outlined">block</span>
+                  </button>
+                }
+              </td>
+            </tr>
+            @if (d.description) {
+              <tr class="description-row">
+                <td colspan="6">{{ d.description }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Create / edit modal — dialog nested INSIDE the backdrop (the #442 lesson). -->
+  @if (modalOpen()) {
+    <div
+      class="form-overlay"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+      data-testid="directive-modal"
+    >
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{ (editingId() ? 'DIRECTIVES.EDIT_TITLE' : 'DIRECTIVES.ADD_TITLE') | translate }}
+        </h2>
+        <form (ngSubmit)="submit()">
+          <label for="directive-type"
+            >{{ 'DIRECTIVES.TYPE' | translate }} *
+            <select id="directive-type" [(ngModel)]="form.directiveType" name="directiveType">
+              @for (t of directiveTypes; track t) {
+                <option [ngValue]="t">{{ 'DIRECTIVES.TYPE_' + t | translate }}</option>
+              }
+            </select>
+          </label>
+          <label for="directive-status"
+            >{{ 'DIRECTIVES.STATUS' | translate }}
+            <select id="directive-status" [(ngModel)]="form.status" name="status">
+              @for (s of editableStatuses; track s) {
+                <option [ngValue]="s">{{ 'DIRECTIVES.STATUS_' + s | translate }}</option>
+              }
+            </select>
+          </label>
+          <label for="directive-description"
+            >{{ 'DIRECTIVES.DESCRIPTION' | translate }}
+            <textarea
+              id="directive-description"
+              [(ngModel)]="form.description"
+              name="description"
+              rows="3"
+              maxlength="2000"
+            ></textarea>
+          </label>
+          <div class="form-row">
+            <label for="directive-effective"
+              >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }}
+              <input
+                id="directive-effective"
+                type="date"
+                [(ngModel)]="form.effectiveDate"
+                name="effectiveDate"
+              />
+            </label>
+            <label for="directive-expiration"
+              >{{ 'DIRECTIVES.EXPIRATION_DATE' | translate }}
+              <input
+                id="directive-expiration"
+                type="date"
+                [(ngModel)]="form.expirationDate"
+                name="expirationDate"
+                [min]="form.effectiveDate ?? ''"
+              />
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="directive-physician"
+              >{{ 'DIRECTIVES.PHYSICIAN' | translate }}
+              <input
+                id="directive-physician"
+                type="text"
+                [(ngModel)]="form.physicianName"
+                name="physicianName"
+                maxlength="255"
+              />
+            </label>
+            <label for="directive-witness"
+              >{{ 'DIRECTIVES.WITNESS' | translate }}
+              <input
+                id="directive-witness"
+                type="text"
+                [(ngModel)]="form.witnessName"
+                name="witnessName"
+                maxlength="255"
+              />
+            </label>
+          </div>
+          <label for="directive-document"
+            >{{ 'DIRECTIVES.DOCUMENT_LOCATION' | translate }}
+            <input
+              id="directive-document"
+              type="text"
+              [(ngModel)]="form.documentLocation"
+              name="documentLocation"
+              maxlength="255"
+            />
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              data-testid="directive-save"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Revoke confirmation -->
+  @if (revokeTarget(); as target) {
+    <div
+      class="form-overlay"
+      (click)="cancelRevoke()"
+      (keydown.escape)="cancelRevoke()"
+      tabindex="-1"
+      data-testid="directive-revoke-modal"
+    >
+      <div
+        class="form-card confirm-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ 'DIRECTIVES.REVOKE_TITLE' | translate }}</h2>
+        <p>
+          <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
+        </p>
+        <p>{{ 'DIRECTIVES.REVOKE_WARNING' | translate }}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelRevoke()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger-solid"
+            [disabled]="revoking()"
+            (click)="executeRevoke()"
+            data-testid="directive-revoke-confirm"
+          >
+            {{ 'DIRECTIVES.REVOKE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</section>

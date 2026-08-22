@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -92,7 +95,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -126,7 +128,7 @@ class NurseTaskServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = Mockito.spy(new NurseTaskServiceImpl(
+        service = spy(new NurseTaskServiceImpl(
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
@@ -239,24 +241,24 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(assignedPatientId, "Ann Assigned", "Ann", "Assigned")));
 
-        Patient assigned = Mockito.mock(Patient.class);
+        Patient assigned = mock(Patient.class);
         when(assigned.getId()).thenReturn(assignedPatientId);
         when(assigned.getFullName()).thenReturn("Ann Assigned");
-        Patient other = Mockito.mock(Patient.class);
+        Patient other = mock(Patient.class);
         when(other.getId()).thenReturn(otherPatientId);
 
-        LabOrder statDraw = Mockito.mock(LabOrder.class);
+        LabOrder statDraw = mock(LabOrder.class);
         when(statDraw.getId()).thenReturn(UUID.randomUUID());
         when(statDraw.getPatient()).thenReturn(assigned);
         when(statDraw.getPriority()).thenReturn(" stat ");
         when(statDraw.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 8, 20, 8, 0));
-        LabOrder otherPatientsDraw = Mockito.mock(LabOrder.class);
+        LabOrder otherPatientsDraw = mock(LabOrder.class);
         when(otherPatientsDraw.getPatient()).thenReturn(other);
         when(labOrderRepository.findByHospital_IdAndStatusIn(
             eq(hospitalId), argThat(s -> s.contains(LabOrderStatus.ORDERED))))
             .thenReturn(List.of(statDraw, otherPatientsDraw));
 
-        ProcedureOrder procedure = Mockito.mock(ProcedureOrder.class);
+        ProcedureOrder procedure = mock(ProcedureOrder.class);
         when(procedure.getId()).thenReturn(UUID.randomUUID());
         when(procedure.getPatient()).thenReturn(assigned);
         when(procedure.getUrgency()).thenReturn(ProcedureUrgency.URGENT);
@@ -282,7 +284,7 @@ class NurseTaskServiceImplTest {
     void getHandoffSummariesReadsPendingRowsAndClampsLimit() {
         UUID hospitalId = UUID.randomUUID();
 
-        Patient patientEntity = Mockito.mock(Patient.class);
+        Patient patientEntity = mock(Patient.class);
         when(patientEntity.getId()).thenReturn(UUID.randomUUID());
         when(patientEntity.getFullName()).thenReturn("Bea Ward");
 
@@ -315,14 +317,54 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void getHandoffSummariesReadsCompletedRowsWithCompletionMetadata() {
+        // ?status=COMPLETED shipped in PR #462; until this test nothing pinned
+        // that the completion metadata actually rounds the trip.
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient patientEntity = mock(Patient.class);
+        when(patientEntity.getId()).thenReturn(UUID.randomUUID());
+        when(patientEntity.getFullName()).thenReturn("Bea Ward");
+
+        NurseHandoff done = NurseHandoff.builder()
+            .patient(patientEntity)
+            .direction("Shift change")
+            .status("COMPLETED")
+            .completedAt(java.time.LocalDateTime.of(2026, 8, 22, 7, 30))
+            .completedByName("Nina Nurse")
+            .build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("COMPLETED"), any(Pageable.class)))
+            .thenReturn(List.of(done));
+
+        List<NurseHandoffSummaryDTO> handoffs =
+            service.getHandoffSummaries(null, hospitalId, 20, "COMPLETED");
+
+        assertThat(handoffs).singleElement().satisfies(dto -> {
+            assertThat(dto.getStatus()).isEqualTo("COMPLETED");
+            assertThat(dto.getCompletedAt())
+                .isEqualTo(java.time.LocalDateTime.of(2026, 8, 22, 7, 30));
+            assertThat(dto.getCompletedByName()).isEqualTo("Nina Nurse");
+        });
+    }
+
+    @Test
+    void getHandoffSummariesRefusesAnUnknownStatus() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.getHandoffSummaries(null, UUID.randomUUID(), 20, "ARCHIVED"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("ARCHIVED");
+    }
+
+    @Test
     void createHandoffPersistsSbarRecord() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Hospital hospital = Mockito.mock(Hospital.class);
+        Hospital hospital = mock(Hospital.class);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        Patient patientEntity = Mockito.mock(Patient.class);
+        Patient patientEntity = mock(Patient.class);
         when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
         when(patientEntity.getId()).thenReturn(patientId);
         when(patientEntity.getFullName()).thenReturn("Bea Ward");
@@ -356,8 +398,8 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(Mockito.mock(Hospital.class)));
-        Patient patientEntity = Mockito.mock(Patient.class);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
+        Patient patientEntity = mock(Patient.class);
         when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(false);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
 
@@ -439,7 +481,7 @@ class NurseTaskServiceImplTest {
 
         service.completeHandoff(handoffId, UUID.randomUUID(), hospitalId);
 
-        verify(nurseHandoffRepository, Mockito.never()).save(any(NurseHandoff.class));
+        verify(nurseHandoffRepository, never()).save(any(NurseHandoff.class));
     }
 
     @Test
@@ -628,12 +670,12 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Med Patient", "Med", "Patient")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -672,7 +714,7 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Draft Pat", "Draft", "Pat")));
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.DRAFT);
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
@@ -692,12 +734,12 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Overdue Pat", "Overdue", "Pat")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -736,12 +778,12 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Done Pat", "Done", "Pat")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -753,8 +795,8 @@ class NurseTaskServiceImplTest {
         when(rx.getCreatedAt()).thenReturn(fixedNow.minusHours(1));
 
         // MAR record shows this prescription was already GIVEN
-        MedicationAdministrationRecord mar = Mockito.mock(MedicationAdministrationRecord.class);
-        Prescription marPrescription = Mockito.mock(Prescription.class);
+        MedicationAdministrationRecord mar = mock(MedicationAdministrationRecord.class);
+        Prescription marPrescription = mock(Prescription.class);
         when(marPrescription.getId()).thenReturn(rxId);
         when(mar.getPrescription()).thenReturn(marPrescription);
 
@@ -785,12 +827,12 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Filter Pat", "Filter", "Pat")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         lenient().when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         lenient().when(rx.getId()).thenReturn(UUID.randomUUID());
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
         lenient().when(rx.getHospital()).thenReturn(mockHospital);
@@ -826,13 +868,13 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("John Doe");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -844,7 +886,7 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
 
-        Staff mockStaff = Mockito.mock(Staff.class);
+        Staff mockStaff = mock(Staff.class);
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId))
             .thenReturn(Optional.of(mockStaff));
 
@@ -881,10 +923,10 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Patient mockPatient = mock(Patient.class);
+        Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getHospital()).thenReturn(mockHospital);
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
         when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
@@ -905,13 +947,13 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Held Patient");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -956,14 +998,14 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Existing Patient Name");
 
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
+        MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getId()).thenReturn(marId);
         when(existingMar.getPatient()).thenReturn(mockPatient);
         when(existingMar.getHospital()).thenReturn(mockHospital);
@@ -976,7 +1018,7 @@ class NurseTaskServiceImplTest {
         when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
         when(marRepository.save(existingMar)).thenReturn(existingMar);
 
-        Staff mockStaff = Mockito.mock(Staff.class);
+        Staff mockStaff = mock(Staff.class);
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId))
             .thenReturn(Optional.of(mockStaff));
 
@@ -1010,10 +1052,10 @@ class NurseTaskServiceImplTest {
         UUID scopedHospitalId = UUID.randomUUID();
         UUID otherHospitalId = UUID.randomUUID();
 
-        Hospital otherHospital = Mockito.mock(Hospital.class);
+        Hospital otherHospital = mock(Hospital.class);
         when(otherHospital.getId()).thenReturn(otherHospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getHospital()).thenReturn(otherHospital);
         when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
 
@@ -1032,10 +1074,10 @@ class NurseTaskServiceImplTest {
         UUID scopedHospitalId = UUID.randomUUID();
         UUID otherHospitalId = UUID.randomUUID();
 
-        Hospital otherHospital = Mockito.mock(Hospital.class);
+        Hospital otherHospital = mock(Hospital.class);
         when(otherHospital.getId()).thenReturn(otherHospitalId);
 
-        MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
+        MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getHospital()).thenReturn(otherHospital);
 
         when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
@@ -1075,13 +1117,13 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Held Patient");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
+        MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getId()).thenReturn(marId);
         when(existingMar.getPatient()).thenReturn(mockPatient);
         when(existingMar.getHospital()).thenReturn(mockHospital);
@@ -1170,12 +1212,12 @@ class NurseTaskServiceImplTest {
             .thenReturn(Optional.empty());
 
         // One active prescription that's DUE
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         lenient().when(rx.getId()).thenReturn(UUID.randomUUID());
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -1216,12 +1258,12 @@ class NurseTaskServiceImplTest {
         when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription overdueRx = Mockito.mock(Prescription.class);
+        Prescription overdueRx = mock(Prescription.class);
         lenient().when(overdueRx.getId()).thenReturn(UUID.randomUUID());
         when(overdueRx.getPatient()).thenReturn(mockPatient);
         when(overdueRx.getHospital()).thenReturn(mockHospital);
@@ -1256,13 +1298,13 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("NullNurse Pat");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -1304,12 +1346,12 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "NullDate Pat", "NullDate", "Pat")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
+        Patient mockPatient = mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
+        Hospital mockHospital = mock(Hospital.class);
         when(mockHospital.getId()).thenReturn(hospitalId);
 
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
         when(rx.getPatient()).thenReturn(mockPatient);
         when(rx.getHospital()).thenReturn(mockHospital);
@@ -2227,7 +2269,7 @@ class NurseTaskServiceImplTest {
         // Vitals still saved
         verify(vitalSignRepository).save(any(PatientVitalSign.class));
         // No encounter save attempted
-        verify(encounterRepository, Mockito.never()).save(any(Encounter.class));
+        verify(encounterRepository, never()).save(any(Encounter.class));
     }
 
     /* ════════════════════════════════════════════════════════════════════
@@ -2237,7 +2279,7 @@ class NurseTaskServiceImplTest {
     private MedicationAdministrationRecord seededMar(UUID patientId, UUID hospitalId, LocalDateTime scheduled) {
         Patient patient = new Patient();
         patient.setId(patientId);
-        Hospital hospital = Mockito.mock(Hospital.class);
+        Hospital hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         Prescription rx = new Prescription();
         rx.setMedicationName("Amoxicillin");
@@ -2429,12 +2471,12 @@ class NurseTaskServiceImplTest {
         UUID rxId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        Patient patient = Mockito.mock(Patient.class);
+        Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
         when(patient.getFullName()).thenReturn("Pre-eMAR Pat");
-        Hospital hospital = Mockito.mock(Hospital.class);
+        Hospital hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(patient);
         when(rx.getHospital()).thenReturn(hospital);
@@ -2504,9 +2546,9 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         Patient patient = new Patient();
         patient.setId(patientId);
-        Hospital hospital = Mockito.mock(Hospital.class);
+        Hospital hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
-        Prescription rx = Mockito.mock(Prescription.class);
+        Prescription rx = mock(Prescription.class);
         lenient().when(rx.getId()).thenReturn(rxId);
         when(rx.getPatient()).thenReturn(patient);
         when(rx.getHospital()).thenReturn(hospital);
@@ -2536,6 +2578,6 @@ class NurseTaskServiceImplTest {
         assertThat(resp.isAllPassed()).isTrue();
         // marRepository.save is called twice: once to materialize the new
         // MAR from the prescription, then again to stamp the verification.
-        verify(marRepository, Mockito.atLeastOnce()).save(any(MedicationAdministrationRecord.class));
+        verify(marRepository, atLeastOnce()).save(any(MedicationAdministrationRecord.class));
     }
 }

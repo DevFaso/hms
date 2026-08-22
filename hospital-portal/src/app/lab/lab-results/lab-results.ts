@@ -84,6 +84,20 @@ export class LabResultsComponent implements OnInit {
     'ROLE_LAB_SCIENTIST',
     'ROLE_LAB_MANAGER',
   ]);
+  /**
+   * POST /{id}/critical-read-back — deliberately NOT the acknowledge list.
+   * Read-back is the ordering clinician confirming what they were told; the
+   * backend excludes the lab roles (lab attestation is not clinician receipt),
+   * so showing them the button meant a control that always 403'd — while the
+   * admin roles the backend does authorize never got it.
+   */
+  readonly canReadBack = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   private hospitalId(): string | null {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
