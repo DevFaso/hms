@@ -19,6 +19,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
+import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
+import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
@@ -36,6 +38,7 @@ type TabKey =
   | 'vitals'
   | 'encounters'
   | 'appointments'
+  | 'directives'
   | 'sharing';
 
 @Component({
@@ -47,6 +50,7 @@ type TabKey =
     RouterLink,
     TranslateModule,
     PatientChartComponent,
+    AdvanceDirectivesTabComponent,
     CoverageTabComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
@@ -167,6 +171,11 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_LAB_SCIENTIST',
       'ROLE_PHARMACIST',
     ]);
+  }
+
+  /** Mirrors AdvanceDirectiveController.CLINICAL_ROLES via DIRECTIVE_ROLES. */
+  canViewDirectives(): boolean {
+    return this.roleContext.hasAnyActiveRole(DIRECTIVE_ROLES);
   }
 
   /** Whether the current user can view the Record Sharing tab */

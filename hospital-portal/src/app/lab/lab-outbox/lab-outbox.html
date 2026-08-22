@@ -1,0 +1,210 @@
+<div class="lab-outbox-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">outbox</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_OUTBOX.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_OUTBOX.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      @if (page(); as p) {
+        <span class="count-badge" data-testid="outbox-count-pending">
+          {{ 'LAB_OUTBOX.PENDING_COUNT' | translate: { count: p.pendingCount } }}
+        </span>
+        <span
+          class="count-badge count-badge-error"
+          [class.has-errors]="p.errorCount > 0"
+          data-testid="outbox-count-error"
+        >
+          {{ 'LAB_OUTBOX.ERROR_COUNT' | translate: { count: p.errorCount } }}
+        </span>
+      }
+      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Transport state: a queue full of PENDING looks identical whether the
+       analyser is down or the sender is simply switched off. -->
+  @if (transport(); as t) {
+    <div
+      class="transport-banner"
+      [class.transport-off]="!t.enabled"
+      data-testid="outbox-transport-banner"
+    >
+      <span class="material-symbols-outlined">{{ t.enabled ? 'cable' : 'power_off' }}</span>
+      @if (t.enabled) {
+        <span>
+          {{ 'LAB_OUTBOX.TRANSPORT_ENABLED' | translate: { host: t.host, port: t.port } }}
+          {{ 'LAB_OUTBOX.TRANSPORT_RETRY' | translate: { attempts: t.maxAttempts } }}
+        </span>
+      } @else {
+        <span>{{ 'LAB_OUTBOX.TRANSPORT_DISABLED' | translate }}</span>
+      }
+    </div>
+  }
+
+  <div class="filter-bar">
+    <label for="outbox-status-filter">{{ 'LAB_OUTBOX.FILTER_STATUS' | translate }}</label>
+    <select
+      id="outbox-status-filter"
+      [ngModel]="statusFilter()"
+      (ngModelChange)="setStatusFilter($event)"
+      data-testid="outbox-status-filter"
+    >
+      <option value="">{{ 'LAB_OUTBOX.ALL_STATUSES' | translate }}</option>
+      <option value="PENDING">{{ 'LAB_OUTBOX.STATUS_PENDING' | translate }}</option>
+      <option value="ERROR">{{ 'LAB_OUTBOX.STATUS_ERROR' | translate }}</option>
+      <option value="ACK">{{ 'LAB_OUTBOX.STATUS_ACK' | translate }}</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="state-block">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button class="btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (rows().length === 0) {
+    <div class="state-block">
+      <span class="material-symbols-outlined">outbox</span>
+      <p>{{ 'LAB_OUTBOX.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="outbox-table">
+        <thead>
+          <tr>
+            <th>{{ 'LAB_OUTBOX.COL_TYPE' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_STATUS' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_ATTEMPTS' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_LAST_ATTEMPT' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_LAST_ERROR' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_CREATED' | translate }}</th>
+            <th>{{ 'LAB_OUTBOX.COL_ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr [attr.data-testid]="'outbox-row-' + row.id">
+              <td class="mono">{{ row.messageType }}</td>
+              <td>
+                <span class="status-badge" [attr.data-status]="row.status">
+                  {{ 'LAB_OUTBOX.STATUS_' + row.status | translate }}
+                </span>
+              </td>
+              <td class="numeric">{{ row.attempts }}</td>
+              <td>{{ row.lastAttemptAt ? (row.lastAttemptAt | date: 'short') : '—' }}</td>
+              <td class="error-cell" [title]="row.lastError ?? ''">
+                {{ row.lastError ?? '—' }}
+              </td>
+              <td>{{ row.createdAt | date: 'short' }}</td>
+              <td class="actions-cell">
+                <button
+                  class="btn-icon"
+                  (click)="openDetail(row)"
+                  [attr.data-testid]="'outbox-view-' + row.id"
+                  [attr.aria-label]="'LAB_OUTBOX.VIEW' | translate"
+                  [title]="'LAB_OUTBOX.VIEW' | translate"
+                >
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+                @if (row.status === 'ERROR' && canRetry()) {
+                  <button
+                    class="btn-icon btn-retry"
+                    (click)="retry(row)"
+                    [disabled]="retryingId() !== null"
+                    [attr.data-testid]="'outbox-retry-' + row.id"
+                    [attr.aria-label]="'LAB_OUTBOX.RETRY' | translate"
+                    [title]="'LAB_OUTBOX.RETRY' | translate"
+                  >
+                    <span class="material-symbols-outlined" [class.spin]="retryingId() === row.id"
+                      >replay</span
+                    >
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button class="btn-page" (click)="previousPage()" [disabled]="pageIndex() === 0">
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span>{{
+        'LAB_OUTBOX.PAGE_OF' | translate: { page: pageIndex() + 1, total: totalPages() }
+      }}</span>
+      <button class="btn-page" (click)="nextPage()" [disabled]="pageIndex() + 1 >= totalPages()">
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- Detail modal: full HL7 payload + the order's other interface messages.
+       Modal nested INSIDE the backdrop — the #442 lesson. -->
+  @if (detail() || detailLoading()) {
+    <div
+      class="form-overlay"
+      (click)="closeDetail()"
+      (keydown.escape)="closeDetail()"
+      tabindex="-1"
+      data-testid="outbox-detail-modal"
+    >
+      <div
+        class="form-card detail-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        @if (detailLoading()) {
+          <div class="state-block">
+            <span class="material-symbols-outlined spin">progress_activity</span>
+          </div>
+        } @else if (detail(); as d) {
+          <h2>
+            {{ 'LAB_OUTBOX.DETAIL_TITLE' | translate }}
+            <span class="mono">{{ d.message.messageType }}</span>
+          </h2>
+          <p>
+            <span class="status-badge" [attr.data-status]="d.message.status">
+              {{ 'LAB_OUTBOX.STATUS_' + d.message.status | translate }}
+            </span>
+            @if (d.message.lastError) {
+              <span class="detail-error">{{ d.message.lastError }}</span>
+            }
+          </p>
+          <h3>{{ 'LAB_OUTBOX.PAYLOAD' | translate }}</h3>
+          <pre class="payload" data-testid="outbox-detail-payload">{{ d.message.payload }}</pre>
+          @if (d.siblings.length > 0) {
+            <h3>{{ 'LAB_OUTBOX.SIBLINGS' | translate }}</h3>
+            <ul class="siblings">
+              @for (sibling of d.siblings; track sibling.id) {
+                <li>
+                  <span class="mono">{{ sibling.messageType }}</span>
+                  <span class="status-badge" [attr.data-status]="sibling.status">
+                    {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}
+                  </span>
+                  <span>{{ sibling.createdAt | date: 'short' }}</span>
+                </li>
+              }
+            </ul>
+          }
+          <div class="modal-actions">
+            <button class="btn-primary" (click)="closeDetail()">
+              {{ 'COMMON.CLOSE' | translate }}
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

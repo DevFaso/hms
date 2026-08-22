@@ -340,6 +340,27 @@ export const routes: Routes = [
         loadComponent: () => import('./scheduling/scheduling').then((m) => m.SchedulingComponent),
       },
 
+      // On-call rota (P2 #13). Own top-level route, NOT a /scheduling child:
+      // doctorHiddenRoutes hides /scheduling from doctors, who are readers
+      // here. Roles mirror OnCallScheduleController.READ_ROLES exactly (no
+      // ROLE_ADMIN — the backend does not grant it); write controls are gated
+      // in-component to the narrower WRITE_ROLES.
+      {
+        path: 'on-call',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./on-call/on-call').then((m) => m.OnCallComponent),
+      },
+
       // Departments
       {
         path: 'departments',
@@ -524,6 +545,25 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./lab/lab-instruments/lab-instruments').then((m) => m.LabInstrumentsComponent),
+      },
+      // Instrument outbox monitor (P2 #17) — roles mirror the backend READ set
+      // on GET /lab-instrument-outbox/** exactly.
+      {
+        path: 'lab-outbox',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-outbox/lab-outbox').then((m) => m.LabOutboxComponent),
       },
       {
         path: 'lab-inventory',

@@ -15,8 +15,14 @@ public class InstrumentOutboxResponseDTO {
     private UUID id;
     private UUID labOrderId;
     private String messageType;
+    /** Full HL7 payload. Elided on list rows — PHI-bearing and up to TEXT-sized. */
     private String payload;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime sentAt;
+
+    /** Delivery tracking (V119). Absent from the wire until 2026-08-22 — the columns were write-only. */
+    private int attempts;
+    private String lastError;
+    private LocalDateTime lastAttemptAt;
 }

@@ -202,13 +202,18 @@
               {{ cs.status | enumLabel: 'status' }}
             </span>
           }
-          @if (cs.directives && cs.directives.length > 0) {
+          @if (activeDirectives().length > 0) {
             <ul class="storyboard__chips storyboard__chips--directives">
-              @for (d of cs.directives; track d.id) {
+              @for (d of activeDirectives(); track d.id) {
                 <li class="storyboard__chip storyboard__chip--neutral">
                   <span class="storyboard__chip-label">
                     {{ d.directiveType }}
                   </span>
+                  @if (d.status === 'PENDING') {
+                    <span class="storyboard__chip-detail">{{
+                      d.status | enumLabel: 'status'
+                    }}</span>
+                  }
                   @if (d.effectiveDate) {
                     <span class="storyboard__chip-detail">{{ d.effectiveDate }}</span>
                   }
