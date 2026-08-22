@@ -1,0 +1,410 @@
+<div class="drug-interactions-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">medication_liquid</span>
+      <div>
+        <h1 class="page-title">{{ 'DRUG_INTERACTIONS.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'DRUG_INTERACTIONS.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      @if (canManage()) {
+        <button class="btn-primary" (click)="openCreate()" data-testid="ddi-add">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'DRUG_INTERACTIONS.ADD' | translate }}
+        </button>
+      }
+      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- The KB has no hospital column: every edit lands on every hospital. -->
+  <div class="scope-banner" data-testid="ddi-scope-banner">
+    <span class="material-symbols-outlined">public</span>
+    {{ 'DRUG_INTERACTIONS.PLATFORM_SCOPE' | translate }}
+  </div>
+
+  <div class="filter-bar">
+    <input
+      type="search"
+      class="search-input"
+      [ngModel]="searchTerm()"
+      (ngModelChange)="searchTerm.set($event)"
+      [placeholder]="'DRUG_INTERACTIONS.SEARCH' | translate"
+      [attr.aria-label]="'DRUG_INTERACTIONS.SEARCH' | translate"
+    />
+    <label for="ddi-severity">{{ 'DRUG_INTERACTIONS.SEVERITY' | translate }}</label>
+    <select
+      id="ddi-severity"
+      [ngModel]="severityFilter()"
+      (ngModelChange)="setSeverityFilter($event)"
+    >
+      <option value="">{{ 'DRUG_INTERACTIONS.ALL_SEVERITIES' | translate }}</option>
+      @for (s of severities; track s) {
+        <option [value]="s">{{ 'DRUG_INTERACTIONS.SEVERITY_' + s | translate }}</option>
+      }
+    </select>
+    <label class="toggle-inactive">
+      <input
+        type="checkbox"
+        [ngModel]="showInactive()"
+        (ngModelChange)="setShowInactive($event)"
+        data-testid="ddi-show-inactive"
+      />
+      {{ 'DRUG_INTERACTIONS.SHOW_INACTIVE' | translate }}
+    </label>
+  </div>
+
+  @if (loading()) {
+    <div class="state-block">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+    </div>
+  } @else if (error()) {
+    <div class="state-block state-error">
+      <p>{{ error() }}</p>
+      <button class="btn-secondary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  } @else if (filtered().length === 0) {
+    <div class="state-block">
+      <span class="material-symbols-outlined">medication_liquid</span>
+      <p>{{ 'DRUG_INTERACTIONS.EMPTY' | translate }}</p>
+    </div>
+  } @else {
+    <div class="table-wrap">
+      <table class="ddi-table">
+        <thead>
+          <tr>
+            <th>{{ 'DRUG_INTERACTIONS.PAIR' | translate }}</th>
+            <th>{{ 'DRUG_INTERACTIONS.SEVERITY' | translate }}</th>
+            <th>{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }}</th>
+            <th>{{ 'DRUG_INTERACTIONS.SOURCE' | translate }}</th>
+            <th>{{ 'DRUG_INTERACTIONS.STATE' | translate }}</th>
+            @if (canManage()) {
+              <th>{{ 'DRUG_INTERACTIONS.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of filtered(); track row.id) {
+            <tr
+              [attr.data-testid]="'ddi-row-' + row.id"
+              [class.row-inactive]="row.active === false"
+            >
+              <td>
+                <div class="pair-cell">
+                  <span
+                    >{{ row.drug1Name }} <span class="code">{{ row.drug1Code }}</span></span
+                  >
+                  <span class="pair-plus">+</span>
+                  <span
+                    >{{ row.drug2Name }} <span class="code">{{ row.drug2Code }}</span></span
+                  >
+                </div>
+              </td>
+              <td>
+                <span [class]="severityClass(row.severity)">
+                  {{ 'DRUG_INTERACTIONS.SEVERITY_' + row.severity | translate }}
+                </span>
+              </td>
+              <td class="recommendation-cell" [title]="row.recommendation">
+                {{ row.recommendation }}
+              </td>
+              <td class="source-cell">{{ row.sourceDatabase || '—' }}</td>
+              <td>
+                @if (row.active === false) {
+                  <span class="state-chip state-retired">
+                    {{ 'DRUG_INTERACTIONS.RETIRED' | translate }}
+                  </span>
+                } @else {
+                  <span class="state-chip state-active">
+                    {{ 'DRUG_INTERACTIONS.ACTIVE' | translate }}
+                  </span>
+                }
+              </td>
+              @if (canManage()) {
+                <td class="actions-cell">
+                  @if (row.active === false) {
+                    <button
+                      class="btn-icon btn-restore"
+                      (click)="reactivate(row)"
+                      [disabled]="reactivatingId() !== null"
+                      [attr.data-testid]="'ddi-reactivate-' + row.id"
+                      [attr.aria-label]="'DRUG_INTERACTIONS.REACTIVATE' | translate"
+                      [title]="'DRUG_INTERACTIONS.REACTIVATE' | translate"
+                    >
+                      <span class="material-symbols-outlined">restart_alt</span>
+                    </button>
+                  } @else {
+                    <button
+                      class="btn-icon"
+                      (click)="openEdit(row)"
+                      [attr.data-testid]="'ddi-edit-' + row.id"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      [title]="'COMMON.EDIT' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="btn-icon btn-danger"
+                      (click)="confirmDeactivate(row)"
+                      [attr.data-testid]="'ddi-deactivate-' + row.id"
+                      [attr.aria-label]="'DRUG_INTERACTIONS.DEACTIVATE' | translate"
+                      [title]="'DRUG_INTERACTIONS.DEACTIVATE' | translate"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                    </button>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Create / edit modal — dialog nested INSIDE the backdrop (the #442 lesson). -->
+  @if (modalOpen()) {
+    <div
+      class="form-overlay"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+      data-testid="ddi-modal"
+    >
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{
+            (editingId() ? 'DRUG_INTERACTIONS.EDIT_TITLE' : 'DRUG_INTERACTIONS.ADD_TITLE')
+              | translate
+          }}
+        </h2>
+        <p class="code-hint">{{ 'DRUG_INTERACTIONS.CODE_HINT' | translate }}</p>
+        <form (ngSubmit)="submit()">
+          <div class="form-row">
+            <label for="ddi-drug1-name"
+              >{{ 'DRUG_INTERACTIONS.DRUG1_NAME' | translate }} *
+              <input
+                id="ddi-drug1-name"
+                type="text"
+                [(ngModel)]="form.drug1Name"
+                name="drug1Name"
+              />
+            </label>
+            <label for="ddi-drug1-code"
+              >{{ 'DRUG_INTERACTIONS.DRUG1_CODE' | translate }} *
+              <input
+                id="ddi-drug1-code"
+                type="text"
+                [(ngModel)]="form.drug1Code"
+                name="drug1Code"
+                [class.invalid]="form.drug1Code && !isRxCuiValid(form.drug1Code)"
+              />
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="ddi-drug2-name"
+              >{{ 'DRUG_INTERACTIONS.DRUG2_NAME' | translate }} *
+              <input
+                id="ddi-drug2-name"
+                type="text"
+                [(ngModel)]="form.drug2Name"
+                name="drug2Name"
+              />
+            </label>
+            <label for="ddi-drug2-code"
+              >{{ 'DRUG_INTERACTIONS.DRUG2_CODE' | translate }} *
+              <input
+                id="ddi-drug2-code"
+                type="text"
+                [(ngModel)]="form.drug2Code"
+                name="drug2Code"
+                [class.invalid]="form.drug2Code && !isRxCuiValid(form.drug2Code)"
+              />
+            </label>
+          </div>
+          <label for="ddi-severity-select"
+            >{{ 'DRUG_INTERACTIONS.SEVERITY' | translate }} *
+            <select id="ddi-severity-select" [(ngModel)]="form.severity" name="severity">
+              @for (s of severities; track s) {
+                <option [ngValue]="s">{{ 'DRUG_INTERACTIONS.SEVERITY_' + s | translate }}</option>
+              }
+            </select>
+          </label>
+          <!-- The three action flags are DERIVED from severity server-side;
+               showing them as editable checkboxes would lie. -->
+          <p class="derived-flags" data-testid="ddi-derived-flags">
+            @if (derivedFlags(form.severity).avoid) {
+              <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_AVOID' | translate }}</span>
+            }
+            @if (derivedFlags(form.severity).adjust) {
+              <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_ADJUST' | translate }}</span>
+            }
+            <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
+          </p>
+          <label for="ddi-recommendation"
+            >{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }} *
+            <textarea
+              id="ddi-recommendation"
+              [(ngModel)]="form.recommendation"
+              name="recommendation"
+              rows="2"
+            ></textarea>
+          </label>
+          <label for="ddi-description"
+            >{{ 'DRUG_INTERACTIONS.DESCRIPTION' | translate }}
+            <textarea
+              id="ddi-description"
+              [(ngModel)]="form.description"
+              name="description"
+              rows="2"
+            ></textarea>
+          </label>
+          <div class="form-row">
+            <label for="ddi-mechanism"
+              >{{ 'DRUG_INTERACTIONS.MECHANISM' | translate }}
+              <input
+                id="ddi-mechanism"
+                type="text"
+                [(ngModel)]="form.mechanism"
+                name="mechanism"
+                maxlength="500"
+              />
+            </label>
+            <label for="ddi-effects"
+              >{{ 'DRUG_INTERACTIONS.CLINICAL_EFFECTS' | translate }}
+              <input
+                id="ddi-effects"
+                type="text"
+                [(ngModel)]="form.clinicalEffects"
+                name="clinicalEffects"
+                maxlength="500"
+              />
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="ddi-monitoring"
+              >{{ 'DRUG_INTERACTIONS.MONITORING_PARAMETERS' | translate }}
+              <input
+                id="ddi-monitoring"
+                type="text"
+                [(ngModel)]="form.monitoringParameters"
+                name="monitoringParameters"
+                maxlength="500"
+              />
+            </label>
+            <label for="ddi-interval"
+              >{{ 'DRUG_INTERACTIONS.MONITORING_INTERVAL' | translate }}
+              <input
+                id="ddi-interval"
+                type="number"
+                min="1"
+                [(ngModel)]="form.monitoringIntervalHours"
+                name="monitoringIntervalHours"
+              />
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="ddi-source"
+              >{{ 'DRUG_INTERACTIONS.SOURCE' | translate }}
+              <input
+                id="ddi-source"
+                type="text"
+                [(ngModel)]="form.sourceDatabase"
+                name="sourceDatabase"
+                maxlength="100"
+              />
+            </label>
+            <label for="ddi-evidence"
+              >{{ 'DRUG_INTERACTIONS.EVIDENCE_LEVEL' | translate }}
+              <input
+                id="ddi-evidence"
+                type="text"
+                [(ngModel)]="form.evidenceLevel"
+                name="evidenceLevel"
+                maxlength="100"
+              />
+            </label>
+          </div>
+          <label for="ddi-references"
+            >{{ 'DRUG_INTERACTIONS.REFERENCES' | translate }}
+            <input
+              id="ddi-references"
+              type="text"
+              [(ngModel)]="form.literatureReferences"
+              name="literatureReferences"
+              maxlength="1000"
+            />
+          </label>
+          <label for="ddi-notes"
+            >{{ 'DRUG_INTERACTIONS.NOTES' | translate }}
+            <textarea
+              id="ddi-notes"
+              [(ngModel)]="form.notes"
+              name="notes"
+              rows="2"
+              maxlength="1000"
+              [placeholder]="'DRUG_INTERACTIONS.NOTES_HINT' | translate"
+            ></textarea>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="saving()" data-testid="ddi-save">
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Deactivate confirmation — honest about scope and reversibility -->
+  @if (deactivateTarget(); as target) {
+    <div
+      class="form-overlay"
+      (click)="cancelDeactivate()"
+      (keydown.escape)="cancelDeactivate()"
+      tabindex="-1"
+      data-testid="ddi-deactivate-modal"
+    >
+      <div
+        class="form-card confirm-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ 'DRUG_INTERACTIONS.DEACTIVATE_TITLE' | translate }}</h2>
+        <p>
+          <strong>{{ target.drug1Name }} + {{ target.drug2Name }}</strong>
+          <span [class]="severityClass(target.severity)">
+            {{ 'DRUG_INTERACTIONS.SEVERITY_' + target.severity | translate }}
+          </span>
+        </p>
+        <p>{{ 'DRUG_INTERACTIONS.DEACTIVATE_WARNING' | translate }}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDeactivate()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger-solid"
+            [disabled]="deactivating()"
+            (click)="executeDeactivate()"
+            data-testid="ddi-deactivate-confirm"
+          >
+            {{ 'DRUG_INTERACTIONS.DEACTIVATE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
