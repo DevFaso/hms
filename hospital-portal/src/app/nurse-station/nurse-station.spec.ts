@@ -320,4 +320,21 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(nurseServiceSpy.completeHandoff).toHaveBeenCalledWith('h1');
     expect(toastSpy.success).toHaveBeenCalled();
   });
+
+  it('the completed-handoffs view requests status=COMPLETED — the parameter that had no caller', () => {
+    // PR #462 added ?status= server-side; the 2026-08-22 re-verification found
+    // the portal service physically could not send it. This pins the caller.
+    nurseServiceSpy.getHandoffs.calls.reset();
+    nurseServiceSpy.getHandoffs.and.returnValue(of([]));
+
+    component.setHandoffView('COMPLETED');
+
+    expect(nurseServiceSpy.getHandoffs).toHaveBeenCalledWith(
+      jasmine.objectContaining({ status: 'COMPLETED' }),
+    );
+    expect(component.handoffView()).toBe('COMPLETED');
+
+    component.setHandoffView('PENDING');
+    expect(component.handoffView()).toBe('PENDING');
+  });
 });
