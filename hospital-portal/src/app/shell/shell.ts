@@ -790,6 +790,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // Instrument outbox (P2 #17). Separate gate: the backend read set also
+    // admits LAB_SCIENTIST and QUALITY_MANAGER, who are not in the
+    // instruments/inventory block above — the route guard uses these roles.
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'outbox',
+        label: 'Instrument Outbox',
+        translationKey: 'NAV.LAB_OUTBOX',
+        route: '/lab-outbox',
+      });
+    }
     if (
       this.hasAnyRole([
         'ROLE_RECEPTIONIST',
