@@ -19,10 +19,21 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Desk lookups: appointments by a patient's email/phone/MRN or a staff number.
+ *
+ * <p>Staff-only. This was {@code isAuthenticated()} until 2026-08-21, which was
+ * harmless while only staff held tokens — but the phone-first registration arc
+ * (PR #430) put JWTs in patients' hands, and these endpoints return another
+ * patient's name, email, phone and visit reason for any identifier supplied.
+ * No portal or mobile client calls them (verified: only the http/ scratch
+ * files), so narrowing breaks nothing.
+ */
 @RestController
 @RequestMapping("/lookup")
 @RequiredArgsConstructor
-@PreAuthorize("isAuthenticated()")
+@PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_DOCTOR','ROLE_MIDWIFE',"
+    + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
 public class LookupController {
 
     private final AppointmentRepository appointmentRepository;

@@ -176,6 +176,18 @@
                       <span class="material-symbols-outlined">draw</span>
                     </button>
                   }
+                  @if (canCosign(p)) {
+                    <button
+                      class="action-link sign-link"
+                      (click)="cosignPrescription(p)"
+                      [disabled]="signingId() === p.id"
+                      [title]="'PRESCRIPTIONS.COSIGN' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.COSIGN' | translate"
+                      [attr.data-testid]="'rx-cosign-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">approval</span>
+                    </button>
+                  }
                   <button
                     class="action-link"
                     (click)="openDispatchModal(p)"
@@ -257,6 +269,44 @@
             <div class="detail-notes">
               <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
               <p>{{ rx.notes }}</p>
+            </div>
+          }
+          <!-- Signature + safeguard evidence (P2 #15/#16). The mapper emitted
+               all of this and no template read it — evidence nobody can see is
+               not evidence. -->
+          @if (rx.signedAt || rx.requiresCosign || rx.controlledSubstance) {
+            <div class="detail-notes" data-testid="rx-evidence">
+              @if (rx.signedAt) {
+                <div class="detail-field">
+                  <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span
+                  ><span class="field-value">{{ rx.signedAt | date: 'medium' }}</span>
+                </div>
+              }
+              @if (rx.requiresCosign) {
+                <div class="detail-field">
+                  <span class="field-label">{{ 'PRESCRIPTIONS.COSIGN_STATE' | translate }}</span
+                  ><span class="field-value">{{
+                    rx.cosignedAt
+                      ? (rx.cosignedAt | date: 'medium')
+                      : ('PRESCRIPTIONS.COSIGN_PENDING' | translate)
+                  }}</span>
+                </div>
+              }
+              @if (rx.controlledSubstance) {
+                <div class="detail-field">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.CONTROLLED_SUBSTANCE' | translate
+                  }}</span
+                  ><span class="field-value">{{
+                    rx.twoFactorVerifiedAt
+                      ? (rx.twoFactorVerifiedAt | date: 'medium')
+                      : ('PRESCRIPTIONS.TWO_FACTOR_PENDING' | translate)
+                  }}</span>
+                </div>
+              }
+              @if (rx.status === 'SIGNED' && !rx.signatureValue) {
+                <p class="muted">{{ 'PRESCRIPTIONS.SIGNED_PRE_V118' | translate }}</p>
+              }
             </div>
           }
         </div>
@@ -395,6 +445,16 @@
                 <option [value]="s.value">{{ s.labelKey | translate }}</option>
               }
             </select>
+          </div>
+          <div class="field">
+            <label for="rx-cosign" class="checkbox-label">
+              <!-- Set-only: the backend refuses withdrawing a declared
+                   safeguard by edit. controlledSubstance is deliberately not
+                   offered — the two-factor transport is an open decision, so
+                   flagging it would make the prescription unsignable. -->
+              <input id="rx-cosign" type="checkbox" [(ngModel)]="form.requiresCosign" />
+              {{ 'PRESCRIPTIONS.REQUIRES_COSIGN' | translate }}
+            </label>
           </div>
         </div>
         <div class="form-row">

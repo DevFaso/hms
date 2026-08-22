@@ -66,6 +66,34 @@ class AdvanceDirectiveServiceImplTest {
 
         hospital = Hospital.builder().name("CHU").code("CHU").build();
         hospital.setId(hospitalId);
+
+        // The 2026-08-21 tenant fix requires the patient to be REGISTERED at
+        // the resolved hospital — a bare findById was the one unguarded write
+        // path in the service, letting a hospital-A clinician record a DNR
+        // against hospital-B's patient.
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        registration.setActive(true);
+        patient.getHospitalRegistrations().add(registration);
+    }
+
+    @org.junit.jupiter.api.Test
+    void createRefusesAPatientNotRegisteredAtTheCallersHospital() {
+        // 404, not 403 — matching loadScoped, so a foreign patient id is
+        // indistinguishable from a nonexistent one.
+        Patient foreign = new Patient();
+        foreign.setId(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(patientRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        UUID foreignId = foreign.getId();
+        AdvanceDirectiveRequestDTO req = request();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(foreignId, req))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        org.mockito.Mockito.verify(directiveRepository, org.mockito.Mockito.never())
+            .save(org.mockito.ArgumentMatchers.any());
     }
 
     private AdvanceDirectiveRequestDTO request() {

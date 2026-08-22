@@ -4599,9 +4599,19 @@
       "SMS_SENT": "SMS envoyé à {pharmacy}",
       "SMS_FAILED": "Impossible d'envoyer le SMS de prescription",
       "SIGNED": "Prescription signée",
-      "SIGN_FAILED": "Échec de la signature"
+      "SIGN_FAILED": "Échec de la signature",
+      "COSIGNED": "Prescription contresignée",
+      "COSIGN_FAILED": "Échec du contreseing"
     },
-    "SIGN": "Signer"
+    "SIGN": "Signer",
+    "COSIGN": "Contresigner",
+    "REQUIRES_COSIGN": "Contreseing d'un second prescripteur requis",
+    "SIGNED_AT": "Signée",
+    "COSIGN_STATE": "Contreseing",
+    "COSIGN_PENDING": "En attente — un second prescripteur doit contresigner",
+    "CONTROLLED_SUBSTANCE": "Substance contrôlée — vérification à deux facteurs",
+    "TWO_FACTOR_PENDING": "En attente — non vérifiée",
+    "SIGNED_PRE_V118": "Signée avant l'existence des preuves de signature ; non vérifiable."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",

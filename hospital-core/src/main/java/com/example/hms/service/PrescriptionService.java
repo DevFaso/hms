@@ -25,6 +25,17 @@ public interface PrescriptionService {
      */
     PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
 
+    /**
+     * Co-sign a prescription that declared it needs one (P2 #15).
+     *
+     * <p>The {@code cosignedBy}/{@code cosignedAt} columns existed since the
+     * pharmacy module with no path ever writing them, so a prescription flagged
+     * {@code requiresCosign} was permanently unsignable once the gates went in.
+     * The co-signer must be a prescriber OTHER than the prescription's own —
+     * a second pair of eyes is the entire point.
+     */
+    PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
+
     Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale);
 
     PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale);

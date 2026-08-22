@@ -81,6 +81,25 @@ public class PrescriptionController {
         return ResponseEntity.ok(prescriptionService.signPrescription(id, locale));
     }
 
+    /**
+     * The co-sign ceremony (P2 #15). Same role note as sign: the annotation is
+     * the coarse filter, and the service additionally requires the caller to be
+     * a prescriber OTHER than the prescription's own. (ROLE_NURSE_PRACTITIONER
+     * is kept for parity with sign but is not currently a seeded role — in
+     * practice only doctors can co-sign, a known open decision.)
+     */
+    @PostMapping("/{id}/cosign")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE_PRACTITIONER')")
+    @Operation(summary = "Co-sign a prescription that requires it",
+        description = "Records a second prescriber's co-signature on a prescription flagged "
+            + "requiresCosign. The co-signer must not be the prescribing clinician, and only a "
+            + "DRAFT or PENDING_SIGNATURE prescription can be co-signed.")
+    public ResponseEntity<PrescriptionResponseDTO> cosign(
+        @PathVariable UUID id,
+        Locale locale) {
+        return ResponseEntity.ok(prescriptionService.cosignPrescription(id, locale));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT')")
     @Operation(summary = "Get Prescription by ID", description = "Fetch a prescription by ID.")

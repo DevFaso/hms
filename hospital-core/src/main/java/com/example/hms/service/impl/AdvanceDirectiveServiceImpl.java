@@ -52,6 +52,17 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
 
         Hospital hospital = resolveHospital(request.getHospitalId());
 
+        // The hospital is pinned to the caller above, but until 2026-08-21 the
+        // PATIENT was a bare findById — the one unguarded write path in this
+        // file, in a class whose own resolveHospital comment warns about
+        // exactly this vector. A DNR recorded against another hospital's
+        // patient is a clinical statement made by someone with no relationship
+        // to them; 404 rather than 403, matching loadScoped, so a foreign
+        // patient id is indistinguishable from a nonexistent one.
+        if (!patient.isRegisteredInHospital(hospital.getId())) {
+            throw new ResourceNotFoundException("Patient not found with ID: " + patientId);
+        }
+
         AdvanceDirective directive = new AdvanceDirective();
         directive.setPatient(patient);
         directive.setHospital(hospital);

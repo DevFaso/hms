@@ -4599,9 +4599,19 @@
       "SMS_SENT": "SMS sent to {pharmacy}",
       "SMS_FAILED": "Could not dispatch the prescription SMS",
       "SIGNED": "Prescription signed",
-      "SIGN_FAILED": "Signing failed"
+      "SIGN_FAILED": "Signing failed",
+      "COSIGNED": "Prescription co-signed",
+      "COSIGN_FAILED": "Co-signing failed"
     },
-    "SIGN": "Sign"
+    "SIGN": "Sign",
+    "COSIGN": "Co-sign",
+    "REQUIRES_COSIGN": "Requires co-signature by a second prescriber",
+    "SIGNED_AT": "Signed",
+    "COSIGN_STATE": "Co-signature",
+    "COSIGN_PENDING": "Pending — a second prescriber must co-sign",
+    "CONTROLLED_SUBSTANCE": "Controlled substance — two-factor verification",
+    "TWO_FACTOR_PENDING": "Pending — not yet verified",
+    "SIGNED_PRE_V118": "Signed before signature evidence existed; cannot be verified."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
