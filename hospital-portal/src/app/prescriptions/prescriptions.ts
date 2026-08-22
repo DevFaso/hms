@@ -120,15 +120,15 @@ export class PrescriptionsComponent implements OnInit {
   // feat/i18n-enum-label-pipe-phase1, so this UI no longer carries its own
   // duplicate translation namespace (PR #256 keys removed in Phase 2/3).
   //
-  // SIGNED is absent on purpose. It used to be offered here, which is how
-  // "signed" came to mean "somebody picked SIGNED from a dropdown" — no signer,
-  // no timestamp, no digest. It is now reachable only through the sign action,
-  // and the backend rejects it in a create/update body. Leaving it in this list
-  // would offer a control that always fails.
+  // SIGNED and TRANSMITTED are absent on purpose. SIGNED used to be offered
+  // here, which is how "signed" came to mean "somebody picked it from a
+  // dropdown" — no signer, no timestamp, no digest. TRANSMITTED followed it
+  // out on 2026-08-21: it is a dispensable state, nothing in the backend ever
+  // writes it, and the server now refuses both in a create/update body — a
+  // workflow status belongs to the workflow that owns it.
   prescriptionStatuses = [
     { value: 'DRAFT', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DRAFT' },
     { value: 'PENDING_SIGNATURE', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.PENDING_SIGNATURE' },
-    { value: 'TRANSMITTED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.TRANSMITTED' },
     { value: 'CANCELLED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED' },
     { value: 'DISCONTINUED', labelKey: 'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED' },
   ];
@@ -335,6 +335,36 @@ export class PrescriptionsComponent implements OnInit {
    */
   canSign(p: PrescriptionResponse): boolean {
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
+  }
+
+  /**
+   * A co-sign is offered while the prescription is still signable and the
+   * declared requirement is unmet. Whether the CALLER may co-sign (a second
+   * prescriber, not the prescription's own) is the backend's check — the row
+   * doesn't carry enough to decide it here, so the refusal surfaces verbatim.
+   */
+  canCosign(p: PrescriptionResponse): boolean {
+    return (
+      !!p.requiresCosign &&
+      !p.cosignedAt &&
+      (p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE')
+    );
+  }
+
+  cosignPrescription(p: PrescriptionResponse): void {
+    this.signingId.set(p.id);
+    this.prescriptionService.cosign(p.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.COSIGNED'));
+        this.signingId.set(null);
+        this.load();
+      },
+      error: (err: unknown) => {
+        const msg = this.extractErrorMessage(err);
+        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
+        this.signingId.set(null);
+      },
+    });
   }
 
   signPrescription(p: PrescriptionResponse): void {

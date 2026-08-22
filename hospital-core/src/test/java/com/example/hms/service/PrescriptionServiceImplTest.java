@@ -77,6 +77,12 @@ class PrescriptionServiceImplTest {
     @Mock
     private com.example.hms.cdshooks.rules.CdsRuleEngine cdsRuleEngine;
 
+    // Real, not mocked: the guard is a pure rule with its own test; a mock here
+    // would let the service pass while the rule refuses.
+    @org.mockito.Spy
+    private com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard =
+        new com.example.hms.service.pharmacy.ControlledSubstanceGuard();
+
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
@@ -2396,6 +2402,115 @@ class PrescriptionServiceImplTest {
         rx.setDosage(TEST_DOSAGE);
         rx.setFrequency(TEST_FREQUENCY);
         return rx;
+    }
+
+    // ── The co-sign ceremony + safeguard writers (P2 #15) ────────────────
+    // The reassessment found the gates guarded a flag nothing could set, and
+    // cosignedBy/cosignedAt had no writer — a requiresCosign prescription was
+    // permanently unsignable once the gates went in.
+
+    @Test
+    void cosignRecordsASecondPrescriber() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        UUID cosignerUserId = UUID.randomUUID();
+        Staff cosigner = Staff.builder().build();
+        cosigner.setId(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(cosignerUserId);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(cosignerUserId))
+            .thenReturn(Optional.of(cosigner));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.cosignPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getCosignedBy()).isSameAs(cosigner);
+        assertThat(rx.getCosignedAt()).isNotNull();
+    }
+
+    @Test
+    void cosignRefusesThePrescriberCosigningTheirOwnOrder() {
+        // Letting the prescriber co-sign their own order would satisfy the
+        // letter of the gate while deleting its point.
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(prescriberUserId))
+            .thenReturn(Optional.of(rx.getStaff()));
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("own prescriber");
+        assertThat(rx.getCosignedAt()).isNull();
+    }
+
+    @Test
+    void cosignRefusesAPrescriptionThatNeverDeclaredTheRequirement() {
+        Prescription rx = signablePrescription(UUID.randomUUID());
+
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.cosignPrescription(rxId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("does not declare");
+    }
+
+    @Test
+    void createPrescriptionRefusesAClientAssertedTransmitted() {
+        // Blocking only SIGNED protected the word, not the capability: a
+        // client-asserted TRANSMITTED still landed on the entity, and
+        // TRANSMITTED is dispensable. Nothing in the backend ever writes
+        // TRANSMITTED, so the only writer it ever had was this hole.
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.TRANSMITTED)
+            .build();
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cannot be set directly");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void updatePrescriptionRefusesWithdrawingTheControlledFlag() {
+        // Clearing controlledSubstance on an edit would drop the two-factor
+        // gate an earlier revision declared it needed.
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setControlledSubstance(true);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .controlledSubstance(false)
+            .build();
+
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cannot be removed by editing");
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
