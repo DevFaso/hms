@@ -31,4 +31,12 @@ public interface DrugInteractionAdminService {
      * that history.
      */
     DrugInteractionDTO deactivate(UUID id);
+
+    /**
+     * Undo a deactivation. Until 2026-08-22 no such path existed: every read
+     * hard-filters {@code active = true} and nothing ever set the flag back,
+     * so one pharmacist's deactivation silenced a pair permanently — for every
+     * hospital in the deployment, since the KB is platform-global.
+     */
+    DrugInteractionDTO reactivate(UUID id);
 }

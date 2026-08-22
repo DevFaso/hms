@@ -690,6 +690,28 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // Drug-interaction KB (P2 #14). Its own gate, not the pharmacy block above:
+    // the backend read set adds DOCTOR/NURSE/MIDWIFE, while the pharmacy block
+    // admits INVENTORY_CLERK/STORE_MANAGER, whom the API refuses — either
+    // reuse would show three roles a dead entry or hide it from three readers.
+    // The route guard uses these same roles.
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'medication_liquid',
+        label: 'Drug Interactions',
+        translationKey: 'NAV.DRUG_INTERACTIONS',
+        route: '/pharmacy/drug-interactions',
+      });
+    }
 
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
