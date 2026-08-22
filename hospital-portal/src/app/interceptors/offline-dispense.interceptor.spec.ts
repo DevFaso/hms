@@ -140,4 +140,24 @@ describe('offlineDispenseInterceptor', () => {
     const req = httpMock.expectOne('/api/pharmacy/dispense');
     req.flush({ message: 'insufficient stock' }, { status: 400, statusText: 'Bad Request' });
   });
+
+  it('does NOT queue a read-only-mode 503 (X-Readonly-Mode) — the platform is refusing writes, not down (P3 #23a)', (done) => {
+    http.post('/api/pharmacy/dispense', baseRequest()).subscribe({
+      next: () => done.fail('expected error on read-only 503, got success'),
+      error: (err: HttpErrorResponse) => {
+        expect(err.status).toBe(503);
+        expect(queue.enqueued).toEqual([]);
+        done();
+      },
+    });
+    const req = httpMock.expectOne('/api/pharmacy/dispense');
+    req.flush(
+      { error: 'READ_ONLY_MODE', message: 'maintenance' },
+      {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'X-Readonly-Mode': 'true' },
+      },
+    );
+  });
 });

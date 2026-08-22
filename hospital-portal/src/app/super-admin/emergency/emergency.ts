@@ -6,6 +6,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EmergencyControlService } from '../../services/emergency-control.service';
 import { EmergencyActionResponse } from '../../services/emergency-control.model';
+import { DowntimeService, DowntimeStatus } from '../../services/downtime.service';
 
 interface PanelState {
   busy: boolean;
@@ -24,7 +25,42 @@ const FRESH_PANEL: PanelState = { busy: false, result: null, error: null };
 })
 export class EmergencyComponent {
   private readonly service = inject(EmergencyControlService);
+  private readonly downtimeService = inject(DowntimeService);
   private readonly translate = inject(TranslateService);
+
+  /* ── Downtime read-only mode (P3 #23a) ── */
+  readonly downtimeStatus = signal<DowntimeStatus | null>(null);
+  readonly downtimeMessage = signal('');
+  readonly downtimeBusy = signal(false);
+  readonly downtimeError = signal('');
+
+  constructor() {
+    this.downtimeService.load();
+    // The shared signal already polls in the shell; mirror it here so the
+    // card reflects the current state on entry.
+    this.refreshDowntimeCard();
+  }
+
+  private refreshDowntimeCard(): void {
+    this.downtimeStatus.set(this.downtimeService.status());
+  }
+
+  setDowntime(readOnly: boolean): void {
+    if (this.downtimeBusy()) return;
+    this.downtimeBusy.set(true);
+    this.downtimeError.set('');
+    this.downtimeService.toggle(readOnly, this.downtimeMessage().trim() || undefined).subscribe({
+      next: (status) => {
+        this.downtimeBusy.set(false);
+        this.downtimeStatus.set(status);
+        this.downtimeService.status.set(status);
+      },
+      error: (err) => {
+        this.downtimeBusy.set(false);
+        this.downtimeError.set(this.errorText(err));
+      },
+    });
+  }
 
   readonly logoutPanel = signal<PanelState>({ ...FRESH_PANEL });
   readonly killPanel = signal<PanelState>({ ...FRESH_PANEL });

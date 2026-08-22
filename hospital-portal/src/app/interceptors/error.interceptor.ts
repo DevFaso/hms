@@ -20,6 +20,7 @@ import {
 } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
+import { DowntimeService } from '../services/downtime.service';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -137,6 +138,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const http = inject(HttpClient);
   const impersonation = inject(ImpersonationService);
+  // Hoisted: inject() is only valid during the synchronous interceptor
+  // call, not inside the async catchError callback below.
+  const downtime = inject(DowntimeService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -176,6 +180,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           auth.logout();
           void router.navigate(['/login']);
         }
+      } else if (error.status === 503 && error.headers?.get('X-Readonly-Mode') === 'true') {
+        // Downtime read-only mode (P3 #23a): flip the banner on immediately
+        // instead of waiting for the next poll; the component-level error
+        // handler still gets the refusal (rethrown below) so the user sees
+        // why their save failed.
+        const body = error.error as { message?: string } | null;
+        downtime.markReadOnly(body?.message ?? null);
       } else if (error.status === 403) {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');

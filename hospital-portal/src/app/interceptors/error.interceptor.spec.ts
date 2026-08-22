@@ -12,6 +12,7 @@ import { of, throwError } from 'rxjs';
 import { errorInterceptor, clearReportedSilent403s } from './error.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
+import { DowntimeService } from '../services/downtime.service';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -150,5 +151,39 @@ describe('errorInterceptor', () => {
     expect(auth.logout).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
     expect(error?.status).toBe(500);
+  });
+
+  describe('downtime read-only 503 (P3 #23a)', () => {
+    it('marks the banner on 503 with the X-Readonly-Mode header, still rethrowing', () => {
+      const downtime = TestBed.inject(DowntimeService);
+
+      let error: HttpErrorResponse | undefined;
+      http.post('/patients', {}).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne('/patients').flush(
+        { error: 'READ_ONLY_MODE', message: 'Maintenance until 14:00' },
+        {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'X-Readonly-Mode': 'true' },
+        },
+      );
+
+      expect(downtime.status()?.readOnly).toBeTrue();
+      expect(downtime.status()?.message).toBe('Maintenance until 14:00');
+      expect(error?.status).toBe(503);
+    });
+
+    it('a bare 503 without the header does not touch the downtime state', () => {
+      const downtime = TestBed.inject(DowntimeService);
+
+      let error: HttpErrorResponse | undefined;
+      http.post('/patients', {}).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne('/patients')
+        .flush({ message: 'down' }, { status: 503, statusText: 'Service Unavailable' });
+
+      expect(downtime.status()).toBeNull();
+      expect(error?.status).toBe(503);
+    });
   });
 });

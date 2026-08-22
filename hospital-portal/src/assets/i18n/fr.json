@@ -435,7 +435,16 @@
       "SEVERITY_CRITICAL": "Critique",
       "ACTION": "Envoyer la diffusion"
     },
-    "REQUEST_FAILED": "La requête a échoué."
+    "REQUEST_FAILED": "La requête a échoué.",
+    "DOWNTIME": {
+      "TITLE": "Mode lecture seule (maintenance)",
+      "DESC": "Bloque toutes les écritures de la plateforme avec un 503 tandis que la consultation reste disponible. La connexion, le rafraîchissement de jeton et ce commutateur restent ouverts. Effet immédiat ici, sous 30 secondes sur les autres instances.",
+      "ACTIVE": "LE MODE LECTURE SEULE EST ACTIF.",
+      "INACTIVE": "Fonctionnement normal — les écritures sont autorisées.",
+      "MESSAGE": "Message de la bannière (affiché à tous les utilisateurs)",
+      "ACTIVATE": "Activer le mode lecture seule",
+      "DEACTIVATE": "Désactiver le mode lecture seule"
+    }
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Émis par",
@@ -2452,7 +2461,10 @@
     "SPECIMEN_STATUS_RECEIVED": "Réceptionné",
     "SPECIMEN_STATUS_PROCESSING": "En traitement",
     "SPECIMEN_STATUS_COMPLETED": "Terminé",
-    "SPECIMEN_STATUS_REJECTED": "Rejeté"
+    "SPECIMEN_STATUS_REJECTED": "Rejeté",
+    "PRINT_LABEL": "Étiquette",
+    "PRINT_LABEL_TITLE": "Imprimer l'étiquette de l'échantillon",
+    "PRINT_LABEL_FAILED": "Échec de la génération de l'étiquette de l'échantillon."
   },
   "LAB_STAFF": {
     "TITLE": "Gestion du personnel de laboratoire",
@@ -3460,7 +3472,9 @@
     "WEIGHT": "Weight",
     "ZIP_CODE": "Zip Code",
     "HEAD_CIRCUMFERENCE": "Périmètre crânien",
-    "BLOOD_GLUCOSE": "Glycémie"
+    "BLOOD_GLUCOSE": "Glycémie",
+    "PRINT_WRISTBAND": "Bracelet",
+    "PRINT_WRISTBAND_TITLE": "Imprimer le bracelet du patient (le QR encode l'identifiant patient pour le scan au chevet)"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7676,5 +7690,9 @@
     "CAMERA_UNSUPPORTED": "Ce navigateur ne prend pas en charge la capture par caméra.",
     "CAMERA_DENIED": "L'accès à la caméra a été refusé.",
     "CAPTURE_FAILED": "L'image n'a pas pu être capturée. Réessayez."
+  },
+  "DOWNTIME": {
+    "BANNER_TITLE": "Mode lecture seule :",
+    "BANNER_DEFAULT": "Le système est en maintenance. La consultation fonctionne ; les modifications sont temporairement désactivées."
   }
 }
