@@ -75,6 +75,9 @@ public class LabResultMapper {
             .criticalEscalationLevel(result.getCriticalEscalationLevel())
             .criticalReadBackAt(result.getCriticalReadBackAt())
             .criticalReadBackBy(result.getCriticalReadBackByDisplay())
+            // The recorded read-back, including a mismatched one — a clinician
+            // repeating the wrong value is the event the audit trail is for.
+            .criticalReadBackValue(result.getCriticalReadBackValue())
             .acknowledgedAt(result.getAcknowledgedAt())
             .acknowledgedBy(result.getAcknowledgedByDisplay())
         .released(result.isReleased())

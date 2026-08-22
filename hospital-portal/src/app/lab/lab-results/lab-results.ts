@@ -427,9 +427,16 @@ export class LabResultsComponent implements OnInit {
    * A critical result asks for a read-back rather than a bare acknowledge: the
    * clinician repeats the value and the server checks it. Acknowledge stays for
    * everything else, where there is no number worth verifying.
+   *
+   * The server's authority is `criticalNotifiedAt` — the stamp its notifier set
+   * when it decided the result was critical — and the server now REFUSES a bare
+   * acknowledge on such a result. `severityFlag` alone is not enough: the
+   * mapper computes it from reference ranges and returns UNSPECIFIED when the
+   * test has none, so gating only on the flag offered an acknowledge button
+   * that always failed for exactly the results that matter most.
    */
   isCritical(r: LabResultResponse): boolean {
-    return (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
+    return !!r.criticalNotifiedAt || (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
   }
 
   openReadBack(r: LabResultResponse): void {

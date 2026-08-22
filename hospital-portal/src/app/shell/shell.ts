@@ -804,21 +804,28 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.FRONT_DESK',
         route: '/reception',
       });
-      // Duplicate-patient review. The panel and its whole backend shipped with
-      // no click anywhere reaching them — an admin had to hand-type the URL.
-      // Roles mirror the route guard on 'reception/empi-candidates'.
+    }
+    // Duplicate-patient review. OUTSIDE the Front Desk gate above on purpose:
+    // this entry's audience includes NURSE and DOCTOR, and nesting it inside a
+    // receptionist/admin-only block meant its own roles list was never even
+    // consulted for them — the 2026-08-21 reassessment found nurses and
+    // doctors could not reach the panel at all, the second reachability
+    // defect on this same surface. Roles mirror the RoleGuard on
+    // 'reception/empi-candidates'.
+    if (
+      this.hasAnyRole([
+        'ROLE_RECEPTIONIST',
+        'ROLE_NURSE',
+        'ROLE_DOCTOR',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
       items.push({
         icon: 'join_inner',
         label: 'Duplicate Patients',
         translationKey: 'NAV.EMPI_CANDIDATES',
         route: '/reception/empi-candidates',
-        roles: [
-          'ROLE_RECEPTIONIST',
-          'ROLE_NURSE',
-          'ROLE_DOCTOR',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_SUPER_ADMIN',
-        ],
       });
     }
 

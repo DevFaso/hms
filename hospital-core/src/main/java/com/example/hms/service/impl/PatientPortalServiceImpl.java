@@ -1256,7 +1256,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, Locale locale) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_APPOINTMENTS");
-        return appointmentService.getAppointmentsByPatientId(patient.getId(), locale, null);
+        // The verified-patient variant, NOT the username-scoped one: passing
+        // null for username threw inside getUserOrThrow before any query ran,
+        // so this tab returned 500 for every proxy while its unit test stubbed
+        // the (…, isNull()) call and asserted the broken contract worked.
+        return appointmentService.getAppointmentsForVerifiedPatient(patient.getId());
     }
 
     @Override

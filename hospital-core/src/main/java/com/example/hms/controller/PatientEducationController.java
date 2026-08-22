@@ -71,7 +71,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get education resource by ID")
     public ResponseEntity<EducationResourceResponseDTO> getResourceById(@PathVariable UUID id) {
         educationService.incrementResourceViewCount(id);
@@ -80,7 +80,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get all education resources")
     public ResponseEntity<List<EducationResourceResponseDTO>> getAllResources(Authentication auth) {
         UUID hospitalId = resolveHospitalScope(auth);
@@ -89,7 +89,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/search")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Search education resources by keyword")
     public ResponseEntity<List<EducationResourceResponseDTO>> searchResources(
             @RequestParam String query,
@@ -100,7 +100,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/by-category/{category}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get education resources by category")
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByCategory(
             @PathVariable EducationCategory category,
@@ -111,7 +111,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/by-type/{type}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get education resources by type")
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByType(
             @PathVariable EducationResourceType type,
@@ -122,7 +122,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/by-language/{languageCode}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get education resources by language")
     public ResponseEntity<List<EducationResourceResponseDTO>> getResourcesByLanguage(
             @PathVariable String languageCode,
@@ -133,7 +133,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/popular/{category}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get popular resources by category")
     public ResponseEntity<List<EducationResourceResponseDTO>> getPopularResourcesByCategory(
             @PathVariable EducationCategory category,
@@ -221,7 +221,7 @@ public class PatientEducationController {
     }
 
     @GetMapping("/resources/{resourceId}/average-rating")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST')")
     @Operation(summary = "Get average rating for a resource")
     public ResponseEntity<Double> getAverageRating(@PathVariable UUID resourceId) {
         Double rating = educationService.calculateAverageRating(resourceId);
