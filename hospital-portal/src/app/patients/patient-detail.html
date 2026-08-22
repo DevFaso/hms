@@ -129,6 +129,17 @@
           {{ 'FLUID_BALANCE.TAB' | translate }}
         </button>
       }
+      @if (canViewMicro()) {
+        <button
+          class="tab"
+          data-testid="micro-tab-button"
+          [class.active]="activeTab() === 'micro'"
+          (click)="setTab('micro')"
+          [title]="'MICRO.TAB_TITLE' | translate"
+        >
+          {{ 'MICRO.TAB' | translate }}
+        </button>
+      }
       @if (canViewEncounters()) {
         <button
           class="tab"
@@ -206,6 +217,11 @@
     <!-- ═══ Fluid Balance Tab (P3 #18 — first numeric I&O surface) ═══ -->
     @if (activeTab() === 'fluid-balance' && canViewFluidBalance()) {
       <app-fluid-balance-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Microbiology Tab (P3 #19 — cultures + susceptibility panels) ═══ -->
+    @if (activeTab() === 'micro' && canViewMicro()) {
+      <app-micro-tab [patientId]="patient()!.id" />
     }
 
     <!-- ═══ Overview Tab ═══ -->

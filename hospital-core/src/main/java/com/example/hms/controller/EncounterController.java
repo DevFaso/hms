@@ -409,6 +409,44 @@ public class EncounterController {
             .body(response);
     }
 
+    /**
+     * P3 #20. NOTE: no /encounters/** SecurityConfig matcher exists — these
+     * ride anyRequest().authenticated(), so the @PreAuthorize here is the
+     * authoritative gate. Sign is author-only (enforced in the service; the
+     * annotation can only establish the caller holds an authoring role).
+     */
+    @PostMapping(value = "/{encounterId}/notes/sign", consumes = MediaType.ALL_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "Sign the encounter note (author-only ceremony)",
+               description = "Server-resolved signer + SHA-256 digest over a canonical payload. "
+                   + "Signing locks the note; content changes go through addenda. "
+                   + "A signature cannot be asserted in the note body.")
+    public ResponseEntity<EncounterNoteResponseDTO> signEncounterNote(
+        @PathVariable UUID encounterId,
+        Locale locale
+    ) {
+        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, locale));
+    }
+
+    /**
+     * Attending attestation: DOCTOR-only by design — the co-signature exists
+     * for the student/resident workflow where an attending physician takes
+     * responsibility for the documentation. Self-cosign refused in the
+     * service; the co-signer's staff profile must be at the note's hospital.
+     */
+    @PostMapping(value = "/{encounterId}/notes/cosign", consumes = MediaType.ALL_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(summary = "Co-sign a signed encounter note (attending attestation)",
+               description = "Requires the note to have declared requiresCosign and to be signed "
+                   + "by its author. The co-signer must be a different clinician with a staff "
+                   + "profile at the note's hospital.")
+    public ResponseEntity<EncounterNoteResponseDTO> cosignEncounterNote(
+        @PathVariable UUID encounterId,
+        Locale locale
+    ) {
+        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, locale));
+    }
+
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounter note history",

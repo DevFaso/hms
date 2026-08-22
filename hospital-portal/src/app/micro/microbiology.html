@@ -1,0 +1,664 @@
+<div class="micro-page">
+  <div class="page-header">
+    <h1>{{ 'MICRO.PAGE_TITLE' | translate }}</h1>
+    <div class="header-actions">
+      <div class="filter-switch" role="group" [attr.aria-label]="'MICRO.FILTER_LABEL' | translate">
+        <button
+          type="button"
+          class="filter-btn"
+          data-testid="filter-all"
+          [class.active]="statusFilter() === ''"
+          (click)="setFilter('')"
+        >
+          {{ 'MICRO.FILTER_ALL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="filter-btn"
+          data-testid="filter-preliminary"
+          [class.active]="statusFilter() === 'PRELIMINARY'"
+          (click)="setFilter('PRELIMINARY')"
+        >
+          {{ 'MICRO.STATUS_PRELIMINARY' | translate }}
+        </button>
+        <button
+          type="button"
+          class="filter-btn"
+          [class.active]="statusFilter() === 'FINAL'"
+          (click)="setFilter('FINAL')"
+        >
+          {{ 'MICRO.STATUS_FINAL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="filter-btn"
+          [class.active]="statusFilter() === 'CORRECTED'"
+          (click)="setFilter('CORRECTED')"
+        >
+          {{ 'MICRO.STATUS_CORRECTED' | translate }}
+        </button>
+      </div>
+      @if (canResult()) {
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="new-culture"
+          (click)="openCreateModal()"
+        >
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MICRO.NEW_CULTURE' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'MICRO.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && error()) {
+    <div class="error-state" data-testid="micro-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'MICRO.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+    @if (cultures().length === 0) {
+      <div class="empty-state" data-testid="micro-empty">
+        <span class="material-symbols-outlined">microbiology</span>
+        <p>{{ 'MICRO.NO_CULTURES_WORKBENCH' | translate }}</p>
+      </div>
+    } @else {
+      <div class="table-wrap">
+        <table class="data-table" data-testid="cultures-table">
+          <thead>
+            <tr>
+              <th>{{ 'MICRO.COL_CREATED' | translate }}</th>
+              <th>{{ 'MICRO.COL_PATIENT' | translate }}</th>
+              <th>{{ 'MICRO.COL_TEST' | translate }}</th>
+              <th>{{ 'MICRO.COL_SOURCE' | translate }}</th>
+              <th>{{ 'MICRO.COL_STATUS' | translate }}</th>
+              <th>{{ 'MICRO.COL_GROWTH' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (culture of cultures(); track culture.id) {
+              <tr
+                class="clickable"
+                [class.selected]="selected()?.id === culture.id"
+                (click)="select(culture)"
+                (keydown.enter)="select(culture)"
+                tabindex="0"
+              >
+                <td>{{ culture.createdAt | date: 'MMM d, HH:mm' }}</td>
+                <td>{{ culture.patientName || '—' }}</td>
+                <td>{{ culture.labTestName || '—' }}</td>
+                <td>{{ culture.specimenSource || '—' }}</td>
+                <td>
+                  <span
+                    class="status-pill"
+                    [class.preliminary]="culture.status === 'PRELIMINARY'"
+                    [class.final]="culture.status === 'FINAL'"
+                    [class.corrected]="culture.status === 'CORRECTED'"
+                  >
+                    {{ statusLabel(culture.status) }}
+                  </span>
+                </td>
+                <td>
+                  <span
+                    class="growth-pill"
+                    [class.growth]="culture.growthResult === 'GROWTH'"
+                    [class.no-growth]="culture.growthResult === 'NO_GROWTH'"
+                    [class.pending]="culture.growthResult === null"
+                  >
+                    {{ growthLabel(culture.growthResult) }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+    @if (selected(); as culture) {
+      <div class="detail-panel" data-testid="culture-detail">
+        <div class="detail-header">
+          <div>
+            <h2>{{ culture.labTestName || ('MICRO.CULTURE' | translate) }}</h2>
+            <p class="detail-sub">
+              {{ culture.patientName || '—' }}
+              @if (culture.specimenSource) {
+                · {{ culture.specimenSource }}
+              }
+              @if (culture.specimenAccessionNumber) {
+                · {{ culture.specimenAccessionNumber }}
+              }
+            </p>
+          </div>
+          <div class="detail-header-actions">
+            @if (canFinalize() && culture.status === 'PRELIMINARY') {
+              <button
+                type="button"
+                class="btn-primary"
+                data-testid="finalize-culture"
+                (click)="finalize()"
+                [disabled]="finalizing()"
+              >
+                {{ (finalizing() ? 'MICRO.FINALIZING' : 'MICRO.FINALIZE') | translate }}
+              </button>
+            }
+            <button
+              type="button"
+              class="btn-icon"
+              data-testid="close-detail"
+              (click)="closeDetail()"
+              [attr.aria-label]="'MICRO.CLOSE' | translate"
+            >
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        </div>
+
+        @if (culture.status === 'CORRECTED' && culture.correctionReason) {
+          <div class="correction-banner" data-testid="correction-banner">
+            <span class="material-symbols-outlined">history_edu</span>
+            <span>
+              {{ 'MICRO.CORRECTED_AT' | translate }}
+              {{ culture.correctedAt | date: 'MMM d, y HH:mm' }} — {{ culture.correctionReason }}
+            </span>
+          </div>
+        }
+        @if (culture.finalizedAt) {
+          <p class="finalized-line">
+            {{ 'MICRO.FINALIZED_AT' | translate }}:
+            {{ culture.finalizedAt | date: 'MMM d, y HH:mm' }}
+            @if (culture.finalizedByName) {
+              ({{ culture.finalizedByName }})
+            }
+          </p>
+        }
+
+        @if (canResult() && selectedLocked()) {
+          <div class="form-field correction-field">
+            <label for="correction-reason">{{ 'MICRO.CORRECTION_REASON' | translate }}</label>
+            <input
+              id="correction-reason"
+              data-testid="correction-reason"
+              type="text"
+              maxlength="500"
+              [placeholder]="'MICRO.CORRECTION_REASON_HINT' | translate"
+              [ngModel]="correctionReason()"
+              (ngModelChange)="correctionReason.set($event)"
+            />
+          </div>
+        }
+
+        @if (canResult()) {
+          <div class="edit-grid">
+            <div class="form-field">
+              <label for="edit-growth">{{ 'MICRO.FIELD_GROWTH' | translate }}</label>
+              <select
+                id="edit-growth"
+                data-testid="edit-growth"
+                [ngModel]="editGrowthResult()"
+                (ngModelChange)="editGrowthResult.set($event)"
+              >
+                <option value="">{{ 'MICRO.GROWTH_PENDING' | translate }}</option>
+                @for (growth of growthResults; track growth) {
+                  <option [value]="growth">{{ growthLabel(growth) }}</option>
+                }
+              </select>
+            </div>
+            <div class="form-field">
+              <label for="edit-gram">{{ 'MICRO.GRAM_STAIN' | translate }}</label>
+              <input
+                id="edit-gram"
+                data-testid="edit-gram"
+                type="text"
+                maxlength="255"
+                [ngModel]="editGramStain()"
+                (ngModelChange)="editGramStain.set($event)"
+              />
+            </div>
+            <div class="form-field notes-field">
+              <label for="edit-notes">{{ 'MICRO.NOTES' | translate }}</label>
+              <textarea
+                id="edit-notes"
+                data-testid="edit-notes"
+                rows="2"
+                maxlength="1000"
+                [ngModel]="editNotes()"
+                (ngModelChange)="editNotes.set($event)"
+              ></textarea>
+            </div>
+            <div class="edit-actions">
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="save-culture"
+                (click)="saveCulture()"
+                [disabled]="savingCulture()"
+              >
+                {{ (savingCulture() ? 'MICRO.SAVING' : 'MICRO.SAVE_CULTURE') | translate }}
+              </button>
+            </div>
+          </div>
+        }
+
+        <div class="isolates-header">
+          <h3>{{ 'MICRO.ISOLATES' | translate }} ({{ culture.isolates.length }})</h3>
+          @if (canResult()) {
+            <button
+              type="button"
+              class="btn-secondary"
+              data-testid="add-isolate"
+              (click)="openIsolateModal()"
+            >
+              <span class="material-symbols-outlined">add</span>
+              {{ 'MICRO.ADD_ISOLATE' | translate }}
+            </button>
+          }
+        </div>
+
+        @if (culture.isolates.length === 0) {
+          <p class="no-isolates">{{ 'MICRO.NO_ISOLATES' | translate }}</p>
+        }
+
+        @for (isolate of culture.isolates; track isolate.id) {
+          <div class="isolate-block" data-testid="isolate-block">
+            <div class="isolate-header">
+              <span class="isolate-number">#{{ isolate.isolateNumber }}</span>
+              <strong class="organism">{{ isolate.organismName }}</strong>
+              @if (isolate.growthQuantity) {
+                <span class="quantity">{{ isolate.growthQuantity }}</span>
+              }
+              @if (canResult()) {
+                <span class="isolate-actions">
+                  <button
+                    type="button"
+                    class="btn-secondary btn-small"
+                    data-testid="add-susceptibility"
+                    (click)="openSuscModal(isolate.id)"
+                  >
+                    {{ 'MICRO.ADD_SUSCEPTIBILITY' | translate }}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-danger btn-small"
+                    data-testid="delete-isolate"
+                    (click)="deleteIsolate(isolate.id)"
+                  >
+                    {{ 'MICRO.REMOVE' | translate }}
+                  </button>
+                </span>
+              }
+            </div>
+            @if (isolate.susceptibilities.length === 0) {
+              <p class="no-susceptibilities">{{ 'MICRO.NO_SUSCEPTIBILITIES' | translate }}</p>
+            } @else {
+              <div class="table-wrap">
+                <table class="susc-table">
+                  <thead>
+                    <tr>
+                      <th>{{ 'MICRO.COL_ANTIBIOTIC' | translate }}</th>
+                      <th>{{ 'MICRO.COL_METHOD' | translate }}</th>
+                      <th>{{ 'MICRO.COL_MIC' | translate }}</th>
+                      <th>{{ 'MICRO.COL_INTERPRETATION' | translate }}</th>
+                      @if (canResult()) {
+                        <th></th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (susc of isolate.susceptibilities; track susc.id) {
+                      <tr>
+                        <td>{{ susc.antibioticName }}</td>
+                        <td>{{ methodLabel(susc.method) }}</td>
+                        <td>{{ susc.micValue || '—' }}</td>
+                        <td>
+                          <span
+                            class="interp-chip"
+                            [class.susceptible]="susc.interpretation === 'SUSCEPTIBLE'"
+                            [class.intermediate]="susc.interpretation === 'INTERMEDIATE'"
+                            [class.resistant]="susc.interpretation === 'RESISTANT'"
+                          >
+                            {{ interpLabel(susc.interpretation) }}
+                          </span>
+                        </td>
+                        @if (canResult()) {
+                          <td class="row-actions">
+                            <button
+                              type="button"
+                              class="btn-danger btn-small"
+                              data-testid="delete-susceptibility"
+                              (click)="deleteSusceptibility(isolate.id, susc.id)"
+                            >
+                              {{ 'MICRO.REMOVE' | translate }}
+                            </button>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+
+  @if (showCreateModal()) {
+    <!-- Modal nested INSIDE the backdrop (the #442 lesson). -->
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeCreateModal()"
+      (keydown.escape)="closeCreateModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeCreateModal()"
+      >
+        <h3>{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
+
+        <div class="form-field">
+          <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }}</label>
+          <select
+            id="create-order"
+            data-testid="create-order"
+            [ngModel]="formOrderId()"
+            (ngModelChange)="formOrderId.set($event)"
+          >
+            <option value="" disabled>
+              {{
+                (ordersLoading() ? 'MICRO.ORDERS_LOADING' : 'MICRO.ORDER_PLACEHOLDER') | translate
+              }}
+            </option>
+            @for (order of orders(); track order.id) {
+              <option [value]="order.id">{{ orderLabel(order) }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="create-source">{{ 'MICRO.SPECIMEN_SOURCE' | translate }}</label>
+          <input
+            id="create-source"
+            data-testid="create-source"
+            type="text"
+            maxlength="100"
+            [placeholder]="'MICRO.SPECIMEN_SOURCE_HINT' | translate"
+            [ngModel]="formSpecimenSource()"
+            (ngModelChange)="formSpecimenSource.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="create-collected">{{ 'MICRO.COLLECTED_AT' | translate }}</label>
+          <input
+            id="create-collected"
+            data-testid="create-collected"
+            type="datetime-local"
+            [ngModel]="formCollectedAt()"
+            (ngModelChange)="formCollectedAt.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="create-gram">{{ 'MICRO.GRAM_STAIN' | translate }}</label>
+          <input
+            id="create-gram"
+            data-testid="create-gram"
+            type="text"
+            maxlength="255"
+            [ngModel]="formGramStain()"
+            (ngModelChange)="formGramStain.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="create-notes">{{ 'MICRO.NOTES' | translate }}</label>
+          <textarea
+            id="create-notes"
+            data-testid="create-notes"
+            rows="2"
+            maxlength="1000"
+            [ngModel]="formNotes()"
+            (ngModelChange)="formNotes.set($event)"
+          ></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="closeCreateModal()"
+            [disabled]="creating()"
+          >
+            {{ 'MICRO.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="create-save"
+            (click)="submitCreate()"
+            [disabled]="creating()"
+          >
+            {{ (creating() ? 'MICRO.SAVING' : 'MICRO.CREATE') | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showIsolateModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeIsolateModal()"
+      (keydown.escape)="closeIsolateModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeIsolateModal()"
+      >
+        <h3>{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
+
+        <div class="form-field">
+          <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }}</label>
+          <input
+            id="iso-organism"
+            data-testid="iso-organism"
+            type="text"
+            maxlength="200"
+            [placeholder]="'MICRO.ORGANISM_HINT' | translate"
+            [ngModel]="isoOrganism()"
+            (ngModelChange)="isoOrganism.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="iso-code">{{ 'MICRO.FIELD_ORGANISM_CODE' | translate }}</label>
+          <input
+            id="iso-code"
+            data-testid="iso-code"
+            type="text"
+            maxlength="50"
+            [ngModel]="isoCode()"
+            (ngModelChange)="isoCode.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="iso-quantity">{{ 'MICRO.FIELD_QUANTITY' | translate }}</label>
+          <input
+            id="iso-quantity"
+            data-testid="iso-quantity"
+            type="text"
+            maxlength="50"
+            [placeholder]="'MICRO.QUANTITY_HINT' | translate"
+            [ngModel]="isoQuantity()"
+            (ngModelChange)="isoQuantity.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="iso-notes">{{ 'MICRO.NOTES' | translate }}</label>
+          <textarea
+            id="iso-notes"
+            data-testid="iso-notes"
+            rows="2"
+            maxlength="500"
+            [ngModel]="isoNotes()"
+            (ngModelChange)="isoNotes.set($event)"
+          ></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="closeIsolateModal()"
+            [disabled]="savingIsolate()"
+          >
+            {{ 'MICRO.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="iso-save"
+            (click)="submitIsolate()"
+            [disabled]="savingIsolate()"
+          >
+            {{ (savingIsolate() ? 'MICRO.SAVING' : 'MICRO.SAVE') | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (showSuscModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeSuscModal()"
+      (keydown.escape)="closeSuscModal()"
+    >
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeSuscModal()"
+      >
+        <h3>{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
+
+        <div class="form-field">
+          <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }}</label>
+          <input
+            id="susc-antibiotic"
+            data-testid="susc-antibiotic"
+            type="text"
+            maxlength="150"
+            [ngModel]="suscAntibiotic()"
+            (ngModelChange)="suscAntibiotic.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="susc-method">{{ 'MICRO.COL_METHOD' | translate }}</label>
+          <select
+            id="susc-method"
+            data-testid="susc-method"
+            [ngModel]="suscMethod()"
+            (ngModelChange)="suscMethod.set($event)"
+          >
+            <option value="">{{ 'MICRO.METHOD_PLACEHOLDER' | translate }}</option>
+            @for (method of methods; track method) {
+              <option [value]="method">{{ methodLabel(method) }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="susc-mic">{{ 'MICRO.COL_MIC' | translate }}</label>
+          <input
+            id="susc-mic"
+            data-testid="susc-mic"
+            type="text"
+            maxlength="30"
+            [placeholder]="'MICRO.MIC_HINT' | translate"
+            [ngModel]="suscMic()"
+            (ngModelChange)="suscMic.set($event)"
+          />
+        </div>
+
+        <div class="form-field">
+          <label for="susc-interp">{{ 'MICRO.COL_INTERPRETATION' | translate }}</label>
+          <select
+            id="susc-interp"
+            data-testid="susc-interp"
+            [ngModel]="suscInterpretation()"
+            (ngModelChange)="suscInterpretation.set($event)"
+          >
+            <option value="" disabled>{{ 'MICRO.INTERP_PLACEHOLDER' | translate }}</option>
+            @for (interp of interpretations; track interp) {
+              <option [value]="interp">{{ interpLabel(interp) }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="form-field">
+          <label for="susc-notes">{{ 'MICRO.NOTES' | translate }}</label>
+          <textarea
+            id="susc-notes"
+            data-testid="susc-notes"
+            rows="2"
+            maxlength="300"
+            [ngModel]="suscNotes()"
+            (ngModelChange)="suscNotes.set($event)"
+          ></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            (click)="closeSuscModal()"
+            [disabled]="savingSusc()"
+          >
+            {{ 'MICRO.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            data-testid="susc-save"
+            (click)="submitSusc()"
+            [disabled]="savingSusc()"
+          >
+            {{ (savingSusc() ? 'MICRO.SAVING' : 'MICRO.SAVE') | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -40,6 +40,9 @@ export interface ChartReviewNote {
   signedAt?: string | null;
   signed: boolean;
   lateEntry: boolean;
+  /* Co-sign state (P3 #20): pending = requiresCosign && !cosignedAt. */
+  requiresCosign?: boolean;
+  cosignedAt?: string | null;
   preview?: string | null;
 }
 
