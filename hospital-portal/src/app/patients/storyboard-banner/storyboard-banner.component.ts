@@ -53,10 +53,21 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
   protected readonly hasAllergies = computed(() => (this.summary()?.allergies?.length ?? 0) > 0);
   protected readonly hasProblems = computed(() => (this.summary()?.problems?.length ?? 0) > 0);
   protected readonly hasEncounter = computed(() => !!this.summary()?.activeEncounter);
+  /**
+   * Directives still in force. A REVOKED or EXPIRED directive rendered
+   * identically to an ACTIVE one turns the code-status banner into a
+   * clinical-safety hazard — a revoked DNR must not read as a standing DNR.
+   */
+  protected readonly activeDirectives = computed(() =>
+    (this.summary()?.codeStatus?.directives ?? []).filter(
+      (d) => d.status !== 'REVOKED' && d.status !== 'EXPIRED',
+    ),
+  );
+
   protected readonly hasCodeStatus = computed(() => {
     const cs = this.summary()?.codeStatus;
     if (!cs) return false;
-    return !!(cs.status || (cs.directives && cs.directives.length > 0));
+    return !!(cs.status || this.activeDirectives().length > 0);
   });
 
   private readonly storyboardService = inject(StoryboardService);

@@ -298,6 +298,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'phone_in_talk',
+        label: 'On-Call',
+        translationKey: 'NAV.ON_CALL',
+        route: '/on-call',
+        // Mirrors OnCallScheduleController.READ_ROLES — the route guard uses
+        // the same list. Kept OUT of /scheduling because doctorHiddenRoutes
+        // hides that route from doctors, who can read the rota.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'domain',
         label: 'Departments',
         translationKey: 'NAV.DEPARTMENTS',
