@@ -56,7 +56,7 @@ public class IntakeOutputController {
         description = "The route determines the category (intake vs output) server-side.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    public ResponseEntity<IntakeOutputSummaryDTO.Entry> record(
+    public ResponseEntity<IntakeOutputSummaryDTO.Entry> recordEntry(
         @PathVariable UUID patientId,
         @Valid @RequestBody IntakeOutputEntryRequestDTO request,
         @RequestParam(required = false) UUID hospitalId,
@@ -66,7 +66,7 @@ public class IntakeOutputController {
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, null, true);
         UUID recorderUserId = authUtils.resolveUserId(auth).orElse(null);
         IntakeOutputSummaryDTO.Entry created =
-            intakeOutputService.record(patientId, resolvedHospitalId, recorderUserId, request);
+            intakeOutputService.recordEntry(patientId, resolvedHospitalId, recorderUserId, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 

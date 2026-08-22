@@ -113,7 +113,7 @@ class IntakeOutputServiceImplTest {
         IntakeOutputEntryRequestDTO request = valid();
         request.setRoute(IntakeOutputRoute.URINE);
 
-        IntakeOutputSummaryDTO.Entry created = service.record(patientId, hospitalId, null, request);
+        IntakeOutputSummaryDTO.Entry created = service.recordEntry(patientId, hospitalId, null, request);
 
         ArgumentCaptor<IntakeOutputEntry> captor = ArgumentCaptor.forClass(IntakeOutputEntry.class);
         verify(entryRepository).save(captor.capture());
@@ -125,7 +125,7 @@ class IntakeOutputServiceImplTest {
 
     @Test
     void recordDefaultsTheObservationTimeToNow() {
-        service.record(patientId, hospitalId, null, valid());
+        service.recordEntry(patientId, hospitalId, null, valid());
 
         ArgumentCaptor<IntakeOutputEntry> captor = ArgumentCaptor.forClass(IntakeOutputEntry.class);
         verify(entryRepository).save(captor.capture());
@@ -138,7 +138,7 @@ class IntakeOutputServiceImplTest {
         IntakeOutputEntryRequestDTO request = valid();
         request.setObservationTime(LocalDateTime.now().plusHours(2));
 
-        assertThatThrownBy(() -> service.record(patientId, hospitalId, null, request))
+        assertThatThrownBy(() -> service.recordEntry(patientId, hospitalId, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("future");
         verify(entryRepository, never()).save(any());
@@ -151,7 +151,7 @@ class IntakeOutputServiceImplTest {
         IntakeOutputEntryRequestDTO request = valid();
         request.setVolumeMl(0);
 
-        assertThatThrownBy(() -> service.record(patientId, hospitalId, null, request))
+        assertThatThrownBy(() -> service.recordEntry(patientId, hospitalId, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("volume");
     }
@@ -160,7 +160,7 @@ class IntakeOutputServiceImplTest {
     void recordingWithoutAHospitalScopeIsRefused() {
         IntakeOutputEntryRequestDTO request = valid();
 
-        assertThatThrownBy(() -> service.record(patientId, null, null, request))
+        assertThatThrownBy(() -> service.recordEntry(patientId, null, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active hospital");
     }
@@ -170,7 +170,7 @@ class IntakeOutputServiceImplTest {
         patient.setHospitalRegistrations(Set.of());
         IntakeOutputEntryRequestDTO request = valid();
 
-        assertThatThrownBy(() -> service.record(patientId, hospitalId, null, request))
+        assertThatThrownBy(() -> service.recordEntry(patientId, hospitalId, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("not registered");
         verify(entryRepository, never()).save(any());
@@ -199,8 +199,7 @@ class IntakeOutputServiceImplTest {
         ArgumentCaptor<LocalDateTime> fromCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         ArgumentCaptor<LocalDateTime> toCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
         verify(entryRepository).findWindow(any(), any(), fromCaptor.capture(), toCaptor.capture());
-        assertThat(java.time.Duration.between(fromCaptor.getValue(), toCaptor.getValue()))
-            .isEqualTo(java.time.Duration.ofHours(24));
+        assertThat(fromCaptor.getValue()).isEqualTo(toCaptor.getValue().minusHours(24));
     }
 
     @Test

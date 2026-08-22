@@ -12,10 +12,10 @@ public interface IntakeOutputService {
      * Record one fluid intake/output event. Writes always require a hospital
      * scope and a patient actively registered there.
      */
-    IntakeOutputSummaryDTO.Entry record(UUID patientId,
-                                        UUID hospitalId,
-                                        UUID recorderUserId,
-                                        IntakeOutputEntryRequestDTO request);
+    IntakeOutputSummaryDTO.Entry recordEntry(UUID patientId,
+                                             UUID hospitalId,
+                                             UUID recorderUserId,
+                                             IntakeOutputEntryRequestDTO request);
 
     /**
      * Entries plus server-computed totals for a window. Null from/to default

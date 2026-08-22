@@ -62,16 +62,6 @@ public class IntakeOutputEntry extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_io_entry_hospital"))
     private Hospital hospital;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recorded_by_staff_id",
-        foreignKey = @ForeignKey(name = "fk_io_entry_staff"))
-    private Staff recordedByStaff;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "documented_by_user_id",
-        foreignKey = @ForeignKey(name = "fk_io_entry_user"))
-    private User documentedBy;
-
     /* ── Timepoint (house late-entry quad) ─────────────────────────────── */
 
     @Column(name = "observation_time", nullable = false)
@@ -104,6 +94,18 @@ public class IntakeOutputEntry extends BaseEntity {
     @Size(max = 500)
     @Column(name = "notes", length = 500)
     private String notes;
+
+    /* ── Attribution ───────────────────────────────────────────────────── */
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recorded_by_staff_id",
+        foreignKey = @ForeignKey(name = "fk_io_entry_staff"))
+    private Staff recordedByStaff;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "documented_by_user_id",
+        foreignKey = @ForeignKey(name = "fk_io_entry_user"))
+    private User documentedBy;
 
     @PrePersist
     @PreUpdate

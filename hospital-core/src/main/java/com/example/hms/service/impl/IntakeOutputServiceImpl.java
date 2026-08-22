@@ -39,10 +39,10 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
     private final IntakeOutputEntryRepository entryRepository;
 
     @Override
-    public IntakeOutputSummaryDTO.Entry record(UUID patientId,
-                                               UUID hospitalId,
-                                               UUID recorderUserId,
-                                               IntakeOutputEntryRequestDTO request) {
+    public IntakeOutputSummaryDTO.Entry recordEntry(UUID patientId,
+                                                    UUID hospitalId,
+                                                    UUID recorderUserId,
+                                                    IntakeOutputEntryRequestDTO request) {
         if (hospitalId == null) {
             throw new BusinessException("An active hospital is required to record intake/output.");
         }
