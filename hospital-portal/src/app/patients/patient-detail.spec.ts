@@ -19,6 +19,7 @@ import { CdsAcknowledgementService } from '../services/cds-acknowledgement.servi
 import { StoryboardService } from '../services/storyboard.service';
 import { BreakGlassService } from '../services/break-glass.service';
 import { AuthService } from '../auth/auth.service';
+import { FluidBalanceService } from '../services/fluid-balance.service';
 
 describe('PatientDetailComponent', () => {
   let component: PatientDetailComponent;
@@ -91,6 +92,21 @@ describe('PatientDetailComponent', () => {
     breakGlassSpy.findMyLiveSession.and.returnValue(of(null));
     const authSpy = jasmine.createSpyObj<AuthService>('AuthService', ['getRoles']);
     authSpy.getRoles.and.returnValue([]);
+    const fluidSpy = jasmine.createSpyObj<FluidBalanceService>('FluidBalanceService', [
+      'record',
+      'getSummary',
+    ]);
+    fluidSpy.getSummary.and.returnValue(
+      of({
+        patientId: 'p1',
+        windowFrom: '2026-08-21T08:00:00',
+        windowTo: '2026-08-22T08:00:00',
+        totalIntakeMl: 0,
+        totalOutputMl: 0,
+        balanceMl: 0,
+        entries: [],
+      }),
+    );
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
@@ -139,6 +155,7 @@ describe('PatientDetailComponent', () => {
         { provide: StoryboardService, useValue: storyboardServiceSpy },
         { provide: BreakGlassService, useValue: breakGlassSpy },
         { provide: AuthService, useValue: authSpy },
+        { provide: FluidBalanceService, useValue: fluidSpy },
       ],
     }).compileComponents();
 
@@ -308,6 +325,32 @@ describe('PatientDetailComponent', () => {
       fixture.detectChanges();
 
       expect(component.showGrowthTab()).toBeFalse();
+    });
+  });
+
+  describe('Fluid balance tab', () => {
+    it('shows for clinical roles at any patient age and renders the tab component', () => {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+        roles.includes('ROLE_NURSE'),
+      );
+      fixture.detectChanges(); // mockPatient is an adult — no age gate here
+
+      const btn = fixture.nativeElement.querySelector('[data-testid="fluid-balance-tab-button"]');
+      expect(btn).toBeTruthy();
+
+      component.setTab('fluid-balance');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-fluid-balance-tab')).toBeTruthy();
+    });
+
+    it('is hidden without a backend-authorized role', () => {
+      roleContextSpy.hasAnyActiveRole.and.returnValue(false);
+      fixture.detectChanges();
+
+      expect(component.canViewFluidBalance()).toBeFalse();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="fluid-balance-tab-button"]'),
+      ).toBeNull();
     });
   });
 });

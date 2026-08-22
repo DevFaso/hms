@@ -1838,4 +1838,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V123 — clinical.intake_output_entries (P3 item 18, flowsheets/I&O).
+         First numeric I&O surface; the old "INTAKE_OUTPUT" was a free-text
+         task-category string with no volumes. New table with REAL FKs,
+         observation-time/late-entry quad. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V123-intake-output-entries" author="hms-team" runOnChange="false">
+        <sqlFile path="V123__intake_output_entries.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
