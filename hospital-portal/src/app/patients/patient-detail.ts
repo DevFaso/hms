@@ -22,6 +22,7 @@ import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
 import { GrowthChartTabComponent } from './growth-chart/growth-chart-tab.component';
+import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
@@ -38,6 +39,7 @@ type TabKey =
   | 'med-history'
   | 'vitals'
   | 'growth'
+  | 'fluid-balance'
   | 'encounters'
   | 'appointments'
   | 'directives'
@@ -54,6 +56,7 @@ type TabKey =
     PatientChartComponent,
     AdvanceDirectivesTabComponent,
     GrowthChartTabComponent,
+    FluidBalanceTabComponent,
     CoverageTabComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
@@ -152,6 +155,17 @@ export class PatientDetailComponent implements OnInit {
    *  'Update Vital Signs' write permission the vitals tab uses, because a
    *  read-only chart gated on a write permission locks out read-only roles. */
   canViewGrowth(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** Mirrors IntakeOutputController's @PreAuthorize list exactly. */
+  canViewFluidBalance(): boolean {
     return this.roleContext.hasAnyActiveRole([
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
