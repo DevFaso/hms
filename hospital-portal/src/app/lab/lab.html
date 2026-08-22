@@ -582,6 +582,16 @@
                           {{ 'LAB.RECEIVE' | translate }}
                         </button>
                       }
+                      <button
+                        class="btn-secondary btn-sm"
+                        data-testid="print-specimen-label"
+                        (click)="printSpecimenLabel(s)"
+                        [disabled]="printingSpecimenId() === s.id"
+                        [title]="'LAB.PRINT_LABEL_TITLE' | translate"
+                      >
+                        <span class="material-symbols-outlined">print</span>
+                        {{ 'LAB.PRINT_LABEL' | translate }}
+                      </button>
                     </td>
                   </tr>
                 }

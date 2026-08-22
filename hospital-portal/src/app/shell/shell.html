@@ -268,6 +268,8 @@
            on every authenticated route. Mounted in the shell so a
            super-admin broadcast reaches users mid-task without a refresh. -->
       <app-emergency-broadcast-banner />
+      <!-- P3 #23a — persistent read-only banner; not dismissible by design. -->
+      <app-downtime-banner />
       <router-outlet />
     </main>
   </div>

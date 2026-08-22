@@ -1,4 +1,4 @@
-<div class="page-container">
+﻿<div class="page-container">
   <div class="page-header">
     <div>
       <h1 class="page-title">{{ 'EMERGENCY.TITLE' | translate }}</h1>
@@ -191,6 +191,54 @@
       }
       @if (broadcastPanel().result; as r) {
         <p class="result-success">{{ r.message }}</p>
+      }
+    </section>
+    <!-- Downtime read-only mode (P3 #23a) -->
+    <section class="action-panel warn" data-test="downtime-panel">
+      <h2>{{ 'EMERGENCY.DOWNTIME.TITLE' | translate }}</h2>
+      <p>{{ 'EMERGENCY.DOWNTIME.DESC' | translate }}</p>
+      @if (downtimeStatus()?.readOnly) {
+        <p class="result-error" data-test="downtime-active">
+          {{ 'EMERGENCY.DOWNTIME.ACTIVE' | translate }}
+          {{ downtimeStatus()?.message }}
+        </p>
+      } @else {
+        <p class="result-success" data-test="downtime-inactive">
+          {{ 'EMERGENCY.DOWNTIME.INACTIVE' | translate }}
+        </p>
+      }
+      <label>
+        <span>{{ 'EMERGENCY.DOWNTIME.MESSAGE' | translate }}</span>
+        <textarea
+          rows="2"
+          maxlength="500"
+          [ngModel]="downtimeMessage()"
+          (ngModelChange)="downtimeMessage.set($event)"
+        ></textarea>
+      </label>
+      @if (!downtimeStatus()?.readOnly) {
+        <button
+          type="button"
+          class="btn-danger"
+          data-test="downtime-activate"
+          (click)="setDowntime(true)"
+          [disabled]="downtimeBusy()"
+        >
+          {{ 'EMERGENCY.DOWNTIME.ACTIVATE' | translate }}
+        </button>
+      } @else {
+        <button
+          type="button"
+          class="btn-primary"
+          data-test="downtime-deactivate"
+          (click)="setDowntime(false)"
+          [disabled]="downtimeBusy()"
+        >
+          {{ 'EMERGENCY.DOWNTIME.DEACTIVATE' | translate }}
+        </button>
+      }
+      @if (downtimeError()) {
+        <p class="result-error">{{ downtimeError() }}</p>
       }
     </section>
   </div>

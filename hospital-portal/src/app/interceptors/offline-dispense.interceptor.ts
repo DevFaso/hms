@@ -44,9 +44,17 @@ const DISPENSE_PATH = '/pharmacy/dispense';
  * Status codes that indicate "transient — try again later". Any other
  * error code means the server understood the request and rejected it for
  * a real reason; replaying that would not help.
+ *
+ * A 503 carrying the X-Readonly-Mode discriminator is NOT transient in
+ * that sense (P3 #23a): the platform is deliberately refusing writes, and
+ * a queued replay would just be rejected again the moment the mode lifts
+ * without pharmacist review. Those surface as normal errors instead.
  */
-function isTransientFailure(status: number): boolean {
-  return status === 0 || status === 503;
+function isTransientFailure(status: number, err?: unknown): boolean {
+  if (status === 0) return true;
+  if (status !== 503) return false;
+  const headers = (err as { headers?: { get?: (name: string) => string | null } })?.headers;
+  return headers?.get?.('X-Readonly-Mode') !== 'true';
 }
 
 /**
@@ -92,7 +100,7 @@ export const offlineDispenseInterceptor: HttpInterceptorFn = (
   return next(stampedReq).pipe(
     catchError((err: { status?: number }) => {
       const status = typeof err?.status === 'number' ? err.status : 500;
-      if (!isTransientFailure(status)) {
+      if (!isTransientFailure(status, err)) {
         return throwError(() => err);
       }
       // Transient failure → enqueue + synth 202. The from() wrapper turns the

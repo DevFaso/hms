@@ -52,6 +52,19 @@
           }}</span>
         </div>
       </div>
+      @if (canPrintWristband()) {
+        <button
+          type="button"
+          class="btn-secondary wristband-btn"
+          data-testid="print-wristband"
+          (click)="printWristband()"
+          [disabled]="wristbandLoading()"
+          [title]="'PATIENTS.PRINT_WRISTBAND_TITLE' | translate"
+        >
+          <span class="material-symbols-outlined">print</span>
+          {{ 'PATIENTS.PRINT_WRISTBAND' | translate }}
+        </button>
+      }
     </div>
 
     <!-- Tabs -->

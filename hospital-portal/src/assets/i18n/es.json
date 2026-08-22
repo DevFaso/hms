@@ -435,7 +435,16 @@
       "SEVERITY_CRITICAL": "Crítico",
       "ACTION": "Enviar difusión"
     },
-    "REQUEST_FAILED": "La solicitud falló."
+    "REQUEST_FAILED": "La solicitud falló.",
+    "DOWNTIME": {
+      "TITLE": "Modo de solo lectura (mantenimiento)",
+      "DESC": "Bloquea todas las escrituras de la plataforma con un 503 mientras la consulta sigue disponible. El inicio de sesión, la renovación de tokens y este interruptor permanecen abiertos. Efecto inmediato aquí, en 30 segundos en las demás instancias.",
+      "ACTIVE": "EL MODO DE SOLO LECTURA ESTÁ ACTIVO.",
+      "INACTIVE": "Operación normal — se permiten escrituras.",
+      "MESSAGE": "Mensaje del banner (visible para todos los usuarios)",
+      "ACTIVATE": "Activar el modo de solo lectura",
+      "DEACTIVATE": "Desactivar el modo de solo lectura"
+    }
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Emitido por",
@@ -2452,7 +2461,10 @@
     "SPECIMEN_STATUS_RECEIVED": "Recibida",
     "SPECIMEN_STATUS_PROCESSING": "En proceso",
     "SPECIMEN_STATUS_COMPLETED": "Completada",
-    "SPECIMEN_STATUS_REJECTED": "Rechazada"
+    "SPECIMEN_STATUS_REJECTED": "Rechazada",
+    "PRINT_LABEL": "Etiqueta",
+    "PRINT_LABEL_TITLE": "Imprimir la etiqueta de la muestra",
+    "PRINT_LABEL_FAILED": "No se pudo generar la etiqueta de la muestra."
   },
   "LAB_STAFF": {
     "TITLE": "Gestión de personal de laboratorio",
@@ -3460,7 +3472,9 @@
     "WEIGHT": "Weight",
     "ZIP_CODE": "Zip Code",
     "HEAD_CIRCUMFERENCE": "Perímetro cefálico",
-    "BLOOD_GLUCOSE": "Glucemia"
+    "BLOOD_GLUCOSE": "Glucemia",
+    "PRINT_WRISTBAND": "Pulsera",
+    "PRINT_WRISTBAND_TITLE": "Imprimir la pulsera del paciente (el QR codifica el ID del paciente para el escaneo junto a la cama)"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7676,5 +7690,9 @@
     "CAMERA_UNSUPPORTED": "Este navegador no admite la captura con cámara.",
     "CAMERA_DENIED": "Se denegó el acceso a la cámara.",
     "CAPTURE_FAILED": "No se pudo capturar la imagen. Inténtelo de nuevo."
+  },
+  "DOWNTIME": {
+    "BANNER_TITLE": "Modo de solo lectura:",
+    "BANNER_DEFAULT": "El sistema está en mantenimiento. La consulta funciona; los cambios están temporalmente deshabilitados."
   }
 }

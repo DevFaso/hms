@@ -133,6 +133,10 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "clinical", "patient_treatment_consents");
             assertTableExists(stmt, "clinical", "patient_guarantors");
             assertColumnExists(stmt, "clinical", "patient_treatment_consents", "signature_hash");
+
+            // V127: downtime read-only singleton (seeded so reads never return empty)
+            assertTableExists(stmt, "platform", "platform_downtime_state");
+            assertSeedRowsPresent(stmt, "platform", "platform_downtime_state", 1);
         }
     }
 
