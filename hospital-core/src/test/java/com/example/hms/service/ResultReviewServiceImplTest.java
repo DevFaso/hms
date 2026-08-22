@@ -9,6 +9,9 @@ import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.SignatureStatus;
 import com.example.hms.enums.SignatureType;
 import com.example.hms.model.Consultation;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.User;
+import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.model.signature.DigitalSignature;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.LabOrder;
@@ -65,6 +68,7 @@ class ResultReviewServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
 
     @InjectMocks
@@ -1021,5 +1025,108 @@ class ResultReviewServiceImplTest {
         assertEquals(2, queue.size());
         assertEquals("CRITICAL", queue.get(0).getAbnormalFlag());
         assertEquals("NORMAL", queue.get(1).getAbnormalFlag());
+    }
+
+    // ========== getInboxItems(): note co-sign queue (P3 #20) ==========
+
+    private Staff stubStaffAtHospital(UUID staffId, UUID hospitalId) {
+        Staff staff = stubStaff(staffId);
+        Hospital hospital = mock(Hospital.class);
+        lenient().when(hospital.getId()).thenReturn(hospitalId);
+        lenient().when(staff.getHospital()).thenReturn(hospital);
+        return staff;
+    }
+
+    private EncounterNote stubPendingCosignNote(UUID authorUserId, String authorName) {
+        EncounterNote note = mock(EncounterNote.class);
+        lenient().when(note.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(note.getSignedAt()).thenReturn(LocalDateTime.now().minusHours(2));
+        lenient().when(note.getAuthorName()).thenReturn(authorName);
+        if (authorUserId != null) {
+            User author = mock(User.class);
+            lenient().when(author.getId()).thenReturn(authorUserId);
+            lenient().when(note.getAuthor()).thenReturn(author);
+        }
+        return note;
+    }
+
+    @Test
+    void getInboxItems_pendingCosignNotes_shouldAddDocumentItems() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaffAtHospital(UUID.randomUUID(), hospitalId));
+
+        EncounterNote note = stubPendingCosignNote(UUID.randomUUID(), "Resident A");
+        Patient patient = mock(Patient.class);
+        lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFirstName()).thenReturn("Awa");
+        lenient().when(patient.getLastName()).thenReturn("Kaboré");
+        lenient().when(note.getPatient()).thenReturn(patient);
+        when(encounterNoteRepository
+            .findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(hospitalId))
+            .thenReturn(List.of(note));
+
+        List<ClinicalInboxItemDTO> items = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = items.stream()
+            .filter(i -> "Encounter note awaiting co-signature".equals(i.getSubject()))
+            .findFirst()
+            .orElseThrow();
+        assertEquals("DOCUMENT_TO_SIGN", item.getCategory());
+        assertEquals("Resident A", item.getSource());
+        assertEquals("Awa Kaboré", item.getPatientName());
+        assertEquals("SIGN", item.getActionType());
+    }
+
+    @Test
+    void getInboxItems_ownPendingCosignNote_shouldBeExcluded() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaffAtHospital(UUID.randomUUID(), hospitalId));
+
+        // The viewer authored this note — self-cosign is refused by the
+        // ceremony, so the queue must not dangle it in front of them.
+        EncounterNote ownNote = stubPendingCosignNote(userId, "Me");
+        when(encounterNoteRepository
+            .findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(hospitalId))
+            .thenReturn(List.of(ownNote));
+
+        List<ClinicalInboxItemDTO> items = service.getInboxItems(userId);
+
+        assertTrue(items.stream()
+            .noneMatch(i -> "Encounter note awaiting co-signature".equals(i.getSubject())));
+    }
+
+    @Test
+    void getInboxItems_cosignNoteWithNullAuthorAndPatient_shouldHandleGracefully() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaffAtHospital(UUID.randomUUID(), hospitalId));
+
+        EncounterNote bareNote = stubPendingCosignNote(null, null);
+        when(encounterNoteRepository
+            .findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(hospitalId))
+            .thenReturn(List.of(bareNote));
+
+        List<ClinicalInboxItemDTO> items = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = items.stream()
+            .filter(i -> "Encounter note awaiting co-signature".equals(i.getSubject()))
+            .findFirst()
+            .orElseThrow();
+        assertEquals("Encounter note", item.getSource());
+        assertNull(item.getPatientName());
+    }
+
+    @Test
+    void getInboxItems_staffWithoutHospital_shouldSkipCosignQueue() {
+        UUID userId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(UUID.randomUUID())); // no hospital
+
+        List<ClinicalInboxItemDTO> items = service.getInboxItems(userId);
+
+        assertTrue(items.stream()
+            .noneMatch(i -> "Encounter note awaiting co-signature".equals(i.getSubject())));
+        org.mockito.Mockito.verifyNoInteractions(encounterNoteRepository);
     }
 }

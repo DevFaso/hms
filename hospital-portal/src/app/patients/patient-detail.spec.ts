@@ -20,6 +20,7 @@ import { StoryboardService } from '../services/storyboard.service';
 import { BreakGlassService } from '../services/break-glass.service';
 import { AuthService } from '../auth/auth.service';
 import { FluidBalanceService } from '../services/fluid-balance.service';
+import { MicroService } from '../services/micro.service';
 
 describe('PatientDetailComponent', () => {
   let component: PatientDetailComponent;
@@ -107,6 +108,8 @@ describe('PatientDetailComponent', () => {
         entries: [],
       }),
     );
+    const microSpy = jasmine.createSpyObj<MicroService>('MicroService', ['listForPatient']);
+    microSpy.listForPatient.and.returnValue(of([]));
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
@@ -156,6 +159,7 @@ describe('PatientDetailComponent', () => {
         { provide: BreakGlassService, useValue: breakGlassSpy },
         { provide: AuthService, useValue: authSpy },
         { provide: FluidBalanceService, useValue: fluidSpy },
+        { provide: MicroService, useValue: microSpy },
       ],
     }).compileComponents();
 
@@ -351,6 +355,32 @@ describe('PatientDetailComponent', () => {
       expect(
         fixture.nativeElement.querySelector('[data-testid="fluid-balance-tab-button"]'),
       ).toBeNull();
+    });
+  });
+
+  describe('Microbiology tab', () => {
+    it('shows for lab roles and renders the tab component', () => {
+      // canViewMicro mirrors PatientMicroCultureController's @PreAuthorize —
+      // lab roles read cultures even though they hold no clinical role.
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+        roles.includes('ROLE_LAB_SCIENTIST'),
+      );
+      fixture.detectChanges();
+
+      const btn = fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]');
+      expect(btn).toBeTruthy();
+
+      component.setTab('micro');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-micro-tab')).toBeTruthy();
+    });
+
+    it('is hidden without a backend-authorized role', () => {
+      roleContextSpy.hasAnyActiveRole.and.returnValue(false);
+      fixture.detectChanges();
+
+      expect(component.canViewMicro()).toBeFalse();
+      expect(fixture.nativeElement.querySelector('[data-testid="micro-tab-button"]')).toBeNull();
     });
   });
 });

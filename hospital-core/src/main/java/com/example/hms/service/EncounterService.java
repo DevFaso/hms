@@ -56,6 +56,12 @@ public interface EncounterService {
 
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
 
+    /** Server-side note signing ceremony (P3 #20): author-only, digest-backed, locks the note. */
+    EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale);
+
+    /** Attending co-signature (P3 #20): requires a signed note that declared requiresCosign. */
+    EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale);
+
     /**
      * MVP 2 — Atomic triage submission: records vitals, chief complaint, acuity,
      * room assignment, and transitions encounter ARRIVED → WAITING_FOR_PHYSICIAN.

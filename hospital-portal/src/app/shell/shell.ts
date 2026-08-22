@@ -838,6 +838,30 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
+    // Microbiology workbench (P3 #19). Gate mirrors the /microbiology route
+    // guard, which mirrors MicroCultureController.READ_ROLES.
+    if (
+      this.hasAnyRole([
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_PHARMACIST',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'microbiology',
+        label: 'Microbiology',
+        translationKey: 'NAV.MICROBIOLOGY',
+        route: '/microbiology',
+      });
+    }
     // Instrument outbox (P2 #17). Separate gate: the backend read set also
     // admits LAB_SCIENTIST and QUALITY_MANAGER, who are not in the
     // instruments/inventory block above — the route guard uses these roles.
