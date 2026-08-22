@@ -66,6 +66,25 @@ public class PrescriptionRequestDTO {
      */
     private Boolean forceOverride;
 
+    /**
+     * Flag this prescription as a controlled substance (P2 #15).
+     *
+     * <p>The gates guarding this flag shipped with no way to set it — the
+     * columns existed since the pharmacy module and nothing ever wrote them, so
+     * the enforcement could never fire. Tri-state on purpose: {@code null}
+     * leaves the stored value unchanged on update; {@code false} on a
+     * prescription already flagged is refused (a declared safeguard is not
+     * un-declarable by edit).
+     *
+     * <p>Fail-closed: a controlled prescription cannot reach SIGNED or dispense
+     * until two-factor verification is recorded, and the verification transport
+     * is a pending product decision — flag with that understanding.
+     */
+    private Boolean controlledSubstance;
+
+    /** Same contract as {@link #controlledSubstance}, for the co-sign gate. */
+    private Boolean requiresCosign;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

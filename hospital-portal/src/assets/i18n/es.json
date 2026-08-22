@@ -4599,9 +4599,19 @@
       "SMS_SENT": "SMS enviado a {pharmacy}",
       "SMS_FAILED": "No se pudo enviar el SMS de prescripción",
       "SIGNED": "Prescripción firmada",
-      "SIGN_FAILED": "Error al firmar"
+      "SIGN_FAILED": "Error al firmar",
+      "COSIGNED": "Prescripción refrendada",
+      "COSIGN_FAILED": "Error al refrendar"
     },
-    "SIGN": "Firmar"
+    "SIGN": "Firmar",
+    "COSIGN": "Refrendar",
+    "REQUIRES_COSIGN": "Requiere refrendo de un segundo prescriptor",
+    "SIGNED_AT": "Firmada",
+    "COSIGN_STATE": "Refrendo",
+    "COSIGN_PENDING": "Pendiente — un segundo prescriptor debe refrendar",
+    "CONTROLLED_SUBSTANCE": "Sustancia controlada — verificación de dos factores",
+    "TWO_FACTOR_PENDING": "Pendiente — sin verificar",
+    "SIGNED_PRE_V118": "Firmada antes de que existieran las pruebas de firma; no verificable."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",

@@ -68,11 +68,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final AuthService authService; // exposes UUID getCurrentUserId()
     private final UserRoleHospitalAssignmentRepository urhaRepository;
     private final CdsRuleEngine cdsRuleEngine;
+    private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
 
     @Override
     @Transactional
     public PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale) {
-        rejectClientAssertedSignature(request);
+        rejectClientAssertedWorkflowStatus(request);
         UUID currentUserId = authService.getCurrentUserId();
         Patient patient = resolvePatient(request, locale);
 
@@ -101,7 +102,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
-        enforceControlledSubstanceGates(entity);
+        controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
@@ -186,7 +187,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // Checked against the status we are about to move to, not the one the
         // row still holds — a controlled substance must not become signable
         // just because it is currently a draft.
-        enforceControlledSubstanceGates(prescription, PrescriptionStatus.SIGNED);
+        controlledSubstanceGuard.requireSafeguardsFor(prescription, PrescriptionStatus.SIGNED);
 
         LocalDateTime signedAt = LocalDateTime.now();
         prescription.setStatus(PrescriptionStatus.SIGNED);
@@ -197,6 +198,68 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             computeSignatureDigest(canonicalSignaturePayload(prescription, signer, signedAt)));
 
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+    }
+
+    /**
+     * The co-sign ceremony (P2 #15).
+     *
+     * <p>First writer {@code cosignedBy}/{@code cosignedAt} have ever had. The
+     * co-signer must hold a prescribing role at the prescription's hospital and
+     * must NOT be the prescription's own prescriber — the requirement exists to
+     * put a second clinician's judgment on record, and letting the prescriber
+     * co-sign their own order would satisfy the letter of the gate while
+     * deleting its point.
+     */
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale) {
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+
+        if (!prescription.isRequiresCosign()) {
+            throw new BusinessException(
+                "This prescription does not declare a co-signature requirement.");
+        }
+        if (prescription.getCosignedAt() != null || prescription.getCosignedBy() != null) {
+            throw new BusinessException("This prescription has already been co-signed.");
+        }
+
+        PrescriptionStatus status = prescription.getStatus();
+        if (status != null && status != PrescriptionStatus.DRAFT
+                && status != PrescriptionStatus.PENDING_SIGNATURE) {
+            throw new BusinessException(
+                "Only a prescription in DRAFT or PENDING_SIGNATURE can be co-signed; this one is "
+                    + status + ".");
+        }
+
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new AccessDeniedException("Unable to determine the co-signing clinician.");
+        }
+        Staff cosigner = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
+            .orElseThrow(() -> new AccessDeniedException(
+                "Only a clinician with a staff profile can co-sign a prescription."));
+
+        Staff prescriber = prescription.getStaff();
+        if (prescriber != null && prescriber.getId() != null
+                && prescriber.getId().equals(cosigner.getId())) {
+            throw new BusinessException(
+                "A prescription cannot be co-signed by its own prescriber; the co-signature "
+                    + "exists to put a second clinician's judgment on record.");
+        }
+
+        prescription.setCosignedBy(cosigner);
+        prescription.setCosignedAt(LocalDateTime.now());
+
+        logger.info("Prescription {} co-signed by staff {}", prescription.getId(), cosigner.getId());
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
     }
 
@@ -260,17 +323,63 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * A client cannot assert a signature by sending its name.
+     * Statuses a request body may assert. Everything else belongs to a server
+     * workflow — SIGNED to the signing ceremony, TRANSMITTED/DISPENSED and the
+     * partner states to dispatch and pharmacy — and being able to assert one in
+     * a create/update body is a bypass of whichever ceremony owns it.
+     */
+    private static final java.util.Set<PrescriptionStatus> CLIENT_ASSERTABLE_STATUSES =
+        java.util.EnumSet.of(
+            PrescriptionStatus.DRAFT,
+            PrescriptionStatus.PENDING_SIGNATURE,
+            PrescriptionStatus.PENDING_CLARIFICATION,
+            PrescriptionStatus.CANCELLED,
+            PrescriptionStatus.DISCONTINUED);
+
+    /**
+     * A client cannot assert a workflow status by sending its name.
      *
      * <p>{@code PrescriptionMapper} copies {@code dto.getStatus()} onto the
-     * entity, which is how SIGNED came to mean nothing. Create and update both
-     * route through here so the only way to reach that status is
-     * {@link #signPrescription}. It refuses rather than silently downgrading:
-     * a caller that believed it was signing must not be told it succeeded.
+     * entity, which is how SIGNED came to mean nothing. The 2026-08-21
+     * reassessment showed blocking only SIGNED left the ceremony bypassable for
+     * its actual purpose: a client-asserted TRANSMITTED still landed on the
+     * entity, and TRANSMITTED is dispensable — the guard protected the word,
+     * not the capability. Nothing in the backend ever writes TRANSMITTED, so
+     * the only writer it ever had was this hole.
+     *
+     * <p>It refuses rather than silently downgrading: a caller that believed it
+     * was signing (or transmitting) must not be told it succeeded.
      */
-    private void rejectClientAssertedSignature(PrescriptionRequestDTO request) {
-        if (request.getStatus() == PrescriptionStatus.SIGNED) {
-            throw new BusinessException("prescription.sign.ceremony.required");
+    private void rejectClientAssertedWorkflowStatus(PrescriptionRequestDTO request) {
+        PrescriptionStatus status = request.getStatus();
+        if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
+            throw new BusinessException(
+                "The status " + status + " cannot be set directly. Signing has its own endpoint "
+                    + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
+                    + "their own workflows.");
+        }
+    }
+
+    /**
+     * A declared safeguard cannot be quietly un-declared.
+     *
+     * <p>Making the controlled-substance flags writable (P2 #15's actual gap —
+     * the gates shipped with no way to set the flag) also creates the reverse
+     * edit: clearing {@code controlledSubstance} on an update would drop the
+     * two-factor gate an earlier revision of the same prescription declared it
+     * needed. Setting a flag is a clinical judgment; unsetting one is refused —
+     * cancel and re-prescribe instead, which leaves a record.
+     */
+    private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
+        if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
+            throw new BusinessException(
+                "This prescription is flagged as a controlled substance; the flag cannot be "
+                    + "removed by editing. Cancel it and write a new prescription instead.");
+        }
+        if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
+            throw new BusinessException(
+                "This prescription declares a co-signature requirement; the requirement cannot be "
+                    + "removed by editing. Cancel it and write a new prescription instead.");
         }
     }
 
@@ -313,9 +422,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
-        rejectClientAssertedSignature(request);
+        rejectClientAssertedWorkflowStatus(request);
         Prescription existing = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        rejectSafeguardWithdrawal(existing, request);
 
         UUID currentUserId = authService.getCurrentUserId();
 
@@ -346,7 +456,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
-        enforceControlledSubstanceGates(existing);
+        controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
 
         Prescription saved = prescriptionRepository.save(existing);
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
@@ -665,59 +775,4 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return advisories;
     }
 
-    /**
-     * Refuse to advance a controlled substance past DRAFT without its safeguards
-     * (P2 #15).
-     *
-     * <p>{@code controlledSubstance}, {@code twoFactorVerifiedAt},
-     * {@code requiresCosign} and {@code cosignedAt} have existed on Prescription
-     * since the pharmacy module shipped and nothing ever read them except
-     * display mappers. A prescriber could flag a schedule-II opioid as
-     * controlled, declare it needs a co-sign, complete neither, and the
-     * prescription would sail through as if it were paracetamol. The columns
-     * described a control that did not exist.
-     *
-     * <p>Gated on the STATUS, not on save: a controlled prescription can be
-     * drafted and saved freely, exactly as a paper one can be written before it
-     * is signed. What it cannot do is reach a state that authorises anybody to
-     * act on it — SIGNED and beyond — with a declared safeguard unmet.
-     *
-     * <p>The mirror of this gate lives in DispenseServiceImpl, because dispense
-     * is the irreversible step: a wrongly-signed prescription can be cancelled,
-     * medication handed to a patient cannot be recalled. Both are needed —
-     * status can be set by paths that never reach this service.
-     */
-    private void enforceControlledSubstanceGates(Prescription prescription) {
-        enforceControlledSubstanceGates(prescription, prescription.getStatus());
-    }
-
-    /**
-     * The same gate, checked against a status the prescription has not been
-     * moved to yet.
-     *
-     * <p>Signing needs to know whether SIGNED would be permitted <em>before</em>
-     * it writes anything. Setting the status first and letting the throw roll
-     * the transaction back would work, but it leaves a window in which the
-     * in-memory entity claims a state its safeguards do not support — and any
-     * code that ran in between would read a lie.
-     */
-    private void enforceControlledSubstanceGates(Prescription prescription, PrescriptionStatus status) {
-        if (status == null || status == PrescriptionStatus.DRAFT
-                || status == PrescriptionStatus.PENDING_SIGNATURE) {
-            return;
-        }
-
-        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
-            throw new BusinessException(
-                    "CONTROLLED_SUBSTANCE: a prescription flagged as a controlled substance cannot be "
-                            + "set to " + status + " until two-factor verification is complete.");
-        }
-
-        if (prescription.isRequiresCosign()
-                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
-            throw new BusinessException(
-                    "COSIGN_REQUIRED: a prescription that requires a co-signature cannot be set to "
-                            + status + " until a second prescriber co-signs it.");
-        }
-    }
 }

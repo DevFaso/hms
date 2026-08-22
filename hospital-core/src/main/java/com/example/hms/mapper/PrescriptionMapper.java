@@ -60,6 +60,11 @@ public class PrescriptionMapper {
             .notes(p.getNotes())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
+            .controlledSubstance(p.isControlledSubstance())
+            .requiresCosign(p.isRequiresCosign())
+            .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
+            .cosignedAt(p.getCosignedAt())
+            .cosignedByStaffId(p.getCosignedBy() != null ? p.getCosignedBy().getId() : null)
             .signatureValue(p.getSignatureValue())
             .signatureAlgorithm(p.getSignatureAlgorithm())
             .signedAt(p.getSignedAt())
@@ -97,6 +102,15 @@ public class PrescriptionMapper {
             e.setStatus(dto.getStatus());
         }
 
+        // Safeguard flags (P2 #15). Writable at last: the gates guarding these
+        // shipped with no writer anywhere, so they could never fire.
+        if (Boolean.TRUE.equals(dto.getControlledSubstance())) {
+            e.setControlledSubstance(true);
+        }
+        if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
+            e.setRequiresCosign(true);
+        }
+
         return e;
     }
 
@@ -126,6 +140,15 @@ public class PrescriptionMapper {
 
         if (dto.getStatus() != null) {
             target.setStatus(dto.getStatus());
+        }
+
+        // Set-only on update: the service refuses a true->false withdrawal
+        // before this runs, and null means "leave unchanged".
+        if (Boolean.TRUE.equals(dto.getControlledSubstance())) {
+            target.setControlledSubstance(true);
+        }
+        if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
+            target.setRequiresCosign(true);
         }
     }
 
