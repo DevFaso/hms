@@ -340,6 +340,27 @@ export const routes: Routes = [
         loadComponent: () => import('./scheduling/scheduling').then((m) => m.SchedulingComponent),
       },
 
+      // On-call rota (P2 #13). Own top-level route, NOT a /scheduling child:
+      // doctorHiddenRoutes hides /scheduling from doctors, who are readers
+      // here. Roles mirror OnCallScheduleController.READ_ROLES exactly (no
+      // ROLE_ADMIN — the backend does not grant it); write controls are gated
+      // in-component to the narrower WRITE_ROLES.
+      {
+        path: 'on-call',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./on-call/on-call').then((m) => m.OnCallComponent),
+      },
+
       // Departments
       {
         path: 'departments',
