@@ -78,6 +78,12 @@ export class EncountersComponent implements OnInit {
   /* Note history + addendums */
   noteHistory = signal<EncounterNoteResponse[]>([]);
   noteHistoryLoading = signal(false);
+
+  /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
+     note payload and is replaced by each ceremony response. */
+  noteState = signal<EncounterNoteResponse | null>(null);
+  signingNote = signal(false);
+  cosigningNote = signal(false);
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
@@ -427,6 +433,7 @@ export class EncountersComponent implements OnInit {
     this.showNoteForm.set(false);
     this.showAddendumForm.set(false);
     this.addendumContent = '';
+    this.noteState.set(enc.note ?? null);
     this.loadNoteHistory(enc.id);
   }
 
@@ -442,15 +449,58 @@ export class EncountersComponent implements OnInit {
     if (!enc) return;
     this.savingNote.set(true);
     this.encounterService.addNote(enc.id, payload).subscribe({
-      next: () => {
+      next: (note) => {
         this.toast.success('Note saved');
         this.savingNote.set(false);
         this.showNoteForm.set(false);
+        this.noteState.set(note ?? null);
         this.loadNoteHistory(enc.id);
       },
-      error: () => {
-        this.toast.error('Failed to save note');
+      error: (err) => {
+        // Surface the backend refusal verbatim (house rule) — a signed-note
+        // lock or client-asserted-signature refusal must reach the clinician.
+        this.toast.error(err?.error?.message ?? 'Failed to save note');
         this.savingNote.set(false);
+      },
+    });
+  }
+
+  /* ── Note sign/co-sign ceremony (P3 #20) ── */
+
+  /** No client-side role gate, matching the prescriptions pattern: whoever
+   *  passes the route guard sees the button; the backend arbitrates
+   *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
+   *  and its refusal is surfaced verbatim. */
+  signNote(): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.signingNote()) return;
+    this.signingNote.set(true);
+    this.encounterService.signNote(enc.id).subscribe({
+      next: (note) => {
+        this.signingNote.set(false);
+        this.toast.success('Note signed');
+        this.noteState.set(note ?? null);
+      },
+      error: (err) => {
+        this.signingNote.set(false);
+        this.toast.error(err?.error?.message ?? 'Failed to sign note');
+      },
+    });
+  }
+
+  cosignNote(): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.cosigningNote()) return;
+    this.cosigningNote.set(true);
+    this.encounterService.cosignNote(enc.id).subscribe({
+      next: (note) => {
+        this.cosigningNote.set(false);
+        this.toast.success('Note co-signed');
+        this.noteState.set(note ?? null);
+      },
+      error: (err) => {
+        this.cosigningNote.set(false);
+        this.toast.error(err?.error?.message ?? 'Failed to co-sign note');
       },
     });
   }

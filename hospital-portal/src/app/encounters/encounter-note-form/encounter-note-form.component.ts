@@ -64,8 +64,6 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
 
   @Input() saving = false;
   @Input() hospitalId: string | null = null;
-  @Input() initialAuthorName: string | null = null;
-  @Input() initialAuthorCredentials: string | null = null;
   @Output() readonly noteSubmit = new EventEmitter<EncounterNoteRequest>();
   @Output() readonly noteCancel = new EventEmitter<void>();
 
@@ -89,6 +87,7 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
     attestAccuracy: false,
     attestNoAbbreviations: false,
     attestSpellCheck: false,
+    requiresCosign: false,
   });
 
   readonly isSoapie = computed(() => this.form().template === 'SOAPIE');
@@ -103,13 +102,6 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
   private destroyed = false;
 
   ngOnInit(): void {
-    if (this.initialAuthorName) {
-      this.patch({ signedByName: this.initialAuthorName });
-    }
-    if (this.initialAuthorCredentials) {
-      this.patch({ signedByCredentials: this.initialAuthorCredentials });
-    }
-
     this.searchTerm$
       .pipe(
         debounceTime(150),
@@ -316,10 +308,11 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
     payload.attestAccuracy = value.attestAccuracy ?? false;
     payload.attestNoAbbreviations = value.attestNoAbbreviations ?? false;
     payload.attestSpellCheck = value.attestSpellCheck ?? false;
-    if (value.signedByName?.trim()) {
-      payload.signedAt = value.signedAt ?? new Date().toISOString();
-      payload.signedByName = value.signedByName.trim();
-      payload.signedByCredentials = value.signedByCredentials?.trim();
+    // Signing is no longer part of the save: the old form stamped a browser
+    // timestamp and two free-text names into the body, which the backend now
+    // refuses. The ceremony lives behind the Sign button on the detail panel.
+    if (value.requiresCosign) {
+      payload.requiresCosign = true;
     }
     this.noteSubmit.emit(payload);
   }

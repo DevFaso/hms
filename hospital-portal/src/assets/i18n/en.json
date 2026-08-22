@@ -890,7 +890,9 @@
     "CLINICAL_QUESTION": "Clinical question",
     "IMPRESSION": "Impression",
     "CONSENT_YES": "Yes",
-    "CONSENT_NO": "Pending"
+    "CONSENT_NO": "Pending",
+    "COSIGNED": "Co-signed",
+    "COSIGN_PENDING": "Co-sign pending"
   },
   "ORDER_SETS": {
     "PICKER_TITLE": "Apply order set",
@@ -2151,7 +2153,17 @@
     "AVS_REFERRALS": "Referrals",
     "AVS_FOLLOW_UP": "Follow-up instructions",
     "AVS_EDUCATION": "Patient education",
-    "AVS_FOLLOW_UP_APPT": "Follow-up appointment"
+    "AVS_FOLLOW_UP_APPT": "Follow-up appointment",
+    "NOTE_SIGNATURE": "Note signature",
+    "NOTE_SIGNED_AT": "Signed",
+    "NOTE_UNSIGNED": "This note has not been signed. Signing locks it — later changes go through addenda.",
+    "SIGN_NOTE": "Sign note",
+    "NOTE_SIGNING": "Signing…",
+    "NOTE_SIGNED_PRE_V125": "Asserted before the ceremony — unverifiable",
+    "NOTE_COSIGN_PENDING": "Awaiting attending co-signature",
+    "COSIGN_NOTE": "Co-sign note",
+    "NOTE_COSIGNING": "Co-signing…",
+    "NOTE_COSIGNED_AT": "Co-signed"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

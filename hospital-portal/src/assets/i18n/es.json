@@ -890,7 +890,9 @@
     "CLINICAL_QUESTION": "Pregunta clínica",
     "IMPRESSION": "Impresión",
     "CONSENT_YES": "Sí",
-    "CONSENT_NO": "Pendiente"
+    "CONSENT_NO": "Pendiente",
+    "COSIGNED": "Contrafirmada",
+    "COSIGN_PENDING": "Contrafirma pendiente"
   },
   "ORDER_SETS": {
     "PICKER_TITLE": "Aplicar conjunto de órdenes",
@@ -2151,7 +2153,17 @@
     "AVS_REFERRALS": "Derivaciones",
     "AVS_FOLLOW_UP": "Indicaciones de seguimiento",
     "AVS_EDUCATION": "Educación del paciente",
-    "AVS_FOLLOW_UP_APPT": "Cita de seguimiento"
+    "AVS_FOLLOW_UP_APPT": "Cita de seguimiento",
+    "NOTE_SIGNATURE": "Firma de la nota",
+    "NOTE_SIGNED_AT": "Firmada",
+    "NOTE_UNSIGNED": "Esta nota no está firmada. La firma la bloquea — los cambios posteriores se hacen mediante adendas.",
+    "SIGN_NOTE": "Firmar la nota",
+    "NOTE_SIGNING": "Firmando…",
+    "NOTE_SIGNED_PRE_V125": "Declarada antes de la ceremonia — no verificable",
+    "NOTE_COSIGN_PENDING": "En espera de la contrafirma del médico adjunto",
+    "COSIGN_NOTE": "Contrafirmar la nota",
+    "NOTE_COSIGNING": "Contrafirmando…",
+    "NOTE_COSIGNED_AT": "Contrafirmada"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

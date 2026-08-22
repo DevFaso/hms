@@ -267,27 +267,20 @@
   <fieldset class="enc-note-form__group">
     <legend>Signature</legend>
     <p class="enc-note-form__hint">
-      Filling in a signer name closes the note for further edits when saved.
+      Signing happens after saving, via the Sign button on the encounter panel — the server records
+      the signer and locks the note. It can no longer be typed into the note body.
     </p>
-    <label class="enc-note-form__field">
-      <span>Signer name</span>
+    <label class="enc-note-form__check">
       <input
-        type="text"
-        name="signedByName"
-        [ngModel]="form().signedByName"
-        (ngModelChange)="patch({ signedByName: $event })"
-        placeholder="Dr. Ama Owusu"
+        type="checkbox"
+        name="requiresCosign"
+        data-testid="note-requires-cosign"
+        [checked]="!!form().requiresCosign"
+        (change)="patch({ requiresCosign: !form().requiresCosign })"
       />
-    </label>
-    <label class="enc-note-form__field">
-      <span>Credentials</span>
-      <input
-        type="text"
-        name="signedByCredentials"
-        [ngModel]="form().signedByCredentials"
-        (ngModelChange)="patch({ signedByCredentials: $event })"
-        placeholder="MD, MBChB, BSN, …"
-      />
+      <span>
+        This note requires an attending physician's co-signature (cannot be withdrawn once saved).
+      </span>
     </label>
   </fieldset>
 

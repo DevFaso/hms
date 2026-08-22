@@ -890,7 +890,9 @@
     "CLINICAL_QUESTION": "Question clinique",
     "IMPRESSION": "Impression",
     "CONSENT_YES": "Oui",
-    "CONSENT_NO": "En attente"
+    "CONSENT_NO": "En attente",
+    "COSIGNED": "Contresignée",
+    "COSIGN_PENDING": "Contre-signature en attente"
   },
   "ORDER_SETS": {
     "PICKER_TITLE": "Appliquer un ensemble d'ordres",
@@ -2151,7 +2153,17 @@
     "AVS_REFERRALS": "Orientations",
     "AVS_FOLLOW_UP": "Consignes de suivi",
     "AVS_EDUCATION": "Éducation du patient",
-    "AVS_FOLLOW_UP_APPT": "Rendez-vous de suivi"
+    "AVS_FOLLOW_UP_APPT": "Rendez-vous de suivi",
+    "NOTE_SIGNATURE": "Signature de la note",
+    "NOTE_SIGNED_AT": "Signée",
+    "NOTE_UNSIGNED": "Cette note n'est pas signée. La signature la verrouille — toute modification ultérieure passe par un addendum.",
+    "SIGN_NOTE": "Signer la note",
+    "NOTE_SIGNING": "Signature…",
+    "NOTE_SIGNED_PRE_V125": "Déclarée avant la cérémonie — invérifiable",
+    "NOTE_COSIGN_PENDING": "En attente de la contre-signature du médecin responsable",
+    "COSIGN_NOTE": "Contresigner la note",
+    "NOTE_COSIGNING": "Contre-signature…",
+    "NOTE_COSIGNED_AT": "Contresignée"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",

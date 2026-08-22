@@ -65,6 +65,7 @@ class ResultReviewServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
 
     @InjectMocks
