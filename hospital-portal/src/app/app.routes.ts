@@ -450,6 +450,29 @@ export const routes: Routes = [
           import('./lab/lab-results/lab-results').then((m) => m.LabResultsComponent),
       },
       {
+        // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
+        // resulting/finalize buttons are gated in-component to the narrower
+        // ENTRY/FINALIZE role sets.
+        path: 'microbiology',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_PHARMACIST',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./micro/microbiology').then((m) => m.MicrobiologyComponent),
+      },
+      {
         path: 'lab-approval-queue',
         canActivate: [RoleGuard],
         data: {

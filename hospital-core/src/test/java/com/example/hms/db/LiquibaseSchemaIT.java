@@ -115,6 +115,13 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "clinical", "appointment_slots");
             assertColumnExists(stmt, "clinical", "appointment_slots", "held_until");
             assertColumnExists(stmt, "clinical", "session_templates", "capacity_per_slot");
+
+            // V124: microbiology — culture report, isolates, susceptibilities
+            assertTableExists(stmt, "lab", "micro_culture_results");
+            assertTableExists(stmt, "lab", "micro_isolates");
+            assertTableExists(stmt, "lab", "micro_susceptibilities");
+            assertColumnExists(stmt, "lab", "micro_culture_results", "growth_result");
+            assertColumnExists(stmt, "lab", "micro_susceptibilities", "interpretation");
         }
     }
 

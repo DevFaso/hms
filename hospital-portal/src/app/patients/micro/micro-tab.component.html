@@ -1,0 +1,155 @@
+<div class="micro-tab">
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'MICRO.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && error()) {
+    <div class="error-state" data-testid="micro-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'MICRO.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+    @if (cultures().length === 0) {
+      <div class="empty-state" data-testid="micro-empty">
+        <span class="material-symbols-outlined">microbiology</span>
+        <p>{{ 'MICRO.NO_CULTURES' | translate }}</p>
+        <p class="hint">{{ 'MICRO.NO_CULTURES_HINT' | translate }}</p>
+      </div>
+    } @else {
+      @for (culture of cultures(); track culture.id) {
+        <div class="culture-card" data-testid="culture-card">
+          <div class="culture-header">
+            <div class="culture-title">
+              <strong>{{ culture.labTestName || ('MICRO.CULTURE' | translate) }}</strong>
+              @if (culture.specimenSource) {
+                <span class="specimen-source">{{ culture.specimenSource }}</span>
+              }
+            </div>
+            <div class="culture-badges">
+              <span
+                class="status-pill"
+                [class.preliminary]="culture.status === 'PRELIMINARY'"
+                [class.final]="culture.status === 'FINAL'"
+                [class.corrected]="culture.status === 'CORRECTED'"
+              >
+                {{ statusLabel(culture.status) }}
+              </span>
+              <span
+                class="growth-pill"
+                [class.growth]="culture.growthResult === 'GROWTH'"
+                [class.no-growth]="culture.growthResult === 'NO_GROWTH'"
+                [class.pending]="culture.growthResult === null"
+              >
+                {{ growthLabel(culture.growthResult) }}
+              </span>
+            </div>
+          </div>
+
+          @if (culture.status === 'CORRECTED' && culture.correctionReason) {
+            <div class="correction-banner" data-testid="correction-banner">
+              <span class="material-symbols-outlined">history_edu</span>
+              <span>
+                {{ 'MICRO.CORRECTED_AT' | translate }}
+                {{ culture.correctedAt | date: 'MMM d, y HH:mm' }} —
+                {{ culture.correctionReason }}
+              </span>
+            </div>
+          }
+
+          <div class="culture-meta">
+            @if (culture.collectedAt) {
+              <span>
+                {{ 'MICRO.COLLECTED_AT' | translate }}:
+                {{ culture.collectedAt | date: 'MMM d, y HH:mm' }}
+              </span>
+            }
+            @if (culture.specimenAccessionNumber) {
+              <span
+                >{{ 'MICRO.ACCESSION' | translate }}: {{ culture.specimenAccessionNumber }}</span
+              >
+            }
+            @if (culture.reportedByName) {
+              <span>{{ 'MICRO.REPORTED_BY' | translate }}: {{ culture.reportedByName }}</span>
+            }
+            @if (culture.finalizedAt) {
+              <span>
+                {{ 'MICRO.FINALIZED_AT' | translate }}:
+                {{ culture.finalizedAt | date: 'MMM d, y HH:mm' }}
+                @if (culture.finalizedByName) {
+                  ({{ culture.finalizedByName }})
+                }
+              </span>
+            }
+          </div>
+
+          @if (culture.gramStain) {
+            <p class="gram-stain">
+              <strong>{{ 'MICRO.GRAM_STAIN' | translate }}:</strong> {{ culture.gramStain }}
+            </p>
+          }
+          @if (culture.notes) {
+            <p class="culture-notes">{{ culture.notes }}</p>
+          }
+
+          @for (isolate of culture.isolates; track isolate.id) {
+            <div class="isolate-block" data-testid="isolate-block">
+              <div class="isolate-header">
+                <span class="isolate-number">#{{ isolate.isolateNumber }}</span>
+                <strong class="organism">{{ isolate.organismName }}</strong>
+                @if (isolate.growthQuantity) {
+                  <span class="quantity">{{ isolate.growthQuantity }}</span>
+                }
+              </div>
+              @if (isolate.notes) {
+                <p class="isolate-notes">{{ isolate.notes }}</p>
+              }
+              @if (isolate.susceptibilities.length === 0) {
+                <p class="no-susceptibilities">{{ 'MICRO.NO_SUSCEPTIBILITIES' | translate }}</p>
+              } @else {
+                <div class="table-wrap">
+                  <table class="susc-table" data-testid="susc-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'MICRO.COL_ANTIBIOTIC' | translate }}</th>
+                        <th>{{ 'MICRO.COL_METHOD' | translate }}</th>
+                        <th>{{ 'MICRO.COL_MIC' | translate }}</th>
+                        <th>{{ 'MICRO.COL_INTERPRETATION' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (susc of isolate.susceptibilities; track susc.id) {
+                        <tr>
+                          <td>{{ susc.antibioticName }}</td>
+                          <td>{{ methodLabel(susc.method) }}</td>
+                          <td>{{ susc.micValue || '—' }}</td>
+                          <td>
+                            <span
+                              class="interp-chip"
+                              [class.susceptible]="susc.interpretation === 'SUSCEPTIBLE'"
+                              [class.intermediate]="susc.interpretation === 'INTERMEDIATE'"
+                              [class.resistant]="susc.interpretation === 'RESISTANT'"
+                            >
+                              {{ interpLabel(susc.interpretation) }}
+                            </span>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    }
+  }
+</div>
