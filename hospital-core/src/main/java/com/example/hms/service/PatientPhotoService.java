@@ -25,5 +25,26 @@ public interface PatientPhotoService {
 
     void delete(UUID patientId, UUID hospitalId);
 
-    record PhotoPayload(byte[] bytes, String contentType) {}
+    /**
+     * Plain class, not a record: a record with an array component gets a
+     * generated equals/hashCode that ignores array CONTENT (Sonar
+     * java:S6218), and this payload is never compared — only streamed.
+     */
+    final class PhotoPayload {
+        private final byte[] bytes;
+        private final String contentType;
+
+        public PhotoPayload(byte[] bytes, String contentType) {
+            this.bytes = bytes;
+            this.contentType = contentType;
+        }
+
+        public byte[] bytes() {
+            return bytes;
+        }
+
+        public String contentType() {
+            return contentType;
+        }
+    }
 }
