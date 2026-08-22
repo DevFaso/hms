@@ -628,6 +628,12 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                // Manual requeue of a failed message. Scoped to exactly this
+                // path so the rule cannot drift against the @PreAuthorize on
+                // the unrelated POST /lab-instrument-outbox/hl7/parse.
+                .requestMatchers(HttpMethod.POST, API_LAB_INSTRUMENT_OUTBOX + "/*/retry")
+                .hasAnyAuthority(ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // Public access to uploaded profile images (static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
