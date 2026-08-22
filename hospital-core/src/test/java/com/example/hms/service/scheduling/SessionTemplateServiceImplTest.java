@@ -180,6 +180,64 @@ class SessionTemplateServiceImplTest {
     }
 
     @Test
+    void listIncludesRetiredRowsOnlyWhenAsked() {
+        SessionTemplate active = template(hospital, true);
+        SessionTemplate retired = template(hospital, false);
+        when(templateRepository.findByHospital_IdAndActiveTrue(hospitalId))
+            .thenReturn(java.util.List.of(active));
+        when(templateRepository.findByHospital_IdOrderByDayOfWeekAscStartTimeAsc(hospitalId))
+            .thenReturn(java.util.List.of(active, retired));
+
+        assertThat(service.list(false)).hasSize(1);
+        assertThat(service.list(true)).hasSize(2);
+    }
+
+    @Test
+    void updateChangesWhatFutureGenerationProduces() {
+        SessionTemplate entity = template(hospital, true);
+        when(templateRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+
+        VisitType visitType = VisitType.builder().hospital(hospital).active(true).name("New consult").build();
+        visitType.setId(UUID.randomUUID());
+        when(visitTypeRepository.findById(visitType.getId())).thenReturn(Optional.of(visitType));
+
+        SessionTemplateRequestDTO request = valid();
+        request.setVisitTypeId(visitType.getId());
+        request.setDayOfWeek(3);
+        request.setSlotMinutes(30);
+        request.setNotes("Wednesday clinic");
+
+        var dto = service.update(entity.getId(), request);
+
+        assertThat(entity.getDayOfWeek()).isEqualTo((short) 3);
+        assertThat(entity.getSlotMinutes()).isEqualTo(30);
+        assertThat(entity.getVisitType()).isEqualTo(visitType);
+        assertThat(dto.getVisitTypeName()).isEqualTo("New consult");
+        assertThat(dto.getNotes()).isEqualTo("Wednesday clinic");
+    }
+
+    @Test
+    void reactivateRestoresARetiredTemplateToTheGenerator() {
+        SessionTemplate entity = template(hospital, false);
+        when(templateRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+
+        assertThat(service.reactivate(entity.getId()).isActive()).isTrue();
+        assertThat(entity.isActive()).isTrue();
+    }
+
+    private SessionTemplate template(Hospital owner, boolean active) {
+        SessionTemplate entity = SessionTemplate.builder()
+            .hospital(owner).staff(staff).department(department)
+            .dayOfWeek((short) 1)
+            .startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(12, 0))
+            .slotMinutes(20).effectiveFrom(LocalDate.of(2026, 9, 1))
+            .active(active)
+            .build();
+        entity.setId(UUID.randomUUID());
+        return entity;
+    }
+
+    @Test
     void aForeignTemplateReadsAsNotFound() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());

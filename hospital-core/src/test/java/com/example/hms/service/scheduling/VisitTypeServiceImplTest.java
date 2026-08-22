@@ -148,6 +148,47 @@ class VisitTypeServiceImplTest {
     }
 
     @Test
+    void listIncludesRetiredRowsOnlyWhenAsked() {
+        VisitType active = VisitType.builder().hospital(hospital).active(true).name("A").build();
+        active.setId(UUID.randomUUID());
+        VisitType retired = VisitType.builder().hospital(hospital).active(false).name("B").build();
+        retired.setId(UUID.randomUUID());
+        when(visitTypeRepository.findByHospital_IdAndActiveTrueOrderByNameAsc(hospitalId))
+            .thenReturn(java.util.List.of(active));
+        when(visitTypeRepository.findByHospital_IdOrderByNameAsc(hospitalId))
+            .thenReturn(java.util.List.of(active, retired));
+
+        assertThat(service.list(false)).hasSize(1);
+        assertThat(service.list(true)).hasSize(2);
+    }
+
+    @Test
+    void updateRewritesTheCatalogRowIncludingItsDepartmentScope() {
+        VisitType entity = VisitType.builder()
+            .hospital(hospital).active(true).code("OLD").name("Old").durationMinutes(15)
+            .build();
+        entity.setId(UUID.randomUUID());
+        when(visitTypeRepository.findById(entity.getId())).thenReturn(Optional.of(entity));
+
+        Department department = new Department();
+        department.setId(UUID.randomUUID());
+        department.setHospital(hospital);
+        department.setName("Cardiology");
+        when(departmentRepository.findById(department.getId())).thenReturn(Optional.of(department));
+
+        VisitTypeRequestDTO request = valid();
+        request.setDepartmentId(department.getId());
+        request.setPatientBookable(true);
+
+        var dto = service.update(entity.getId(), request);
+
+        assertThat(entity.getCode()).isEqualTo("NEW_CONSULT");
+        assertThat(entity.getDepartment()).isEqualTo(department);
+        assertThat(entity.isPatientBookable()).isTrue();
+        assertThat(dto.getDepartmentName()).isEqualTo("Cardiology");
+    }
+
+    @Test
     void aForeignVisitTypeReadsAsNotFound() {
         Hospital other = new Hospital();
         other.setId(UUID.randomUUID());
