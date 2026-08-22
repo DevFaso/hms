@@ -144,7 +144,8 @@ class SessionTemplateServiceImplTest {
         other.setId(UUID.randomUUID());
         staff.setHospital(other);
 
-        assertThatThrownBy(() -> service.create(valid()))
+        SessionTemplateRequestDTO request = valid();
+        assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(templateRepository, never()).save(any());
     }
@@ -250,7 +251,8 @@ class SessionTemplateServiceImplTest {
         foreign.setId(UUID.randomUUID());
         when(templateRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.deactivate(foreign.getId()))
+        UUID foreignId = foreign.getId();
+        assertThatThrownBy(() -> service.deactivate(foreignId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

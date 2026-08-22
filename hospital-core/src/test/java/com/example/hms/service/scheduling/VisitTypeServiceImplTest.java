@@ -90,7 +90,8 @@ class VisitTypeServiceImplTest {
         when(visitTypeRepository.findByHospital_IdAndCodeIgnoreCase(hospitalId, "NEW_CONSULT"))
             .thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> service.create(valid()))
+        VisitTypeRequestDTO request = valid();
+        assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already exists");
         verify(visitTypeRepository, never()).save(any());
@@ -103,7 +104,8 @@ class VisitTypeServiceImplTest {
         when(visitTypeRepository.findByHospital_IdAndCodeIgnoreCase(hospitalId, "NEW_CONSULT"))
             .thenReturn(Optional.of(retired));
 
-        assertThatThrownBy(() -> service.create(valid()))
+        VisitTypeRequestDTO request = valid();
+        assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("reactivate");
     }
@@ -114,7 +116,8 @@ class VisitTypeServiceImplTest {
         // per-hospital; there is nothing sensible to answer globally.
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
-        assertThatThrownBy(() -> service.create(valid()))
+        VisitTypeRequestDTO request = valid();
+        assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active hospital");
     }
@@ -196,7 +199,8 @@ class VisitTypeServiceImplTest {
         foreign.setId(UUID.randomUUID());
         when(visitTypeRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.deactivate(foreign.getId()))
+        UUID foreignId = foreign.getId();
+        assertThatThrownBy(() -> service.deactivate(foreignId))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }
