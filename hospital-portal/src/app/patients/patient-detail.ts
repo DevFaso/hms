@@ -21,6 +21,8 @@ import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
+import { GrowthChartTabComponent } from './growth-chart/growth-chart-tab.component';
+import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
@@ -36,6 +38,8 @@ type TabKey =
   | 'coverage'
   | 'med-history'
   | 'vitals'
+  | 'growth'
+  | 'fluid-balance'
   | 'encounters'
   | 'appointments'
   | 'directives'
@@ -51,6 +55,8 @@ type TabKey =
     TranslateModule,
     PatientChartComponent,
     AdvanceDirectivesTabComponent,
+    GrowthChartTabComponent,
+    FluidBalanceTabComponent,
     CoverageTabComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
@@ -143,6 +149,40 @@ export class PatientDetailComponent implements OnInit {
   /** Whether the current user can view clinical encounters */
   canViewEncounters(): boolean {
     return this.permissions.hasPermission('Create Encounters');
+  }
+
+  /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
+   *  'Update Vital Signs' write permission the vitals tab uses, because a
+   *  read-only chart gated on a write permission locks out read-only roles. */
+  canViewGrowth(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** Mirrors IntakeOutputController's @PreAuthorize list exactly. */
+  canViewFluidBalance(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** Growth charts are a pediatric surface (WHO/CDC curves stop at 19); the
+   *  tab hides for adults rather than rendering a lifetime weight log. */
+  showGrowthTab(): boolean {
+    if (!this.canViewGrowth()) return false;
+    const dob = this.patient()?.dateOfBirth;
+    if (!dob) return false;
+    const ageMs = Date.now() - new Date(dob).getTime();
+    return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
   }
 
   /** Whether the current user can view the structured Chart tab (roles that can
@@ -390,6 +430,28 @@ export class PatientDetailComponent implements OnInit {
       age--;
     }
     return `${age} years`;
+  }
+
+  /** True for a real measurement, including 0 — but not null/undefined.
+   *  (A missing JSON key parses to undefined, which `=== null` misses; that
+   *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
+  hasValue(value: number | null | undefined): boolean {
+    return value !== null && value !== undefined;
+  }
+
+  hasNoMetrics(v: VitalSignResponse): boolean {
+    return [
+      v.heartRateBpm,
+      v.systolicBpMmHg,
+      v.diastolicBpMmHg,
+      v.temperatureCelsius,
+      v.spo2Percent,
+      v.respiratoryRateBpm,
+      v.bloodGlucoseMgDl,
+      v.weightKg,
+      v.heightCm,
+      v.headCircumferenceCm,
+    ].every((value) => !this.hasValue(value));
   }
 
   getEncounterStatusClass(status: string): string {

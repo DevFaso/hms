@@ -47,4 +47,22 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
                                            @Param("from") LocalDateTime from,
                                            @Param("to") LocalDateTime to,
                                            Pageable pageable);
+
+    /**
+     * Every row carrying at least one anthropometric value, oldest first —
+     * the growth-chart series. Vitals rows are sparse measurement bundles,
+     * so most rows (BP-only, temp-only, …) carry none and are skipped here
+     * rather than plotted as gaps.
+     */
+    @Query("""
+            SELECT v FROM PatientVitalSign v
+            WHERE v.patient.id = :patientId
+                AND (:hospitalId IS NULL OR v.hospital.id = :hospitalId)
+                AND (v.weightKg IS NOT NULL
+                     OR v.heightCm IS NOT NULL
+                     OR v.headCircumferenceCm IS NOT NULL)
+            ORDER BY v.recordedAt ASC
+    """)
+    List<PatientVitalSign> findGrowthSeries(@Param("patientId") UUID patientId,
+                                            @Param("hospitalId") UUID hospitalId);
 }
