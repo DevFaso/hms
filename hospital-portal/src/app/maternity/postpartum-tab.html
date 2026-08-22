@@ -170,7 +170,18 @@
           <tbody>
             @for (a of assessments(); track a.id) {
               <tr class="data-row">
-                <td>{{ a.assessmentTime ? (a.assessmentTime | date: 'short') : '—' }}</td>
+                <td>
+                  {{ a.assessmentTime ? (a.assessmentTime | date: 'short') : '—' }}
+                  @if (a.deliveryRecordId) {
+                    <!-- The linkage was invisible even when set via API: no
+                         template anywhere rendered deliveryRecordId. -->
+                    <span
+                      class="muted delivery-linked"
+                      [title]="'POSTPARTUM.DELIVERY_LINKED' | translate"
+                      >· {{ 'POSTPARTUM.DELIVERY_LINKED' | translate }}</span
+                    >
+                  }
+                </td>
                 <td>{{ apgarSummary(a) }}</td>
                 <td>
                   {{ a.temperatureCelsius ?? '—' }}°C · {{ a.heartRateBpm ?? '—' }} bpm ·
@@ -448,6 +459,24 @@
           <label for="nb-time">{{ 'POSTPARTUM.TIME' | translate }}</label>
           <input id="nb-time" type="datetime-local" [(ngModel)]="assessmentForm.assessmentTime" />
         </div>
+        @if (deliveries().length > 0) {
+          <div class="form-row">
+            <div class="field">
+              <label for="nb-delivery">{{ 'POSTPARTUM.DELIVERY_LINK' | translate }}</label>
+              <!-- The delivery this newborn came from. Sole writer of
+                   deliveryRecordId, which shipped in PR #450 with a column,
+                   an FK and hospital validation — and no UI setting it. -->
+              <select id="nb-delivery" [(ngModel)]="assessmentForm.deliveryRecordId">
+                <option [ngValue]="undefined">
+                  {{ 'POSTPARTUM.DELIVERY_LINK_NONE' | translate }}
+                </option>
+                @for (d of deliveries(); track d.id) {
+                  <option [ngValue]="d.id">{{ deliveryLabel(d) }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
         <h3 class="section-heading">{{ 'POSTPARTUM.APGAR' | translate }}</h3>
         <div class="form-row gtpal-row">
           <div class="field">

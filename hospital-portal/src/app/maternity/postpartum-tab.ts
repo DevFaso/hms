@@ -20,6 +20,7 @@ import {
   PostpartumSupportStatus,
 } from '../services/postpartum.service';
 import { PatientResponse } from '../services/patient.service';
+import { DeliveryRecordResponse, LaborService } from '../services/labor.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
@@ -35,12 +36,22 @@ import { nowLocalDatetime } from '../shared/date-utils';
 })
 export class PostpartumTabComponent {
   private readonly postpartumService = inject(PostpartumService);
+  private readonly laborService = inject(LaborService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
   patient = signal<PatientResponse | null>(null);
   section = signal<'mother' | 'newborn'>('mother');
+
+  /**
+   * The mother's recorded deliveries, offered as the link target when filing a
+   * newborn assessment. PR #450 built the deliveryRecordId column, FK and
+   * validation end to end — and nothing in any UI ever SET it, so the link
+   * stayed persistence-only until the 2026-08-21 reassessment. Best-effort:
+   * a mother with no L&D episode simply gets no selector.
+   */
+  deliveries = signal<DeliveryRecordResponse[]>([]);
 
   schedule = signal<PostpartumSchedule | null>(null);
   observations = signal<PostpartumObservationResponse[]>([]);
@@ -182,6 +193,35 @@ export class PostpartumTabComponent {
         this.assessmentsError.set(true);
       },
     });
+    this.loadDeliveries(patient.id);
+  }
+
+  /**
+   * Delivery records hang off labor episodes, so this walks episodes first and
+   * fetches the record for each that has one. Errors are swallowed per episode:
+   * the selector is an enrichment, and a labor-module hiccup must not block
+   * filing a newborn assessment.
+   */
+  private loadDeliveries(patientId: string): void {
+    this.deliveries.set([]);
+    this.laborService.episodes(patientId, 10).subscribe({
+      next: (episodes) => {
+        for (const episode of episodes ?? []) {
+          if (!episode.deliveryRecorded) continue;
+          this.laborService.delivery(patientId, episode.id).subscribe({
+            next: (record) => this.deliveries.update((list) => [...list, record]),
+            error: () => undefined,
+          });
+        }
+      },
+      error: () => undefined,
+    });
+  }
+
+  /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
+  deliveryLabel(d: DeliveryRecordResponse): string {
+    const when = d.birthDateTime ? new Date(d.birthDateTime).toLocaleDateString() : '';
+    return `${when} — ${d.deliveryMode ?? ''}`.trim();
   }
 
   phaseLabelKey(schedule: PostpartumSchedule): string {
@@ -238,6 +278,13 @@ export class PostpartumTabComponent {
 
   openAssessment(): void {
     this.assessmentForm = { assessmentTime: nowLocalDatetime() };
+    // One recorded delivery is the overwhelmingly common case; preselect it so
+    // the linkage happens by default and a clinician only touches the selector
+    // for twins or a transferred-in newborn (where "none" is correct).
+    const deliveries = this.deliveries();
+    if (deliveries.length === 1) {
+      this.assessmentForm.deliveryRecordId = deliveries[0].id;
+    }
     this.selectedFollowUps = new Set();
     this.showAssessmentModal.set(true);
   }

@@ -78,7 +78,9 @@ public class NurseHandoff extends BaseEntity {
     private String recommendation;
 
     /**
-     * PENDING / COMPLETED / CANCELLED
+     * PENDING / COMPLETED. (An earlier draft promised CANCELLED too; no code
+     * path has ever written it, and claiming states that cannot occur is how
+     * readers come to distrust the ones that can.)
      */
     @NotBlank
     @Size(max = 20)

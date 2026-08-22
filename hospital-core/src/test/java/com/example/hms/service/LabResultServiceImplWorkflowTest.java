@@ -310,6 +310,61 @@ class LabResultServiceImplWorkflowTest {
     }
 
     @Test
+    void signingACriticalResultDoesNotSilenceTheEscalation() {
+        // The lab signing its own result is not the ordering clinician
+        // confirming receipt. Sign used to auto-acknowledge, which bypassed
+        // the read-back requirement for exactly the results it protects.
+        UUID labResultId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        LabOrder order = new LabOrder();
+        order.setHospital(hospital);
+        LabResult critical = new LabResult();
+        critical.setId(labResultId);
+        critical.setLabOrder(order);
+        critical.setCriticalNotifiedAt(java.time.LocalDateTime.now().minusMinutes(5));
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(critical));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        // Super-admin path sidesteps hospital-context resolution — the guard
+        // under test is about acknowledgement, not signing permissions.
+        when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(i -> i.getArgument(0));
+        when(labResultMapper.toResponseDTO(any(LabResult.class)))
+            .thenReturn(LabResultResponseDTO.builder().id(labResultId.toString()).build());
+
+        LabResultSignatureRequestDTO request = LabResultSignatureRequestDTO.builder()
+            .signature("signed")
+            .build();
+        labResultService.signLabResult(labResultId, request, Locale.US);
+
+        assertThat(critical.getSignedAt()).isNotNull();
+        assertThat(critical.isAcknowledged()).isFalse();
+        assertThat(critical.getAcknowledgedAt()).isNull();
+    }
+
+    @Test
+    void acknowledgeLabResultRefusesACriticalResultWithoutReadBack() {
+        // The escalation sweep exits on acknowledged=false, so a bare
+        // acknowledge on a critical result silences the whole safety chain with
+        // nothing recording what the clinician was told. The read-back path is
+        // the only way to acknowledge a result the notifier flagged critical.
+        UUID labResultId = UUID.randomUUID();
+        LabResult critical = new LabResult();
+        critical.setId(labResultId);
+        critical.setCriticalNotifiedAt(java.time.LocalDateTime.now().minusMinutes(5));
+
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(critical));
+
+        assertThrows(BusinessException.class,
+            () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
+        assertThat(critical.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
     void acknowledgeLabResultStampsAcknowledgementFields() {
         UUID labResultId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();

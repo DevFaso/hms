@@ -63,6 +63,14 @@
           </select>
         </label>
         <label>
+          {{ 'PORTAL.FAMILY.EXPIRES' | translate }}
+          <!-- The backend has enforced expiresAt since the P1 #9 fix, but no
+               client offered a way to SET it — every web grant was permanent
+               by omission. Optional: blank keeps the grant open-ended, which
+               stays the right default for a parent/guardian. -->
+          <input type="date" [(ngModel)]="expiresOn" [min]="minExpiry" />
+        </label>
+        <label>
           {{ 'PORTAL.FAMILY.NOTES' | translate }}
           <input
             type="text"

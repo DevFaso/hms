@@ -46,6 +46,8 @@ public class LabResultResponseDTO {
     private short criticalEscalationLevel;
     private LocalDateTime criticalReadBackAt;
     private String criticalReadBackBy;
+    /** What was repeated back — persisted even on a mismatch, for the audit. */
+    private String criticalReadBackValue;
     private boolean released;
     private LocalDateTime releasedAt;
     private String releasedByFullName;

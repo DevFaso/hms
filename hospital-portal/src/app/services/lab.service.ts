@@ -47,6 +47,8 @@ export interface LabResultResponse {
   criticalEscalationLevel?: number;
   criticalReadBackAt?: string | null;
   criticalReadBackBy?: string | null;
+  /** What was repeated back — persisted even on a mismatch, for the audit. */
+  criticalReadBackValue?: string | null;
   released: boolean;
   releasedAt: string | null;
   releasedByFullName: string | null;
