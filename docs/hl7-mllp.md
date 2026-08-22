@@ -66,6 +66,32 @@ APP_HL7_MLLP_PORT=2575
 APP_HL7_MLLP_BIND_ADDRESS=0.0.0.0
 ```
 
+### Outbound sender (P2 #17)
+
+The outbound half (`MllpOutboundSender` + the dispatch sweep over
+`lab.instrument_outbox`) is configured separately and is **also off by
+default**. Note the two switches are independent: `app.hl7.mllp.enabled`
+gates only the inbound listener; outbound transmission is gated solely by
+`app.hl7.mllp.outbound.enabled`.
+
+| Property                                    | Env var                                         | Default     | Notes |
+| ------------------------------------------- | ----------------------------------------------- | ----------- | ----- |
+| `app.hl7.mllp.outbound.enabled`             | `APP_HL7_MLLP_OUTBOUND_ENABLED`                 | `false`     | Master switch for transmission. When off, queued rows stay PENDING and the sweep logs once per pass at DEBUG. |
+| `app.hl7.mllp.outbound.host`                | `APP_HL7_MLLP_OUTBOUND_HOST`                    | `localhost` | Analyser / middleware host. |
+| `app.hl7.mllp.outbound.port`                | `APP_HL7_MLLP_OUTBOUND_PORT`                    | `2576`      | |
+| `app.hl7.mllp.outbound.charset`             | `APP_HL7_MLLP_OUTBOUND_CHARSET`                 | `UTF-8`     | Agree with the receiver. |
+| `app.hl7.mllp.outbound.connectTimeoutMs`    | `APP_HL7_MLLP_OUTBOUND_CONNECT_TIMEOUT_MS`      | `10000`     | |
+| `app.hl7.mllp.outbound.readTimeoutMs`       | `APP_HL7_MLLP_OUTBOUND_READ_TIMEOUT_MS`         | `30000`     | How long to wait for the ACK. |
+| `app.hl7.mllp.outbound.maxFrameBytes`       | `APP_HL7_MLLP_OUTBOUND_MAX_FRAME_BYTES`         | `1048576`   | |
+| `app.hl7.mllp.outbound.maxAttempts`         | `APP_HL7_MLLP_OUTBOUND_MAX_ATTEMPTS`            | `5`         | Transport failures retry to this ceiling, then the row is parked as ERROR. A negative ACK (AE/AR) is terminal immediately. |
+| `app.hl7.mllp.outbound.retryAfterSeconds`   | `APP_HL7_MLLP_OUTBOUND_RETRY_AFTER_SECONDS`     | `60`        | Backoff between attempts on the same message. |
+| `app.hl7.mllp.outbound.batchSize`           | `APP_HL7_MLLP_OUTBOUND_BATCH_SIZE`              | `50`        | Messages per sweep. |
+| `app.hl7.mllp.outbound.sweep-interval-ms`   | `APP_HL7_MLLP_OUTBOUND_SWEEP_INTERVAL_MS`       | `60000`     | Read directly by `InstrumentOutboxDispatchScheduler`, not part of the properties class. |
+
+Operational state is visible in the portal at **Lab → Instrument Outbox**
+(`GET /lab-instrument-outbox` + `/transport`), including per-message
+`attempts` / `last_error` and a manual retry for rows parked in ERROR.
+
 ## Smoke test
 
 ```bash
