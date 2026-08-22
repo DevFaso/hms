@@ -525,6 +525,25 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./lab/lab-instruments/lab-instruments').then((m) => m.LabInstrumentsComponent),
       },
+      // Instrument outbox monitor (P2 #17) — roles mirror the backend READ set
+      // on GET /lab-instrument-outbox/** exactly.
+      {
+        path: 'lab-outbox',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-outbox/lab-outbox').then((m) => m.LabOutboxComponent),
+      },
       {
         path: 'lab-inventory',
         canActivate: [RoleGuard],
