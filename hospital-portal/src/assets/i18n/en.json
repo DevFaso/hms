@@ -435,7 +435,16 @@
       "SEVERITY_CRITICAL": "Critical",
       "ACTION": "Send broadcast"
     },
-    "REQUEST_FAILED": "Request failed."
+    "REQUEST_FAILED": "Request failed.",
+    "DOWNTIME": {
+      "TITLE": "Read-only (downtime) mode",
+      "DESC": "Blocks every write across the platform with a 503 while viewing stays available. Login, token refresh and this toggle stay open. Takes effect immediately here, within 30 seconds on other instances.",
+      "ACTIVE": "READ-ONLY MODE IS ACTIVE.",
+      "INACTIVE": "Normal operation — writes are allowed.",
+      "MESSAGE": "Banner message (shown to every user)",
+      "ACTIVATE": "Activate read-only mode",
+      "DEACTIVATE": "Deactivate read-only mode"
+    }
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Issued by",
@@ -2452,7 +2461,10 @@
     "SPECIMEN_STATUS_RECEIVED": "Received",
     "SPECIMEN_STATUS_PROCESSING": "Processing",
     "SPECIMEN_STATUS_COMPLETED": "Completed",
-    "SPECIMEN_STATUS_REJECTED": "Rejected"
+    "SPECIMEN_STATUS_REJECTED": "Rejected",
+    "PRINT_LABEL": "Label",
+    "PRINT_LABEL_TITLE": "Print the specimen label",
+    "PRINT_LABEL_FAILED": "Failed to generate the specimen label."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -3460,7 +3472,9 @@
     "WEIGHT": "Weight",
     "ZIP_CODE": "Zip Code",
     "HEAD_CIRCUMFERENCE": "Head circumference",
-    "BLOOD_GLUCOSE": "Blood glucose"
+    "BLOOD_GLUCOSE": "Blood glucose",
+    "PRINT_WRISTBAND": "Wristband",
+    "PRINT_WRISTBAND_TITLE": "Print the patient wristband (QR encodes the patient ID for bedside scanning)"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7676,5 +7690,9 @@
     "CAMERA_UNSUPPORTED": "This browser does not support camera capture.",
     "CAMERA_DENIED": "Camera access was denied.",
     "CAPTURE_FAILED": "The frame could not be captured. Try again."
+  },
+  "DOWNTIME": {
+    "BANNER_TITLE": "Read-only mode:",
+    "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
   }
 }

@@ -1893,4 +1893,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V127 — platform.platform_downtime_state (P3 item 23a, read-only
+         continuity mode). Singleton row (V80 security_revocations
+         pattern) enforced by an HTTP filter — deliberately not DB-level
+         read-only, which would break login and silently drop audit rows.
+         No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V127-downtime-state" author="hms-team" runOnChange="false">
+        <sqlFile path="V127__downtime_state.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
