@@ -22,4 +22,12 @@ public class EncounterNoteResponseDTO extends EncounterNoteBaseDTO {
     private LocalDateTime updatedAt;
     private List<EncounterNoteAddendumResponseDTO> addenda;
     private List<EncounterLinkedArtifactDTO> linkedArtifacts;
+
+    /* Ceremony evidence (V125). signatureValue null on a signed note means
+       "asserted before V125, unverifiable". */
+    private UUID signedByUserId;
+    private String signatureAlgorithm;
+    private String signatureValue;
+    private LocalDateTime cosignedAt;
+    private String cosignedByName;
 }

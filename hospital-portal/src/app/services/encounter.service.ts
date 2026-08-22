@@ -27,6 +27,15 @@ export interface EncounterNoteResponse {
   content: string;
   authorName: string;
   createdAt: string;
+  /* Ceremony evidence (P3 #20), present on EncounterNoteResponseDTO payloads
+     (encounter.note, addNote/sign/cosign responses). signatureValue null on a
+     signed note means "asserted before V125, unverifiable". */
+  signedAt?: string | null;
+  signedByName?: string | null;
+  signatureValue?: string | null;
+  requiresCosign?: boolean;
+  cosignedAt?: string | null;
+  cosignedByName?: string | null;
 }
 
 export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
@@ -230,10 +239,13 @@ export interface EncounterNoteRequest {
   attestNoAbbreviations?: boolean;
   attestSpellCheck?: boolean;
 
-  /** Optional digital signature (closes the note for further edits). */
-  signedAt?: string;
-  signedByName?: string;
-  signedByCredentials?: string;
+  /**
+   * Set-only: flags the note for an attending co-signature (P3 #20).
+   * The signature itself can no longer be asserted in the note body —
+   * the backend refuses signedAt/signedByName here; signing is the
+   * POST /encounters/{id}/notes/sign ceremony.
+   */
+  requiresCosign?: boolean;
 }
 
 export interface EncounterNoteAddendumRequest {
@@ -320,6 +332,17 @@ export class EncounterService {
 
   getNoteHistory(encounterId: string): Observable<EncounterNoteResponse[]> {
     return this.http.get<EncounterNoteResponse[]>(`${this.baseUrl}/${encounterId}/notes/history`);
+  }
+
+  /** Author-only signing ceremony (P3 #20) — the backend resolves the signer
+   *  and refuses non-authors; empty body by design. */
+  signNote(encounterId: string): Observable<EncounterNoteResponse> {
+    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/sign`, {});
+  }
+
+  /** Attending co-signature — backend refuses the note's own author. */
+  cosignNote(encounterId: string): Observable<EncounterNoteResponse> {
+    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/cosign`, {});
   }
 
   submitTriage(

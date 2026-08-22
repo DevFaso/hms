@@ -162,6 +162,42 @@ public class EncounterNote extends BaseEntity {
     @Column(name = "signed_by_credentials", length = 200)
     private String signedByCredentials;
 
+    /* ── Server-side ceremony evidence (V125). Pre-V125 rows keep their
+       client-asserted signed_at/signed_by_name with all of these null:
+       signature_value IS NULL on a signed row means "asserted before
+       V125, unverifiable" — the V118 stance, not backfilled. ─────────── */
+
+    @Column(name = "signed_by_user_id")
+    private java.util.UUID signedByUserId;
+
+    @Column(name = "signature_algorithm", length = 32)
+    private String signatureAlgorithm;
+
+    @Column(name = "signature_value", length = 128)
+    private String signatureValue;
+
+    /** Set-only at documentation time (the prescription idiom): once a note
+     *  declares it needs an attending's co-signature, the upsert cannot
+     *  quietly withdraw the requirement. */
+    @Builder.Default
+    @Column(name = "requires_cosign", nullable = false)
+    private boolean requiresCosign = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cosigned_by_staff_id",
+        foreignKey = @ForeignKey(name = "fk_encounter_note_cosigner"))
+    private Staff cosignedBy;
+
+    @Column(name = "cosigned_at")
+    private LocalDateTime cosignedAt;
+
+    /** Signed notes are locked: content changes go through addenda. Includes
+     *  pre-V125 client-asserted signatures — the UI always promised that
+     *  signing "closes the note for further edits"; now it is true. */
+    public boolean isSigned() {
+        return signedAt != null;
+    }
+
     @Builder.Default
     @OneToMany(mappedBy = "note", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("documentedAt ASC")

@@ -284,6 +284,68 @@
             </div>
           }
 
+          @if (noteState(); as note) {
+            <div class="detail-section" data-testid="note-signature-section">
+              <h3>{{ 'ENCOUNTERS.NOTE_SIGNATURE' | translate }}</h3>
+              @if (note.signedAt) {
+                <p class="note-meta" data-testid="note-signed-line">
+                  {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
+                  {{ note.signedAt | date: 'short' }}
+                  @if (note.signedByName) {
+                    — {{ note.signedByName }}
+                  }
+                  @if (!note.signatureValue) {
+                    <span class="cosign-pending-badge">
+                      {{ 'ENCOUNTERS.NOTE_SIGNED_PRE_V125' | translate }}
+                    </span>
+                  }
+                </p>
+              } @else {
+                <p class="note-meta">{{ 'ENCOUNTERS.NOTE_UNSIGNED' | translate }}</p>
+                <button
+                  class="btn-primary"
+                  data-testid="sign-note"
+                  (click)="signNote()"
+                  [disabled]="signingNote()"
+                >
+                  <span class="material-symbols-outlined">draw</span>
+                  {{
+                    (signingNote() ? 'ENCOUNTERS.NOTE_SIGNING' : 'ENCOUNTERS.SIGN_NOTE') | translate
+                  }}
+                </button>
+              }
+              @if (note.requiresCosign) {
+                @if (note.cosignedAt) {
+                  <p class="note-meta" data-testid="note-cosigned-line">
+                    {{ 'ENCOUNTERS.NOTE_COSIGNED_AT' | translate }}
+                    {{ note.cosignedAt | date: 'short' }}
+                    @if (note.cosignedByName) {
+                      — {{ note.cosignedByName }}
+                    }
+                  </p>
+                } @else {
+                  <p class="note-meta cosign-pending" data-testid="note-cosign-pending">
+                    {{ 'ENCOUNTERS.NOTE_COSIGN_PENDING' | translate }}
+                  </p>
+                  @if (note.signedAt) {
+                    <button
+                      class="btn-secondary"
+                      data-testid="cosign-note"
+                      (click)="cosignNote()"
+                      [disabled]="cosigningNote()"
+                    >
+                      <span class="material-symbols-outlined">approval</span>
+                      {{
+                        (cosigningNote() ? 'ENCOUNTERS.NOTE_COSIGNING' : 'ENCOUNTERS.COSIGN_NOTE')
+                          | translate
+                      }}
+                    </button>
+                  }
+                }
+              }
+            </div>
+          }
+
           @if (enc.appointmentReason) {
             <div class="detail-section">
               <h3>{{ 'ENCOUNTERS.APPOINTMENT' | translate }}</h3>
@@ -292,7 +354,8 @@
           }
 
           <div class="detail-section detail-section--actions">
-            @if (!showNoteForm()) {
+            <!-- A signed note is locked (P3 #20) — content changes go through addenda. -->
+            @if (!showNoteForm() && !noteState()?.signedAt) {
               <button
                 class="btn-secondary"
                 title="Add clinical note"

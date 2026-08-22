@@ -93,6 +93,9 @@ public class ChartReviewDTO {
         private LocalDateTime signedAt;
         private boolean signed;
         private boolean lateEntry;
+        /* Co-sign state (P3 #20): pending = requiresCosign && cosignedAt null. */
+        private boolean requiresCosign;
+        private LocalDateTime cosignedAt;
         /** Short preview (first ~280 chars) of the most-relevant body field. */
         private String preview;
     }

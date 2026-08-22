@@ -354,6 +354,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .signedAt(note.getSignedAt())
             .signed(note.getSignedAt() != null)
             .lateEntry(note.isLateEntry())
+            .requiresCosign(note.isRequiresCosign())
+            .cosignedAt(note.getCosignedAt())
             .preview(buildNotePreview(note))
             .build();
     }

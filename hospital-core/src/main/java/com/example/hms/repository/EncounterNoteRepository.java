@@ -20,4 +20,13 @@ public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UU
      * instead of N+1 single-encounter queries.
      */
     List<EncounterNote> findByEncounter_IdIn(Collection<UUID> encounterIds);
+
+    /**
+     * The co-sign queue (P3 #20): signed notes that declared a co-signature
+     * requirement and have not received one, at one hospital. Served to every
+     * attending-privileged clinician there — no staff-to-staff supervision
+     * relation exists to narrow it further.
+     */
+    List<EncounterNote> findByHospital_IdAndRequiresCosignTrueAndCosignedAtIsNullAndSignedAtIsNotNullOrderBySignedAtAsc(
+        UUID hospitalId);
 }

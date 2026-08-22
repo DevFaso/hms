@@ -61,6 +61,8 @@ describe('EncountersComponent', () => {
       'completeExamination',
       'markReadyForDischarge',
       'getAvs',
+      'signNote',
+      'cosignNote',
     ]);
     encounterSpy.list.and.returnValue(
       of([
@@ -297,6 +299,87 @@ describe('EncountersComponent', () => {
     expect(component.getTypeIcon('EMERGENCY')).toBe('emergency');
     expect(component.getTypeIcon('LAB')).toBe('science');
     expect(component.getTypeIcon('UNKNOWN')).toBe('medical_services');
+  });
+
+  describe('note sign/co-sign ceremony (P3 #20)', () => {
+    const note = (overrides: Partial<EncounterNoteResponse> = {}): EncounterNoteResponse =>
+      ({
+        id: 'n1',
+        encounterId: 'e1',
+        signedAt: null,
+        requiresCosign: false,
+        cosignedAt: null,
+        ...overrides,
+      }) as EncounterNoteResponse;
+
+    it('selecting an encounter seeds the note state from its payload', () => {
+      const enc = mockEncounter({ note: note({ requiresCosign: true }) });
+      component.selectEncounter(enc);
+      expect(component.noteState()?.requiresCosign).toBeTrue();
+    });
+
+    it('signNote replaces the note state with the ceremony response', () => {
+      component.selectEncounter(mockEncounter({ note: note() }));
+      encounterSpy.signNote.and.returnValue(
+        of(note({ signedAt: '2026-08-22T10:00:00', signatureValue: 'a'.repeat(64) })),
+      );
+
+      component.signNote();
+
+      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1');
+      expect(component.noteState()?.signedAt).toBeTruthy();
+      expect(component.signingNote()).toBeFalse();
+    });
+
+    it('sign refusal is surfaced verbatim', () => {
+      component.selectEncounter(mockEncounter({ note: note() }));
+      encounterSpy.signNote.and.returnValue(
+        throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+      );
+
+      component.signNote();
+
+      expect(toastSpy.error).toHaveBeenCalledWith("Only the note's author can sign it.");
+      expect(component.signingNote()).toBeFalse();
+    });
+
+    it('cosignNote posts the ceremony and stores the co-signed state', () => {
+      component.selectEncounter(
+        mockEncounter({ note: note({ signedAt: '2026-08-22T09:00:00', requiresCosign: true }) }),
+      );
+      encounterSpy.cosignNote.and.returnValue(
+        of(
+          note({
+            signedAt: '2026-08-22T09:00:00',
+            requiresCosign: true,
+            cosignedAt: '2026-08-22T11:00:00',
+            cosignedByName: 'Dr Attending',
+          }),
+        ),
+      );
+
+      component.cosignNote();
+
+      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1');
+      expect(component.noteState()?.cosignedAt).toBeTruthy();
+    });
+
+    it('saveStructuredNote surfaces the signed-lock refusal verbatim', () => {
+      component.selectEncounter(mockEncounter({ note: note() }));
+      encounterSpy.addNote.and.returnValue(
+        throwError(() => ({
+          error: {
+            message: 'This note is signed and can no longer be edited. Append an addendum instead.',
+          },
+        })),
+      );
+
+      component.saveStructuredNote({ template: 'SOAP' });
+
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'This note is signed and can no longer be edited. Append an addendum instead.',
+      );
+    });
   });
 
   it('countByStatus counts loaded encounters', () => {

@@ -154,6 +154,17 @@ public class EncounterMapper {
             .signedAt(note.getSignedAt())
             .signedByName(nullSafe(note.getSignedByName()))
             .signedByCredentials(nullSafe(note.getSignedByCredentials()))
+            .signedByUserId(note.getSignedByUserId())
+            .signatureAlgorithm(nullSafe(note.getSignatureAlgorithm()))
+            .signatureValue(nullSafe(note.getSignatureValue()))
+            .requiresCosign(note.isRequiresCosign())
+            .cosignedAt(note.getCosignedAt())
+            .cosignedByName(note.getCosignedBy() != null
+                ? (note.getCosignedBy().getUser() != null
+                    ? joinName(note.getCosignedBy().getUser().getFirstName(),
+                        note.getCosignedBy().getUser().getLastName())
+                    : nullSafe(note.getCosignedBy().getName()))
+                : null)
             .addenda(note.getAddenda() != null
                 ? note.getAddenda().stream()
                     .map(this::toEncounterNoteAddendumResponseDTO)
