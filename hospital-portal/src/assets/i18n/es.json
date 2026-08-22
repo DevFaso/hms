@@ -3148,7 +3148,9 @@
       "DIASTOLIC": "p. ej. 80",
       "SPO2": "p. ej. 98",
       "GLUCOSE": "p. ej. 100",
-      "WEIGHT": "p. ej. 70,5"
+      "WEIGHT": "p. ej. 70,5",
+      "HEIGHT": "ej. 74,5",
+      "HEAD_CIRCUMFERENCE": "ej. 44,2"
     },
     "TOAST": {
       "VITALS_LOAD_FAILED": "Error al cargar los signos vitales",
@@ -3185,7 +3187,8 @@
     "HANDOFFS_PENDING": "Pendientes",
     "HANDOFFS_COMPLETED": "Completados",
     "NO_COMPLETED_HANDOFFS": "Aún no hay traspasos completados",
-    "HANDOFF_COMPLETED_BY": "Completado por"
+    "HANDOFF_COMPLETED_BY": "Completado por",
+    "HEAD_CIRCUMFERENCE": "Perímetro cefálico"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -3442,7 +3445,9 @@
     "VITALS": "Vitals",
     "VITALS_TITLE": "Vital signs",
     "WEIGHT": "Weight",
-    "ZIP_CODE": "Zip Code"
+    "ZIP_CODE": "Zip Code",
+    "HEAD_CIRCUMFERENCE": "Perímetro cefálico",
+    "BLOOD_GLUCOSE": "Glucemia"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7422,5 +7427,33 @@
     "REVOKED_TOAST": "Directiva revocada.",
     "REVOKE_ERROR": "No se pudo revocar la directiva.",
     "LAST_REVIEWED": "revisada"
+  },
+  "GROWTH": {
+    "TAB": "Crecimiento",
+    "TAB_TITLE": "Curva de crecimiento — peso, talla y perímetro cefálico según la edad",
+    "LOADING": "Cargando datos de crecimiento…",
+    "LOAD_FAILED": "No se pudieron cargar los datos de crecimiento",
+    "RETRY": "Reintentar",
+    "NO_DATA": "Aún no hay mediciones de crecimiento registradas",
+    "NO_DATA_HINT": "El peso, la talla y el perímetro cefálico capturados con los signos vitales aparecerán aquí.",
+    "METRIC_SWITCH": "Medida de crecimiento",
+    "METRIC_WEIGHT": "Peso",
+    "METRIC_HEIGHT": "Talla",
+    "METRIC_HEAD_CIRCUMFERENCE": "Perímetro cefálico",
+    "NO_METRIC_POINTS": "Aún no hay mediciones para este indicador.",
+    "CHART_ARIA": "Curva de crecimiento: {{count}} mediciones ({{metric}}) según la edad",
+    "X_AXIS_MONTHS": "Edad (meses)",
+    "X_AXIS_YEARS": "Edad (años)",
+    "SOURCE_DELIVERY": "Peso al nacer (registro de parto)",
+    "PERCENTILES_DEFERRED": "Las curvas de percentiles de la OMS aún no se muestran: los datos de referencia deben importarse de una fuente verificada y aprobarse clínicamente antes de superponerse.",
+    "COL_DATE": "Fecha",
+    "COL_AGE": "Edad",
+    "COL_WEIGHT": "Peso",
+    "COL_HEIGHT": "Talla",
+    "COL_HEAD_CIRCUMFERENCE": "Per. cefálico",
+    "COL_SOURCE": "Origen",
+    "AGE_DAYS": "{{days}} d",
+    "AGE_MONTHS": "{{months}} m",
+    "AGE_YEARS_MONTHS": "{{years}} a {{months}} m"
   }
 }

@@ -19,9 +19,10 @@ import java.util.List;
 /**
  * Maps two source domains into FHIR R4 {@code Observation}:
  * <ul>
- *   <li>{@link com.example.hms.model.PatientVitalSign} — one capture row → up to 7
- *       Observation resources, one per measured component (temperature, HR, RR, SBP/DBP,
- *       SpO2, glucose, weight). Each is bound to a LOINC code.</li>
+ *   <li>{@link com.example.hms.model.PatientVitalSign} — one capture row → one
+ *       Observation resource per measured component (temperature, HR, RR, SBP/DBP,
+ *       SpO2, glucose, weight, height, head circumference). Each is bound to a
+ *       LOINC code.</li>
  *   <li>{@link com.example.hms.model.LabResult} — single Observation per result row
  *       using the lab order test name as the {@code code.text} until LOINC binding is
  *       added in P1 gap #5.</li>
@@ -48,6 +49,8 @@ public class ObservationFhirMapper {
         addNumeric(out, src, "spo2",          "59408-5","Oxygen saturation",     "%",     src.getSpo2Percent() == null ? null : BigDecimal.valueOf(src.getSpo2Percent()));
         addNumeric(out, src, "glucose",       "2339-0", "Glucose [Mass/volume] in Blood", "mg/dL", src.getBloodGlucoseMgDl() == null ? null : BigDecimal.valueOf(src.getBloodGlucoseMgDl()));
         addNumeric(out, src, "weight",        "29463-7","Body weight",           "kg",    asBd(src.getWeightKg()));
+        addNumeric(out, src, "height",        "8302-2", "Body height",           "cm",    asBd(src.getHeightCm()));
+        addNumeric(out, src, "head-circ",     "9843-4", "Head Occipital-frontal circumference", "cm", asBd(src.getHeadCircumferenceCm()));
         return out;
     }
 

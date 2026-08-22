@@ -31,6 +31,8 @@ public class PatientVitalSignResponseDTO {
     private Integer spo2Percent;
     private Integer bloodGlucoseMgDl;
     private Double weightKg;
+    private Double heightCm;
+    private Double headCircumferenceCm;
     private String bodyPosition;
     private String notes;
     private boolean clinicallySignificant;

@@ -107,6 +107,17 @@
           {{ 'PATIENTS.VITALS' | translate }}
         </button>
       }
+      @if (showGrowthTab()) {
+        <button
+          class="tab"
+          data-testid="growth-tab-button"
+          [class.active]="activeTab() === 'growth'"
+          (click)="setTab('growth')"
+          [title]="'GROWTH.TAB_TITLE' | translate"
+        >
+          {{ 'GROWTH.TAB' | translate }}
+        </button>
+      }
       @if (canViewEncounters()) {
         <button
           class="tab"
@@ -174,6 +185,11 @@
     <!-- ═══ Advance Directives Tab (P2 #13 — first write surface) ═══ -->
     @if (activeTab() === 'directives' && canViewDirectives()) {
       <app-advance-directives-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Growth Tab (P3 #18 — anthropometric trajectory) ═══ -->
+    @if (activeTab() === 'growth' && showGrowthTab()) {
+      <app-growth-chart-tab [patientId]="patient()!.id" />
     }
 
     <!-- ═══ Overview Tab ═══ -->
@@ -303,102 +319,102 @@
               <div class="vital-header">
                 <span class="vital-date">{{ v.recordedAt | date: 'medium' }}</span>
                 <span class="vital-by"
-                  >{{ 'PATIENTS.BY' | translate }} {{ v.staffName || '—' }}</span
+                  >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
               </div>
               <div class="vital-metrics">
-                @if (v.heartRate) {
+                @if (hasValue(v.heartRateBpm)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">favorite</span>
                     <div>
-                      <strong>{{ v.heartRate }}</strong
+                      <strong>{{ v.heartRateBpm }}</strong
                       ><small> bpm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEART_RATE' | translate }}</span>
                   </div>
                 }
-                @if (v.systolicBp || v.diastolicBp) {
+                @if (hasValue(v.systolicBpMmHg) || hasValue(v.diastolicBpMmHg)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">speed</span>
                     <div>
-                      <strong>{{ v.systolicBp }}/{{ v.diastolicBp }}</strong
+                      <strong>{{ v.systolicBpMmHg }}/{{ v.diastolicBpMmHg }}</strong
                       ><small> mmHg</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.BLOOD_PRESSURE' | translate }}</span>
                   </div>
                 }
-                @if (v.temperature) {
+                @if (hasValue(v.temperatureCelsius)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">thermostat</span>
                     <div>
-                      <strong>{{ v.temperature }}</strong
+                      <strong>{{ v.temperatureCelsius }}</strong
                       ><small> °C</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.TEMPERATURE' | translate }}</span>
                   </div>
                 }
-                @if (v.oxygenSaturation) {
+                @if (hasValue(v.spo2Percent)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">air</span>
                     <div>
-                      <strong>{{ v.oxygenSaturation }}</strong
+                      <strong>{{ v.spo2Percent }}</strong
                       ><small>%</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.SPO2' | translate }}</span>
                   </div>
                 }
-                @if (v.respiratoryRate) {
+                @if (hasValue(v.respiratoryRateBpm)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">pulmonology</span>
                     <div>
-                      <strong>{{ v.respiratoryRate }}</strong
+                      <strong>{{ v.respiratoryRateBpm }}</strong
                       ><small> /min</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.RESP_RATE' | translate }}</span>
                   </div>
                 }
-                @if (v.painLevel !== null && v.painLevel !== undefined) {
+                @if (hasValue(v.bloodGlucoseMgDl)) {
                   <div class="vital-metric">
-                    <span class="material-symbols-outlined">sentiment_very_dissatisfied</span>
+                    <span class="material-symbols-outlined">glucose</span>
                     <div>
-                      <strong>{{ v.painLevel }}</strong
-                      ><small>/10</small>
+                      <strong>{{ v.bloodGlucoseMgDl }}</strong
+                      ><small> mg/dL</small>
                     </div>
-                    <span class="vital-label">{{ 'PATIENTS.PAIN_LEVEL' | translate }}</span>
+                    <span class="vital-label">{{ 'PATIENTS.BLOOD_GLUCOSE' | translate }}</span>
                   </div>
                 }
-                @if (v.weight) {
+                @if (hasValue(v.weightKg)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">monitor_weight</span>
                     <div>
-                      <strong>{{ v.weight }}</strong
+                      <strong>{{ v.weightKg }}</strong
                       ><small> kg</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.WEIGHT' | translate }}</span>
                   </div>
                 }
-                @if (v.height) {
+                @if (hasValue(v.heightCm)) {
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">height</span>
                     <div>
-                      <strong>{{ v.height }}</strong
+                      <strong>{{ v.heightCm }}</strong
                       ><small> cm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEIGHT' | translate }}</span>
                   </div>
                 }
+                @if (hasValue(v.headCircumferenceCm)) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">child_care</span>
+                    <div>
+                      <strong>{{ v.headCircumferenceCm }}</strong
+                      ><small> cm</small>
+                    </div>
+                    <span class="vital-label">{{ 'PATIENTS.HEAD_CIRCUMFERENCE' | translate }}</span>
+                  </div>
+                }
               </div>
-              @if (
-                v.heartRate === null &&
-                v.systolicBp === null &&
-                v.diastolicBp === null &&
-                v.temperature === null &&
-                v.oxygenSaturation === null &&
-                v.respiratoryRate === null &&
-                v.painLevel === null &&
-                v.weight === null &&
-                v.height === null
-              ) {
+              @if (hasNoMetrics(v)) {
                 <p class="vital-notes no-metrics">
                   {{ 'PATIENTS.NO_VITAL_METRICS' | translate }}
                 </p>

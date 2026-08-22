@@ -46,7 +46,7 @@ describe('PatientDetailComponent', () => {
 
   beforeEach(async () => {
     patientServiceSpy = jasmine.createSpyObj('PatientService', ['getById']);
-    vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent']);
+    vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
     sharingServiceSpy = jasmine.createSpyObj('RecordSharingService', [
@@ -94,6 +94,9 @@ describe('PatientDetailComponent', () => {
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
     vitalServiceSpy.getRecent.and.returnValue(of([]));
+    vitalServiceSpy.getGrowthChart.and.returnValue(
+      of({ patientId: 'p1', dateOfBirth: '1998-01-01', gender: 'MALE', points: [] }),
+    );
     encounterServiceSpy.list.and.returnValue(of([] as any));
     appointmentServiceSpy.list.and.returnValue(of([] as any));
     permissionSpy.hasPermission.and.returnValue(true);
@@ -161,39 +164,56 @@ describe('PatientDetailComponent', () => {
   });
 
   describe('Vitals tab — no-metrics placeholder', () => {
-    const vitalWithOnlyNotes: VitalSignResponse = {
-      id: 'v1',
+    // These fixtures use the BACKEND DTO field names. The old spec mocked a
+    // portal-invented shape (heartRate/temperature/height/painLevel) that the
+    // wire never carried, which kept the tests green while the tab rendered
+    // nothing in production.
+    const emptyVital: VitalSignResponse = {
+      id: 'v0',
       patientId: 'p1',
-      staffId: 's1',
-      staffName: 'Nurse A',
-      heartRate: null,
-      systolicBp: null,
-      diastolicBp: null,
-      temperature: null,
-      respiratoryRate: null,
-      oxygenSaturation: null,
-      weight: null,
-      height: null,
-      painLevel: null,
-      notes: 'twisted',
+      registrationId: null,
+      hospitalId: 'h1',
+      hospitalName: null,
+      recordedByStaffId: 's1',
+      recordedByAssignmentId: null,
+      recordedByName: 'Nurse A',
+      source: 'NURSE_STATION',
+      temperatureCelsius: null,
+      heartRateBpm: null,
+      respiratoryRateBpm: null,
+      systolicBpMmHg: null,
+      diastolicBpMmHg: null,
+      spo2Percent: null,
+      bloodGlucoseMgDl: null,
+      weightKg: null,
+      heightCm: null,
+      headCircumferenceCm: null,
+      bodyPosition: null,
+      notes: null,
+      clinicallySignificant: false,
       recordedAt: '2026-04-15T00:42:15',
       createdAt: '2026-04-15T00:42:15',
+      updatedAt: null,
+    };
+
+    const vitalWithOnlyNotes: VitalSignResponse = {
+      ...emptyVital,
+      id: 'v1',
+      notes: 'twisted',
     };
 
     const vitalWithMetrics: VitalSignResponse = {
+      ...emptyVital,
       id: 'v2',
-      patientId: 'p1',
-      staffId: 's1',
-      staffName: 'Nurse A',
-      heartRate: 72,
-      systolicBp: 120,
-      diastolicBp: 80,
-      temperature: 36.5,
-      respiratoryRate: 16,
-      oxygenSaturation: 98,
-      weight: 70,
-      height: 175,
-      painLevel: 2,
+      heartRateBpm: 72,
+      systolicBpMmHg: 120,
+      diastolicBpMmHg: 80,
+      temperatureCelsius: 36.5,
+      respiratoryRateBpm: 16,
+      spo2Percent: 98,
+      weightKg: 70,
+      heightCm: 175,
+      headCircumferenceCm: null,
       notes: 'Normal vitals',
       recordedAt: '2026-04-15T01:00:00',
       createdAt: '2026-04-15T01:00:00',
@@ -242,6 +262,52 @@ describe('PatientDetailComponent', () => {
 
       const empty = fixture.nativeElement.querySelector('.empty-state');
       expect(empty).toBeTruthy();
+    });
+  });
+
+  describe('Growth tab', () => {
+    const clinicalRoles = ['ROLE_NURSE'];
+
+    function grantClinicalRole(): void {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+        roles.some((r) => clinicalRoles.includes(r)),
+      );
+    }
+
+    it('hides the tab for an adult patient even with a clinical role', () => {
+      grantClinicalRole();
+      fixture.detectChanges(); // mockPatient is born 1998 — an adult
+
+      expect(component.showGrowthTab()).toBeFalse();
+      const btn = fixture.nativeElement.querySelector('[data-testid="growth-tab-button"]');
+      expect(btn).toBeNull();
+    });
+
+    it('shows the tab for a pediatric patient and renders the chart component', () => {
+      grantClinicalRole();
+      const child = { ...mockPatient, dateOfBirth: '2024-06-01' };
+      patientServiceSpy.getById.and.returnValue(of(child));
+      fixture.detectChanges();
+
+      expect(component.showGrowthTab()).toBeTrue();
+      const btn = fixture.nativeElement.querySelector('[data-testid="growth-tab-button"]');
+      expect(btn).toBeTruthy();
+
+      component.setTab('growth');
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('app-growth-chart-tab')).toBeTruthy();
+      expect(vitalServiceSpy.getGrowthChart).toHaveBeenCalledWith('p1');
+    });
+
+    it('stays hidden for a pediatric patient without a backend-authorized role', () => {
+      // canViewGrowth mirrors GrowthChartController's @PreAuthorize list, not
+      // the 'Update Vital Signs' write permission the vitals tab uses.
+      roleContextSpy.hasAnyActiveRole.and.returnValue(false);
+      const child = { ...mockPatient, dateOfBirth: '2024-06-01' };
+      patientServiceSpy.getById.and.returnValue(of(child));
+      fixture.detectChanges();
+
+      expect(component.showGrowthTab()).toBeFalse();
     });
   });
 });

@@ -1,0 +1,211 @@
+<div class="growth-tab">
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'GROWTH.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && error()) {
+    <div class="error-state" data-testid="growth-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ error() }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'GROWTH.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+    @if (allPoints().length === 0) {
+      <div class="empty-state" data-testid="growth-empty">
+        <span class="material-symbols-outlined">monitoring</span>
+        <p>{{ 'GROWTH.NO_DATA' | translate }}</p>
+        <p class="hint">{{ 'GROWTH.NO_DATA_HINT' | translate }}</p>
+      </div>
+    }
+
+    @if (allPoints().length > 0) {
+      <div
+        class="metric-switch"
+        role="group"
+        [attr.aria-label]="'GROWTH.METRIC_SWITCH' | translate"
+      >
+        <button
+          type="button"
+          class="metric-btn"
+          data-testid="metric-weight"
+          [class.active]="metric() === 'weight'"
+          (click)="setMetric('weight')"
+        >
+          {{ 'GROWTH.METRIC_WEIGHT' | translate }}
+          <span class="count">{{ metricCounts().weight }}</span>
+        </button>
+        <button
+          type="button"
+          class="metric-btn"
+          data-testid="metric-height"
+          [class.active]="metric() === 'height'"
+          (click)="setMetric('height')"
+        >
+          {{ 'GROWTH.METRIC_HEIGHT' | translate }}
+          <span class="count">{{ metricCounts().height }}</span>
+        </button>
+        <button
+          type="button"
+          class="metric-btn"
+          data-testid="metric-head"
+          [class.active]="metric() === 'headCircumference'"
+          (click)="setMetric('headCircumference')"
+        >
+          {{ 'GROWTH.METRIC_HEAD_CIRCUMFERENCE' | translate }}
+          <span class="count">{{ metricCounts().headCircumference }}</span>
+        </button>
+      </div>
+
+      @if (chartModel(); as model) {
+        <figure class="growth-figure">
+          <svg
+            [attr.viewBox]="'0 0 ' + width + ' ' + height"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            focusable="false"
+            [attr.aria-label]="ariaLabel()"
+          >
+            <!-- grid -->
+            @for (tick of model.xTicks; track tick.label) {
+              <line
+                [attr.x1]="tick.x"
+                [attr.y1]="padTop"
+                [attr.x2]="tick.x"
+                [attr.y2]="height - padBottom"
+                stroke="#e5e7eb"
+                stroke-width="1"
+              />
+              <text
+                [attr.x]="tick.x"
+                [attr.y]="height - padBottom + 14"
+                text-anchor="middle"
+                class="axis-text"
+              >
+                {{ tick.label }}
+              </text>
+            }
+            @for (tick of model.yTicks; track tick.label) {
+              <line
+                [attr.x1]="padLeft"
+                [attr.y1]="tick.y"
+                [attr.x2]="width - padRight"
+                [attr.y2]="tick.y"
+                stroke="#e5e7eb"
+                stroke-width="1"
+              />
+              <text
+                [attr.x]="padLeft - 6"
+                [attr.y]="tick.y + 3"
+                text-anchor="end"
+                class="axis-text"
+              >
+                {{ tick.label }}
+              </text>
+            }
+
+            <!-- trajectory -->
+            @if (model.points.length > 1) {
+              <polyline
+                [attr.points]="model.polyline"
+                fill="none"
+                stroke="#0f766e"
+                stroke-width="2"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+            }
+            @for (p of model.points; track $index) {
+              @if (p.delivery) {
+                <circle
+                  [attr.cx]="p.x"
+                  [attr.cy]="p.y"
+                  r="4"
+                  fill="#fff"
+                  stroke="#b45309"
+                  stroke-width="2"
+                  class="delivery-point"
+                  data-testid="delivery-point"
+                />
+              } @else {
+                <circle [attr.cx]="p.x" [attr.cy]="p.y" r="3.5" fill="#0f766e" />
+              }
+            }
+
+            <!-- axis titles -->
+            <text
+              [attr.x]="width / 2"
+              [attr.y]="height - 4"
+              text-anchor="middle"
+              class="axis-title"
+            >
+              {{ (model.monthsMode ? 'GROWTH.X_AXIS_MONTHS' : 'GROWTH.X_AXIS_YEARS') | translate }}
+            </text>
+            <text
+              [attr.x]="12"
+              [attr.y]="height / 2"
+              text-anchor="middle"
+              class="axis-title"
+              [attr.transform]="'rotate(-90 12 ' + height / 2 + ')'"
+            >
+              {{ metricLabel(metric()) }} ({{ metricUnit(metric()) }})
+            </text>
+          </svg>
+          <figcaption class="growth-legend">
+            <span class="legend-item"
+              ><span class="swatch swatch-series"></span>{{ metricLabel(metric()) }}</span
+            >
+            @if (hasBirthSeed()) {
+              <span class="legend-item"
+                ><span class="swatch swatch-delivery"></span
+                >{{ 'GROWTH.SOURCE_DELIVERY' | translate }}</span
+              >
+            }
+          </figcaption>
+        </figure>
+      } @else {
+        <p class="no-metric-points" data-testid="no-metric-points">
+          {{ 'GROWTH.NO_METRIC_POINTS' | translate }}
+        </p>
+      }
+
+      <p class="percentiles-note">
+        <span class="material-symbols-outlined">info</span>
+        {{ 'GROWTH.PERCENTILES_DEFERRED' | translate }}
+      </p>
+
+      <div class="table-wrap">
+        <table class="growth-table" data-testid="growth-table">
+          <thead>
+            <tr>
+              <th>{{ 'GROWTH.COL_DATE' | translate }}</th>
+              <th>{{ 'GROWTH.COL_AGE' | translate }}</th>
+              <th>{{ 'GROWTH.COL_WEIGHT' | translate }}</th>
+              <th>{{ 'GROWTH.COL_HEIGHT' | translate }}</th>
+              <th>{{ 'GROWTH.COL_HEAD_CIRCUMFERENCE' | translate }}</th>
+              <th>{{ 'GROWTH.COL_SOURCE' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of allPoints(); track $index) {
+              <tr>
+                <td>{{ p.recordedAt | date: 'mediumDate' }}</td>
+                <td>{{ formatAge(p.ageDays) }}</td>
+                <td>{{ formatMeasure(p.weightKg, 'kg') }}</td>
+                <td>{{ formatMeasure(p.heightCm, 'cm') }}</td>
+                <td>{{ formatMeasure(p.headCircumferenceCm, 'cm') }}</td>
+                <td>{{ sourceLabel(p.source) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

@@ -3148,7 +3148,9 @@
       "DIASTOLIC": "e.g. 80",
       "SPO2": "e.g. 98",
       "GLUCOSE": "e.g. 100",
-      "WEIGHT": "e.g. 70.5"
+      "WEIGHT": "e.g. 70.5",
+      "HEIGHT": "e.g. 74.5",
+      "HEAD_CIRCUMFERENCE": "e.g. 44.2"
     },
     "TOAST": {
       "VITALS_LOAD_FAILED": "Failed to load vitals",
@@ -3185,7 +3187,8 @@
     "HANDOFFS_PENDING": "Pending",
     "HANDOFFS_COMPLETED": "Completed",
     "NO_COMPLETED_HANDOFFS": "No completed handoffs yet",
-    "HANDOFF_COMPLETED_BY": "Completed by"
+    "HANDOFF_COMPLETED_BY": "Completed by",
+    "HEAD_CIRCUMFERENCE": "Head circumference"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -3442,7 +3445,9 @@
     "VITALS": "Vitals",
     "VITALS_TITLE": "Vital signs",
     "WEIGHT": "Weight",
-    "ZIP_CODE": "Zip Code"
+    "ZIP_CODE": "Zip Code",
+    "HEAD_CIRCUMFERENCE": "Head circumference",
+    "BLOOD_GLUCOSE": "Blood glucose"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7422,5 +7427,33 @@
     "REVOKED_TOAST": "Directive revoked.",
     "REVOKE_ERROR": "Could not revoke the directive.",
     "LAST_REVIEWED": "reviewed"
+  },
+  "GROWTH": {
+    "TAB": "Growth",
+    "TAB_TITLE": "Growth chart — weight, height and head circumference over age",
+    "LOADING": "Loading growth data…",
+    "LOAD_FAILED": "Failed to load growth data",
+    "RETRY": "Retry",
+    "NO_DATA": "No growth measurements recorded yet",
+    "NO_DATA_HINT": "Weight, height and head circumference captured with vitals will appear here.",
+    "METRIC_SWITCH": "Growth metric",
+    "METRIC_WEIGHT": "Weight",
+    "METRIC_HEIGHT": "Height",
+    "METRIC_HEAD_CIRCUMFERENCE": "Head circumference",
+    "NO_METRIC_POINTS": "No measurements for this metric yet.",
+    "CHART_ARIA": "Growth chart: {{count}} {{metric}} measurements over age",
+    "X_AXIS_MONTHS": "Age (months)",
+    "X_AXIS_YEARS": "Age (years)",
+    "SOURCE_DELIVERY": "Birth weight (delivery record)",
+    "PERCENTILES_DEFERRED": "WHO percentile curves are not shown yet: reference data must be imported from a verified source and clinically approved before it can be overlaid.",
+    "COL_DATE": "Date",
+    "COL_AGE": "Age",
+    "COL_WEIGHT": "Weight",
+    "COL_HEIGHT": "Height",
+    "COL_HEAD_CIRCUMFERENCE": "Head circ.",
+    "COL_SOURCE": "Source",
+    "AGE_DAYS": "{{days}} d",
+    "AGE_MONTHS": "{{months}} mo",
+    "AGE_YEARS_MONTHS": "{{years}} y {{months}} mo"
   }
 }

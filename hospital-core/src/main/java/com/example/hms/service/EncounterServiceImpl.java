@@ -1343,6 +1343,9 @@ public class EncounterServiceImpl implements EncounterService {
                 .diastolicBpMmHg(req.getDiastolicBpMmHg())
                 .spo2Percent(req.getSpo2Percent())
                 .weightKg(req.getWeightKg())
+                // heightCm was accepted from the triage form and silently dropped
+                // until V122 gave it a column — the field's first reader.
+                .heightCm(req.getHeightCm())
                 .notes(req.getPainScale() != null ? "Pain scale: " + req.getPainScale() : null)
                 .build();
     }

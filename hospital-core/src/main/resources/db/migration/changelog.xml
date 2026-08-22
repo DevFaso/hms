@@ -1825,4 +1825,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V122 — height_cm + head_circumference_cm on patient_vital_signs
+         (P3 item 18, growth charts). weight_kg has existed since V1 with
+         no other anthropometric; triage-entered height was accepted and
+         silently discarded. Additive, nullable, idempotent. No DO block,
+         so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V122-vitals-anthropometrics" author="hms-team" runOnChange="false">
+        <sqlFile path="V122__vitals_anthropometrics.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

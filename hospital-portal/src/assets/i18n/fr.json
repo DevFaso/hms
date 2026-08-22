@@ -3148,7 +3148,9 @@
       "DIASTOLIC": "ex. 80",
       "SPO2": "ex. 98",
       "GLUCOSE": "ex. 100",
-      "WEIGHT": "ex. 70,5"
+      "WEIGHT": "ex. 70,5",
+      "HEIGHT": "ex. 74,5",
+      "HEAD_CIRCUMFERENCE": "ex. 44,2"
     },
     "TOAST": {
       "VITALS_LOAD_FAILED": "Échec du chargement des signes vitaux",
@@ -3185,7 +3187,8 @@
     "HANDOFFS_PENDING": "En attente",
     "HANDOFFS_COMPLETED": "Terminées",
     "NO_COMPLETED_HANDOFFS": "Aucune transmission terminée pour l’instant",
-    "HANDOFF_COMPLETED_BY": "Terminée par"
+    "HANDOFF_COMPLETED_BY": "Terminée par",
+    "HEAD_CIRCUMFERENCE": "Périmètre crânien"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -3442,7 +3445,9 @@
     "VITALS": "Vitals",
     "VITALS_TITLE": "Vital signs",
     "WEIGHT": "Weight",
-    "ZIP_CODE": "Zip Code"
+    "ZIP_CODE": "Zip Code",
+    "HEAD_CIRCUMFERENCE": "Périmètre crânien",
+    "BLOOD_GLUCOSE": "Glycémie"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7422,5 +7427,33 @@
     "REVOKED_TOAST": "Directive révoquée.",
     "REVOKE_ERROR": "Impossible de révoquer la directive.",
     "LAST_REVIEWED": "révisée"
+  },
+  "GROWTH": {
+    "TAB": "Croissance",
+    "TAB_TITLE": "Courbe de croissance — poids, taille et périmètre crânien selon l'âge",
+    "LOADING": "Chargement des données de croissance…",
+    "LOAD_FAILED": "Échec du chargement des données de croissance",
+    "RETRY": "Réessayer",
+    "NO_DATA": "Aucune mesure de croissance enregistrée pour le moment",
+    "NO_DATA_HINT": "Le poids, la taille et le périmètre crânien saisis avec les signes vitaux apparaîtront ici.",
+    "METRIC_SWITCH": "Mesure de croissance",
+    "METRIC_WEIGHT": "Poids",
+    "METRIC_HEIGHT": "Taille",
+    "METRIC_HEAD_CIRCUMFERENCE": "Périmètre crânien",
+    "NO_METRIC_POINTS": "Aucune mesure pour cet indicateur pour le moment.",
+    "CHART_ARIA": "Courbe de croissance : {{count}} mesures ({{metric}}) selon l'âge",
+    "X_AXIS_MONTHS": "Âge (mois)",
+    "X_AXIS_YEARS": "Âge (années)",
+    "SOURCE_DELIVERY": "Poids de naissance (dossier d'accouchement)",
+    "PERCENTILES_DEFERRED": "Les courbes de percentiles OMS ne sont pas encore affichées : les données de référence doivent être importées d'une source vérifiée et validées cliniquement avant d'être superposées.",
+    "COL_DATE": "Date",
+    "COL_AGE": "Âge",
+    "COL_WEIGHT": "Poids",
+    "COL_HEIGHT": "Taille",
+    "COL_HEAD_CIRCUMFERENCE": "Pér. crânien",
+    "COL_SOURCE": "Source",
+    "AGE_DAYS": "{{days}} j",
+    "AGE_MONTHS": "{{months}} mois",
+    "AGE_YEARS_MONTHS": "{{years}} a {{months}} mois"
   }
 }

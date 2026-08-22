@@ -54,9 +54,19 @@ public class PatientVitalSignRequestDTO {
     @Max(800)
     private Integer bloodGlucoseMgDl;
 
-    @DecimalMin(value = "1.0")
+    // Floor at 0.2 kg, not 1.0 — sub-1kg NICU neonates are real patients and the
+    // old floor rejected their weights outright (growth charts start at birth).
+    @DecimalMin(value = "0.2")
     @DecimalMax(value = "400.0")
     private Double weightKg;
+
+    @DecimalMin(value = "20.0")
+    @DecimalMax(value = "250.0")
+    private Double heightCm;
+
+    @DecimalMin(value = "15.0")
+    @DecimalMax(value = "70.0")
+    private Double headCircumferenceCm;
 
     @Size(max = 40)
     private String bodyPosition;
