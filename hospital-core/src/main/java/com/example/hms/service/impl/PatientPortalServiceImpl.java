@@ -154,6 +154,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // Phase 2 additions
     private final AppointmentRepository appointmentRepository;
     private final AppointmentMapper appointmentMapper;
+    private final com.example.hms.repository.PatientTreatmentConsentRepository treatmentConsentRepository;
+    private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
     private final PrescriptionRepository prescriptionRepository;
     private final RefillRequestRepository refillRequestRepository;
     private final DischargeSummaryService dischargeSummaryService;
@@ -1703,6 +1705,32 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     questionnaireResponseRepository.save(qr);
                     qrCount++;
                 }
+            }
+        }
+
+        // 2b) Persist the consent the form has always collected (P3 #21).
+        // The portal REQUIRES the patient to tick consentAcknowledged before
+        // submit, and until V126 the backend silently discarded the value —
+        // patients attested consent that was recorded nowhere. Idempotent
+        // per appointment; best effort so a consent hiccup never blocks the
+        // pre-check-in itself.
+        if (Boolean.TRUE.equals(dto.getConsentAcknowledged()) && appointment.getHospital() != null) {
+            try {
+                if (!treatmentConsentRepository.existsByAppointment_IdAndStatus(
+                        appointment.getId(), com.example.hms.enums.TreatmentConsentStatus.ACTIVE)) {
+                    UUID patientUserId = patient.getUser() != null ? patient.getUser().getId() : null;
+                    treatmentConsentService.record(patientId, appointment.getHospital().getId(),
+                        patientUserId,
+                        com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN,
+                        com.example.hms.payload.dto.TreatmentConsentRequestDTO.builder()
+                            .method(com.example.hms.enums.TreatmentConsentMethod.ELECTRONIC)
+                            .signedName(patient.getFullName())
+                            .appointmentId(appointment.getId())
+                            .build());
+                }
+            } catch (RuntimeException ex) {
+                log.warn("Consent-to-treat recording failed during pre-check-in of appointment {}: {}",
+                    appointment.getId(), ex.getMessage());
             }
         }
 

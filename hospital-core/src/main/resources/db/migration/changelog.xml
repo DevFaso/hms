@@ -1879,4 +1879,18 @@
                  splitStatements="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V126 — registration extras (P3 item 21): patient photo columns
+         (path + type; binary streamed through an authenticated endpoint,
+         never the permitAll /uploads/** handler), consent-to-treat
+         records (the pre-check-in consent checkbox was write-only), and
+         guarantor accounts. New tables with REAL FKs. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V126-registration-extras" author="hms-team" runOnChange="false">
+        <sqlFile path="V126__registration_extras.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

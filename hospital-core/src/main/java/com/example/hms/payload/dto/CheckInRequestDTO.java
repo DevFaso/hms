@@ -41,4 +41,19 @@ public class CheckInRequestDTO {
 
     /** Optional notes entered by the receptionist at check-in. */
     private String notes;
+
+    /* ── Consent-to-treat capture (P3 #21). RECORDED, never gating: the
+       check-in proceeds either way, but unlike the identity/insurance
+       attestations above (which survive only inside an audit-log string),
+       consent lands as a queryable clinical.patient_treatment_consents
+       row. ─────────────────────────────────────────────────────────────── */
+
+    /** When TRUE, a consent-to-treat record is created for this visit. */
+    private Boolean consentObtained;
+
+    /** How the consent was captured; defaults to ELECTRONIC when omitted. */
+    private com.example.hms.enums.TreatmentConsentMethod consentMethod;
+
+    /** The name as signed/typed at the desk. */
+    private String consentSignedName;
 }

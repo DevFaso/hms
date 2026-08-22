@@ -83,6 +83,8 @@ class ReceptionServiceImplTest {
     @Mock private DepartmentRepository departmentRepo;
     @Mock private StaffRepository staffRepo;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.UserRepository userRepo;
+    @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -1075,6 +1077,105 @@ class ReceptionServiceImplTest {
             verify(appointmentRepo).save(any(Appointment.class));
             verify(encounterRepo).save(any(Encounter.class));
             verify(auditEventLogService).logEvent(any());
+            // No consent fields on the request — nothing recorded (P3 #21).
+            verify(treatmentConsentService, org.mockito.Mockito.never())
+                .record(any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("consentObtained=true records a consent-to-treat row (P3 #21)")
+        void checkInRecordsConsentWhenObtained() {
+            UUID appointmentId = UUID.randomUUID();
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepo.findByUsername("receptionist1")).thenReturn(Optional.empty());
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .consentSignedName("John Doe")
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getAppointmentStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            // Hoisted: patient/hospital are mocks, and calling their getters
+            // between eq() registrations corrupts the matcher stack.
+            UUID expectedPatientId = patient.getId();
+            UUID expectedHospitalId = hospital.getId();
+            verify(treatmentConsentService).record(
+                org.mockito.ArgumentMatchers.eq(expectedPatientId),
+                org.mockito.ArgumentMatchers.eq(expectedHospitalId),
+                org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.eq(com.example.hms.enums.TreatmentConsentSource.CHECK_IN),
+                org.mockito.ArgumentMatchers.argThat(req ->
+                    "John Doe".equals(req.getSignedName())
+                        && req.getAppointmentId().equals(appointmentId)));
+        }
+
+        @Test
+        @DisplayName("a consent-recording failure never rolls back the check-in (P3 #21)")
+        void consentFailureDoesNotBlockCheckIn() {
+            UUID appointmentId = UUID.randomUUID();
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepo.findByUsername(any())).thenReturn(Optional.empty());
+            when(treatmentConsentService.record(any(), any(), any(), any(), any()))
+                .thenThrow(new IllegalStateException("consent table unavailable"));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .consentObtained(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getAppointmentStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
         }
 
         @Test

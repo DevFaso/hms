@@ -23,7 +23,12 @@
 
     <!-- Header -->
     <div class="detail-header">
-      <div class="patient-avatar-lg">{{ getInitials(p) }}</div>
+      <app-patient-photo
+        [patientId]="p.id"
+        [photoUpdatedAt]="p.photoUpdatedAt ?? null"
+        [initials]="getInitials(p)"
+        [canEdit]="canEditPhoto()"
+      />
       <div class="header-info">
         <h1>{{ p.firstName }} {{ p.lastName }}</h1>
         <div class="header-meta">

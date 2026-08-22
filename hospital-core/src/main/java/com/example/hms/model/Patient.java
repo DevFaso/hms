@@ -169,6 +169,20 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "code_status", length = 30)
     private String codeStatus;
 
+    /* ── Patient photo (V126). A storage path, DELIBERATELY not a public
+       URL: /uploads/** is served permitAll, and a patient photo is PHI —
+       the binary is streamed through the authenticated
+       GET /patients/{id}/photo endpoint instead. ─────────────────────── */
+
+    @Column(name = "photo_file_path", length = 1024)
+    private String photoFilePath;
+
+    @Column(name = "photo_content_type", length = 100)
+    private String photoContentType;
+
+    @Column(name = "photo_updated_at")
+    private java.time.LocalDateTime photoUpdatedAt;
+
     @Column(name = "organization_id")
     private UUID organizationId;
 
