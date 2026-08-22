@@ -81,6 +81,8 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final DepartmentRepository departmentRepo;
     private final StaffRepository staffRepo;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.UserRepository userRepo;
+    private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
 
     // ── MVP 9: Dashboard Summary ─────────────────────────────────────────────
 
@@ -735,6 +737,29 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
 
         encounterRepo.save(encounter);
+
+        // 3b. Consent-to-treat capture (P3 #21) — recorded, never gating.
+        // Best effort by policy: a consent-recording failure must not roll
+        // back the check-in the patient is standing at the desk for.
+        if (Boolean.TRUE.equals(request.getConsentObtained())) {
+            try {
+                UUID actorUserId = userRepo.findByUsername(actorUsername)
+                    .map(u -> u.getId()).orElse(null);
+                treatmentConsentService.record(patient.getId(), hospital.getId(), actorUserId,
+                    com.example.hms.enums.TreatmentConsentSource.CHECK_IN,
+                    com.example.hms.payload.dto.TreatmentConsentRequestDTO.builder()
+                        .method(request.getConsentMethod() != null
+                            ? request.getConsentMethod()
+                            : com.example.hms.enums.TreatmentConsentMethod.ELECTRONIC)
+                        .signedName(request.getConsentSignedName())
+                        .appointmentId(appointment.getId())
+                        .encounterId(encounter.getId())
+                        .build());
+            } catch (RuntimeException ex) {
+                log.warn("Consent-to-treat recording failed during check-in of appointment {}: {}",
+                    appointment.getId(), ex.getMessage());
+            }
+        }
 
         // 4. Audit trail
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()

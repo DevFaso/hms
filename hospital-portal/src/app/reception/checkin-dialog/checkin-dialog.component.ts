@@ -30,6 +30,10 @@ export class CheckinDialogComponent {
   copayAmount = signal<number | null>(null);
   identityConfirmed = signal(false);
   insuranceVerified = signal(false);
+  /* Consent-to-treat (P3 #21): recorded, never gating — the submit does not
+     require it, unlike identity confirmation. */
+  consentObtained = signal(false);
+  consentSignedName = signal('');
   notes = signal('');
   saving = signal(false);
 
@@ -58,6 +62,11 @@ export class CheckinDialogComponent {
       insuranceVerified: this.insuranceVerified(),
       notes: this.notes() || null,
     };
+    if (this.consentObtained()) {
+      request.consentObtained = true;
+      request.consentMethod = 'ELECTRONIC';
+      request.consentSignedName = this.consentSignedName().trim() || null;
+    }
 
     this.receptionService.checkInPatient(request).subscribe({
       next: (response) => {

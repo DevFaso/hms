@@ -102,6 +102,10 @@ public class PatientResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    /** Non-null iff the patient has a photo; the binary comes from the
+     *  authenticated GET /patients/{id}/photo endpoint (V126). */
+    private LocalDateTime photoUpdatedAt;
+
     @Getter
     @Setter
     @NoArgsConstructor

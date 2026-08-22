@@ -24,6 +24,7 @@ import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
 import { GrowthChartTabComponent } from './growth-chart/growth-chart-tab.component';
 import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.component';
 import { MicroTabComponent } from './micro/micro-tab.component';
+import { PatientPhotoComponent } from './patient-photo/patient-photo.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
@@ -60,6 +61,7 @@ type TabKey =
     GrowthChartTabComponent,
     FluidBalanceTabComponent,
     MicroTabComponent,
+    PatientPhotoComponent,
     CoverageTabComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
@@ -174,6 +176,18 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_MIDWIFE',
       'ROLE_DOCTOR',
       'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** Mirrors PatientPhotoController.WRITE_ROLES exactly (P3 #21). */
+  canEditPhoto(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
       'ROLE_SUPER_ADMIN',
     ]);
   }

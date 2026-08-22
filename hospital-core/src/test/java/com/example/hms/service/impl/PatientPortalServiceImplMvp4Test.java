@@ -110,6 +110,8 @@ class PatientPortalServiceImplMvp4Test {
     @Mock private QuestionnaireRepository questionnaireRepository;
     @Mock private QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private QuestionnaireMapper questionnaireMapper;
+    @Mock private com.example.hms.repository.PatientTreatmentConsentRepository treatmentConsentRepository;
+    @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
 
     @InjectMocks private PatientPortalServiceImpl service;
     @Mock private Authentication auth;
@@ -324,6 +326,69 @@ class PatientPortalServiceImplMvp4Test {
 
             verify(appointmentRepository).save(appt);
             assertThat(appt.getPreCheckedIn()).isTrue();
+        }
+
+        @Test
+        @DisplayName("persists the consent the form always collected (P3 #21)")
+        void persistsConsentAcknowledged() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(treatmentConsentRepository.existsByAppointment_IdAndStatus(
+                    apptId, com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(false);
+
+            service.submitPreCheckIn(auth, buildDto(apptId));
+
+            // consentAcknowledged was accepted and DISCARDED until V126.
+            verify(treatmentConsentService).record(
+                    org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.eq(appt.getHospital().getId()),
+                    any(),
+                    org.mockito.ArgumentMatchers.eq(
+                            com.example.hms.enums.TreatmentConsentSource.PRE_CHECK_IN),
+                    org.mockito.ArgumentMatchers.argThat(req ->
+                            apptId.equals(req.getAppointmentId())
+                                    && req.getMethod() == com.example.hms.enums.TreatmentConsentMethod.ELECTRONIC));
+        }
+
+        @Test
+        @DisplayName("a consent-recording failure never blocks pre-check-in (P3 #21)")
+        void consentFailureDoesNotBlockPreCheckIn() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(treatmentConsentRepository.existsByAppointment_IdAndStatus(
+                    apptId, com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(false);
+            when(treatmentConsentService.record(any(), any(), any(), any(), any()))
+                    .thenThrow(new IllegalStateException("consent table unavailable"));
+
+            PreCheckInResponseDTO result = service.submitPreCheckIn(auth, buildDto(apptId));
+
+            assertThat(result.getPreCheckedIn()).isTrue();
+        }
+
+        @Test
+        @DisplayName("consent persistence is idempotent per appointment (P3 #21)")
+        void consentIdempotentPerAppointment() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(treatmentConsentRepository.existsByAppointment_IdAndStatus(
+                    apptId, com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(true);
+
+            service.submitPreCheckIn(auth, buildDto(apptId));
+
+            verify(treatmentConsentService, org.mockito.Mockito.never())
+                    .record(any(), any(), any(), any(), any());
         }
 
         @Test
