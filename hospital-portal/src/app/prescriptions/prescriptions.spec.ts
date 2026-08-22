@@ -166,6 +166,7 @@ describe('PrescriptionsComponent — signing', () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'sign',
+      'cosign',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -239,6 +240,32 @@ describe('PrescriptionsComponent — signing', () => {
 
     expect(fixture.nativeElement.querySelector('[data-testid="rx-sign-rx-1"]')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('[data-testid="rx-sign-rx-2"]')).toBeNull();
+  });
+
+  it('does not offer TRANSMITTED in the editable status list', () => {
+    // A dispensable state nothing in the backend ever writes — the only
+    // writer it ever had was the client-asserted-status hole, now refused.
+    expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('TRANSMITTED');
+  });
+
+  it('offers co-signing only while the declared requirement is unmet', () => {
+    const base = rx('a', 'DRAFT');
+    expect(component.canCosign({ ...base, requiresCosign: true })).toBeTrue();
+    expect(
+      component.canCosign({ ...base, requiresCosign: true, cosignedAt: '2026-08-21T10:00:00' }),
+    ).toBeFalse();
+    expect(component.canCosign(base)).toBeFalse();
+    expect(component.canCosign({ ...rx('b', 'SIGNED'), requiresCosign: true })).toBeFalse();
+  });
+
+  it('co-signs through the ceremony endpoint and reloads', () => {
+    prescriptionService.cosign.and.returnValue(of(rx('rx-1', 'DRAFT')));
+
+    component.cosignPrescription({ ...rx('rx-1', 'DRAFT'), requiresCosign: true });
+
+    expect(prescriptionService.cosign).toHaveBeenCalledWith('rx-1');
+    expect(toast.success).toHaveBeenCalled();
+    expect(component.signingId()).toBeNull();
   });
 
   it('signs through the ceremony endpoint and reloads', () => {

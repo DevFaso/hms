@@ -57,6 +57,17 @@ public class PrescriptionResponseDTO {
     private java.time.LocalDateTime signedAt;
     private java.util.UUID signedByStaffId;
 
+    /**
+     * Safeguard state (P2 #15), surfaced so a refused sign or dispense is
+     * explicable: the response says WHICH safeguard is declared and whether it
+     * has been satisfied, instead of leaving the caller to guess.
+     */
+    private boolean controlledSubstance;
+    private boolean requiresCosign;
+    private java.time.LocalDateTime twoFactorVerifiedAt;
+    private java.time.LocalDateTime cosignedAt;
+    private java.util.UUID cosignedByStaffId;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

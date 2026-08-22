@@ -34,6 +34,17 @@ export interface PrescriptionResponse {
    * re-run the rule engine.
    */
   cdsAdvisories?: CdsCard[];
+  /** Safeguard state (P2 #15) — why a sign/dispense was refused, made visible. */
+  controlledSubstance?: boolean;
+  requiresCosign?: boolean;
+  twoFactorVerifiedAt?: string | null;
+  cosignedAt?: string | null;
+  cosignedByStaffId?: string | null;
+  /** Signature evidence (P2 #16). Null on a SIGNED row = signed before V118. */
+  signatureValue?: string | null;
+  signatureAlgorithm?: string | null;
+  signedAt?: string | null;
+  signedByStaffId?: string | null;
 }
 
 export type PrescriptionStatusType =
@@ -57,6 +68,14 @@ export interface PrescriptionRequest {
   notes?: string;
   status?: PrescriptionStatusType;
   forceOverride?: boolean;
+  /**
+   * Safeguard flags (P2 #15). Set-only: the backend refuses clearing a flag by
+   * edit. controlledSubstance is deliberately not offered by the form yet —
+   * the two-factor transport is an open decision, so flagging it would make
+   * the prescription unsignable; requiresCosign is fully usable.
+   */
+  controlledSubstance?: boolean;
+  requiresCosign?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -104,6 +123,14 @@ export class PrescriptionService {
    */
   sign(id: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, {});
+  }
+
+  /**
+   * Co-sign ceremony (P2 #15): a second prescriber puts their judgment on
+   * record. The backend refuses the prescription's own prescriber.
+   */
+  cosign(id: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/cosign`, {});
   }
 
   dispatchSms(

@@ -79,6 +79,10 @@ class DispenseServiceImplTest {
     @Mock private PharmacyServiceSupport support;
     @Mock private CdsCheckService cdsCheckService;
 
+    // Real, not mocked: the guard is a pure rule with its own test.
+    @org.mockito.Spy
+    private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
+
     @InjectMocks
     private DispenseServiceImpl service;
 
