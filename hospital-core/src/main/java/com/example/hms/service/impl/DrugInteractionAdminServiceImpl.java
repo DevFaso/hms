@@ -27,8 +27,13 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     @Override
     @Transactional(readOnly = true)
     public List<DrugInteractionDTO> list(InteractionSeverity severity, boolean activeOnly) {
+        // activeOnly=false means "include retired rows", never "retired rows
+        // only". The old severity branch passed activeOnly into the ACTIVE
+        // column predicate, so ?severity=MAJOR&activeOnly=false returned only
+        // the INACTIVE majors — the one query an admin needs to find a row to
+        // reactivate silently excluded the active ones.
         List<DrugInteraction> rows = severity != null
-            ? repository.findBySeverityAndActiveOrderByDrug1NameAsc(severity, activeOnly)
+            ? repository.findBySeverityOrderByDrug1NameAsc(severity)
             : repository.findAll();
         return rows.stream()
             .filter(row -> !activeOnly || row.isActive())
@@ -48,10 +53,14 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
         validate(request);
         // Order-insensitive: an interaction is a property of the PAIR, and
         // storing A+B and B+A separately means one of them eventually drifts.
-        repository.findInteractionBetween(request.getDrug1Code(), request.getDrug2Code())
+        // The lookup must ignore the active flag — a retired pair re-created
+        // as a new row would leave two rows for one pair.
+        repository.findAnyInteractionBetween(request.getDrug1Code(), request.getDrug2Code())
             .ifPresent(existing -> {
-                throw new BusinessException(
-                    "An interaction between these two drugs already exists; update it instead.");
+                throw new BusinessException(existing.isActive()
+                    ? "An interaction between these two drugs already exists; update it instead."
+                    : "An interaction between these two drugs exists but was retired; "
+                        + "reactivate it instead of re-creating it.");
             });
 
         DrugInteraction entity = new DrugInteraction();
@@ -76,6 +85,15 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
         DrugInteraction entity = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("Drug interaction not found with ID: " + id));
         entity.setActive(false);
+        return mapper.toDTO(repository.save(entity));
+    }
+
+    @Override
+    @Transactional
+    public DrugInteractionDTO reactivate(UUID id) {
+        DrugInteraction entity = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Drug interaction not found with ID: " + id));
+        entity.setActive(true);
         return mapper.toDTO(repository.save(entity));
     }
 
@@ -109,9 +127,13 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
         entity.setMechanism(request.getMechanism());
         entity.setClinicalEffects(request.getClinicalEffects());
         entity.setMonitoringParameters(request.getMonitoringParameters());
+        entity.setMonitoringIntervalHours(request.getMonitoringIntervalHours());
         entity.setSourceDatabase(request.getSourceDatabase());
         entity.setEvidenceLevel(request.getEvidenceLevel());
         entity.setLiteratureReferences(request.getLiteratureReferences());
+        // Curation note — where a pharmacist records why a row was added,
+        // corrected or retired. Was unreachable through the write path.
+        entity.setNotes(request.getNotes());
 
         // Derived from severity so the three action flags cannot contradict it —
         // a CONTRAINDICATED pair that does not require avoidance is a data bug

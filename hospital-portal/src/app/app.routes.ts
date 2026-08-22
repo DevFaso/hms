@@ -983,6 +983,25 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
       },
+      // Drug-interaction KB curation (P2 #14). Roles mirror the backend
+      // READ_ROLES on /drug-interactions exactly; write controls are gated
+      // in-component to WRITE_ROLES (PHARMACIST/HOSPITAL_ADMIN/SUPER_ADMIN).
+      {
+        path: 'pharmacy/drug-interactions',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/drug-interactions').then((m) => m.DrugInteractionsComponent),
+      },
       {
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],

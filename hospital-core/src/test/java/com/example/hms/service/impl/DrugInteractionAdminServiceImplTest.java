@@ -44,7 +44,7 @@ class DrugInteractionAdminServiceImplTest {
     void setUp() {
         service = new DrugInteractionAdminServiceImpl(repository, new DrugInteractionMapper());
         when(repository.save(any(DrugInteraction.class))).thenAnswer(i -> i.getArgument(0));
-        when(repository.findInteractionBetween(anyString(), anyString())).thenReturn(Optional.empty());
+        when(repository.findAnyInteractionBetween(anyString(), anyString())).thenReturn(Optional.empty());
     }
 
     private DrugInteractionDTO valid() {
@@ -69,12 +69,30 @@ class DrugInteractionAdminServiceImplTest {
     void createRejectsADuplicatePairInEitherOrder() {
         // An interaction is a property of the PAIR. Storing A+B and B+A
         // separately means one of them eventually drifts out of step.
-        when(repository.findInteractionBetween(anyString(), anyString()))
-            .thenReturn(Optional.of(new DrugInteraction()));
+        DrugInteraction existing = new DrugInteraction();
+        existing.setActive(true);
+        when(repository.findAnyInteractionBetween(anyString(), anyString()))
+            .thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.create(valid()))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already exists");
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void createRefusesToShadowARetiredPairAndPointsAtReactivate() {
+        // The old guard used the active-filtered lookup, so a deactivated pair
+        // slipped past it and re-creating produced TWO rows for one pair — one
+        // inactive, one active — instead of a clean error.
+        DrugInteraction retired = new DrugInteraction();
+        retired.setActive(false);
+        when(repository.findAnyInteractionBetween(anyString(), anyString()))
+            .thenReturn(Optional.of(retired));
+
+        assertThatThrownBy(() -> service.create(valid()))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("reactivate");
         verify(repository, never()).save(any());
     }
 
@@ -143,5 +161,58 @@ class DrugInteractionAdminServiceImplTest {
 
         assertThat(entity.isActive()).isFalse();
         verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void reactivatePutsARetiredPairBackIntoEveryCheckingLayer() {
+        // Before this method existed, deactivation was a one-way door: every
+        // read hard-filters active = true and nothing ever set the flag back —
+        // platform-wide, since the KB has no tenant column.
+        UUID id = UUID.randomUUID();
+        DrugInteraction entity = new DrugInteraction();
+        entity.setId(id);
+        entity.setActive(false);
+        when(repository.findById(id)).thenReturn(Optional.of(entity));
+
+        DrugInteractionDTO dto = service.reactivate(id);
+
+        assertThat(entity.isActive()).isTrue();
+        assertThat(dto.isActive()).isTrue();
+    }
+
+    @Test
+    void includeRetiredMeansActivePlusRetired_neverRetiredOnly() {
+        // ?severity=MAJOR&activeOnly=false used to pass activeOnly into the
+        // ACTIVE column predicate, returning only the INACTIVE majors — the one
+        // query an admin needs to find a row to reactivate excluded every
+        // active one.
+        DrugInteraction active = new DrugInteraction();
+        active.setActive(true);
+        active.setSeverity(InteractionSeverity.MAJOR);
+        DrugInteraction retired = new DrugInteraction();
+        retired.setActive(false);
+        retired.setSeverity(InteractionSeverity.MAJOR);
+        when(repository.findBySeverityOrderByDrug1NameAsc(InteractionSeverity.MAJOR))
+            .thenReturn(java.util.List.of(active, retired));
+
+        assertThat(service.list(InteractionSeverity.MAJOR, false)).hasSize(2);
+        assertThat(service.list(InteractionSeverity.MAJOR, true)).hasSize(1);
+    }
+
+    @Test
+    void curationNoteAndMonitoringIntervalSurviveTheWritePath() {
+        // Both fields existed on the entity and the read side while the write
+        // path silently dropped them.
+        DrugInteractionDTO dto = valid();
+        dto.setNotes("Retired duplicate of the amiodarone set; see BNF 86.");
+        dto.setMonitoringIntervalHours(48);
+
+        service.create(dto);
+
+        org.mockito.ArgumentCaptor<DrugInteraction> captor =
+            org.mockito.ArgumentCaptor.forClass(DrugInteraction.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getNotes()).contains("BNF 86");
+        assertThat(captor.getValue().getMonitoringIntervalHours()).isEqualTo(48);
     }
 }
