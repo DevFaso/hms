@@ -241,6 +241,103 @@ class TreatmentConsentServiceImplTest {
     }
 
     @Test
+    void recordRequiresACaptureMethod() {
+        TreatmentConsentRequestDTO empty = TreatmentConsentRequestDTO.builder().build();
+
+        assertThatThrownBy(() -> service.record(patientId, hospitalId, null,
+            TreatmentConsentSource.MANUAL, empty))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("capture method");
+    }
+
+    @Test
+    void recordLinksAMatchingAppointment() {
+        Appointment appointment = new Appointment();
+        appointment.setId(UUID.randomUUID());
+        appointment.setPatient(patient);
+        appointment.setHospital(hospital);
+        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        TreatmentConsentRequestDTO request = electronic();
+        request.setAppointmentId(appointment.getId());
+
+        TreatmentConsentResponseDTO created =
+            service.record(patientId, hospitalId, null, TreatmentConsentSource.CHECK_IN, request);
+
+        assertThat(created.getAppointmentId()).isEqualTo(appointment.getId());
+    }
+
+    @Test
+    void appointmentOfAnotherHospitalIsRefused() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        Appointment appointment = new Appointment();
+        appointment.setId(UUID.randomUUID());
+        appointment.setPatient(patient);
+        appointment.setHospital(other);
+        when(appointmentRepository.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+        TreatmentConsentRequestDTO request = electronic();
+        request.setAppointmentId(appointment.getId());
+
+        assertThatThrownBy(() -> service.record(patientId, hospitalId, null,
+            TreatmentConsentSource.MANUAL, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("different hospital");
+    }
+
+    @Test
+    void recordLinksAMatchingEncounter() {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setPatient(patient);
+        encounter.setHospital(hospital);
+        when(encounterRepository.findById(encounter.getId())).thenReturn(Optional.of(encounter));
+        TreatmentConsentRequestDTO request = electronic();
+        request.setEncounterId(encounter.getId());
+
+        TreatmentConsentResponseDTO created =
+            service.record(patientId, hospitalId, null, TreatmentConsentSource.CHECK_IN, request);
+
+        assertThat(created.getEncounterId()).isEqualTo(encounter.getId());
+    }
+
+    @Test
+    void encounterOfAnotherPatientIsRefused() {
+        Patient other = Patient.builder().firstName("X").lastName("Y").build();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setPatient(other);
+        encounter.setHospital(hospital);
+        when(encounterRepository.findById(encounter.getId())).thenReturn(Optional.of(encounter));
+        TreatmentConsentRequestDTO request = electronic();
+        request.setEncounterId(encounter.getId());
+
+        assertThatThrownBy(() -> service.record(patientId, hospitalId, null,
+            TreatmentConsentSource.MANUAL, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("different patient");
+    }
+
+    @Test
+    void attributionResolvesTheRecordingStaffName() {
+        UUID actorUserId = UUID.randomUUID();
+        com.example.hms.model.User actorUser = new com.example.hms.model.User();
+        actorUser.setId(actorUserId);
+        actorUser.setFirstName("Fatou");
+        actorUser.setLastName("Zongo");
+        com.example.hms.model.Staff staff =
+            com.example.hms.model.Staff.builder().user(actorUser).build();
+        when(userRepository.findById(actorUserId)).thenReturn(Optional.of(actorUser));
+        when(staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId))
+            .thenReturn(Optional.of(staff));
+
+        TreatmentConsentResponseDTO created = service.record(patientId, hospitalId, actorUserId,
+            TreatmentConsentSource.MANUAL, electronic());
+
+        assertThat(created.getRecordedByName()).isEqualTo("Fatou Zongo");
+    }
+
+    @Test
     void hasActiveConsentDelegatesToTheRepository() {
         when(consentRepository.existsByPatient_IdAndHospital_IdAndStatus(
             patientId, hospitalId, TreatmentConsentStatus.ACTIVE)).thenReturn(true);

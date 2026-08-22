@@ -154,6 +154,62 @@ class PatientPhotoServiceImplTest {
     }
 
     @Test
+    void uploadRequiresAHospitalScope() {
+        MockMultipartFile file = jpeg("face.jpg", new byte[] {1});
+
+        assertThatThrownBy(() -> service.upload(patientId, null, file))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("active hospital");
+    }
+
+    @Test
+    void uploadRefusesAnEmptyFile() {
+        MockMultipartFile empty = jpeg("face.jpg", new byte[] {});
+
+        assertThatThrownBy(() -> service.upload(patientId, hospitalId, empty))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("photo file is required");
+    }
+
+    @Test
+    void uploadRefusesAnOversizedFile() {
+        MockMultipartFile big = jpeg("face.jpg", new byte[5 * 1024 * 1024 + 1]);
+
+        assertThatThrownBy(() -> service.upload(patientId, hospitalId, big))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("5 MB");
+    }
+
+    @Test
+    void uploadRefusesAFileWithoutAName() {
+        MockMultipartFile nameless =
+            new MockMultipartFile("file", null, "image/jpeg", new byte[] {1});
+
+        assertThatThrownBy(() -> service.upload(patientId, hospitalId, nameless))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Unsupported image type");
+    }
+
+    @Test
+    void deleteRequiresAHospitalScope() {
+        assertThatThrownBy(() -> service.delete(patientId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("active hospital");
+    }
+
+    @Test
+    void loadIs404WhenTheStoredFileVanishedFromDisk() throws Exception {
+        service.upload(patientId, hospitalId, jpeg("face.jpg", new byte[] {1}));
+        Files.delete(tempDir.resolve(patient.getPhotoFilePath()));
+
+        // The DB row points at a file an operator removed — same outcome as
+        // no photo, never a 500.
+        assertThatThrownBy(() -> service.load(patientId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining("No photo on file");
+    }
+
+    @Test
     void deleteClearsColumnsAndRemovesTheFile() {
         service.upload(patientId, hospitalId, jpeg("face.jpg", new byte[] {1}));
         String storedFile = patient.getPhotoFilePath();

@@ -355,6 +355,25 @@ class PatientPortalServiceImplMvp4Test {
         }
 
         @Test
+        @DisplayName("a consent-recording failure never blocks pre-check-in (P3 #21)")
+        void consentFailureDoesNotBlockPreCheckIn() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appt = buildAppointment(apptId, AppointmentStatus.SCHEDULED, 3);
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appt));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(treatmentConsentRepository.existsByAppointment_IdAndStatus(
+                    apptId, com.example.hms.enums.TreatmentConsentStatus.ACTIVE)).thenReturn(false);
+            when(treatmentConsentService.record(any(), any(), any(), any(), any()))
+                    .thenThrow(new IllegalStateException("consent table unavailable"));
+
+            PreCheckInResponseDTO result = service.submitPreCheckIn(auth, buildDto(apptId));
+
+            assertThat(result.getPreCheckedIn()).isTrue();
+        }
+
+        @Test
         @DisplayName("consent persistence is idempotent per appointment (P3 #21)")
         void consentIdempotentPerAppointment() {
             stubPatientResolution();
