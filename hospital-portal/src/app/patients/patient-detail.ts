@@ -23,6 +23,7 @@ import { AdvanceDirectivesTabComponent } from './advance-directives/advance-dire
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
 import { GrowthChartTabComponent } from './growth-chart/growth-chart-tab.component';
 import { FluidBalanceTabComponent } from './fluid-balance/fluid-balance-tab.component';
+import { MicroTabComponent } from './micro/micro-tab.component';
 import { CoverageTabComponent } from './coverage-tab/coverage-tab.component';
 import { MedicalHistoryTabComponent } from './medical-history-tab/medical-history-tab.component';
 import { BpaPanelComponent } from './bpa-panel/bpa-panel.component';
@@ -40,6 +41,7 @@ type TabKey =
   | 'vitals'
   | 'growth'
   | 'fluid-balance'
+  | 'micro'
   | 'encounters'
   | 'appointments'
   | 'directives'
@@ -57,6 +59,7 @@ type TabKey =
     AdvanceDirectivesTabComponent,
     GrowthChartTabComponent,
     FluidBalanceTabComponent,
+    MicroTabComponent,
     CoverageTabComponent,
     MedicalHistoryTabComponent,
     BpaPanelComponent,
@@ -172,6 +175,24 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_DOCTOR',
       'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** Mirrors PatientMicroCultureController's @PreAuthorize list exactly —
+   *  PHARMACIST included deliberately (susceptibilities drive stewardship). */
+  canViewMicro(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_PHARMACIST',
     ]);
   }
 

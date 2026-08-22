@@ -1851,4 +1851,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V124 — lab.micro_culture_results / micro_isolates /
+         micro_susceptibilities (P3 item 19, microbiology). First
+         micro-shaped tables: culture report on a lab order, organisms per
+         culture, susceptibility rows per organism. New tables with REAL
+         FKs. No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V124-microbiology" author="hms-team" runOnChange="false">
+        <sqlFile path="V124__microbiology.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
