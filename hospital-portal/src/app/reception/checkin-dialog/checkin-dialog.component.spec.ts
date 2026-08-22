@@ -121,4 +121,39 @@ describe('CheckinDialogComponent', () => {
     component.dismissed.emit();
     expect(component.dismissed.emit).toHaveBeenCalled();
   });
+
+  describe('consent-to-treat capture (P3 #21)', () => {
+    it('omits consent fields entirely when the checkbox is unticked', () => {
+      mockReceptionService.checkInPatient.and.returnValue(of(sampleResponse));
+      component.identityConfirmed.set(true);
+
+      component.submit();
+
+      const sent = mockReceptionService.checkInPatient.calls.mostRecent().args[0];
+      expect('consentObtained' in sent).toBeFalse();
+    });
+
+    it('sends the consent block when ticked — recorded, never gating', () => {
+      mockReceptionService.checkInPatient.and.returnValue(of(sampleResponse));
+      component.identityConfirmed.set(true);
+      component.consentObtained.set(true);
+      component.consentSignedName.set('Jane Doe');
+
+      component.submit();
+
+      expect(mockReceptionService.checkInPatient).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          consentObtained: true,
+          consentMethod: 'ELECTRONIC',
+          consentSignedName: 'Jane Doe',
+        }),
+      );
+    });
+
+    it('consent is NOT required to submit (unlike identity confirmation)', () => {
+      component.identityConfirmed.set(true);
+      component.consentObtained.set(false);
+      expect(component.canSubmit).toBeTrue();
+    });
+  });
 });

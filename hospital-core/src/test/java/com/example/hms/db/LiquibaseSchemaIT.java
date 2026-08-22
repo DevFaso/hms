@@ -127,6 +127,16 @@ class LiquibaseSchemaIT {
             assertColumnExists(stmt, "clinical", "encounter_notes", "signature_value");
             assertColumnExists(stmt, "clinical", "encounter_notes", "requires_cosign");
             assertColumnExists(stmt, "clinical", "encounter_notes", "cosigned_by_staff_id");
+
+            // V126: registration extras — photo columns, consent-to-treat, guarantors
+            assertColumnExists(stmt, "clinical", "patients", "photo_file_path");
+            assertTableExists(stmt, "clinical", "patient_treatment_consents");
+            assertTableExists(stmt, "clinical", "patient_guarantors");
+            assertColumnExists(stmt, "clinical", "patient_treatment_consents", "signature_hash");
+
+            // V127: downtime read-only singleton (seeded so reads never return empty)
+            assertTableExists(stmt, "platform", "platform_downtime_state");
+            assertSeedRowsPresent(stmt, "platform", "platform_downtime_state", 1);
         }
     }
 

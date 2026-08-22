@@ -1,0 +1,102 @@
+<button
+  type="button"
+  class="photo-avatar"
+  data-testid="patient-photo-avatar"
+  [class.editable]="canEdit"
+  [disabled]="!canEdit"
+  (click)="openModal()"
+  [attr.aria-label]="'PATIENT_PHOTO.EDIT' | translate"
+>
+  @if (photoUrl(); as url) {
+    <img [src]="url" [alt]="'PATIENT_PHOTO.ALT' | translate" data-testid="patient-photo-img" />
+  } @else {
+    <span class="initials">{{ initials }}</span>
+  }
+  @if (canEdit) {
+    <span class="edit-overlay"><span class="material-symbols-outlined">photo_camera</span></span>
+  }
+</button>
+
+@if (showModal()) {
+  <!-- Modal nested INSIDE the backdrop (the #442 lesson). -->
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeModal()"
+    >
+      <h3>{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}</h3>
+
+      @if (!cameraActive()) {
+        <div class="capture-options">
+          <label class="btn-secondary file-btn">
+            <span class="material-symbols-outlined">upload</span>
+            {{ 'PATIENT_PHOTO.UPLOAD_FILE' | translate }}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              data-testid="photo-file-input"
+              (change)="onFileSelected($event)"
+              hidden
+            />
+          </label>
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="photo-start-camera"
+            (click)="startCamera()"
+          >
+            <span class="material-symbols-outlined">photo_camera</span>
+            {{ 'PATIENT_PHOTO.USE_CAMERA' | translate }}
+          </button>
+          @if (photoUrl()) {
+            <button
+              type="button"
+              class="btn-danger"
+              data-testid="photo-remove"
+              (click)="removePhoto()"
+              [disabled]="saving()"
+            >
+              <span class="material-symbols-outlined">delete</span>
+              {{ 'PATIENT_PHOTO.REMOVE' | translate }}
+            </button>
+          }
+        </div>
+      } @else {
+        <div class="camera-stage">
+          <video #cameraVideo autoplay playsinline muted></video>
+          <div class="camera-actions">
+            <button
+              type="button"
+              class="btn-primary"
+              data-testid="photo-capture"
+              (click)="captureFrame()"
+              [disabled]="saving()"
+            >
+              {{ 'PATIENT_PHOTO.CAPTURE' | translate }}
+            </button>
+            <button type="button" class="btn-secondary" (click)="stopCamera()">
+              {{ 'PATIENT_PHOTO.STOP_CAMERA' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (cameraError()) {
+        <p class="camera-error" data-testid="photo-camera-error">{{ cameraError() }}</p>
+      }
+      @if (saving()) {
+        <p class="saving-hint">{{ 'PATIENT_PHOTO.SAVING' | translate }}</p>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeModal()" [disabled]="saving()">
+          {{ 'PATIENT_PHOTO.CLOSE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

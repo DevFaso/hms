@@ -134,6 +134,175 @@
       </table>
     </div>
   }
+
+  <!-- ══ Guarantors (P3 #21) ══ -->
+  <div class="section-toolbar">
+    <h3>{{ 'COVERAGE.GUARANTORS_TITLE' | translate }}</h3>
+    @if (canEdit) {
+      <button
+        type="button"
+        class="btn-primary btn-sm"
+        data-testid="add-guarantor"
+        (click)="openGuarantor(null)"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        {{ 'COVERAGE.ADD_GUARANTOR' | translate }}
+      </button>
+    }
+  </div>
+
+  @if (guarantorsLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (guarantors().length === 0) {
+    <p class="empty-hint">{{ 'COVERAGE.NO_GUARANTORS' | translate }}</p>
+  } @else {
+    <div class="data-table">
+      <table data-testid="guarantors-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'COVERAGE.GUARANTOR_NAME' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.GUARANTOR_RELATIONSHIP' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.GUARANTOR_CONTACT' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            @if (canEdit) {
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (g of guarantors(); track g.id) {
+            <tr>
+              <td>
+                {{ g.fullName }}
+                @if (g.primary) {
+                  <span class="flag-badge primary-badge">{{ 'COVERAGE.PRIMARY' | translate }}</span>
+                }
+              </td>
+              <td>{{ g.relationship || '—' }}</td>
+              <td>
+                {{ g.phone || '—' }}
+                @if (g.email) {
+                  <span class="muted">{{ g.email }}</span>
+                }
+              </td>
+              <td>
+                @if (g.active) {
+                  <span class="status-badge status-completed">{{
+                    'COMMON.ACTIVE' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-cancelled">
+                    {{ 'COMMON.INACTIVE' | translate }}
+                  </span>
+                }
+              </td>
+              @if (canEdit) {
+                <td>
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    data-testid="edit-guarantor"
+                    (click)="openGuarantor(g)"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    data-testid="toggle-guarantor"
+                    (click)="toggleGuarantorActive(g)"
+                    [attr.aria-label]="
+                      (g.active ? 'COVERAGE.DEACTIVATE' : 'COVERAGE.REACTIVATE') | translate
+                    "
+                  >
+                    <span class="material-symbols-outlined">{{
+                      g.active ? 'person_off' : 'person'
+                    }}</span>
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ══ Consent to treat (P3 #21) — recorded, never gating ══ -->
+  <div class="section-toolbar">
+    <h3>{{ 'COVERAGE.CONSENTS_TITLE' | translate }}</h3>
+    @if (canEdit) {
+      <button
+        type="button"
+        class="btn-primary btn-sm"
+        data-testid="record-consent"
+        (click)="openConsent()"
+      >
+        <span class="material-symbols-outlined">approval</span>
+        {{ 'COVERAGE.RECORD_CONSENT' | translate }}
+      </button>
+    }
+  </div>
+
+  @if (consentsLoading()) {
+    <div class="loading-state"><div class="spinner"></div></div>
+  } @else if (consents().length === 0) {
+    <p class="empty-hint">{{ 'COVERAGE.NO_CONSENTS' | translate }}</p>
+  } @else {
+    <div class="data-table">
+      <table data-testid="consents-table">
+        <thead>
+          <tr>
+            <th scope="col">{{ 'COVERAGE.CONSENT_DATE' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.CONSENT_METHOD' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.CONSENT_SOURCE' | translate }}</th>
+            <th scope="col">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            @if (canEdit) {
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of consents(); track c.id) {
+            <tr>
+              <td>{{ c.consentedAt | date: 'medium' }}</td>
+              <td>{{ 'COVERAGE.CONSENT_METHOD_' + c.method | translate }}</td>
+              <td>{{ 'COVERAGE.CONSENT_SOURCE_' + c.source | translate }}</td>
+              <td>{{ c.signedName || '—' }}</td>
+              <td>
+                @if (c.status === 'ACTIVE') {
+                  <span class="status-badge status-completed">{{
+                    'COMMON.ACTIVE' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-cancelled" [title]="c.revocationReason || ''">
+                    {{ 'COVERAGE.CONSENT_' + c.status | translate }}
+                  </span>
+                }
+              </td>
+              @if (canEdit) {
+                <td>
+                  @if (c.status === 'ACTIVE') {
+                    <button
+                      type="button"
+                      class="btn-icon"
+                      data-testid="revoke-consent"
+                      (click)="openRevoke(c)"
+                      [attr.aria-label]="'COVERAGE.REVOKE_CONSENT' | translate"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                    </button>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
 </div>
 
 <!-- ══ Link insurance modal ══ -->
@@ -316,6 +485,258 @@
         </button>
         <button type="button" class="btn-danger" [disabled]="deleteBusy()" (click)="submitDelete()">
           {{ 'COMMON.DELETE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Guarantor modal (P3 #21) ══ -->
+@if (showGuarantorModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeGuarantor()"
+    (keydown.escape)="closeGuarantor()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (editingGuarantor() ? 'COVERAGE.EDIT_GUARANTOR' : 'COVERAGE.ADD_GUARANTOR') | translate
+          }}
+        </h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeGuarantor()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="gua-name">{{ 'COVERAGE.GUARANTOR_NAME' | translate }} *</label>
+            <input
+              id="gua-name"
+              type="text"
+              maxlength="200"
+              data-testid="guarantor-name"
+              [(ngModel)]="guarantorForm.fullName"
+            />
+          </div>
+          <div class="field">
+            <label for="gua-rel">{{ 'COVERAGE.GUARANTOR_RELATIONSHIP' | translate }}</label>
+            <input
+              id="gua-rel"
+              type="text"
+              maxlength="50"
+              [(ngModel)]="guarantorForm.relationship"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="gua-phone">{{ 'COVERAGE.GUARANTOR_PHONE' | translate }}</label>
+            <input id="gua-phone" type="text" maxlength="20" [(ngModel)]="guarantorForm.phone" />
+          </div>
+          <div class="field">
+            <label for="gua-email">{{ 'COVERAGE.GUARANTOR_EMAIL' | translate }}</label>
+            <input id="gua-email" type="email" maxlength="150" [(ngModel)]="guarantorForm.email" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="gua-address">{{ 'COVERAGE.GUARANTOR_ADDRESS' | translate }}</label>
+            <input
+              id="gua-address"
+              type="text"
+              maxlength="255"
+              [(ngModel)]="guarantorForm.address"
+            />
+          </div>
+        </div>
+        <div class="checkbox-row">
+          <label>
+            <input type="checkbox" [(ngModel)]="guarantorForm.primary" />
+            {{ 'COVERAGE.MAKE_PRIMARY' | translate }}
+          </label>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="gua-notes">{{ 'COVERAGE.GUARANTOR_NOTES' | translate }}</label>
+            <textarea
+              id="gua-notes"
+              rows="2"
+              maxlength="500"
+              [(ngModel)]="guarantorForm.notes"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeGuarantor()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="guarantor-save"
+          [disabled]="guarantorSaving() || !guarantorForm.fullName"
+          (click)="submitGuarantor()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Record consent modal (P3 #21) ══ -->
+@if (showConsentModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeConsent()"
+    (keydown.escape)="closeConsent()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeConsent()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ 'COVERAGE.CONSENT_HINT' | translate }}</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="con-method">{{ 'COVERAGE.CONSENT_METHOD' | translate }} *</label>
+            <select id="con-method" data-testid="consent-method" [(ngModel)]="consentForm.method">
+              <option value="ELECTRONIC">
+                {{ 'COVERAGE.CONSENT_METHOD_ELECTRONIC' | translate }}
+              </option>
+              <option value="VERBAL">{{ 'COVERAGE.CONSENT_METHOD_VERBAL' | translate }}</option>
+              <option value="PAPER">{{ 'COVERAGE.CONSENT_METHOD_PAPER' | translate }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</label>
+            <input
+              id="con-name"
+              type="text"
+              maxlength="200"
+              data-testid="consent-signed-name"
+              [(ngModel)]="consentForm.signedName"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="con-notes">{{ 'COVERAGE.GUARANTOR_NOTES' | translate }}</label>
+            <textarea
+              id="con-notes"
+              rows="2"
+              maxlength="500"
+              [(ngModel)]="consentForm.notes"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeConsent()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          data-testid="consent-save"
+          [disabled]="consentSaving()"
+          (click)="submitConsent()"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Revoke consent modal (P3 #21) — reason mandatory, never delete ══ -->
+@if (revokeTarget()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeRevoke()"
+    (keydown.escape)="closeRevoke()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeRevoke()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="muted">{{ 'COVERAGE.CONSENT_REVOKE_HINT' | translate }}</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="rev-reason">{{ 'COVERAGE.CONSENT_REVOKE_REASON' | translate }} *</label>
+            <textarea
+              id="rev-reason"
+              rows="2"
+              maxlength="500"
+              data-testid="consent-revoke-reason"
+              [ngModel]="revokeReason()"
+              (ngModelChange)="revokeReason.set($event)"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeRevoke()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-danger"
+          data-testid="consent-revoke-confirm"
+          [disabled]="revokeBusy()"
+          (click)="submitRevoke()"
+        >
+          {{ 'COVERAGE.REVOKE_CONSENT' | translate }}
         </button>
       </div>
     </div>
