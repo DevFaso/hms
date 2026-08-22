@@ -10,6 +10,13 @@ import {
   PatientInsuranceUpdateRequest,
 } from '../../services/patient-insurance.service';
 import { RegistrationService, HospitalRegistration } from '../../services/registration.service';
+import {
+  Guarantor,
+  GuarantorRequest,
+  RegistrationExtrasService,
+  TreatmentConsent,
+  TreatmentConsentMethod,
+} from '../../services/registration-extras.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 
@@ -33,6 +40,7 @@ export class CoverageTabComponent implements OnInit {
 
   private readonly insuranceService = inject(PatientInsuranceService);
   private readonly registrationService = inject(RegistrationService);
+  private readonly extrasService = inject(RegistrationExtrasService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -65,9 +73,192 @@ export class CoverageTabComponent implements OnInit {
   deleteTarget = signal<PatientInsurance | null>(null);
   deleteBusy = signal(false);
 
+  /* ── Guarantors + consent-to-treat (P3 #21) ── */
+  guarantors = signal<Guarantor[]>([]);
+  guarantorsLoading = signal(false);
+  showGuarantorModal = signal(false);
+  guarantorSaving = signal(false);
+  editingGuarantor = signal<Guarantor | null>(null);
+  guarantorForm: GuarantorRequest = { fullName: '' };
+
+  consents = signal<TreatmentConsent[]>([]);
+  consentsLoading = signal(false);
+  showConsentModal = signal(false);
+  consentSaving = signal(false);
+  consentForm: { method: TreatmentConsentMethod; signedName: string; notes: string } = {
+    method: 'ELECTRONIC',
+    signedName: '',
+    notes: '',
+  };
+  revokeTarget = signal<TreatmentConsent | null>(null);
+  revokeReason = signal('');
+  revokeBusy = signal(false);
+
   ngOnInit(): void {
     this.loadInsurances();
     this.loadRegistrations();
+    this.loadGuarantors();
+    this.loadConsents();
+  }
+
+  loadGuarantors(): void {
+    this.guarantorsLoading.set(true);
+    this.extrasService.listGuarantors(this.patientId).subscribe({
+      next: (guarantors) => {
+        this.guarantors.set(guarantors ?? []);
+        this.guarantorsLoading.set(false);
+      },
+      error: () => {
+        this.guarantors.set([]);
+        this.guarantorsLoading.set(false);
+      },
+    });
+  }
+
+  loadConsents(): void {
+    this.consentsLoading.set(true);
+    this.extrasService.listConsents(this.patientId).subscribe({
+      next: (consents) => {
+        this.consents.set(consents ?? []);
+        this.consentsLoading.set(false);
+      },
+      error: () => {
+        this.consents.set([]);
+        this.consentsLoading.set(false);
+      },
+    });
+  }
+
+  openGuarantor(existing: Guarantor | null): void {
+    this.editingGuarantor.set(existing);
+    this.guarantorForm = existing
+      ? {
+          fullName: existing.fullName,
+          relationship: existing.relationship ?? undefined,
+          phone: existing.phone ?? undefined,
+          email: existing.email ?? undefined,
+          address: existing.address ?? undefined,
+          primary: existing.primary,
+          notes: existing.notes ?? undefined,
+        }
+      : { fullName: '' };
+    this.showGuarantorModal.set(true);
+  }
+
+  closeGuarantor(): void {
+    if (this.guarantorSaving()) return;
+    this.showGuarantorModal.set(false);
+  }
+
+  submitGuarantor(): void {
+    if (!this.guarantorForm.fullName.trim()) {
+      this.toast.error(this.translate.instant('COVERAGE.GUARANTOR_NAME_REQUIRED'));
+      return;
+    }
+    if (this.guarantorSaving()) return;
+    this.guarantorSaving.set(true);
+    const existing = this.editingGuarantor();
+    const call = existing
+      ? this.extrasService.updateGuarantor(this.patientId, existing.id, this.guarantorForm)
+      : this.extrasService.addGuarantor(this.patientId, this.guarantorForm);
+    call.subscribe({
+      next: () => {
+        this.guarantorSaving.set(false);
+        this.showGuarantorModal.set(false);
+        this.toast.success(this.translate.instant('COVERAGE.GUARANTOR_SAVED'));
+        this.loadGuarantors();
+      },
+      error: (err) => {
+        this.guarantorSaving.set(false);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+        );
+      },
+    });
+  }
+
+  toggleGuarantorActive(guarantor: Guarantor): void {
+    const call = guarantor.active
+      ? this.extrasService.deactivateGuarantor(this.patientId, guarantor.id)
+      : this.extrasService.reactivateGuarantor(this.patientId, guarantor.id);
+    call.subscribe({
+      next: () => this.loadGuarantors(),
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+        );
+      },
+    });
+  }
+
+  openConsent(): void {
+    this.consentForm = { method: 'ELECTRONIC', signedName: '', notes: '' };
+    this.showConsentModal.set(true);
+  }
+
+  closeConsent(): void {
+    if (this.consentSaving()) return;
+    this.showConsentModal.set(false);
+  }
+
+  submitConsent(): void {
+    if (this.consentSaving()) return;
+    this.consentSaving.set(true);
+    this.extrasService
+      .recordConsent(this.patientId, {
+        method: this.consentForm.method,
+        signedName: this.consentForm.signedName.trim() || undefined,
+        notes: this.consentForm.notes.trim() || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.consentSaving.set(false);
+          this.showConsentModal.set(false);
+          this.toast.success(this.translate.instant('COVERAGE.CONSENT_RECORDED'));
+          this.loadConsents();
+        },
+        error: (err) => {
+          this.consentSaving.set(false);
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+          );
+        },
+      });
+  }
+
+  openRevoke(consent: TreatmentConsent): void {
+    this.revokeTarget.set(consent);
+    this.revokeReason.set('');
+  }
+
+  closeRevoke(): void {
+    if (this.revokeBusy()) return;
+    this.revokeTarget.set(null);
+  }
+
+  submitRevoke(): void {
+    const target = this.revokeTarget();
+    const reason = this.revokeReason().trim();
+    if (!target) return;
+    if (!reason) {
+      this.toast.error(this.translate.instant('COVERAGE.CONSENT_REVOKE_REASON_REQUIRED'));
+      return;
+    }
+    this.revokeBusy.set(true);
+    this.extrasService.revokeConsent(this.patientId, target.id, reason).subscribe({
+      next: () => {
+        this.revokeBusy.set(false);
+        this.revokeTarget.set(null);
+        this.toast.success(this.translate.instant('COVERAGE.CONSENT_REVOKED_OK'));
+        this.loadConsents();
+      },
+      error: (err) => {
+        this.revokeBusy.set(false);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+        );
+      },
+    });
   }
 
   loadInsurances(): void {

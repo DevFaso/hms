@@ -39,6 +39,10 @@ export interface PatientResponse {
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /** Non-null iff the patient has a photo (P3 #21). The binary comes from
+   *  the authenticated GET /patients/{id}/photo endpoint — fetched as a
+   *  blob, never an <img src> URL (those requests carry no bearer token). */
+  photoUpdatedAt?: string | null;
   /** Populated by doctor-specific endpoints */
   lastEncounterDate?: string;
   lastLocation?: string;

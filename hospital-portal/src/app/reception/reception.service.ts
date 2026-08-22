@@ -155,6 +155,11 @@ export interface CheckInRequest {
   identityConfirmed?: boolean;
   insuranceVerified?: boolean;
   notes?: string | null;
+  /* Consent-to-treat capture (P3 #21) — recorded as a queryable row, never
+     gating: check-in proceeds either way. */
+  consentObtained?: boolean;
+  consentMethod?: 'ELECTRONIC' | 'VERBAL' | 'PAPER';
+  consentSignedName?: string | null;
 }
 
 export interface CheckInResponse {

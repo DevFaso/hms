@@ -25,6 +25,8 @@ import { ImpersonationBannerComponent } from '../impersonation/impersonation-ban
 import { ImpersonationService } from '../services/impersonation.service';
 import { EmergencyBroadcastBannerComponent } from '../emergency/emergency-broadcast-banner';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
+import { DowntimeBannerComponent } from '../downtime/downtime-banner';
+import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
@@ -49,6 +51,7 @@ interface NavItem {
     LockScreenComponent,
     ImpersonationBannerComponent,
     EmergencyBroadcastBannerComponent,
+    DowntimeBannerComponent,
     TranslateModule,
     SkipLinkComponent,
   ],
@@ -74,6 +77,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly navOrder = inject(NavOrderService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly emergencyBroadcast = inject(EmergencyBroadcastService);
+  private readonly downtime = inject(DowntimeService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -1019,6 +1023,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // broadcast surfaces in the banner across every authenticated route.
     this.emergencyBroadcast.connect();
 
+    // P3 #23a: poll the persisted downtime state — unlike the broadcast,
+    // this survives login/refresh, so late arrivals still see the banner.
+    this.downtime.startPolling();
+
     const username = this.auth.getSubject();
     if (username) {
       this.notifService.connectWebSocket();
@@ -1063,6 +1071,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.notifService.disconnectWebSocket();
     // MVP-7b — release the emergency-broadcast STOMP socket on shell teardown.
     this.emergencyBroadcast.disconnect();
+    this.downtime.stopPolling();
     this.idle.stop();
   }
 

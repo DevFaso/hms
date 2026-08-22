@@ -17,7 +17,8 @@ import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
@@ -35,6 +36,8 @@ export class LabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly profileService = inject(ProfileService);
+  private readonly printService = inject(PrintLabelService);
+  private readonly translate = inject(TranslateService);
 
   /** Only providers can place lab orders (matches POST /lab-orders @PreAuthorize). */
   readonly canCreateOrder = computed(() =>
@@ -88,6 +91,7 @@ export class LabComponent implements OnInit {
   specimenForm = { specimenType: '', currentLocation: '', notes: '' };
   specimenSaving = signal(false);
   receivingSpecimenId = signal<string | null>(null);
+  printingSpecimenId = signal<string | null>(null);
 
   /** Matches the specimen create/receive @PreAuthorize (lab staff + admins). */
   readonly canManageSpecimens = this.roleContext.hasAnyActiveRole([
@@ -519,6 +523,22 @@ export class LabComponent implements OnInit {
           this.specimenSaving.set(false);
         },
       });
+  }
+
+  /** Specimen label PDF (P3 #23b) — first reader of the stored barcode_value. */
+  printSpecimenLabel(specimen: LabSpecimen): void {
+    if (this.printingSpecimenId()) return;
+    this.printingSpecimenId.set(specimen.id);
+    this.printService.getSpecimenLabelPdf(specimen.id).subscribe({
+      next: (blob) => {
+        this.printingSpecimenId.set(null);
+        this.printService.openForPrint(blob);
+      },
+      error: (err) => {
+        this.printingSpecimenId.set(null);
+        this.toast.error(err?.error?.message ?? this.translate.instant('LAB.PRINT_LABEL_FAILED'));
+      },
+    });
   }
 
   receiveSpecimen(specimen: LabSpecimen): void {

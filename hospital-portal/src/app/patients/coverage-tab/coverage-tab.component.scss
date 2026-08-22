@@ -294,3 +294,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* P3 #21: guarantor/consent row actions */
+.btn-icon {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0.2rem;
+
+  &:hover {
+    color: #0f172a;
+  }
+}

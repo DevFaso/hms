@@ -228,6 +228,7 @@ public class PatientMapper {
             .departmentName(departmentName)
             .createdAt(patient.getCreatedAt())
             .updatedAt(patient.getUpdatedAt())
+            .photoUpdatedAt(patient.getPhotoUpdatedAt())
             .build();
     }
 

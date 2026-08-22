@@ -435,7 +435,16 @@
       "SEVERITY_CRITICAL": "Critical",
       "ACTION": "Send broadcast"
     },
-    "REQUEST_FAILED": "Request failed."
+    "REQUEST_FAILED": "Request failed.",
+    "DOWNTIME": {
+      "TITLE": "Read-only (downtime) mode",
+      "DESC": "Blocks every write across the platform with a 503 while viewing stays available. Login, token refresh and this toggle stay open. Takes effect immediately here, within 30 seconds on other instances.",
+      "ACTIVE": "READ-ONLY MODE IS ACTIVE.",
+      "INACTIVE": "Normal operation — writes are allowed.",
+      "MESSAGE": "Banner message (shown to every user)",
+      "ACTIVATE": "Activate read-only mode",
+      "DEACTIVATE": "Deactivate read-only mode"
+    }
   },
   "EMERGENCY_BANNER": {
     "ISSUED_BY": "Issued by",
@@ -2452,7 +2461,10 @@
     "SPECIMEN_STATUS_RECEIVED": "Received",
     "SPECIMEN_STATUS_PROCESSING": "Processing",
     "SPECIMEN_STATUS_COMPLETED": "Completed",
-    "SPECIMEN_STATUS_REJECTED": "Rejected"
+    "SPECIMEN_STATUS_REJECTED": "Rejected",
+    "PRINT_LABEL": "Label",
+    "PRINT_LABEL_TITLE": "Print the specimen label",
+    "PRINT_LABEL_FAILED": "Failed to generate the specimen label."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -3460,7 +3472,9 @@
     "WEIGHT": "Weight",
     "ZIP_CODE": "Zip Code",
     "HEAD_CIRCUMFERENCE": "Head circumference",
-    "BLOOD_GLUCOSE": "Blood glucose"
+    "BLOOD_GLUCOSE": "Blood glucose",
+    "PRINT_WRISTBAND": "Wristband",
+    "PRINT_WRISTBAND_TITLE": "Print the patient wristband (QR encodes the patient ID for bedside scanning)"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -4968,7 +4982,10 @@
     "SLOT_OFFERED": "Slot offered — schedule an appointment for this patient",
     "OFFER_FAILED": "Failed to offer slot",
     "ENTRY_CLOSED": "Waitlist entry closed",
-    "CLOSE_FAILED": "Failed to close entry"
+    "CLOSE_FAILED": "Failed to close entry",
+    "CONSENT_OBTAINED": "Consent to treat obtained",
+    "CONSENT_SIGNED_NAME": "Signed name",
+    "CONSENT_SIGNED_NAME_HINT": "Name as signed by the patient or representative"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -6483,7 +6500,46 @@
     "DELETE_ERROR": "Failed to delete the insurance",
     "REGISTRATIONS_TITLE": "Hospital registrations",
     "NO_REGISTRATIONS": "No hospital registrations.",
-    "REGISTERED_ON": "Registered on"
+    "REGISTERED_ON": "Registered on",
+    "GUARANTORS_TITLE": "Guarantors",
+    "ADD_GUARANTOR": "Add guarantor",
+    "EDIT_GUARANTOR": "Edit guarantor",
+    "NO_GUARANTORS": "No guarantors on file.",
+    "GUARANTOR_NAME": "Full name",
+    "GUARANTOR_RELATIONSHIP": "Relationship",
+    "GUARANTOR_CONTACT": "Contact",
+    "GUARANTOR_PHONE": "Phone",
+    "GUARANTOR_EMAIL": "Email",
+    "GUARANTOR_ADDRESS": "Address",
+    "GUARANTOR_NOTES": "Notes",
+    "GUARANTOR_NAME_REQUIRED": "The guarantor's full name is required.",
+    "GUARANTOR_SAVED": "Guarantor saved.",
+    "GUARANTOR_SAVE_ERROR": "The guarantor could not be saved.",
+    "DEACTIVATE": "Deactivate",
+    "REACTIVATE": "Reactivate",
+    "CONSENTS_TITLE": "Consent to treat",
+    "RECORD_CONSENT": "Record consent",
+    "NO_CONSENTS": "No consent-to-treat records.",
+    "CONSENT_DATE": "Date",
+    "CONSENT_METHOD": "Method",
+    "CONSENT_SOURCE": "Source",
+    "CONSENT_SIGNED_BY": "Signed by",
+    "CONSENT_METHOD_ELECTRONIC": "Electronic",
+    "CONSENT_METHOD_VERBAL": "Verbal",
+    "CONSENT_METHOD_PAPER": "Paper form",
+    "CONSENT_SOURCE_CHECK_IN": "Check-in",
+    "CONSENT_SOURCE_PRE_CHECK_IN": "Pre-check-in",
+    "CONSENT_SOURCE_MANUAL": "Manual",
+    "CONSENT_REVOKED": "Revoked",
+    "CONSENT_EXPIRED": "Expired",
+    "CONSENT_HINT": "Records that the patient consented to treatment. This is a record, not a gate — care is never blocked by this form.",
+    "CONSENT_RECORDED": "Consent recorded.",
+    "CONSENT_REVOKED_OK": "Consent revoked.",
+    "CONSENT_SAVE_ERROR": "The consent could not be saved.",
+    "REVOKE_CONSENT": "Revoke consent",
+    "CONSENT_REVOKE_HINT": "The record is kept and marked revoked — it is never deleted.",
+    "CONSENT_REVOKE_REASON": "Revocation reason",
+    "CONSENT_REVOKE_REASON_REQUIRED": "A revocation reason is required."
   },
   "MED_HISTORY": {
     "TAB": "History",
@@ -7616,5 +7672,27 @@
     "CANCEL": "Cancel",
     "CLOSE": "Close",
     "REMOVE": "Remove"
+  },
+  "PATIENT_PHOTO": {
+    "EDIT": "Edit patient photo",
+    "ALT": "Patient photo",
+    "MODAL_TITLE": "Patient photo",
+    "UPLOAD_FILE": "Upload a file",
+    "USE_CAMERA": "Use camera",
+    "CAPTURE": "Capture",
+    "STOP_CAMERA": "Stop camera",
+    "REMOVE": "Remove photo",
+    "CLOSE": "Close",
+    "SAVED": "Photo saved.",
+    "REMOVED": "Photo removed.",
+    "SAVE_FAILED": "The photo could not be saved.",
+    "SAVING": "Saving…",
+    "CAMERA_UNSUPPORTED": "This browser does not support camera capture.",
+    "CAMERA_DENIED": "Camera access was denied.",
+    "CAPTURE_FAILED": "The frame could not be captured. Try again."
+  },
+  "DOWNTIME": {
+    "BANNER_TITLE": "Read-only mode:",
+    "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
   }
 }
