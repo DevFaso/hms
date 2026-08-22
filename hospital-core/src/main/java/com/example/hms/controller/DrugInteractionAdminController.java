@@ -96,4 +96,18 @@ public class DrugInteractionAdminController {
     public ResponseEntity<DrugInteractionDTO> deactivate(@PathVariable UUID id) {
         return ResponseEntity.ok(service.deactivate(id));
     }
+
+    /**
+     * The undo deactivate never had. Every read hard-filters {@code active =
+     * true} and the KB is platform-global, so before this endpoint one
+     * pharmacist's deactivation silenced a pair permanently for every hospital
+     * in the deployment.
+     */
+    @PutMapping("/{id}/reactivate")
+    @PreAuthorize(WRITE_ROLES)
+    @Operation(summary = "Reactivate a retired interaction",
+        description = "Puts a retired entry back into every checking layer.")
+    public ResponseEntity<DrugInteractionDTO> reactivate(@PathVariable UUID id) {
+        return ResponseEntity.ok(service.reactivate(id));
+    }
 }

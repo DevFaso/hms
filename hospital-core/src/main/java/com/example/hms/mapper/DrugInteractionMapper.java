@@ -37,6 +37,7 @@ public class DrugInteractionMapper {
             .sourceDatabase(entity.getSourceDatabase())
             .evidenceLevel(entity.getEvidenceLevel())
             .literatureReferences(entity.getLiteratureReferences())
+            .notes(entity.getNotes())
             .active(entity.isActive())
             .build();
     }

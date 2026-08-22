@@ -133,6 +133,16 @@
       >
         {{ 'PATIENTS.APPOINTMENTS_TAB' | translate }}
       </button>
+      @if (canViewDirectives()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'directives'"
+          (click)="setTab('directives')"
+          [title]="'DIRECTIVES.TAB_TITLE' | translate"
+        >
+          {{ 'DIRECTIVES.TAB_LABEL' | translate }}
+        </button>
+      }
       @if (canViewSharing()) {
         <button
           class="tab sharing-tab"
@@ -159,6 +169,11 @@
     <!-- ═══ Coverage Tab (insurance + hospital registrations) ═══ -->
     @if (activeTab() === 'coverage' && canViewCoverage()) {
       <app-coverage-tab [patientId]="patient()!.id" />
+    }
+
+    <!-- ═══ Advance Directives Tab (P2 #13 — first write surface) ═══ -->
+    @if (activeTab() === 'directives' && canViewDirectives()) {
+      <app-advance-directives-tab [patientId]="patient()!.id" />
     }
 
     <!-- ═══ Overview Tab ═══ -->

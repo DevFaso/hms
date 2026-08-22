@@ -3,8 +3,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { signal } from '@angular/core';
 import { LabResultsComponent } from './lab-results';
 import { LabOrderResponse } from '../../services/lab.service';
+import { RoleContextService } from '../../core/role-context.service';
 
 function mockResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -266,10 +268,10 @@ describe('LabResultsComponent', () => {
 
   describe('critical-value read-back', () => {
     it('asks a critical result to be read back rather than merely acknowledged', () => {
-      // canAcknowledge is role-derived and false in this harness; overriding it
+      // canReadBack is role-derived and false in this harness; overriding it
       // is what makes the assertion about CRITICAL-vs-normal rather than about
       // whether the actions column renders at all.
-      (component as unknown as { canAcknowledge: boolean }).canAcknowledge = true;
+      (component as unknown as { canReadBack: boolean }).canReadBack = true;
       fixture.detectChanges();
       flushInit([mockResult({ severityFlag: 'CRITICAL' })]);
       fixture.detectChanges();
@@ -277,6 +279,44 @@ describe('LabResultsComponent', () => {
       expect(
         fixture.nativeElement.querySelector('[data-testid="read-back-result-1"]'),
       ).not.toBeNull();
+    });
+
+    it('renders persisted read-back evidence — including a mismatch — in the detail panel', () => {
+      fixture.detectChanges();
+      flushInit();
+
+      // A repeated value with no read-back stamp is a persisted MISMATCH:
+      // the record the REQUIRES_NEW write exists to preserve, previously
+      // invisible to every UI.
+      component.selectedResult.set(
+        mockResult({
+          criticalNotifiedAt: '2026-08-22T08:00:00',
+          criticalReadBackValue: '9.1',
+          criticalReadBackBy: 'Dr. Awa Traoré',
+          criticalReadBackAt: null,
+        }) as never,
+      );
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="read-back-mismatch"]'),
+      ).not.toBeNull();
+
+      component.selectedResult.set(
+        mockResult({
+          criticalNotifiedAt: '2026-08-22T08:00:00',
+          criticalReadBackValue: '8.9',
+          criticalReadBackBy: 'Dr. Awa Traoré',
+          criticalReadBackAt: '2026-08-22T08:05:00',
+          acknowledged: true,
+          acknowledgedAt: '2026-08-22T08:05:00',
+          acknowledgedBy: 'Dr. Awa Traoré',
+        }) as never,
+      );
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="read-back-evidence"]'),
+      ).not.toBeNull();
+      expect(fixture.nativeElement.querySelector('[data-testid="read-back-mismatch"]')).toBeNull();
     });
 
     it('leaves a normal result with a plain acknowledge', () => {
@@ -334,5 +374,50 @@ describe('LabResultsComponent', () => {
       expect(component.readBackTarget()).not.toBeNull();
       expect(component.readBackSubmitting()).toBeFalse();
     });
+  });
+});
+
+/**
+ * Read-back last mile (P0 #5 re-verification findings, 2026-08-22): the
+ * persisted read-back — above all a persisted MISMATCH — had no reader
+ * surface anywhere, and the read-back button was shown to two lab roles the
+ * backend 403s while the authorized admin roles never got it.
+ */
+describe('LabResultsComponent — read-back role gate', () => {
+  function createWithRoles(activeRoles: string[]): LabResultsComponent {
+    TestBed.configureTestingModule({
+      imports: [LabResultsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+          },
+        },
+      ],
+    });
+    return TestBed.createComponent(LabResultsComponent).componentInstance;
+  }
+
+  it('offers read-back to the admin roles the backend authorizes', () => {
+    const component = createWithRoles(['ROLE_HOSPITAL_ADMIN']);
+    expect(component.canReadBack).toBeTrue();
+    // Admins are not in the acknowledge set - the two gates are different.
+    expect(component.canAcknowledge).toBeFalse();
+  });
+
+  it('does not offer read-back to the lab roles the backend refuses', () => {
+    // Read-back is the ordering clinician confirming what they were told;
+    // lab attestation is a different act. A button that 403s teaches the
+    // lab to ignore controls.
+    const component = createWithRoles(['ROLE_LAB_SCIENTIST']);
+    expect(component.canReadBack).toBeFalse();
+    expect(component.canAcknowledge).toBeTrue();
   });
 });

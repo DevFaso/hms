@@ -27,11 +27,28 @@ public interface DrugInteractionRepository extends JpaRepository<DrugInteraction
     );
 
     /**
+     * Same pair lookup with NO active filter — the duplicate guard needs it.
+     * {@link #findInteractionBetween} hard-filters {@code active = true}, so a
+     * deactivated pair slipped past the guard and re-creating it produced two
+     * rows for one pair (one inactive, one active) instead of a clean error.
+     */
+    @Query("SELECT di FROM DrugInteraction di WHERE " +
+           "((di.drug1Code = :code1 AND di.drug2Code = :code2) OR " +
+           " (di.drug1Code = :code2 AND di.drug2Code = :code1))")
+    Optional<DrugInteraction> findAnyInteractionBetween(
+        @Param("code1") String drugCode1,
+        @Param("code2") String drugCode2
+    );
+
+    /**
      * Find all interactions involving a specific drug.
      */
     @Query("SELECT di FROM DrugInteraction di WHERE di.active = true AND " +
            "(di.drug1Code = :drugCode OR di.drug2Code = :drugCode)")
     List<DrugInteraction> findInteractionsForDrug(@Param("drugCode") String drugCode);
+
+    /** Severity filter without an active predicate — the admin list's "include retired" view. */
+    List<DrugInteraction> findBySeverityOrderByDrug1NameAsc(InteractionSeverity severity);
 
     /**
      * Find all interactions for multiple drugs (for concurrent medication checking).
