@@ -339,6 +339,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'calendar_view_week',
+        label: 'Slot Inventory',
+        translationKey: 'NAV.SLOT_ADMIN',
+        route: '/slot-admin',
+        // Backend writes are HOSPITAL_ADMIN/SUPER_ADMIN only (no ROLE_ADMIN);
+        // the route guard uses the same roles.
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'medication_liquid',
         label: 'Medication History',
         translationKey: 'NAV.MEDICATION_HISTORY',

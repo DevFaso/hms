@@ -13,5 +13,8 @@ public interface VisitTypeRepository extends JpaRepository<VisitType, UUID> {
 
     List<VisitType> findByHospital_IdAndActiveTrueOrderByNameAsc(UUID hospitalId);
 
+    /** Admin list including retired rows. */
+    List<VisitType> findByHospital_IdOrderByNameAsc(UUID hospitalId);
+
     Optional<VisitType> findByHospital_IdAndCodeIgnoreCase(UUID hospitalId, String code);
 }

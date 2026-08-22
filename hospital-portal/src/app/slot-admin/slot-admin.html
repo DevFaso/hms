@@ -1,0 +1,634 @@
+<div class="slot-admin-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">calendar_view_week</span>
+      <div>
+        <h1 class="page-title">{{ 'SLOT_ADMIN.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'SLOT_ADMIN.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+  </header>
+
+  <div class="section-tabs" role="tablist">
+    <button
+      class="tab"
+      [class.active]="section() === 'visit-types'"
+      (click)="setSection('visit-types')"
+      data-testid="slot-admin-tab-visit-types"
+    >
+      {{ 'SLOT_ADMIN.TAB_VISIT_TYPES' | translate }}
+    </button>
+    <button
+      class="tab"
+      [class.active]="section() === 'templates'"
+      (click)="setSection('templates')"
+      data-testid="slot-admin-tab-templates"
+    >
+      {{ 'SLOT_ADMIN.TAB_TEMPLATES' | translate }}
+    </button>
+    <button
+      class="tab"
+      [class.active]="section() === 'slots'"
+      (click)="setSection('slots')"
+      data-testid="slot-admin-tab-slots"
+    >
+      {{ 'SLOT_ADMIN.TAB_SLOTS' | translate }}
+    </button>
+  </div>
+
+  <!-- ═══ Visit types ═══ -->
+  @if (section() === 'visit-types') {
+    <section>
+      <div class="section-head">
+        <label class="toggle-inactive">
+          <input
+            type="checkbox"
+            [ngModel]="vtShowInactive()"
+            (ngModelChange)="setVtShowInactive($event)"
+          />
+          {{ 'SLOT_ADMIN.SHOW_INACTIVE' | translate }}
+        </label>
+        <button class="btn-primary" (click)="openCreateVisitType()" data-testid="vt-add">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'SLOT_ADMIN.VT_ADD' | translate }}
+        </button>
+      </div>
+      @if (vtLoading()) {
+        <div class="state-block">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        </div>
+      } @else if (visitTypes().length === 0) {
+        <div class="state-block">
+          <p>{{ 'SLOT_ADMIN.VT_EMPTY' | translate }}</p>
+          <p class="empty-hint">{{ 'SLOT_ADMIN.VT_EMPTY_HINT' | translate }}</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>{{ 'SLOT_ADMIN.VT_CODE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.VT_NAME' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.VT_DURATION' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.VT_BOOKABLE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.STATE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (vt of visitTypes(); track vt.id) {
+                <tr [attr.data-testid]="'vt-row-' + vt.id" [class.row-inactive]="!vt.active">
+                  <td class="mono">{{ vt.code }}</td>
+                  <td>{{ vt.name }}</td>
+                  <td>{{ vt.departmentName || ('SLOT_ADMIN.HOSPITAL_WIDE' | translate) }}</td>
+                  <td class="numeric">
+                    {{ 'SLOT_ADMIN.MINUTES' | translate: { count: vt.durationMinutes } }}
+                  </td>
+                  <td>{{ (vt.patientBookable ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
+                  <td>
+                    <span class="state-chip" [class.state-active]="vt.active">
+                      {{ (vt.active ? 'SLOT_ADMIN.ACTIVE' : 'SLOT_ADMIN.RETIRED') | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
+                    @if (vt.active) {
+                      <button
+                        class="btn-icon"
+                        (click)="openEditVisitType(vt)"
+                        [attr.data-testid]="'vt-edit-' + vt.id"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                    }
+                    <button
+                      class="btn-icon"
+                      [class.btn-danger]="vt.active"
+                      [class.btn-restore]="!vt.active"
+                      (click)="toggleVisitTypeActive(vt)"
+                      [attr.data-testid]="'vt-toggle-' + vt.id"
+                      [attr.aria-label]="
+                        (vt.active ? 'SLOT_ADMIN.RETIRE' : 'SLOT_ADMIN.RESTORE') | translate
+                      "
+                      [title]="(vt.active ? 'SLOT_ADMIN.RETIRE' : 'SLOT_ADMIN.RESTORE') | translate"
+                    >
+                      <span class="material-symbols-outlined">{{
+                        vt.active ? 'block' : 'restart_alt'
+                      }}</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ═══ Session templates ═══ -->
+  @if (section() === 'templates') {
+    <section>
+      <div class="section-head">
+        <label class="toggle-inactive">
+          <input
+            type="checkbox"
+            [ngModel]="tplShowInactive()"
+            (ngModelChange)="setTplShowInactive($event)"
+          />
+          {{ 'SLOT_ADMIN.SHOW_INACTIVE' | translate }}
+        </label>
+        <button class="btn-primary" (click)="openCreateTemplate()" data-testid="tpl-add">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'SLOT_ADMIN.TPL_ADD' | translate }}
+        </button>
+      </div>
+      @if (tplLoading()) {
+        <div class="state-block">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        </div>
+      } @else if (templates().length === 0) {
+        <div class="state-block">
+          <p>{{ 'SLOT_ADMIN.TPL_EMPTY' | translate }}</p>
+          <p class="empty-hint">{{ 'SLOT_ADMIN.TPL_EMPTY_HINT' | translate }}</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>{{ 'SLOT_ADMIN.TPL_DAY' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.TPL_HOURS' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.TPL_SLOT_LENGTH' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.STAFF' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.VISIT_TYPE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.TPL_EFFECTIVE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.STATE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (tpl of templates(); track tpl.id) {
+                <tr [attr.data-testid]="'tpl-row-' + tpl.id" [class.row-inactive]="!tpl.active">
+                  <td>{{ dayLabel(tpl.dayOfWeek) }}</td>
+                  <td>{{ tpl.startTime }}–{{ tpl.endTime }}</td>
+                  <td class="numeric">
+                    {{ 'SLOT_ADMIN.MINUTES' | translate: { count: tpl.slotMinutes } }}
+                  </td>
+                  <td>{{ tpl.staffName || tpl.staffId }}</td>
+                  <td>{{ tpl.departmentName || '—' }}</td>
+                  <td>{{ tpl.visitTypeName || ('SLOT_ADMIN.ANY_VISIT_TYPE' | translate) }}</td>
+                  <td>
+                    {{ tpl.effectiveFrom | date: 'mediumDate' }}
+                    → {{ tpl.effectiveTo ? (tpl.effectiveTo | date: 'mediumDate') : '∞' }}
+                  </td>
+                  <td>
+                    <span class="state-chip" [class.state-active]="tpl.active">
+                      {{ (tpl.active ? 'SLOT_ADMIN.ACTIVE' : 'SLOT_ADMIN.RETIRED') | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
+                    @if (tpl.active) {
+                      <button
+                        class="btn-icon"
+                        (click)="openEditTemplate(tpl)"
+                        [attr.data-testid]="'tpl-edit-' + tpl.id"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
+                        [title]="'COMMON.EDIT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                    }
+                    <button
+                      class="btn-icon"
+                      [class.btn-danger]="tpl.active"
+                      [class.btn-restore]="!tpl.active"
+                      (click)="toggleTemplateActive(tpl)"
+                      [attr.data-testid]="'tpl-toggle-' + tpl.id"
+                      [attr.aria-label]="
+                        (tpl.active ? 'SLOT_ADMIN.RETIRE' : 'SLOT_ADMIN.RESTORE') | translate
+                      "
+                      [title]="
+                        (tpl.active ? 'SLOT_ADMIN.RETIRE' : 'SLOT_ADMIN.RESTORE') | translate
+                      "
+                    >
+                      <span class="material-symbols-outlined">{{
+                        tpl.active ? 'block' : 'restart_alt'
+                      }}</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- ═══ Generation + slot preview ═══ -->
+  @if (section() === 'slots') {
+    <section>
+      <div class="generate-panel" data-testid="slot-generate-panel">
+        <h3>{{ 'SLOT_ADMIN.GENERATE_TITLE' | translate }}</h3>
+        <p class="panel-hint">{{ 'SLOT_ADMIN.GENERATE_HINT' | translate }}</p>
+        <div class="generate-controls">
+          <label for="gen-from"
+            >{{ 'SLOT_ADMIN.FROM' | translate }}
+            <input id="gen-from" type="date" [(ngModel)]="genFrom" />
+          </label>
+          <label for="gen-to"
+            >{{ 'SLOT_ADMIN.TO' | translate }}
+            <input id="gen-to" type="date" [(ngModel)]="genTo" />
+          </label>
+          <button
+            class="btn-primary"
+            (click)="runGeneration()"
+            [disabled]="generating()"
+            data-testid="slot-generate"
+          >
+            <span class="material-symbols-outlined" [class.spin]="generating()">bolt</span>
+            {{ 'SLOT_ADMIN.GENERATE' | translate }}
+          </button>
+        </div>
+        @if (lastGeneration(); as result) {
+          <p class="generate-result" data-testid="slot-generate-result">
+            {{
+              'SLOT_ADMIN.GENERATED'
+                | translate
+                  : {
+                      created: result.slotsCreated,
+                      templates: result.templatesApplied,
+                      skipped: result.skippedExisting,
+                    }
+            }}
+          </p>
+        }
+      </div>
+
+      <div class="filter-bar">
+        <label for="slot-staff"
+          >{{ 'SLOT_ADMIN.STAFF' | translate }}
+          <select id="slot-staff" [(ngModel)]="slotFilterStaffId">
+            <option value="">{{ 'SLOT_ADMIN.ALL' | translate }}</option>
+            @for (s of staffOptions(); track s.id) {
+              <option [value]="s.id">{{ s.name }}</option>
+            }
+          </select>
+        </label>
+        <label for="slot-department"
+          >{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}
+          <select id="slot-department" [(ngModel)]="slotFilterDepartmentId">
+            <option value="">{{ 'SLOT_ADMIN.ALL' | translate }}</option>
+            @for (d of departments(); track d.id) {
+              <option [value]="d.id">{{ d.name }}</option>
+            }
+          </select>
+        </label>
+        <label for="slot-from"
+          >{{ 'SLOT_ADMIN.FROM' | translate }}
+          <input id="slot-from" type="date" [(ngModel)]="slotFrom" />
+        </label>
+        <label for="slot-to"
+          >{{ 'SLOT_ADMIN.TO' | translate }}
+          <input id="slot-to" type="date" [(ngModel)]="slotTo" />
+        </label>
+        <button class="btn-secondary" (click)="searchSlots()" data-testid="slot-search">
+          <span class="material-symbols-outlined">search</span>
+          {{ 'SLOT_ADMIN.SEARCH' | translate }}
+        </button>
+      </div>
+
+      @if (slotsLoading()) {
+        <div class="state-block">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        </div>
+      } @else if (slots().length === 0) {
+        <div class="state-block">
+          <p>{{ 'SLOT_ADMIN.SLOTS_EMPTY' | translate }}</p>
+          <p class="empty-hint">{{ 'SLOT_ADMIN.SLOTS_EMPTY_HINT' | translate }}</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>{{ 'SLOT_ADMIN.SLOT_DATE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.SLOT_TIME' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.STAFF' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.VISIT_TYPE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.STATE' | translate }}</th>
+                <th>{{ 'SLOT_ADMIN.ACTIONS' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (slot of slots(); track slot.id) {
+                <tr [attr.data-testid]="'slot-row-' + slot.id">
+                  <td>{{ slot.slotDate | date: 'mediumDate' }}</td>
+                  <td>
+                    {{ slot.startAt | date: 'shortTime' }}–{{ slot.endAt | date: 'shortTime' }}
+                  </td>
+                  <td>{{ slot.staffName || '—' }}</td>
+                  <td>{{ slot.departmentName || '—' }}</td>
+                  <td>{{ slot.visitTypeName || ('SLOT_ADMIN.ANY_VISIT_TYPE' | translate) }}</td>
+                  <td>
+                    <span class="status-badge" [attr.data-status]="slot.status">
+                      {{ 'SLOT_ADMIN.STATUS_' + slot.status | translate }}
+                    </span>
+                  </td>
+                  <td class="actions-cell">
+                    @if (slot.status === 'OPEN') {
+                      <button
+                        class="btn-icon btn-danger"
+                        (click)="confirmBlock(slot)"
+                        [attr.data-testid]="'slot-block-' + slot.id"
+                        [attr.aria-label]="'SLOT_ADMIN.BLOCK' | translate"
+                        [title]="'SLOT_ADMIN.BLOCK' | translate"
+                      >
+                        <span class="material-symbols-outlined">block</span>
+                      </button>
+                    }
+                    @if (slot.status === 'HELD' || slot.status === 'BLOCKED') {
+                      <button
+                        class="btn-icon btn-restore"
+                        (click)="release(slot)"
+                        [disabled]="releasingId() !== null"
+                        [attr.data-testid]="'slot-release-' + slot.id"
+                        [attr.aria-label]="'SLOT_ADMIN.RELEASE' | translate"
+                        [title]="'SLOT_ADMIN.RELEASE' | translate"
+                      >
+                        <span class="material-symbols-outlined">lock_open</span>
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- Visit-type modal — dialog nested INSIDE the backdrop (the #442 lesson). -->
+  @if (vtModalOpen()) {
+    <div
+      class="form-overlay"
+      (click)="closeVisitTypeModal()"
+      (keydown.escape)="closeVisitTypeModal()"
+      tabindex="-1"
+      data-testid="vt-modal"
+    >
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{ (vtEditingId() ? 'SLOT_ADMIN.VT_EDIT_TITLE' : 'SLOT_ADMIN.VT_ADD_TITLE') | translate }}
+        </h2>
+        <form (ngSubmit)="submitVisitType()">
+          <div class="form-row">
+            <label for="vt-code"
+              >{{ 'SLOT_ADMIN.VT_CODE' | translate }} *
+              <input
+                id="vt-code"
+                type="text"
+                [(ngModel)]="vtForm.code"
+                name="code"
+                maxlength="40"
+              />
+            </label>
+            <label for="vt-duration"
+              >{{ 'SLOT_ADMIN.VT_DURATION' | translate }} *
+              <input
+                id="vt-duration"
+                type="number"
+                min="1"
+                [(ngModel)]="vtForm.durationMinutes"
+                name="durationMinutes"
+              />
+            </label>
+          </div>
+          <label for="vt-name"
+            >{{ 'SLOT_ADMIN.VT_NAME' | translate }} *
+            <input id="vt-name" type="text" [(ngModel)]="vtForm.name" name="name" maxlength="150" />
+          </label>
+          <label for="vt-department"
+            >{{ 'SLOT_ADMIN.DEPARTMENT' | translate }}
+            <select id="vt-department" [(ngModel)]="vtForm.departmentId" name="departmentId">
+              <option [ngValue]="undefined">{{ 'SLOT_ADMIN.HOSPITAL_WIDE' | translate }}</option>
+              @for (d of departments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </label>
+          <label for="vt-description"
+            >{{ 'SLOT_ADMIN.VT_DESCRIPTION' | translate }}
+            <textarea
+              id="vt-description"
+              [(ngModel)]="vtForm.description"
+              name="description"
+              rows="2"
+              maxlength="500"
+            ></textarea>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="vtForm.patientBookable" name="patientBookable" />
+            {{ 'SLOT_ADMIN.VT_BOOKABLE_LABEL' | translate }}
+          </label>
+          <p class="panel-hint">{{ 'SLOT_ADMIN.VT_BOOKABLE_HINT' | translate }}</p>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeVisitTypeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="vtSaving()" data-testid="vt-save">
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Session-template modal -->
+  @if (tplModalOpen()) {
+    <div
+      class="form-overlay"
+      (click)="closeTemplateModal()"
+      (keydown.escape)="closeTemplateModal()"
+      tabindex="-1"
+      data-testid="tpl-modal"
+    >
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{
+            (tplEditingId() ? 'SLOT_ADMIN.TPL_EDIT_TITLE' : 'SLOT_ADMIN.TPL_ADD_TITLE') | translate
+          }}
+        </h2>
+        <form (ngSubmit)="submitTemplate()">
+          <div class="form-row">
+            <label for="tpl-staff"
+              >{{ 'SLOT_ADMIN.STAFF' | translate }} *
+              <select id="tpl-staff" [(ngModel)]="tplForm.staffId" name="staffId">
+                <option value="">{{ 'SLOT_ADMIN.SELECT_STAFF' | translate }}</option>
+                @for (s of staffOptions(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            </label>
+            <label for="tpl-department"
+              >{{ 'SLOT_ADMIN.DEPARTMENT' | translate }} *
+              <select id="tpl-department" [(ngModel)]="tplForm.departmentId" name="departmentId">
+                <option value="">{{ 'SLOT_ADMIN.SELECT_DEPARTMENT' | translate }}</option>
+                @for (d of departments(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="tpl-visit-type"
+              >{{ 'SLOT_ADMIN.VISIT_TYPE' | translate }}
+              <select id="tpl-visit-type" [(ngModel)]="tplForm.visitTypeId" name="visitTypeId">
+                <option [ngValue]="undefined">{{ 'SLOT_ADMIN.ANY_VISIT_TYPE' | translate }}</option>
+                @for (vt of visitTypes(); track vt.id) {
+                  @if (vt.active) {
+                    <option [value]="vt.id">{{ vt.name }}</option>
+                  }
+                }
+              </select>
+            </label>
+            <label for="tpl-day"
+              >{{ 'SLOT_ADMIN.TPL_DAY' | translate }} *
+              <select id="tpl-day" [(ngModel)]="tplForm.dayOfWeek" name="dayOfWeek">
+                @for (d of days; track d) {
+                  <option [ngValue]="d">{{ dayLabel(d) }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="tpl-start"
+              >{{ 'SLOT_ADMIN.TPL_START' | translate }} *
+              <input id="tpl-start" type="time" [(ngModel)]="tplForm.startTime" name="startTime" />
+            </label>
+            <label for="tpl-end"
+              >{{ 'SLOT_ADMIN.TPL_END' | translate }} *
+              <input id="tpl-end" type="time" [(ngModel)]="tplForm.endTime" name="endTime" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label for="tpl-slot-minutes"
+              >{{ 'SLOT_ADMIN.TPL_SLOT_LENGTH' | translate }} *
+              <input
+                id="tpl-slot-minutes"
+                type="number"
+                min="1"
+                [(ngModel)]="tplForm.slotMinutes"
+                name="slotMinutes"
+              />
+            </label>
+            <span></span>
+          </div>
+          <div class="form-row">
+            <label for="tpl-effective-from"
+              >{{ 'SLOT_ADMIN.TPL_EFFECTIVE_FROM' | translate }} *
+              <input
+                id="tpl-effective-from"
+                type="date"
+                [(ngModel)]="tplForm.effectiveFrom"
+                name="effectiveFrom"
+              />
+            </label>
+            <label for="tpl-effective-to"
+              >{{ 'SLOT_ADMIN.TPL_EFFECTIVE_TO' | translate }}
+              <input
+                id="tpl-effective-to"
+                type="date"
+                [(ngModel)]="tplForm.effectiveTo"
+                name="effectiveTo"
+                [min]="tplForm.effectiveFrom"
+              />
+            </label>
+          </div>
+          <label for="tpl-notes"
+            >{{ 'SLOT_ADMIN.NOTES' | translate }}
+            <textarea
+              id="tpl-notes"
+              [(ngModel)]="tplForm.notes"
+              name="notes"
+              rows="2"
+              maxlength="500"
+            ></textarea>
+          </label>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeTemplateModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="tplSaving()"
+              data-testid="tpl-save"
+            >
+              {{ 'COMMON.SAVE' | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Block confirmation -->
+  @if (blockTarget(); as target) {
+    <div
+      class="form-overlay"
+      (click)="cancelBlock()"
+      (keydown.escape)="cancelBlock()"
+      tabindex="-1"
+      data-testid="slot-block-modal"
+    >
+      <div
+        class="form-card confirm-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>{{ 'SLOT_ADMIN.BLOCK_TITLE' | translate }}</h2>
+        <p>
+          <strong>{{ target.startAt | date: 'medium' }}</strong>
+          — {{ target.staffName }}
+        </p>
+        <label for="block-reason"
+          >{{ 'SLOT_ADMIN.BLOCK_REASON' | translate }}
+          <input id="block-reason" type="text" [(ngModel)]="blockReason" maxlength="255" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelBlock()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger-solid"
+            [disabled]="blocking()"
+            (click)="executeBlock()"
+            data-testid="slot-block-confirm"
+          >
+            {{ 'SLOT_ADMIN.BLOCK' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

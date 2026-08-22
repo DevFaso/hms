@@ -697,6 +697,18 @@ export const routes: Routes = [
           import('./bed-management/bed-management').then((m) => m.BedManagementComponent),
       },
 
+      // Slot inventory administration (P2 #11 — visit types, session
+      // templates, generation). Backend writes are HOSPITAL_ADMIN/SUPER_ADMIN
+      // (no ROLE_ADMIN), so the route matches that exactly.
+      {
+        path: 'slot-admin',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./slot-admin/slot-admin').then((m) => m.SlotAdminComponent),
+      },
+
       // Discharge (approvals + summaries)
       {
         path: 'discharge',
