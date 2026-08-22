@@ -32,7 +32,11 @@ public class DowntimeStateService {
 
     private final PlatformDowntimeStateRepository repository;
 
-    private volatile DowntimeSnapshot cached = DowntimeSnapshot.NORMAL;
+    /** AtomicReference rather than a volatile field: the snapshot record is
+     *  immutable so volatile would suffice, but Sonar (java:S3077) cannot
+     *  see record immutability — and the atomic type documents the intent. */
+    private final java.util.concurrent.atomic.AtomicReference<DowntimeSnapshot> cached =
+        new java.util.concurrent.atomic.AtomicReference<>(DowntimeSnapshot.NORMAL);
 
     @PostConstruct
     void init() {
@@ -42,9 +46,9 @@ public class DowntimeStateService {
     @Scheduled(fixedDelay = 30_000L)
     public void refresh() {
         try {
-            cached = repository.findById(PlatformDowntimeState.SINGLETON_ID)
+            cached.set(repository.findById(PlatformDowntimeState.SINGLETON_ID)
                 .map(row -> new DowntimeSnapshot(row.isReadOnly(), row.getMessage(), row.getActivatedAt()))
-                .orElse(DowntimeSnapshot.NORMAL);
+                .orElse(DowntimeSnapshot.NORMAL));
         } catch (RuntimeException ex) {
             // Keep the previous value on a DB blip — during an actual outage
             // this is exactly when the mode must keep holding.
@@ -54,7 +58,7 @@ public class DowntimeStateService {
     }
 
     public DowntimeSnapshot snapshot() {
-        return cached;
+        return cached.get();
     }
 
     @Transactional
@@ -74,7 +78,7 @@ public class DowntimeStateService {
         repository.save(row);
         DowntimeSnapshot snapshot =
             new DowntimeSnapshot(row.isReadOnly(), row.getMessage(), row.getActivatedAt());
-        cached = snapshot;
+        cached.set(snapshot);
         return snapshot;
     }
 }
