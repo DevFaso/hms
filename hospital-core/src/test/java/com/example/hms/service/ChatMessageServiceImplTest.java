@@ -536,4 +536,75 @@ class ChatMessageServiceImplTest {
         assertNotNull(result);
         verify(chatAttachmentRepository, times(1)).saveAndFlush(any(ChatAttachment.class));
     }
+
+    // ── downloadAttachment (authenticated streaming — the /uploads fix) ──
+
+    private ChatAttachment attachmentBetween(String senderUsername, String recipientUsername) {
+        User sender = new User();
+        sender.setId(UUID.randomUUID());
+        sender.setUsername(senderUsername);
+        User recipient = new User();
+        recipient.setId(UUID.randomUUID());
+        recipient.setUsername(recipientUsername);
+        ChatMessage message = new ChatMessage();
+        message.setSender(sender);
+        message.setRecipient(recipient);
+        return ChatAttachment.builder()
+            .id(UUID.randomUUID())
+            .message(message)
+            .kind(ChatAttachmentKind.PHOTO)
+            .storageKey("/uploads/chat-attachments/x.jpg")
+            .publicUrl("https://hms/uploads/chat-attachments/x.jpg")
+            .displayName("x.jpg")
+            .contentType("image/jpeg")
+            .sizeBytes(1024L)
+            .sha256("cafe")
+            .build();
+    }
+
+    @Test
+    void downloadAttachment_streamsForTheSender() {
+        ChatAttachment attachment = attachmentBetween("alice", "bob");
+        when(chatAttachmentRepository.findById(attachment.getId())).thenReturn(Optional.of(attachment));
+        java.nio.file.Path onDisk = java.nio.file.Path.of("x.jpg");
+        when(fileUploadService.resolveStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
+            .thenReturn(onDisk);
+
+        ChatMessageService.ChatAttachmentPayload payload =
+            chatMessageService.downloadAttachment(attachment.getId(), "alice");
+
+        assertEquals(onDisk, payload.path());
+        assertEquals("image/jpeg", payload.contentType());
+        assertEquals("x.jpg", payload.displayName());
+    }
+
+    @Test
+    void downloadAttachment_streamsForTheRecipient() {
+        ChatAttachment attachment = attachmentBetween("alice", "bob");
+        when(chatAttachmentRepository.findById(attachment.getId())).thenReturn(Optional.of(attachment));
+        when(fileUploadService.resolveStoredFile("/uploads/chat-attachments/x.jpg", "chat-attachments"))
+            .thenReturn(java.nio.file.Path.of("x.jpg"));
+
+        assertNotNull(chatMessageService.downloadAttachment(attachment.getId(), "bob"));
+    }
+
+    @Test
+    void downloadAttachment_aNonParticipantReadsNotFound() {
+        // Not 403: attachment ids must reveal nothing about who talks to whom.
+        ChatAttachment attachment = attachmentBetween("alice", "bob");
+        when(chatAttachmentRepository.findById(attachment.getId())).thenReturn(Optional.of(attachment));
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> chatMessageService.downloadAttachment(attachment.getId(), "mallory"));
+        verify(fileUploadService, never()).resolveStoredFile(any(), any());
+    }
+
+    @Test
+    void downloadAttachment_unknownIdIsNotFound() {
+        UUID id = UUID.randomUUID();
+        when(chatAttachmentRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> chatMessageService.downloadAttachment(id, "alice"));
+    }
 }

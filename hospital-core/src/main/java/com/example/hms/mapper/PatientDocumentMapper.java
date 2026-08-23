@@ -20,7 +20,11 @@ public class PatientDocumentMapper {
                 .uploadedByDisplayName(resolveUploaderDisplayName(uploader))
                 .documentType(doc.getDocumentType())
                 .displayName(doc.getDisplayName())
-                .fileUrl(doc.getFileUrl())
+                // Derived, never the stored file_url: historical rows carry
+                // absolute /uploads URLs from when the tree was served
+                // permitAll. Deriving here heals every old row — clients
+                // fetch through the authenticated download endpoint.
+                .fileUrl("/me/patient/documents/" + doc.getId() + "/download")
                 .mimeType(doc.getMimeType())
                 .fileSizeBytes(doc.getFileSizeBytes())
                 .checksumSha256(doc.getChecksumSha256())

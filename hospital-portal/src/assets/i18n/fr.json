@@ -1301,7 +1301,8 @@
     "VOICE_MEMO": "mémo vocal",
     "VOICE_MEMO_EMPTY": "Le mémo vocal était vide — veuillez réessayer.",
     "VOICE_MEMO_NOT_SUPPORTED": "L'enregistrement de mémo vocal n'est pas pris en charge dans ce navigateur.",
-    "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal."
+    "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal.",
+    "LOADING_ATTACHMENT": "Chargement de la pièce jointe…"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -4524,7 +4525,8 @@
       "TYPE_IMMUNIZATION_RECORD": "Carnet de vaccination",
       "TYPE_OTHER": "Autre",
       "UPLOADED_BY": "Téléversé par",
-      "DOWNLOAD": "Voir / Télécharger"
+      "DOWNLOAD": "Voir / Télécharger",
+      "DOWNLOAD_FAILED": "Échec du téléchargement du document"
     },
     "NOTIFICATIONS": {
       "TITLE": "Mes Notifications",

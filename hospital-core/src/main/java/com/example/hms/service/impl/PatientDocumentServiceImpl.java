@@ -106,6 +106,22 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         log.info("Patient {} soft-deleted document {}", patientId, documentId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public DocumentPayload downloadDocument(Authentication auth, UUID documentId) {
+        UUID patientId = resolvePatientId(auth);
+        PatientUploadedDocument doc = documentRepository
+                .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+        // filePath is the server-assigned storage key from upload time —
+        // never client input — and resolveStoredFile pins it inside the
+        // patient-documents subdirectory.
+        java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
+        String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
+        String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
+        return new DocumentPayload(path, contentType, displayName);
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     private UUID resolveUserId(Authentication auth) {

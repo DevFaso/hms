@@ -48,4 +48,15 @@ public interface PatientDocumentService {
      * Soft-delete a document, verifying it belongs to the authenticated patient.
      */
     void deleteDocument(Authentication auth, UUID documentId);
+
+    /**
+     * Resolve a document's bytes for authenticated streaming, verifying it
+     * belongs to the authenticated patient. This is the ONLY way document
+     * bytes leave the server — the upload tree has no public static
+     * mapping (the permitAll /uploads/** hole).
+     */
+    DocumentPayload downloadDocument(Authentication auth, UUID documentId);
+
+    /** One downloadable document: on-disk path + the headers to serve it with. */
+    record DocumentPayload(java.nio.file.Path path, String contentType, String displayName) { }
 }

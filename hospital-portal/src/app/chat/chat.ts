@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -105,7 +105,7 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
 })
-export class ChatComponent implements OnInit {
+export class ChatComponent implements OnInit, OnDestroy {
   private readonly chatService = inject(ChatService);
   private readonly userService = inject(UserService);
   private readonly auth = inject(AuthService);
@@ -132,6 +132,40 @@ export class ChatComponent implements OnInit {
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
   private recordingStartedAt = 0;
+
+  /* Attachment bytes stream through the authenticated, participant-checked
+     download endpoint (the permitAll /uploads/** hole is closed), and a
+     bare <img src>/<audio src> carries no bearer token — so each
+     attachment is fetched as a blob and rendered via an object URL. */
+  attachmentUrls = signal<Record<string, string>>({});
+  private readonly fetchingAttachmentIds = new Set<string>();
+
+  attachmentUrl(att: ChatAttachment): string | null {
+    return att.id ? (this.attachmentUrls()[att.id] ?? null) : null;
+  }
+
+  private hydrateAttachments(msgs: ChatMessage[]): void {
+    for (const msg of msgs) {
+      for (const att of msg.attachments ?? []) {
+        const id = att.id;
+        if (!id || this.attachmentUrls()[id] || this.fetchingAttachmentIds.has(id)) continue;
+        this.fetchingAttachmentIds.add(id);
+        this.chatService.getAttachmentBlob(id).subscribe({
+          next: (blob) => {
+            this.fetchingAttachmentIds.delete(id);
+            this.attachmentUrls.update((m) => ({ ...m, [id]: URL.createObjectURL(blob) }));
+          },
+          error: () => this.fetchingAttachmentIds.delete(id),
+        });
+      }
+    }
+  }
+
+  ngOnDestroy(): void {
+    for (const url of Object.values(this.attachmentUrls())) {
+      URL.revokeObjectURL(url);
+    }
+  }
   private recordingTimerId: ReturnType<typeof setInterval> | null = null;
 
   /** Browser's recorded MIME type for the active session (decided at start). */
@@ -197,6 +231,7 @@ export class ChatComponent implements OnInit {
     this.chatService.getHistory(this.currentUserId, conv.conversationUserId).subscribe({
       next: (msgs) => {
         this.messages.set(msgs ?? []);
+        this.hydrateAttachments(msgs ?? []);
         this.chatService
           .markRead(conv.conversationUserId, this.currentUserId)
           .subscribe({ error: (_e) => _e });
@@ -229,6 +264,7 @@ export class ChatComponent implements OnInit {
     this.chatService.sendMessage(req).subscribe({
       next: (msg) => {
         this.messages.update((list) => [...list, msg]);
+        this.hydrateAttachments([msg]);
         this.messageText = '';
         this.pendingAttachments.set([]);
         this.attachmentError.set(null);
@@ -486,6 +522,7 @@ export class ChatComponent implements OnInit {
     this.chatService.getHistory(this.currentUserId, conv.conversationUserId).subscribe({
       next: (msgs) => {
         this.messages.set(msgs ?? []);
+        this.hydrateAttachments(msgs ?? []);
         this.toast.success('Messages refreshed');
       },
     });
