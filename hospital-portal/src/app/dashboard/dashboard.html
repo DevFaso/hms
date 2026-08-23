@@ -2425,7 +2425,7 @@
           <span class="material-symbols-outlined stat-icon">science</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ labOpsSummary()?.statusPending ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.PENDING_LAB_ORDERS' | translate }}</span>
         </div>
       </a>
@@ -2434,7 +2434,7 @@
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ labOpsSummary()?.completedToday ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
         </div>
       </a>
@@ -2443,7 +2443,7 @@
           <span class="material-symbols-outlined stat-icon">biotech</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ labOpsSummary()?.statusInProgress ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.IN_PROCESSING' | translate }}</span>
         </div>
       </a>
@@ -2557,17 +2557,8 @@
           <span class="material-symbols-outlined stat-icon">local_pharmacy</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ dispenseQueueCount() ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.PENDING_PRESCRIPTIONS' | translate }}</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/prescriptions">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">medication_liquid</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">—</span
-          ><span class="stat-label">{{ 'DASHBOARD.DISPENSED_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/prescriptions">
@@ -2575,7 +2566,7 @@
           <span class="material-symbols-outlined stat-icon">loop</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ refillPendingCount() ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.REFILL_REQUESTS' | translate }}</span>
         </div>
       </a>
@@ -2691,17 +2682,8 @@
           <span class="material-symbols-outlined stat-icon">radiology</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ imagingPendingCount() ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.PENDING_STUDIES' | translate }}</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/imaging">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">task_alt</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">—</span
-          ><span class="stat-label">{{ 'DASHBOARD.REPORTED_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/imaging">
@@ -2709,7 +2691,7 @@
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span
+          <span class="stat-value">{{ imagingAwaitingReportCount() ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.AWAITING_REPORT' | translate }}</span>
         </div>
       </a>
@@ -3112,6 +3094,51 @@
                 <span class="qa-desc">{{ action.description }}</span>
               </a>
             }
+          </div>
+        </section>
+      }
+      <!-- Work queues for roles that land on the fallback view (role audit
+           D1). Both endpoints already admit the role; before this the two
+           had a sidebar and nothing to start from on the dashboard. -->
+      @if (dispenseQueueCount() !== null) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">medication_liquid</span>
+              <h2 class="card-title">{{ 'DASHBOARD.DISPENSE_QUEUE' | translate }}</h2>
+            </div>
+            <a routerLink="/pharmacy/dispensing" class="card-link">{{
+              'COMMON.VIEW_ALL' | translate
+            }}</a>
+          </div>
+          <div class="schedule-list">
+            <div class="sched-row">
+              <div class="sched-info">
+                <span class="sched-name">{{ dispenseQueueCount() }}</span>
+                <span class="sched-reason">{{ 'DASHBOARD.DISPENSE_QUEUE_DESC' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      }
+      @if (pharmacyClaimsCount() !== null) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">request_quote</span>
+              <h2 class="card-title">{{ 'DASHBOARD.PHARMACY_CLAIMS' | translate }}</h2>
+            </div>
+            <a routerLink="/pharmacy/claims" class="card-link">{{
+              'COMMON.VIEW_ALL' | translate
+            }}</a>
+          </div>
+          <div class="schedule-list">
+            <div class="sched-row">
+              <div class="sched-info">
+                <span class="sched-name">{{ pharmacyClaimsCount() }}</span>
+                <span class="sched-reason">{{ 'DASHBOARD.PHARMACY_CLAIMS_DESC' | translate }}</span>
+              </div>
+            </div>
           </div>
         </section>
       }

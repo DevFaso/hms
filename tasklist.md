@@ -929,11 +929,29 @@ PHYSIOTHERAPIST.
 
 ## D. Follow-ups (after Aâ€“C)
 
-- [ ] D1. Fallback-view work cards: dispense queue for PHARMACY_VERIFIER,
-  claims list for CLAIMS_REVIEWER (endpoints exist and admit the roles).
-- [ ] D2. Pharmacist dashboard: wire stat strip + Prescription Queue card to
-  the real dispense work-queue; radiologist view: real summary endpoint
-  instead of hardcoded dashes; lab view: wire stat cards.
+- [x] D1. Fallback-view work cards: dispense queue for PHARMACY_VERIFIER,
+  claims list for CLAIMS_REVIEWER. DONE 2026-08-23 (**PR #496**). Both
+  endpoints already admitted the role (DispenseController work-queue lists
+  PHARMACY_VERIFIER, PharmacyClaimController's CLAIMS_ROLES lists
+  CLAIMS_REVIEWER) - the roles simply had a sidebar entry and nothing to start
+  from on the dashboard. Counts read with size=1 so a total costs one row, not
+  a page of rows nothing renders.
+- [x] D2. Pharmacist / radiologist / lab stat strips. DONE 2026-08-23
+  (**PR #496**). NINE hardcoded em-dashes across the three views; seven now
+  carry real numbers and TWO CARDS WERE REMOVED rather than left as permanent
+  placeholders - DISPENSED_TODAY and REPORTED_TODAY have no data source (no
+  endpoint returns dispenses for today, and the imaging order projection
+  carries no report timestamp). A dash that can never fill is a claim the
+  product makes and cannot keep; deleting it is the honest fix, and the
+  numbers can come back with the endpoints that would feed them.
+  Lab strip needed a backend change: /dashboard/lab-ops/summary excluded
+  LAB_SCIENTIST and LAB_TECHNICIAN - the exact roles the lab VIEW is built
+  for - so the only summary endpoint available to that view 403'd its own
+  audience. Widened (aggregate counts for the caller's hospital, no PHI).
+  Radiologist counts are derived client-side from the hospital-wide imaging
+  order list: pending = ORDERED+SCHEDULED, awaiting-report = COMPLETED (the
+  gap before RESULTS_AVAILABLE). No imaging dashboard summary endpoint exists
+  and two honest counts beat three invented ones.
 - [x] D3. `findRouteRecursive` cannot resolve nested paths, so canAccessRoute
   passes stale nested links (the dead PHYSICIAN 'Register Patient' hero
   action) â€” walk path segments/children. DONE 2026-08-23 (**PR #489**).
