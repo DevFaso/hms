@@ -1912,6 +1912,8 @@
     "BILLING_SNAPSHOT": "Billing Snapshot",
     "BILLING_OVERDUE": "Overdue invoices",
     "ALERT_ACK_FAILED": "Could not acknowledge the alert. Please try again.",
+    "DISPENSE_QUEUE": "Dispense Queue",
+    "DISPENSE_QUEUE_DESC": "Prescriptions ready to dispense",
     "TILE": {
       "STAFF": "Staff",
       "APPOINTMENTS": "Appointments",
@@ -2010,7 +2012,9 @@
       "READY_TO_DISCHARGE": "Ready to Discharge",
       "COMPLETED": "Completed",
       "CANCELLED": "Cancelled"
-    }
+    },
+    "PHARMACY_CLAIMS": "Pharmacy Claims",
+    "PHARMACY_CLAIMS_DESC": "Claims at this hospital"
   },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Active Staff",

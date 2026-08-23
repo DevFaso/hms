@@ -1912,6 +1912,8 @@
     "BILLING_SNAPSHOT": "Aperçu de Facturation",
     "BILLING_OVERDUE": "Factures en retard",
     "ALERT_ACK_FAILED": "Impossible d'acquitter l'alerte. Veuillez réessayer.",
+    "DISPENSE_QUEUE": "File de dispensation",
+    "DISPENSE_QUEUE_DESC": "Ordonnances prêtes à dispenser",
     "TILE": {
       "STAFF": "Personnel",
       "APPOINTMENTS": "Rendez-vous",
@@ -2010,7 +2012,9 @@
       "READY_TO_DISCHARGE": "Prêt pour la sortie",
       "COMPLETED": "Terminé",
       "CANCELLED": "Annulé"
-    }
+    },
+    "PHARMACY_CLAIMS": "Demandes de remboursement",
+    "PHARMACY_CLAIMS_DESC": "Demandes pour cet hôpital"
   },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personnel Actif",

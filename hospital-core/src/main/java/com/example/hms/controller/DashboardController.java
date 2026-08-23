@@ -86,8 +86,16 @@ public class DashboardController {
         return ResponseEntity.ok(qualityManagerDashboardService.getSummary(hospitalId));
     }
 
+    // LAB_SCIENTIST / LAB_TECHNICIAN added by role audit D2: these are the
+    // roles the lab DASHBOARD VIEW is built for, and the bench cannot see its
+    // own workload without them — the stat strip sat on hardcoded em-dashes
+    // precisely because the only summary endpoint excluded its audience. The
+    // payload is aggregate counts for the caller's own hospital: no PHI, no
+    // patient identity, nothing a bench scientist does not already see in the
+    // worklist they work from.
     @GetMapping("/lab-ops/summary")
-    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN',"
+        + " 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get Lab Operations dashboard summary")
     public ResponseEntity<LabOpsSummaryDTO> getLabOpsSummary() {
         UUID hospitalId = HospitalContextHolder.getContext()
