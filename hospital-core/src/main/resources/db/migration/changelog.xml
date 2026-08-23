@@ -1920,4 +1920,17 @@
                  splitStatements="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V129 — persistent FHIR bulk-export jobs (P3 item 24, roadmap
+         row 21 follow-on): platform.fhir_bulk_export_jobs +
+         fhir_bulk_export_files replace the in-memory job map so the
+         @Scheduled NDJSON runner can finish what the kickoff started.
+         No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V129-fhir-bulk-export-jobs" author="hms-team" runOnChange="false">
+        <sqlFile path="V129__fhir_bulk_export_jobs.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
