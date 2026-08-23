@@ -187,6 +187,17 @@ export class SlotInventoryService {
     return this.http.post<AppointmentSlotResponse>(`/slots/${slotId}/release`, null, {});
   }
 
+  /**
+   * Book a slot for a patient (P3 #22). Creates a normal appointment and
+   * stamps the slot BOOKED — the appointment owns the time from then on.
+   */
+  book(slotId: string, patientId: string, reason?: string): Observable<AppointmentSlotResponse> {
+    return this.http.post<AppointmentSlotResponse>(`/slots/${slotId}/book`, {
+      patientId,
+      reason: reason ?? null,
+    });
+  }
+
   // ── Options ────────────────────────────────────────────────
 
   listDepartments(): Observable<DepartmentOption[]> {

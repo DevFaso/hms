@@ -55,6 +55,7 @@ class AppointmentStatusTransitionTest {
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EmailService emailService;
+    @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @InjectMocks
@@ -249,6 +250,8 @@ class AppointmentStatusTransitionTest {
         appointmentService.confirmOrCancelAppointment(appointmentId, "confirm", null, "doctor_b");
 
         verify(appointmentRepository).save(appointment);
+        // Confirming keeps the appointment, so its slot must stay booked.
+        verify(slotInventoryService, org.mockito.Mockito.never()).releaseForAppointment(any());
     }
 
     @Test
@@ -265,5 +268,7 @@ class AppointmentStatusTransitionTest {
         appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", null, "doctor_b");
 
         verify(appointmentRepository).save(appointment);
+        // The appointment owns its slot (P3 #22): cancelling frees the time.
+        verify(slotInventoryService).releaseForAppointment(appointmentId);
     }
 }

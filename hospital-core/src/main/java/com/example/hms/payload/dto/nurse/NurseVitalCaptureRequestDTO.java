@@ -24,5 +24,12 @@ public class NurseVitalCaptureRequestDTO {
     private Double weightKg;
     private Double heightCm;
     private Double headCircumferenceCm;
+
+    /** Supplemental oxygen at measurement time — NEWS2 parameter (P3 #25b). */
+    private Boolean onOxygen;
+
+    /** ACVPU consciousness assessment — NEWS2 parameter (P3 #25b). */
+    private com.example.hms.enums.ConsciousnessLevel consciousnessLevel;
+
     private String notes;
 }

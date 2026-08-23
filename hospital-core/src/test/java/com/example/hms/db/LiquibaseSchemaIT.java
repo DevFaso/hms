@@ -137,6 +137,21 @@ class LiquibaseSchemaIT {
             // V127: downtime read-only singleton (seeded so reads never return empty)
             assertTableExists(stmt, "platform", "platform_downtime_state");
             assertSeedRowsPresent(stmt, "platform", "platform_downtime_state", 1);
+
+            // V128: recall lists + waitlist offers + slot booking
+            assertTableExists(stmt, "scheduling", "patient_recalls");
+            assertColumnExists(stmt, "scheduling", "appointment_waitlist", "offered_slot_id");
+            assertColumnExists(stmt, "clinical", "appointment_slots", "version");
+
+            // V129: persistent FHIR bulk-export jobs
+            assertTableExists(stmt, "platform", "fhir_bulk_export_jobs");
+            assertTableExists(stmt, "platform", "fhir_bulk_export_files");
+
+            // V130: NEWS2 capture columns + scheduled-report tables
+            assertColumnExists(stmt, "clinical", "patient_vital_signs", "on_oxygen");
+            assertColumnExists(stmt, "clinical", "patient_vital_signs", "consciousness_level");
+            assertTableExists(stmt, "platform", "report_definitions");
+            assertTableExists(stmt, "platform", "report_runs");
         }
     }
 

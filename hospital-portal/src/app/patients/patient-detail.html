@@ -372,6 +372,28 @@
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
               </div>
+              @if (v.newsScore !== null && v.newsRiskBand) {
+                <div
+                  class="news-chip"
+                  [class.news-low]="v.newsRiskBand === 'LOW'"
+                  [class.news-low-medium]="v.newsRiskBand === 'LOW_MEDIUM'"
+                  [class.news-medium]="v.newsRiskBand === 'MEDIUM'"
+                  [class.news-high]="v.newsRiskBand === 'HIGH'"
+                >
+                  <span class="news-label">NEWS2</span>
+                  <span class="news-value">{{ v.newsScore }}</span>
+                  <span class="news-band">{{
+                    'PATIENTS.NEWS_BAND_' + v.newsRiskBand | translate
+                  }}</span>
+                  @if (v.newsComplete === false) {
+                    <span
+                      class="news-incomplete"
+                      [attr.title]="'PATIENTS.NEWS_INCOMPLETE_HINT' | translate"
+                      >{{ 'PATIENTS.NEWS_INCOMPLETE' | translate }}</span
+                    >
+                  }
+                </div>
+              }
               <div class="vital-metrics">
                 @if (hasValue(v.heartRateBpm)) {
                   <div class="vital-metric">

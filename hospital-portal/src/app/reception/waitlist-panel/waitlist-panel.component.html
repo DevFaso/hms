@@ -70,16 +70,42 @@
               <span [ngClass]="statusClass(entry.status)">{{
                 'RECEPTION.' + entry.status | translate
               }}</span>
+              @if (entry.status === 'OFFERED' && entry.offeredSlotStartAt) {
+                <div class="offer-info">
+                  <span class="material-symbols-outlined">event_available</span>
+                  {{ entry.offeredSlotStartAt | date: 'short' }}
+                </div>
+                @if (entry.offerExpiresAt) {
+                  <div class="offer-expiry" [class.expired]="offerExpired(entry)">
+                    {{ 'RECEPTION.OFFER_EXPIRES' | translate }}
+                    {{ entry.offerExpiresAt | date: 'short' }}
+                  </div>
+                }
+              }
             </td>
             <td class="actions-cell">
               @if (entry.status === 'WAITING') {
-                <button class="btn-sm btn-primary" (click)="offerSlot(entry.id)">
+                <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
                   {{ 'RECEPTION.OFFER_SLOT' | translate }}
                 </button>
                 <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               } @else if (entry.status === 'OFFERED') {
+                <button
+                  class="btn-sm btn-primary"
+                  [disabled]="actingOnEntryId() === entry.id"
+                  (click)="acceptOffer(entry)"
+                >
+                  {{ 'RECEPTION.ACCEPT_OFFER' | translate }}
+                </button>
+                <button
+                  class="btn-sm btn-secondary"
+                  [disabled]="actingOnEntryId() === entry.id"
+                  (click)="declineOffer(entry)"
+                >
+                  {{ 'RECEPTION.DECLINE_OFFER' | translate }}
+                </button>
                 <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
@@ -252,6 +278,91 @@
           <span class="material-symbols-outlined spin">progress_activity</span>
         }
         {{ 'RECEPTION.ADD_TO_WAITLIST' | translate }}
+      </button>
+    </div>
+  </div>
+}
+
+<!-- Offer-a-slot Modal (P3 #22) -->
+@if (offerEntry(); as entry) {
+  <div
+    class="modal-backdrop"
+    (click)="offerEntry.set(null)"
+    (keydown.enter)="offerEntry.set(null)"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'COMMON.CANCEL' | translate"
+  ></div>
+  <div
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'RECEPTION.OFFER_SLOT' | translate"
+  >
+    <div class="modal-header">
+      <h2>{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.patientName } }}</h2>
+      <button class="btn-icon-close" (click)="offerEntry.set(null)" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      @if (offerSlotsLoading()) {
+        <div class="loading-row">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+          {{ 'COMMON.LOADING' | translate }}
+        </div>
+      } @else if (offerSlots().length === 0) {
+        <div class="empty-state">{{ 'RECEPTION.NO_OPEN_SLOTS' | translate }}</div>
+      } @else {
+        <fieldset class="slot-picker">
+          <legend class="form-label">{{ 'RECEPTION.SELECT_SLOT' | translate }}</legend>
+          @for (slot of offerSlots(); track slot.id) {
+            <label class="slot-option" [class.selected]="selectedSlotId() === slot.id">
+              <input
+                type="radio"
+                name="offer-slot"
+                [value]="slot.id"
+                [checked]="selectedSlotId() === slot.id"
+                (change)="selectedSlotId.set(slot.id)"
+              />
+              <span class="slot-when">{{ slot.startAt | date: 'EEE d MMM, HH:mm' }}</span>
+              <span class="slot-who">{{ slot.staffName ?? '—' }}</span>
+              @if (slot.visitTypeName) {
+                <span class="slot-type">{{ slot.visitTypeName }}</span>
+              }
+            </label>
+          }
+        </fieldset>
+
+        <div class="form-group">
+          <label class="form-label" for="offer-hours">{{
+            'RECEPTION.OFFER_VALID_HOURS' | translate
+          }}</label>
+          <input
+            id="offer-hours"
+            class="form-input offer-hours-input"
+            type="number"
+            min="1"
+            max="168"
+            [ngModel]="offerHours()"
+            (ngModelChange)="offerHours.set($event)"
+          />
+        </div>
+      }
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="offerEntry.set(null)">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        [disabled]="offering() || !selectedSlotId()"
+        (click)="submitOffer()"
+      >
+        @if (offering()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        {{ 'RECEPTION.OFFER_SLOT' | translate }}
       </button>
     </div>
   </div>

@@ -158,6 +158,10 @@ export interface NurseVitalCaptureRequest {
   weightKg?: number;
   heightCm?: number;
   headCircumferenceCm?: number;
+  /** NEWS2 (P3 #25b): supplemental oxygen at measurement time. */
+  onOxygen?: boolean;
+  /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
+  consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   notes?: string;
 }
 

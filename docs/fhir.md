@@ -107,7 +107,9 @@ matches the WHO SMART Guideline profiles used by DHIS2.
 - **SMART-on-FHIR App Launch 1.0** discovery is now available — see
   [`smart-on-fhir.md`](smart-on-fhir.md).
 - **HL7 v2 MLLP listener** is now available — see [`hl7-mllp.md`](hl7-mllp.md).
-- **Bulk export, `$everything`, `Bundle` transactions** — not yet.
+- **Bulk `$export` and `Patient/{id}/$everything`** are now available behind
+  independent feature flags (default OFF) — see [`fhir-bulk.md`](fhir-bulk.md)
+  for semantics and the enable runbook. **`Bundle` transactions** — not yet.
 - **`given` / `family` / `gender` Patient search params** — not yet honored;
   callers should use the broader `name` parameter. Pushing these into the
   JPA query is a P1 follow-up.

@@ -369,6 +369,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'summarize',
+        label: 'Scheduled Reports',
+        translationKey: 'NAV.REPORTS',
+        route: '/reports',
+        // Mirrors ReportController's class-level @PreAuthorize (P3 #25a).
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'medication_liquid',
         label: 'Medication History',
         translationKey: 'NAV.MEDICATION_HISTORY',

@@ -56,6 +56,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -104,6 +105,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     @Mock private com.example.hms.service.PatientTrackerEventPublisher trackerEventPublisher;
+    @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -896,6 +898,110 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
         when(checkOutMapper.toAfterVisitSummary(any(), any(), any())).thenReturn(avs);
+
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+
+        assertThat(result).isNotNull();
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+    }
+
+    // ---------- checkout recall feed (P3 #22) ----------
+
+    private Encounter checkoutRecallEncounter(UUID encounterId) {
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        encounter.setHospital(hospital);
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        encounter.setPatient(patient);
+        Staff staff = new Staff();
+        encounter.setStaff(staff);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(checkOutMapper.toAfterVisitSummary(any(), any(), any()))
+            .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+        return encounter;
+    }
+
+    @Test
+    void checkOut_followUpRequest_becomesARecall() {
+        // The follow-up request was captured since MVP 6 and silently dropped —
+        // this is where the desk finally sees it.
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusWeeks(6);
+
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .reason("Repeat HbA1c")
+                .preferredDate(preferred.toString())
+                .notes("Morning preferred")
+                .build())
+            .build();
+
+        service.checkOut(encounterId, request, "doctor1");
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
+        verify(patientRecallRepository).save(captor.capture());
+        com.example.hms.model.scheduling.PatientRecall recall = captor.getValue();
+        assertThat(recall.getSource()).isEqualTo(com.example.hms.enums.RecallSource.CHECKOUT);
+        assertThat(recall.getStatus()).isEqualTo(com.example.hms.enums.RecallStatus.PENDING);
+        assertThat(recall.getDueDate()).isEqualTo(preferred);
+        assertThat(recall.getReason()).isEqualTo("Repeat HbA1c");
+        assertThat(recall.getNotes()).isEqualTo("Morning preferred");
+        assertThat(recall.getEncounter()).isSameAs(encounter);
+        assertThat(recall.getPatient()).isSameAs(encounter.getPatient());
+        assertThat(recall.getPreferredProvider()).isSameAs(encounter.getStaff());
+        assertThat(recall.getCreatedBy()).isEqualTo("doctor1");
+    }
+
+    @Test
+    void checkOut_unparseableFollowUpDate_defaultsToTwoWeeks() {
+        UUID encounterId = UUID.randomUUID();
+        checkoutRecallEncounter(encounterId);
+
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .reason("Wound check")
+                .preferredDate("next Tuesday")
+                .build())
+            .build();
+
+        service.checkOut(encounterId, request, "doctor1");
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
+        verify(patientRecallRepository).save(captor.capture());
+        assertThat(captor.getValue().getDueDate()).isEqualTo(LocalDate.now().plusWeeks(2));
+    }
+
+    @Test
+    void checkOut_withoutFollowUpRequest_createsNoRecall() {
+        UUID encounterId = UUID.randomUUID();
+        checkoutRecallEncounter(encounterId);
+
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1");
+
+        verify(patientRecallRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void checkOut_recallPersistenceFailure_neverFailsTheCheckout() {
+        // The checkout is the clinical record; the recall is a worklist row.
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        when(patientRecallRepository.save(any())).thenThrow(new RuntimeException("db down"));
+
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .reason("Repeat labs")
+                .build())
+            .build();
 
         AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
 

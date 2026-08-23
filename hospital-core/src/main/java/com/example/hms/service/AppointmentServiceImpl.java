@@ -88,6 +88,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final UserRepository userRepository;
     private final StaffAvailabilityService staffAvailabilityService;
     private final DepartmentRepository departmentRepository;
+    private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     private final com.example.hms.config.AppointmentLinkProperties appointmentLinks;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
@@ -628,6 +629,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         appointment.setStatus(newStatus);
         appointmentRepository.save(appointment);
+
+        // The appointment owns its slot (P3 #22): once the visit is cancelled
+        // or moved, the slot goes back into circulation.
+        if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
+            slotInventoryService.releaseForAppointment(appointment.getId());
+        }
 
         // Email notification triggers
         Patient patient = appointment.getPatient();

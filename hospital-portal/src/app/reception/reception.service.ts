@@ -141,6 +141,50 @@ export interface WaitlistEntryResponse {
   /** WAITING | OFFERED | CLOSED */
   status: string;
   offeredAppointmentId: string | null;
+  /** The slot currently offered, while status is OFFERED (P3 #22). */
+  offeredSlotId: string | null;
+  offeredSlotStartAt: string | null;
+  offeredAt: string | null;
+  offerExpiresAt: string | null;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+// ── P3 #22: Patient recall types ────────────────────────────────────────────
+
+export type RecallStatus = 'PENDING' | 'NOTIFIED' | 'SCHEDULED' | 'CLOSED' | 'CANCELLED';
+export type RecallType = 'FOLLOW_UP' | 'PREVENTIVE' | 'RESULT_FOLLOW_UP' | 'OTHER';
+
+export interface RecallRequest {
+  patientId: string;
+  departmentId?: string | null;
+  preferredProviderId?: string | null;
+  recallType?: RecallType;
+  dueDate: string;
+  reason: string;
+  notes?: string | null;
+}
+
+export interface RecallResponse {
+  id: string;
+  hospitalId: string;
+  patientId: string;
+  patientName: string;
+  mrn: string | null;
+  departmentId: string | null;
+  departmentName: string | null;
+  preferredProviderId: string | null;
+  preferredProviderName: string | null;
+  encounterId: string | null;
+  recallType: RecallType;
+  status: RecallStatus;
+  source: 'CHECKOUT' | 'MANUAL';
+  dueDate: string;
+  reason: string;
+  notes: string | null;
+  notifiedAt: string | null;
+  linkedAppointmentId: string | null;
+  closedAt: string | null;
   createdAt: string;
   createdBy: string | null;
 }
@@ -259,12 +303,59 @@ export class ReceptionService {
     return this.http.get<WaitlistEntryResponse[]>(`${this.base}/waitlist`, { params });
   }
 
-  offerWaitlistSlot(id: string): Observable<WaitlistEntryResponse> {
-    return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/offer`, {});
+  /** Offers a concrete slot: the backend holds it and notifies the patient. */
+  offerWaitlistSlot(
+    id: string,
+    slotId: string,
+    expiresInHours?: number,
+  ): Observable<WaitlistEntryResponse> {
+    let params = new HttpParams().set('slotId', slotId);
+    if (expiresInHours) params = params.set('expiresInHours', expiresInHours);
+    return this.http.post<WaitlistEntryResponse>(
+      `${this.base}/waitlist/${id}/offer`,
+      {},
+      { params },
+    );
+  }
+
+  /** Front-desk confirmation: books the offered slot and closes the entry. */
+  acceptWaitlistOffer(id: string): Observable<WaitlistEntryResponse> {
+    return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/accept-offer`, {});
+  }
+
+  /** The patient passed: frees the slot, entry returns to WAITING. */
+  declineWaitlistOffer(id: string): Observable<WaitlistEntryResponse> {
+    return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/decline-offer`, {});
   }
 
   closeWaitlistEntry(id: string): Observable<void> {
     return this.http.post<void>(`${this.base}/waitlist/${id}/close`, {});
+  }
+
+  // ── P3 #22: Patient recalls ────────────────────────────────────────────────
+
+  createRecall(request: RecallRequest): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>('/recalls', request);
+  }
+
+  getRecalls(opts?: { status?: RecallStatus; patientId?: string }): Observable<RecallResponse[]> {
+    let params = new HttpParams();
+    if (opts?.status) params = params.set('status', opts.status);
+    if (opts?.patientId) params = params.set('patientId', opts.patientId);
+    return this.http.get<RecallResponse[]>('/recalls', { params });
+  }
+
+  closeRecall(id: string): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>(`/recalls/${id}/close`, {});
+  }
+
+  cancelRecall(id: string): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, {});
+  }
+
+  linkRecallAppointment(id: string, appointmentId: string): Observable<RecallResponse> {
+    const params = new HttpParams().set('appointmentId', appointmentId);
+    return this.http.post<RecallResponse>(`/recalls/${id}/link-appointment`, {}, { params });
   }
 
   // ── MVP 11: Eligibility attestation ───────────────────────────────────────

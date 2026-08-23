@@ -41,6 +41,12 @@ public class TriageSubmissionRequestDTO {
 
     private Double heightCm;
 
+    /** Supplemental oxygen at measurement time — NEWS2 parameter (P3 #25b). */
+    private Boolean onOxygen;
+
+    /** ACVPU consciousness assessment — NEWS2 parameter (P3 #25b). */
+    private com.example.hms.enums.ConsciousnessLevel consciousnessLevel;
+
     /** Pain scale 0-10 */
     @Min(0) @Max(10)
     private Integer painScale;

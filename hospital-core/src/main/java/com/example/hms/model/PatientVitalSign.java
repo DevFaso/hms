@@ -106,6 +106,15 @@ public class PatientVitalSign extends BaseEntity {
     @Column(name = "head_circumference_cm")
     private Double headCircumferenceCm;
 
+    /** Supplemental oxygen at measurement time — a NEWS2 parameter (P3 #25b). */
+    @Column(name = "on_oxygen")
+    private Boolean onOxygen;
+
+    /** ACVPU consciousness assessment — a NEWS2 parameter (P3 #25b). */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "consciousness_level", length = 20)
+    private com.example.hms.enums.ConsciousnessLevel consciousnessLevel;
+
     @Size(max = 40)
     @Column(name = "body_position", length = 40)
     private String bodyPosition;
