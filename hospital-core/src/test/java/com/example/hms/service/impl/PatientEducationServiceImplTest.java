@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -558,6 +559,33 @@ class PatientEducationServiceImplTest {
         assertThat(result.getQuestionText()).isEqualTo("What should I eat during pregnancy?");
         assertThat(result.getIsAnswered()).isFalse();
         verify(questionRepository).save(any(PatientEducationQuestion.class));
+    }
+
+    @Test
+    void submitQuestion_shouldFailDiagnosablyWhenTheMapperYieldsNothing() {
+        // The service dereferences the mapper result immediately. MapStruct maps
+        // a null source to a null result, so a null here means no payload ever
+        // reached the service — a programming error, which must surface as
+        // something readable rather than an NPE on the next line.
+        PatientEducationQuestionMapper nullingMapper = mock(PatientEducationQuestionMapper.class);
+        PatientEducationServiceImpl serviceWithNullingMapper = new PatientEducationServiceImpl(
+            resourceRepository, progressRepository, documentationRepository, questionRepository,
+            patientRepository, staffRepository, hospitalRepository, encounterRepository,
+            resourceMapper, progressMapper, documentationMapper, nullingMapper);
+
+        PatientEducationQuestionRequestDTO requestDTO = PatientEducationQuestionRequestDTO.builder()
+            .questionText("Anything")
+            .build();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(nullingMapper.toEntity(requestDTO)).thenReturn(null);
+
+        assertThatThrownBy(() ->
+            serviceWithNullingMapper.submitQuestion(patientId, requestDTO, hospitalId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("question payload");
+
+        verify(questionRepository, never()).save(any(PatientEducationQuestion.class));
     }
 
     @Test

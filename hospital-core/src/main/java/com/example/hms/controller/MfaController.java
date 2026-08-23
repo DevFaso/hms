@@ -33,6 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * MFA enrollment and verification endpoints.
@@ -56,18 +57,29 @@ public class MfaController {
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final IdleSessionGate idleSessionGate;
 
+    /** 401 for a caller holding only a partial mfaToken, not a full access token. */
+    private ResponseEntity<Object> notFullyAuthenticated() {
+        return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
+    }
+
     /**
-     * Resolves the authenticated user from the security principal.
-     * Returns 401 with a clear message if the principal is null, which
-     * happens when the caller only holds a partial mfaToken instead of
-     * a full access token. Avoids the historical NullPointerException
-     * that bubbled up as an opaque HTTP 500.
+     * Resolve the authenticated user, or empty when the caller holds only a
+     * partial mfaToken instead of a full access token.
+     *
+     * <p>This used to be {@code requireFullAuth}, which returned an error
+     * response on failure and NULL on success — so every caller then
+     * dereferenced {@code principal} on a line where nothing local proved it
+     * non-null. It was safe, but only via a helper whose return value inverted
+     * the meaning, which neither a reader nor a static analyser can follow.
+     * Resolving the user inside the guard puts the null check and the
+     * dereference in the same place.
      */
-    private ResponseEntity<Object> requireFullAuth(UserDetails principal) {
+    private Optional<User> resolveFullyAuthenticatedUser(UserDetails principal) {
         if (principal == null) {
-            return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
+            return Optional.empty();
         }
-        return null;
+        return Optional.of(userRepository.findByUsername(principal.getUsername())
+                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND)));
     }
 
     /**
@@ -75,11 +87,9 @@ public class MfaController {
      */
     @PostMapping("/enroll")
     public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal) {
-        ResponseEntity<Object> authError = requireFullAuth(principal);
-        if (authError != null) return authError;
-
-        User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
+        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
+        if (authenticated.isEmpty()) return notFullyAuthenticated();
+        User user = authenticated.get();
 
         MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user);
 
@@ -107,11 +117,9 @@ public class MfaController {
             @AuthenticationPrincipal UserDetails principal,
             @Valid @RequestBody MfaVerifyRequest request) {
 
-        ResponseEntity<Object> authError = requireFullAuth(principal);
-        if (authError != null) return authError;
-
-        User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
+        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
+        if (authenticated.isEmpty()) return notFullyAuthenticated();
+        User user = authenticated.get();
 
         boolean verified = mfaService.verifyEnrollment(user.getId(), request.code());
 
@@ -141,11 +149,9 @@ public class MfaController {
      */
     @GetMapping("/status")
     public ResponseEntity<Object> status(@AuthenticationPrincipal UserDetails principal) {
-        ResponseEntity<Object> authError = requireFullAuth(principal);
-        if (authError != null) return authError;
-
-        User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
+        Optional<User> authenticated = resolveFullyAuthenticatedUser(principal);
+        if (authenticated.isEmpty()) return notFullyAuthenticated();
+        User user = authenticated.get();
 
         boolean enabled = mfaService.isMfaEnabled(user.getId());
         return ResponseEntity.ok(Map.of("mfaEnabled", enabled));

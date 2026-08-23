@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -134,7 +135,12 @@ class CriticalValueNotificationServiceTest {
         when(notificationService.createNotification(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("broker down"));
 
-        service.notifyIfCritical(result); // must not throw
+        assertThatCode(() -> service.notifyIfCritical(result)).doesNotThrowAnyException();
+
+        // The swallow must be around a real attempt: without this, an
+        // implementation that stopped notifying altogether would also "never
+        // propagate" and the test would still pass.
+        verify(notificationService).createNotification(anyString(), anyString(), anyString());
     }
 
     @Test

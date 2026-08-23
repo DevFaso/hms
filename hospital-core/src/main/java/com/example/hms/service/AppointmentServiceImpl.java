@@ -777,6 +777,13 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private List<AppointmentResponseDTO> getAppointmentsByPatientScoped(UUID patientId, User user) {
+        // Both callers resolve the user via getUserOrThrow, so this never trips
+        // today. It is stated because isSuperAdmin -> hasRole handles a null
+        // user by returning false, which declares the parameter nullable — and
+        // the self-access check below then dereferences it. Rather than leave
+        // the two halves disagreeing, pin the contract the callers already
+        // honour: no user, no scoped read.
+        Objects.requireNonNull(user, "A resolved user is required to scope patient appointments.");
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByPatient_Id(patientId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
@@ -786,7 +793,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
-        if (user.getId().equals(patient.getUser().getId())) {
+        // patient.getUser() is nullable in practice — the same dangling-FK class
+        // that produced the registrations 500 (a patient row whose user was
+        // deleted). A self-access check must fail closed on a broken link, not
+        // throw a 500 at a caller who may well be entitled by hospital scope
+        // below.
+        boolean isOwnRecord = patient.getUser() != null
+            && user.getId().equals(patient.getUser().getId());
+        if (isOwnRecord) {
             return appointmentRepository.findByPatient_Id(patientId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
                 .toList();
