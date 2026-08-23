@@ -2912,7 +2912,8 @@
     "MY_EDUCATION": "My Education",
     "REFILLS": "Refill Requests",
     "LAB_OUTBOX": "Instrument Outbox",
-    "MICROBIOLOGY": "Microbiology"
+    "MICROBIOLOGY": "Microbiology",
+    "REPORTS": "Scheduled Reports"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -3213,7 +3214,15 @@
     "HANDOFFS_COMPLETED": "Completed",
     "NO_COMPLETED_HANDOFFS": "No completed handoffs yet",
     "HANDOFF_COMPLETED_BY": "Completed by",
-    "HEAD_CIRCUMFERENCE": "Head circumference"
+    "HEAD_CIRCUMFERENCE": "Head circumference",
+    "CONSCIOUSNESS": "Consciousness (ACVPU)",
+    "NOT_ASSESSED": "Not assessed",
+    "ON_OXYGEN": "On supplemental oxygen",
+    "ACVPU_ALERT": "Alert",
+    "ACVPU_NEW_CONFUSION": "New confusion",
+    "ACVPU_VOICE": "Responds to voice",
+    "ACVPU_PAIN": "Responds to pain",
+    "ACVPU_UNRESPONSIVE": "Unresponsive"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -3474,7 +3483,13 @@
     "HEAD_CIRCUMFERENCE": "Head circumference",
     "BLOOD_GLUCOSE": "Blood glucose",
     "PRINT_WRISTBAND": "Wristband",
-    "PRINT_WRISTBAND_TITLE": "Print the patient wristband (QR encodes the patient ID for bedside scanning)"
+    "PRINT_WRISTBAND_TITLE": "Print the patient wristband (QR encodes the patient ID for bedside scanning)",
+    "NEWS_BAND_LOW": "Low risk",
+    "NEWS_BAND_LOW_MEDIUM": "Low-medium risk",
+    "NEWS_BAND_MEDIUM": "Medium risk",
+    "NEWS_BAND_HIGH": "High risk",
+    "NEWS_INCOMPLETE": "Incomplete",
+    "NEWS_INCOMPLETE_HINT": "Not every NEWS2 parameter was recorded — the true score can only be equal or higher."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -5650,7 +5665,15 @@
     "FALL_RISK_SCORE": "Fall Risk Score",
     "ROOMING": "Rooming",
     "ROOM_ASSIGNMENT": "Room Assignment",
-    "SUBMIT": "Submit Triage"
+    "SUBMIT": "Submit Triage",
+    "CONSCIOUSNESS": "Consciousness (ACVPU)",
+    "NOT_ASSESSED": "Not assessed",
+    "ON_OXYGEN": "On supplemental oxygen",
+    "ACVPU_ALERT": "Alert",
+    "ACVPU_NEW_CONFUSION": "New confusion",
+    "ACVPU_VOICE": "Responds to voice",
+    "ACVPU_PAIN": "Responds to pain",
+    "ACVPU_UNRESPONSIVE": "Unresponsive"
   },
   "INTAKE": {
     "TITLE": "Nursing Intake",
@@ -7733,5 +7756,46 @@
   "DOWNTIME": {
     "BANNER_TITLE": "Read-only mode:",
     "BANNER_DEFAULT": "The system is in maintenance. Viewing works; changes are temporarily disabled."
+  },
+  "REPORTS": {
+    "TITLE": "Scheduled Reports",
+    "SUBTITLE": "Aggregate CSV reports emailed each closed period",
+    "CREATE": "New Report",
+    "AGGREGATE_ONLY_NOTE": "Reports contain aggregate counts only — never patient data. Email is not a channel for PHI.",
+    "LOAD_FAILED": "Failed to load report definitions",
+    "FIELDS_REQUIRED": "Name and recipients are required",
+    "CREATED": "Report created — the first email goes out when the current period closes",
+    "CREATE_FAILED": "Failed to create the report",
+    "RUNS_LOAD_FAILED": "Failed to load the run history",
+    "RUN_SENT": "Report generated and emailed",
+    "RUN_NOW_FAILED": "Failed to run the report",
+    "DEACTIVATED": "Report stopped",
+    "REACTIVATED": "Report resumed",
+    "ACTION_FAILED": "Failed to update the report",
+    "TYPE": "Type",
+    "PERIOD": "Period",
+    "RECIPIENTS": "Recipients",
+    "RECIPIENTS_HINT": "Comma-separated email addresses",
+    "ACTIVE": "Active",
+    "INACTIVE": "Stopped",
+    "RUN_NOW": "Run now",
+    "HISTORY": "History",
+    "DEACTIVATE": "Stop",
+    "REACTIVATE": "Resume",
+    "NONE_YET": "No scheduled reports yet",
+    "NONE_YET_HINT": "Create one to email an aggregate CSV each day, week or month.",
+    "NO_RUNS": "No runs yet for this report",
+    "PERIOD_TOKEN": "Period",
+    "ROWS": "Rows",
+    "GENERATED_AT": "Generated",
+    "ERROR": "Error",
+    "TYPE_ENCOUNTER_ACTIVITY": "Encounter activity",
+    "TYPE_APPOINTMENT_ACTIVITY": "Appointment activity",
+    "PERIOD_DAILY": "Daily",
+    "PERIOD_WEEKLY": "Weekly",
+    "PERIOD_MONTHLY": "Monthly",
+    "RUN_GENERATING": "Generating",
+    "RUN_SUCCEEDED": "Sent",
+    "RUN_FAILED": "Failed"
   }
 }

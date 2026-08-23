@@ -4,6 +4,7 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
+import com.example.hms.utility.NewsScoreCalculator;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -15,6 +16,11 @@ public class PatientVitalSignMapper {
         if (entity == null) {
             return null;
         }
+
+        // NEWS2 is computed on read, never stored — a stored score would go
+        // stale the moment the scoring table changed (P3 #25b). Explicitly
+        // partial: missing parameters are named, not silently zeroed.
+        NewsScoreCalculator.NewsScoreResult news = NewsScoreCalculator.score(entity);
 
         return PatientVitalSignResponseDTO.builder()
             .id(entity.getId())
@@ -39,6 +45,12 @@ public class PatientVitalSignMapper {
             .bodyPosition(entity.getBodyPosition())
             .notes(entity.getNotes())
             .clinicallySignificant(entity.isClinicallySignificant())
+            .onOxygen(entity.getOnOxygen())
+            .consciousnessLevel(entity.getConsciousnessLevel())
+            .newsScore(news.total())
+            .newsRiskBand(news.riskBand().name())
+            .newsComplete(news.complete())
+            .newsMissing(news.missingParameters())
             .recordedAt(entity.getRecordedAt())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
@@ -60,6 +72,8 @@ public class PatientVitalSignMapper {
         entity.setHeightCm(request.getHeightCm());
         entity.setHeadCircumferenceCm(request.getHeadCircumferenceCm());
         entity.setBodyPosition(request.getBodyPosition());
+        entity.setOnOxygen(request.getOnOxygen());
+        entity.setConsciousnessLevel(request.getConsciousnessLevel());
         entity.setNotes(request.getNotes());
         entity.setSource(request.getSource());
         entity.setRecordedAt(request.getRecordedAt());

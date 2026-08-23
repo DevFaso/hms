@@ -146,6 +146,12 @@ class LiquibaseSchemaIT {
             // V129: persistent FHIR bulk-export jobs
             assertTableExists(stmt, "platform", "fhir_bulk_export_jobs");
             assertTableExists(stmt, "platform", "fhir_bulk_export_files");
+
+            // V130: NEWS2 capture columns + scheduled-report tables
+            assertColumnExists(stmt, "clinical", "patient_vital_signs", "on_oxygen");
+            assertColumnExists(stmt, "clinical", "patient_vital_signs", "consciousness_level");
+            assertTableExists(stmt, "platform", "report_definitions");
+            assertTableExists(stmt, "platform", "report_runs");
         }
     }
 

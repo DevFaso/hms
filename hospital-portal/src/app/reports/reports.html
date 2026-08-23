@@ -1,0 +1,217 @@
+<div class="reports-container">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'REPORTS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'REPORTS.SUBTITLE' | translate }}</p>
+    </div>
+    <button class="btn-primary" type="button" (click)="openCreate()">
+      <span class="material-symbols-outlined">note_add</span>
+      {{ 'REPORTS.CREATE' | translate }}
+    </button>
+  </div>
+
+  <div class="privacy-note">
+    <span class="material-symbols-outlined">shield</span>
+    {{ 'REPORTS.AGGREGATE_ONLY_NOTE' | translate }}
+  </div>
+
+  @if (loading()) {
+    <div class="loading-row">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      {{ 'COMMON.LOADING' | translate }}
+    </div>
+  } @else if (definitions().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">summarize</span>
+      <h3>{{ 'REPORTS.NONE_YET' | translate }}</h3>
+      <p>{{ 'REPORTS.NONE_YET_HINT' | translate }}</p>
+    </div>
+  } @else {
+    <table class="reports-table">
+      <thead>
+        <tr>
+          <th>{{ 'COMMON.NAME' | translate }}</th>
+          <th>{{ 'REPORTS.TYPE' | translate }}</th>
+          <th>{{ 'REPORTS.PERIOD' | translate }}</th>
+          <th>{{ 'REPORTS.RECIPIENTS' | translate }}</th>
+          <th>{{ 'COMMON.STATUS' | translate }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (def of definitions(); track def.id) {
+          <tr>
+            <td class="name-cell">{{ def.name }}</td>
+            <td>{{ 'REPORTS.TYPE_' + def.reportType | translate }}</td>
+            <td>{{ 'REPORTS.PERIOD_' + def.period | translate }}</td>
+            <td class="recipients-cell">{{ def.recipients }}</td>
+            <td>
+              <span [class]="def.active ? 'def-active' : 'def-inactive'">
+                {{ (def.active ? 'REPORTS.ACTIVE' : 'REPORTS.INACTIVE') | translate }}
+              </span>
+            </td>
+            <td class="actions-cell">
+              <button
+                class="btn-sm btn-primary"
+                type="button"
+                [disabled]="actingOnId() === def.id"
+                (click)="runNow(def)"
+              >
+                {{ 'REPORTS.RUN_NOW' | translate }}
+              </button>
+              <button class="btn-sm btn-ghost" type="button" (click)="toggleRuns(def)">
+                {{ 'REPORTS.HISTORY' | translate }}
+              </button>
+              <button
+                class="btn-sm btn-ghost"
+                type="button"
+                [disabled]="actingOnId() === def.id"
+                (click)="toggleActive(def)"
+              >
+                {{ (def.active ? 'REPORTS.DEACTIVATE' : 'REPORTS.REACTIVATE') | translate }}
+              </button>
+            </td>
+          </tr>
+          @if (expandedId() === def.id) {
+            <tr class="runs-row">
+              <td colspan="6">
+                @if (runsLoading()) {
+                  <div class="loading-row">
+                    <span class="material-symbols-outlined spin">progress_activity</span>
+                    {{ 'COMMON.LOADING' | translate }}
+                  </div>
+                } @else if (runs().length === 0) {
+                  <div class="runs-empty">{{ 'REPORTS.NO_RUNS' | translate }}</div>
+                } @else {
+                  <table class="runs-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'REPORTS.PERIOD_TOKEN' | translate }}</th>
+                        <th>{{ 'COMMON.STATUS' | translate }}</th>
+                        <th>{{ 'REPORTS.ROWS' | translate }}</th>
+                        <th>{{ 'REPORTS.GENERATED_AT' | translate }}</th>
+                        <th>{{ 'REPORTS.ERROR' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (run of runs(); track run.id) {
+                        <tr>
+                          <td>{{ run.periodToken }}</td>
+                          <td>
+                            <span [class]="statusClass(run.status)">{{
+                              'REPORTS.RUN_' + run.status | translate
+                            }}</span>
+                          </td>
+                          <td>{{ run.rowCount ?? '—' }}</td>
+                          <td>{{ run.generatedAt ? (run.generatedAt | date: 'short') : '—' }}</td>
+                          <td class="error-cell">{{ run.errorMessage ?? '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+<!-- Create Report Modal -->
+@if (showCreate()) {
+  <div
+    class="modal-backdrop"
+    (click)="showCreate.set(false)"
+    (keydown.enter)="showCreate.set(false)"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'COMMON.CANCEL' | translate"
+  ></div>
+  <div
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'REPORTS.CREATE' | translate"
+  >
+    <div class="modal-header">
+      <h2>{{ 'REPORTS.CREATE' | translate }}</h2>
+      <button
+        class="btn-icon-close"
+        type="button"
+        (click)="showCreate.set(false)"
+        aria-label="Close"
+      >
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="rep-name">{{ 'COMMON.NAME' | translate }} *</label>
+        <input
+          id="rep-name"
+          class="form-input"
+          type="text"
+          maxlength="150"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event)"
+        />
+      </div>
+
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label" for="rep-type">{{ 'REPORTS.TYPE' | translate }}</label>
+          <select
+            id="rep-type"
+            class="form-select"
+            [ngModel]="reportType()"
+            (ngModelChange)="reportType.set($event)"
+          >
+            @for (t of reportTypes; track t) {
+              <option [value]="t">{{ 'REPORTS.TYPE_' + t | translate }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rep-period">{{ 'REPORTS.PERIOD' | translate }}</label>
+          <select
+            id="rep-period"
+            class="form-select"
+            [ngModel]="period()"
+            (ngModelChange)="period.set($event)"
+          >
+            @for (p of periods; track p) {
+              <option [value]="p">{{ 'REPORTS.PERIOD_' + p | translate }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="rep-recipients">
+          {{ 'REPORTS.RECIPIENTS' | translate }} *
+        </label>
+        <textarea
+          id="rep-recipients"
+          class="form-textarea"
+          rows="2"
+          [placeholder]="'REPORTS.RECIPIENTS_HINT' | translate"
+          [ngModel]="recipients()"
+          (ngModelChange)="recipients.set($event)"
+        ></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" type="button" (click)="showCreate.set(false)">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button class="btn-primary" type="button" [disabled]="saving()" (click)="submitCreate()">
+        @if (saving()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        {{ 'REPORTS.CREATE' | translate }}
+      </button>
+    </div>
+  </div>
+}

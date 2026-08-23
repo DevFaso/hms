@@ -1933,4 +1933,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V130 — scheduled reports + NEWS2 early-warning capture (P3 item
+         25): on_oxygen + consciousness_level on patient_vital_signs +
+         the NEWS2 BPA protocol seed; platform.report_definitions +
+         report_runs with the UNIQUE (definition, period) exactly-once
+         claim. No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V130-reports-and-news2" author="hms-team" runOnChange="false">
+        <sqlFile path="V130__reports_and_news2.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
