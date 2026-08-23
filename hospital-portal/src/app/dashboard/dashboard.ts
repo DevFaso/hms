@@ -2307,6 +2307,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.alerts.update((list) =>
           list.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a)),
         ),
+      // A failed acknowledge used to vanish silently — for nurses/midwives
+      // the backend 403'd every click until the endpoint admitted them
+      // (2026-08-23 role audit, B4). Surface any failure instead.
+      error: () => this.toast.error(this.t('DASHBOARD.ALERT_ACK_FAILED')),
     });
   }
 
