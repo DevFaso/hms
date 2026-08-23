@@ -164,8 +164,12 @@ public class DashboardConfigService {
         rolePriority.put("ROLE_RADIOLOGIST", 50);
         rolePriority.put("ROLE_LAB_SCIENTIST", 45);
         rolePriority.put("ROLE_PHYSIOTHERAPIST", 40);
+        rolePriority.put("ROLE_PHARMACY_VERIFIER", 48);
         rolePriority.put("ROLE_RECEPTIONIST", 30);
         rolePriority.put("ROLE_BILLING_SPECIALIST", 25);
+        rolePriority.put("ROLE_CLAIMS_REVIEWER", 24);
+        rolePriority.put("ROLE_ACCOUNTANT", 23);
+        rolePriority.put("ROLE_STAFF", 20);
         rolePriority.put("ROLE_PATIENT", 10);
 
         return roleConfigs.stream()
@@ -515,6 +519,39 @@ public class DashboardConfigService {
                 PERM_UPDATE_REFERENCE_RANGES,
                 PERM_FLAG_ABNORMAL_RESULTS,
                 PERM_VIEW_PATIENT_RECORDS));
+        // 2026-08-23 role audit (C1/C2/C7 + verifier/claims-reviewer
+        // role-model findings): these roles previously had NO entry, so
+        // GET /me/dashboard-config contributed nothing and the portal ran
+        // purely on its static fallback map.
+        map.put("ROLE_ADMIN", List.of(
+                "View Dashboard",
+                PERM_VIEW_PATIENT_RECORDS,
+                "View Audit Logs",
+                "View Notifications"));
+        map.put("ROLE_PHYSICIAN", List.of(
+                PERM_VIEW_PATIENT_RECORDS,
+                PERM_UPDATE_PATIENT_RECORDS,
+                "Create Prescriptions",
+                "Order Lab Tests",
+                PERM_VIEW_LAB_RESULTS,
+                "Create Encounters",
+                "Update Diagnoses",
+                "Request Imaging Studies",
+                "View Imaging Results"));
+        map.put("ROLE_STAFF", List.of(
+                "View Dashboard",
+                "View Appointments",
+                "View Staff Schedules",
+                "View Notifications"));
+        map.put("ROLE_PHARMACY_VERIFIER", List.of(
+                "View Prescriptions",
+                "Dispense Medications",
+                "Verify Dispense",
+                "Route Stock"));
+        map.put("ROLE_CLAIMS_REVIEWER", List.of(
+                "View Pharmacy Claims",
+                "Manage Pharmacy Claims",
+                "View Billing Summary"));
         return Collections.unmodifiableMap(map);
     }
 }

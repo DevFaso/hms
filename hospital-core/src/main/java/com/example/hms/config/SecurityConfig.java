@@ -61,6 +61,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
+import static com.example.hms.config.SecurityConstants.ROLE_ADMIN;
 
 @Configuration
 @EnableWebSecurity
@@ -207,9 +208,19 @@ public class SecurityConfig {
         );
         return (Collection<? extends GrantedAuthority> authorities) -> {
             boolean isSuper = authorities.stream().anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
-            if (!isSuper) return authorities;
+            // Doctor equivalence (2026-08-23 role audit, C2): physicians and
+            // surgeons ARE doctors. Mirrors JwtTokenProvider's per-request
+            // expansion so both auth paths agree.
+            boolean isDoctorLike = authorities.stream().anyMatch(a ->
+                "ROLE_PHYSICIAN".equals(a.getAuthority()) || "ROLE_SURGEON".equals(a.getAuthority()));
+            if (!isSuper && !isDoctorLike) return authorities;
             var extended = new HashSet<GrantedAuthority>(authorities);
-            inherited.forEach(r -> extended.add(new SimpleGrantedAuthority(r)));
+            if (isSuper) {
+                inherited.forEach(r -> extended.add(new SimpleGrantedAuthority(r)));
+            }
+            if (isDoctorLike) {
+                extended.add(new SimpleGrantedAuthority(ROLE_DOCTOR));
+            }
             return extended;
         };
     }
@@ -382,8 +393,12 @@ public class SecurityConfig {
                 // -------------------- Patients --------------------
                 // PHARMACIST: the shared patient picker (/patients/search, /patients/lookup)
                 // backs pharmacist-reachable pages such as /medication-history.
+                // ROLE_ADMIN (general administrative user) reads patient
+                // demographics for front-office oversight — 2026-08-23 role
+                // audit decision C1; the /patients route guard and the
+                // patient-tracker backend admitted the role all along.
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
 
@@ -532,16 +547,13 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 // -------------------- Chat / Notifications --------------------
-                // Mirrors ChatController.CHAT_ROLES exactly — the matcher
-                // previously omitted BILLING_SPECIALIST and ACCOUNTANT, which
-                // the controller admits, so finance staff 403'd at the filter
-                // before @PreAuthorize (the annotation stays the precise gate).
-                .requestMatchers("/chat/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
-                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT,
-                        ROLE_STAFF, ROLE_PATIENT)
+                // Internal messaging is for EVERY hospital user (2026-08-23
+                // role audit, decision C3: real-world semantics) — role
+                // enumeration here kept locking out whichever staff role the
+                // list forgot (pharmacists, radiologists, therapists…). The
+                // real protection is the participant gating inside
+                // ChatMessageService: you only read threads you are part of.
+                .requestMatchers("/chat/**").authenticated()
 
                 // WebSocket endpoints should NOT be public in an HMS; require authentication.
                 .requestMatchers("/ws-chat/**").authenticated()

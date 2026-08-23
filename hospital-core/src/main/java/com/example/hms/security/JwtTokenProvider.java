@@ -692,6 +692,15 @@ public class JwtTokenProvider {
                 .forEach(normalizedRoles::add);
         }
 
+        // Doctor equivalence (2026-08-23 role audit, C2): physicians and
+        // surgeons ARE doctors — every matcher and @PreAuthorize naming
+        // ROLE_DOCTOR admits them through this expansion instead of each
+        // list carrying three role names. Mirrored in
+        // SecurityConfig.authoritiesMapper for the session-auth path.
+        if (normalizedRoles.contains("ROLE_PHYSICIAN") || normalizedRoles.contains("ROLE_SURGEON")) {
+            normalizedRoles.add(ROLE_DOCTOR);
+        }
+
         List<SimpleGrantedAuthority> authorities = normalizedRoles.stream()
             .map(SimpleGrantedAuthority::new)
             .toList();

@@ -57,58 +57,20 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private static final String TIMESTAMP_FIELD = "timestamp";
 
     /**
-     * Hierarchical messaging rules — maps each role to the set of roles it may message.
+     * Messaging rules (2026-08-23 role audit, decision C3 — real-world
+     * semantics). The old per-role target matrix denied any role it did not
+     * enumerate, which silently locked pharmacists, radiologists, therapists
+     * and the finance roles out of internal messaging. The real-world rules
+     * are three, not a matrix:
      * <ul>
-     *   <li>SUPER_ADMIN — can reach everyone (no restriction applied)</li>
-     *   <li>HOSPITAL_ADMIN — can reach SUPER_ADMIN + all staff/patient roles in their hospital</li>
-     *   <li>Clinical roles (DOCTOR, NURSE, MIDWIFE) — can reach each other, HOSPITAL_ADMIN, support staff, and patients</li>
-     *   <li>Support roles (RECEPTIONIST, LAB_SCIENTIST, STAFF) — can reach clinical staff and HOSPITAL_ADMIN (escalation)</li>
-     *   <li>PATIENT — can only reach their clinical care roles (DOCTOR, NURSE, MIDWIFE)</li>
+     *   <li>SUPER_ADMIN — everyone (bypass, unchanged)</li>
+     *   <li>Staff ↔ staff — always allowed (hospital secure messaging)</li>
+     *   <li>PATIENT boundary — a patient reaches only clinical care roles,
+     *       and only clinical care roles reach a patient (unchanged)</li>
      * </ul>
      */
-    private static final Map<String, Set<String>> ALLOWED_MESSAGE_TARGETS = Map.ofEntries(
-        Map.entry(ROLE_HOSPITAL_ADMIN, Set.of(
-            ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
-            ROLE_PATIENT
-        )),
-        Map.entry(ROLE_DOCTOR, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
-            ROLE_PATIENT
-        )),
-        Map.entry(ROLE_NURSE, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
-            ROLE_PATIENT
-        )),
-        Map.entry(ROLE_MIDWIFE, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF,
-            ROLE_PATIENT
-        )),
-        Map.entry(ROLE_RECEPTIONIST, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
-        )),
-        Map.entry(ROLE_LAB_SCIENTIST, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
-        )),
-        Map.entry(ROLE_STAFF, Set.of(
-            ROLE_HOSPITAL_ADMIN,
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_RECEPTIONIST, ROLE_LAB_SCIENTIST, ROLE_STAFF
-        )),
-        Map.entry(ROLE_PATIENT, Set.of(
-            ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE
-        ))
+    private static final Set<String> CLINICAL_CARE_ROLES = Set.of(
+        ROLE_DOCTOR, "ROLE_PHYSICIAN", "ROLE_SURGEON", ROLE_NURSE, ROLE_MIDWIFE
     );
 
 
@@ -354,14 +316,17 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             })
             .collect(java.util.stream.Collectors.toSet());
 
-        // Check if any sender role is allowed to message any recipient role
-        boolean allowed = senderRoles.stream().anyMatch(senderRole -> {
-            Set<String> targets = ALLOWED_MESSAGE_TARGETS.get(senderRole);
-            if (targets == null) {
-                return false; // Unknown role — deny by default
-            }
-            return recipientRoles.stream().anyMatch(targets::contains);
-        });
+        // Real-world rules (C3): staff-to-staff is always allowed; the only
+        // boundary is the patient one — a patient reaches only clinical care
+        // roles, and only clinical care roles reach a patient.
+        boolean senderIsStaff = senderRoles.stream().anyMatch(r -> !ROLE_PATIENT.equals(r));
+        boolean senderIsClinical = senderRoles.stream().anyMatch(CLINICAL_CARE_ROLES::contains);
+        boolean recipientIsStaff = recipientRoles.stream().anyMatch(r -> !ROLE_PATIENT.equals(r));
+        boolean recipientIsClinical = recipientRoles.stream().anyMatch(CLINICAL_CARE_ROLES::contains);
+
+        boolean allowed = recipientIsStaff
+            ? (senderIsStaff || recipientIsClinical)
+            : senderIsClinical;
 
         if (!allowed) {
             throw new SecurityException("Your role does not permit messaging this user.");

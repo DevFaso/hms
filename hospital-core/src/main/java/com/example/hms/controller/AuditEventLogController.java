@@ -20,6 +20,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,6 +43,18 @@ import java.util.UUID;
 @Tag(name = "Audit Logs", description = "Endpoints for managing system audit logs and tracking events.")
 public class AuditEventLogController {
 
+    /**
+     * Audit-trail readers (2026-08-23 role audit, C6): platform + hospital
+     * administration plus lab leadership — quality managers and lab
+     * directors review access trails as part of CAP/ISO 15189 quality
+     * audits. Before this gate the controller had NO authorization at all:
+     * any authenticated user, patients included, could page the entire
+     * audit log. The POST (event emission) deliberately stays open to all
+     * authenticated users — clients record their own audit events.
+     */
+    private static final String AUDIT_READ_ROLES =
+        "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
+
     private final AuditEventLogService auditService;
     private final AuditEventLogRepository auditRepository;
     private final AuditEventLogMapper auditMapper;
@@ -58,6 +71,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination. Optionally filter by date range.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
@@ -77,6 +91,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get Audit Logs by Hospital", description = "Retrieve audit logs scoped to a specific hospital, ordered by timestamp descending.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByHospital(
@@ -87,6 +102,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping("/user/{userId}")
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get Audit Logs by User", description = "Retrieve audit logs for a specific user based on their UUID.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByUser(
@@ -97,6 +113,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping("/event-types-summary")
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get event type counts", description = "Retrieve a summary of audit event counts grouped by event type.")
     @ApiResponse(responseCode = "200", description = "Event type summary retrieved successfully")
     public ResponseEntity<List<Map<String, Object>>> getEventTypesSummary() {
@@ -110,6 +127,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping("/event-type-status")
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get Audit Logs by Event Type (with optional status)", description = "Retrieve audit logs filtered by event type and optionally by status.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     @ApiResponse(responseCode = "400", description = "Invalid audit event type or status")
@@ -138,6 +156,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping("/target")
+    @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get Audit Logs by Target Resource", description = "Retrieve audit logs based on the affected entity type and resource ID.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByTarget(

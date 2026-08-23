@@ -4,6 +4,7 @@ import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
+import { expandRoleEquivalents } from '../core/role-equivalence';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -446,7 +447,9 @@ export class AuthService {
   }
 
   hasAnyRole(expected: string[]): boolean {
-    const roles = this.getRoles();
+    // Doctor equivalence (role audit C2): PHYSICIAN/SURGEON satisfy
+    // ROLE_DOCTOR checks, mirroring the backend authority expansion.
+    const roles = expandRoleEquivalents(this.getRoles());
     return expected.some((r) => roles.includes(r));
   }
 
