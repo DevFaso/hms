@@ -416,6 +416,12 @@ export class PermissionService {
       'View Staff Schedules',
       'View Notifications',
     ],
+    // Finance roles deliberately do NOT get 'View Patient Records': the
+    // backend denies them GET /patients at both the SecurityConfig matcher
+    // and the controller @PreAuthorize, and billing DTOs already embed the
+    // patient identity an invoice needs. Granting it here only produced a
+    // dead Patients nav entry and a guaranteed 403 from the dashboard's
+    // recent-patients widget.
     ROLE_BILLING_SPECIALIST: [
       'View Dashboard',
       'View Billing',
@@ -425,7 +431,6 @@ export class PermissionService {
       'Record Payment',
       'Process Refund',
       'Email Invoice',
-      'View Patient Records',
       'View Notifications',
     ],
     ROLE_PHYSIOTHERAPIST: [
@@ -450,7 +455,6 @@ export class PermissionService {
       'View Billing Summary',
       'Record Payment',
       'View Billing Reports',
-      'View Patient Records',
       'View Notifications',
     ],
   };

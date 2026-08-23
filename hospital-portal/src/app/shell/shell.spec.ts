@@ -31,6 +31,8 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     activeRole: string | null;
     roles: string[];
     wildcardPermission: boolean;
+    /** When set, hasPermission answers from this list instead of the wildcard. */
+    permissions?: string[];
   }): { items: NavItem[] } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
@@ -47,9 +49,12 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     // Wildcard owners (super admin / admin) get every permission; other
     // roles get none — keeps the test focused on the nav role-filter logic.
+    // Tests that need a realistic per-role set pass `permissions` instead.
     const permStub: Partial<PermissionService> = {
-      hasPermission: () => opts.wildcardPermission,
-      hasAnyPermission: () => opts.wildcardPermission,
+      hasPermission: (p: string) =>
+        opts.permissions ? opts.permissions.includes(p) : opts.wildcardPermission,
+      hasAnyPermission: (...ps: string[]) =>
+        opts.permissions ? ps.some((p) => opts.permissions!.includes(p)) : opts.wildcardPermission,
     };
 
     const notifStub = jasmine.createSpyObj<NotificationService>('NotificationService', [
@@ -213,6 +218,43 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     });
 
     expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
+  // The accountant screenshot bug (2026-08-23): the sidebar offered Patients
+  // and the click landed on the 403 page — the nav item was permission-gated
+  // while the route guard is role-gated, and the two vocabularies disagreed
+  // for ten roles. The item now carries the guard's role list too.
+  it('accountant sees Billing and Messages but not Patients — nav mirrors the route guard', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_ACCOUNTANT',
+      roles: ['ROLE_ACCOUNTANT'],
+      wildcardPermission: false,
+      permissions: [
+        'View Dashboard',
+        'View Billing',
+        'View Billing Summary',
+        'Record Payment',
+        'View Billing Reports',
+        'View Notifications',
+      ],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/billing');
+    expect(routes).toContain('/chat');
+    expect(routes).toContain('/announcements');
+    expect(routes).not.toContain('/patients');
+  });
+
+  it('keeps Patients for a role inside the /patients route guard', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_NURSE',
+      roles: ['ROLE_NURSE'],
+      wildcardPermission: false,
+      permissions: ['View Patient Records'],
+    });
+
+    expect(items.map((i) => i.route)).toContain('/patients');
   });
 
   it('reaches the duplicate-patient panel as a NURSE with no reception role', () => {
