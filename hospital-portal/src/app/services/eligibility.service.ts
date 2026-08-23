@@ -4,12 +4,7 @@ import { Observable, of } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 
 export type EligibilityScheme =
-  | 'NHIS_GH'
-  | 'NHIA_NG'
-  | 'CNAMGS_GA'
-  | 'MUTUELLE_RW'
-  | 'MUTUELLE_BF'
-  | 'GENERIC';
+  'NHIS_GH' | 'NHIA_NG' | 'CNAMGS_GA' | 'MUTUELLE_RW' | 'MUTUELLE_BF' | 'GENERIC';
 
 export type EligibilityCheckType = 'COVERAGE' | 'PRIOR_AUTH';
 

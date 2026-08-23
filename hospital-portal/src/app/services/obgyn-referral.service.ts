@@ -4,11 +4,7 @@ import { Observable } from 'rxjs';
 import { PageResponse } from './maternity.service';
 
 export type ObgynReferralStatus =
-  | 'SUBMITTED'
-  | 'ACKNOWLEDGED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
-  | 'CANCELLED';
+  'SUBMITTED' | 'ACKNOWLEDGED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
 export type ObgynReferralUrgency = 'ROUTINE' | 'PRIORITY' | 'URGENT';
 export type ObgynReferralCareContext = 'ANTENATAL' | 'INTRAPARTUM' | 'POSTPARTUM';
 export type ObgynTransferType = 'CONSULTATION' | 'SHARED_CARE' | 'TRANSFER_OF_CARE';

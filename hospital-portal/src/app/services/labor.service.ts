@@ -5,11 +5,7 @@ import { Observable } from 'rxjs';
 export type LaborStatus = 'ACTIVE' | 'DELIVERED' | 'TRANSFERRED' | 'CLOSED';
 export type MembraneStatus = 'INTACT' | 'SPONTANEOUS_RUPTURE' | 'ARTIFICIAL_RUPTURE';
 export type LiquorColour =
-  | 'MEMBRANES_INTACT'
-  | 'CLEAR'
-  | 'MECONIUM_STAINED'
-  | 'BLOOD_STAINED'
-  | 'ABSENT';
+  'MEMBRANES_INTACT' | 'CLEAR' | 'MECONIUM_STAINED' | 'BLOOD_STAINED' | 'ABSENT';
 export type MouldingDegree = 'NONE' | 'PLUS_ONE' | 'PLUS_TWO' | 'PLUS_THREE';
 export type DeliveryMode =
   | 'SPONTANEOUS_VAGINAL'
@@ -20,12 +16,7 @@ export type DeliveryMode =
   | 'ASSISTED_BREECH';
 export type InfantSex = 'MALE' | 'FEMALE' | 'UNDETERMINED';
 export type PerinealTear =
-  | 'NONE'
-  | 'FIRST_DEGREE'
-  | 'SECOND_DEGREE'
-  | 'THIRD_DEGREE'
-  | 'FOURTH_DEGREE'
-  | 'EPISIOTOMY';
+  'NONE' | 'FIRST_DEGREE' | 'SECOND_DEGREE' | 'THIRD_DEGREE' | 'FOURTH_DEGREE' | 'EPISIOTOMY';
 
 export interface LaborAlert {
   type: string;

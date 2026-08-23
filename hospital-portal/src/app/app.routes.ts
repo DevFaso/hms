@@ -179,9 +179,9 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import(
-            './patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component'
-          ).then((m) => m.ProxyDataViewerComponent),
+          import('./patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component').then(
+            (m) => m.ProxyDataViewerComponent,
+          ),
       },
       {
         path: 'my-summaries',

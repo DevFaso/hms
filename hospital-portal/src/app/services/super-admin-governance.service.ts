@@ -78,13 +78,7 @@ export interface PasswordRotationRow {
 /* ── Credential health ── */
 
 export type MfaMethodType =
-  | 'TOTP'
-  | 'SMS'
-  | 'EMAIL'
-  | 'PUSH'
-  | 'APP_PUSH'
-  | 'SECURITY_KEY'
-  | 'BACKUP_CODE';
+  'TOTP' | 'SMS' | 'EMAIL' | 'PUSH' | 'APP_PUSH' | 'SECURITY_KEY' | 'BACKUP_CODE';
 export type RecoveryContactType = 'EMAIL' | 'PHONE' | 'SECURITY_KEY' | 'PERSONAL_CONTACT' | 'OTHER';
 
 export interface MfaEnrollment {

@@ -3,12 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
 export type TreatmentPlanStatus =
-  | 'DRAFT'
-  | 'IN_REVIEW'
-  | 'REVISIONS_REQUIRED'
-  | 'APPROVED'
-  | 'ARCHIVED'
-  | 'CANCELLED';
+  'DRAFT' | 'IN_REVIEW' | 'REVISIONS_REQUIRED' | 'APPROVED' | 'ARCHIVED' | 'CANCELLED';
 
 export interface TreatmentPlanFollowUp {
   id: string;

@@ -24,11 +24,7 @@ export type AdmissionType =
   | 'PSYCHIATRIC';
 
 export type AcuityLevel =
-  | 'LEVEL_1_MINIMAL'
-  | 'LEVEL_2_MODERATE'
-  | 'LEVEL_3_MAJOR'
-  | 'LEVEL_4_SEVERE'
-  | 'LEVEL_5_CRITICAL';
+  'LEVEL_1_MINIMAL' | 'LEVEL_2_MODERATE' | 'LEVEL_3_MAJOR' | 'LEVEL_4_SEVERE' | 'LEVEL_5_CRITICAL';
 
 export type EncounterType =
   | 'CONSULTATION'
