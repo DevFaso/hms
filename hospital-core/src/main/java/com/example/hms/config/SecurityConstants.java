@@ -32,6 +32,7 @@ public class SecurityConstants {
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_RADIOLOGIST = "ROLE_RADIOLOGIST";
     public static final String ROLE_SURGEON = "ROLE_SURGEON";
+    public static final String ROLE_PHYSIOTHERAPIST = "ROLE_PHYSIOTHERAPIST";
     public static final String ROLE_DENTIST = "ROLE_DENTIST";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";

@@ -80,6 +80,30 @@ public class PatientController {
         "ROLE_HOSPITAL_ADMIN"
     );
 
+    /**
+     * Chart read (list + detail) — the /patients page. One shared list because
+     * list and detail had drifted into two hand-maintained copies of the same
+     * set. Narrower than the SecurityConfig GET /patients matcher on purpose:
+     * the matcher also covers the picker endpoints below, whose callers have no
+     * business paging the whole chart.
+     */
+    private static final String PATIENT_READ_ROLES = "hasAnyAuthority("
+        + "'ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
+        + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
+        + "'ROLE_SUPER_ADMIN')";
+
+    /**
+     * Shared patient picker (/search + /lookup) — every role whose pages embed
+     * {@code <app-patient-picker>} needs it, which is why LAB_SCIENTIST and
+     * PHARMACIST are here (/medication-history). RADIOLOGIST (/imaging) and
+     * PHYSIOTHERAPIST (/treatment-plans, admitted by audit decision C4) reach
+     * those pages through their route guards but the picker rejected them, so
+     * the search box was dead — 2026-08-23 role audit, D4.
+     */
+    private static final String PATIENT_PICKER_ROLES = "hasAnyAuthority("
+        + "'ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
+        + "'ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')";
+
     private final PatientService patientService;
     private final NurseDashboardService nurseDashboardService;
     private final PatientChartUpdateService patientChartUpdateService;
@@ -99,7 +123,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(PATIENT_READ_ROLES)
     public ResponseEntity<List<PatientResponseDTO>> getAllPatients(
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(name = "assignedTo", required = false) String assignedTo,
@@ -169,7 +193,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = MessageResponse.class)))
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(PATIENT_READ_ROLES)
     public ResponseEntity<PatientResponseDTO> getPatientById(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -260,9 +284,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/search")
-    // LAB_SCIENTIST/PHARMACIST reach this through the shared patient picker
-    // (e.g. /medication-history), which previously used the broader GET /patients.
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(PATIENT_PICKER_ROLES)
     public ResponseEntity<List<PatientResponseDTO>> searchPatients(
         @RequestParam(required = false) String mrn,
         @RequestParam(required = false) String name,
@@ -302,9 +324,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/lookup")
-    // LAB_SCIENTIST/PHARMACIST reach this through the shared patient picker
-    // (e.g. /medication-history), which previously used the broader GET /patients.
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(PATIENT_PICKER_ROLES)
     public ResponseEntity<List<PatientResponseDTO>> lookupPatients(
         @RequestParam(required = false) String identifier,
         @RequestParam(required = false) String email,
