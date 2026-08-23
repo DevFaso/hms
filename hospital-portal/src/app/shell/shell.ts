@@ -262,6 +262,23 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.PATIENTS',
         route: '/patients',
         permission: 'View Patient Records',
+        // Mirrors the /patients RoleGuard list — without it, ten roles whose
+        // static permission map grants 'View Patient Records' (accountant,
+        // billing specialist, pharmacist, …) saw a nav entry that landed on
+        // the 403 page because the guard rejects them.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_QUALITY_MANAGER',
+        ],
       },
       {
         icon: 'calendar_month',
@@ -525,6 +542,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.BILLING',
         route: '/billing',
         permission: 'View Billing',
+        // Mirrors the /billing RoleGuard list (claims reviewers hold
+        // 'View Billing' for pharmacy claims but the guard rejects them).
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_ACCOUNTANT',
+          'ROLE_RECEPTIONIST',
+        ],
       },
       {
         icon: 'science',

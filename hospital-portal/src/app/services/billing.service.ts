@@ -9,8 +9,8 @@ import { Observable, map } from 'rxjs';
  * with the caller's active hospital. DELETE returns text/plain, not JSON.
  * Payment recording forwards only the amount — method/reference/notes are
  * discarded server-side. Email is synchronous and flips status to SENT.
- * ⚠ SecurityConfig excludes RECEPTIONIST from POST /billing-invoices/** so
- * payment recording 403s for pure receptionists despite the @PreAuthorize.
+ * (The old RECEPTIONIST-payment 403 is fixed: the POST matcher now includes
+ * RECEPTIONIST and the per-endpoint @PreAuthorize stays the precise gate.)
  */
 
 /** Backend InvoiceStatus — the only values the server knows. */

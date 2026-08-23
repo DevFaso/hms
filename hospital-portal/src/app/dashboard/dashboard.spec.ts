@@ -21,7 +21,11 @@ import {
  * assert that quick-action routes and workflow tiles are correct.
  */
 describe('Dashboard navigation & RBAC', () => {
-  function createComponent(roles: string[], permissions: string[]): DashboardComponent {
+  function createComponent(
+    roles: string[],
+    permissions: string[],
+    routes: import('@angular/router').Routes = [],
+  ): DashboardComponent {
     const permSet = new Set(permissions);
     const authStub = jasmine.createSpyObj('AuthService', [
       'getRoles',
@@ -53,7 +57,7 @@ describe('Dashboard navigation & RBAC', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([]),
+        provideRouter(routes),
         { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: permStub },
       ],
@@ -419,6 +423,51 @@ describe('Dashboard navigation & RBAC', () => {
       .withContext('Expected receptionist workflow tiles to include a Check-In tile')
       .toBeDefined();
     expect(checkIn!.route).toBe('/reception');
+  });
+
+  // ── Accountant fallback view (2026-08-23 screenshot bug) ─────
+  // The accountant landed on a dashboard whose only data call was
+  // GET /patients — which the backend rejects for finance roles — and
+  // whose only visible content was the generic welcome card.
+
+  const ACCOUNTANT_PERMISSIONS = [
+    'View Dashboard',
+    'View Billing',
+    'View Billing Summary',
+    'Record Payment',
+    'View Billing Reports',
+    'View Notifications',
+  ];
+
+  it('accountant lands on the fallback view with a billing quick action', () => {
+    const c = createComponent(['ROLE_ACCOUNTANT'], ACCOUNTANT_PERMISSIONS);
+    c.isAccountant.set(true);
+
+    expect(c.activeView()).toBe('fallback');
+    expect(c.quickActions().map((a) => a.route)).toContain('/billing');
+  });
+
+  it('accountant role label is its own, not the generic Staff badge', () => {
+    const c = createComponent(['ROLE_ACCOUNTANT'], ACCOUNTANT_PERMISSIONS);
+    c.isAccountant.set(true);
+
+    expect(c.roleLabel()).toContain('ACCOUNTANT');
+  });
+
+  it('canAccessRoute respects a role-guarded route the caller is outside of', () => {
+    const guardedRoutes: import('@angular/router').Routes = [
+      { path: 'patients', children: [], data: { roles: ['ROLE_DOCTOR', 'ROLE_NURSE'] } },
+    ];
+    const c = createComponent(
+      ['ROLE_ACCOUNTANT'],
+      [...ACCOUNTANT_PERMISSIONS, 'View Patient Records'],
+      guardedRoutes,
+    );
+
+    // The recent-patients fetch gates on this — a permission alone must not
+    // fire GET /patients for a role the route guard (and backend) rejects.
+    const gate = (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute;
+    expect(gate.call(c, '/patients')).toBeFalse();
   });
 });
 

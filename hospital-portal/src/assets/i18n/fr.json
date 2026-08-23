@@ -1899,8 +1899,12 @@
       "LAB_SCIENTIST": "Technicien de Laboratoire",
       "PHARMACIST": "Pharmacien",
       "RADIOLOGIST": "Radiologue",
+      "BILLING_SPECIALIST": "Spécialiste Facturation",
+      "ACCOUNTANT": "Comptable",
       "STAFF": "Personnel"
     },
+    "BILLING_SNAPSHOT": "Aperçu de Facturation",
+    "BILLING_OVERDUE": "Factures en retard",
     "TILE": {
       "STAFF": "Personnel",
       "APPOINTMENTS": "Rendez-vous",

@@ -3088,6 +3088,71 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'fallback') {
     <div class="fallback-grid">
+      @if (quickActions().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">bolt</span>
+              <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+            </div>
+          </div>
+          <div class="qa-grid">
+            @for (action of quickActions(); track action.label) {
+              <a
+                class="qa-card"
+                [routerLink]="action.route"
+                [queryParams]="action.queryParams ?? null"
+                [style.--qa-color]="action.color"
+                [style.--qa-bg]="action.bgColor"
+              >
+                <div class="qa-icon-wrap">
+                  <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+                </div>
+                <span class="qa-label">{{ action.label }}</span>
+                <span class="qa-desc">{{ action.description }}</span>
+              </a>
+            }
+          </div>
+        </section>
+      }
+      @if (billingSnapshotLoaded()) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">receipt_long</span>
+              <h2 class="card-title">{{ 'DASHBOARD.BILLING_SNAPSHOT' | translate }}</h2>
+            </div>
+            <a routerLink="/billing" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          </div>
+          <div class="schedule-list">
+            <div class="sched-row">
+              <div class="sched-info">
+                <span class="sched-name">{{ 'DASHBOARD.BILLING_OVERDUE' | translate }}</span>
+                <span class="sched-reason">
+                  {{ billingOverdueCount() }} ·
+                  {{ formatInvoiceAmount(billingOverdueTotal()) }}
+                </span>
+              </div>
+            </div>
+            @for (inv of billingRecentInvoices(); track inv.id) {
+              <a routerLink="/billing" class="sched-row">
+                <div class="sched-info">
+                  <span class="sched-name"
+                    >{{ inv.invoiceNumber }} — {{ inv.patientFullName }}</span
+                  >
+                  <span class="sched-reason">
+                    {{ formatInvoiceAmount(inv.totalAmount) }} ·
+                    {{ formatInvoiceStatus(inv.status) }}
+                  </span>
+                </div>
+                <span class="material-symbols-outlined chevron">chevron_right</span>
+              </a>
+            } @empty {
+              <p class="sched-reason">{{ 'BILLING.NO_INVOICES' | translate }}</p>
+            }
+          </div>
+        </section>
+      }
       @if (todayAppointments().length > 0) {
         <section class="card">
           <div class="card-head">
@@ -3144,7 +3209,12 @@
           </div>
         </section>
       }
-      @if (todayAppointments().length === 0 && recentPatients().length === 0) {
+      @if (
+        todayAppointments().length === 0 &&
+        recentPatients().length === 0 &&
+        quickActions().length === 0 &&
+        !billingSnapshotLoaded()
+      ) {
         <section class="card empty-card">
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">medical_services</span>
