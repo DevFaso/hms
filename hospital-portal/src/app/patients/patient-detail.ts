@@ -38,6 +38,7 @@ type TabKey =
   | 'overview'
   | 'medical'
   | 'chart'
+  | 'chart-review'
   | 'coverage'
   | 'med-history'
   | 'vitals'
