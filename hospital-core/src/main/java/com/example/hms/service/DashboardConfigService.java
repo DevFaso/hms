@@ -345,11 +345,10 @@ public class DashboardConfigService {
                 "Interpret Ultrasounds",
                 "Create Radiology Reports",
                 "Sign Imaging Reports",
-                // 'View Patient Records' removed by role audit D4: the
-                // /patients page is not wired for this role (its vitals,
-                // encounters and sharing panels each 403), so the grant
-                // advertised a chart the role cannot open. Patient LOOKUP for
-                // the picker on /imaging is granted separately and does work.
+                // Restored by role audit D7, which wired the chart end-to-end
+                // for the consulting clinicians. D4 had removed it because only
+                // the route would have worked, not the panels behind it.
+                PERM_VIEW_PATIENT_RECORDS,
                 "Request Additional Views",
                 "Communicate Findings to Physicians",
                 "Perform Interventional Procedures",
@@ -358,8 +357,10 @@ public class DashboardConfigService {
                 "Document Radiation Dosage",
                 "Flag Critical Findings",
                 "Access Patient History"));
-        // 'View Patient Records' removed by role audit D4 — see ROLE_RADIOLOGIST.
+        // Role audit D7 — see ROLE_RADIOLOGIST. A pre-anaesthetic evaluation
+        // IS a chart read, so this role's core duty depends on the grant.
         map.put("ROLE_ANESTHESIOLOGIST", List.of(
+                PERM_VIEW_PATIENT_RECORDS,
                 "Perform Pre-anesthetic Evaluation",
                 "Create Anesthesia Plans",
                 "Administer Anesthesia",
@@ -432,10 +433,10 @@ public class DashboardConfigService {
                 PERM_GENERATE_LAB_REPORTS,
                 PERM_FLAG_ABNORMAL_RESULTS,
                 PERM_COMMUNICATE_WITH_PHYSICIANS));
-        // 'View Patient Records' removed by role audit D4 — see ROLE_RADIOLOGIST.
-        // The treatment-plans page C4 admitted this role to needs patient
-        // LOOKUP, which PATIENT_PICKER_ROLES grants, not the chart page.
+        // Role audit D7 — see ROLE_RADIOLOGIST. The picker on /treatment-plans
+        // (decision C4) remains a separate backend grant.
         map.put("ROLE_PHYSIOTHERAPIST", List.of(
+                PERM_VIEW_PATIENT_RECORDS,
                 "Create Treatment Plans",
                 "Document Therapy Sessions",
                 "Update Patient Progress",

@@ -379,14 +379,14 @@ export class PermissionService {
       'View Billing Summary',
       'View Notifications',
     ],
-    // 'View Patient Records' removed by role audit D4: the /patients page is
-    // not wired for this role — its vitals, encounters, appointments and
-    // record-sharing panels each 403 — so the grant only advertised a chart
-    // the role cannot open. Patient LOOKUP (the picker on /imaging) is a
-    // separate backend grant and does work. Wiring the chart itself is D7.
+    // D7 wired the chart end-to-end for the consulting clinicians (patient
+    // read, vitals, encounters, appointments and hospital scope all widened
+    // together), so 'View Patient Records' is honest again — D4 had removed
+    // it precisely because only the route, not the panels, would have worked.
     ROLE_RADIOLOGIST: [
       'View Dashboard',
       'View Appointments',
+      'View Patient Records',
       'View Imaging Studies',
       'Request Imaging Studies',
       'View Lab',
@@ -417,11 +417,13 @@ export class PermissionService {
       'View Notifications',
     ],
     // ── Additional backend roles ──────────────────────────────────
-    // Same as the radiologist above (role audit D4) — and this role reaches no
-    // role-guarded page at all today, which is what D7 has to answer.
+    // D7: the chart is this role's whole reason to be in the product — a
+    // pre-operative assessment is a chart read. Before D7 it reached no
+    // role-guarded page at all.
     ROLE_ANESTHESIOLOGIST: [
       'View Dashboard',
       'View Appointments',
+      'View Patient Records',
       'Create Encounters',
       'View Prescriptions',
       'View Lab',
@@ -446,12 +448,12 @@ export class PermissionService {
       'Email Invoice',
       'View Notifications',
     ],
-    // Same as the radiologist above (role audit D4). The treatment-plans page
-    // C4 admitted this role to needs patient LOOKUP, not the chart page, and
-    // that grant is backend-side (PATIENT_PICKER_ROLES).
+    // D7: reads the chart for their rehabilitation caseload. The picker on
+    // /treatment-plans (audit decision C4) is a separate backend grant.
     ROLE_PHYSIOTHERAPIST: [
       'View Dashboard',
       'View Appointments',
+      'View Patient Records',
       'Create Encounters',
       'Create Treatment Plans',
       'View Staff Schedules',

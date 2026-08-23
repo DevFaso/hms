@@ -15,6 +15,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import static com.example.hms.config.SecurityConstants.CONSULTING_CLINICIANS_AUTHORITIES;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +36,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Patient Vital Signs", description = "Record and retrieve patient vital signs")
 public class PatientVitalSignController {
+
+    /**
+     * Vitals READ. Consulting clinicians (radiologist, anaesthetist,
+     * physiotherapist) were admitted by role audit D7 — an anaesthetist
+     * cannot do a pre-operative assessment without them. Writing vitals
+     * stays with the bedside roles on the POST above.
+     */
+    private static final String VITALS_READ_ROLES = "hasAnyAuthority("
+        + "'ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ","
+        + "'ROLE_SUPER_ADMIN')";
 
     private static final int DEFAULT_RECENT_LIMIT = 10;
     private static final int MAX_RECENT_LIMIT = 50;
@@ -71,7 +84,7 @@ public class PatientVitalSignController {
     }
 
     @GetMapping("/recent")
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(VITALS_READ_ROLES)
     @Operation(
         summary = "List most recent vitals",
         description = "Returns the most recent vital sign entries for the patient.",
@@ -92,7 +105,7 @@ public class PatientVitalSignController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(VITALS_READ_ROLES)
     @Operation(
         summary = "Search historical vital signs",
         description = "Returns a paginated set of vital sign entries filtered by time window.",

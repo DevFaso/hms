@@ -43,6 +43,8 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import static com.example.hms.config.SecurityConstants.CONSULTING_CLINICIANS_AUTHORITIES;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -86,10 +88,15 @@ public class PatientController {
      * set. Narrower than the SecurityConfig GET /patients matcher on purpose:
      * the matcher also covers the picker endpoints below, whose callers have no
      * business paging the whole chart.
+     *
+     * <p>The consulting clinicians were admitted by role audit D7, together
+     * with the other four layers the chart page needs — see
+     * {@link com.example.hms.config.SecurityConstants#CONSULTING_CLINICIANS_AUTHORITIES}.
      */
     private static final String PATIENT_READ_ROLES = "hasAnyAuthority("
         + "'ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ","
         + "'ROLE_SUPER_ADMIN')";
 
     /**

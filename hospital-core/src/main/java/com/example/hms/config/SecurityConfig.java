@@ -58,6 +58,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_PHARMACIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMINISTRATIVE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_ANESTHESIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
@@ -410,7 +411,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
-                        ROLE_RADIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -418,8 +419,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
+                // Consulting clinicians READ vitals (pre-operative assessment,
+                // exercise tolerance before therapy) but never write them —
+                // the POST matcher above stays narrow. Role audit D7.
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
-                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_RADIOLOGIST,
+                        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PUT, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -454,7 +459,10 @@ public class SecurityConfig {
                 // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
                 .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER)
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        // Role audit D7: every authenticated page resolves its
+                        // hospital scope here, so the chart 403s without it.
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST)
 
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.
