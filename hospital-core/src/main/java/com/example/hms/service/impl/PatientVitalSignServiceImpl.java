@@ -73,6 +73,13 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
         vitalSignMapper.applyRequestToEntity(request, entity);
 
+        // NEWS2 MEDIUM+ auto-flags the bundle significant (P3 #25b): the
+        // aggregate catches multi-parameter deterioration that no single
+        // caller-supplied flag or per-vital threshold would.
+        if (com.example.hms.utility.NewsScoreCalculator.score(entity).total() >= 5) {
+            entity.setClinicallySignificant(true);
+        }
+
         PatientVitalSign saved = vitalSignRepository.save(entity);
         return vitalSignMapper.toResponse(saved);
     }

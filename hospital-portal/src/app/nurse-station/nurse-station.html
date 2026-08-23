@@ -1157,6 +1157,30 @@
             (input)="updateVitalsField('headCircumferenceCm', $any($event.target).value)"
           />
         </div>
+        <!-- NEWS2 parameters (P3 #25b) -->
+        <div class="vitals-field">
+          <label for="vf-consciousness">{{ 'NURSE.CONSCIOUSNESS' | translate }}</label>
+          <select
+            id="vf-consciousness"
+            [value]="vitalsForm().consciousnessLevel ?? ''"
+            (change)="updateVitalsConsciousness($any($event.target).value)"
+          >
+            <option value="">— {{ 'NURSE.NOT_ASSESSED' | translate }} —</option>
+            @for (level of consciousnessOptions; track level) {
+              <option [value]="level">{{ 'NURSE.ACVPU_' + level | translate }}</option>
+            }
+          </select>
+        </div>
+        <div class="vitals-field">
+          <label>
+            <input
+              type="checkbox"
+              [checked]="vitalsForm().onOxygen === true"
+              (change)="updateVitalsOnOxygen($any($event.target).checked)"
+            />
+            {{ 'NURSE.ON_OXYGEN' | translate }}
+          </label>
+        </div>
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea

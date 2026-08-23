@@ -193,6 +193,34 @@
               name="painScale"
             />
           </div>
+
+          <!-- NEWS2 parameters (P3 #25b) -->
+          <div class="form-group">
+            <label for="consciousness">{{ 'TRIAGE.CONSCIOUSNESS' | translate }}</label>
+            <select
+              id="consciousness"
+              [ngModel]="consciousnessLevel()"
+              (ngModelChange)="consciousnessLevel.set($event)"
+              name="consciousnessLevel"
+            >
+              <option value="">— {{ 'TRIAGE.NOT_ASSESSED' | translate }} —</option>
+              @for (level of consciousnessOptions; track level) {
+                <option [value]="level">{{ 'TRIAGE.ACVPU_' + level | translate }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                [ngModel]="onOxygen()"
+                (ngModelChange)="onOxygen.set($event)"
+                name="onOxygen"
+              />
+              {{ 'TRIAGE.ON_OXYGEN' | translate }}
+            </label>
+          </div>
         </div>
       </fieldset>
 

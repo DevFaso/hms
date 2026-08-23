@@ -32,10 +32,22 @@ export interface VitalSignResponse {
   bodyPosition: string | null;
   notes: string | null;
   clinicallySignificant: boolean;
+  /* NEWS2 (P3 #25b) — computed server-side per bundle. When newsComplete is
+     false the score covers only what was recorded and newsMissing names the
+     gaps; render the incompleteness, never hide it. */
+  onOxygen: boolean | null;
+  consciousnessLevel: ConsciousnessLevel | null;
+  newsScore: number | null;
+  newsRiskBand: NewsRiskBand | null;
+  newsComplete: boolean | null;
+  newsMissing: string[] | null;
   recordedAt: string;
   createdAt: string;
   updatedAt: string | null;
 }
+
+export type ConsciousnessLevel = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+export type NewsRiskBand = 'LOW' | 'LOW_MEDIUM' | 'MEDIUM' | 'HIGH';
 
 /** Mirrors PatientVitalSignRequestDTO (measurement subset). */
 export interface VitalSignRequest {
@@ -50,6 +62,10 @@ export interface VitalSignRequest {
   heightCm?: number;
   headCircumferenceCm?: number;
   bodyPosition?: string;
+  /** NEWS2 (P3 #25b): supplemental oxygen at measurement time. */
+  onOxygen?: boolean;
+  /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
+  consciousnessLevel?: ConsciousnessLevel;
   notes?: string;
   recordedAt?: string;
 }

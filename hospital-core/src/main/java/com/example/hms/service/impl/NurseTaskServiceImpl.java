@@ -1169,8 +1169,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("Patient is not registered at this hospital.");
         }
 
-        boolean clinicallySig = isClinicallySignificant(request);
-
         PatientVitalSign vital = PatientVitalSign.builder()
             .patient(patient)
             .hospital(hospital)
@@ -1186,9 +1184,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .weightKg(request.getWeightKg())
             .heightCm(request.getHeightCm())
             .headCircumferenceCm(request.getHeadCircumferenceCm())
+            .onOxygen(request.getOnOxygen())
+            .consciousnessLevel(request.getConsciousnessLevel())
             .notes(request.getNotes())
-            .clinicallySignificant(clinicallySig)
             .build();
+
+        // Significant when the legacy per-vital thresholds fire OR the
+        // NEWS2 aggregate reaches MEDIUM (P3 #25b) — the aggregate catches
+        // the multi-parameter deterioration the per-vital ranges miss.
+        boolean clinicallySig = isClinicallySignificant(request)
+            || com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5;
+        vital.setClinicallySignificant(clinicallySig);
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(vital::setRecordedByStaff);
         vitalSignRepository.save(vital);

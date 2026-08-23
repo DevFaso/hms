@@ -228,6 +228,55 @@
   border-bottom: 1px solid #f1f5f9;
 }
 
+/* ── NEWS2 chip (P3 #25b) ───────────────────────────── */
+.news-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid transparent;
+
+  .news-label {
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  .news-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .news-incomplete {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    text-decoration: underline dotted;
+    cursor: help;
+  }
+
+  &.news-low {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+  }
+  &.news-low-medium {
+    background: #fffbeb;
+    color: #b45309;
+    border-color: #fde68a;
+  }
+  &.news-medium {
+    background: #fff7ed;
+    color: #c2410c;
+    border-color: #fed7aa;
+  }
+  &.news-high {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+  }
+}
+
 .vital-date {
   font-size: 0.875rem;
   font-weight: 600;
