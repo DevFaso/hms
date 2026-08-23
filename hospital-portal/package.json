@@ -21,6 +21,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,html,scss,md,json}\"",
     "i18n:check": "node scripts/check-i18n-coverage.mjs",
     "i18n:parity": "node scripts/check-i18n-coverage.mjs --strict",
+    "i18n:referenced": "node scripts/check-i18n-referenced-keys.mjs",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
   },
   "prettier": {

@@ -170,7 +170,7 @@
     @if (totalPages() > 1) {
       <nav class="pager">
         <button type="button" [disabled]="!hasPrev()" (click)="goToPage(pageNumber() - 1)">
-          {{ 'COMMON.PREV' | translate }}
+          {{ 'COMMON.PREVIOUS' | translate }}
         </button>
         <span data-test="pager-status">
           {{
