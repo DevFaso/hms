@@ -1905,6 +1905,7 @@
     },
     "BILLING_SNAPSHOT": "Billing Snapshot",
     "BILLING_OVERDUE": "Overdue invoices",
+    "ALERT_ACK_FAILED": "Could not acknowledge the alert. Please try again.",
     "TILE": {
       "STAFF": "Staff",
       "APPOINTMENTS": "Appointments",
