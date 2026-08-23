@@ -227,6 +227,10 @@ export const routes: Routes = [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_SCIENTIST',
+            // 2026-08-23 role audit: both backend layers (GET /patients
+            // matcher + controller) always admitted lab technicians; the
+            // guard was the only rejecting layer.
+            'ROLE_LAB_TECHNICIAN',
             'ROLE_QUALITY_MANAGER',
           ],
         },
@@ -262,6 +266,9 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
+            // 2026-08-23 role audit: the backend admits STAFF on every
+            // appointment read endpoint — the guard was the outlier.
+            'ROLE_STAFF',
           ],
         },
         children: [
@@ -304,6 +311,9 @@ export const routes: Routes = [
             'ROLE_RECEPTIONIST',
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
+            // 2026-08-23 role audit: the backend GET /staff matcher admits
+            // quality managers — the guard was the outlier.
+            'ROLE_QUALITY_MANAGER',
           ],
         },
         children: [
@@ -826,6 +836,10 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
+            // 2026-08-23 role audit: the backend list endpoint always
+            // admitted midwives; the guard was the only rejecting layer.
+            // (POST /prescriptions still excludes midwives at the controller.)
+            'ROLE_MIDWIFE',
             'ROLE_PHARMACIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
@@ -912,6 +926,9 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
+            // 2026-08-23 role audit: the backend admits midwives on imaging
+            // order creation and listing — the guard was the outlier.
+            'ROLE_MIDWIFE',
             'ROLE_RADIOLOGIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
@@ -946,6 +963,9 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
+            // 2026-08-23 role audit: every backend treatment-plan endpoint
+            // admits midwives — the guard was the outlier.
+            'ROLE_MIDWIFE',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -963,6 +983,9 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
+            // 2026-08-23 role audit: OB-GYN referrals are an explicit midwife
+            // duty in the backend role model — the guard was the outlier.
+            'ROLE_MIDWIFE',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',

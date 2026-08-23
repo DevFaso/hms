@@ -832,3 +832,110 @@ list. All P3 items are now closed: the final batch (22, 24, 25) shipped
 
 *Source audit + full evidence: artifact above. Related work already landed: PR #429 (cross-hospital
 link-at-registration), PR #430 (phone-first registration + IKODDI SMS OTP).*
+
+---
+
+# Role-Base Consistency Audit — 2026-08-23
+
+Source: 14-agent adversarially-verified audit (workflow `wf_d102eb4a`) run after
+the ACCOUNTANT fix (PR #485) — every role checked for the same defect classes:
+dead nav (visible entry whose route guard 403s), guaranteed-403 dashboard HTTP
+calls, matcher↔annotation drift, unreachable shipped features. All `broken`
+findings were CONFIRMED with file:line evidence on both sides. Verdicts:
+clean = RECEPTIONIST, PATIENT · degraded = SUPER_ADMIN, HOSPITAL_ADMIN, DOCTOR,
+NURSE, LAB_SCIENTIST, LAB_DIRECTOR, QUALITY_MANAGER, STAFF · **broken** =
+ADMIN, PHYSICIAN, SURGEON, MIDWIFE, LAB_TECHNICIAN, LAB_MANAGER, RADIOLOGIST,
+PHARMACIST, PHARMACY_VERIFIER, CLAIMS_REVIEWER, ANESTHESIOLOGIST,
+PHYSIOTHERAPIST.
+
+## A. Portal mechanical consistency (one PR, no product decisions) — PRIORITY 1
+
+- [ ] A1. Guard-mirroring `roles` lists on every permission-only nav item
+  (Appointments, Encounters, Admissions, Prescriptions, Consultations,
+  Treatment Plans, Referrals, Imaging, Laboratory, Lab Results, Audit Logs) —
+  generalizes the PR #485 Patients/Billing pattern; kills every dead sidebar
+  entry for PHYSICIAN/SURGEON (9 each), RADIOLOGIST (3), ANESTHESIOLOGIST (5),
+  PHYSIOTHERAPIST (3), PHARMACY_VERIFIER (1), LAB_DIRECTOR/QUALITY_MANAGER
+  (audit-logs) without changing anyone's access.
+- [ ] A2. Gate the Messages nav item on the backend chat role set (today's
+  CHAT_ROLES) — 8 staff roles currently open a chat page whose every API call
+  403s. (Widening chat itself is decision D4.)
+- [ ] A3. `canAccessRoute('/appointments')` gate on the dashboard appointments
+  fetch (mirror of the PR #485 recent-patients fix) — removes the guaranteed
+  403 fired on every load for RADIOLOGIST, ANESTHESIOLOGIST, PHYSIOTHERAPIST,
+  PHYSICIAN, SURGEON.
+- [ ] A4. Filter dashboard workflow tiles through `canAccessRoute` (lab view's
+  Encounters tile, pharmacist/radiologist Patients+Encounters tiles) and fix
+  the pharmacist tiles' stale routes (Dispense → /pharmacy/dispensing,
+  Interactions → /pharmacy/drug-interactions, Inventory → /pharmacy/inventory;
+  Reports tile removed — no page exists).
+- [ ] A5. Route-guard additions where the BACKEND already admits the role (the
+  guard is the only broken layer): /prescriptions + /imaging +
+  /treatment-plans + /referrals for ROLE_MIDWIFE; /appointments for ROLE_STAFF;
+  /staff for ROLE_QUALITY_MANAGER; /patients (guard + nav mirror) for
+  ROLE_LAB_TECHNICIAN. Also drop 'Create Prescriptions' from the midwife static
+  map (POST /prescriptions excludes midwife — avoid trading dead nav for a
+  dead button).
+- [ ] A6. LAB_TECHNICIAN lands on the lab view: `isLabScientist` includes
+  ROLE_LAB_TECHNICIAN (dashboard.ts one-liner; spec drove the flag by hand and
+  masked it). LAB_MANAGER gets a flag + lands on the lab view + its own label.
+- [ ] A7. Missing nav for shipped features: eMAR (roles mirror /emar guard —
+  the bedside five-rights loop is URL-only today), Pharmacy Claims + Checkout +
+  MTM Review (unlocks CLAIMS_REVIEWER's entire purpose), Dispensing + Stock
+  Routing for PHARMACY_VERIFIER, super-admin Integration Messages + Cost/
+  Chargeback console entries, Scheduling for LAB_SCIENTIST ('View Staff
+  Schedules' grant), Imaging for DOCTOR + NURSE ('View Imaging Studies' grant).
+- [ ] A8. Role labels instead of generic "Staff": LAB_TECHNICIAN, LAB_MANAGER,
+  PHARMACY_VERIFIER, CLAIMS_REVIEWER, ANESTHESIOLOGIST, PHYSIOTHERAPIST
+  (EN/FR/ES). Remove the duplicate patient "Documents" nav entry.
+
+## B. Backend matcher/annotation alignments (one PR, PR #483 class) — PRIORITY 2
+
+- [ ] B1. Narrow `GET /staff/scheduling/**` matcher above `/staff/**` carrying
+  StaffSchedulingController's role union (STAFF, PHARMACIST, RADIOLOGIST are
+  stranded by first-match-wins today).
+- [ ] B2. DepartmentController GET annotations aligned with the /departments
+  matcher's role list (lab roles admitted by the matcher 403 at the
+  annotation — LAB_MANAGER's Departments page is fully dead).
+- [ ] B3. `GET /staff/{id}/active` widened to the same read roles as GET /staff
+  (staff detail is a dead click for every non-admin role).
+- [ ] B4. POST /me/alerts/{id}/acknowledge admits NURSE + MIDWIFE (they receive
+  actionRequired alerts; the nurse view renders the Ack button for them and it
+  silently 403s) + error toast on failure.
+
+## C. Decisions required (blocked on user) — PRIORITY 3
+
+- [ ] C1. ROLE_ADMIN contract: the role is seeded and real but has zero
+  permissions in both maps, its /admin landing fires a SUPER_ADMIN-only
+  endpoint, and SecurityConfig has no ADMIN matcher anywhere. Define what an
+  ADMIN operates (or retire the role).
+- [ ] C2. PHYSICIAN / SURGEON role model: treat as DOCTOR everywhere (shared
+  DOCTOR_LIKE_ROLES constant across guards, nav, matchers, annotations) or
+  retire/alias to ROLE_DOCTOR at assignment time.
+- [ ] C3. Chat scope: open CHAT_ROLES + matcher to all staff roles (pharmacist,
+  radiologist, physician, surgeon, anesthesiologist, physiotherapist,
+  verifier, claims reviewer) or keep the current list (A2 hides the nav
+  either way).
+- [ ] C4. PHYSIOTHERAPIST treatment plans: its core duty is rejected by the
+  guard AND every backend endpoint while both permission maps grant it —
+  admit the role end-to-end or strip the grant.
+- [ ] C5. Nurse Station for HOSPITAL_ADMIN: nav+guard admit, /nurse/** matcher
+  rejects — read-only oversight (add matcher roles) or drop the permission.
+- [ ] C6. Audit-log access for LAB_DIRECTOR / QUALITY_MANAGER: guard rejects,
+  static maps grant — widen the guard + add real @PreAuthorize to
+  AuditEventLogController, or remove the grant (A1 hides the entry meanwhile).
+- [ ] C7. ROLE_STAFF: not seeded, no backend defaults — seed it or document as
+  inheritance-only pseudo-role. Its lab-order read grant is portal-unreachable.
+
+## D. Follow-ups (after A–C)
+
+- [ ] D1. Fallback-view work cards: dispense queue for PHARMACY_VERIFIER,
+  claims list for CLAIMS_REVIEWER (endpoints exist and admit the roles).
+- [ ] D2. Pharmacist dashboard: wire stat strip + Prescription Queue card to
+  the real dispense work-queue; radiologist view: real summary endpoint
+  instead of hardcoded dashes; lab view: wire stat cards.
+- [ ] D3. `findRouteRecursive` cannot resolve nested paths, so canAccessRoute
+  passes stale nested links (the dead PHYSICIAN 'Register Patient' hero
+  action) — walk path segments/children.
+- [ ] D4. Reconcile DashboardConfigService per-role defaults with SecurityConfig
+  matchers (roles granted 'View Lab'/'View Patient Records' the matchers 403).
