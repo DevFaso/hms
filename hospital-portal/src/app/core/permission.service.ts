@@ -65,7 +65,9 @@ export class PermissionService {
       'Create Prescriptions',
       'View Prescriptions',
       'Document Nursing Notes',
-      'Access Nurse Station',
+      // 'Access Nurse Station' deliberately absent (role audit C5): the
+      // bedside station is clinical-staff-only — the /nurse/** backend
+      // always rejected admins; the tracker is the admin oversight surface.
       'Request Imaging Studies',
       'View Imaging Studies',
       'Request Consultations',
@@ -464,6 +466,11 @@ export class PermissionService {
       'View Billing Reports',
       'View Notifications',
     ],
+    // Role audit decision C1: general administrative user — back-office
+    // operations (users, front desk oversight, patient lookup, audit
+    // trail), NOT platform config and NOT clinical surfaces. Mirrors
+    // DashboardConfigService's ROLE_ADMIN defaults.
+    ROLE_ADMIN: ['View Dashboard', 'View Patient Records', 'View Audit Logs', 'View Notifications'],
   };
 
   /**

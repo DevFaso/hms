@@ -204,10 +204,13 @@ public class FileUploadController {
         }
     }
 
-    /** Mirrors {@code ChatController.CHAT_ROLES} so only chat-capable roles can upload media. */
-    private static final String CHAT_ATTACHMENT_ROLES = "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'RECEPTIONIST', "
-            + "'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', "
-            + "'BILLING_SPECIALIST', 'ACCOUNTANT', 'STAFF', 'PATIENT')";
+    /**
+     * Mirrors {@code ChatController.CHAT_ROLES}: chat is open to every
+     * authenticated hospital user (2026-08-23 role audit, decision C3);
+     * per-thread participant gating in ChatMessageService is the real
+     * protection.
+     */
+    private static final String CHAT_ATTACHMENT_ROLES = "isAuthenticated()";
 
     @Operation(
         summary = "Upload chat attachment (telehealth low-bandwidth)",

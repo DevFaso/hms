@@ -280,7 +280,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/referrals');
   });
 
-  it('radiologist no longer sees dead Appointments/Lab/Messages entries', () => {
+  it('radiologist no longer sees dead Appointments/Lab entries, and Messages works', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_RADIOLOGIST',
       roles: ['ROLE_RADIOLOGIST'],
@@ -292,7 +292,9 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/appointments');
     expect(routes).not.toContain('/lab');
     expect(routes).not.toContain('/lab-results');
-    expect(routes).not.toContain('/chat');
+    // Chat is open to every authenticated user since decision C3, so the
+    // Messages entry is back — and this time the backend admits the role.
+    expect(routes).toContain('/chat');
     expect(routes).toContain('/imaging');
   });
 
@@ -321,6 +323,61 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/pharmacy/claims');
     expect(routes).not.toContain('/billing');
+  });
+
+  // Role audit decision C2: physicians/surgeons are doctor-equivalent —
+  // every nav gate naming ROLE_DOCTOR admits them.
+  it('physician sees the doctor nav entries via role equivalence', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PHYSICIAN',
+      roles: ['ROLE_PHYSICIAN'],
+      wildcardPermission: false,
+      permissions: ['View Appointments', 'Create Encounters', 'View Prescriptions'],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/appointments');
+    expect(routes).toContain('/encounters');
+    expect(routes).toContain('/prescriptions');
+  });
+
+  // Role audit decision C1: ADMIN is back-office operations, not platform IT.
+  it('admin sees Users/Administration/Patients/Audit Logs but no platform-IT entries', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: false,
+      permissions: [
+        'View Dashboard',
+        'View Patient Records',
+        'View Audit Logs',
+        'View Notifications',
+      ],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/users');
+    expect(routes).toContain('/admin');
+    expect(routes).toContain('/patients');
+    expect(routes).toContain('/audit-logs');
+    expect(routes).not.toContain('/organizations');
+    expect(routes).not.toContain('/roles');
+    expect(routes).not.toContain('/platform');
+    expect(routes).not.toContain('/analytics');
+    expect(routes).not.toContain('/feature-flags');
+    expect(routes).not.toContain('/bed-management');
+  });
+
+  // Role audit decision C6: lab leadership reads the audit trail.
+  it('quality manager reaches Audit Logs', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_QUALITY_MANAGER',
+      roles: ['ROLE_QUALITY_MANAGER'],
+      wildcardPermission: false,
+      permissions: ['View Audit Logs'],
+    });
+
+    expect(items.map((i) => i.route)).toContain('/audit-logs');
   });
 
   it('nurse reaches the eMAR from the sidebar', () => {

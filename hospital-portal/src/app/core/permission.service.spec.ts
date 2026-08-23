@@ -36,9 +36,12 @@ describe('PermissionService', () => {
     expect(service.hasPermission('Access Nurse Station')).toBeTrue();
   });
 
-  it('ROLE_HOSPITAL_ADMIN should have Access Nurse Station', () => {
+  it('ROLE_HOSPITAL_ADMIN should NOT have Access Nurse Station', () => {
+    // Role audit decision C5: the bedside station is clinical-staff-only —
+    // the /nurse/** backend always rejected admins, so the grant only
+    // produced a fully dead page.
     setup(['ROLE_HOSPITAL_ADMIN']);
-    expect(service.hasPermission('Access Nurse Station')).toBeTrue();
+    expect(service.hasPermission('Access Nurse Station')).toBeFalse();
   });
 
   it('ROLE_DOCTOR should NOT have Access Nurse Station', () => {

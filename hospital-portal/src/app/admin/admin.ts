@@ -2,8 +2,8 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../auth/auth.service';
+import { DashboardService } from '../services/dashboard.service';
 
 interface SystemStat {
   label: string;
@@ -28,7 +28,7 @@ interface AdminSection {
   styleUrl: './admin.scss',
 })
 export class AdminComponent implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly dashboardService = inject(DashboardService);
   private readonly auth = inject(AuthService);
 
   loading = signal(true);
@@ -40,34 +40,32 @@ export class AdminComponent implements OnInit {
     { label: 'System Health', value: 'Online', icon: 'monitor_heart', color: '#059669' },
   ]);
 
+  // Role audit decision C1: only ROLE_ADMIN can reach this page (super
+  // admins are redirected to the Control Tower), so every tile must be a
+  // surface whose route guard AND backend admit ADMIN. The old set sent
+  // admins into /staff, /departments, /billing and /lab — all-403 pages —
+  // and the Audit Logs tile pointed back at /admin itself.
   sections: AdminSection[] = [
     {
       title: 'User Management',
       description: 'Manage user accounts, roles, and permissions',
       icon: 'manage_accounts',
-      route: '/staff',
+      route: '/users',
       color: '#3b82f6',
     },
     {
-      title: 'Department Management',
-      description: 'Create and configure hospital departments',
-      icon: 'domain',
-      route: '/departments',
+      title: 'Patient Tracker',
+      description: 'Live patient flow across the hospital',
+      icon: 'view_kanban',
+      route: '/patient-tracker',
       color: '#8b5cf6',
     },
     {
-      title: 'Billing Configuration',
-      description: 'Configure billing rates, insurance, and payment methods',
-      icon: 'receipt_long',
-      route: '/billing',
+      title: 'Front Desk',
+      description: 'Reception cockpit: check-in, queues, and recalls',
+      icon: 'support_agent',
+      route: '/reception',
       color: '#10b981',
-    },
-    {
-      title: 'Laboratory Settings',
-      description: 'Manage lab test catalogs and processing workflows',
-      icon: 'science',
-      route: '/lab',
-      color: '#f59e0b',
     },
     {
       title: 'System Notifications',
@@ -80,7 +78,7 @@ export class AdminComponent implements OnInit {
       title: 'Audit Logs',
       description: 'View system audit trail and access logs',
       icon: 'shield',
-      route: '/admin',
+      route: '/audit-logs',
       color: '#64748b',
     },
   ];
@@ -91,25 +89,29 @@ export class AdminComponent implements OnInit {
 
   loadStats(): void {
     this.loading.set(true);
-    this.http.get<Record<string, number>>('/super-admin/summary').subscribe({
+    // Role audit decision C1: this page is reachable ONLY by ROLE_ADMIN
+    // (super admins get redirected to /super-admin), yet it called the
+    // SUPER_ADMIN-only /super-admin/summary — a guaranteed 403 leaving the
+    // stat cards at "—" forever. The hospital-admin summary admits ADMIN.
+    this.dashboardService.getHospitalAdminSummary().subscribe({
       next: (data) => {
         this.stats.set([
           {
-            label: 'Total Users',
-            value: data['totalUsers'] ?? '—',
-            icon: 'group',
-            color: '#3b82f6',
-          },
-          {
             label: 'Active Staff',
-            value: data['activeUsers'] ?? '—',
+            value: data.staffing?.activeStaff ?? '—',
             icon: 'badge',
             color: '#10b981',
           },
           {
-            label: 'Departments',
-            value: data['totalHospitals'] ?? '—',
-            icon: 'domain',
+            label: 'On Shift Today',
+            value: data.staffing?.onShiftToday ?? '—',
+            icon: 'schedule',
+            color: '#3b82f6',
+          },
+          {
+            label: "Today's Appointments",
+            value: data.appointments?.todayTotal ?? '—',
+            icon: 'calendar_month',
             color: '#8b5cf6',
           },
           { label: 'System Health', value: 'Online', icon: 'monitor_heart', color: '#059669' },

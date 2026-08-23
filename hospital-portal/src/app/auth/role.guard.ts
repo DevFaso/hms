@@ -3,6 +3,7 @@ import { CanActivateFn, Router, ActivatedRouteSnapshot, UrlTree } from '@angular
 
 import { AuthService } from './auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleSatisfies } from '../core/role-equivalence';
 
 export const RoleGuard: CanActivateFn = (route: ActivatedRouteSnapshot): boolean | UrlTree => {
   const auth = inject(AuthService);
@@ -14,7 +15,9 @@ export const RoleGuard: CanActivateFn = (route: ActivatedRouteSnapshot): boolean
 
   const activeRole = roleContext.activeRole;
   if (activeRole) {
-    return requiredRoles.includes(activeRole) ? true : router.parseUrl('/error/403');
+    // roleSatisfies applies doctor equivalence (role audit C2):
+    // PHYSICIAN/SURGEON pass any guard that names ROLE_DOCTOR.
+    return roleSatisfies(requiredRoles, activeRole) ? true : router.parseUrl('/error/403');
   }
 
   if (auth.hasAnyRole(requiredRoles)) {

@@ -96,6 +96,12 @@ public class RoleSeeder implements CommandLineRunner {
         roles.put("ROLE_SECURITY",           "Security personnel managing access control, surveillance, and facility safety protocols");
         roles.put("ROLE_SUPPORT",            "Technical or customer support staff assisting users with system issues and inquiries");
         roles.put("ROLE_MANAGER",            "Department or operational manager overseeing staff coordination and resource planning");
+        // 2026-08-23 role audit (C7 + role-model findings): these roles were
+        // referenced by security gates and route guards but never seeded, so
+        // no real user could hold them without a hand-written role row.
+        roles.put("ROLE_STAFF",              "General hospital support staff with schedule and appointment visibility");
+        roles.put("ROLE_PHARMACY_VERIFIER",  "Pharmacy verifier performing second-person dispense verification and stock routing");
+        roles.put("ROLE_CLAIMS_REVIEWER",    "Pharmacy claims reviewer adjudicating insurance claims and billing disputes");
         return roles;
     }
 }
