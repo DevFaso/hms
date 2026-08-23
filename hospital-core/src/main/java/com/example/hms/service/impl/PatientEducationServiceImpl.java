@@ -439,6 +439,12 @@ public class PatientEducationServiceImpl implements PatientEducationService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND + hospitalId));
 
         PatientEducationQuestion question = questionMapper.toEntity(requestDTO);
+        if (question == null) {
+            // MapStruct maps null source -> null result; a null body here means
+            // the request never reached validation, so fail diagnosably rather
+            // than NPE on the next line.
+            throw new IllegalStateException("No question payload was supplied.");
+        }
         question.setPatientId(patientId);
         question.setHospitalId(hospitalId);
 
