@@ -58,6 +58,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_PHARMACIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_ADMINISTRATIVE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_PHYSIOTHERAPIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
@@ -399,10 +400,17 @@ public class SecurityConfig {
                 // demographics for front-office oversight — 2026-08-23 role
                 // audit decision C1; the /patients route guard and the
                 // patient-tracker backend admitted the role all along.
+                // RADIOLOGIST and PHYSIOTHERAPIST join PHARMACIST for the same
+                // reason: the shared patient picker lives under /patients/**,
+                // and their pages embed it (/imaging, /treatment-plans). The
+                // matcher rejected the picker call, so both pages had a dead
+                // search box — 2026-08-23 role audit, D4. Chart list/detail
+                // stays narrower at the controller.
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST, ROLE_SUPER_ADMIN)
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
+                        ROLE_RADIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)

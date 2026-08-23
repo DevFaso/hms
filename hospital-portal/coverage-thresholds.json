@@ -8,6 +8,6 @@
     "src/app/consultations/": { "statements": 75, "branches": 57, "functions": 64, "lines": 76 },
     "src/app/encounters/": { "statements": 47, "branches": 26, "functions": 44, "lines": 48 },
     "src/app/admissions/": { "statements": 90, "branches": 50, "functions": 89, "lines": 90 },
-    "src/app/auth/": { "statements": 56, "branches": 36, "functions": 55, "lines": 63 }
+    "src/app/auth/": { "statements": 60, "branches": 39, "functions": 58, "lines": 66 }
   }
 }
