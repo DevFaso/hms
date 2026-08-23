@@ -15,7 +15,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +40,7 @@ import static org.mockito.Mockito.when;
 class PatientLabResultServiceImplTest {
 
     @Mock private LabResultRepository labResultRepository;
-    @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private LabResultMapper labResultMapper;
 
@@ -70,7 +70,7 @@ class PatientLabResultServiceImplTest {
     }
 
     @Test void getLabResults_success_empty() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of());
@@ -78,20 +78,21 @@ class PatientLabResultServiceImplTest {
     }
 
     @Test void getLabResults_patientNotFound() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(patientId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
         assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, hospitalId, 10))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test void getLabResults_hospitalNotFound() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getLabResultsForPatient(patientId, hospitalId, 10))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test void getLabResults_defaultLimit() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of());
@@ -100,7 +101,7 @@ class PatientLabResultServiceImplTest {
     }
 
     @Test void getLabResults_exceedsMaxLimit() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of());
@@ -118,7 +119,7 @@ class PatientLabResultServiceImplTest {
         lr.setLabOrder(order);
         when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -141,7 +142,7 @@ class PatientLabResultServiceImplTest {
         mapped.setSeverityFlag(null);
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -158,7 +159,7 @@ class PatientLabResultServiceImplTest {
         mapped.setSeverityFlag("CRITICAL");
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -175,7 +176,7 @@ class PatientLabResultServiceImplTest {
         mapped.setSeverityFlag("HIGH");
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -192,7 +193,7 @@ class PatientLabResultServiceImplTest {
         mapped.setSeverityFlag("HIGH");
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -209,7 +210,7 @@ class PatientLabResultServiceImplTest {
         mapped.setSeverityFlag("LOW");
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -227,7 +228,7 @@ class PatientLabResultServiceImplTest {
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -246,7 +247,7 @@ class PatientLabResultServiceImplTest {
         mapped.setReferenceRanges(List.of(range));
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -261,7 +262,7 @@ class PatientLabResultServiceImplTest {
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));
@@ -281,7 +282,7 @@ class PatientLabResultServiceImplTest {
         LabResultResponseDTO mapped = new LabResultResponseDTO();
         when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any(Pageable.class)))
             .thenReturn(List.of(lr));

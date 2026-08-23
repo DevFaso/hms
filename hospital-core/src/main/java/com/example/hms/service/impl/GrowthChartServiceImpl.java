@@ -7,7 +7,7 @@ import com.example.hms.model.labor.DeliveryRecord;
 import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.payload.dto.GrowthChartDTO;
 import com.example.hms.repository.NewbornAssessmentRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.service.GrowthChartService;
 import lombok.RequiredArgsConstructor;
@@ -29,20 +29,14 @@ public class GrowthChartServiceImpl implements GrowthChartService {
 
     private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
 
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final PatientVitalSignRepository vitalSignRepository;
     private final NewbornAssessmentRepository newbornAssessmentRepository;
 
     @Override
     public GrowthChartDTO getGrowthChart(UUID patientId, UUID hospitalId) {
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
-
-        // 404-not-403: a scoped caller asking about a patient their hospital has
-        // no active registration for learns nothing, not "exists elsewhere".
-        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
-        }
+        // 404-not-403 and cross-hospital safe — see PatientChartAccess.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         LocalDate dob = patient.getDateOfBirth();
         List<GrowthChartDTO.GrowthPoint> points = new ArrayList<>();

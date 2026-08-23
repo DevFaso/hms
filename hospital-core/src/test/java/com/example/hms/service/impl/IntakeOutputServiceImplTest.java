@@ -12,7 +12,7 @@ import com.example.hms.payload.dto.IntakeOutputEntryRequestDTO;
 import com.example.hms.payload.dto.IntakeOutputSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.IntakeOutputEntryRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -46,7 +47,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class IntakeOutputServiceImplTest {
 
-    @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
@@ -62,7 +63,7 @@ class IntakeOutputServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new IntakeOutputServiceImpl(
-            patientRepository, hospitalRepository, staffRepository, userRepository, entryRepository);
+            patientChartAccess, hospitalRepository, staffRepository, userRepository, entryRepository);
 
         hospitalId = UUID.randomUUID();
         hospital = new Hospital();
@@ -79,7 +80,7 @@ class IntakeOutputServiceImplTest {
         registration.setActive(true);
         patient.setHospitalRegistrations(Set.of(registration));
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findByUserIdAndHospitalId(any(), any())).thenReturn(Optional.empty());
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
@@ -214,7 +215,12 @@ class IntakeOutputServiceImplTest {
 
     @Test
     void aPatientForeignToTheCallersHospitalReadsAsNotFound() {
+        // The scope decision itself lives in PatientChartAccess (tested there);
+        // what matters here is that the summary propagates it rather than
+        // falling through to an empty-but-successful fluid balance.
         UUID foreignHospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, foreignHospitalId))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThatThrownBy(() -> service.getSummary(patientId, foreignHospitalId, null, null))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -223,7 +229,8 @@ class IntakeOutputServiceImplTest {
     @Test
     void anUnknownPatientIsNotFound() {
         UUID unknownId = UUID.randomUUID();
-        when(patientRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(unknownId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", unknownId));
 
         assertThatThrownBy(() -> service.getSummary(unknownId, null, null, null))
             .isInstanceOf(ResourceNotFoundException.class);

@@ -10,6 +10,7 @@ import com.example.hms.payload.dto.GuarantorResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientGuarantorRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientGuarantorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
 
     private final PatientGuarantorRepository guarantorRepository;
     private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
 
     @Override
@@ -91,12 +93,8 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
     @Override
     @Transactional(readOnly = true)
     public List<GuarantorResponseDTO> list(UUID patientId, UUID hospitalId) {
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
-        // 404-not-403: same message whether unknown or merely unregistered here.
-        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
-        }
+        // 404-not-403 and cross-hospital safe — see PatientChartAccess.
+        patientChartAccess.require(patientId, hospitalId);
         return guarantorRepository.findForPatient(patientId, hospitalId).stream()
             .map(this::toDto)
             .toList();
