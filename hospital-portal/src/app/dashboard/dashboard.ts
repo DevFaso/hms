@@ -44,6 +44,7 @@ import {
   WardOccupancyRow,
   LabDirectorDashboard,
   QualityManagerDashboard,
+  LabOpsSummary,
 } from '../services/dashboard.service';
 import {
   PatientPortalService,
@@ -65,6 +66,9 @@ import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-resul
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 import { EncounterService } from '../services/encounter.service';
+import { PharmacyService } from '../services/pharmacy.service';
+import { RefillApprovalService } from '../services/refill-approval.service';
+import { ImagingService } from '../services/imaging.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -147,6 +151,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly trackerWs = inject(PatientTrackerWsService);
+  private readonly pharmacyService = inject(PharmacyService);
+  private readonly refillApproval = inject(RefillApprovalService);
+  private readonly imagingService = inject(ImagingService);
 
   /**
    * Bumps every time the active language changes. Reading this signal inside a
@@ -204,6 +211,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Quality Manager data ──────────────────────────────────
   qualityManagerDashboard = signal<QualityManagerDashboard | null>(null);
+
+  // ── Lab bench stat strip (role audit D2) ──────────────────
+  // The lab view's three stat cards were hardcoded em-dashes; these come from
+  // /dashboard/lab-ops/summary, which D2 also opened to the bench roles that
+  // actually see this view.
+  labOpsSummary = signal<LabOpsSummary | null>(null);
+
+  // ── Work-queue counts (role audit D1 + D2) ────────────────
+  // Exact totals, read from the paginated endpoints with size=1 so the count
+  // costs one row rather than a page of rows nothing renders.
+  dispenseQueueCount = signal<number | null>(null);
+  refillPendingCount = signal<number | null>(null);
+  pharmacyClaimsCount = signal<number | null>(null);
+  imagingPendingCount = signal<number | null>(null);
+  imagingAwaitingReportCount = signal<number | null>(null);
 
   // ── Clinical Dashboard data ───────────────────────────────────
   kpis = signal<DashboardKPI[]>([]);
@@ -2087,6 +2109,77 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.dashboardService.getLabDirectorSummary().subscribe({
         next: (d) => {
           this.labDirectorDashboard.set(d);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Lab bench stat strip (role audit D2). The lab view is shown to lab
+    // scientists, technicians and managers; /dashboard/lab-ops/summary now
+    // admits all three, so its three cards can stop being em-dashes.
+    if (this.isLabScientist() || this.isLabManager()) {
+      pending++;
+      this.dashboardService.getLabOpsSummary().subscribe({
+        next: (d) => {
+          this.labOpsSummary.set(d);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Dispense queue — the pharmacist stat strip AND the fallback work card
+    // a PHARMACY_VERIFIER lands on (role audit D1/D2). size=1 because only
+    // totalElements is rendered.
+    if (this.auth.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_PHARMACY_VERIFIER'])) {
+      pending++;
+      this.pharmacyService.getDispenseWorkQueue(0, 1).subscribe({
+        next: (r) => {
+          this.dispenseQueueCount.set(r?.data?.totalElements ?? 0);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    if (this.isPharmacist()) {
+      pending++;
+      this.refillApproval.pendingCount().subscribe({
+        next: (n) => {
+          this.refillPendingCount.set(n);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Claims list — the CLAIMS_REVIEWER fallback work card (role audit D1).
+    if (this.auth.hasAnyRole(['ROLE_CLAIMS_REVIEWER'])) {
+      pending++;
+      this.pharmacyService.listClaimsByHospital(0, 1).subscribe({
+        next: (r) => {
+          this.pharmacyClaimsCount.set(r?.data?.totalElements ?? 0);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Radiologist stat strip (role audit D2). Derived from the hospital-wide
+    // imaging order list — there is no imaging dashboard summary endpoint, and
+    // two counts is what this data honestly supports.
+    if (this.isRadiologist()) {
+      pending++;
+      this.imagingService.getAllOrders().subscribe({
+        next: (orders) => {
+          const notYetPerformed = new Set(['ORDERED', 'SCHEDULED']);
+          this.imagingPendingCount.set(orders.filter((o) => notYetPerformed.has(o.status)).length);
+          // COMPLETED means the study was performed; RESULTS_AVAILABLE means a
+          // report exists. The gap between them is the reporting backlog.
+          this.imagingAwaitingReportCount.set(
+            orders.filter((o) => o.status === 'COMPLETED').length,
+          );
           done();
         },
         error: () => done(),

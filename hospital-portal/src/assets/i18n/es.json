@@ -1912,6 +1912,8 @@
     "BILLING_SNAPSHOT": "Resumen de Facturación",
     "BILLING_OVERDUE": "Facturas vencidas",
     "ALERT_ACK_FAILED": "No se pudo confirmar la alerta. Inténtelo de nuevo.",
+    "DISPENSE_QUEUE": "Cola de dispensación",
+    "DISPENSE_QUEUE_DESC": "Recetas listas para dispensar",
     "TILE": {
       "STAFF": "Personal",
       "APPOINTMENTS": "Citas",
@@ -2010,7 +2012,9 @@
       "READY_TO_DISCHARGE": "Listo para alta",
       "COMPLETED": "Completado",
       "CANCELLED": "Cancelado"
-    }
+    },
+    "PHARMACY_CLAIMS": "Reclamaciones de farmacia",
+    "PHARMACY_CLAIMS_DESC": "Reclamaciones de este hospital"
   },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personal Activo",
