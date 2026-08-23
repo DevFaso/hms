@@ -12,6 +12,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
+import { BillingService, BillingInvoiceResponse } from '../services/billing.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import {
   DashboardService,
@@ -137,6 +138,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
+  private readonly billingService = inject(BillingService);
   private readonly patientService = inject(PatientService);
   private readonly router = inject(Router);
   private readonly dashboardService = inject(DashboardService);
@@ -181,6 +183,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isQualityManager = signal(false);
   isPharmacist = signal(false);
   isRadiologist = signal(false);
+  isBillingSpecialist = signal(false);
+  isAccountant = signal(false);
   isPatient = signal(false);
 
   /** True for DOCTOR / NURSE / MIDWIFE — gets clinical workspace layout */
@@ -271,6 +275,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Schedule & Patients ───────────────────────────────────────
   todayAppointments = signal<AppointmentResponse[]>([]);
   recentPatients = signal<PatientResponse[]>([]);
+
+  // ── Billing snapshot (fallback view: accountant / billing specialist) ──
+  billingRecentInvoices = signal<BillingInvoiceResponse[]>([]);
+  billingOverdueCount = signal(0);
+  billingOverdueTotal = signal(0);
+  billingSnapshotLoaded = signal(false);
 
   // ── Patient Portal data ──────────────────────────────────────
   healthSummary = signal<HealthSummaryDTO | null>(null);
@@ -404,6 +414,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isLabScientist()) return this.t('DASHBOARD.ROLE.LAB_SCIENTIST');
     if (this.isPharmacist()) return this.t('DASHBOARD.ROLE.PHARMACIST');
     if (this.isRadiologist()) return this.t('DASHBOARD.ROLE.RADIOLOGIST');
+    if (this.isBillingSpecialist()) return this.t('DASHBOARD.ROLE.BILLING_SPECIALIST');
+    if (this.isAccountant()) return this.t('DASHBOARD.ROLE.ACCOUNTANT');
     return this.t('DASHBOARD.ROLE.STAFF');
   });
 
@@ -1952,6 +1964,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Mirrors the billing page's XOF formatting so amounts read identically. */
+  formatInvoiceAmount(amount: number): string {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'XOF',
+      maximumFractionDigits: 0,
+    }).format(amount ?? 0);
+  }
+
+  /** Mirrors the billing page's status rendering (underscores → spaces). */
+  formatInvoiceStatus(status: string): string {
+    return status ? status.replace(/_/g, ' ') : '—';
+  }
+
   private initProfile(): void {
     const profile = this.auth.getUserProfile();
     const first = profile?.firstName ?? '';
@@ -1970,6 +1996,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isQualityManager.set(this.auth.hasAnyRole(['ROLE_QUALITY_MANAGER']));
     this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
     this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
+    this.isBillingSpecialist.set(this.auth.hasAnyRole(['ROLE_BILLING_SPECIALIST']));
+    this.isAccountant.set(this.auth.hasAnyRole(['ROLE_ACCOUNTANT']));
     this.isPatient.set(this.auth.hasAnyRole(['ROLE_PATIENT']));
 
     // Title prefix
@@ -2114,8 +2142,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.scheduleLoading.set(false);
     }
 
-    // Recent patients (doctors see their own recently encountered patients)
-    if (this.permissions.hasPermission('View Patient Records')) {
+    // Recent patients (doctors see their own recently encountered patients).
+    // Also requires /patients route access: the permission alone is held by
+    // roles (pharmacist, finance) whose GET /patients the backend rejects —
+    // firing the call for them was a guaranteed 403, and the card's row
+    // links navigate into the role-guarded /patients pages anyway.
+    if (
+      this.permissions.hasPermission('View Patient Records') &&
+      this.canAccessRoute('/patients')
+    ) {
       pending++;
       const recentObs = this.isDoctor()
         ? this.dashboardService.getRecentPatients()
@@ -2123,6 +2158,37 @@ export class DashboardComponent implements OnInit, OnDestroy {
       recentObs.subscribe({
         next: (patients) => {
           this.recentPatients.set(patients.slice(0, 6));
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Billing snapshot — only for roles that land on the fallback view with
+    // billing access (accountant / billing specialist); role views with their
+    // own billing widgets (hospital admin) never render this card.
+    if (
+      this.activeView() === 'fallback' &&
+      this.permissions.hasPermission('View Billing Summary') &&
+      this.canAccessRoute('/billing')
+    ) {
+      pending++;
+      this.billingService.searchInvoices({}, 0, 5).subscribe({
+        next: (page) => {
+          this.billingRecentInvoices.set(page.content);
+          this.billingSnapshotLoaded.set(true);
+          done();
+        },
+        error: () => done(),
+      });
+      pending++;
+      this.billingService.getOverdue().subscribe({
+        next: (overdue) => {
+          this.billingOverdueCount.set(overdue.length);
+          this.billingOverdueTotal.set(
+            overdue.reduce((sum, inv) => sum + (inv.balanceDue ?? 0), 0),
+          );
+          this.billingSnapshotLoaded.set(true);
           done();
         },
         error: () => done(),
