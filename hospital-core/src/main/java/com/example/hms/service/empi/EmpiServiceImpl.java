@@ -418,6 +418,14 @@ public class EmpiServiceImpl implements EmpiService {
 
     private EmpiMasterIdentity initializeIdentity(EmpiIdentityLinkRequestDTO request, HospitalContext context) {
         EmpiMasterIdentity identity = empiMapper.initializeIdentity(request);
+        if (identity == null) {
+            // MapStruct maps null source -> null result, so this means the
+            // request was null: a programming error upstream, not a client
+            // error. Fail with something diagnosable instead of an opaque NPE
+            // on the next line.
+            throw new IllegalStateException(
+                "EMPI identity could not be initialised — no link request was supplied.");
+        }
         identity.setEmpiNumber(generateEmpiNumber());
         identity.setCreatedBy(context.getPrincipalUserId());
         identity.setUpdatedBy(context.getPrincipalUserId());
