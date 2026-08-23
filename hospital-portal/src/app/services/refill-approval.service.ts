@@ -3,12 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, map, of, catchError } from 'rxjs';
 
 export type RefillStatus =
-  | 'REQUESTED'
-  | 'PAUSED'
-  | 'APPROVED'
-  | 'DENIED'
-  | 'DISPENSED'
-  | 'CANCELLED';
+  'REQUESTED' | 'PAUSED' | 'APPROVED' | 'DENIED' | 'DISPENSED' | 'CANCELLED';
 
 export interface RefillRequest {
   id: string;

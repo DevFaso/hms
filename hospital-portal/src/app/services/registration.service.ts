@@ -13,12 +13,7 @@ import { Observable } from 'rxjs';
  */
 
 export type PatientStayStatus =
-  | 'REGISTERED'
-  | 'ADMITTED'
-  | 'READY_FOR_DISCHARGE'
-  | 'DISCHARGED'
-  | 'TRANSFERRED'
-  | 'HOLD';
+  'REGISTERED' | 'ADMITTED' | 'READY_FOR_DISCHARGE' | 'DISCHARGED' | 'TRANSFERRED' | 'HOLD';
 
 export interface HospitalRegistration {
   id: string;

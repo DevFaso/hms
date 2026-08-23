@@ -103,12 +103,7 @@ export interface MedicationSummary {
 }
 
 export type RefillRequestStatus =
-  | 'REQUESTED'
-  | 'PAUSED'
-  | 'APPROVED'
-  | 'DENIED'
-  | 'DISPENSED'
-  | 'CANCELLED';
+  'REQUESTED' | 'PAUSED' | 'APPROVED' | 'DENIED' | 'DISPENSED' | 'CANCELLED';
 
 export interface VitalSignSummary {
   id: string;
@@ -1138,9 +1133,9 @@ export class PatientPortalService {
 
   getSchedulingDepartments(hospitalId: string): Observable<SchedulingDepartment[]> {
     return this.http
-      .get<
-        ApiWrapper<SchedulingDepartment[]>
-      >(`${this.base}/booking/hospitals/${hospitalId}/departments`)
+      .get<ApiWrapper<SchedulingDepartment[]>>(
+        `${this.base}/booking/hospitals/${hospitalId}/departments`,
+      )
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),
@@ -1152,9 +1147,9 @@ export class PatientPortalService {
     departmentId: string,
   ): Observable<SchedulingProvider[]> {
     return this.http
-      .get<
-        ApiWrapper<SchedulingProvider[]>
-      >(`${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`)
+      .get<ApiWrapper<SchedulingProvider[]>>(
+        `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`,
+      )
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),
@@ -1245,9 +1240,10 @@ export class PatientPortalService {
     update: PatientEducationProgressUpdate,
   ): Observable<PatientEducationItem> {
     return this.http
-      .put<
-        ApiWrapper<PatientEducationItem>
-      >(`${this.base}/education/${resourceId}/progress`, update)
+      .put<ApiWrapper<PatientEducationItem>>(
+        `${this.base}/education/${resourceId}/progress`,
+        update,
+      )
       .pipe(map((r) => r.data));
   }
 
@@ -1275,9 +1271,9 @@ export class PatientPortalService {
 
   getProxyAppointments(patientId: string): Observable<PortalAppointment[]> {
     return this.http
-      .get<
-        ApiWrapper<AppointmentApiResponse[]>
-      >(`${this.base}/proxy-access/${patientId}/appointments`)
+      .get<ApiWrapper<AppointmentApiResponse[]>>(
+        `${this.base}/proxy-access/${patientId}/appointments`,
+      )
       .pipe(map((r) => (r.data ?? []).map(mapAppointment)));
   }
 
@@ -1427,9 +1423,9 @@ export class PatientPortalService {
 
   getQuestionnairesForAppointment(appointmentId: string): Observable<QuestionnaireDTO[]> {
     return this.http
-      .get<
-        ApiWrapper<QuestionnaireDTO[]>
-      >(`${this.base}/appointments/${appointmentId}/questionnaires`)
+      .get<ApiWrapper<QuestionnaireDTO[]>>(
+        `${this.base}/appointments/${appointmentId}/questionnaires`,
+      )
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),
@@ -1438,9 +1434,10 @@ export class PatientPortalService {
 
   submitPreCheckIn(appointmentId: string, dto: PreCheckInRequest): Observable<PreCheckInResponse> {
     return this.http
-      .post<
-        ApiWrapper<PreCheckInResponse>
-      >(`${this.base}/appointments/${appointmentId}/pre-checkin`, dto)
+      .post<ApiWrapper<PreCheckInResponse>>(
+        `${this.base}/appointments/${appointmentId}/pre-checkin`,
+        dto,
+      )
       .pipe(map((r) => r.data));
   }
 

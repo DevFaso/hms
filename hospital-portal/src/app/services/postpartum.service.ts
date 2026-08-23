@@ -3,17 +3,9 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export type PostpartumSchedulePhase =
-  | 'IMMEDIATE_RECOVERY'
-  | 'SHIFT_BASELINE'
-  | 'ENHANCED_MONITORING'
-  | 'DISCHARGE_PLANNING';
+  'IMMEDIATE_RECOVERY' | 'SHIFT_BASELINE' | 'ENHANCED_MONITORING' | 'DISCHARGE_PLANNING';
 export type PostpartumFundusTone =
-  | 'FIRM'
-  | 'SLIGHTLY_BOGGY'
-  | 'BOGGY'
-  | 'DEVIATED'
-  | 'NOT_PALPABLE'
-  | 'UNKNOWN';
+  'FIRM' | 'SLIGHTLY_BOGGY' | 'BOGGY' | 'DEVIATED' | 'NOT_PALPABLE' | 'UNKNOWN';
 export type PostpartumBladderStatus =
   | 'VOIDED_SPONTANEOUSLY'
   | 'VOIDED_WITH_ASSISTANCE'
@@ -23,21 +15,9 @@ export type PostpartumBladderStatus =
   | 'UNABLE_TO_VOID'
   | 'UNKNOWN';
 export type PostpartumLochiaAmount =
-  | 'NONE'
-  | 'SCANT'
-  | 'LIGHT'
-  | 'MODERATE'
-  | 'HEAVY'
-  | 'EXCESSIVE';
+  'NONE' | 'SCANT' | 'LIGHT' | 'MODERATE' | 'HEAVY' | 'EXCESSIVE';
 export type PostpartumLochiaCharacter =
-  | 'RUBRA'
-  | 'SEROSA'
-  | 'ALBA'
-  | 'BROWN_TINGED'
-  | 'FRESH_RED'
-  | 'FOUL_ODOR'
-  | 'WITH_CLOTS'
-  | 'OTHER';
+  'RUBRA' | 'SEROSA' | 'ALBA' | 'BROWN_TINGED' | 'FRESH_RED' | 'FOUL_ODOR' | 'WITH_CLOTS' | 'OTHER';
 export type PostpartumMoodStatus =
   | 'CALM'
   | 'CONTENT'
@@ -50,11 +30,7 @@ export type PostpartumMoodStatus =
   | 'OTHER';
 export type PostpartumSupportStatus = 'ROBUST' | 'ADEQUATE' | 'LIMITED' | 'NONE' | 'UNKNOWN';
 export type PostpartumSleepQuality =
-  | 'RESTED'
-  | 'ADEQUATE'
-  | 'INTERRUPTED'
-  | 'EXHAUSTED'
-  | 'UNKNOWN';
+  'RESTED' | 'ADEQUATE' | 'INTERRUPTED' | 'EXHAUSTED' | 'UNKNOWN';
 export type PostpartumAlertSeverity = 'INFO' | 'CAUTION' | 'URGENT';
 
 export interface PostpartumAlert {

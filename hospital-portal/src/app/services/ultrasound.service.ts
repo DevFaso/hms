@@ -12,19 +12,9 @@ export type UltrasoundScanType =
   | 'HIGH_RISK_FOLLOW_UP'
   | 'OTHER';
 export type UltrasoundOrderStatus =
-  | 'ORDERED'
-  | 'SCHEDULED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
-  | 'REPORT_AVAILABLE'
-  | 'CANCELLED';
+  'ORDERED' | 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'REPORT_AVAILABLE' | 'CANCELLED';
 export type UltrasoundFindingCategory =
-  | 'NORMAL'
-  | 'VARIANT'
-  | 'MONITORING_REQUIRED'
-  | 'ABNORMAL'
-  | 'CONCERNING_FOR_ANOMALY'
-  | 'URGENT';
+  'NORMAL' | 'VARIANT' | 'MONITORING_REQUIRED' | 'ABNORMAL' | 'CONCERNING_FOR_ANOMALY' | 'URGENT';
 
 /** Shared report shape (UltrasoundReportBaseDTO). All fields optional on the wire. */
 export interface UltrasoundReportFields {

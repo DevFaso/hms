@@ -13,13 +13,7 @@ export type EncounterStatus =
   | 'COMPLETED'
   | 'CANCELLED';
 export type EncounterType =
-  | 'CONSULTATION'
-  | 'FOLLOW_UP'
-  | 'EMERGENCY'
-  | 'SURGERY'
-  | 'LAB'
-  | 'OUTPATIENT'
-  | 'INPATIENT';
+  'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'SURGERY' | 'LAB' | 'OUTPATIENT' | 'INPATIENT';
 
 export interface EncounterNoteResponse {
   id: string;
