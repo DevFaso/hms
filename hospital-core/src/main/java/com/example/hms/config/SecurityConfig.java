@@ -503,10 +503,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/*/email")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
-                // RECEPTIONIST is here for POST /billing-invoices/{id}/payments,
-                // whose @PreAuthorize admits them (front-desk payment capture);
-                // the create/update endpoints' annotations still exclude them,
-                // so the annotation remains the precise per-endpoint gate.
+                // Receptionists are included for the payments sub-path, whose
+                // controller annotation admits front-desk payment capture. The
+                // create and update endpoints still exclude receptionists at the
+                // annotation, which remains the precise per-endpoint gate.
                 .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
