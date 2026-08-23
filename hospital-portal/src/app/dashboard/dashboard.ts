@@ -179,6 +179,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isMidwife = signal(false);
   isReceptionist = signal(false);
   isLabScientist = signal(false);
+  isLabManager = signal(false);
   isLabDirector = signal(false);
   isQualityManager = signal(false);
   isPharmacist = signal(false);
@@ -393,7 +394,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isReceptionist()) return 'receptionist';
     if (this.isLabDirector()) return 'lab-director';
     if (this.isQualityManager()) return 'quality-manager';
-    if (this.isLabScientist()) return 'lab';
+    // Lab managers get the lab view rather than the generic fallback — the
+    // role previously had no flag at all (2026-08-23 role audit).
+    if (this.isLabScientist() || this.isLabManager()) return 'lab';
     if (this.isPharmacist()) return 'pharmacist';
     if (this.isRadiologist()) return 'radiologist';
     return 'fallback';
@@ -411,11 +414,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isReceptionist()) return this.t('DASHBOARD.ROLE.RECEPTIONIST');
     if (this.isLabDirector()) return this.t('DASHBOARD.ROLE.LAB_DIRECTOR');
     if (this.isQualityManager()) return this.t('DASHBOARD.ROLE.QUALITY_MANAGER');
+    if (this.isLabManager()) return this.t('DASHBOARD.ROLE.LAB_MANAGER');
+    // Technician before the shared lab flag so they get their own label.
+    if (this.auth.hasAnyRole(['ROLE_LAB_TECHNICIAN'])) {
+      return this.t('DASHBOARD.ROLE.LAB_TECHNICIAN');
+    }
     if (this.isLabScientist()) return this.t('DASHBOARD.ROLE.LAB_SCIENTIST');
     if (this.isPharmacist()) return this.t('DASHBOARD.ROLE.PHARMACIST');
     if (this.isRadiologist()) return this.t('DASHBOARD.ROLE.RADIOLOGIST');
     if (this.isBillingSpecialist()) return this.t('DASHBOARD.ROLE.BILLING_SPECIALIST');
     if (this.isAccountant()) return this.t('DASHBOARD.ROLE.ACCOUNTANT');
+    // Named specialties that land on the fallback view still deserve their
+    // own badge instead of the generic "Staff" (2026-08-23 role audit).
+    if (this.auth.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
+      return this.t('DASHBOARD.ROLE.PHARMACY_VERIFIER');
+    }
+    if (this.auth.hasAnyRole(['ROLE_CLAIMS_REVIEWER'])) {
+      return this.t('DASHBOARD.ROLE.CLAIMS_REVIEWER');
+    }
+    if (this.auth.hasAnyRole(['ROLE_ANESTHESIOLOGIST'])) {
+      return this.t('DASHBOARD.ROLE.ANESTHESIOLOGIST');
+    }
+    if (this.auth.hasAnyRole(['ROLE_PHYSIOTHERAPIST'])) {
+      return this.t('DASHBOARD.ROLE.PHYSIOTHERAPIST');
+    }
     return this.t('DASHBOARD.ROLE.STAFF');
   });
 
@@ -1350,7 +1372,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#ea580c',
         bg: '#fff7ed',
       },
-    ];
+      // Tiles whose route guard rejects the viewer are dropped — the lab
+      // view's Encounters tile was a dead click for lab roles (2026-08-23
+      // role audit).
+    ].filter((t) => this.canAccessRoute(t.route));
   });
 
   // ── Lab Director stat cards ───────────────────────────────────
@@ -1652,7 +1677,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'medication_liquid',
         label: this.t('DASHBOARD.TILE.DISPENSE'),
-        route: '/prescriptions',
+        // Real pharmacy-module page, not the prescriptions list (the tiles
+        // predated the pharmacy module and were never re-pointed).
+        route: '/pharmacy/dispensing',
         color: '#059669',
         bg: '#d1fae5',
       },
@@ -1680,25 +1707,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'warning',
         label: this.t('DASHBOARD.TILE.INTERACTIONS'),
-        route: '/prescriptions',
+        route: '/pharmacy/drug-interactions',
         color: '#dc2626',
         bg: '#fee2e2',
       },
       {
         icon: 'inventory_2',
         label: this.t('DASHBOARD.TILE.INVENTORY'),
-        route: '/prescriptions',
+        route: '/pharmacy/inventory',
         color: '#4f46e5',
         bg: '#eef2ff',
       },
-      {
-        icon: 'analytics',
-        label: this.t('DASHBOARD.TILE.REPORTS'),
-        route: '/prescriptions',
-        color: '#ea580c',
-        bg: '#fff7ed',
-      },
-    ];
+      // The Reports tile is gone: it routed to /prescriptions and no
+      // pharmacy-reports page exists. Guard-rejected tiles (Patients,
+      // Encounters for pharmacists) are dropped by the filter.
+    ].filter((t) => this.canAccessRoute(t.route));
   });
 
   // ── Radiologist workflow tiles ───────────────────────────────
@@ -1761,7 +1784,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#ea580c',
         bg: '#fff7ed',
       },
-    ];
+      // Guard-rejected tiles (Patients, Encounters for radiologists) are
+      // dropped instead of navigating to the 403 page.
+    ].filter((t) => this.canAccessRoute(t.route));
   });
 
   // ── Patient quick-access tiles (Epic MyChart style) ──────────
@@ -1991,7 +2016,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isNurse.set(this.auth.hasAnyRole(['ROLE_NURSE']));
     this.isMidwife.set(this.auth.hasAnyRole(['ROLE_MIDWIFE']));
     this.isReceptionist.set(this.auth.hasAnyRole(['ROLE_RECEPTIONIST']));
-    this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST']));
+    // Technicians share the bench view — only mapping LAB_SCIENTIST dropped
+    // them onto the generic fallback view (2026-08-23 role audit; the spec
+    // hand-set this flag for technicians and masked the drift).
+    this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST', 'ROLE_LAB_TECHNICIAN']));
+    this.isLabManager.set(this.auth.hasAnyRole(['ROLE_LAB_MANAGER']));
     this.isLabDirector.set(this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR']));
     this.isQualityManager.set(this.auth.hasAnyRole(['ROLE_QUALITY_MANAGER']));
     this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
@@ -2122,8 +2151,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Today's appointments (for roles that can see them)
-    if (this.permissions.hasPermission('View Appointments')) {
+    // Today's appointments (for roles that can see them). Route access is
+    // required too: radiologists/anesthesiologists/physiotherapists hold the
+    // permission in the static map but the backend rejects them — the call
+    // was a guaranteed 403 on every load (2026-08-23 role audit).
+    if (
+      this.permissions.hasPermission('View Appointments') &&
+      this.canAccessRoute('/appointments')
+    ) {
       pending++;
       const today = new Date().toISOString().split('T')[0];
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
@@ -2272,6 +2307,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.alerts.update((list) =>
           list.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a)),
         ),
+      // A failed acknowledge used to vanish silently — for nurses/midwives
+      // the backend 403'd every click until the endpoint admitted them
+      // (2026-08-23 role audit, B4). Surface any failure instead.
+      error: () => this.toast.error(this.t('DASHBOARD.ALERT_ACK_FAILED')),
     });
   }
 

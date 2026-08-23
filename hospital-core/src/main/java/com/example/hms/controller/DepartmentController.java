@@ -41,8 +41,12 @@ public class DepartmentController {
 
     @Operation(summary = "Get all departments", description = "Returns a list of all departments with localized data.")
     @ApiResponse(responseCode = "200", description = "Successful retrieval of departments")
+    // Read annotations mirror the SecurityConfig GET /departments/** matcher:
+    // the matcher admitted the clinical + lab roles but these annotations
+    // stopped at RECEPTIONIST, so the Departments page (whose nav and route
+    // guard admit lab leadership) was a guaranteed 403 (2026-08-23 audit, B2).
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<List<DepartmentResponseDTO>> getAllDepartments(
             @RequestParam(name = "organizationId", required = false) UUID organizationId,
             @RequestParam(name = "unassignedOnly", required = false) Boolean unassignedOnly,
@@ -63,7 +67,7 @@ public class DepartmentController {
     @Operation(summary = "Get department by ID", description = "Returns a department by its ID with localized content.")
     @ApiResponse(responseCode = "200", description = "Department found")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<DepartmentResponseDTO> getDepartmentById(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -85,7 +89,7 @@ public class DepartmentController {
     }
 
     @GetMapping("/by-hospital/{hospitalId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<Page<DepartmentResponseDTO>> getDepartmentsByHospital(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable,
@@ -95,7 +99,7 @@ public class DepartmentController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<Page<DepartmentResponseDTO>> searchDepartments(
         @RequestParam String query,
         @ParameterObject Pageable pageable,
@@ -141,7 +145,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get department with staff", description = "Returns a department with full staff listing.")
     @GetMapping("/{id}/with-staff")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<DepartmentWithStaffDTO> getDepartmentWithStaff(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -162,7 +166,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get department statistics", description = "Returns statistics like total staff, doctors, nurses.")
     @GetMapping("/{id}/stats")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<DepartmentStatsDTO> getDepartmentStatistics(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -182,7 +186,7 @@ public class DepartmentController {
 
     @Operation(summary = "Check if staff is head of any department", description = "Returns true if given staff is a department head.")
     @GetMapping("/is-head/{staffId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE','LAB_DIRECTOR','LAB_MANAGER','LAB_SCIENTIST','LAB_TECHNICIAN','QUALITY_MANAGER')")
     public ResponseEntity<Boolean> isHeadOfDepartment(
             @PathVariable UUID staffId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

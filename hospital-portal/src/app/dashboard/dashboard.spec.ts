@@ -74,6 +74,7 @@ describe('Dashboard navigation & RBAC', () => {
     c.isLabScientist.set(
       roles.includes('ROLE_LAB_SCIENTIST') || roles.includes('ROLE_LAB_TECHNICIAN'),
     );
+    c.isLabManager.set(roles.includes('ROLE_LAB_MANAGER'));
     c.isLabDirector.set(roles.includes('ROLE_LAB_DIRECTOR'));
     c.isQualityManager.set(roles.includes('ROLE_QUALITY_MANAGER'));
     c.isPharmacist.set(roles.includes('ROLE_PHARMACIST'));
@@ -454,6 +455,39 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.roleLabel()).toContain('ACCOUNTANT');
   });
 
+  // 2026-08-23 role audit: only LAB_SCIENTIST mapped to the lab view, so
+  // technicians and managers fell through to the generic fallback. These
+  // drive initProfile itself so the flag mapping can't silently drift again.
+
+  it('lab technician lands on the lab view via initProfile', () => {
+    const c = createComponent(['ROLE_LAB_TECHNICIAN'], []);
+    (c as unknown as { initProfile(): void }).initProfile();
+    expect(c.activeView()).toBe('lab');
+  });
+
+  it('lab manager lands on the lab view via initProfile with its own label', () => {
+    const c = createComponent(['ROLE_LAB_MANAGER'], []);
+    (c as unknown as { initProfile(): void }).initProfile();
+    expect(c.activeView()).toBe('lab');
+    expect(c.roleLabel()).toContain('LAB_MANAGER');
+  });
+
+  it('pharmacist tiles drop guard-rejected routes and use real pharmacy pages', () => {
+    const guarded: import('@angular/router').Routes = [
+      { path: 'patients', children: [], data: { roles: ['ROLE_DOCTOR'] } },
+      { path: 'encounters', children: [], data: { roles: ['ROLE_DOCTOR'] } },
+    ];
+    const c = createComponent(['ROLE_PHARMACIST'], [], guarded);
+    c.isPharmacist.set(true);
+
+    const routes = c.pharmacistWorkflowTiles().map((t) => t.route);
+    expect(routes).not.toContain('/patients');
+    expect(routes).not.toContain('/encounters');
+    expect(routes).toContain('/pharmacy/dispensing');
+    expect(routes).toContain('/pharmacy/inventory');
+    expect(routes).toContain('/pharmacy/drug-interactions');
+  });
+
   it('canAccessRoute respects a role-guarded route the caller is outside of', () => {
     const guardedRoutes: import('@angular/router').Routes = [
       { path: 'patients', children: [], data: { roles: ['ROLE_DOCTOR', 'ROLE_NURSE'] } },
@@ -683,9 +717,12 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.labWorkflowTiles().length).toBe(8);
   });
 
-  it('pharmacistWorkflowTiles returns 8 tiles', () => {
+  it('pharmacistWorkflowTiles returns 7 tiles', () => {
+    // 2026-08-23 role audit: the Reports tile is gone (it routed to
+    // /prescriptions and no pharmacy-reports page exists). With no guarded
+    // routes registered in this test, the canAccessRoute filter drops nothing.
     const c = createComponent(['ROLE_PHARMACIST']);
-    expect(c.pharmacistWorkflowTiles().length).toBe(8);
+    expect(c.pharmacistWorkflowTiles().length).toBe(7);
   });
 
   it('radiologistWorkflowTiles returns 8 tiles', () => {

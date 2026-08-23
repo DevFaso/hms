@@ -116,7 +116,11 @@ public class StaffController {
     // 2.4 Get staff by id but only if active
     @Operation(summary = "Get staff by id (active only)")
     @GetMapping("/{id}/active")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    // Same read roles as the GET /staff matcher: the staff-detail page calls
+    // this after a list every read role can fetch, so the admin-only
+    // annotation made every detail click a dead 403 for receptionists and
+    // lab leadership (2026-08-23 role audit, B3).
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Optional<StaffResponseDTO>> getActiveById(
         @PathVariable UUID id,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {

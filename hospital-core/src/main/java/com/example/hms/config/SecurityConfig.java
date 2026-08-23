@@ -57,6 +57,8 @@ import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_PHARMACIST;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
+import static com.example.hms.config.SecurityConstants.ROLE_ADMINISTRATIVE_STAFF;
+import static com.example.hms.config.SecurityConstants.ROLE_RADIOLOGIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
@@ -456,6 +458,18 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Staff --------------------
+                // Narrow scheduling matcher FIRST (first-match-wins): the
+                // StaffSchedulingController annotations admit STAFF, PHARMACIST,
+                // RADIOLOGIST and ADMINISTRATIVE_STAFF on their own-shift/leave
+                // endpoints, but the broad /staff/** matchers 403'd them before
+                // any annotation ran (2026-08-23 role audit, B1). The union
+                // below mirrors the controller; each endpoint's @PreAuthorize
+                // stays the precise gate.
+                .requestMatchers("/staff/scheduling/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PHARMACIST, ROLE_RADIOLOGIST, ROLE_ADMINISTRATIVE_STAFF,
+                        ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
+
                 .requestMatchers(HttpMethod.GET, API_STAFF, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
