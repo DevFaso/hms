@@ -15,7 +15,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
 import java.util.List;
 import java.util.Locale;
@@ -43,7 +43,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     private static final String STATUS_PENDING = "PENDING";
 
     private final LabResultRepository labResultRepository;
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final LabResultMapper labResultMapper;
 
@@ -52,8 +52,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+        // See PatientChartAccess — cross-hospital safe, and adds the hospital
+        // authorization this read previously relied on the finder for.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         Pageable pageable = PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "resultDate"));

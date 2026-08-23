@@ -10,10 +10,10 @@ import com.example.hms.payload.dto.IntakeOutputEntryRequestDTO;
 import com.example.hms.payload.dto.IntakeOutputSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.IntakeOutputEntryRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.IntakeOutputService;
+import com.example.hms.service.support.PatientChartAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,10 +29,9 @@ import java.util.UUID;
 @Transactional
 public class IntakeOutputServiceImpl implements IntakeOutputService {
 
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
     private static final Duration DEFAULT_WINDOW = Duration.ofHours(24);
 
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
@@ -60,8 +59,9 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
             throw new BusinessException("An intake/output entry cannot be observed in the future.");
         }
 
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
+        // Unscoped resolve + registration check (see PatientChartAccess); the
+        // active-registration rule below still governs whether we may WRITE.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
@@ -95,13 +95,8 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
                                              UUID hospitalId,
                                              LocalDateTime from,
                                              LocalDateTime to) {
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
-        // 404-not-403: a scoped caller asking about a patient their hospital
-        // has no active registration for learns nothing, not "exists elsewhere".
-        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
-        }
+        // 404-not-403 and cross-hospital-safe in one place — see PatientChartAccess.
+        patientChartAccess.require(patientId, hospitalId);
 
         LocalDateTime windowTo = to != null ? to : LocalDateTime.now();
         LocalDateTime windowFrom = from != null ? from : windowTo.minus(DEFAULT_WINDOW);

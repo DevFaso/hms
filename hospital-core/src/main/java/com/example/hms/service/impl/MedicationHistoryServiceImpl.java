@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.medication.PharmacyFillResponseDTO;
 import com.example.hms.repository.DrugInteractionRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PharmacyFillRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.MedicationHistoryService;
@@ -45,6 +46,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     private final PrescriptionRepository prescriptionRepository;
     private final DrugInteractionRepository drugInteractionRepository;
     private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final PharmacyFillMapper pharmacyFillMapper;
 
@@ -60,8 +62,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         log.info("Generating medication timeline for patient: {}, hospital: {}", patientId, hospitalId);
 
         // Validate patient and hospital exist
-        patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+        patientChartAccess.require(patientId, hospitalId);
         hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
 
