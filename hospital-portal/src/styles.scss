@@ -147,3 +147,67 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Print rules (global)
+
+   window.print() prints the whole document, so without these the app shell
+   — sidebar, top bar, language switcher, notification bell, avatar — landed
+   on every printed page. An After-Visit Summary is handed to the patient,
+   so it has to come out as a document, not a screenshot of the application.
+
+   The shell chrome is hidden here because it lives in ShellComponent, and
+   Angular's view encapsulation means a component-scoped @media print block
+   in a page like my-summaries cannot reach it. Pages then use .no-print /
+   .print-only (and their own @media print rules) to choose what of THEIR
+   content prints.
+   ───────────────────────────────────────────────────────────────────────── */
+@media print {
+  .sidebar,
+  .topbar,
+  app-impersonation-banner,
+  app-emergency-broadcast-banner,
+  app-downtime-banner,
+  .skip-link,
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* The shell lays out as a fixed sidebar + scrolling main area; on paper
+     that becomes a single flowing column. */
+  .shell,
+  .main-area,
+  .content {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ink economy, and keep link targets readable on paper. */
+  * {
+    box-shadow: none !important;
+  }
+
+  a[href]::after {
+    content: '';
+  }
+
+  @page {
+    margin: 1.5cm;
+  }
+}
