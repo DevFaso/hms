@@ -1911,6 +1911,7 @@
     },
     "BILLING_SNAPSHOT": "Aperçu de Facturation",
     "BILLING_OVERDUE": "Factures en retard",
+    "ALERT_ACK_FAILED": "Impossible d'acquitter l'alerte. Veuillez réessayer.",
     "TILE": {
       "STAFF": "Personnel",
       "APPOINTMENTS": "Rendez-vous",

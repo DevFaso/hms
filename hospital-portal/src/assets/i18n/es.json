@@ -1911,6 +1911,7 @@
     },
     "BILLING_SNAPSHOT": "Resumen de Facturación",
     "BILLING_OVERDUE": "Facturas vencidas",
+    "ALERT_ACK_FAILED": "No se pudo confirmar la alerta. Inténtelo de nuevo.",
     "TILE": {
       "STAFF": "Personal",
       "APPOINTMENTS": "Citas",
