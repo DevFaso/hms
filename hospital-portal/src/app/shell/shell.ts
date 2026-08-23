@@ -274,6 +274,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_SCIENTIST',
           'ROLE_LAB_TECHNICIAN',
           'ROLE_QUALITY_MANAGER',
+          // Role audit D7 — mirrors the /patients guard.
+          'ROLE_RADIOLOGIST',
+          'ROLE_ANESTHESIOLOGIST',
+          'ROLE_PHYSIOTHERAPIST',
         ],
       },
       {

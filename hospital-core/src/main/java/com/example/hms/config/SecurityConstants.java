@@ -32,8 +32,29 @@ public class SecurityConstants {
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_RADIOLOGIST = "ROLE_RADIOLOGIST";
     public static final String ROLE_SURGEON = "ROLE_SURGEON";
+    public static final String ROLE_ANESTHESIOLOGIST = "ROLE_ANESTHESIOLOGIST";
     public static final String ROLE_PHYSIOTHERAPIST = "ROLE_PHYSIOTHERAPIST";
     public static final String ROLE_DENTIST = "ROLE_DENTIST";
+
+    /**
+     * Clinicians who treat the patient but do not own the chart: they READ it
+     * and write only within their own specialty surface (imaging reports,
+     * anaesthesia records, treatment plans). Radiologists need the clinical
+     * indication and contrast-safety picture, anaesthetists the pre-operative
+     * assessment, physiotherapists their rehabilitation caseload.
+     *
+     * <p>Kept as SpEL fragments because the chart is guarded at five
+     * independent layers (patient read, vitals, encounters, appointments,
+     * hospital scope) and they had drifted apart — admitting a role to one of
+     * them only moves the 403 rather than removing it. 2026-08-23 role audit,
+     * decision D7.
+     */
+    public static final String CONSULTING_CLINICIANS_AUTHORITIES =
+        "'ROLE_RADIOLOGIST','ROLE_ANESTHESIOLOGIST','ROLE_PHYSIOTHERAPIST'";
+
+    /** Same three roles for {@code hasAnyRole(...)}, which strips the ROLE_ prefix. */
+    public static final String CONSULTING_CLINICIANS_ROLES =
+        "'RADIOLOGIST','ANESTHESIOLOGIST','PHYSIOTHERAPIST'";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
     public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";
     public static final String ROLE_ADMINISTRATIVE_STAFF = "ROLE_ADMINISTRATIVE_STAFF";
