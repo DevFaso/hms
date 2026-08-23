@@ -20,6 +20,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import static com.example.hms.config.SecurityConstants.CONSULTING_CLINICIANS_ROLES;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,11 +48,30 @@ import org.springframework.security.core.Authentication;
 @RequiredArgsConstructor
 public class AppointmentController {
 
+    /**
+     * Appointment READ. A consulting clinician needs the visit calendar to
+     * place their own work against it (pre-operative clinic, therapy
+     * series). Admitted by role audit D7 — booking and cancelling stay
+     * with reception and the treating team.
+     */
+    /**
+     * Booking. Identical to the read list BEFORE role audit D7, and kept
+     * separate precisely so widening the read list does not silently hand
+     * consulting clinicians the ability to book — they read the calendar,
+     * they do not schedule against it.
+     */
+    private static final String APPOINTMENT_BOOK_ROLES =
+        "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')";
+
+    private static final String APPOINTMENT_READ_ROLES = "hasAnyRole("
+        + "'SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT',"
+        + CONSULTING_CLINICIANS_ROLES + ")";
+
     private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
 
     // ---- LIST BY PATIENT USERNAME ----
     @GetMapping("/patients/username/{patientUsername}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientUsername(
         @PathVariable String patientUsername,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
@@ -87,7 +108,7 @@ public class AppointmentController {
 
     // ---- CREATE ----
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize(APPOINTMENT_BOOK_ROLES)
     public ResponseEntity<AppointmentSummaryDTO> createAppointment(
         @Valid @RequestBody AppointmentRequestDTO request,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
@@ -130,7 +151,7 @@ public class AppointmentController {
 
     // ---- GET BY ID ----
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<AppointmentResponseDTO> getAppointmentById(
         @PathVariable UUID id,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
@@ -144,7 +165,7 @@ public class AppointmentController {
 
     // ---- SEARCH ----
     @PostMapping("/search")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<Page<AppointmentResponseDTO>> searchAppointments(
         @RequestBody(required = false) AppointmentFilterDTO filter,
         @RequestParam(name = "page", defaultValue = "0") int page,
@@ -226,7 +247,7 @@ public class AppointmentController {
 
     // ---- LIST BY PATIENT ----
     @GetMapping("/patients/{patientId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
+    @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientId(
         @PathVariable UUID patientId,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
