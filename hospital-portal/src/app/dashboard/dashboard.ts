@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
@@ -761,27 +761,47 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return actions;
   });
 
-  /** Check whether the current user can navigate to a role-guarded route. */
+  /**
+   * Check whether the current user can navigate to a role-guarded route.
+   *
+   * Angular activates a child only after every ancestor guard has passed, so a
+   * nested link is reachable only when the caller satisfies each `data.roles`
+   * list on the matched chain — `/patients/new` inherits the gate declared on
+   * `/patients`. A route the config cannot match at all is a dead link, not an
+   * open one, so it is reported inaccessible rather than shown and 404'd.
+   */
   private canAccessRoute(route: string): boolean {
-    const normalizedPath = route.replace(/^\//, '');
-    const entry = this.findRouteRecursive(this.router.config, normalizedPath);
-    const requiredRoles = entry?.data?.['roles'];
-    if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) {
-      return true; // no role guard → accessible
-    }
-    return this.auth.hasAnyRole(requiredRoles);
+    const chain = this.collectRouteRoles(this.router.config, this.splitPath(route));
+    if (!chain) return false;
+    return chain.every((roles) => this.auth.hasAnyRole(roles));
   }
 
-  /** Walk the route tree (including children) to find a matching route config. */
-  private findRouteRecursive(
-    routes: import('@angular/router').Routes,
-    path: string,
-  ): import('@angular/router').Route | undefined {
+  private splitPath(route: string): string[] {
+    return route.split('?')[0].split('/').filter(Boolean);
+  }
+
+  /**
+   * Resolve `segments` against the route tree, returning the `data.roles` list
+   * of every guarded route on the matched chain (empty array = matched, no
+   * guards) or `undefined` when nothing matches. Handles the three shapes the
+   * route table uses: multi-segment paths declared in one entry
+   * ('pharmacy/dispensing'), empty-path wrappers that consume no segment, and
+   * ':param' segments that match any value.
+   */
+  private collectRouteRoles(routes: Routes, segments: string[]): string[][] | undefined {
     for (const r of routes) {
-      if (r.path === path) return r;
+      const declared = this.splitPath(r.path ?? '');
+      if (declared.length > segments.length) continue;
+      if (!declared.every((s, i) => s.startsWith(':') || s === segments[i])) continue;
+
+      const roles = r.data?.['roles'];
+      const own: string[][] = Array.isArray(roles) && roles.length > 0 ? [roles as string[]] : [];
+      const rest = segments.slice(declared.length);
+
+      if (rest.length === 0 && declared.length > 0) return own;
       if (r.children) {
-        const found = this.findRouteRecursive(r.children, path);
-        if (found) return found;
+        const child = this.collectRouteRoles(r.children, rest);
+        if (child) return [...own, ...child];
       }
     }
     return undefined;

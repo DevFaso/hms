@@ -4,6 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DashboardComponent } from './dashboard';
+import { routes as appRoutes } from '../app.routes';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
@@ -16,15 +17,67 @@ import {
 } from '../services/patient-tracker-ws.service';
 
 /**
+ * Every route literal the dashboard links to (tiles, quick actions, fetch
+ * gates). Regenerate with:
+ *   grep -oh "route: '/[^']*'" src/app/dashboard/dashboard.ts \
+ *     | sed "s/route: '//;s/'$//" | sort -u
+ */
+const DASHBOARD_ROUTES = [
+  '/admissions',
+  '/appointments',
+  '/appointments/new',
+  '/audit-logs',
+  '/billing',
+  '/chat',
+  '/consultations',
+  '/departments',
+  '/encounters',
+  '/imaging',
+  '/lab',
+  '/lab-instruments',
+  '/lab-inventory',
+  '/lab-ops-dashboard',
+  '/lab-qc-dashboard',
+  '/lab-staff',
+  '/lab-test-config',
+  '/my-appointments',
+  '/my-billing',
+  '/my-care-team',
+  '/my-lab-results',
+  '/my-medications',
+  '/my-visits',
+  '/my-vitals',
+  '/notifications',
+  '/nurse-station',
+  '/patients',
+  '/patients/new',
+  '/pharmacy/dispensing',
+  '/pharmacy/drug-interactions',
+  '/pharmacy/inventory',
+  '/prescriptions',
+  '/reception',
+  '/referrals',
+  '/refills',
+  '/scheduling',
+  '/staff',
+  '/treatment-plans',
+];
+
+/**
  * Lightweight unit tests for dashboard navigation and RBAC fixes.
  * We instantiate the component with mocked auth/permissions, then
  * assert that quick-action routes and workflow tiles are correct.
  */
 describe('Dashboard navigation & RBAC', () => {
+  // canAccessRoute resolves against the router config, and since 2026-08-23 an
+  // unresolvable route counts as inaccessible (a tile pointing nowhere is a
+  // dead click). Specs therefore run against the REAL route table by default —
+  // a hand-written stub would make every tile vanish, and asserting tiles
+  // against fictional routes proved nothing anyway.
   function createComponent(
     roles: string[],
     permissions: string[],
-    routes: import('@angular/router').Routes = [],
+    routes: import('@angular/router').Routes = appRoutes,
   ): DashboardComponent {
     const permSet = new Set(permissions);
     const authStub = jasmine.createSpyObj('AuthService', [
@@ -473,11 +526,9 @@ describe('Dashboard navigation & RBAC', () => {
   });
 
   it('pharmacist tiles drop guard-rejected routes and use real pharmacy pages', () => {
-    const guarded: import('@angular/router').Routes = [
-      { path: 'patients', children: [], data: { roles: ['ROLE_DOCTOR'] } },
-      { path: 'encounters', children: [], data: { roles: ['ROLE_DOCTOR'] } },
-    ];
-    const c = createComponent(['ROLE_PHARMACIST'], [], guarded);
+    // Real route table: /patients and /encounters exclude ROLE_PHARMACIST,
+    // the three pharmacy pages admit it.
+    const c = createComponent(['ROLE_PHARMACIST'], []);
     c.isPharmacist.set(true);
 
     const routes = c.pharmacistWorkflowTiles().map((t) => t.route);
@@ -489,19 +540,67 @@ describe('Dashboard navigation & RBAC', () => {
   });
 
   it('canAccessRoute respects a role-guarded route the caller is outside of', () => {
-    const guardedRoutes: import('@angular/router').Routes = [
-      { path: 'patients', children: [], data: { roles: ['ROLE_DOCTOR', 'ROLE_NURSE'] } },
-    ];
     const c = createComponent(
       ['ROLE_ACCOUNTANT'],
       [...ACCOUNTANT_PERMISSIONS, 'View Patient Records'],
-      guardedRoutes,
     );
 
     // The recent-patients fetch gates on this — a permission alone must not
     // fire GET /patients for a role the route guard (and backend) rejects.
     const gate = (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute;
     expect(gate.call(c, '/patients')).toBeFalse();
+  });
+
+  // ── canAccessRoute path resolution (2026-08-23 audit, D3) ───────
+
+  // TestBed cannot be reconfigured once instantiated, so each case builds
+  // exactly one component.
+  const gate = (c: DashboardComponent, r: string) =>
+    (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute.call(c, r);
+
+  it('canAccessRoute grants a nested child route the parent guard admits', () => {
+    // /patients/new declares no roles of its own; Angular still runs the
+    // /patients guard before activating it, so the child inherits it.
+    const doctor = createComponent(['ROLE_DOCTOR'], []);
+    expect(gate(doctor, '/patients/new')).toBeTrue();
+    expect(gate(doctor, '/patients/abc-123')).toBeTrue(); // ':id' segment
+  });
+
+  it('canAccessRoute denies a nested child route the parent guard rejects', () => {
+    const accountant = createComponent(['ROLE_ACCOUNTANT'], []);
+    expect(gate(accountant, '/patients/new')).toBeFalse();
+  });
+
+  it('canAccessRoute resolves a multi-segment path declared in one entry', () => {
+    // 'pharmacy/dispensing' is a single route entry, not a parent/child pair.
+    const pharmacist = createComponent(['ROLE_PHARMACIST'], []);
+    expect(gate(pharmacist, '/pharmacy/dispensing')).toBeTrue();
+    expect(gate(pharmacist, '/patients')).toBeFalse();
+  });
+
+  it('canAccessRoute reports an unresolvable route as inaccessible', () => {
+    const superAdmin = createComponent(['ROLE_SUPER_ADMIN'], ['*']);
+    const gate = (superAdmin as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute;
+    // A tile pointing at a route the table cannot match is a dead click, and
+    // must be hidden rather than shown and 404'd — even for a super admin.
+    expect(gate.call(superAdmin, '/no-such-page')).toBeFalse();
+    expect(gate.call(superAdmin, '/patients/new/extra')).toBeFalse();
+  });
+
+  it('every route the dashboard links to resolves against the real route table', () => {
+    // Guards the strictness above: if a tile route is renamed or deleted, this
+    // fails loudly here instead of silently emptying a role's dashboard.
+    const superAdmin = createComponent(['ROLE_SUPER_ADMIN'], ['*']);
+    const resolve = (r: string) =>
+      (
+        superAdmin as unknown as {
+          collectRouteRoles(routes: import('@angular/router').Routes, s: string[]): unknown;
+        }
+      ).collectRouteRoles.call(superAdmin, appRoutes, r.split('/').filter(Boolean));
+
+    for (const route of DASHBOARD_ROUTES) {
+      expect(resolve(route)).withContext(`unresolved dashboard route ${route}`).toBeDefined();
+    }
   });
 });
 
@@ -632,7 +731,9 @@ describe('Dashboard i18n refactor coverage', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([]),
+        // Real route table — the tile computeds filter through canAccessRoute,
+        // which since 2026-08-23 hides routes it cannot resolve.
+        provideRouter(appRoutes),
         { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: permStub },
       ],
@@ -712,22 +813,26 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.receptionistWorkflowTiles().length).toBe(8);
   });
 
-  it('labWorkflowTiles returns 8 tiles', () => {
+  it('labWorkflowTiles returns 7 tiles', () => {
+    // 8 declared; the Encounters tile drops — /encounters admits no lab role.
     const c = createComponent(['ROLE_LAB_SCIENTIST']);
-    expect(c.labWorkflowTiles().length).toBe(8);
+    expect(c.labWorkflowTiles().length).toBe(7);
   });
 
-  it('pharmacistWorkflowTiles returns 7 tiles', () => {
+  it('pharmacistWorkflowTiles returns 5 tiles', () => {
     // 2026-08-23 role audit: the Reports tile is gone (it routed to
-    // /prescriptions and no pharmacy-reports page exists). With no guarded
-    // routes registered in this test, the canAccessRoute filter drops nothing.
+    // /prescriptions and no pharmacy-reports page exists). Of the 7 that
+    // remain, Patients and Encounters drop — neither route admits a pharmacist.
     const c = createComponent(['ROLE_PHARMACIST']);
-    expect(c.pharmacistWorkflowTiles().length).toBe(7);
+    expect(c.pharmacistWorkflowTiles().length).toBe(5);
   });
 
-  it('radiologistWorkflowTiles returns 8 tiles', () => {
+  it('radiologistWorkflowTiles returns 6 tiles', () => {
+    // 8 declared; Patients and Encounters drop — neither route admits a
+    // radiologist. The chart itself is D7, not D4: the /patients page's vitals,
+    // encounters and sharing panels would each 403.
     const c = createComponent(['ROLE_RADIOLOGIST']);
-    expect(c.radiologistWorkflowTiles().length).toBe(8);
+    expect(c.radiologistWorkflowTiles().length).toBe(6);
   });
 
   it('patientQuickLinks returns 8 tiles', () => {
