@@ -18,7 +18,12 @@ import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
-import { CHART_VIEW_ROLES } from './patient-chart/chart-access';
+import {
+  CHART_REVIEW_VIEW_ROLES,
+  CHART_VIEW_ROLES,
+  ENCOUNTER_VIEW_ROLES,
+  VITALS_VIEW_ROLES,
+} from './patient-chart/chart-access';
 import { AdvanceDirectivesTabComponent } from './advance-directives/advance-directives-tab.component';
 import { DIRECTIVE_ROLES } from './advance-directives/directive-access';
 import { GrowthChartTabComponent } from './growth-chart/growth-chart-tab.component';
@@ -149,14 +154,28 @@ export class PatientDetailComponent implements OnInit {
     });
   }
 
-  /** Whether the current user can view clinical vitals */
+  /** Mirrors PatientVitalSignController's READ list.
+   *
+   *  Was hasPermission('Update Vital Signs') — a WRITE permission gating a
+   *  READ tab, which is exactly the trap canViewGrowth() below documents. It
+   *  hid the vitals tab from every read-only role, including the consulting
+   *  clinicians the backend admits since audit decision D7. */
   canViewVitals(): boolean {
-    return this.permissions.hasPermission('Update Vital Signs');
+    return this.roleContext.hasAnyActiveRole(VITALS_VIEW_ROLES);
   }
 
-  /** Whether the current user can view clinical encounters */
+  /** Mirrors EncounterController's list READ gate — likewise not the
+   *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
-    return this.permissions.hasPermission('Create Encounters');
+    return this.roleContext.hasAnyActiveRole(ENCOUNTER_VIEW_ROLES);
+  }
+
+  /** Chart Review is its own backend (ChartReviewController) with its own,
+   *  broader list — the lab and pharmacy roles read the longitudinal record
+   *  without being able to open encounters. Gating both tabs on one flag hid
+   *  that difference. */
+  canViewChartReview(): boolean {
+    return this.roleContext.hasAnyActiveRole(CHART_REVIEW_VIEW_ROLES);
   }
 
   /** Mirrors GrowthChartController's @PreAuthorize list exactly — NOT the
