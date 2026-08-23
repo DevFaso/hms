@@ -41,6 +41,8 @@ public class DashboardConfigService {
         private static final String PERM_VIEW_LAB_RESULTS = "View Lab Results";
         private static final String PERM_ACCESS_PATIENT_ALLERGIES = "Access Patient Allergies";
         private static final String PERM_VIEW_LAB_ORDERS = "View Lab Orders";
+        private static final String PERM_ORDER_LAB_TESTS = "Order Lab Tests";
+        private static final String PERM_VIEW_IMAGING_RESULTS = "View Imaging Results";
         private static final String PERM_CREATE_LAB_RESULTS = "Create Lab Results";
         private static final String PERM_UPDATE_LAB_RESULTS = "Update Lab Results";
         private static final String PERM_MANAGE_LAB_TESTS = "Manage Lab Tests";
@@ -234,12 +236,12 @@ public class DashboardConfigService {
                 PERM_VIEW_PATIENT_RECORDS,
                 PERM_UPDATE_PATIENT_RECORDS,
                 "Create Prescriptions",
-                "Order Lab Tests",
+                PERM_ORDER_LAB_TESTS,
                 PERM_VIEW_LAB_RESULTS,
                 "Create Encounters",
                 "Update Diagnoses",
                 "Request Imaging Studies",
-                "View Imaging Results",
+                PERM_VIEW_IMAGING_RESULTS,
                 "Create Treatment Plans",
                 "Update Medical History",
                 "Order Medications",
@@ -260,7 +262,7 @@ public class DashboardConfigService {
                 "Create Surgical Plans",
                 "Document Surgical Procedures",
                 "Order Pre-op Tests",
-                "View Imaging Results",
+                PERM_VIEW_IMAGING_RESULTS,
                 "Request Anesthesia Consultation",
                 "Update Surgical Notes",
                 "Create Post-op Orders",
@@ -307,7 +309,7 @@ public class DashboardConfigService {
                 "Provide Breastfeeding Support",
                 "Schedule Prenatal Appointments",
                 "Document Newborn Assessment",
-                "Order Lab Tests",
+                PERM_ORDER_LAB_TESTS,
                 PERM_VIEW_LAB_RESULTS,
                 "Create Referrals to OB-GYN",
                 "Educate Patients",
@@ -532,12 +534,12 @@ public class DashboardConfigService {
                 PERM_VIEW_PATIENT_RECORDS,
                 PERM_UPDATE_PATIENT_RECORDS,
                 "Create Prescriptions",
-                "Order Lab Tests",
+                PERM_ORDER_LAB_TESTS,
                 PERM_VIEW_LAB_RESULTS,
                 "Create Encounters",
                 "Update Diagnoses",
                 "Request Imaging Studies",
-                "View Imaging Results"));
+                PERM_VIEW_IMAGING_RESULTS));
         map.put("ROLE_STAFF", List.of(
                 "View Dashboard",
                 "View Appointments",

@@ -1,13 +1,9 @@
 package com.example.hms.service;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
-import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
-import static com.example.hms.config.SecurityConstants.ROLE_LAB_SCIENTIST;
 import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
-import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
-import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 import com.example.hms.exception.ResourceNotFoundException;
