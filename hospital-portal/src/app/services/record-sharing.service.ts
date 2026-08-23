@@ -344,13 +344,7 @@ export interface PatientConsentResponse {
   consentExpiration: string | null;
   purpose: string | null;
   consentType:
-    | 'TREATMENT'
-    | 'RESEARCH'
-    | 'BILLING'
-    | 'EMERGENCY'
-    | 'REFERRAL'
-    | 'ALL_PURPOSES'
-    | null;
+    'TREATMENT' | 'RESEARCH' | 'BILLING' | 'EMERGENCY' | 'REFERRAL' | 'ALL_PURPOSES' | null;
   scope: string | null;
 }
 

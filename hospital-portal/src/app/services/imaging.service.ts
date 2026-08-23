@@ -63,14 +63,7 @@ export interface ImagingOrderRequest {
 }
 
 export type ImagingReportStatus =
-  | 'DRAFT'
-  | 'PRELIMINARY'
-  | 'FINAL'
-  | 'ADDENDUM'
-  | 'CORRECTED'
-  | 'AMENDED'
-  | 'CANCELLED'
-  | 'ERROR';
+  'DRAFT' | 'PRELIMINARY' | 'FINAL' | 'ADDENDUM' | 'CORRECTED' | 'AMENDED' | 'CANCELLED' | 'ERROR';
 
 export interface ImagingReportMeasurement {
   id: string;

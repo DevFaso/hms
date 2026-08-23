@@ -40,20 +40,10 @@ import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 
 type BoardWorklist =
-  | 'high-risk'
-  | 'pending-review'
-  | 'specialist-referral'
-  | 'psychosocial'
-  | 'all';
+  'high-risk' | 'pending-review' | 'specialist-referral' | 'psychosocial' | 'all';
 type ReferralListMode = 'hospital' | 'assigned' | 'patient';
 type MaternityTab =
-  | 'board'
-  | 'referrals'
-  | 'ultrasound'
-  | 'birth-plans'
-  | 'prenatal'
-  | 'labor'
-  | 'postpartum';
+  'board' | 'referrals' | 'ultrasound' | 'birth-plans' | 'prenatal' | 'labor' | 'postpartum';
 
 @Component({
   selector: 'app-maternity',

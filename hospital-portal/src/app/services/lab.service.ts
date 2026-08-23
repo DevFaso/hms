@@ -243,13 +243,7 @@ export interface LabTestDefinitionRequest {
 }
 
 export type LabSpecimenStatus =
-  | 'PENDING'
-  | 'COLLECTED'
-  | 'IN_TRANSIT'
-  | 'RECEIVED'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'REJECTED';
+  'PENDING' | 'COLLECTED' | 'IN_TRANSIT' | 'RECEIVED' | 'PROCESSING' | 'COMPLETED' | 'REJECTED';
 
 export interface LabSpecimen {
   id: string;
@@ -274,11 +268,7 @@ export interface LabSpecimenRequest {
 }
 
 export type TrendDirection =
-  | 'INCREASING'
-  | 'DECREASING'
-  | 'STABLE'
-  | 'FLUCTUATING'
-  | 'INSUFFICIENT_DATA';
+  'INCREASING' | 'DECREASING' | 'STABLE' | 'FLUCTUATING' | 'INSUFFICIENT_DATA';
 
 export interface LabResultComparisonPoint {
   labResultId: string;
@@ -475,9 +465,9 @@ export class LabService {
 
   getValidationStudies(definitionId: string): Observable<LabTestValidationStudy[]> {
     return this.http
-      .get<
-        ApiWrapper<LabTestValidationStudy[]>
-      >(`/lab-test-definitions/${definitionId}/validation-studies`)
+      .get<ApiWrapper<LabTestValidationStudy[]>>(
+        `/lab-test-definitions/${definitionId}/validation-studies`,
+      )
       .pipe(map((res) => res?.data ?? []));
   }
 
@@ -486,9 +476,10 @@ export class LabService {
     req: LabTestValidationStudyRequest,
   ): Observable<LabTestValidationStudy> {
     return this.http
-      .post<
-        ApiWrapper<LabTestValidationStudy>
-      >(`/lab-test-definitions/${definitionId}/validation-studies`, req)
+      .post<ApiWrapper<LabTestValidationStudy>>(
+        `/lab-test-definitions/${definitionId}/validation-studies`,
+        req,
+      )
       .pipe(map((res) => res.data));
   }
 

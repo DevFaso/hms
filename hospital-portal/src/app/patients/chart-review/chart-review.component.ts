@@ -19,13 +19,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
 export type ChartReviewTab =
-  | 'timeline'
-  | 'encounters'
-  | 'notes'
-  | 'results'
-  | 'medications'
-  | 'imaging'
-  | 'procedures';
+  'timeline' | 'encounters' | 'notes' | 'results' | 'medications' | 'imaging' | 'procedures';
 
 const TABS: readonly ChartReviewTab[] = [
   'timeline',

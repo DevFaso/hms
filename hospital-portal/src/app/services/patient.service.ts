@@ -87,11 +87,7 @@ export interface PatientCreateRequest {
 
 export type AllergySeverity = 'MILD' | 'MODERATE' | 'SEVERE' | 'LIFE_THREATENING' | 'UNKNOWN';
 export type AllergyVerificationStatus =
-  | 'UNCONFIRMED'
-  | 'PROVISIONAL'
-  | 'CONFIRMED'
-  | 'REFUTED'
-  | 'ENTERED_IN_ERROR';
+  'UNCONFIRMED' | 'PROVISIONAL' | 'CONFIRMED' | 'REFUTED' | 'ENTERED_IN_ERROR';
 
 export interface PatientAllergy {
   id: string;

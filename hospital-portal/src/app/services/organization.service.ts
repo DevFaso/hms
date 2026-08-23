@@ -48,11 +48,7 @@ export interface OrganizationCreateRequest {
 /* ── Tenant lifecycle (MVP-2) ─────────────────────────────────────── */
 
 export type OrganizationLifecycleState =
-  | 'ACTIVE'
-  | 'SUSPENDED'
-  | 'ARCHIVED'
-  | 'PENDING_PURGE'
-  | 'PURGED';
+  'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PENDING_PURGE' | 'PURGED';
 
 export interface TenantLifecycleResponse {
   organizationId: string;
