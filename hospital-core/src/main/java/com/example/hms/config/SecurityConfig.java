@@ -560,13 +560,37 @@ public class SecurityConfig {
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
+                // ROLE_STAFF added to match LabOrderController's GET
+                // @PreAuthorize — the filter chain is first-match-wins and
+                // terminal, so a role missing HERE gets 403 before the
+                // annotation that explicitly permits it ever runs.
                 .requestMatchers(HttpMethod.GET, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_STAFF,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // Workflow sub-resources FIRST (first-match-wins): the state
+                // machine requires lab staff for every step past PENDING
+                // (LabOrderServiceImpl.validateTransitionAuthority), and
+                // specimen collection is lab work — but the broad
+                // provider-only POST matcher below used to swallow these
+                // paths and 403 exactly the roles the endpoints exist for.
+                // This coarse gate carries the UNION of both endpoints'
+                // @PreAuthorize lists; the annotations stay the precise gate
+                // (the /lab-instrument-outbox/*/retry narrow-scoping
+                // precedent).
+                .requestMatchers(HttpMethod.POST,
+                        API_LAB_ORDERS + "/*/transition",
+                        API_LAB_ORDERS + "/*/specimens")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                // Only providers (doctors, nurses, admins) can place orders
-                .requestMatchers(HttpMethod.POST, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
+                // Only providers (doctors, nurses, admins) can place orders.
+                // Exact path only — a /** pattern here is what swallowed the
+                // workflow sub-resources above; future sub-resources ride
+                // anyRequest().authenticated() + their own @PreAuthorize.
+                .requestMatchers(HttpMethod.POST, API_LAB_ORDERS)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
@@ -579,15 +603,21 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
+                // Aligned to LabResultController's acknowledge @PreAuthorize
+                // exactly: the old list omitted HOSPITAL_ADMIN / LAB_DIRECTOR /
+                // QUALITY_MANAGER / SUPER_ADMIN (403'd from their own
+                // endpoint) and admitted LAB_TECHNICIAN, whom the annotation
+                // then rejected anyway.
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS + "/*/acknowledge")
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
-                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR,
+                        ROLE_QUALITY_MANAGER, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                // ---- Specimen endpoints (POST /lab-orders/{id}/specimens handled via API_LAB_ORDERS_PATTERN) ----
+                // ---- Specimen endpoints (POST /lab-orders/{id}/specimens has its own matcher above) ----
                 .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
