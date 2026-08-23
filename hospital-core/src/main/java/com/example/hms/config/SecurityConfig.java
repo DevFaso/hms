@@ -503,8 +503,12 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/billing-invoices/*/email")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
+                // Receptionists are included for the payments sub-path, whose
+                // controller annotation admits front-desk payment capture. The
+                // create and update endpoints still exclude receptionists at the
+                // annotation, which remains the precise per-endpoint gate.
                 .requestMatchers(HttpMethod.POST, API_BILLING_INVOICES_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
                 .requestMatchers(HttpMethod.PUT, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
@@ -528,10 +532,15 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 // -------------------- Chat / Notifications --------------------
+                // Mirrors ChatController.CHAT_ROLES exactly — the matcher
+                // previously omitted BILLING_SPECIALIST and ACCOUNTANT, which
+                // the controller admits, so finance staff 403'd at the filter
+                // before @PreAuthorize (the annotation stays the precise gate).
                 .requestMatchers("/chat/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT,
                         ROLE_STAFF, ROLE_PATIENT)
 
                 // WebSocket endpoints should NOT be public in an HMS; require authentication.
