@@ -24,7 +24,7 @@ frames per connection.
 
 | Inbound                       | Action                                                  | ACK |
 | ----------------------------- | ------------------------------------------------------- | --- |
-| `ORU^R01` (lab results)       | Parsed via the existing `Hl7v2MessageBuilder.parseOruR01`. Logged with sender + OBX content. *Persistence wired in P1.* | AA |
+| `ORU^R01` (lab results)       | Parsed via `Hl7v2MessageBuilder.parseOruR01` — **every OBX segment**, grouped under its OBR — and persisted as one `LabResult` per observation in a single transaction (V131). Criticals notify per row. | AA |
 | `ORU^R01` with no OBX         | Logged as a parse failure                               | AE |
 | `ADT^A01 / A04 / A08`         | Logged with MSH routing data. *Encounter projection in P1.* | AA |
 | Anything else (`ORM`, `MDM`, …) | Logged as unsupported                                  | AR |
@@ -141,8 +141,9 @@ MSA|AA|MSG-1<FS><CR>
 
 ## Next steps (P1)
 
-- Persist `ORU^R01` results as `LabResult` rows once OBR-3 → `LabOrder.id`
-  resolution and the integration-service assignment context are wired.
+- ~~Persist `ORU^R01` results as `LabResult` rows~~ — done, including
+  multi-OBX fan-out (one row per OBX, OBR-grouped placer resolution,
+  V131 set-id discriminator on the dedup index).
 - Project `ADT^A01/A04/A08` into `Patient` + `Encounter` via the EMPI service.
 - Add per-facility allowlist (sending facility → hospital).
 - Optionally swap the hand-rolled inspector for HAPI HL7v2 once we add

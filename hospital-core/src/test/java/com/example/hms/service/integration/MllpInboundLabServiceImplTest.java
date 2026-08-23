@@ -25,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,9 +68,14 @@ class MllpInboundLabServiceImplTest {
     }
 
     private ParsedObservation observation(String placer, String value) {
+        return observation(placer, value, "1", "GLU", "N");
+    }
+
+    private ParsedObservation observation(String placer, String value, String setId,
+                                          String testCode, String abnormalFlag) {
         return new ParsedObservation(
-            "patient-mrn", placer, "filler-1", "GLU", value, "mmol/L", "N",
-            LocalDateTime.of(2026, 4, 29, 8, 30));
+            "patient-mrn", placer, "filler-1", setId, testCode, value, "mmol/L",
+            "3.9-6.1", abnormalFlag, LocalDateTime.of(2026, 4, 29, 8, 30));
     }
 
     @Test
@@ -81,7 +88,7 @@ class MllpInboundLabServiceImplTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-1", "5.4"), hospital, "ROCHE_COBAS", "LAB_A",
+            List.of(observation("ACC-1", "5.4")), hospital, "ROCHE_COBAS", "LAB_A",
             "MSG-CTRL-1", "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
@@ -98,6 +105,9 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.getSourceSendingApplication()).isEqualTo("ROCHE_COBAS");
         assertThat(saved.getSourceSendingFacility()).isEqualTo("LAB_A");
         assertThat(saved.getSourceMessageControlId()).isEqualTo("MSG-CTRL-1");
+        assertThat(saved.getSourceObservationSetId()).isEqualTo("1");
+        assertThat(saved.getTestCode()).isEqualTo("GLU");
+        assertThat(saved.getReferenceRange()).isEqualTo("3.9-6.1");
 
         verify(messageRecorder).recordMessage(
             eq("MLLP:ROCHE_COBAS/LAB_A"), isNull(),
@@ -121,7 +131,7 @@ class MllpInboundLabServiceImplTest {
             .thenReturn(Optional.of(existing));
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-1", "5.4"), hospital, "APP", "FAC",
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
             "MSG-REPLAY", "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
@@ -147,7 +157,7 @@ class MllpInboundLabServiceImplTest {
             .thenReturn(Optional.empty());
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-1", "5.7"), hospital, "MINDRAY", "LAB_A",
+            List.of(observation("ACC-1", "5.7")), hospital, "MINDRAY", "LAB_A",
             "COMMON-ID", "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
@@ -160,7 +170,7 @@ class MllpInboundLabServiceImplTest {
         when(specimenRepository.findByAccessionNumber("ACC-MISSING")).thenReturn(Optional.empty());
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-MISSING", "5.4"), hospital, "APP", "FAC",
+            List.of(observation("ACC-MISSING", "5.4")), hospital, "APP", "FAC",
             "MSG-CTRL-2", "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_NOT_FOUND);
@@ -179,7 +189,7 @@ class MllpInboundLabServiceImplTest {
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-1", "5.4"), hospital, "APP", "FAC",
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
             "MSG-CTRL-3", "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_CROSS_TENANT);
@@ -193,9 +203,9 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("REJECTED_INVALID — missing OBR-2 placer order number")
     void rejectedInvalidWhenPlacerMissing() {
         ParsedObservation obs = new ParsedObservation(
-            "p", "", "f", "GLU", "5.4", "mmol/L", "N", LocalDateTime.now());
+            "p", "", "f", "1", "GLU", "5.4", "mmol/L", "", "N", LocalDateTime.now());
 
-        assertThat(service.processOruR01(obs, hospital, "APP", "FAC", "MSG-CTRL-4", "MSH|...\r"))
+        assertThat(service.processOruR01(List.of(obs), hospital, "APP", "FAC", "MSG-CTRL-4", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
         verify(labResultRepository, never()).save(any());
     }
@@ -204,16 +214,16 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("REJECTED_INVALID — missing OBX result value")
     void rejectedInvalidWhenResultValueBlank() {
         ParsedObservation obs = new ParsedObservation(
-            "p", "ACC-1", "f", "GLU", "", "mmol/L", "N", LocalDateTime.now());
+            "p", "ACC-1", "f", "1", "GLU", "", "mmol/L", "", "N", LocalDateTime.now());
 
-        assertThat(service.processOruR01(obs, hospital, "APP", "FAC", "MSG-CTRL-5", "MSH|...\r"))
+        assertThat(service.processOruR01(List.of(obs), hospital, "APP", "FAC", "MSG-CTRL-5", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
     }
 
     @Test
     @DisplayName("REJECTED_INVALID — null hospital")
     void rejectedInvalidWhenHospitalNull() {
-        assertThat(service.processOruR01(observation("ACC-1", "5.4"), null,
+        assertThat(service.processOruR01(List.of(observation("ACC-1", "5.4")), null,
             "APP", "FAC", "MSG-CTRL-6", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
     }
@@ -224,7 +234,7 @@ class MllpInboundLabServiceImplTest {
         labOrder.setHospital(null);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
 
-        assertThat(service.processOruR01(observation("ACC-1", "5.4"), hospital,
+        assertThat(service.processOruR01(List.of(observation("ACC-1", "5.4")), hospital,
             "APP", "FAC", "MSG-CTRL-7", "MSH|...\r"))
             .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
     }
@@ -236,7 +246,7 @@ class MllpInboundLabServiceImplTest {
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
         MllpInboundOutcome outcome = service.processOruR01(
-            observation("ACC-1", "5.4"), hospital, "APP", "FAC",
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
             null, "MSH|...\r");
 
         assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
@@ -248,5 +258,85 @@ class MllpInboundLabServiceImplTest {
         assertThat(captor.getValue().getSourceMessageControlId()).isNull();
         assertThat(captor.getValue().getSourceSendingApplication()).isEqualTo("APP");
         assertThat(captor.getValue().getSourceSendingFacility()).isEqualTo("FAC");
+    }
+
+    // ── Multi-OBX fan-out (V131) ─────────────────────────────────────────
+
+    @Test
+    @DisplayName("Multi-OBX — every observation persists as its own row, criticals notify per row")
+    void multiObxPersistsEveryObservation() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "APP", "FAC", "MSG-MULTI"))
+            .thenReturn(Optional.empty());
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // A 3-analyte CBC with the critical on OBX-2 — exactly the shape
+        // the old first-OBX-only parser silently truncated.
+        List<ParsedObservation> panel = List.of(
+            observation("ACC-1", "6.2", "1", "WBC", "N"),
+            observation("ACC-1", "6.6", "2", "HGB", "LL"),
+            observation("ACC-1", "150", "3", "PLT", "N"));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            panel, hospital, "APP", "FAC", "MSG-MULTI", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(3)).save(captor.capture());
+        List<LabResult> saved = captor.getAllValues();
+        assertThat(saved).extracting(LabResult::getSourceObservationSetId)
+            .containsExactly("1", "2", "3");
+        assertThat(saved).extracting(LabResult::getTestCode)
+            .containsExactly("WBC", "HGB", "PLT");
+        assertThat(saved).extracting(LabResult::getSourceMessageControlId)
+            .containsOnly("MSG-MULTI");
+        // The critical on OBX-2 must notify even though OBX-1 was normal.
+        verify(criticalValueNotificationService, times(3)).notifyIfCritical(any(LabResult.class));
+        // One integration-message row for the whole message, not one per OBX.
+        verify(messageRecorder).recordMessage(
+            any(), any(), eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            any(), eq(IntegrationMessageStatus.RECEIVED), isNull());
+    }
+
+    @Test
+    @DisplayName("Blank or duplicate OBX-1 set ids fall back to the 1-based position for ALL rows")
+    void setIdFallsBackToPositionWhenBlankOrDuplicate() {
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        List<ParsedObservation> panel = List.of(
+            observation("ACC-1", "5.4", "7", "GLU", "N"),
+            observation("ACC-1", "3.1", "7", "UREA", "N"));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            panel, hospital, "APP", "FAC", null, "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.ACCEPTED);
+        ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabResult::getSourceObservationSetId)
+            .containsExactly("1", "2");
+    }
+
+    @Test
+    @DisplayName("One malformed OBX rejects the WHOLE message — no partial persist")
+    void oneBadObxRejectsWholeMessage() {
+        List<ParsedObservation> panel = List.of(
+            observation("ACC-1", "5.4"),
+            observation("ACC-1", ""));
+
+        assertThat(service.processOruR01(panel, hospital, "APP", "FAC", "MSG-PART", "MSH|...\r"))
+            .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any());
+    }
+
+    @Test
+    @DisplayName("REJECTED_INVALID — no OBX segments at all")
+    void emptyObservationListRejected() {
+        assertThat(service.processOruR01(List.of(), hospital, "APP", "FAC", "MSG-EMPTY", "MSH|...\r"))
+            .isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
     }
 }

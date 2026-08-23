@@ -6,6 +6,7 @@ import com.example.hms.utility.Hl7v2MessageBuilder.ParsedAdtMessage;
 import com.example.hms.utility.Hl7v2MessageBuilder.ParsedObservation;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -136,7 +137,7 @@ class Hl7v2MessageBuilderAdtParserTest {
     }
 
     @Nested
-    @DisplayName("parseOruR01 with placer / filler order numbers")
+    @DisplayName("parseOruR01 — every OBX, grouped under its OBR")
     class OruParser {
 
         @Test
@@ -145,16 +146,19 @@ class Hl7v2MessageBuilderAdtParserTest {
             String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-1|P|2.5.1\r"
                        + "PID|1||MRN-1\r"
                        + "OBR|1|ACC-PLACER||GLU^Glucose|||20260428073000\r"
-                       + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N|||F|||20260428073000\r";
+                       + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|3.9-6.1||N|||F|||20260428073000\r";
 
-            ParsedObservation obs = builder.parseOruR01(oru);
+            List<ParsedObservation> observations = builder.parseOruR01(oru);
 
-            assertThat(obs).isNotNull();
+            assertThat(observations).hasSize(1);
+            ParsedObservation obs = observations.get(0);
             assertThat(obs.placerOrderNumber()).isEqualTo("ACC-PLACER");
             assertThat(obs.fillerOrderNumber()).isEmpty();
+            assertThat(obs.setId()).isEqualTo("1");
             assertThat(obs.testCode()).isEqualTo("GLU");
             assertThat(obs.resultValue()).isEqualTo("5.6");
             assertThat(obs.resultUnit()).isEqualTo("mmol/L");
+            assertThat(obs.referenceRange()).isEqualTo("3.9-6.1");
         }
 
         @Test
@@ -165,11 +169,54 @@ class Hl7v2MessageBuilderAdtParserTest {
                        + "OBR|1|ACC-PLACER|FILLER-789|GLU^Glucose|||20260428073000\r"
                        + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N\r";
 
-            ParsedObservation obs = builder.parseOruR01(oru);
+            List<ParsedObservation> observations = builder.parseOruR01(oru);
 
-            assertThat(obs).isNotNull();
-            assertThat(obs.placerOrderNumber()).isEqualTo("ACC-PLACER");
-            assertThat(obs.fillerOrderNumber()).isEqualTo("FILLER-789");
+            assertThat(observations).hasSize(1);
+            assertThat(observations.get(0).placerOrderNumber()).isEqualTo("ACC-PLACER");
+            assertThat(observations.get(0).fillerOrderNumber()).isEqualTo("FILLER-789");
+        }
+
+        @Test
+        @DisplayName("returns EVERY OBX of a panel, in transmission order")
+        void returnsEveryObx() {
+            String oru = "MSH|^~\\&|SYSMEX|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-CBC|P|2.5.1\r"
+                       + "PID|1||MRN-1\r"
+                       + "OBR|1|ACC-CBC||CBC^Complete Blood Count|||20260428073000\r"
+                       + "OBX|1|NM|WBC^Leukocytes||6.2|10*9/L|4.0-10.0|N|||F\r"
+                       + "OBX|2|NM|HGB^Hemoglobin||6.6|g/dL|13.0-17.0|LL|||F\r"
+                       + "OBX|3|NM|PLT^Platelets||150|10*9/L|150-400|N|||F\r";
+
+            List<ParsedObservation> observations = builder.parseOruR01(oru);
+
+            assertThat(observations).hasSize(3);
+            assertThat(observations).extracting(ParsedObservation::setId)
+                .containsExactly("1", "2", "3");
+            assertThat(observations).extracting(ParsedObservation::testCode)
+                .containsExactly("WBC", "HGB", "PLT");
+            assertThat(observations).extracting(ParsedObservation::abnormalFlag)
+                .containsExactly("N", "LL", "N");
+            assertThat(observations).extracting(ParsedObservation::referenceRange)
+                .containsExactly("4.0-10.0", "13.0-17.0", "150-400");
+            // All three belong to the single OBR group.
+            assertThat(observations).extracting(ParsedObservation::placerOrderNumber)
+                .containsOnly("ACC-CBC");
+        }
+
+        @Test
+        @DisplayName("multi-OBR message groups each OBX under its own OBR's order numbers")
+        void groupsObxUnderItsOwnObr() {
+            String oru = "MSH|^~\\&|COBAS|LAB1|HMS|HOSP1|20260428073000||ORU^R01|MSG-2ORD|P|2.5.1\r"
+                       + "PID|1||MRN-1\r"
+                       + "OBR|1|ACC-A||GLU^Glucose\r"
+                       + "OBX|1|NM|GLU^Glucose||5.6|mmol/L|||N\r"
+                       + "OBR|2|ACC-B||UREA^Urea\r"
+                       + "OBX|1|NM|UREA^Urea||3.1|mmol/L|||N\r";
+
+            List<ParsedObservation> observations = builder.parseOruR01(oru);
+
+            assertThat(observations).hasSize(2);
+            assertThat(observations.get(0).placerOrderNumber()).isEqualTo("ACC-A");
+            assertThat(observations.get(1).placerOrderNumber()).isEqualTo("ACC-B");
         }
 
         @Test
@@ -181,12 +228,12 @@ class Hl7v2MessageBuilderAdtParserTest {
         }
 
         @Test
-        @DisplayName("returns null when there is no OBX segment")
-        void nullWhenNoObx() {
+        @DisplayName("returns an empty list when there is no OBX segment")
+        void emptyWhenNoObx() {
             String oru = "MSH|^~\\&|MINDRAY|LAB1|HMS|HOSP1|20260428||ORU^R01|MSG-3|P|2.5\r"
                        + "PID|1||MRN-1\r"
                        + "OBR|1|ACC-PLACER||GLU^Glucose\r";
-            assertThat(builder.parseOruR01(oru)).isNull();
+            assertThat(builder.parseOruR01(oru)).isEmpty();
         }
     }
 }
