@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>401-or-handler-status split: Spring Security rejects unauthenticated
  * writes at 401 before HAPI sees them; the corrective flag-first
- * ordering would otherwise return 405 once an authenticated
+ * ordering would otherwise return 501 once an authenticated
  * TestRestTemplate is wired.
  */
 @SpringBootTest(classes = HmsApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -39,7 +39,7 @@ class FhirBulkExportIT {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("POST /fhir/$export is rejected (401 or 405) when flag off")
+    @DisplayName("POST /fhir/$export is rejected (401 or 501) when flag off")
     void systemExportRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.valueOf("application/fhir+json"));
@@ -49,11 +49,11 @@ class FhirBulkExportIT {
             new HttpEntity<>("{}", headers),
             String.class
         );
-        assertThat(response.getStatusCode().value()).isIn(401, 405);
+        assertThat(response.getStatusCode().value()).isIn(401, 501);
     }
 
     @Test
-    @DisplayName("POST /fhir/Patient/$export is rejected (401 or 405) when flag off")
+    @DisplayName("POST /fhir/Patient/$export is rejected (401 or 501) when flag off")
     void patientExportRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.valueOf("application/fhir+json"));
@@ -63,11 +63,11 @@ class FhirBulkExportIT {
             new HttpEntity<>("{}", headers),
             String.class
         );
-        assertThat(response.getStatusCode().value()).isIn(401, 405);
+        assertThat(response.getStatusCode().value()).isIn(401, 501);
     }
 
     @Test
-    @DisplayName("GET /fhir-bulk-status/{id} is rejected (401 or 405) when flag off")
+    @DisplayName("GET /fhir-bulk-status/{id} is rejected (401 or 501) when flag off")
     void statusEndpointRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/fhir+json");
@@ -77,7 +77,7 @@ class FhirBulkExportIT {
             new HttpEntity<>(headers),
             String.class
         );
-        assertThat(response.getStatusCode().value()).isIn(401, 405);
+        assertThat(response.getStatusCode().value()).isIn(401, 501);
     }
 
     @Test

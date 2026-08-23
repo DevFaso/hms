@@ -142,6 +142,10 @@ class LiquibaseSchemaIT {
             assertTableExists(stmt, "scheduling", "patient_recalls");
             assertColumnExists(stmt, "scheduling", "appointment_waitlist", "offered_slot_id");
             assertColumnExists(stmt, "clinical", "appointment_slots", "version");
+
+            // V129: persistent FHIR bulk-export jobs
+            assertTableExists(stmt, "platform", "fhir_bulk_export_jobs");
+            assertTableExists(stmt, "platform", "fhir_bulk_export_files");
         }
     }
 

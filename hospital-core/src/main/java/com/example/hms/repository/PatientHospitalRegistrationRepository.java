@@ -23,6 +23,12 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
 
     List<PatientHospitalRegistration> findByHospitalId(UUID hospitalId);
 
+    /** The bulk-export runner's patient iteration (P3 #24) — paged, stable order. */
+    org.springframework.data.domain.Page<PatientHospitalRegistration> findByHospitalIdAndActiveTrue(
+        UUID hospitalId, org.springframework.data.domain.Pageable pageable);
+
+    long countByHospitalIdAndActiveTrue(UUID hospitalId);
+
     /**
      * Desk list for one hospital, as a flat column projection.
      *
