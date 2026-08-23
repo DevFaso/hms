@@ -12,6 +12,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import static com.example.hms.config.SecurityConstants.CONSULTING_CLINICIANS_AUTHORITIES;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,10 +56,18 @@ public class ChartReviewController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = ChartReviewDTO.class)))
     @GetMapping("/{patientId}/chart-review")
+    // Consulting clinicians (radiologist, anaesthetist, physiotherapist) read
+    // the longitudinal record here — role audit D5/D6. Chart Review already
+    // carries the results and imaging sections they need, so this is the
+    // surface that answers those two items: they read labs and imaging FROM
+    // THE CHART, not from /lab and /imaging, which are order-entry workbenches
+    // for the teams that own those queues.
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_PHARMACIST',"
         + "'ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER',"
-        + "'ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER','ROLE_SUPER_ADMIN')")
+        + "'ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ","
+        + "'ROLE_SUPER_ADMIN')")
     public ResponseEntity<ChartReviewDTO> getChartReview(
         @PathVariable UUID patientId,
         @RequestParam(required = false) UUID hospitalId,

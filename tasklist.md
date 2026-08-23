@@ -974,21 +974,35 @@ PHYSIOTHERAPIST.
     hand-maintained copies of one set. A new drift guard pins both, and pins
     that picker-only roles do NOT get the chart.
   DEFERRED, deliberately: lab read (D5), imaging read (D6), chart access (D7).
-- [ ] D5. Lab read for RADIOLOGIST + ANESTHESIOLOGIST. Both are granted
-  'View Lab' by the portal map (and the anesthesiologist PERM_VIEW_LAB_RESULTS
-  by the backend map) while `GET /lab-orders`, `GET /lab-results` and the /lab
-  route guard all reject them. The clinical case is real (renal function before
-  contrast; pre-operative labs), but it is NOT a matcher one-liner: LabOrder /
-  LabResultController carry ~7 read `@PreAuthorize` lists that would each need
-  widening, and the /lab page is an ORDER-ENTRY workbench, so the honest
-  question is whether these read-only roles belong there at all or should read
-  labs from the patient chart instead (which is D7). Decide the surface first,
-  then wire it end-to-end - widening the matcher alone is theatre, the
-  annotation still 403s.
-- [ ] D6. Imaging read for ANESTHESIOLOGIST ('View Imaging Studies' is granted
-  by the portal map; ImagingOrderController gates reads on the
-  VIEW_IMAGING_ORDERS authority or SUPER_ADMIN/DOCTOR/NURSE/RADIOLOGIST).
-  Same shape as D5 - several annotations, not one matcher.
+- [x] D5. Lab read for RADIOLOGIST + ANESTHESIOLOGIST.
+  DONE 2026-08-23 (**PR #495**), resolved real-world: they read labs from the
+  PATIENT'S RECORD, not from /lab. The open question was whether read-only
+  clinicians belong in an order-entry workbench; the answer is no. /lab is the
+  queue the lab team works, and a radiologist checking renal function before
+  contrast opens the patient, not the lab's worklist. Chart Review already
+  carries a RESULTS section fed by the same LabResult queries, hospital-scoped
+  with no per-endpoint role gate - so the fix was ChartReviewController's role
+  list, not the ~7 LabOrder/LabResult annotations D4 feared. The /lab and
+  /lab-results guards are deliberately unchanged.
+- [x] D6. Imaging read for ANESTHESIOLOGIST.
+  DONE 2026-08-23 (**PR #495**), same resolution and same one-line surface:
+  Chart Review's IMAGING section. ImagingOrderController and the /imaging
+  route guard are deliberately unchanged - /imaging is the radiology
+  worklist, not a chart view.
+
+  D5+D6 also exposed a LOOSE END IN D7: widening the five backend reads was
+  necessary but not sufficient, because the chart TAB gates use a different
+  vocabulary. Two of them gated a READ tab on a WRITE permission -
+  canViewVitals on 'Update Vital Signs' and canViewEncounters on 'Create
+  Encounters' - which is the exact trap canViewGrowth's own comment documents.
+  So D7 widened the vitals endpoints while the vitals TAB stayed hidden from
+  every read-only role. Both now mirror their controller's read list
+  (VITALS_VIEW_ROLES / ENCOUNTER_VIEW_ROLES in chart-access.ts), and Chart
+  Review got its own CHART_REVIEW_VIEW_ROLES because its backend list is
+  broader than the encounters one - sharing a flag hid that the lab and
+  pharmacy roles read the record without being able to open encounters.
+  LESSON: when widening a backend read, grep the PORTAL gate too; a role list
+  and a permission string are different vocabularies and drift silently.
 - [x] D7. Patient chart for the treating clinicians who are NOT on the care
   team's core loop: RADIOLOGIST, ANESTHESIOLOGIST, PHYSIOTHERAPIST.
   DONE 2026-08-23 (**PR #492**), resolved real-world: in a real hospital all
