@@ -28,6 +28,8 @@ public class SecurityConstants {
     public static final String ROLE_LAB_TECHNICIAN = "ROLE_LAB_TECHNICIAN";
     public static final String ROLE_LAB_MANAGER = "ROLE_LAB_MANAGER";
     public static final String ROLE_ACCOUNTANT = "ROLE_ACCOUNTANT";
+    /** General administrative user (seeded) — back-office operations, not platform config. */
+    public static final String ROLE_ADMIN = "ROLE_ADMIN";
     public static final String ROLE_RADIOLOGIST = "ROLE_RADIOLOGIST";
     public static final String ROLE_SURGEON = "ROLE_SURGEON";
     public static final String ROLE_DENTIST = "ROLE_DENTIST";

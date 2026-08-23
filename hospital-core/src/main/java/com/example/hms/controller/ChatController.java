@@ -45,10 +45,14 @@ public class ChatController {
 
     private static final Logger logger = LoggerFactory.getLogger(ChatController.class);
 
-    /** All roles allowed to use the chat system. */
-    private static final String CHAT_ROLES = "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'RECEPTIONIST', "
-            + "'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', "
-            + "'BILLING_SPECIALIST', 'ACCOUNTANT', 'STAFF', 'PATIENT')";
+    /**
+     * Internal messaging is open to every authenticated hospital user
+     * (2026-08-23 role audit, decision C3): enumerating roles here kept
+     * locking out whichever staff role the list forgot. Access to CONTENT is
+     * still gated per-thread inside ChatMessageService (sender/recipient
+     * participant checks, incl. the attachment ownership gate from PR #482).
+     */
+    private static final String CHAT_ROLES = "isAuthenticated()";
 
     private final ChatMessageService chatMessageService;
     private final SimpMessagingTemplate messagingTemplate;

@@ -17,6 +17,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { roleSatisfies } from '../core/role-equivalence';
 import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
@@ -410,7 +411,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // Roles only (no permission key): 'Manage Bed Capacity' is in
         // HOSPITAL_ADMIN's defaults but not guaranteed for SUPER_ADMIN's
         // merged permission set, and the route guard uses the same roles.
-        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        // ADMIN removed per role audit C1 — the bed backend rejects it.
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'calendar_view_week',
@@ -603,12 +605,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.TREATMENT_PLANS',
         route: '/treatment-plans',
         permission: 'Create Treatment Plans',
-        // Mirrors the /treatment-plans RoleGuard (midwife added there in
-        // this change — every backend treatment-plan endpoint admits it).
+        // Mirrors the /treatment-plans RoleGuard (physiotherapists added per
+        // role audit decision C4 — writing treatment plans is their core duty).
         roles: [
           'ROLE_DOCTOR',
           'ROLE_NURSE',
           'ROLE_MIDWIFE',
+          'ROLE_PHYSIOTHERAPIST',
           'ROLE_HOSPITAL_ADMIN',
           'ROLE_ADMIN',
           'ROLE_SUPER_ADMIN',
@@ -696,32 +699,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/notifications',
         permission: 'View Notifications',
       },
-      {
-        icon: 'chat',
-        label: 'Messages',
-        translationKey: 'NAV.MESSAGES',
-        route: '/chat',
-        // Mirrors the backend chat role set (SecurityConfig /chat/** matcher =
-        // ChatController.CHAT_ROLES). Roles outside it opened a chat page
-        // whose every API call 403'd (2026-08-23 role audit). Widening chat
-        // to more staff roles is tasklist decision C3.
-        roles: [
-          'ROLE_SUPER_ADMIN',
-          'ROLE_HOSPITAL_ADMIN',
-          'ROLE_DOCTOR',
-          'ROLE_NURSE',
-          'ROLE_MIDWIFE',
-          'ROLE_RECEPTIONIST',
-          'ROLE_LAB_SCIENTIST',
-          'ROLE_LAB_TECHNICIAN',
-          'ROLE_LAB_MANAGER',
-          'ROLE_LAB_DIRECTOR',
-          'ROLE_QUALITY_MANAGER',
-          'ROLE_BILLING_SPECIALIST',
-          'ROLE_ACCOUNTANT',
-          'ROLE_STAFF',
-        ],
-      },
+      // Messages is deliberately ungated: chat is open to every
+      // authenticated hospital user (role audit decision C3 — the backend
+      // matcher and CHAT_ROLES are isAuthenticated(); per-thread participant
+      // gating in ChatMessageService is the real protection).
+      { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
       {
         icon: 'campaign',
         label: 'Announcements',
@@ -748,25 +730,52 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
     // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
     if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
-      items.push(
-        {
-          icon: 'corporate_fare',
-          label: 'Organizations',
-          translationKey: 'NAV.ORGANIZATIONS',
-          route: '/organizations',
-        },
-        { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
-        { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
-        // MVP-5b: super-admin lands on the namespaced /super-admin/platform alias
-        // so the active-link highlight matches the address bar after the rewrite
-        // guard runs. ADMIN keeps the legacy /platform path.
-        {
-          icon: 'hub',
-          label: 'Platform',
-          translationKey: 'NAV.PLATFORM',
-          route: isActiveSuperAdmin ? '/super-admin/platform' : '/platform',
-        },
-      );
+      // Role audit decision C1: an ADMIN is a back-office operations role,
+      // not platform IT — Organizations / Roles / Platform / Analytics /
+      // Feature Flags are super-admin surfaces (their backends reject ADMIN
+      // on every call), so only Users + Administration render for ADMIN.
+      if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+        items.push(
+          {
+            icon: 'corporate_fare',
+            label: 'Organizations',
+            translationKey: 'NAV.ORGANIZATIONS',
+            route: '/organizations',
+          },
+          { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
+        );
+      }
+      items.push({
+        icon: 'manage_accounts',
+        label: 'Users',
+        translationKey: 'NAV.USERS',
+        route: '/users',
+      });
+      if (this.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+        items.push(
+          // MVP-5b: super-admin lands on the namespaced /super-admin/platform
+          // alias so the active-link highlight matches the address bar after
+          // the rewrite guard runs.
+          {
+            icon: 'hub',
+            label: 'Platform',
+            translationKey: 'NAV.PLATFORM',
+            route: '/super-admin/platform',
+          },
+          {
+            icon: 'query_stats',
+            label: 'Analytics',
+            translationKey: 'NAV.ANALYTICS',
+            route: '/analytics',
+          },
+          {
+            icon: 'toggle_on',
+            label: 'Feature Flags',
+            translationKey: 'NAV.FEATURE_FLAGS',
+            route: '/feature-flags',
+          },
+        );
+      }
       // MVP-5: only ROLE_ADMIN sees Administration. Super admins are
       // redirected from /admin to /super-admin (SuperAdminRedirectGuard) and
       // already have the Control Tower in their nav.
@@ -778,20 +787,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/admin',
         });
       }
-      items.push(
-        {
-          icon: 'query_stats',
-          label: 'Analytics',
-          translationKey: 'NAV.ANALYTICS',
-          route: '/analytics',
-        },
-        {
-          icon: 'toggle_on',
-          label: 'Feature Flags',
-          translationKey: 'NAV.FEATURE_FLAGS',
-          route: '/feature-flags',
-        },
-      );
     }
     if (this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       items.push({
@@ -821,9 +816,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
     if (
       this.permissions.hasPermission('View Audit Logs') &&
-      // Mirrors the /audit-logs RoleGuard — LAB_DIRECTOR/QUALITY_MANAGER hold
-      // the permission but the guard rejects them (widening is decision C6).
-      this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])
+      // Mirrors the /audit-logs RoleGuard. Lab leadership included per role
+      // audit decision C6 — quality managers and lab directors review audit
+      // trails as part of CAP/ISO 15189 quality audits.
+      this.hasAnyRole([
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+      ])
     ) {
       items.push({
         icon: 'policy',
@@ -975,7 +977,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
 
-    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
+    // ADMIN removed per role audit C1 — every consent backend call rejects it.
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
         icon: 'handshake',
         label: 'Consent Management',
@@ -1010,12 +1013,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     if (
+      // ADMIN removed per role audit C1 — the lab dashboards' backends
+      // reject the role on every call.
       this.hasAnyRole([
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1052,11 +1056,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       });
     }
     if (
+      // ADMIN removed per role audit C1 — the lab-staff backend rejects it.
       this.hasAnyRole([
         'ROLE_LAB_DIRECTOR',
         'ROLE_LAB_MANAGER',
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
@@ -1192,7 +1196,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private hasAnyRole(roles: string[]): boolean {
     const activeRole = this.roleContext.activeRole;
     if (activeRole) {
-      return roles.includes(activeRole);
+      // roleSatisfies applies doctor equivalence (role audit C2):
+      // PHYSICIAN/SURGEON pass any gate that names ROLE_DOCTOR.
+      return roleSatisfies(roles, activeRole);
     }
     return this.auth.hasAnyRole(roles);
   }
