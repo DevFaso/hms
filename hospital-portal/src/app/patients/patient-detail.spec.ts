@@ -184,6 +184,22 @@ describe('PatientDetailComponent', () => {
     expect(vitalServiceSpy.getRecent).toHaveBeenCalledWith('p1');
   });
 
+  it('keeps Chart and Chart Review as two distinct tabs', () => {
+    // Both the Chart Review button and its panel were bound to the 'chart'
+    // key, so selecting either lit BOTH tabs and stacked BOTH panels — which
+    // read as one duplicated tab. They are different views: Chart is the
+    // structured summary (allergies, problems, chart updates), Chart Review is
+    // the longitudinal record (encounters, notes, results, meds, imaging).
+    fixture.detectChanges();
+
+    component.setTab('chart');
+    expect(component.activeTab()).toBe('chart');
+
+    component.setTab('chart-review');
+    expect(component.activeTab()).toBe('chart-review');
+    expect(component.activeTab()).not.toBe('chart');
+  });
+
   describe('Vitals tab — no-metrics placeholder', () => {
     // These fixtures use the BACKEND DTO field names. The old spec mocked a
     // portal-invented shape (heartRate/temperature/height/painLevel) that the
