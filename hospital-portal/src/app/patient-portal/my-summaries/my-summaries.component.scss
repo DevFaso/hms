@@ -56,3 +56,64 @@
     color: #e65100;
   }
 }
+
+/* ─── Print rules ───────────────────────────────────────────────────────
+   An After-Visit Summary is printed to hand to the patient, so the page
+   has to come out as ONE visit's document. Before this, window.print()
+   emitted the whole app (shell chrome is hidden globally in styles.scss)
+   plus the collapsed headers of every other visit.
+
+   The expanded card is the document: its header already carries the visit
+   identity (date, provider, hospital, encounter type), so it stays and the
+   surrounding list furniture goes.
+   ──────────────────────────────────────────────────────────────────────── */
+@media print {
+  /* Only the open summary prints — the other visits are not this document. */
+  .avs-card:not(.expanded) {
+    display: none !important;
+  }
+
+  /* Chrome that means nothing on paper. */
+  .avs-expand-icon,
+  .avs-actions {
+    display: none !important;
+  }
+
+  .avs-header {
+    cursor: default;
+  }
+
+  .avs-card {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    break-inside: auto;
+  }
+
+  .avs-body {
+    padding: 0 !important;
+  }
+
+  /* Keep a section and its heading together across a page break. */
+  .avs-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .avs-section h4 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* Callouts read as flat blocks in mono/greyscale print. */
+  .avs-warning {
+    background: transparent !important;
+    border-left: 2px solid #000 !important;
+  }
+
+  .avs-tag {
+    border: 1px solid #666 !important;
+    background: transparent !important;
+  }
+}
