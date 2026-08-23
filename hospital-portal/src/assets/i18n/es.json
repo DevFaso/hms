@@ -1901,10 +1901,17 @@
       "RADIOLOGIST": "Radiólogo",
       "BILLING_SPECIALIST": "Especialista en Facturación",
       "ACCOUNTANT": "Contador",
-      "STAFF": "Personal"
+      "STAFF": "Personal",
+      "LAB_TECHNICIAN": "Técnico de Laboratorio",
+      "LAB_MANAGER": "Gerente de Laboratorio",
+      "PHARMACY_VERIFIER": "Verificador de Farmacia",
+      "CLAIMS_REVIEWER": "Revisor de Reclamaciones",
+      "ANESTHESIOLOGIST": "Anestesiólogo",
+      "PHYSIOTHERAPIST": "Fisioterapeuta"
     },
     "BILLING_SNAPSHOT": "Resumen de Facturación",
     "BILLING_OVERDUE": "Facturas vencidas",
+    "ALERT_ACK_FAILED": "No se pudo confirmar la alerta. Inténtelo de nuevo.",
     "TILE": {
       "STAFF": "Personal",
       "APPOINTMENTS": "Citas",
@@ -2918,7 +2925,13 @@
     "REFILLS": "Solicitudes de reposición",
     "LAB_OUTBOX": "Bandeja de instrumentos",
     "MICROBIOLOGY": "Microbiología",
-    "REPORTS": "Informes programados"
+    "REPORTS": "Informes programados",
+    "EMAR": "eMAR",
+    "PHARMACY_CLAIMS": "Reclamaciones de Farmacia",
+    "PHARMACY_CHECKOUT": "Caja de Farmacia",
+    "MTM_REVIEW": "Revisión MTM",
+    "INTEGRATION_MESSAGES": "Mensajes de Integración",
+    "COST_CHARGEBACK": "Costos / Refacturación"
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",

@@ -155,7 +155,11 @@ public class MeController {
 
     @Operation(summary = "Acknowledge a clinical alert")
     @PostMapping("/alerts/{alertId}/acknowledge")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    // Nurses and midwives receive actionRequired alerts on the shared nurse
+    // dashboard view and its Ack button rendered for them — but the
+    // doctor-only annotation made every click a silent 403 (2026-08-23 role
+    // audit, B4).
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<Void> acknowledgeAlert(@PathVariable UUID alertId, Authentication auth) {
         UUID userId = resolveUserId(auth);
         clinicalDashboardService.acknowledgeAlert(alertId, userId);

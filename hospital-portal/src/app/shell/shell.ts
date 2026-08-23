@@ -224,12 +224,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           translationKey: 'NAV.VISIT_SUMMARIES',
           route: '/my-summaries',
         },
-        {
-          icon: 'description',
-          label: 'Documents',
-          translationKey: 'NAV.DOCUMENTS',
-          route: '/my-documents',
-        },
         { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
         {
           icon: 'notifications',
@@ -277,6 +271,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_LAB_DIRECTOR',
           'ROLE_LAB_MANAGER',
           'ROLE_LAB_SCIENTIST',
+          'ROLE_LAB_TECHNICIAN',
           'ROLE_QUALITY_MANAGER',
         ],
       },
@@ -286,6 +281,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.APPOINTMENTS',
         route: '/appointments',
         permission: 'View Appointments',
+        // Mirrors the /appointments RoleGuard (2026-08-23 role audit: the
+        // permission-only gate showed dead entries to radiologists,
+        // anesthesiologists, physiotherapists, physicians and surgeons).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_STAFF',
+        ],
       },
       {
         icon: 'badge',
@@ -293,6 +301,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.STAFF',
         route: '/staff',
         permission: 'View Staff',
+        // Mirrors the /staff RoleGuard.
+        roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_RECEPTIONIST',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_LAB_MANAGER',
+          'ROLE_QUALITY_MANAGER',
+        ],
       },
       {
         icon: 'event_note',
@@ -358,6 +376,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.ENCOUNTERS',
         route: '/encounters',
         permission: 'Create Encounters',
+        // Mirrors the /encounters RoleGuard.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'hotel',
@@ -365,6 +392,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.ADMISSIONS',
         route: '/admissions',
         permission: 'Admit Patients',
+        // Mirrors the /admissions RoleGuard.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'bed',
@@ -461,6 +497,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.PRESCRIPTIONS',
         route: '/prescriptions',
         permission: 'View Prescriptions',
+        // Mirrors the /prescriptions RoleGuard (midwife added there in the
+        // same change — the backend list endpoint always admitted midwives).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_PHARMACIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'loop',
@@ -475,6 +522,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.NURSE_STATION',
         route: '/nurse-station',
         permission: 'Access Nurse Station',
+      },
+      {
+        icon: 'qr_code_scanner',
+        label: 'eMAR',
+        translationKey: 'NAV.EMAR',
+        route: '/emar',
+        // Mirrors the /emar RoleGuard. The bedside five-rights barcode loop
+        // shipped with no nav entry anywhere — URL-only until the 2026-08-23
+        // role audit surfaced it.
+        roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'],
       },
       {
         icon: 'view_kanban',
@@ -514,6 +571,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.IMAGING',
         route: '/imaging',
         permission: 'View Imaging Studies',
+        // Mirrors the /imaging RoleGuard (midwife added there in this change).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RADIOLOGIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'forum',
@@ -521,6 +588,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.CONSULTATIONS',
         route: '/consultations',
         permission: 'Request Consultations',
+        // Mirrors the /consultations RoleGuard.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'assignment',
@@ -528,6 +603,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.TREATMENT_PLANS',
         route: '/treatment-plans',
         permission: 'Create Treatment Plans',
+        // Mirrors the /treatment-plans RoleGuard (midwife added there in
+        // this change — every backend treatment-plan endpoint admits it).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'send',
@@ -535,6 +620,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.REFERRALS',
         route: '/referrals',
         permission: 'Create Referrals',
+        // Mirrors the /referrals RoleGuard (midwife added there in this change).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'receipt_long',
@@ -559,6 +653,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.LABORATORY',
         route: '/lab',
         permission: 'View Lab',
+        // Mirrors the /lab RoleGuard (radiologists hold 'View Lab' in the
+        // static map but the guard and lab matchers reject them).
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_LAB_TECHNICIAN',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_QUALITY_MANAGER',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'biotech',
@@ -566,6 +674,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.LAB_RESULTS',
         route: '/lab-results',
         permission: 'View Lab',
+        // Mirrors the /lab-results RoleGuard.
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_LAB_TECHNICIAN',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_QUALITY_MANAGER',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'notifications',
@@ -574,7 +696,32 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/notifications',
         permission: 'View Notifications',
       },
-      { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
+      {
+        icon: 'chat',
+        label: 'Messages',
+        translationKey: 'NAV.MESSAGES',
+        route: '/chat',
+        // Mirrors the backend chat role set (SecurityConfig /chat/** matcher =
+        // ChatController.CHAT_ROLES). Roles outside it opened a chat page
+        // whose every API call 403'd (2026-08-23 role audit). Widening chat
+        // to more staff roles is tasklist decision C3.
+        roles: [
+          'ROLE_SUPER_ADMIN',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_LAB_TECHNICIAN',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_QUALITY_MANAGER',
+          'ROLE_BILLING_SPECIALIST',
+          'ROLE_ACCOUNTANT',
+          'ROLE_STAFF',
+        ],
+      },
       {
         icon: 'campaign',
         label: 'Announcements',
@@ -672,7 +819,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         route: '/admin-governance',
       });
     }
-    if (this.permissions.hasPermission('View Audit Logs')) {
+    if (
+      this.permissions.hasPermission('View Audit Logs') &&
+      // Mirrors the /audit-logs RoleGuard — LAB_DIRECTOR/QUALITY_MANAGER hold
+      // the permission but the guard rejects them (widening is decision C6).
+      this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])
+    ) {
       items.push({
         icon: 'policy',
         label: 'Audit Logs',
@@ -737,6 +889,68 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/stock-routing',
         },
       );
+    }
+    // PHARMACY_VERIFIER's core workflow, previously unreachable: the block
+    // above omits the role, and it must — the inventory-page guards reject
+    // verifiers. Only Dispensing + Stock Routing admit them (2026-08-23 audit).
+    if (this.hasAnyRole(['ROLE_PHARMACY_VERIFIER'])) {
+      items.push(
+        {
+          icon: 'medication',
+          label: 'Dispensing',
+          translationKey: 'NAV.DISPENSING',
+          route: '/pharmacy/dispensing',
+        },
+        {
+          icon: 'alt_route',
+          label: 'Stock Routing',
+          translationKey: 'NAV.STOCK_ROUTING',
+          route: '/pharmacy/stock-routing',
+        },
+      );
+    }
+    // Claims / Checkout / MTM shipped with no nav entry anywhere — for
+    // CLAIMS_REVIEWER the claims page is the role's entire purpose. Each
+    // gate mirrors its route guard.
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_CLAIMS_REVIEWER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'request_quote',
+        label: 'Pharmacy Claims',
+        translationKey: 'NAV.PHARMACY_CLAIMS',
+        route: '/pharmacy/claims',
+      });
+    }
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_CASHIER',
+        'ROLE_BILLING_SPECIALIST',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'point_of_sale',
+        label: 'Pharmacy Checkout',
+        translationKey: 'NAV.PHARMACY_CHECKOUT',
+        route: '/pharmacy/checkout',
+      });
+    }
+    if (this.hasAnyRole(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
+      items.push({
+        icon: 'clinical_notes',
+        label: 'MTM Review',
+        translationKey: 'NAV.MTM_REVIEW',
+        route: '/pharmacy/mtm',
+      });
     }
     // Drug-interaction KB (P2 #14). Its own gate, not the pharmacy block above:
     // the backend read set adds DOCTOR/NURSE/MIDWIFE, while the pharmacy block
@@ -1000,6 +1214,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       label: 'Integrations Health',
       translationKey: 'NAV.INTEGRATIONS_HEALTH',
       route: '/super-admin/integrations',
+    });
+    // Shipped with routes but no nav entry anywhere (2026-08-23 role audit):
+    // the DLQ/replay console and the per-tenant cost panel were URL-only.
+    items.push({
+      icon: 'move_to_inbox',
+      label: 'Integration Messages',
+      translationKey: 'NAV.INTEGRATION_MESSAGES',
+      route: '/super-admin/integration-messages',
+    });
+    items.push({
+      icon: 'payments',
+      label: 'Cost / Chargeback',
+      translationKey: 'NAV.COST_CHARGEBACK',
+      route: '/super-admin/cost',
     });
     items.push({
       icon: 'policy',

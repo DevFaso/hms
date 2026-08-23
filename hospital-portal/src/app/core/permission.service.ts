@@ -112,6 +112,7 @@ export class PermissionService {
       'View Prescriptions',
       'Document Nursing Notes',
       'Request Imaging Studies',
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -192,6 +193,7 @@ export class PermissionService {
       'Create Prescriptions',
       'View Prescriptions',
       'Request Imaging Studies',
+      'View Imaging Studies',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -221,7 +223,9 @@ export class PermissionService {
       'Admit Patients',
       'Document Nursing Notes',
       'Access Nurse Station',
-      'Create Prescriptions',
+      // 'Create Prescriptions' deliberately absent: POST /prescriptions
+      // excludes midwives at the controller — granting it here produced a
+      // dead create button (2026-08-23 role audit).
       'View Prescriptions',
       'Create Referrals',
       'Create Treatment Plans',
@@ -268,6 +272,9 @@ export class PermissionService {
       'View Lab',
       'Process Lab Tests',
       'View Patient Records',
+      // Own shifts + leave requests — the /scheduling guard and every
+      // backend endpoint the page calls deliberately admit the role.
+      'View Staff Schedules',
       'View Notifications',
     ],
     // Backend Role enum uses ROLE_LAB_TECHNICIAN — alias to same permissions

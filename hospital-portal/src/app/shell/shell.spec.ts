@@ -257,6 +257,83 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.map((i) => i.route)).toContain('/patients');
   });
 
+  // 2026-08-23 role audit: the same dead-nav defect class existed for ten
+  // more roles. These pin the guard-mirroring role lists added in response.
+
+  it('midwife sees the clinical entries whose guards now admit her', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_MIDWIFE',
+      roles: ['ROLE_MIDWIFE'],
+      wildcardPermission: false,
+      permissions: [
+        'View Prescriptions',
+        'View Imaging Studies',
+        'Create Treatment Plans',
+        'Create Referrals',
+      ],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/prescriptions');
+    expect(routes).toContain('/imaging');
+    expect(routes).toContain('/treatment-plans');
+    expect(routes).toContain('/referrals');
+  });
+
+  it('radiologist no longer sees dead Appointments/Lab/Messages entries', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RADIOLOGIST',
+      roles: ['ROLE_RADIOLOGIST'],
+      wildcardPermission: false,
+      permissions: ['View Appointments', 'View Lab', 'View Imaging Studies', 'View Notifications'],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).not.toContain('/appointments');
+    expect(routes).not.toContain('/lab');
+    expect(routes).not.toContain('/lab-results');
+    expect(routes).not.toContain('/chat');
+    expect(routes).toContain('/imaging');
+  });
+
+  it('pharmacy verifier reaches Dispensing and Stock Routing but not Prescriptions', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PHARMACY_VERIFIER',
+      roles: ['ROLE_PHARMACY_VERIFIER'],
+      wildcardPermission: false,
+      permissions: ['View Prescriptions'],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/pharmacy/dispensing');
+    expect(routes).toContain('/pharmacy/stock-routing');
+    expect(routes).not.toContain('/prescriptions');
+  });
+
+  it('claims reviewer reaches Pharmacy Claims — its entire purpose', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_CLAIMS_REVIEWER',
+      roles: ['ROLE_CLAIMS_REVIEWER'],
+      wildcardPermission: false,
+      permissions: ['View Billing'],
+    });
+
+    const routes = items.map((i) => i.route);
+    expect(routes).toContain('/pharmacy/claims');
+    expect(routes).not.toContain('/billing');
+  });
+
+  it('nurse reaches the eMAR from the sidebar', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_NURSE',
+      roles: ['ROLE_NURSE'],
+      wildcardPermission: false,
+      permissions: [],
+    });
+
+    expect(items.map((i) => i.route)).toContain('/emar');
+  });
+
   it('reaches the duplicate-patient panel as a NURSE with no reception role', () => {
     // The regression the receptionist test above could never catch: the entry
     // used to be pushed inside a receptionist/admin-only block, so its own

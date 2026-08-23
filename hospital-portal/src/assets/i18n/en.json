@@ -1901,10 +1901,17 @@
       "RADIOLOGIST": "Radiologist",
       "BILLING_SPECIALIST": "Billing Specialist",
       "ACCOUNTANT": "Accountant",
-      "STAFF": "Staff"
+      "STAFF": "Staff",
+      "LAB_TECHNICIAN": "Lab Technician",
+      "LAB_MANAGER": "Lab Manager",
+      "PHARMACY_VERIFIER": "Pharmacy Verifier",
+      "CLAIMS_REVIEWER": "Claims Reviewer",
+      "ANESTHESIOLOGIST": "Anesthesiologist",
+      "PHYSIOTHERAPIST": "Physiotherapist"
     },
     "BILLING_SNAPSHOT": "Billing Snapshot",
     "BILLING_OVERDUE": "Overdue invoices",
+    "ALERT_ACK_FAILED": "Could not acknowledge the alert. Please try again.",
     "TILE": {
       "STAFF": "Staff",
       "APPOINTMENTS": "Appointments",
@@ -2918,7 +2925,13 @@
     "REFILLS": "Refill Requests",
     "LAB_OUTBOX": "Instrument Outbox",
     "MICROBIOLOGY": "Microbiology",
-    "REPORTS": "Scheduled Reports"
+    "REPORTS": "Scheduled Reports",
+    "EMAR": "eMAR",
+    "PHARMACY_CLAIMS": "Pharmacy Claims",
+    "PHARMACY_CHECKOUT": "Pharmacy Checkout",
+    "MTM_REVIEW": "MTM Review",
+    "INTEGRATION_MESSAGES": "Integration Messages",
+    "COST_CHARGEBACK": "Cost / Chargeback"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
