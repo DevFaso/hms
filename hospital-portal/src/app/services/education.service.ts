@@ -33,13 +33,7 @@ export type EducationCategory =
   | 'ULTRASOUND_SCANS'
   | 'GENETIC_SCREENING';
 export type EducationResourceType =
-  | 'ARTICLE'
-  | 'VIDEO'
-  | 'INTERACTIVE_MODULE'
-  | 'INFOGRAPHIC'
-  | 'CHECKLIST'
-  | 'FAQ'
-  | 'PODCAST';
+  'ARTICLE' | 'VIDEO' | 'INTERACTIVE_MODULE' | 'INFOGRAPHIC' | 'CHECKLIST' | 'FAQ' | 'PODCAST';
 export type EducationComprehensionStatus =
   | 'NOT_STARTED'
   | 'IN_PROGRESS'

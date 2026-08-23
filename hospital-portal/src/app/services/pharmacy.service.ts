@@ -291,12 +291,7 @@ export interface WorkQueueRefillContext {
 }
 
 export type RefillDecisionStatus =
-  | 'REQUESTED'
-  | 'PAUSED'
-  | 'APPROVED'
-  | 'DENIED'
-  | 'DISPENSED'
-  | 'CANCELLED';
+  'REQUESTED' | 'PAUSED' | 'APPROVED' | 'DENIED' | 'DISPENSED' | 'CANCELLED';
 
 /* ───────────────────────────── Stock-Out Routing ───────────────────────────── */
 

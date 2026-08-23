@@ -4,19 +4,7 @@
  * the two enums in lock-step when adding a code.
  */
 export type OrganizationRegion =
-  | 'BF'
-  | 'CI'
-  | 'SN'
-  | 'GA'
-  | 'CM'
-  | 'BJ'
-  | 'TG'
-  | 'ML'
-  | 'NE'
-  | 'ML_OAPI'
-  | 'EU'
-  | 'US'
-  | 'OTHER';
+  'BF' | 'CI' | 'SN' | 'GA' | 'CM' | 'BJ' | 'TG' | 'ML' | 'NE' | 'ML_OAPI' | 'EU' | 'US' | 'OTHER';
 
 /**
  * Per-organization snapshot returned by the Data Residency console.

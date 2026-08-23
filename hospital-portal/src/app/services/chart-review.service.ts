@@ -10,12 +10,7 @@ import { Observable } from 'rxjs';
  * the Storyboard banner uses.
  */
 export type TimelineSection =
-  | 'ENCOUNTER'
-  | 'NOTE'
-  | 'RESULT'
-  | 'MEDICATION'
-  | 'IMAGING'
-  | 'PROCEDURE';
+  'ENCOUNTER' | 'NOTE' | 'RESULT' | 'MEDICATION' | 'IMAGING' | 'PROCEDURE';
 
 export interface ChartReviewEncounter {
   id: string;

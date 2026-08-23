@@ -3,10 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export type PrenatalVisitType =
-  | 'INITIAL_INTAKE'
-  | 'ROUTINE_CHECK'
-  | 'ULTRASOUND'
-  | 'LATE_PREGNANCY';
+  'INITIAL_INTAKE' | 'ROUTINE_CHECK' | 'ULTRASOUND' | 'LATE_PREGNANCY';
 
 export interface PrenatalScheduleRequest {
   patientId: string;

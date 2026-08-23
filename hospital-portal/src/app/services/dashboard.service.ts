@@ -680,9 +680,9 @@ export class DashboardService {
 
   getRecentPatients(): Observable<import('../services/patient.service').PatientResponse[]> {
     return this.http
-      .get<
-        ApiWrapper<import('../services/patient.service').PatientResponse[]>
-      >('/me/recent-patients')
+      .get<ApiWrapper<import('../services/patient.service').PatientResponse[]>>(
+        '/me/recent-patients',
+      )
       .pipe(
         map((res) => res.data ?? []),
         catchError(() => of([])),

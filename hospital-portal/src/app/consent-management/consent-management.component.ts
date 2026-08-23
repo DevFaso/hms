@@ -15,12 +15,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 
 type ConsentTypeValue =
-  | 'TREATMENT'
-  | 'RESEARCH'
-  | 'BILLING'
-  | 'EMERGENCY'
-  | 'REFERRAL'
-  | 'ALL_PURPOSES';
+  'TREATMENT' | 'RESEARCH' | 'BILLING' | 'EMERGENCY' | 'REFERRAL' | 'ALL_PURPOSES';
 
 const CONSENT_TYPES: ConsentTypeValue[] = [
   'TREATMENT',

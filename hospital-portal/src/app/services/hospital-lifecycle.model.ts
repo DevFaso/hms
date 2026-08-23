@@ -3,11 +3,7 @@
  * `HospitalLifecycleState` enum.
  */
 export type HospitalLifecycleState =
-  | 'ACTIVE'
-  | 'SUSPENDED'
-  | 'ARCHIVED'
-  | 'PURGE_SCHEDULED'
-  | 'PURGED';
+  'ACTIVE' | 'SUSPENDED' | 'ARCHIVED' | 'PURGE_SCHEDULED' | 'PURGED';
 
 /**
  * MVP-c batch — lifecycle snapshot for a hospital. Mirrors the
