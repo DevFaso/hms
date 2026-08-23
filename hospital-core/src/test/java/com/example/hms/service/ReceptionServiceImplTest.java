@@ -16,6 +16,13 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.Staff;
+import com.example.hms.enums.SlotStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.model.scheduling.AppointmentSlot;
+import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
+import com.example.hms.repository.scheduling.AppointmentSlotRepository;
+import com.example.hms.service.scheduling.PatientOutreachNotifier;
+import com.example.hms.service.scheduling.SlotInventoryService;
 import com.example.hms.payload.dto.CheckInRequestDTO;
 import com.example.hms.payload.dto.CheckInResponseDTO;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
@@ -56,6 +63,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -63,9 +71,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -85,6 +95,10 @@ class ReceptionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.UserRepository userRepo;
     @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    @Mock private AppointmentSlotRepository slotRepo;
+    @Mock private SlotInventoryService slotInventoryService;
+    @Mock private PatientOutreachNotifier outreachNotifier;
+    @Mock private org.springframework.context.MessageSource messageSource;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -115,6 +129,9 @@ class ReceptionServiceImplTest {
         hospital = mock(Hospital.class);
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         lenient().when(hospital.getName()).thenReturn("Central Hospital");
+
+        // @Value field — never injected by Mockito, and a null language tag NPEs.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "outreachLocale", "en");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -837,32 +854,100 @@ class ReceptionServiceImplTest {
         }
     }
 
-    // ── offerWaitlistSlot ────────────────────────────────────────────────────
+    // ── waitlist offer lifecycle (P3 #22) ────────────────────────────────────
+
+    private AppointmentSlot offerSlot(LocalDateTime startAt) {
+        AppointmentSlot slot = AppointmentSlot.builder()
+                .hospital(hospital)
+                .slotDate(startAt.toLocalDate())
+                .startAt(startAt)
+                .endAt(startAt.plusMinutes(30))
+                .status(SlotStatus.OPEN)
+                .build();
+        slot.setId(UUID.randomUUID());
+        lenient().when(slotRepo.findById(slot.getId())).thenReturn(Optional.of(slot));
+        return slot;
+    }
+
+    private AppointmentWaitlist waitingEntry(UUID waitlistId) {
+        AppointmentWaitlist entry = mock(AppointmentWaitlist.class);
+        lenient().when(entry.getId()).thenReturn(waitlistId);
+        lenient().when(entry.getHospital()).thenReturn(hospital);
+        lenient().when(entry.getDepartment()).thenReturn(department);
+        lenient().when(entry.getPatient()).thenReturn(patient);
+        lenient().when(entry.getStatus()).thenReturn("WAITING");
+        patient.setHospitalRegistrations(Collections.emptySet());
+        lenient().when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                .thenReturn(Optional.of(entry));
+        lenient().when(waitlistRepo.save(entry)).thenReturn(entry);
+        return entry;
+    }
 
     @Nested
     @DisplayName("offerWaitlistSlot()")
     class OfferWaitlistSlot {
 
         @Test
-        @DisplayName("changes status to OFFERED")
-        void changesStatusToOffered() {
+        @DisplayName("holds the slot, stamps the entry OFFERED and notifies the patient")
+        void offersASlot() {
             UUID waitlistId = UUID.randomUUID();
-            AppointmentWaitlist entry = mock(AppointmentWaitlist.class);
-            when(entry.getId()).thenReturn(waitlistId);
-            when(entry.getHospital()).thenReturn(hospital);
-            when(entry.getDepartment()).thenReturn(department);
-            when(entry.getPatient()).thenReturn(patient);
-            when(entry.getPreferredProvider()).thenReturn(null);
-            when(entry.getStatus()).thenReturn("OFFERED");
-            patient.setHospitalRegistrations(Collections.emptySet());
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(7));
+            when(messageSource.getMessage(eq("sms.waitlist.offer"), any(), any(Locale.class)))
+                    .thenReturn("offer message");
 
-            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
-                    .thenReturn(Optional.of(entry));
-            when(waitlistRepo.save(entry)).thenReturn(entry);
+            WaitlistEntryResponseDTO result =
+                    service.offerWaitlistSlot(waitlistId, hospitalId, slot.getId(), 48);
 
-            WaitlistEntryResponseDTO result = service.offerWaitlistSlot(waitlistId, hospitalId);
+            verify(slotInventoryService).hold(eq(slot.getId()), anyInt());
+            verify(entry).setOfferedSlot(slot);
+            verify(entry).setStatus("OFFERED");
+            verify(entry).setOfferExpiresAt(any(LocalDateTime.class));
+            verify(outreachNotifier).notifyPatient(patient, "offer message");
+            assertThat(result).isNotNull();
+        }
 
-            assertThat(result.getStatus()).isEqualTo("OFFERED");
+        @Test
+        @DisplayName("caps the offer expiry at the slot's start time")
+        void capsExpiryAtSlotStart() {
+            // A 48-hour offer on a slot six hours away must lapse when the slot
+            // starts, or accepting a stale offer could book the past.
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusHours(6));
+
+            service.offerWaitlistSlot(waitlistId, hospitalId, slot.getId(), 48);
+
+            verify(entry).setOfferExpiresAt(slot.getStartAt());
+        }
+
+        @Test
+        @DisplayName("refuses an entry that is not waiting")
+        void refusesNonWaitingEntry() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            when(entry.getStatus()).thenReturn("CLOSED");
+            UUID slotId = UUID.randomUUID();
+
+            assertThatThrownBy(() -> service.offerWaitlistSlot(waitlistId, hospitalId, slotId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("waiting entry");
+            verify(slotInventoryService, never()).hold(any(), anyInt());
+        }
+
+        @Test
+        @DisplayName("a slot from another hospital reads as not found")
+        void otherHospitalSlotIs404() {
+            UUID waitlistId = UUID.randomUUID();
+            waitingEntry(waitlistId);
+            Hospital other = mock(Hospital.class);
+            lenient().when(other.getId()).thenReturn(UUID.randomUUID());
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(7));
+            slot.setHospital(other);
+
+            UUID slotId = slot.getId();
+            assertThatThrownBy(() -> service.offerWaitlistSlot(waitlistId, hospitalId, slotId, null))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
 
         @Test
@@ -870,9 +955,116 @@ class ReceptionServiceImplTest {
         void throwsWhenNotFound() {
             UUID waitlistId = UUID.randomUUID();
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)).thenReturn(Optional.empty());
+            UUID slotId = UUID.randomUUID();
 
-            assertThatThrownBy(() -> service.offerWaitlistSlot(waitlistId, hospitalId))
+            assertThatThrownBy(() -> service.offerWaitlistSlot(waitlistId, hospitalId, slotId, null))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("acceptWaitlistOffer()")
+    class AcceptWaitlistOffer {
+
+        @Test
+        @DisplayName("books the offered slot and closes the entry")
+        void booksAndCloses() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(3));
+            slot.setStatus(SlotStatus.HELD);
+            when(entry.getStatus()).thenReturn("OFFERED");
+            when(entry.getOfferedSlot()).thenReturn(slot);
+            when(entry.getOfferExpiresAt()).thenReturn(LocalDateTime.now().plusHours(12));
+            when(entry.getReason()).thenReturn("Back pain");
+
+            UUID appointmentId = UUID.randomUUID();
+            when(slotInventoryService.book(slot.getId(), patientId, "Back pain"))
+                    .thenReturn(AppointmentSlotDTO.builder().appointmentId(appointmentId).build());
+            Appointment appointment = mock(Appointment.class);
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+            service.acceptWaitlistOffer(waitlistId, hospitalId);
+
+            // The offer-hold is freed first so booking can claim the slot.
+            verify(slotInventoryService).release(slot.getId());
+            verify(slotInventoryService).book(slot.getId(), patientId, "Back pain");
+            verify(entry).setOfferedAppointment(appointment);
+            verify(entry).setStatus("CLOSED");
+        }
+
+        @Test
+        @DisplayName("refuses an expired offer")
+        void refusesExpiredOffer() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(3));
+            when(entry.getStatus()).thenReturn("OFFERED");
+            when(entry.getOfferedSlot()).thenReturn(slot);
+            when(entry.getOfferExpiresAt()).thenReturn(LocalDateTime.now().minusMinutes(5));
+
+            assertThatThrownBy(() -> service.acceptWaitlistOffer(waitlistId, hospitalId))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("expired");
+            verify(slotInventoryService, never()).book(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("refuses an entry with no open offer")
+        void refusesWithoutOffer() {
+            UUID waitlistId = UUID.randomUUID();
+            waitingEntry(waitlistId);
+
+            assertThatThrownBy(() -> service.acceptWaitlistOffer(waitlistId, hospitalId))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("no open offer");
+        }
+    }
+
+    @Nested
+    @DisplayName("declineWaitlistOffer()")
+    class DeclineWaitlistOffer {
+
+        @Test
+        @DisplayName("frees the held slot and returns the entry to WAITING")
+        void freesSlotAndRewaits() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = waitingEntry(waitlistId);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(3));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(10));
+            when(entry.getStatus()).thenReturn("OFFERED");
+            when(entry.getOfferedSlot()).thenReturn(slot);
+
+            service.declineWaitlistOffer(waitlistId, hospitalId);
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+            assertThat(slot.getHeldUntil()).isNull();
+            verify(entry).setStatus("WAITING");
+            verify(entry).setOfferedSlot(null);
+            verify(entry).setOfferExpiresAt(null);
+        }
+    }
+
+    @Nested
+    @DisplayName("reconcileExpiredWaitlistOffers()")
+    class ReconcileExpiredWaitlistOffers {
+
+        @Test
+        @DisplayName("returns lapsed offers to WAITING and frees their slots")
+        void reconcilesLapsedOffers() {
+            AppointmentWaitlist entry = waitingEntry(UUID.randomUUID());
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            when(entry.getOfferedSlot()).thenReturn(slot);
+            when(waitlistRepo.findByStatusAndOfferExpiresAtBefore(eq("OFFERED"), any(LocalDateTime.class)))
+                    .thenReturn(List.of(entry));
+
+            assertThat(service.reconcileExpiredWaitlistOffers()).isEqualTo(1);
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+            verify(entry).setStatus("WAITING");
+            verify(entry).setOfferedSlot(null);
         }
     }
 

@@ -1,0 +1,242 @@
+<div class="recalls-panel">
+  <!-- Toolbar -->
+  <div class="panel-toolbar">
+    <div class="filter-group">
+      @for (opt of statusOptions; track opt) {
+        <button
+          class="filter-btn"
+          [class.active]="statusFilter() === opt"
+          (click)="statusFilter.set(opt); loadRecalls()"
+        >
+          {{ filterLabel(opt) }}
+        </button>
+      }
+    </div>
+    <button class="btn-primary" (click)="openAddForm()">
+      <span class="material-symbols-outlined">notification_add</span>
+      {{ 'RECEPTION.ADD_RECALL' | translate }}
+    </button>
+  </div>
+
+  <!-- List -->
+  @if (loading()) {
+    <div class="loading-row">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      {{ 'COMMON.LOADING' | translate }}
+    </div>
+  } @else if (recalls().length === 0) {
+    <div class="empty-state">{{ 'RECEPTION.NO_RECALLS' | translate }}</div>
+  } @else {
+    <table class="recalls-table">
+      <thead>
+        <tr>
+          <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+          <th>{{ 'RECEPTION.RECALL_DUE' | translate }}</th>
+          <th>{{ 'RECEPTION.RECALL_TYPE' | translate }}</th>
+          <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+          <th>{{ 'RECEPTION.REASON' | translate }}</th>
+          <th>{{ 'RECEPTION.RECALL_SOURCE' | translate }}</th>
+          <th>{{ 'COMMON.STATUS' | translate }}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (recall of recalls(); track recall.id) {
+          <tr [class.overdue-row]="isOverdue(recall)">
+            <td>
+              <button class="patient-link" (click)="patientClicked.emit(recall.patientId)">
+                {{ recall.patientName }}
+              </button>
+              @if (recall.mrn) {
+                <span class="mrn-tag">{{ recall.mrn }}</span>
+              }
+            </td>
+            <td>
+              <span class="due-date" [class.overdue]="isOverdue(recall)">
+                {{ recall.dueDate | date: 'mediumDate' }}
+              </span>
+              @if (isOverdue(recall)) {
+                <span class="overdue-tag">{{ 'RECEPTION.OVERDUE' | translate }}</span>
+              }
+            </td>
+            <td>{{ 'RECEPTION.RECALL_TYPE_' + recall.recallType | translate }}</td>
+            <td>{{ recall.departmentName ?? '—' }}</td>
+            <td class="reason-cell">{{ recall.reason }}</td>
+            <td>{{ 'RECEPTION.RECALL_SOURCE_' + recall.source | translate }}</td>
+            <td>
+              <span [ngClass]="statusClass(recall.status)">{{
+                'RECEPTION.RECALL_STATUS_' + recall.status | translate
+              }}</span>
+              @if (recall.notifiedAt) {
+                <div class="notified-hint">
+                  {{ 'RECEPTION.RECALL_NOTIFIED_ON' | translate }}
+                  {{ recall.notifiedAt | date: 'short' }}
+                </div>
+              }
+            </td>
+            <td class="actions-cell">
+              @if (isOpen(recall)) {
+                <button
+                  class="btn-sm btn-primary"
+                  [disabled]="actingOnId() === recall.id"
+                  (click)="closeRecall(recall)"
+                >
+                  {{ 'COMMON.CLOSE' | translate }}
+                </button>
+                <button
+                  class="btn-sm btn-ghost"
+                  [disabled]="actingOnId() === recall.id"
+                  (click)="cancelRecall(recall)"
+                >
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
+              } @else if (recall.status === 'SCHEDULED') {
+                <button
+                  class="btn-sm btn-primary"
+                  [disabled]="actingOnId() === recall.id"
+                  (click)="closeRecall(recall)"
+                >
+                  {{ 'COMMON.CLOSE' | translate }}
+                </button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+<!-- Create Recall Modal -->
+@if (showAddForm()) {
+  <div
+    class="modal-backdrop"
+    (click)="showAddForm.set(false)"
+    (keydown.enter)="showAddForm.set(false)"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'COMMON.CANCEL' | translate"
+  ></div>
+  <div
+    class="modal-panel"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'RECEPTION.ADD_RECALL' | translate"
+  >
+    <div class="modal-header">
+      <h2>{{ 'RECEPTION.ADD_RECALL' | translate }}</h2>
+      <button class="btn-icon-close" (click)="showAddForm.set(false)" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Patient search -->
+      <div class="form-group">
+        <label class="form-label" for="rc-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
+        <div class="autocomplete-wrap">
+          <input
+            id="rc-patient"
+            class="form-input"
+            type="text"
+            [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
+            [ngModel]="patientQuery()"
+            (ngModelChange)="onPatientQueryChange($event)"
+            autocomplete="off"
+          />
+          @if (patientResults().length > 0) {
+            <ul class="autocomplete-list">
+              @for (p of patientResults(); track p.id) {
+                <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
+                  {{ p.firstName }} {{ p.lastName }}
+                  @if (p.dateOfBirth) {
+                    <span class="dob-hint">({{ p.dateOfBirth | date: 'mediumDate' }})</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <div class="form-row-2">
+        <!-- Due date -->
+        <div class="form-group">
+          <label class="form-label" for="rc-due">{{ 'RECEPTION.RECALL_DUE' | translate }} *</label>
+          <input
+            id="rc-due"
+            class="form-input"
+            type="date"
+            [ngModel]="dueDate()"
+            (ngModelChange)="dueDate.set($event)"
+          />
+        </div>
+        <!-- Type -->
+        <div class="form-group">
+          <label class="form-label" for="rc-type">{{ 'RECEPTION.RECALL_TYPE' | translate }}</label>
+          <select
+            id="rc-type"
+            class="form-select"
+            [ngModel]="recallType()"
+            (ngModelChange)="recallType.set($event)"
+          >
+            @for (t of recallTypes; track t) {
+              <option [value]="t">{{ 'RECEPTION.RECALL_TYPE_' + t | translate }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- Department -->
+      <div class="form-group">
+        <label class="form-label" for="rc-dept">{{ 'STAFF.DEPARTMENT' | translate }}</label>
+        <select
+          id="rc-dept"
+          class="form-select"
+          [ngModel]="selectedDeptId()"
+          (ngModelChange)="selectedDeptId.set($event)"
+        >
+          <option value="">— {{ 'RECEPTION.SELECT_DEPARTMENT' | translate }} —</option>
+          @for (d of departments(); track d.id) {
+            <option [value]="d.id">{{ d.name }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Reason -->
+      <div class="form-group">
+        <label class="form-label" for="rc-reason">{{ 'RECEPTION.REASON' | translate }} *</label>
+        <textarea
+          id="rc-reason"
+          class="form-textarea"
+          rows="2"
+          [placeholder]="'RECEPTION.CLINICAL_REASON' | translate"
+          [ngModel]="reason()"
+          (ngModelChange)="reason.set($event)"
+        ></textarea>
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group">
+        <label class="form-label" for="rc-notes">{{ 'COMMON.NOTES' | translate }}</label>
+        <textarea
+          id="rc-notes"
+          class="form-textarea"
+          rows="2"
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"
+        ></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="showAddForm.set(false)">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button class="btn-primary" [disabled]="saving()" (click)="submitAdd()">
+        @if (saving()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        {{ 'RECEPTION.ADD_RECALL' | translate }}
+      </button>
+    </div>
+  </div>
+}

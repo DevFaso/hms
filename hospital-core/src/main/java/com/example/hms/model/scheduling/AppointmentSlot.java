@@ -111,6 +111,14 @@ public class AppointmentSlot extends BaseEntity {
     @Column(name = "blocked_reason", length = 255)
     private String blockedReason;
 
+    /** Optimistic lock (V128): hold() and book() are check-then-act — two
+     *  concurrent callers both pass isOfferable and the second silently
+     *  wins without this. The GeneralReferral @Version precedent. */
+    @jakarta.persistence.Version
+    @Column(name = "version", nullable = false)
+    @Builder.Default
+    private long version = 0L;
+
     /**
      * Whether this slot can be offered right now.
      *

@@ -51,4 +51,7 @@ public interface AppointmentSlotRepository extends JpaRepository<AppointmentSlot
 
     /** Holds whose window has passed, for the reclaim sweep. */
     List<AppointmentSlot> findByStatusAndHeldUntilBefore(SlotStatus status, LocalDateTime cutoff);
+
+    /** The slot an appointment was booked from, for free-on-cancel (P3 #22). */
+    java.util.Optional<AppointmentSlot> findByAppointment_Id(UUID appointmentId);
 }

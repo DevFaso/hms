@@ -170,6 +170,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
+    private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
 
     // MVP 4 additions
     private final QuestionnaireRepository questionnaireRepository;
@@ -563,6 +564,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     + "Patient cancelled: " + dto.getReason());
         }
         appointmentRepository.save(appointment);
+        // The appointment owns its slot (P3 #22): a patient cancelling from the
+        // portal frees the time for the next patient just like a desk cancel.
+        slotInventoryService.releaseForAppointment(appointment.getId());
         log.info("Patient {} cancelled appointment {}", patientId, appointment.getId());
 
         // ── Send cancellation email to patient ──

@@ -6,6 +6,8 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.enums.SlotStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.CheckInRequestDTO;
@@ -20,6 +22,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.Staff;
+import com.example.hms.model.scheduling.AppointmentSlot;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
 import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
@@ -38,8 +41,14 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.scheduling.AppointmentSlotRepository;
+import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
+import com.example.hms.service.scheduling.PatientOutreachNotifier;
+import com.example.hms.service.scheduling.SlotInventoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -54,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -65,6 +75,11 @@ import java.util.stream.Collectors;
 public class ReceptionServiceImpl implements ReceptionService {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final String WAITLIST_STATUS_WAITING = "WAITING";
+    private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
+    private static final int DEFAULT_OFFER_HOURS = 48;
     private static final String STATUS_ARRIVED = "ARRIVED";
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
@@ -83,6 +98,14 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final AuditEventLogService auditEventLogService;
     private final com.example.hms.repository.UserRepository userRepo;
     private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
+    private final AppointmentSlotRepository slotRepo;
+    private final SlotInventoryService slotInventoryService;
+    private final PatientOutreachNotifier outreachNotifier;
+    private final MessageSource messageSource;
+
+    /** Outreach has no request locale — explicit config, French by default. */
+    @Value("${hms.scheduling.outreach.locale:fr}")
+    private String outreachLocale;
 
     // ── MVP 9: Dashboard Summary ─────────────────────────────────────────────
 
@@ -597,11 +620,140 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     @Transactional
-    public WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId) {
+    public WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId, UUID slotId,
+                                                      Integer expiresInHours) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
-        entry.setStatus("OFFERED");
+        if (!WAITLIST_STATUS_WAITING.equals(entry.getStatus())) {
+            throw new BusinessException("Only a waiting entry can be offered a slot.");
+        }
+        if (slotId == null) {
+            throw new BusinessException("Choose a slot to offer.");
+        }
+        AppointmentSlot slot = slotRepo.findById(slotId)
+                .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Slot not found with ID: " + slotId));
+
+        LocalDateTime now = LocalDateTime.now();
+        int hours = expiresInHours != null && expiresInHours > 0 ? expiresInHours : DEFAULT_OFFER_HOURS;
+        LocalDateTime expiry = now.plusHours(hours);
+        if (slot.getStartAt().isBefore(expiry)) {
+            // An offer must lapse before the slot starts, or accepting a stale
+            // one could book time already in the past.
+            expiry = slot.getStartAt();
+        }
+        long minutes = ChronoUnit.MINUTES.between(now, expiry);
+        if (minutes < 1) {
+            throw new BusinessException("That slot starts too soon to offer.");
+        }
+        // hold() re-validates availability and stamps HELD for the offer window,
+        // so nobody else books the time while the patient decides.
+        slotInventoryService.hold(slotId, (int) minutes);
+
+        entry.setOfferedSlot(slot);
+        entry.setOfferedAt(now);
+        entry.setOfferExpiresAt(expiry);
+        entry.setStatus(WAITLIST_STATUS_OFFERED);
+        entry = waitlistRepo.save(entry);
+
+        notifyOffer(entry, slot, expiry);
+        return toWaitlistResponse(entry, hospitalId);
+    }
+
+    @Override
+    @Transactional
+    public WaitlistEntryResponseDTO acceptWaitlistOffer(UUID waitlistId, UUID hospitalId) {
+        AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+        if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus()) || entry.getOfferedSlot() == null) {
+            throw new BusinessException("There is no open offer on this entry.");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (entry.getOfferExpiresAt() != null && entry.getOfferExpiresAt().isBefore(now)) {
+            throw new BusinessException("The offer has expired. Offer another slot.");
+        }
+        AppointmentSlot slot = entry.getOfferedSlot();
+        if (slot.getStatus() == SlotStatus.HELD) {
+            // Free the offer-hold so booking can claim the slot; the version
+            // column turns any concurrent taker into a friendly refusal.
+            slotInventoryService.release(slot.getId());
+        }
+        AppointmentSlotDTO booked = slotInventoryService.book(
+                slot.getId(), entry.getPatient().getId(), entry.getReason());
+        Appointment appointment = appointmentRepo.findById(booked.getAppointmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+        entry.setOfferedAppointment(appointment);
+        entry.setStatus("CLOSED");
         return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
+    }
+
+    @Override
+    @Transactional
+    public WaitlistEntryResponseDTO declineWaitlistOffer(UUID waitlistId, UUID hospitalId) {
+        AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+        if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
+            throw new BusinessException("There is no open offer on this entry.");
+        }
+        releaseOfferedSlot(entry);
+        entry.setStatus(WAITLIST_STATUS_WAITING);
+        entry.setOfferedSlot(null);
+        entry.setOfferExpiresAt(null);
+        return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
+    }
+
+    @Override
+    @Transactional
+    public int reconcileExpiredWaitlistOffers() {
+        List<AppointmentWaitlist> lapsed = waitlistRepo
+                .findByStatusAndOfferExpiresAtBefore(WAITLIST_STATUS_OFFERED, LocalDateTime.now());
+        for (AppointmentWaitlist entry : lapsed) {
+            releaseOfferedSlot(entry);
+            entry.setStatus(WAITLIST_STATUS_WAITING);
+            entry.setOfferedSlot(null);
+            entry.setOfferExpiresAt(null);
+            waitlistRepo.save(entry);
+        }
+        if (!lapsed.isEmpty()) {
+            log.info("Waitlist offer reconciliation: {} lapsed offer(s) returned to WAITING",
+                    lapsed.size());
+        }
+        return lapsed.size();
+    }
+
+    /**
+     * Undo an offer-hold. Deliberately repo-direct rather than through
+     * SlotInventoryService.release(): the reconciliation sweep runs with no
+     * authentication, so the tenant-scoped path is not available to it.
+     */
+    private void releaseOfferedSlot(AppointmentWaitlist entry) {
+        AppointmentSlot slot = entry.getOfferedSlot();
+        if (slot != null && slot.getStatus() == SlotStatus.HELD) {
+            slot.setHeldUntil(null);
+            slot.setHeldByUserId(null);
+            slot.setStatus(SlotStatus.OPEN);
+            slotRepo.save(slot);
+        }
+    }
+
+    private void notifyOffer(AppointmentWaitlist entry, AppointmentSlot slot, LocalDateTime expiry) {
+        try {
+            String hospitalName = entry.getHospital() != null && entry.getHospital().getName() != null
+                    ? entry.getHospital().getName() : "";
+            Locale locale = Locale.forLanguageTag(outreachLocale);
+            String message = messageSource.getMessage("sms.waitlist.offer",
+                    new Object[]{
+                        slot.getStartAt().toLocalDate().format(DATE_FMT),
+                        slot.getStartAt().toLocalTime().format(TIME_FMT),
+                        hospitalName,
+                        expiry.format(EXPIRY_FMT)
+                    }, locale);
+            outreachNotifier.notifyPatient(entry.getPatient(), message);
+        } catch (RuntimeException ex) {
+            // Outreach is best-effort: the desk can always phone the patient.
+            log.warn("Waitlist offer notification failed for entry {}: {}",
+                    entry.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -832,6 +984,10 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .reason(e.getReason())
                 .status(e.getStatus())
                 .offeredAppointmentId(e.getOfferedAppointment() != null ? e.getOfferedAppointment().getId() : null)
+                .offeredSlotId(e.getOfferedSlot() != null ? e.getOfferedSlot().getId() : null)
+                .offeredSlotStartAt(e.getOfferedSlot() != null ? e.getOfferedSlot().getStartAt() : null)
+                .offeredAt(e.getOfferedAt())
+                .offerExpiresAt(e.getOfferExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .createdBy(e.getCreatedBy())
                 .build();

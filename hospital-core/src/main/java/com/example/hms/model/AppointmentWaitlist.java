@@ -77,11 +77,27 @@ public class AppointmentWaitlist extends BaseEntity {
     @Builder.Default
     private String status = "WAITING";
 
-    /** Appointment created when the receptionist offers a slot. */
+    /** Appointment created when an offer is accepted (first written in V128). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "offered_appointment_id",
         foreignKey = @ForeignKey(name = "fk_waitlist_offered_appt"))
     private Appointment offeredAppointment;
+
+    /* ── The real offer (V128, P3 #22). Until then "offer" only flipped
+       the status string: no slot, no expiry, no notification. The slot is
+       HELD for the offer window; when the offer lapses the reconciliation
+       sweep returns this entry to WAITING (the hold expires on its own). */
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "offered_slot_id",
+        foreignKey = @ForeignKey(name = "fk_waitlist_offered_slot"))
+    private com.example.hms.model.scheduling.AppointmentSlot offeredSlot;
+
+    @Column(name = "offered_at")
+    private java.time.LocalDateTime offeredAt;
+
+    @Column(name = "offer_expires_at")
+    private java.time.LocalDateTime offerExpiresAt;
 
     @Column(name = "created_by", length = 255)
     private String createdBy;
