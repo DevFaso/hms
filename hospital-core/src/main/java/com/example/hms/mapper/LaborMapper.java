@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.model.labor.DeliveryRecord;
 import com.example.hms.model.labor.LaborAlert;
 import com.example.hms.model.labor.LaborEpisode;
@@ -129,6 +130,6 @@ public class LaborMapper {
         if (anchor == null || observationTime == null || observationTime.isBefore(anchor)) {
             return null;
         }
-        return Duration.between(anchor, observationTime).toMinutes() / 60.0;
+        return ElapsedTime.minutesBetween(anchor, observationTime) / 60.0;
     }
 }

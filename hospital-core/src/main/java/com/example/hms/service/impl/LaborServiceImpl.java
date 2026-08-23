@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.DeliveryMode;
 import com.example.hms.enums.LaborAlertSeverity;
 import com.example.hms.enums.LaborAlertType;
@@ -328,7 +329,7 @@ public class LaborServiceImpl implements LaborService {
             || entry.getObservationTime().isBefore(anchor)) {
             return;
         }
-        double hours = Duration.between(anchor, entry.getObservationTime()).toMinutes() / 60.0;
+        double hours = ElapsedTime.minutesBetween(anchor, entry.getObservationTime()) / 60.0;
         double expected = Math.min(10.0, ACTIVE_PHASE_DILATION_CM + hours);
         double lagHours = expected - dilation;
         if (lagHours >= ACTION_LINE_LAG_HOURS) {
