@@ -3,7 +3,8 @@ package com.example.hms.fhir.bulk;
 import ca.uhn.fhir.rest.annotation.Operation;
 import ca.uhn.fhir.rest.annotation.OperationParam;
 import ca.uhn.fhir.rest.server.exceptions.InvalidRequestException;
-import com.example.hms.fhir.bulk.FhirBulkExportService.Scope;
+import com.example.hms.model.platform.FhirBulkExportJob;
+import com.example.hms.model.platform.FhirBulkExportJob.Scope;
 import jakarta.servlet.http.HttpServletResponse;
 import org.hl7.fhir.r4.model.OperationOutcome;
 import org.hl7.fhir.r4.model.Patient;
@@ -44,10 +45,11 @@ import java.util.List;
  * row-21 follow-on once the async runner lands.
  *
  * <p>Flag-off behaviour: every call throws
- * {@code MethodNotAllowedException} from
- * {@link FhirBulkExportService#createExport} so the response is 405 +
- * a FHIR {@code OperationOutcome} (NOTSUPPORTED) — matching the
- * established HMS flag-off contract on the FHIR write paths.
+ * {@code NotImplementedOperationException} from
+ * {@link FhirBulkExportService#createExport} so the response is 501 +
+ * a FHIR {@code OperationOutcome} (NOTSUPPORTED) — the bulk-data
+ * spec's preference, adopted with the async runner (P3 #24) exactly as
+ * the foundation pass documented it would be.
  */
 @Component
 public class FhirBulkExportOperationProvider {
@@ -76,7 +78,7 @@ public class FhirBulkExportOperationProvider {
         @OperationParam(name = "_outputFormat") String outputFormat,
         HttpServletResponse response
     ) {
-        startExport(Scope.SYSTEM, since, type, null, response);
+        startExport(Scope.SYSTEM, since, type, outputFormat, null, response);
     }
 
     /**
@@ -92,20 +94,22 @@ public class FhirBulkExportOperationProvider {
         @OperationParam(name = "_outputFormat") String outputFormat,
         HttpServletResponse response
     ) {
-        startExport(Scope.PATIENT, since, type, null, response);
+        startExport(Scope.PATIENT, since, type, outputFormat, null, response);
     }
 
     private void startExport(
-        Scope scope, String sinceRaw, String typeRaw, String groupId,
+        Scope scope, String sinceRaw, String typeRaw, String outputFormat, String groupId,
         HttpServletResponse response
     ) {
         Instant since = parseInstant(sinceRaw);
         List<String> types = parseTypeList(typeRaw);
-        BulkExportJobState state = service.createExport(scope, since, types, groupId);
+        FhirBulkExportJob job = service.createExport(
+            scope, since, types, outputFormat, groupId,
+            buildRequestUrl(scope, sinceRaw, typeRaw));
 
         response.setStatus(HttpServletResponse.SC_ACCEPTED);
         response.setHeader(CONTENT_LOCATION_HEADER,
-            STATUS_PATH_PREFIX + state.getJobId());
+            STATUS_PATH_PREFIX + job.getId());
 
         // Best-effort minimal Parameters body. The bulk-data spec does
         // not mandate a response body on the kickoff 202 — most
@@ -119,8 +123,8 @@ public class FhirBulkExportOperationProvider {
         try {
             response.setContentType("application/fhir+json");
             String body = "{\"resourceType\":\"Parameters\",\"parameter\":["
-                + "{\"name\":\"jobId\",\"valueString\":\"" + state.getJobId() + "\"},"
-                + "{\"name\":\"pollUrl\",\"valueUri\":\"" + STATUS_PATH_PREFIX + state.getJobId() + "\"}"
+                + "{\"name\":\"jobId\",\"valueString\":\"" + job.getId() + "\"},"
+                + "{\"name\":\"pollUrl\",\"valueUri\":\"" + STATUS_PATH_PREFIX + job.getId() + "\"}"
                 + "]}";
             response.getWriter().write(body);
             response.getWriter().flush();
@@ -128,8 +132,32 @@ public class FhirBulkExportOperationProvider {
             // 202 + Content-Location is already on the wire; body emit
             // failure is a logging-only concern.
             log.warn("Failed to write $export kickoff body for job {}: {}",
-                state.getJobId(), ex.toString());
+                job.getId(), ex.toString());
         }
+    }
+
+    /**
+     * Reconstruct the kickoff URL for the completion manifest's
+     * {@code request} field (the bulk-data spec echoes it back).
+     */
+    private static String buildRequestUrl(Scope scope, String sinceRaw, String typeRaw) {
+        StringBuilder sb = new StringBuilder("/api/fhir");
+        if (scope == Scope.PATIENT) {
+            sb.append("/Patient");
+        }
+        sb.append("/$export");
+        StringBuilder query = new StringBuilder();
+        if (sinceRaw != null && !sinceRaw.isBlank()) {
+            query.append("_since=").append(sinceRaw.trim());
+        }
+        if (typeRaw != null && !typeRaw.isBlank()) {
+            if (query.length() > 0) query.append('&');
+            query.append("_type=").append(typeRaw.trim());
+        }
+        if (query.length() > 0) {
+            sb.append('?').append(query);
+        }
+        return sb.toString();
     }
 
     /**
