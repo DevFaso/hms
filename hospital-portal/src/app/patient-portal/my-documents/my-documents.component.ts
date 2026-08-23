@@ -106,6 +106,33 @@ export class MyDocumentsComponent implements OnInit {
       });
   }
 
+  downloading = signal<string | null>(null);
+
+  /**
+   * Blob download: document bytes stream only through the authenticated
+   * endpoint (the public /uploads mapping is gone), and a bare href
+   * carries no bearer token.
+   */
+  downloadDocument(doc: PatientDocumentResponse): void {
+    if (this.downloading()) return;
+    this.downloading.set(doc.id);
+    this.portalService.downloadDocumentBlob(doc.id).subscribe({
+      next: (blob) => {
+        this.downloading.set(null);
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = doc.displayName || 'document';
+        anchor.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.downloading.set(null);
+        this.toast.error('PORTAL.DOCUMENTS.DOWNLOAD_FAILED');
+      },
+    });
+  }
+
   deleteDocument(docId: string): void {
     if (!confirm(this.translate.instant('PORTAL.DOCUMENTS.DELETE_CONFIRM'))) return;
     this.deleting.set(docId);

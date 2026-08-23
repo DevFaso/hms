@@ -216,6 +216,11 @@ public class LabResultServiceImpl implements LabResultService {
         // result is a real 404 again.
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        // Tenant guard (the getLabResultById idiom, 404-not-403): this was
+        // the one write path with no scope check — a foreign tenant could
+        // acknowledge, and thereby silence, another hospital's critical
+        // result by guessing the UUID.
+        requireResultInActiveHospital(labResult);
         acknowledgeResult(labResult, currentUserId);
     }
 
@@ -227,11 +232,31 @@ public class LabResultServiceImpl implements LabResultService {
             Locale locale) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        // Tenant guard: worse than acknowledge — the response DTO carries
+        // patient name + value, so this was a cross-tenant PHI read as
+        // well as a write, and a matching read-back removes the row from
+        // the escalation sweep permanently.
+        requireResultInActiveHospital(labResult);
 
         UUID actorId = authService.getCurrentUserId();
         LabResult updated = criticalValueNotificationService.recordReadBack(
             labResult, request.getRepeatedValue(), actorId, resolveActorDisplay(actorId));
         return labResultMapper.toResponseDTO(updated);
+    }
+
+    /**
+     * The shared 404-not-403 tenancy comparison used by every other
+     * single-row path in this class (get/update/delete/compare). LabResult
+     * has no hospital column of its own — scope flows through
+     * labOrder.hospital. Null active scope = super-admin, unscoped.
+     */
+    private void requireResultInActiveHospital(LabResult labResult) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && labResult.getLabOrder() != null
+                && labResult.getLabOrder().getHospital() != null
+                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
     }
 
     /**

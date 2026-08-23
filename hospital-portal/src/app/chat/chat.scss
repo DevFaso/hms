@@ -655,6 +655,22 @@
     width: 240px;
     max-width: 100%;
   }
+
+  .msg-attachment-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(0 0 0 / 0.06);
+    font-size: 0.8rem;
+    color: inherit;
+    opacity: 0.75;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+    }
+  }
 }
 
 .msg-pending-attachments {

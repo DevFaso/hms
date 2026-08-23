@@ -1301,7 +1301,8 @@
     "VOICE_MEMO": "voice memo",
     "VOICE_MEMO_EMPTY": "Voice memo was empty — please try again.",
     "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
-    "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo."
+    "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo.",
+    "LOADING_ATTACHMENT": "Loading attachment…"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -4558,7 +4559,8 @@
       "TYPE_IMMUNIZATION_RECORD": "Immunization Record",
       "TYPE_OTHER": "Other",
       "UPLOADED_BY": "Uploaded by",
-      "DOWNLOAD": "View / Download"
+      "DOWNLOAD": "View / Download",
+      "DOWNLOAD_FAILED": "Failed to download the document"
     },
     "NOTIFICATIONS": {
       "TITLE": "My Notifications",

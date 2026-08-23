@@ -265,4 +265,49 @@ class PatientDocumentServiceImplTest {
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
+
+    // ── downloadDocument (authenticated streaming — the /uploads fix) ────────
+
+    @Nested
+    @DisplayName("downloadDocument()")
+    class DownloadDocument {
+
+        private final UUID docId = UUID.randomUUID();
+
+        @Test
+        @DisplayName("streams the patient's own document with its stored headers")
+        void streamsOwnDocument() {
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            PatientUploadedDocument doc = PatientUploadedDocument.builder()
+                    .patient(patient)
+                    .filePath("/uploads/patient-documents/x.pdf")
+                    .mimeType("application/pdf")
+                    .displayName("lab-report.pdf")
+                    .build();
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            java.nio.file.Path onDisk = java.nio.file.Path.of("x.pdf");
+            when(fileUploadService.resolveStoredFile("/uploads/patient-documents/x.pdf", "patient-documents"))
+                    .thenReturn(onDisk);
+
+            PatientDocumentService.DocumentPayload payload = service.downloadDocument(auth, docId);
+
+            assertThat(payload.path()).isEqualTo(onDisk);
+            assertThat(payload.contentType()).isEqualTo("application/pdf");
+            assertThat(payload.displayName()).isEqualTo("lab-report.pdf");
+        }
+
+        @Test
+        @DisplayName("another patient's document reads as not-found")
+        void foreignDocumentIsNotFound() {
+            // The ownership filter is in the query itself: a document id
+            // belonging to a different patient simply never comes back.
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.downloadDocument(auth, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
 }

@@ -11,6 +11,7 @@ import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.param.TokenOrListParam;
 import ca.uhn.fhir.rest.param.TokenParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
+import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import ca.uhn.fhir.rest.server.exceptions.UnprocessableEntityException;
@@ -19,6 +20,7 @@ import com.example.hms.fhir.write.ObservationFhirWriteService;
 import com.example.hms.model.LabResult;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.security.context.HospitalContextHolder;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.OperationOutcome;
@@ -74,11 +76,19 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
         if (id == null || id.getIdPart() == null) {
             throw new ResourceNotFoundException(id);
         }
+        // Same tenant contract as the write path and $everything: an active
+        // hospital scope is required, and a row belonging to another
+        // hospital collapses to not-found — cross-tenant rejection stays
+        // invisible. The previous bare findById here was a cross-tenant
+        // PHI read for anyone holding a row UUID.
+        UUID hospitalId = requireHospitalScope();
         String idPart = id.getIdPart();
         if (idPart.startsWith("labresult-")) {
             UUID uuid = FhirIds.tryParse(idPart.substring("labresult-".length()));
             if (uuid == null) throw new ResourceNotFoundException(id);
             return labResultRepository.findById(uuid)
+                .filter(r -> r.getLabOrder() != null && r.getLabOrder().getHospital() != null
+                    && hospitalId.equals(r.getLabOrder().getHospital().getId()))
                 .map(mapper::toFhir)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }
@@ -95,6 +105,8 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
             if (uuid == null) throw new ResourceNotFoundException(id);
             String component = idPart.substring(uuidEnd + 1);
             return vitalsRepository.findById(uuid)
+                .filter(v -> v.getHospital() != null
+                    && hospitalId.equals(v.getHospital().getId()))
                 .map(mapper::toFhir)
                 .flatMap(list -> list.stream()
                     .filter(o -> o.getId() != null && o.getId().endsWith("-" + component))
@@ -113,23 +125,48 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
         UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return List.of();
 
+        // Hospital-scoped queries (the $everything contract): the previous
+        // patient-only queries let any authenticated caller pull ANY
+        // patient's vitals + labs by guessing the patient UUID.
+        UUID hospitalId = requireHospitalScope();
         boolean wantsVitals = wantsCategory(category, "vital-signs", true);
         boolean wantsLabs = wantsCategory(category, "laboratory", true);
 
         List<Observation> out = new ArrayList<>();
         if (wantsVitals) {
-            vitalsRepository.findByPatient_IdOrderByRecordedAtDesc(patientId, PageRequest.of(0, MAX_VITALS_PER_PATIENT))
+            vitalsRepository.findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
+                    patientId, hospitalId, PageRequest.of(0, MAX_VITALS_PER_PATIENT))
                 .forEach(v -> out.addAll(mapper.toFhir(v)));
         }
         if (wantsLabs) {
-            labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-                .limit(MAX_LAB_RESULTS_PER_PATIENT)
+            labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                    patientId, hospitalId, PageRequest.of(0, MAX_LAB_RESULTS_PER_PATIENT))
                 .forEach(r -> {
                     Observation mapped = mapper.toFhir(r);
                     if (mapped != null) out.add(mapped);
                 });
         }
         return out;
+    }
+
+    /**
+     * The read-side tenant anchor, mirroring ObservationFhirWriteService
+     * and Patient/{id}/$everything: no active hospital scope means no
+     * answer — a super-admin must pin X-Hospital-Id, exactly as on the
+     * write path.
+     */
+    private static UUID requireHospitalScope() {
+        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
+        if (hospitalId == null) {
+            OperationOutcome outcome = new OperationOutcome();
+            outcome.addIssue()
+                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
+                .setCode(OperationOutcome.IssueType.FORBIDDEN)
+                .setDiagnostics("FHIR Observation reads require an active hospital scope; "
+                    + "supply X-Hospital-Id or authenticate as a hospital-scoped user.");
+            throw new ForbiddenOperationException("An active hospital scope is required.", outcome);
+        }
+        return hospitalId;
     }
 
     private static boolean wantsCategory(TokenOrListParam category, String code, boolean defaultIfMissing) {

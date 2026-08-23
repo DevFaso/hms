@@ -87,10 +87,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Override
     @Transactional(readOnly = true)
     public PatientDocumentResponseDTO getDocument(Authentication auth, UUID documentId) {
-        UUID patientId = resolvePatientId(auth);
-        PatientUploadedDocument doc = documentRepository
-                .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+        PatientUploadedDocument doc = requireOwnDocument(resolvePatientId(auth), documentId);
         return documentMapper.toDto(doc);
     }
 
@@ -98,15 +95,37 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Transactional
     public void deleteDocument(Authentication auth, UUID documentId) {
         UUID patientId = resolvePatientId(auth);
-        PatientUploadedDocument doc = documentRepository
-                .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
-                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+        PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         doc.setDeletedAt(LocalDateTime.now());
         documentRepository.save(doc);
         log.info("Patient {} soft-deleted document {}", patientId, documentId);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public DocumentPayload downloadDocument(Authentication auth, UUID documentId) {
+        PatientUploadedDocument doc = requireOwnDocument(resolvePatientId(auth), documentId);
+        // filePath is the server-assigned storage key from upload time —
+        // never client input — and resolveStoredFile pins it inside the
+        // patient-documents subdirectory.
+        java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
+        String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
+        String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
+        return new DocumentPayload(path, contentType, displayName);
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
+
+    /**
+     * Ownership-scoped lookup shared by get/delete/download: only a
+     * live (non-deleted) document belonging to the calling patient
+     * resolves; anything else is a 404.
+     */
+    private PatientUploadedDocument requireOwnDocument(UUID patientId, UUID documentId) {
+        return documentRepository
+                .findByIdAndPatient_IdAndDeletedAtIsNull(documentId, patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document not found: " + documentId));
+    }
 
     private UUID resolveUserId(Authentication auth) {
         return authUtils.resolveUserId(auth)

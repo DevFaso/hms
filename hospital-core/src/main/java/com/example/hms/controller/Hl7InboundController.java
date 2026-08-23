@@ -48,8 +48,14 @@ public class Hl7InboundController {
 
     /**
      * POST /lab/hl7/inbound
-     * Accepts a raw HL7v2 message body (Content-Type: text/plain or text/hl7-v2).
-     * Parses the first OBX segment and creates a {@code LabResult} record.
+     * Accepts a raw HL7v2 message body (Content-Type: text/plain or text/hl7-v2)
+     * and creates a {@code LabResult} record from the FIRST observation.
+     *
+     * <p>Single-result by design: this REST adapter returns one DTO and takes
+     * its order linkage from headers, so it deliberately keeps first-OBX
+     * semantics even though the parser now returns every OBX. Multi-OBX
+     * fan-out lives on the MLLP path ({@code MllpInboundLabService}), which
+     * persists one row per observation.
      *
      * <p>The caller must supply {@code X-Lab-Order-Id} and {@code X-Assignment-Id}
      * headers because HL7v2 PIDs in this environment are UUIDs, not MRNs, and
@@ -69,11 +75,12 @@ public class Hl7InboundController {
         @RequestHeader("X-Assignment-Id")   UUID assignmentId,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        ParsedObservation obs = hl7v2MessageBuilder.parseOruR01(hl7Message);
-        if (obs == null) {
+        java.util.List<ParsedObservation> observations = hl7v2MessageBuilder.parseOruR01(hl7Message);
+        if (observations == null || observations.isEmpty()) {
             throw new com.example.hms.exception.BusinessException(
                 "Unable to parse HL7v2 message. Ensure the message is a valid ORU^R01.");
         }
+        ParsedObservation obs = observations.get(0);
 
         log.info("Inbound HL7v2 ORU^R01: testCode={}, value={}, unit={}, flag={}",
             obs.testCode(), obs.resultValue(), obs.resultUnit(), obs.abnormalFlag());

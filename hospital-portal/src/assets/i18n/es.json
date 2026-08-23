@@ -1301,7 +1301,8 @@
     "VOICE_MEMO": "nota de voz",
     "VOICE_MEMO_EMPTY": "La nota de voz estaba vacía — inténtelo de nuevo.",
     "VOICE_MEMO_NOT_SUPPORTED": "Este navegador no admite la grabación de notas de voz.",
-    "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz."
+    "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz.",
+    "LOADING_ATTACHMENT": "Cargando el adjunto…"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -4558,7 +4559,8 @@
       "TYPE_IMMUNIZATION_RECORD": "Registro de vacunas",
       "TYPE_OTHER": "Otro",
       "UPLOADED_BY": "Subido por",
-      "DOWNLOAD": "Ver / Descargar"
+      "DOWNLOAD": "Ver / Descargar",
+      "DOWNLOAD_FAILED": "Error al descargar el documento"
     },
     "NOTIFICATIONS": {
       "TITLE": "Mis Notificaciones",
