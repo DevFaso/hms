@@ -39,7 +39,10 @@ class ChatAttachmentMapperTest {
         assertEquals(id, dto.getId());
         assertEquals(ChatAttachmentKind.PHOTO, dto.getKind());
         assertEquals("/uploads/chat-attachments/x.jpg", dto.getStorageKey());
-        assertEquals("https://hms/uploads/chat-attachments/x.jpg", dto.getPublicUrl());
+        // Derived, never the stored public_url — historical rows carry
+        // absolute /uploads URLs from the permitAll era; clients fetch
+        // through the authenticated, participant-checked endpoint.
+        assertEquals("/chat/attachments/" + id + "/download", dto.getPublicUrl());
         assertEquals("x.jpg", dto.getDisplayName());
         assertEquals("image/jpeg", dto.getContentType());
         assertEquals(2048L, dto.getSizeBytes());

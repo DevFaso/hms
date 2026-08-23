@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -32,8 +33,8 @@ import static org.mockito.Mockito.when;
  * <p>Each test feeds a realistic vendor sample message through the full
  * {@link Hl7MessageDispatcher} pipeline (header parse → allowlist →
  * {@link Hl7v2MessageBuilder#parseOruR01} → {@link MllpInboundLabService})
- * and asserts both the dispatcher-emitted ACK and the {@code ParsedObservation}
- * the inbound service was handed.
+ * and asserts both the dispatcher-emitted ACK and the parsed observation
+ * list the inbound service was handed — every OBX, in transmission order.
  *
  * <p>The sample messages below were transcribed from manufacturer
  * integration guides:
@@ -91,20 +92,24 @@ class OruR01VendorSampleIngestionTest {
 
         assertThat(ack).contains("MSA|AA|MINDRAY-2026-00417");
 
-        ArgumentCaptor<Hl7v2MessageBuilder.ParsedObservation> obsCap =
-            ArgumentCaptor.forClass(Hl7v2MessageBuilder.ParsedObservation.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Hl7v2MessageBuilder.ParsedObservation>> obsCap =
+            ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<String> ctrlIdCap = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> rawBodyCap = ArgumentCaptor.forClass(String.class);
         verify(inboundLab).processOruR01(obsCap.capture(), eq(hospital),
             eq("MINDRAY^BS-240^L"), eq("LAB-A^FACILITY-1^L"),
             ctrlIdCap.capture(), rawBodyCap.capture());
 
-        Hl7v2MessageBuilder.ParsedObservation observation = obsCap.getValue();
+        assertThat(obsCap.getValue()).hasSize(1);
+        Hl7v2MessageBuilder.ParsedObservation observation = obsCap.getValue().get(0);
         assertThat(observation.placerOrderNumber()).isEqualTo("ACC-2026-00417");
         assertThat(observation.fillerOrderNumber()).isEqualTo("24f3a");
+        assertThat(observation.setId()).isEqualTo("1");
         assertThat(observation.testCode()).isEqualTo("15074-8");
         assertThat(observation.resultValue()).isEqualTo("5.7");
         assertThat(observation.resultUnit()).isEqualTo("mmol/L");
+        assertThat(observation.referenceRange()).isEqualTo("3.9-5.6");
         assertThat(observation.abnormalFlag()).isEqualTo("H");
         assertThat(ctrlIdCap.getValue()).isEqualTo("MINDRAY-2026-00417");
         assertThat(rawBodyCap.getValue()).startsWith("MSH|^~\\&|MINDRAY^BS-240^L|");
@@ -140,23 +145,32 @@ class OruR01VendorSampleIngestionTest {
 
         assertThat(ack).contains("MSA|AA|SXN-0000891234");
 
-        ArgumentCaptor<Hl7v2MessageBuilder.ParsedObservation> obsCap =
-            ArgumentCaptor.forClass(Hl7v2MessageBuilder.ParsedObservation.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Hl7v2MessageBuilder.ParsedObservation>> obsCap =
+            ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<String> ctrlIdCap = ArgumentCaptor.forClass(String.class);
         verify(inboundLab).processOruR01(obsCap.capture(), eq(hospital),
             eq("SYSMEX^XN-1000"), eq("LAB-A"),
             ctrlIdCap.capture(), anyString());
 
-        // The current parser shape extracts the first OBX; multi-OBX
-        // panels (CBC has 3) will need follow-on work to persist all
-        // analytes. We assert the first-OBX-wins contract here so the
-        // moment we extend parseAllObx() the test breaks loudly.
-        Hl7v2MessageBuilder.ParsedObservation observation = obsCap.getValue();
-        assertThat(observation.placerOrderNumber()).isEqualTo("ACC-2026-00499");
-        assertThat(observation.testCode()).isEqualTo("HGB");
-        assertThat(observation.resultValue()).isEqualTo("6.2");
-        assertThat(observation.resultUnit()).isEqualTo("g/dL");
-        assertThat(observation.abnormalFlag()).isEqualTo("LL");
+        // Multi-OBX contract (V131): ALL three CBC analytes reach the
+        // service — the critically-low haemoglobin does not stand alone,
+        // and the old first-OBX-only truncation would now fail this test.
+        List<Hl7v2MessageBuilder.ParsedObservation> observations = obsCap.getValue();
+        assertThat(observations).hasSize(3);
+        assertThat(observations).extracting(Hl7v2MessageBuilder.ParsedObservation::testCode)
+            .containsExactly("HGB", "WBC", "PLT");
+        assertThat(observations).extracting(Hl7v2MessageBuilder.ParsedObservation::abnormalFlag)
+            .containsExactly("LL", "N", "N");
+        assertThat(observations).extracting(Hl7v2MessageBuilder.ParsedObservation::setId)
+            .containsExactly("1", "2", "3");
+        assertThat(observations).extracting(Hl7v2MessageBuilder.ParsedObservation::placerOrderNumber)
+            .containsOnly("ACC-2026-00499");
+
+        Hl7v2MessageBuilder.ParsedObservation haemoglobin = observations.get(0);
+        assertThat(haemoglobin.resultValue()).isEqualTo("6.2");
+        assertThat(haemoglobin.resultUnit()).isEqualTo("g/dL");
+        assertThat(haemoglobin.referenceRange()).isEqualTo("13.0-17.0");
         assertThat(ctrlIdCap.getValue()).isEqualTo("SXN-0000891234");
     }
 

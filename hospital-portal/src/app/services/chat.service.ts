@@ -66,6 +66,19 @@ export class ChatService {
   }
 
   /**
+   * Fetch an attachment's bytes through the authenticated,
+   * participant-checked endpoint. Attachment files have no public static
+   * mapping (the permitAll /uploads/** hole was closed), and a bare
+   * <img src>/<audio src> carries no bearer token — render via
+   * URL.createObjectURL on the returned blob instead.
+   */
+  getAttachmentBlob(attachmentId: string): Observable<Blob> {
+    return this.http.get(`/chat/attachments/${attachmentId}/download`, {
+      responseType: 'blob',
+    });
+  }
+
+  /**
    * Upload a single chat attachment (telehealth low-bandwidth).
    * Returns the storage descriptor; the caller links it on the next sendMessage().
    */

@@ -10,6 +10,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
 import com.example.hms.payload.dto.LabResultTrendPointDTO;
@@ -390,5 +391,54 @@ class LabResultServiceImplWorkflowTest {
         labResult.setResultDate(LocalDateTime.now().minusDays(1));
         labResult.setNotes("Initial pending result");
         return labResult;
+    }
+
+    // ── cross-tenant guards on acknowledge + read-back ──────────────────
+    // These two were the ONLY single-row paths in this class without the
+    // 404-not-403 scope comparison: a foreign tenant could acknowledge —
+    // and thereby silence — another hospital's critical result by UUID.
+
+    @Test
+    void acknowledgeLabResultFromAnotherHospitalReadsAsNotFound() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        // Caller's active scope is a DIFFERENT hospital than the result's.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
+        assertThat(labResult.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    void acknowledgeLabResultPassesForTheOwningHospital() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        labResultService.acknowledgeLabResult(labResultId, Locale.US);
+
+        assertThat(labResult.isAcknowledged()).isTrue();
+    }
+
+    @Test
+    void criticalReadBackFromAnotherHospitalReadsAsNotFound() {
+        // Worse than acknowledge: the response DTO carries patient name +
+        // value, so the old unscoped load was a cross-tenant PHI read too.
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        CriticalValueReadBackRequestDTO request = new CriticalValueReadBackRequestDTO();
+        request.setRepeatedValue("7.2");
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.recordCriticalReadBack(labResultId, request, Locale.US));
     }
 }

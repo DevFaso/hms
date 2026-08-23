@@ -170,19 +170,24 @@ public class InstrumentOutboxController {
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Ingest Inbound HL7v2 Message",
                description = "Accepts a raw HL7v2 ORU^R01 / OUL message from an analyzer interface engine. "
-                   + "Parses the first OBX segment and returns a structured JSON representation for downstream processing.")
+                   + "Parses the message and returns the FIRST observation as structured JSON "
+                   + "(response shape kept single for API compatibility; the MLLP path persists every OBX).")
     @ApiResponse(responseCode = "200", description = "Message parsed successfully")
     @ApiResponse(responseCode = "422", description = "Message could not be parsed")
     public ResponseEntity<ApiResponseWrapper<ParsedObservationView>> ingestHl7Message(
         @RequestBody String hl7Message,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        Hl7v2MessageBuilder.ParsedObservation parsed = hl7v2MessageBuilder.parseOruR01(hl7Message);
-        if (parsed == null) {
+        // Response shape is a single observation for API compatibility;
+        // the first OBX is returned. The MLLP ingestion path handles
+        // multi-OBX fan-out.
+        java.util.List<Hl7v2MessageBuilder.ParsedObservation> parsed =
+            hl7v2MessageBuilder.parseOruR01(hl7Message);
+        if (parsed == null || parsed.isEmpty()) {
             throw new com.example.hms.exception.BusinessException(
                 "Unable to parse the supplied HL7v2 message. Ensure it contains a valid MSH and OBX segment.");
         }
-        return ResponseEntity.ok(ApiResponseWrapper.success(new ParsedObservationView(parsed)));
+        return ResponseEntity.ok(ApiResponseWrapper.success(new ParsedObservationView(parsed.get(0))));
     }
 
     /** JSON-serialisable view of a parsed HL7v2 observation (wraps the record). */

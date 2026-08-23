@@ -12,7 +12,11 @@ public class ChatAttachmentMapper {
         return ChatAttachmentDTO.builder()
             .id(attachment.getId())
             .storageKey(attachment.getStorageKey())
-            .publicUrl(attachment.getPublicUrl())
+            // Derived, never the stored public_url: historical rows carry
+            // absolute /uploads URLs from when the tree was served
+            // permitAll. Clients fetch through the authenticated,
+            // participant-checked download endpoint instead.
+            .publicUrl("/chat/attachments/" + attachment.getId() + "/download")
             .displayName(attachment.getDisplayName())
             .contentType(attachment.getContentType())
             .sizeBytes(attachment.getSizeBytes())

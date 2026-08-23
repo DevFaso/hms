@@ -134,15 +134,17 @@
             <p class="doc-notes">{{ doc.notes }}</p>
           }
           <div class="doc-actions">
-            <a
-              [href]="doc.fileUrl"
-              target="_blank"
-              rel="noopener noreferrer"
+            <!-- Blob download: document bytes stream through the authenticated
+                 endpoint (a bare href carries no bearer token). -->
+            <button
+              type="button"
               class="btn-secondary-sm"
+              (click)="downloadDocument(doc)"
+              [disabled]="downloading() === doc.id"
             >
               <span class="material-symbols-outlined">download</span>
               {{ 'PORTAL.DOCUMENTS.DOWNLOAD' | translate }}
-            </a>
+            </button>
             <button
               class="btn-danger-sm"
               (click)="deleteDocument(doc.id)"

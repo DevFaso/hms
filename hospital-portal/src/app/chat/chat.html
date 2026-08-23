@@ -172,28 +172,34 @@
                 }
                 @if (msg.attachments && msg.attachments.length > 0) {
                   <div class="msg-attachments">
+                    <!-- Bytes come through the authenticated download endpoint
+                         as blobs (a bare src carries no bearer token). -->
                     @for (att of msg.attachments; track att.id || att.storageKey) {
-                      @if (att.kind === 'PHOTO') {
-                        <a
-                          class="msg-photo"
-                          [href]="att.publicUrl"
-                          target="_blank"
-                          rel="noopener"
-                          [title]="att.displayName || 'attachment'"
-                        >
-                          <img
-                            [src]="att.publicUrl"
-                            [alt]="att.displayName || 'chat attachment'"
-                            [title]="att.displayName || 'chat attachment'"
-                          />
-                        </a>
-                      } @else if (att.kind === 'AUDIO') {
-                        <audio
-                          class="msg-audio"
-                          controls
-                          preload="none"
-                          [src]="att.publicUrl"
-                        ></audio>
+                      @if (attachmentUrl(att); as blobUrl) {
+                        @if (att.kind === 'PHOTO') {
+                          <a
+                            class="msg-photo"
+                            [href]="blobUrl"
+                            target="_blank"
+                            rel="noopener"
+                            [title]="att.displayName || 'attachment'"
+                          >
+                            <img
+                              [src]="blobUrl"
+                              [alt]="att.displayName || 'chat attachment'"
+                              [title]="att.displayName || 'chat attachment'"
+                            />
+                          </a>
+                        } @else if (att.kind === 'AUDIO') {
+                          <audio class="msg-audio" controls preload="none" [src]="blobUrl"></audio>
+                        }
+                      } @else {
+                        <div class="msg-attachment-loading">
+                          <span class="material-symbols-outlined">
+                            {{ att.kind === 'PHOTO' ? 'image' : 'mic' }}
+                          </span>
+                          {{ att.displayName || ('CHAT.LOADING_ATTACHMENT' | translate) }}
+                        </div>
                       }
                     }
                   </div>

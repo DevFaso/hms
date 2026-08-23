@@ -615,6 +615,21 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 
+    @Operation(summary = "Download an uploaded document",
+            description = "Authenticated, ownership-checked streaming — document bytes have "
+                + "no public static mapping.")
+    @GetMapping("/documents/{documentId}/download")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadDocument(
+            Authentication auth, @PathVariable UUID documentId) {
+        PatientDocumentService.DocumentPayload payload = documentService.downloadDocument(auth, documentId);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(payload.contentType()))
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
+                .body(new org.springframework.core.io.FileSystemResource(payload.path()));
+    }
+
     // ── Notifications (Phase 3) ───────────────────────────────────────────
 
     @Operation(summary = "List my notifications",

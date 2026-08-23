@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -86,74 +88,77 @@ public class Hl7v2MessageBuilder {
     // ── Inbound ORU^R01 parser ────────────────────────────────────────────────
 
     /**
-     * Parsed representation of an inbound ORU^R01 observation result.
+     * Parsed representation of one inbound ORU^R01 observation (one OBX
+     * segment).
      *
      * <p>{@code placerOrderNumber} (OBR-2) is the id we assigned when the
      * order was sent — that is the field we use to resolve the inbound
      * result back to a {@link LabOrder}. {@code fillerOrderNumber} (OBR-3)
      * is the analyzer's own id and is captured for traceability only.
+     * Both come from the OBR group the OBX belongs to, so a multi-OBR
+     * message resolves each observation against its own order.
+     *
+     * <p>{@code setId} (OBX-1) discriminates sibling observations of one
+     * message — every OBX shares the MSH-level dedup triple, so this is
+     * what keeps them distinct rows under the V131 unique index.
      */
     public record ParsedObservation(
         String patientId,
         String placerOrderNumber,
         String fillerOrderNumber,
+        String setId,
         String testCode,
         String resultValue,
         String resultUnit,
+        String referenceRange,
         String abnormalFlag,
         LocalDateTime resultDate
     ) {}
 
     /**
-     * Parses the first OBX segment from an inbound HL7v2 message and
-     * captures the OBR placer/filler order numbers so the result can be
-     * routed back to a known {@link LabOrder}.
+     * Parses EVERY OBX segment from an inbound HL7v2 ORU^R01, grouping
+     * each under the most recent OBR so multi-order messages resolve
+     * each observation against its own placer/filler numbers.
      *
-     * <p>Returns {@code null} if the message cannot be parsed.
+     * <p>Returns {@code null} if the message cannot be parsed at all;
+     * an empty list if it parsed but contains no OBX segments (the
+     * caller decides whether that is an error).
      */
-    public ParsedObservation parseOruR01(String hl7Message) {
+    public List<ParsedObservation> parseOruR01(String hl7Message) {
         if (hl7Message == null || hl7Message.isBlank()) return null;
         try {
             String[] segments = hl7Message.split("[\r\n]+");
             String patientId = extractPid(segments);
-            String[] obrIds = extractObrOrderNumbers(segments);
-            return parseFirstObx(segments, patientId, obrIds[0], obrIds[1]);
+            List<ParsedObservation> observations = new ArrayList<>();
+            String placer = "";
+            String filler = "";
+            for (String seg : segments) {
+                if (seg.startsWith("OBR")) {
+                    String[] f = seg.split("\\|", -1);
+                    placer = f.length > 2 ? firstComponent(f[2]) : "";
+                    filler = f.length > 3 ? firstComponent(f[3]) : "";
+                } else if (seg.startsWith("OBX")) {
+                    observations.add(parseObxSegment(seg, patientId, placer, filler));
+                }
+            }
+            return observations;
         } catch (Exception ignored) {
             return null;
         }
     }
 
-    private ParsedObservation parseFirstObx(String[] segments, String patientId,
-                                            String placer, String filler) {
-        for (String seg : segments) {
-            if (seg.startsWith("OBX")) {
-                return parseObxSegment(seg, patientId, placer, filler);
-            }
-        }
-        return null;
-    }
-
     private ParsedObservation parseObxSegment(String seg, String patientId,
                                               String placer, String filler) {
         String[] f = seg.split("\\|", -1);
+        String setId    = f.length > 1  ? f[1].trim()          : "";
         String testCode = f.length > 3  ? firstComponent(f[3]) : "";
         String value    = f.length > 5  ? f[5]                 : "";
         String unit     = f.length > 6  ? f[6]                 : "";
+        String refRange = f.length > 7  ? f[7]                 : "";
         String abnFlag  = f.length > 8  ? f[8]                 : "N";
         String datePart = f.length > 14 ? f[14]                : "";
-        return new ParsedObservation(patientId, placer, filler, testCode, value, unit, abnFlag, parseHl7DateTime(datePart));
-    }
-
-    private String[] extractObrOrderNumbers(String[] segments) {
-        for (String seg : segments) {
-            if (seg.startsWith("OBR")) {
-                String[] f = seg.split("\\|", -1);
-                String placer = f.length > 2 ? firstComponent(f[2]) : "";
-                String filler = f.length > 3 ? firstComponent(f[3]) : "";
-                return new String[] { placer, filler };
-            }
-        }
-        return new String[] { "", "" };
+        return new ParsedObservation(patientId, placer, filler, setId, testCode,
+            value, unit, refRange, abnFlag, parseHl7DateTime(datePart));
     }
 
     // ── Inbound ADT parser ────────────────────────────────────────────────────
