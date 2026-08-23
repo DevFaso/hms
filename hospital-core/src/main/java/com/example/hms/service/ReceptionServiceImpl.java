@@ -55,8 +55,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -642,7 +644,11 @@ public class ReceptionServiceImpl implements ReceptionService {
             // one could book time already in the past.
             expiry = slot.getStartAt();
         }
-        long minutes = ChronoUnit.MINUTES.between(now, expiry);
+        // Zone-aware duration (Sonar S8700): a bare LocalDateTime diff is
+        // ambiguous across DST transitions, so anchor both ends to the
+        // system zone before measuring the hold window.
+        ZoneId zone = ZoneId.systemDefault();
+        long minutes = Duration.between(now.atZone(zone), expiry.atZone(zone)).toMinutes();
         if (minutes < 1) {
             throw new BusinessException("That slot starts too soon to offer.");
         }
