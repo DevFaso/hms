@@ -33,12 +33,12 @@ public class PermissionServiceImpl implements PermissionService {
     @Override
     @Transactional
     public PermissionResponseDTO createPermission(PermissionRequestDTO request, Locale locale) {
+        // Was findAll().stream().anyMatch(...), which loaded every permission in
+        // the database and called p.getAssignment().getId() on each — one row
+        // with no assignment was an NPE, and it was a full-table scan to answer
+        // a single-row question.
         boolean exists = permissionRepository
-            .findAll()
-            .stream()
-            .anyMatch(p ->
-                p.getName().equalsIgnoreCase(request.getName()) &&
-                    p.getAssignment().getId().equals(request.getAssignmentId()));
+            .existsByNameIgnoreCaseAndAssignment_Id(request.getName(), request.getAssignmentId());
 
         if (exists) {
             throw new BusinessException("A permission with this name already exists for the specified assignment.");

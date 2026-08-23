@@ -106,11 +106,15 @@ public class DataSourceConfig {
                 + ":" + dbUri.getPort()
                 + dbUri.getPath();
             properties.setUrl(jdbcUrl);
+            // indexOf rather than split(":", 2): the split form is in fact safe
+            // after contains(":"), but nothing local proves parts[1] exists, so
+            // it reads as an unchecked array access (and Sonar flags it as one).
+            // This is provably in-bounds and allocates nothing.
             String userInfo = dbUri.getUserInfo();
-            if (userInfo != null && userInfo.contains(":")) {
-                String[] parts = userInfo.split(":", 2);
-                properties.setUsername(parts[0]);
-                properties.setPassword(parts[1]);
+            int separator = userInfo == null ? -1 : userInfo.indexOf(':');
+            if (separator >= 0) {
+                properties.setUsername(userInfo.substring(0, separator));
+                properties.setPassword(userInfo.substring(separator + 1));
             }
         } catch (URISyntaxException e) {
             throw new IllegalStateException("Invalid DATABASE_URL: " + url, e);

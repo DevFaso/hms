@@ -20,6 +20,15 @@ public interface PermissionRepository extends JpaRepository<Permission, UUID>, J
 
     boolean existsByNameAndAssignment_Id(String name, UUID assignmentId);
 
+    /**
+     * Case-insensitive duplicate check for one assignment. Replaces a
+     * {@code findAll().stream().anyMatch(...)} that loaded EVERY permission row
+     * in the database and dereferenced {@code p.getAssignment().getId()} on
+     * each — an NPE on any row with no assignment, and a full-table scan to
+     * answer a single-row question.
+     */
+    boolean existsByNameIgnoreCaseAndAssignment_Id(String name, UUID assignmentId);
+
     List<Permission> findByCodeIn(Collection<String> codes);
 
     List<Permission> findByAssignment_IdIn(Collection<UUID> assignmentIds);

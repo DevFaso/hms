@@ -11,6 +11,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -65,7 +66,10 @@ class ReferralExpirySchedulerTest {
         doThrow(new RuntimeException("transient"))
             .when(expiryService).expireOverdueReferrals(any(Duration.class));
 
-        scheduler.runSweep();
-        // No assertion needed — the test passes if the call returned normally.
+        assertThatCode(() -> scheduler.runSweep()).doesNotThrowAnyException();
+
+        // And it must have actually swept: a scheduler that silently stopped
+        // calling the service would satisfy "does not throw" too.
+        verify(expiryService).expireOverdueReferrals(any(Duration.class));
     }
 }
