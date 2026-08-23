@@ -719,9 +719,12 @@ Last updated: **2026-05-17**. Update both files together when scope moves.
 > **Sysmex XN-1000** (three-OBX CBC panel, critical `LL`
 > haemoglobin) sample messages transcribed from manufacturer
 > integration guides, plus a same-MSH-10 retransmit-delegation
-> case. Row stays `started` until follow-on multi-OBX persistence
-> (CBC panels currently only persist first OBX) and a real-traffic
-> soak against the first partner analyzer.
+> case. Multi-OBX persistence landed 2026-08 (V131): the parser
+> returns every OBX grouped under its OBR, the service persists one
+> row per observation atomically with per-row critical notification,
+> and the V98 dedup index gained the OBX set-id discriminator. Row
+> stays `started` only for the real-traffic soak against the first
+> partner analyzer.
 >
 > **2026-05-15 update — v2.0 / Multi-tenancy / Schema-per-tenant
 > migration path foundation pass started.** Row 33 flipped from

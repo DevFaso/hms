@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -29,7 +30,8 @@ import java.util.UUID;
  *       Unknown {@code (MSH-3, MSH-4)} pairs are rejected with AR
  *       before any parsing or domain work.</li>
  *   <li>{@code ORU^R01} — parsed via {@link Hl7v2MessageBuilder#parseOruR01}
- *       and persisted as a {@code LabResult} via
+ *       (every OBX segment, grouped under its OBR) and persisted as one
+ *       {@code LabResult} per observation via
  *       {@link MllpInboundLabService}. The placer order number (OBR-2)
  *       is matched against {@code LabSpecimen.accessionNumber}.</li>
  *   <li>{@code ADT^A01 / A02 / A03 / A04 / A08} — parsed via
@@ -128,9 +130,9 @@ public class Hl7MessageDispatcher {
 
     private String handleOru(Hl7MessageHeader header, String hl7Body,
                              String remoteAddress, Hospital hospital) {
-        ParsedObservation obs = messageBuilder.parseOruR01(hl7Body);
-        if (obs == null) {
-            log.warn("[MLLP {}] ORU^R01 from {}/{} unparseable",
+        List<ParsedObservation> observations = messageBuilder.parseOruR01(hl7Body);
+        if (observations == null || observations.isEmpty()) {
+            log.warn("[MLLP {}] ORU^R01 from {}/{} unparseable or without OBX segments",
                 remoteAddress, header.sendingApplication(), header.sendingFacility());
             // Service was never invoked, so record here. The successful
             // and post-service-reject paths are recorded inside the
@@ -138,12 +140,12 @@ public class Hl7MessageDispatcher {
             // domain-level error message.
             recordReject(integrationIdFor(header), organizationIdOf(hospital),
                 "ORU^R01", hl7Body,
-                "unparseable ORU^R01 OBX segment");
+                "unparseable ORU^R01 or no OBX segments");
             return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
-                "Unparseable ORU^R01 OBX segment");
+                "Unparseable ORU^R01 or no OBX segments");
         }
         MllpInboundOutcome outcome = inboundLab.processOruR01(
-            obs, hospital, header.sendingApplication(), header.sendingFacility(),
+            observations, hospital, header.sendingApplication(), header.sendingFacility(),
             header.messageControlId(), hl7Body);
         return ackForOutcome(header, outcome, "ORU^R01");
     }

@@ -127,6 +127,33 @@ public class LabResult extends BaseEntity {
     @Column(name = "source_message_control_id", length = 255)
     private String sourceMessageControlId;
 
+    /**
+     * OBX-1 (set id) of the segment that produced this row. Every OBX
+     * of one ORU^R01 shares the sender/control-id triple, so this is
+     * the discriminator that lets sibling observations of one message
+     * coexist under the V131 unique index. The ingestion service
+     * guarantees a non-null, per-message-unique value (OBX-1, falling
+     * back to the 1-based segment position). {@code null} for USER
+     * writes and pre-V131 rows are backfilled to {@code "1"}.
+     */
+    @Size(max = 16)
+    @Column(name = "source_observation_set_id", length = 16)
+    private String sourceObservationSetId;
+
+    /**
+     * OBX-3.1 (observation identifier code, e.g. LOINC or vendor code).
+     * With many rows per order this is the only way to tell which
+     * analyte a row is. Optional — the clinical-UI path doesn't set it.
+     */
+    @Size(max = 255)
+    @Column(name = "test_code", length = 255)
+    private String testCode;
+
+    /** OBX-7 (reference range) as transmitted, e.g. {@code "13.0-17.0"}. */
+    @Size(max = 255)
+    @Column(name = "reference_range", length = 255)
+    private String referenceRange;
+
     @Builder.Default
     @Column(name = "acknowledged", nullable = false)
     private boolean acknowledged = false;

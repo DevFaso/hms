@@ -152,6 +152,45 @@ class LiquibaseSchemaIT {
             assertColumnExists(stmt, "clinical", "patient_vital_signs", "consciousness_level");
             assertTableExists(stmt, "platform", "report_definitions");
             assertTableExists(stmt, "platform", "report_runs");
+
+            // V131: multi-OBX ORU ingestion — per-observation discriminator +
+            // the analyte metadata columns the parser used to drop
+            assertColumnExists(stmt, "lab", "lab_results", "source_observation_set_id");
+            assertColumnExists(stmt, "lab", "lab_results", "test_code");
+            assertColumnExists(stmt, "lab", "lab_results", "reference_range");
+        }
+    }
+
+    /**
+     * V131 redefines the V98 dedup index to include the OBX set id —
+     * without the discriminator every OBX of one message shares the
+     * (app, facility, MSH-10) triple and the second row of every panel
+     * would be rejected. The index must exist, be unique, and cover the
+     * set-id expression.
+     */
+    @Test
+    void v131DedupIndexIncludesObservationSetId() throws Exception {
+        runLiquibaseUpdate();
+
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery(
+                "SELECT pg_get_indexdef(i.indexrelid) AS def, i.indisunique "
+                    + "FROM pg_index i "
+                    + "JOIN pg_class c ON c.oid = i.indexrelid "
+                    + "JOIN pg_namespace n ON n.oid = c.relnamespace "
+                    + "WHERE c.relname = 'uk_lab_result_source_message' "
+                    + "  AND n.nspname = 'lab'")) {
+
+                assertThat(rs.next())
+                    .as("uk_lab_result_source_message must exist on lab.lab_results")
+                    .isTrue();
+                assertThat(rs.getBoolean("indisunique"))
+                    .as("dedup index must be UNIQUE")
+                    .isTrue();
+                assertThat(rs.getString("def"))
+                    .as("index must include the V131 per-OBX discriminator")
+                    .contains("source_observation_set_id");
+            }
         }
     }
 

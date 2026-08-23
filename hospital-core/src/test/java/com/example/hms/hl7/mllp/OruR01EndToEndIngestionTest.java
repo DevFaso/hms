@@ -141,6 +141,10 @@ class OruR01EndToEndIngestionTest {
         assertThat(saved.getSourceSendingApplication()).isEqualTo("MINDRAY^BS-240^L");
         assertThat(saved.getSourceSendingFacility()).isEqualTo("LAB-A^FACILITY-1^L");
         assertThat(saved.getSourceMessageControlId()).isEqualTo("MINDRAY-2026-00417");
+        // V131 analyte metadata + per-OBX discriminator
+        assertThat(saved.getSourceObservationSetId()).isEqualTo("1");
+        assertThat(saved.getTestCode()).isEqualTo("15074-8");
+        assertThat(saved.getReferenceRange()).isEqualTo("3.9-5.6");
         // OBX-8 "H" → AbnormalFlag.ABNORMAL (high but not critical)
         assertThat(saved.getAbnormalFlag().name()).isEqualTo("ABNORMAL");
 
@@ -235,6 +239,53 @@ class OruR01EndToEndIngestionTest {
         // Both messages produced a saved row — the shared MSH-10 did
         // NOT collapse them. This is the regression Copilot flagged.
         verify(labResultRepository, times(2)).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("Sysmex 3-OBX CBC end-to-end → three rows persist, critical HGB on OBX-1 notifies per row")
+    void multiObxCbcPersistsEveryAnalyte() {
+        // Real parser + real service: the full V131 contract in one hop.
+        String sysmex = String.join("\r",
+            "MSH|^~\\&|SYSMEX^XN-1000|LAB-A|HMS|HOSP-OUAGA|"
+                + "20260515112030||ORU^R01|SXN-CBC-0001|P|2.5",
+            "PID|1||MRN-0103",
+            "OBR|1|ACC-2026-00499|XN-891234^SYSMEX|CBC^Complete Blood Count|||20260515111500",
+            "OBX|1|NM|HGB^Haemoglobin^L||6.2|g/dL|13.0-17.0|LL|||F|||20260515112030",
+            "OBX|2|NM|WBC^White blood cells^L||4.8|10*3/uL|4.0-10.0|N|||F|||20260515112030",
+            "OBX|3|NM|PLT^Platelets^L||245|10*3/uL|150-400|N|||F|||20260515112030",
+            "") + "\r";
+
+        when(allowlist.resolveHospital("SYSMEX^XN-1000", "LAB-A"))
+            .thenReturn(Optional.of(hospital));
+        when(labResultRepository
+            .findFirstBySourceSendingApplicationAndSourceSendingFacilityAndSourceMessageControlId(
+                "SYSMEX^XN-1000", "LAB-A", "SXN-CBC-0001"))
+            .thenReturn(Optional.empty());
+        when(specimenRepository.findByAccessionNumber("ACC-2026-00499"))
+            .thenReturn(Optional.of(specimen));
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        String ack = dispatcher.dispatch(sysmex, "10.20.30.41:5013");
+
+        assertThat(ack).contains("MSA|AA|SXN-CBC-0001");
+
+        ArgumentCaptor<LabResult> labCap = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, times(3)).save(labCap.capture());
+        assertThat(labCap.getAllValues()).extracting(LabResult::getTestCode)
+            .containsExactly("HGB", "WBC", "PLT");
+        assertThat(labCap.getAllValues()).extracting(LabResult::getSourceObservationSetId)
+            .containsExactly("1", "2", "3");
+        assertThat(labCap.getAllValues()).extracting(r -> r.getAbnormalFlag().name())
+            .containsExactly("CRITICAL", "NORMAL", "NORMAL");
+        // Every row is offered to the critical-value notifier; the LL
+        // haemoglobin is the one that actually escalates.
+        verify(criticalValueNotificationService, times(3)).notifyIfCritical(any(LabResult.class));
+        // One RECEIVED integration row for the whole message.
+        verify(messageRecorder, times(1)).recordMessage(
+            any(), any(), eq(IntegrationMessageDirection.INBOUND), eq("ORU^R01"),
+            eq(sysmex), eq(IntegrationMessageStatus.RECEIVED), any());
+        // One audit event per persisted row.
+        verify(auditEventLogService, times(3)).logEvent(any(AuditEventRequestDTO.class));
     }
 
     @Test
