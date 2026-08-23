@@ -188,7 +188,8 @@ class PatientPortalControllerPhase2Test {
         @DisplayName("should return 200 with rescheduled appointment")
         void rescheduleAppointment_success() throws Exception {
             UUID apptId = UUID.randomUUID();
-            // Dynamic date: newDate is @FutureOrPresent, a hardcoded date rots.
+            // Relative date: a fixed "future" date rots into the past and turns
+            // the request into a 400 once the calendar catches up.
             LocalDate newDate = LocalDate.now().plusDays(30);
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
@@ -599,7 +600,6 @@ class PatientPortalControllerPhase2Test {
                     .hospitalId(UUID.randomUUID())
                     .departmentId(UUID.randomUUID())
                     .staffId(UUID.randomUUID())
-                    // Dynamic date: date is @FutureOrPresent, a hardcoded date rots.
                     .date(LocalDate.now().plusDays(30))
                     .startTime(LocalTime.of(10, 0))
                     .reason("Annual checkup")
