@@ -777,6 +777,13 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private List<AppointmentResponseDTO> getAppointmentsByPatientScoped(UUID patientId, User user) {
+        // Both callers resolve the user via getUserOrThrow, so this never trips
+        // today. It is stated because isSuperAdmin -> hasRole handles a null
+        // user by returning false, which declares the parameter nullable — and
+        // the self-access check below then dereferences it. Rather than leave
+        // the two halves disagreeing, pin the contract the callers already
+        // honour: no user, no scoped read.
+        Objects.requireNonNull(user, "A resolved user is required to scope patient appointments.");
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByPatient_Id(patientId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)

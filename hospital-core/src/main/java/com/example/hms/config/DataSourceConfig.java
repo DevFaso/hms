@@ -96,7 +96,10 @@ public class DataSourceConfig {
      * extracted into a helper so the writeDataSource bean stays small
      * and the routing wrapper can be reasoned about in isolation.
      */
-    private static void normalizeRailwayUrl(DataSourceProperties properties) {
+    // Package-private rather than private so DataSourceConfigTest can exercise
+    // the credential parsing directly. It is pure string work over a properties
+    // object with no Spring context, and reflection would only obscure that.
+    static void normalizeRailwayUrl(DataSourceProperties properties) {
         String url = properties.getUrl();
         if (url == null) return;
         if (!url.startsWith("postgresql://") && !url.startsWith("postgres://")) return;
