@@ -178,10 +178,52 @@ describe('PatientDetailComponent', () => {
   });
 
   it('should switch to vitals tab and load vitals', () => {
+    // The vitals gate is now the controller's READ role list, not the
+    // 'Update Vital Signs' write permission it used to check.
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
     fixture.detectChanges();
     component.setTab('vitals');
     expect(component.activeTab()).toBe('vitals');
     expect(vitalServiceSpy.getRecent).toHaveBeenCalledWith('p1');
+  });
+
+  // ── Read tabs must not be gated on write permissions (audit D5/D6/D7) ──
+
+  it('shows vitals to a read-only role the backend admits', () => {
+    // canViewVitals used to check hasPermission('Update Vital Signs') — a
+    // WRITE permission — so every read-only role lost the tab even though the
+    // read endpoints admit them. The gate is now the controller's read list.
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_ANESTHESIOLOGIST'),
+    );
+    permissionSpy.hasPermission.and.returnValue(false);
+    fixture.detectChanges();
+
+    expect(component.canViewVitals()).toBeTrue();
+  });
+
+  it('gives Chart Review its own, broader gate than Encounters', () => {
+    // ChartReviewController admits the lab and pharmacy roles; EncounterController
+    // does not. Sharing one flag hid that difference and, for a radiologist,
+    // hid the very surface D5/D6 route them to for labs and imaging.
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_LAB_SCIENTIST'),
+    );
+    fixture.detectChanges();
+
+    expect(component.canViewChartReview()).toBeTrue();
+    expect(component.canViewEncounters()).toBeFalse();
+  });
+
+  it('routes consulting clinicians to Chart Review for labs and imaging', () => {
+    // The D5/D6 resolution: they read results and imaging from the patient's
+    // record, not from /lab and /imaging, which are order-entry workbenches.
+    for (const role of ['ROLE_RADIOLOGIST', 'ROLE_ANESTHESIOLOGIST', 'ROLE_PHYSIOTHERAPIST']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
+      expect(component.canViewChartReview())
+        .withContext(`${role} must reach Chart Review`)
+        .toBeTrue();
+    }
   });
 
   it('keeps Chart and Chart Review as two distinct tabs', () => {
@@ -201,6 +243,10 @@ describe('PatientDetailComponent', () => {
   });
 
   describe('Vitals tab — no-metrics placeholder', () => {
+    // canViewVitals mirrors PatientVitalSignController's read list now, so the
+    // tab needs a role rather than the old write permission.
+    beforeEach(() => roleContextSpy.hasAnyActiveRole.and.returnValue(true));
+
     // These fixtures use the BACKEND DTO field names. The old spec mocked a
     // portal-invented shape (heartRate/temperature/height/painLevel) that the
     // wire never carried, which kept the tests green while the tab rendered
