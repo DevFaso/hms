@@ -345,7 +345,11 @@ public class DashboardConfigService {
                 "Interpret Ultrasounds",
                 "Create Radiology Reports",
                 "Sign Imaging Reports",
-                PERM_VIEW_PATIENT_RECORDS,
+                // 'View Patient Records' removed by role audit D4: the
+                // /patients page is not wired for this role (its vitals,
+                // encounters and sharing panels each 403), so the grant
+                // advertised a chart the role cannot open. Patient LOOKUP for
+                // the picker on /imaging is granted separately and does work.
                 "Request Additional Views",
                 "Communicate Findings to Physicians",
                 "Perform Interventional Procedures",
@@ -354,8 +358,8 @@ public class DashboardConfigService {
                 "Document Radiation Dosage",
                 "Flag Critical Findings",
                 "Access Patient History"));
+        // 'View Patient Records' removed by role audit D4 — see ROLE_RADIOLOGIST.
         map.put("ROLE_ANESTHESIOLOGIST", List.of(
-                PERM_VIEW_PATIENT_RECORDS,
                 "Perform Pre-anesthetic Evaluation",
                 "Create Anesthesia Plans",
                 "Administer Anesthesia",
@@ -428,8 +432,10 @@ public class DashboardConfigService {
                 PERM_GENERATE_LAB_REPORTS,
                 PERM_FLAG_ABNORMAL_RESULTS,
                 PERM_COMMUNICATE_WITH_PHYSICIANS));
+        // 'View Patient Records' removed by role audit D4 — see ROLE_RADIOLOGIST.
+        // The treatment-plans page C4 admitted this role to needs patient
+        // LOOKUP, which PATIENT_PICKER_ROLES grants, not the chart page.
         map.put("ROLE_PHYSIOTHERAPIST", List.of(
-                PERM_VIEW_PATIENT_RECORDS,
                 "Create Treatment Plans",
                 "Document Therapy Sessions",
                 "Update Patient Progress",
