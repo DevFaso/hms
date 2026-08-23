@@ -1906,4 +1906,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V128 — recall lists + waitlist auto-offer + slot booking (P3
+         item 22, per the 2026-08-22 decision: the Appointment owns the
+         time). Slot @Version column, waitlist offer columns (+guarded
+         FK), scheduling.patient_recalls. Contains a DO $$ block, so
+         splitStatements must be false.
+         ================================================================= -->
+    <changeSet id="V128-recall-waitlist-booking" author="hms-team" runOnChange="false">
+        <sqlFile path="V128__recall_waitlist_booking.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"
+                 splitStatements="false"/>
+    </changeSet>
+
 </databaseChangeLog>

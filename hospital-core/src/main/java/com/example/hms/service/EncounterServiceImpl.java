@@ -269,6 +269,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     private final PatientTrackerEventPublisher trackerEventPublisher;
+    private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -1763,8 +1764,60 @@ public class EncounterServiceImpl implements EncounterService {
             appointmentRepository.save(appointment);
         }
 
+        // (c2) Feed the follow-up request into the recall worklist (P3 #22).
+        // Captured since MVP 6 and silently dropped until V128 — this is where
+        // the desk finally sees "Dr Ouédraogo wants this patient back in two
+        // weeks" without the patient having to remember it.
+        createRecallFromCheckout(encounter, request, actorUsername);
+
         // (d) Build and return AVS
         return checkOutMapper.toAfterVisitSummary(encounter, request, null);
+    }
+
+    /**
+     * The checkout half of the recall feed (P3 #22). Never propagates — the
+     * checkout is the clinical record, the recall is the worklist built on it
+     * (the referral-appointment precedent). Reason falls back to a generic
+     * label because pre-V128 clients may omit it; the due date falls back to
+     * two weeks out when no preference was given or it fails to parse.
+     */
+    private void createRecallFromCheckout(
+            Encounter encounter,
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
+            String actorUsername) {
+        if (request == null || request.getFollowUpAppointment() == null) {
+            return;
+        }
+        var followUp = request.getFollowUpAppointment();
+        try {
+            java.time.LocalDate dueDate = java.time.LocalDate.now().plusWeeks(2);
+            if (followUp.getPreferredDate() != null && !followUp.getPreferredDate().isBlank()) {
+                try {
+                    dueDate = java.time.LocalDate.parse(followUp.getPreferredDate().trim());
+                } catch (java.time.format.DateTimeParseException ex) {
+                    log.warn("Unparseable follow-up date '{}' on encounter {} — defaulting to two weeks",
+                            followUp.getPreferredDate(), encounter.getId());
+                }
+            }
+            String reason = followUp.getReason() != null && !followUp.getReason().isBlank()
+                    ? followUp.getReason() : "Follow-up after visit";
+            patientRecallRepository.save(
+                    com.example.hms.model.scheduling.PatientRecall.builder()
+                            .patient(encounter.getPatient())
+                            .hospital(encounter.getHospital())
+                            .department(encounter.getDepartment())
+                            .preferredProvider(encounter.getStaff())
+                            .encounter(encounter)
+                            .source(com.example.hms.enums.RecallSource.CHECKOUT)
+                            .dueDate(dueDate)
+                            .reason(reason.length() > 500 ? reason.substring(0, 500) : reason)
+                            .notes(followUp.getNotes() != null && followUp.getNotes().length() > 500
+                                    ? followUp.getNotes().substring(0, 500) : followUp.getNotes())
+                            .createdBy(actorUsername)
+                            .build());
+        } catch (RuntimeException ex) {
+            log.warn("Could not create a recall for encounter {}: {}", encounter.getId(), ex.getMessage());
+        }
     }
 
     private void upsertDischargeSummaryForCheckout(

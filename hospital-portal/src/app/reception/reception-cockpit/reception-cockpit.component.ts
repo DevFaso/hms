@@ -16,9 +16,10 @@ import { PaymentPendingPanelComponent } from '../payment-pending-panel/payment-p
 import { FlowBoardComponent, FlowBoardStatusChange } from '../flow-board/flow-board.component';
 import { WalkInDialogComponent } from '../walkin-dialog/walkin-dialog.component';
 import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.component';
+import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 
-type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist';
+type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
 type StatusFilter =
   | 'ALL'
   | 'SCHEDULED'
@@ -46,6 +47,7 @@ function todayIso(): string {
     FlowBoardComponent,
     WalkInDialogComponent,
     WaitlistPanelComponent,
+    RecallsPanelComponent,
     CheckinDialogComponent,
   ],
   templateUrl: './reception-cockpit.component.html',

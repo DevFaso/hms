@@ -49,4 +49,22 @@ public interface SlotInventoryService {
 
     /** Reclaim holds whose window has passed. Returns how many were freed. */
     int reclaimExpiredHolds();
+
+    /**
+     * Book a slot: create a normal Appointment and stamp the slot BOOKED
+     * (P3 #22). The appointment owns the time from that moment — slots are
+     * pure capacity inventory, and cancelling the appointment is what frees
+     * the slot again.
+     */
+    AppointmentSlotDTO book(UUID slotId, UUID patientId, String reason);
+
+    /**
+     * Free the slot an appointment was booked from, if any. Called by the
+     * appointment lifecycle on cancel/reschedule — deliberately not
+     * tenant-scoped, because the caller has already authorised the
+     * appointment change and the slot must follow it.
+     *
+     * @return how many slots were freed (0 or 1)
+     */
+    int releaseForAppointment(UUID appointmentId);
 }

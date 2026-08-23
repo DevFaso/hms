@@ -176,10 +176,34 @@ public class ReceptionController {
 
     @PostMapping("/waitlist/{id}/offer")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
-    @Operation(summary = "Mark a waitlist entry as Offered (receptionist is scheduling a slot)")
-    public ResponseEntity<WaitlistEntryResponseDTO> offerWaitlistSlot(@PathVariable UUID id) {
+    @Operation(summary = "Offer a concrete slot to a waitlist entry",
+        description = "Holds the slot for the offer window and notifies the patient. "
+            + "Expiry defaults to 48 hours, capped at the slot's start time.")
+    public ResponseEntity<WaitlistEntryResponseDTO> offerWaitlistSlot(
+            @PathVariable UUID id,
+            @RequestParam UUID slotId,
+            @RequestParam(required = false) Integer expiresInHours) {
         UUID hospitalId = resolveHospitalId();
-        return ResponseEntity.ok(receptionService.offerWaitlistSlot(id, hospitalId));
+        return ResponseEntity.ok(
+                receptionService.offerWaitlistSlot(id, hospitalId, slotId, expiresInHours));
+    }
+
+    @PostMapping("/waitlist/{id}/accept-offer")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Confirm the patient wants the offered slot",
+        description = "Books the offered slot as a normal appointment and closes the entry.")
+    public ResponseEntity<WaitlistEntryResponseDTO> acceptWaitlistOffer(@PathVariable UUID id) {
+        UUID hospitalId = resolveHospitalId();
+        return ResponseEntity.ok(receptionService.acceptWaitlistOffer(id, hospitalId));
+    }
+
+    @PostMapping("/waitlist/{id}/decline-offer")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Record that the patient passed on the offered slot",
+        description = "Frees the held slot and returns the entry to WAITING.")
+    public ResponseEntity<WaitlistEntryResponseDTO> declineWaitlistOffer(@PathVariable UUID id) {
+        UUID hospitalId = resolveHospitalId();
+        return ResponseEntity.ok(receptionService.declineWaitlistOffer(id, hospitalId));
     }
 
     @PostMapping("/waitlist/{id}/close")

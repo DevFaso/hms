@@ -1,18 +1,27 @@
 package com.example.hms.service.scheduling;
 
+import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.scheduling.AppointmentSlot;
 import com.example.hms.model.scheduling.SessionTemplate;
 import com.example.hms.model.scheduling.VisitType;
 import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
 import com.example.hms.payload.dto.scheduling.SlotGenerationResultDTO;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +29,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -40,6 +49,9 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
 
     private final SessionTemplateRepository templateRepository;
     private final AppointmentSlotRepository slotRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final PatientRepository patientRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleValidator roleValidator;
 
     @Override
@@ -196,6 +208,101 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             log.info("Reclaimed {} expired slot hold(s)", expired.size());
         }
         return expired.size();
+    }
+
+    @Override
+    @Transactional
+    public AppointmentSlotDTO book(UUID slotId, UUID patientId, String reason) {
+        AppointmentSlot slot = loadScoped(slotId);
+        LocalDateTime now = LocalDateTime.now();
+        UUID currentUserId = roleValidator.getCurrentUserId();
+
+        // A live hold placed by the caller is exactly the state booking is
+        // meant to complete from, so it counts as available to them alone.
+        boolean heldByCaller = slot.getStatus() == SlotStatus.HELD
+            && slot.getHeldUntil() != null
+            && slot.getHeldUntil().isAfter(now)
+            && Objects.equals(slot.getHeldByUserId(), currentUserId);
+        if (!slot.isOfferable(now) && !heldByCaller) {
+            throw new BusinessException("That slot is no longer available.");
+        }
+        if (slot.getStartAt().isBefore(now)) {
+            throw new BusinessException("That slot is in the past.");
+        }
+
+        Patient patient = patientRepository.findById(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+        UUID hospitalId = slot.getHospital().getId();
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("The patient is not registered at this hospital.");
+        }
+
+        Staff staff = slot.getStaff();
+        if (staff.getUser() == null) {
+            throw new BusinessException(
+                "The slot's clinician has no user account, so an appointment cannot be created.");
+        }
+        // Same contract as AppointmentServiceImpl: the assignment is mandatory,
+        // and a missing one is a refusal, not a degraded appointment.
+        UserRoleHospitalAssignment assignment = assignmentRepository
+            .findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId)
+            .orElseThrow(() -> new BusinessException(
+                "The clinician has no role assignment at this hospital."));
+
+        Appointment appointment = appointmentRepository.save(Appointment.builder()
+            .patient(patient)
+            .staff(staff)
+            .assignment(assignment)
+            .hospital(slot.getHospital())
+            .department(slot.getDepartment())
+            .appointmentDate(slot.getSlotDate())
+            .startTime(slot.getStartAt().toLocalTime())
+            .endTime(slot.getEndAt().toLocalTime())
+            .status(AppointmentStatus.SCHEDULED)
+            .reason(reason == null || reason.isBlank() ? defaultReason(slot) : reason)
+            .build());
+
+        clearHold(slot);
+        slot.setStatus(SlotStatus.BOOKED);
+        slot.setAppointment(appointment);
+        try {
+            // Flush inside the try: the version check happens at flush time,
+            // and surfacing it here (not at commit, outside this method) is
+            // what turns a double-book race into a friendly refusal. The
+            // rollback takes the appointment insert with it.
+            return toDto(slotRepository.saveAndFlush(slot));
+        } catch (OptimisticLockingFailureException e) {
+            throw new BusinessException("That slot was just taken. Pick another time.");
+        }
+    }
+
+    @Override
+    @Transactional
+    public int releaseForAppointment(UUID appointmentId) {
+        return slotRepository.findByAppointment_Id(appointmentId)
+            .filter(slot -> slot.getStatus() == SlotStatus.BOOKED)
+            .map(slot -> {
+                slot.setAppointment(null);
+                clearHold(slot);
+                // A slot whose time has passed must not re-enter circulation:
+                // searchOpen would never return it, but OPEN would misstate it.
+                slot.setStatus(slot.getStartAt().isBefore(LocalDateTime.now())
+                    ? SlotStatus.BLOCKED : SlotStatus.OPEN);
+                if (slot.getStatus() == SlotStatus.BLOCKED) {
+                    slot.setBlockedReason("Appointment cancelled after the slot time passed");
+                }
+                slotRepository.save(slot);
+                log.info("Freed slot {} after appointment {} was cancelled or moved",
+                    slot.getId(), appointmentId);
+                return 1;
+            })
+            .orElse(0);
+    }
+
+    private String defaultReason(AppointmentSlot slot) {
+        VisitType visitType = slot.getVisitType();
+        return visitType != null && visitType.getName() != null
+            ? visitType.getName() : "Booked from slot";
     }
 
     /* ---------------- helpers ---------------- */

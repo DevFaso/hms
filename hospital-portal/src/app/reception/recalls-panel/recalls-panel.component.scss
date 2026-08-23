@@ -1,4 +1,4 @@
-.waitlist-panel {
+.recalls-panel {
   padding: 0;
 }
 
@@ -34,7 +34,7 @@
   }
 }
 
-.waitlist-table {
+.recalls-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
@@ -58,6 +58,10 @@
   }
 }
 
+.overdue-row td {
+  background: var(--danger-soft, #fef2f2);
+}
+
 .patient-link {
   background: none;
   border: none;
@@ -79,7 +83,7 @@
 }
 
 .reason-cell {
-  max-width: 180px;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -91,27 +95,38 @@
   white-space: nowrap;
 }
 
-/* Priority chips */
-.priority-routine {
-  color: #64748b;
-}
-.priority-urgent {
-  color: #d97706;
+.due-date.overdue {
+  color: var(--danger, #dc2626);
   font-weight: 600;
 }
-.priority-stat {
-  color: #dc2626;
+.overdue-tag {
+  margin-left: 6px;
+  font-size: 0.7rem;
   font-weight: 700;
+  color: #fff;
+  background: var(--danger, #dc2626);
+  border-radius: 4px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+}
+.notified-hint {
+  font-size: 0.72rem;
+  color: var(--text-secondary, #64748b);
+  margin-top: 2px;
 }
 
 /* Status chips */
-.status-waiting {
+.recall-status-pending {
   color: #2563eb;
 }
-.status-offered {
+.recall-status-notified {
   color: #7c3aed;
 }
-.status-closed {
+.recall-status-scheduled {
+  color: #059669;
+}
+.recall-status-closed,
+.recall-status-cancelled {
   color: #64748b;
 }
 
@@ -126,6 +141,15 @@
 .btn-primary {
   background: var(--primary, #4f46e5);
   color: #fff;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 0.875rem;
+  cursor: pointer;
+
   &:hover {
     opacity: 0.9;
   }
@@ -134,10 +158,24 @@
     cursor: not-allowed;
   }
 }
+.btn-sm.btn-primary {
+  padding: 3px 10px;
+  font-size: 0.78rem;
+  border-radius: 4px;
+}
 .btn-ghost {
   background: transparent;
-  border: 1px solid var(--border-color, #e2e8f0) !important;
+  border: 1px solid var(--border-color, #e2e8f0);
   color: var(--text-secondary, #64748b);
+}
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--border-color, #e2e8f0);
+  padding: 7px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--text-primary, #0f172a);
 }
 
 /* Modal */
@@ -274,82 +312,6 @@
   justify-content: center;
   gap: 8px;
 }
-/* ── Offer-a-slot modal (P3 #22) ─────────────────────────── */
-
-.offer-info {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.78rem;
-  color: var(--text-secondary, #64748b);
-  margin-top: 4px;
-
-  .material-symbols-outlined {
-    font-size: 1rem;
-  }
-}
-.offer-expiry {
-  font-size: 0.72rem;
-  color: var(--text-secondary, #64748b);
-
-  &.expired {
-    color: var(--danger, #dc2626);
-    font-weight: 600;
-  }
-}
-.slot-picker {
-  border: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 260px;
-  overflow-y: auto;
-
-  legend {
-    padding: 0;
-    margin-bottom: 6px;
-  }
-}
-.slot-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border-color, #e2e8f0);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-
-  &:hover {
-    background: var(--surface-hover, #f1f5f9);
-  }
-  &.selected {
-    border-color: var(--primary, #4f46e5);
-    background: var(--primary-soft, #eef2ff);
-  }
-
-  .slot-when {
-    font-weight: 600;
-    color: var(--text-primary, #0f172a);
-  }
-  .slot-who {
-    color: var(--text-secondary, #64748b);
-  }
-  .slot-type {
-    margin-left: auto;
-    font-size: 0.75rem;
-    background: var(--surface-hover, #f1f5f9);
-    border-radius: 10px;
-    padding: 2px 8px;
-    color: var(--text-secondary, #64748b);
-  }
-}
-.offer-hours-input {
-  max-width: 120px;
-}
-
 .spin {
   animation: spin 1s linear infinite;
 }
@@ -357,13 +319,4 @@
   to {
     transform: rotate(360deg);
   }
-}
-.btn-secondary {
-  background: transparent;
-  border: 1px solid var(--border-color, #e2e8f0);
-  padding: 7px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  color: var(--text-primary, #0f172a);
 }
