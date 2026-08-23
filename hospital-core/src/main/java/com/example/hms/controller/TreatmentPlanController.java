@@ -36,14 +36,14 @@ public class TreatmentPlanController {
     private final TreatmentPlanService treatmentPlanService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Create a treatment plan")
     public ResponseEntity<TreatmentPlanResponseDTO> create(@Valid @RequestBody TreatmentPlanRequestDTO requestDTO) {
         return ResponseEntity.ok(treatmentPlanService.create(requestDTO));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update a treatment plan")
     public ResponseEntity<TreatmentPlanResponseDTO> update(@PathVariable UUID id,
                                                            @Valid @RequestBody TreatmentPlanRequestDTO requestDTO) {
@@ -51,21 +51,21 @@ public class TreatmentPlanController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get treatment plan by id")
     public ResponseEntity<TreatmentPlanResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(treatmentPlanService.getById(id));
     }
 
     @GetMapping("/by-patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List treatment plans for a patient")
     public ResponseEntity<Page<TreatmentPlanResponseDTO>> byPatient(@PathVariable UUID patientId, Pageable pageable) {
         return ResponseEntity.ok(treatmentPlanService.listByPatient(patientId, pageable));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST')")
     @Operation(summary = "List all treatment plans")
     public ResponseEntity<Page<TreatmentPlanResponseDTO>> listAll(
         @RequestParam(required = false) TreatmentPlanStatus status,
@@ -75,7 +75,7 @@ public class TreatmentPlanController {
     }
 
     @GetMapping("/by-hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List treatment plans for a hospital", description = "Optional status filter")
     public ResponseEntity<Page<TreatmentPlanResponseDTO>> byHospital(@PathVariable UUID hospitalId,
                                                                      @RequestParam(required = false) TreatmentPlanStatus status,
@@ -84,7 +84,7 @@ public class TreatmentPlanController {
     }
 
     @PostMapping("/{id}/follow-ups")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Add follow-up task to treatment plan")
     public ResponseEntity<TreatmentPlanFollowUpDTO> addFollowUp(@PathVariable UUID id,
                                                                 @Valid @RequestBody TreatmentPlanFollowUpRequestDTO requestDTO) {
@@ -92,7 +92,7 @@ public class TreatmentPlanController {
     }
 
     @PutMapping("/{id}/follow-ups/{followUpId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update follow-up task on treatment plan")
     public ResponseEntity<TreatmentPlanFollowUpDTO> updateFollowUp(@PathVariable UUID id,
                                                                    @PathVariable UUID followUpId,
@@ -101,7 +101,7 @@ public class TreatmentPlanController {
     }
 
     @PostMapping("/{id}/reviews")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_MIDWIFE','ROLE_PHYSIOTHERAPIST','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Add review entry for treatment plan")
     public ResponseEntity<TreatmentPlanReviewDTO> addReview(@PathVariable UUID id,
                                                             @Valid @RequestBody TreatmentPlanReviewRequestDTO requestDTO) {

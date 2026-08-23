@@ -503,12 +503,12 @@ export const routes: Routes = [
         path: 'lab-qc-dashboard',
         canActivate: [RoleGuard],
         data: {
+          // ADMIN removed per role audit C1 — the QC backend rejects it.
           roles: [
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -524,7 +524,6 @@ export const routes: Routes = [
             'ROLE_LAB_MANAGER',
             'ROLE_QUALITY_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -541,7 +540,6 @@ export const routes: Routes = [
             'ROLE_LAB_DIRECTOR',
             'ROLE_LAB_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
@@ -687,7 +685,9 @@ export const routes: Routes = [
       {
         path: 'organizations',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // ADMIN removed per role audit C1 — org management is platform IT
+        // and every backend call rejected the role anyway.
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () =>
           import('./organizations/organization-list').then((m) => m.OrganizationListComponent),
       },
@@ -711,7 +711,7 @@ export const routes: Routes = [
       {
         path: 'roles',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./roles/role-list').then((m) => m.RoleListComponent),
       },
 
@@ -721,7 +721,7 @@ export const routes: Routes = [
       {
         path: 'platform',
         canActivate: [superAdminPathRewriteGuard('/super-admin/platform'), RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./platform/platform').then((m) => m.PlatformComponent),
       },
 
@@ -764,7 +764,8 @@ export const routes: Routes = [
         path: 'bed-management',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+          // ADMIN removed per role audit C1 — the bed backend rejects it.
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./bed-management/bed-management').then((m) => m.BedManagementComponent),
@@ -855,13 +856,10 @@ export const routes: Routes = [
         path: 'nurse-station',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_NURSE',
-            'ROLE_MIDWIFE',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          // Role audit decision C5: the bedside nurse station is for
+          // clinical staff — admins oversee via the patient tracker. The
+          // /nurse/** backend always rejected HOSPITAL_ADMIN and ADMIN.
+          roles: ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./nurse-station/nurse-station').then((m) => m.NurseStationComponent),
@@ -966,6 +964,9 @@ export const routes: Routes = [
             // 2026-08-23 role audit: every backend treatment-plan endpoint
             // admits midwives — the guard was the outlier.
             'ROLE_MIDWIFE',
+            // Role audit decision C4: writing treatment plans is the
+            // physiotherapist's core duty — admitted end-to-end.
+            'ROLE_PHYSIOTHERAPIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -1001,7 +1002,16 @@ export const routes: Routes = [
         path: 'audit-logs',
         canActivate: [superAdminPathRewriteGuard('/super-admin/audit-logs'), RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+          // Lab leadership added per role audit decision C6 — quality
+          // managers and lab directors review audit trails (CAP/ISO 15189).
+          // Mirrors AuditEventLogController.AUDIT_READ_ROLES.
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
         },
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
       },
@@ -1013,7 +1023,6 @@ export const routes: Routes = [
         data: {
           roles: [
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_DOCTOR',
             'ROLE_LAB_DIRECTOR',
@@ -1031,7 +1040,6 @@ export const routes: Routes = [
         data: {
           roles: [
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
             'ROLE_DOCTOR',
             'ROLE_LAB_DIRECTOR',
