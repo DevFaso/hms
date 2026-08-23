@@ -29,4 +29,8 @@ public interface AppointmentWaitlistRepository extends JpaRepository<Appointment
     );
 
     Optional<AppointmentWaitlist> findByIdAndHospital_Id(UUID id, UUID hospitalId);
+
+    /** Lapsed offers, for the reconciliation sweep (P3 #22). Unscoped — system actor. */
+    List<AppointmentWaitlist> findByStatusAndOfferExpiresAtBefore(
+        String status, java.time.LocalDateTime cutoff);
 }

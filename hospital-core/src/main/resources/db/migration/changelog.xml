@@ -1906,4 +1906,44 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V128 — recall lists + waitlist auto-offer + slot booking (P3
+         item 22, per the 2026-08-22 decision: the Appointment owns the
+         time). Slot @Version column, waitlist offer columns (+guarded
+         FK), scheduling.patient_recalls. Contains a DO $$ block, so
+         splitStatements must be false.
+         ================================================================= -->
+    <changeSet id="V128-recall-waitlist-booking" author="hms-team" runOnChange="false">
+        <sqlFile path="V128__recall_waitlist_booking.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"
+                 splitStatements="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V129 — persistent FHIR bulk-export jobs (P3 item 24, roadmap
+         row 21 follow-on): platform.fhir_bulk_export_jobs +
+         fhir_bulk_export_files replace the in-memory job map so the
+         @Scheduled NDJSON runner can finish what the kickoff started.
+         No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V129-fhir-bulk-export-jobs" author="hms-team" runOnChange="false">
+        <sqlFile path="V129__fhir_bulk_export_jobs.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V130 — scheduled reports + NEWS2 early-warning capture (P3 item
+         25): on_oxygen + consciousness_level on patient_vital_signs +
+         the NEWS2 BPA protocol seed; platform.report_definitions +
+         report_runs with the UNIQUE (definition, period) exactly-once
+         claim. No DO block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V130-reports-and-news2" author="hms-team" runOnChange="false">
+        <sqlFile path="V130__reports_and_news2.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

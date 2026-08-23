@@ -1,104 +1,134 @@
 # FHIR Bulk Data Access — operational notes
 
-**Status:** foundation pass shipped on `feat/v1.1-fhir-bulk-and-everything` (roadmap row 21).
-**Scope today:** kickoff + poll + cancel surfaces against an in-memory job map; **the actual async runner that emits NDJSON to S3 is deferred to the row-21 follow-on.**
+**Status:** complete (roadmap row 21; P3 item 24 shipped the async runner, V129).
+**Scope today:** kickoff + poll + cancel + **NDJSON output + authenticated download**, backed by the persistent `platform.fhir_bulk_export_jobs` / `fhir_bulk_export_files` tables and a `@Scheduled` runner. The foundation pass's in-memory job map is gone.
 
 ---
 
-## Feature flags
+## Enable runbook
 
-Two independent switches under `app.fhir.operations.*`, both default OFF:
+The flags are **environment-bound `@ConfigurationProperties`, not DB feature
+flags** — changing them means changing the environment and restarting the
+service. There is no admin-UI toggle.
 
-```
-app.fhir.operations.bulk-export.enabled=${FHIR_BULK_EXPORT_ENABLED:false}
-app.fhir.operations.everything.enabled=${FHIR_EVERYTHING_ENABLED:false}
-```
+1. Set the environment variables on the deployment (Railway service / compose
+   file):
 
-Promote bulk-export and `$everything` independently — the latter is synchronous and low-risk; the former is async and capacity-sensitive.
+   ```properties
+   FHIR_BULK_EXPORT_ENABLED=true          # gates $export + poll + download
+   FHIR_EVERYTHING_ENABLED=true           # gates Patient/{id}/$everything (independent)
+   FHIR_BULK_EXPORT_DIR=/data/fhir-bulk   # optional; default "fhir-bulk-exports"
+   FHIR_BULK_EXPORT_RUNNER_INTERVAL_MS=60000  # optional sweep interval
+   ```
 
-With `bulk-export.enabled=false`:
+2. **Storage directory rules:** the directory must be writable by the service
+   user and must NOT live under the public upload tree — `/uploads/**` is
+   served `permitAll` and export output is a mass PHI extract. The default is
+   a sibling directory (the V126 patient-photo precedent). Files stream only
+   through the authenticated download endpoint, which is what makes the
+   manifest's `requiresAccessToken: true` literally true.
 
-- `POST /api/fhir/$export` → `405 Method Not Allowed`
-- `POST /api/fhir/Patient/$export` → `405 Method Not Allowed`
-- `GET /api/fhir-bulk-status/{jobId}` → `405 Method Not Allowed`
-- `DELETE /api/fhir-bulk-status/{jobId}` → `405 Method Not Allowed`
-- `GET /api/fhir/metadata` does NOT advertise the `$export` operation entry
+3. Restart the service. `GET /api/fhir/metadata` now advertises the `$export`
+   operation; the runner sweep starts picking up `QUEUED` jobs within one
+   interval.
 
-With `everything.enabled=false`:
+4. **Who can run it:** kickoff, poll and download all require
+   `SUPER_ADMIN` or `HOSPITAL_ADMIN` (a bulk export is a mass PHI extract;
+   `/fhir/**` itself carries no role gate, so the gate lives in the service
+   and on the status controller). Every call must carry an active hospital
+   scope (`X-Hospital-Id` for super-admins) — kickoff without one is a 400,
+   and jobs are pinned to that hospital for their lifetime.
 
-- `GET /api/fhir/Patient/{id}/$everything` → `405 Method Not Allowed`
-- `GET /api/fhir/metadata` does NOT advertise the `$everything` operation entry
+5. Promote `$everything` and `$export` independently — the former is
+   synchronous and low-risk; the latter is async and capacity-sensitive.
+
+With `bulk-export.enabled=false` (the default), every `$export` surface —
+kickoff, poll, cancel, download — returns **`501 Not Implemented`** + a FHIR
+`OperationOutcome`, and the `CapabilityStatement` omits the operation entry.
+(The foundation pass returned 405 and documented the flip to 501 as shipping
+with the async runner; that is this pass.) `$everything` flag-off remains
+`405` — the synchronous-path HMS flag-off contract.
 
 ---
 
 ## Supported semantics
 
-### `$export` (row 21)
+### `$export` (row 21 — complete)
 
-| Endpoint | Path | Status |
+| Endpoint | Path | Behaviour |
 | --- | --- | --- |
-| Kickoff (system level) | `POST /api/fhir/$export` | Foundation: 202 + `Content-Location` |
-| Kickoff (Patient-type level) | `POST /api/fhir/Patient/$export` | Foundation: 202 + `Content-Location` |
+| Kickoff (system level) | `POST /api/fhir/$export` | 202 + `Content-Location` |
+| Kickoff (Patient-type level) | `POST /api/fhir/Patient/$export` | 202 + `Content-Location` |
 | Kickoff (Group instance level) | `POST /api/fhir/Group/{id}/$export` | **Deferred** — needs `GroupFhirResourceProvider` |
-| Poll status | `GET /api/fhir-bulk-status/{jobId}` | Foundation: always `202 Accepted` + `Retry-After: 120` |
-| Cancel | `DELETE /api/fhir-bulk-status/{jobId}` | Foundation: `202 Accepted` (drops job from map) |
+| Poll | `GET /api/fhir-bulk-status/{jobId}` | 202 + `X-Progress` while QUEUED/IN_PROGRESS; **200 + manifest** when COMPLETED; 500 + `OperationOutcome` when FAILED; 404 when cancelled/unknown/cross-tenant |
+| Cancel | `DELETE /api/fhir-bulk-status/{jobId}` | 202 on an open job (row kept, flipped CANCELLED); 404 otherwise. A job cancelled mid-run aborts at its next patient page and discards partial output |
+| Download | `GET /api/fhir-bulk-status/{jobId}/file/{fileName}` | Streams one NDJSON file of a COMPLETED job (`application/fhir+ndjson`) |
 
-The poll path lives at `/api/fhir-bulk-status/{jobId}` (NOT `/api/fhir/$export-poll-status/{jobId}`) because the HAPI FHIR servlet captures the entire `/api/fhir/*` space; mounting a plain Spring controller under `/api/fhir/*` requires HAPI's `manualResponse=true` machinery on a `@Operation` method with a synthetic name. That mounting lands with the row-21 follow-on along with the async runner — partner integrations should treat the URL as opaque (the bulk-data spec dictates the server chooses the Content-Location URL).
+The poll path lives at `/api/fhir-bulk-status/{jobId}` (NOT `/api/fhir/$export-poll-status/{jobId}`) because the HAPI FHIR servlet captures the entire `/api/fhir/*` space. Partner integrations should treat the URL as opaque — the bulk-data spec dictates the server chooses the `Content-Location` URL.
 
 **Honored parameters:**
 
 | Parameter | Type | Notes |
 | --- | --- | --- |
-| `_since` | ISO-8601 instant | Resources changed at or after this instant |
-| `_type` | comma-separated string | Limit which resource types are exported |
-| `_outputFormat` | string | Accepted for spec compliance; currently ignored — runner writes `application/fhir+ndjson` |
+| `_since` | ISO-8601 instant | Resources changed at or after this instant. Rows with no modification timestamp pass the filter (legacy-data stance shared with `$everything`). Malformed → 400 |
+| `_type` | comma-separated string | Supported: `Patient`, `Encounter`, `Observation`, `Condition`, `MedicationRequest`. An unsupported type is **rejected at kickoff (400)** — silently dropping one would let a client believe its extract was complete |
+| `_outputFormat` | string | `application/fhir+ndjson`, `application/ndjson`, `ndjson` accepted (output is always `application/fhir+ndjson`); anything else → 400 |
 
-The kickoff response body is a minimal `Parameters` resource carrying the assigned `jobId` and `pollUrl`. The bulk-data spec does not mandate a kickoff body; we emit one so foundation-pass clients can read the id without parsing the header.
+**What a job exports:** every patient actively registered at the job's
+hospital, fanned out through the same five hospital-scoped queries and FHIR
+mappers `$everything` uses, streamed page-by-page into one NDJSON file per
+resource type (`{storage-dir}/{jobId}/Patient.ndjson`, …). Types that produce
+zero resources leave no file and no manifest line. SYSTEM and PATIENT scope
+currently produce identical output — HMS has no non-patient-compartment
+resources to add at system level yet.
 
-**Tenant scope:** the active hospital is read from `HospitalContextHolder.getActiveHospitalId()` and pinned on the job at creation time. Status / cancel calls from a different tenant collapse to `404 Not Found` — cross-tenant rejection is invisible (no information leak).
+**Completion manifest** (spec shape):
 
-**Audit emission:** `AuditEventType.DATA_EXPORT` on kickoff + cancel, with `entityType="FHIR_BULK_EXPORT_JOB"`.
+```json
+{
+  "transactionTime": "2026-08-22T10:01:00Z",
+  "request": "/api/fhir/$export?_type=Patient,Observation",
+  "requiresAccessToken": true,
+  "output": [
+    {"type": "Patient", "url": "https://…/api/fhir-bulk-status/{jobId}/file/Patient.ndjson", "count": 1204}
+  ],
+  "error": []
+}
+```
+
+**Job lifecycle:** `QUEUED → IN_PROGRESS → COMPLETED | FAILED | CANCELLED`.
+The runner claims QUEUED jobs with an atomic conditional UPDATE (safe without
+ShedLock across instances), updates `processed_patients` as it pages (visible
+in `X-Progress`), and never deletes a terminal row. Failures carry
+`error_message`; there is no automatic retry — re-kick `$export`.
+
+**Tenant scope:** pinned at creation from `HospitalContextHolder`; missing
+scope → 400. Poll/cancel/download from another tenant (or with no
+`X-Hospital-Id`) collapse to 404 — cross-tenant rejection is invisible.
+
+**Audit emission:** `AuditEventType.DATA_EXPORT` on kickoff, cancel,
+completion and failure, with `entityType="FHIR_BULK_EXPORT_JOB"`.
 
 ### `$everything` (row 22)
 
-| Endpoint | Path | Status |
-| --- | --- | --- |
-| Patient compartment export | `GET /api/fhir/Patient/{id}/$everything` | Foundation: synchronous `200 OK` + `Bundle` |
-
-The Bundle is of type `searchset` and contains:
-
-- 1 `Patient`
-- Up to 200 most-recent `Encounter`s (hospital-scoped)
-- Up to 200 most-recent vital-sign rows (each expanded 1:N into up to 7 `Observation` resources by `ObservationFhirMapper`)
-- Up to 200 most-recent lab results (`Observation`, hospital-scoped via `labOrder.hospital`)
-- All `Condition`s (problem list — typically small enough to skip a page cap)
-- Up to 200 most-recent `MedicationRequest`s (hospital-scoped)
-
-**Tenant scope:** active hospital read from `HospitalContextHolder`. Missing scope → `403 Forbidden`. Patient resolution is via `PatientRepository.findById(...)` which is tenant-aware; cross-tenant access surfaces as `404`.
-
-**Audit emission:** `AuditEventType.PATIENT_EXPORT` with `entityType="PATIENT"` and a description recording the entry count.
+Unchanged — see the `PatientEverythingService` javadoc; synchronous
+`200 OK + Bundle`, `_since` / `_type` / `_count` / `_page` honored,
+flag-off 405.
 
 ---
 
-## What's deferred (row-21 follow-on)
+## What's still deferred
 
-The row stays at `started` until these land:
-
-- **Persistent job store** — `fhir_bulk_export_jobs` table (V103 in the next free slot), JPA entity + repository replacing the in-memory `ConcurrentHashMap`.
-- **Async runner** — `@Scheduled` (or Kafka consumer once row 36 lands) that picks up `QUEUED` jobs, fans out per-resource-type collection queries through the existing FHIR read mappers, streams NDJSON to an S3-compatible bucket.
-- **Output manifest** — `200 OK` poll response with `transactionTime`, `request`, `requiresAccessToken`, `output: [{type, url}]`, `error: []`.
-- **Group-level $export** — needs `GroupFhirResourceProvider` (HMS does not currently model Group as a first-class FHIR resource).
-- **Canonical poll-URL mounting** — `/api/fhir/$export-poll-status/{jobId}` via a HAPI plain-provider `@Operation` with `manualResponse=true`, so consumers can rely on the spec's "treat Content-Location as opaque" guarantee while still keeping every bulk-data path under `/api/fhir/*`.
-- **`_outputFormat` honoured** — `application/fhir+ndjson` (default), `application/ndjson`, `ndjson`.
-- **Spec-compliant 501 on flag-off** — the foundation pass returns 405 to match the rest of HMS's flag-off contract; the spec preference is 501 and ships with the async runner.
-
-## What's deferred (row-22 follow-on)
-
-- **Authenticated end-to-end IT** with a seeded patient + encounter / observation / condition / medication-request so the Bundle composition is asserted on the wire (today's IT is a metadata-advertisement check; the 401-or-handler-status pattern blocks a deeper assertion).
-- **`_since` / `_type` honored on $everything** for incremental sync.
-- **Page cursor / `_count`** for compartments that exceed the 200-row caps (rare on a single patient but real for long-running ones).
-- **`start` / `end` parameters** for date-range scoping per the FHIR R4 operation definition.
-- **Conformance soak against SMART App Launcher** before the row flips to `completed`.
+- **Group-level $export** — needs `GroupFhirResourceProvider` (HMS does not
+  model Group as a first-class FHIR resource).
+- **Canonical poll-URL mounting** under `/api/fhir/*` via a HAPI
+  plain-provider `@Operation` with `manualResponse=true`.
+- **S3-compatible output target** — output is local-disk only; there is no S3
+  client on the classpath. Point `FHIR_BULK_EXPORT_DIR` at a mounted volume.
+- **Retry / DLQ semantics** — a FAILED job is terminal; the operator re-kicks.
+- **`deleteRequested` output-file expiry** — files live until the operator
+  clears the storage directory; add a retention sweep when a deployment
+  actually accumulates exports.
 
 ---
 
@@ -106,15 +136,15 @@ The row stays at `started` until these land:
 
 - `hospital-core/src/main/java/com/example/hms/fhir/FhirOperationsProperties.java`
 - `hospital-core/src/main/java/com/example/hms/fhir/bulk/FhirBulkExportService.java`
-- `hospital-core/src/main/java/com/example/hms/fhir/bulk/BulkExportJobState.java`
+- `hospital-core/src/main/java/com/example/hms/fhir/bulk/FhirBulkExportRunner.java`
 - `hospital-core/src/main/java/com/example/hms/fhir/bulk/FhirBulkExportOperationProvider.java`
 - `hospital-core/src/main/java/com/example/hms/fhir/bulk/FhirBulkExportStatusController.java`
+- `hospital-core/src/main/java/com/example/hms/model/platform/FhirBulkExportJob.java`
+- `hospital-core/src/main/resources/db/migration/V129__fhir_bulk_export_jobs.sql`
 - `hospital-core/src/main/java/com/example/hms/fhir/everything/PatientEverythingService.java`
-- `hospital-core/src/main/java/com/example/hms/fhir/provider/PatientFhirResourceProvider.java` (`@Operation $everything`)
-- `hospital-core/src/main/java/com/example/hms/fhir/smart/HmsCapabilityStatementProvider.java` (`applyOperationVisibility`)
-- `hospital-core/src/main/java/com/example/hms/fhir/FhirConfig.java` (plain-provider registration)
 - Tests:
+  - `hospital-core/src/test/java/com/example/hms/fhir/bulk/FhirBulkExportServiceTest.java`
+  - `hospital-core/src/test/java/com/example/hms/fhir/bulk/FhirBulkExportRunnerTest.java`
+  - `hospital-core/src/test/java/com/example/hms/fhir/bulk/FhirBulkExportStatusControllerTest.java`
   - `hospital-core/src/test/java/com/example/hms/fhir/FhirBulkExportIT.java`
   - `hospital-core/src/test/java/com/example/hms/fhir/FhirBulkExportEnabledIT.java`
-  - `hospital-core/src/test/java/com/example/hms/fhir/PatientEverythingIT.java`
-  - `hospital-core/src/test/java/com/example/hms/fhir/PatientEverythingEnabledIT.java`

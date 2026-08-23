@@ -11,6 +11,8 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 
+type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+
 @Component({
   selector: 'app-triage-form',
   standalone: true,
@@ -36,6 +38,17 @@ export class TriageFormComponent {
   weightKg = signal<number | null>(null);
   heightCm = signal<number | null>(null);
   painScale = signal<number | null>(null);
+
+  /* ── NEWS2 parameters (P3 #25b) ─────────── */
+  onOxygen = signal(false);
+  consciousnessLevel = signal<ConsciousnessOption | ''>('');
+  readonly consciousnessOptions: ConsciousnessOption[] = [
+    'ALERT',
+    'NEW_CONFUSION',
+    'VOICE',
+    'PAIN',
+    'UNRESPONSIVE',
+  ];
 
   /* ── Clinical assessment ────────────────── */
   chiefComplaint = signal('');
@@ -80,6 +93,8 @@ export class TriageFormComponent {
       spo2Percent: this.spo2Percent() ?? undefined,
       weightKg: this.weightKg() ?? undefined,
       heightCm: this.heightCm() ?? undefined,
+      onOxygen: this.onOxygen(),
+      consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,

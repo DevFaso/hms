@@ -36,6 +36,19 @@ public class PatientVitalSignResponseDTO {
     private String bodyPosition;
     private String notes;
     private boolean clinicallySignificant;
+
+    /* ── NEWS2 (P3 #25b) ─────────────────────────────────────────────
+       Computed on read from this bundle's parameters. When incomplete,
+       the score covers only what was recorded and newsMissing names the
+       gaps — consumers must render the incompleteness, never hide it. */
+    private Boolean onOxygen;
+    private com.example.hms.enums.ConsciousnessLevel consciousnessLevel;
+    private Integer newsScore;
+    /** LOW | LOW_MEDIUM | MEDIUM | HIGH */
+    private String newsRiskBand;
+    private Boolean newsComplete;
+    private java.util.List<String> newsMissing;
+
     private LocalDateTime recordedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

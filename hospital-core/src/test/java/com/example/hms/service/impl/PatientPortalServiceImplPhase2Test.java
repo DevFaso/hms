@@ -132,6 +132,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.repository.UserRepository userRepository;
     @Mock private com.example.hms.service.NotificationService notificationService;
     @Mock private com.example.hms.service.EmailService emailService;
+    @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.repository.QuestionnaireRepository questionnaireRepository;
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
@@ -214,6 +215,9 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
             assertThat(appointment.getNotes()).contains("Patient cancelled: Schedule conflict");
             verify(appointmentRepository).save(appointment);
+            // The appointment owns its slot (P3 #22): a portal cancel frees
+            // the time just like a desk cancel.
+            verify(slotInventoryService).releaseForAppointment(apptId);
         }
 
         @Test

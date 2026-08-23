@@ -39,6 +39,12 @@ public class WaitlistEntryResponseDTO {
 
     private UUID offeredAppointmentId;
 
+    /** The slot currently offered, while status is OFFERED (P3 #22). */
+    private UUID offeredSlotId;
+    private LocalDateTime offeredSlotStartAt;
+    private LocalDateTime offeredAt;
+    private LocalDateTime offerExpiresAt;
+
     private LocalDateTime createdAt;
     private String createdBy;
 }

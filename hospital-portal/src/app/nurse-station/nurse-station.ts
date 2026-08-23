@@ -491,6 +491,27 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.vitalsForm.update((f) => ({ ...f, notes: value || undefined }));
   }
 
+  /* ── NEWS2 parameters (P3 #25b) ──────────────────────────────── */
+
+  readonly consciousnessOptions: NonNullable<NurseVitalCaptureRequest['consciousnessLevel']>[] = [
+    'ALERT',
+    'NEW_CONFUSION',
+    'VOICE',
+    'PAIN',
+    'UNRESPONSIVE',
+  ];
+
+  updateVitalsOnOxygen(value: boolean): void {
+    this.vitalsForm.update((f) => ({ ...f, onOxygen: value }));
+  }
+
+  updateVitalsConsciousness(value: string): void {
+    this.vitalsForm.update((f) => ({
+      ...f,
+      consciousnessLevel: (value || undefined) as NurseVitalCaptureRequest['consciousnessLevel'],
+    }));
+  }
+
   submitVitals(): void {
     const target = this.vitalsCaptureFor();
     if (!target) return;

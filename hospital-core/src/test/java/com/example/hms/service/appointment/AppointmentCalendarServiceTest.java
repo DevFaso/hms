@@ -50,6 +50,7 @@ class AppointmentCalendarServiceTest {
             null,                       // userRepository
             null,                       // staffAvailabilityService
             null,                       // departmentRepository
+            null,                       // slotInventoryService (P3 #22)
             null                        // appointmentLinks (AppointmentLinkProperties, PR #315)
         );
     }

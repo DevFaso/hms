@@ -89,6 +89,10 @@ export interface TriageSubmissionRequest {
   spo2Percent?: number;
   weightKg?: number;
   heightCm?: number;
+  /** NEWS2 (P3 #25b): supplemental oxygen at measurement time. */
+  onOxygen?: boolean;
+  /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
+  consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   painScale?: number;
   chiefComplaint?: string;
   esiScore: number;

@@ -43,7 +43,28 @@ public interface ReceptionService {
 
     List<WaitlistEntryResponseDTO> getWaitlist(UUID hospitalId, UUID departmentId, String status);
 
-    WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId);
+    /**
+     * Offer a concrete slot to a waiting entry (P3 #22): holds the slot for
+     * the offer window, stamps the entry OFFERED and notifies the patient.
+     */
+    WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId, UUID slotId,
+                                               Integer expiresInHours);
+
+    /**
+     * Front-desk confirmation that the patient wants the offered slot: books
+     * it (the appointment owns the time from then on) and closes the entry.
+     */
+    WaitlistEntryResponseDTO acceptWaitlistOffer(UUID waitlistId, UUID hospitalId);
+
+    /** The patient passed on the offer: free the slot, back to WAITING. */
+    WaitlistEntryResponseDTO declineWaitlistOffer(UUID waitlistId, UUID hospitalId);
+
+    /**
+     * Return lapsed offers to WAITING and free their slots, so an unanswered
+     * offer never strands an entry or a slot. Unscoped — the sweep is a
+     * system actor. Returns how many entries were reset.
+     */
+    int reconcileExpiredWaitlistOffers();
 
     void closeWaitlistEntry(UUID waitlistId, UUID hospitalId);
 

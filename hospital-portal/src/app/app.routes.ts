@@ -772,6 +772,17 @@ export const routes: Routes = [
         loadComponent: () => import('./slot-admin/slot-admin').then((m) => m.SlotAdminComponent),
       },
 
+      // Scheduled reports (P3 #25a) — roles mirror ReportController's
+      // class-level @PreAuthorize exactly (HOSPITAL_ADMIN / SUPER_ADMIN).
+      {
+        path: 'reports',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
+      },
+
       // Discharge (approvals + summaries)
       {
         path: 'discharge',

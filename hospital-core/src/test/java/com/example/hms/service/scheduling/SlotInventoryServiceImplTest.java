@@ -1,13 +1,22 @@
 package com.example.hms.service.scheduling;
 
+import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.scheduling.AppointmentSlot;
 import com.example.hms.model.scheduling.SessionTemplate;
+import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
 import com.example.hms.payload.dto.scheduling.SlotGenerationResultDTO;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
 import com.example.hms.utility.RoleValidator;
@@ -30,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +58,9 @@ class SlotInventoryServiceImplTest {
 
     @Mock private SessionTemplateRepository templateRepository;
     @Mock private AppointmentSlotRepository slotRepository;
+    @Mock private AppointmentRepository appointmentRepository;
+    @Mock private PatientRepository patientRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleValidator roleValidator;
 
     private SlotInventoryServiceImpl service;
@@ -59,7 +72,8 @@ class SlotInventoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SlotInventoryServiceImpl(templateRepository, slotRepository, roleValidator);
+        service = new SlotInventoryServiceImpl(templateRepository, slotRepository,
+            appointmentRepository, patientRepository, assignmentRepository, roleValidator);
 
         hospitalId = UUID.randomUUID();
         hospital = Hospital.builder().name("CHU").code("CHU").build();
@@ -262,5 +276,200 @@ class SlotInventoryServiceImplTest {
         assertThatThrownBy(() -> service.generate(MONDAY, MONDAY))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active hospital");
+    }
+
+    /* ── booking (P3 #22): the appointment owns the time ── */
+
+    private UUID patientId;
+    private Patient patient;
+
+    /** Wires everything a successful booking needs around an open slot. */
+    private AppointmentSlot bookableSlot() {
+        AppointmentSlot slot = openSlot();
+
+        patientId = UUID.randomUUID();
+        patient = mock(Patient.class);
+        when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        User clinicianUser = new User();
+        UUID clinicianUserId = UUID.randomUUID();
+        clinicianUser.setId(clinicianUserId);
+        staff.setUser(clinicianUser);
+        when(assignmentRepository.findByUserIdAndHospitalId(clinicianUserId, hospitalId))
+            .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
+
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> {
+            Appointment a = i.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+        when(slotRepository.saveAndFlush(any(AppointmentSlot.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        return slot;
+    }
+
+    @Test
+    void bookCreatesTheAppointmentAndStampsTheSlot() {
+        AppointmentSlot slot = bookableSlot();
+
+        AppointmentSlotDTO dto = service.book(slot.getId(), patientId, "Knee follow-up");
+
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.BOOKED);
+        Appointment appointment = slot.getAppointment();
+        assertThat(appointment).isNotNull();
+        // The appointment carries the slot's coordinates — from here on it,
+        // not the slot, owns the time.
+        assertThat(appointment.getAppointmentDate()).isEqualTo(slot.getSlotDate());
+        assertThat(appointment.getStartTime()).isEqualTo(slot.getStartAt().toLocalTime());
+        assertThat(appointment.getEndTime()).isEqualTo(slot.getEndAt().toLocalTime());
+        assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(appointment.getReason()).isEqualTo("Knee follow-up");
+        assertThat(dto.getAppointmentId()).isEqualTo(appointment.getId());
+    }
+
+    @Test
+    void bookCompletesTheCallersOwnHold() {
+        // A live hold placed by the caller is exactly the state booking is
+        // meant to complete from.
+        AppointmentSlot slot = bookableSlot();
+        UUID callerId = UUID.randomUUID();
+        slot.setStatus(SlotStatus.HELD);
+        slot.setHeldUntil(LocalDateTime.now().plusMinutes(5));
+        slot.setHeldByUserId(callerId);
+        when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+
+        service.book(slot.getId(), patientId, null);
+
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.BOOKED);
+        assertThat(slot.getHeldUntil()).isNull();
+        assertThat(slot.getHeldByUserId()).isNull();
+    }
+
+    @Test
+    void bookRefusesASlotHeldBySomeoneElse() {
+        AppointmentSlot slot = bookableSlot();
+        slot.setStatus(SlotStatus.HELD);
+        slot.setHeldUntil(LocalDateTime.now().plusMinutes(5));
+        slot.setHeldByUserId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        UUID slotId = slot.getId();
+        UUID bookFor = patientId;
+        assertThatThrownBy(() -> service.book(slotId, bookFor, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("no longer available");
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void bookRefusesAPastSlot() {
+        AppointmentSlot slot = bookableSlot();
+        slot.setStartAt(LocalDateTime.now().minusHours(1));
+
+        UUID slotId = slot.getId();
+        UUID bookFor = patientId;
+        assertThatThrownBy(() -> service.book(slotId, bookFor, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("in the past");
+    }
+
+    @Test
+    void bookRefusesAPatientNotRegisteredHere() {
+        AppointmentSlot slot = bookableSlot();
+        when(patient.isRegisteredInHospital(hospitalId)).thenReturn(false);
+
+        UUID slotId = slot.getId();
+        UUID bookFor = patientId;
+        assertThatThrownBy(() -> service.book(slotId, bookFor, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("not registered");
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void bookRefusesWhenTheClinicianHasNoAssignmentHere() {
+        // Same contract as AppointmentServiceImpl: a missing assignment is a
+        // refusal, not a degraded appointment.
+        AppointmentSlot slot = bookableSlot();
+        UUID clinicianUserId = staff.getUser().getId();
+        when(assignmentRepository.findByUserIdAndHospitalId(clinicianUserId, hospitalId))
+            .thenReturn(Optional.empty());
+
+        UUID slotId = slot.getId();
+        UUID bookFor = patientId;
+        assertThatThrownBy(() -> service.book(slotId, bookFor, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("no role assignment");
+    }
+
+    @Test
+    void aDoubleBookRaceLosesGracefully() {
+        // Two receptionists, one slot: the version column turns the second
+        // flush into a refusal instead of a double-booking.
+        AppointmentSlot slot = bookableSlot();
+        when(slotRepository.saveAndFlush(any(AppointmentSlot.class)))
+            .thenThrow(new org.springframework.dao.OptimisticLockingFailureException("stale"));
+
+        UUID slotId = slot.getId();
+        UUID bookFor = patientId;
+        assertThatThrownBy(() -> service.book(slotId, bookFor, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("just taken");
+    }
+
+    @Test
+    void bookDefaultsTheReasonToTheVisitTypeName() {
+        AppointmentSlot slot = bookableSlot();
+        com.example.hms.model.scheduling.VisitType visitType =
+            com.example.hms.model.scheduling.VisitType.builder().name("Consultation").build();
+        slot.setVisitType(visitType);
+
+        service.book(slot.getId(), patientId, "  ");
+
+        assertThat(slot.getAppointment().getReason()).isEqualTo("Consultation");
+    }
+
+    /* ── free-on-cancel: cancelling the appointment releases the slot ── */
+
+    @Test
+    void cancellingTheAppointmentFreesTheSlot() {
+        AppointmentSlot slot = openSlot();
+        Appointment appointment = new Appointment();
+        UUID appointmentId = UUID.randomUUID();
+        appointment.setId(appointmentId);
+        slot.setStatus(SlotStatus.BOOKED);
+        slot.setAppointment(appointment);
+        when(slotRepository.findByAppointment_Id(appointmentId)).thenReturn(Optional.of(slot));
+
+        assertThat(service.releaseForAppointment(appointmentId)).isEqualTo(1);
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+        assertThat(slot.getAppointment()).isNull();
+    }
+
+    @Test
+    void aFreedSlotWhoseTimePassedIsBlockedNotReopened() {
+        // OPEN would misstate it: searchOpen never returns past slots, but the
+        // rota must read honestly to anyone looking at it directly.
+        AppointmentSlot slot = openSlot();
+        slot.setStartAt(LocalDateTime.now().minusHours(2));
+        Appointment appointment = new Appointment();
+        UUID appointmentId = UUID.randomUUID();
+        appointment.setId(appointmentId);
+        slot.setStatus(SlotStatus.BOOKED);
+        slot.setAppointment(appointment);
+        when(slotRepository.findByAppointment_Id(appointmentId)).thenReturn(Optional.of(slot));
+
+        assertThat(service.releaseForAppointment(appointmentId)).isEqualTo(1);
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.BLOCKED);
+        assertThat(slot.getBlockedReason()).contains("cancelled");
+    }
+
+    @Test
+    void releaseForAppointmentIgnoresAppointmentsWithoutASlot() {
+        when(slotRepository.findByAppointment_Id(any())).thenReturn(Optional.empty());
+
+        assertThat(service.releaseForAppointment(UUID.randomUUID())).isZero();
+        verify(slotRepository, never()).save(any());
     }
 }

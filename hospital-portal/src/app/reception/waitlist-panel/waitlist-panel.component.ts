@@ -7,6 +7,10 @@ import {
   WaitlistEntryRequest,
   WaitlistEntryResponse,
 } from '../reception.service';
+import {
+  SlotInventoryService,
+  AppointmentSlotResponse,
+} from '../../services/slot-inventory.service';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { ReferralService, DepartmentMinimal } from '../../services/referral.service';
 import { StaffService, StaffResponse } from '../../services/staff.service';
@@ -27,6 +31,7 @@ export class WaitlistPanelComponent implements OnInit {
   @Output() patientClicked = new EventEmitter<string>();
 
   private readonly receptionService = inject(ReceptionService);
+  private readonly slotInventoryService = inject(SlotInventoryService);
   private readonly patientService = inject(PatientService);
   private readonly referralService = inject(ReferralService);
   private readonly staffService = inject(StaffService);
@@ -67,6 +72,15 @@ export class WaitlistPanelComponent implements OnInit {
   priority = signal<'ROUTINE' | 'URGENT' | 'STAT'>('ROUTINE');
   reason = signal('');
   readonly priorities = ['ROUTINE', 'URGENT', 'STAT'] as const;
+
+  /* ── Offer-a-slot modal (P3 #22) ─ */
+  offerEntry = signal<WaitlistEntryResponse | null>(null);
+  offerSlots = signal<AppointmentSlotResponse[]>([]);
+  offerSlotsLoading = signal(false);
+  selectedSlotId = signal('');
+  offerHours = signal(48);
+  offering = signal(false);
+  actingOnEntryId = signal<string | null>(null);
 
   ngOnInit(): void {
     const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
@@ -165,14 +179,92 @@ export class WaitlistPanelComponent implements OnInit {
     });
   }
 
-  offerSlot(id: string): void {
-    this.receptionService.offerWaitlistSlot(id).subscribe({
+  openOfferModal(entry: WaitlistEntryResponse): void {
+    this.offerEntry.set(entry);
+    this.offerSlots.set([]);
+    this.selectedSlotId.set('');
+    this.offerHours.set(48);
+    this.offerSlotsLoading.set(true);
+    this.slotInventoryService
+      .searchOpen({
+        departmentId: entry.departmentId,
+        staffId: entry.preferredProviderId ?? undefined,
+        from: entry.requestedDateFrom ?? undefined,
+        to: entry.requestedDateTo ?? undefined,
+        limit: 50,
+      })
+      .subscribe({
+        next: (slots) => {
+          this.offerSlots.set(slots);
+          this.offerSlotsLoading.set(false);
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('RECEPTION.LOAD_SLOTS_FAILED'));
+          this.offerSlotsLoading.set(false);
+        },
+      });
+  }
+
+  submitOffer(): void {
+    const entry = this.offerEntry();
+    const slotId = this.selectedSlotId();
+    if (!entry || !slotId || this.offering()) {
+      if (!slotId) this.toast.error(this.translate.instant('RECEPTION.SELECT_SLOT_FIRST'));
+      return;
+    }
+    this.offering.set(true);
+    this.receptionService.offerWaitlistSlot(entry.id, slotId, this.offerHours() || 48).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.SLOT_OFFERED'));
+        this.offering.set(false);
+        this.offerEntry.set(null);
         this.loadEntries();
       },
-      error: () => this.toast.error(this.translate.instant('RECEPTION.OFFER_FAILED')),
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
+        this.offering.set(false);
+      },
     });
+  }
+
+  acceptOffer(entry: WaitlistEntryResponse): void {
+    if (this.actingOnEntryId()) return;
+    this.actingOnEntryId.set(entry.id);
+    this.receptionService.acceptWaitlistOffer(entry.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('RECEPTION.OFFER_ACCEPTED'));
+        this.actingOnEntryId.set(null);
+        this.loadEntries();
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('RECEPTION.ACCEPT_OFFER_FAILED'),
+        );
+        this.actingOnEntryId.set(null);
+      },
+    });
+  }
+
+  declineOffer(entry: WaitlistEntryResponse): void {
+    if (this.actingOnEntryId()) return;
+    this.actingOnEntryId.set(entry.id);
+    this.receptionService.declineWaitlistOffer(entry.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('RECEPTION.OFFER_DECLINED'));
+        this.actingOnEntryId.set(null);
+        this.loadEntries();
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('RECEPTION.DECLINE_OFFER_FAILED'),
+        );
+        this.actingOnEntryId.set(null);
+      },
+    });
+  }
+
+  offerExpired(entry: WaitlistEntryResponse): boolean {
+    return !!entry.offerExpiresAt && new Date(entry.offerExpiresAt).getTime() < Date.now();
   }
 
   closeEntry(id: string): void {

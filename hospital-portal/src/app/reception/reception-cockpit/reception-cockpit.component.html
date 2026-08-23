@@ -86,6 +86,9 @@
     <button [class.active]="activeTab() === 'waitlist'" (click)="activeTab.set('waitlist')">
       {{ 'RECEPTION.WAITLIST' | translate }}
     </button>
+    <button [class.active]="activeTab() === 'recalls'" (click)="activeTab.set('recalls')">
+      {{ 'RECEPTION.RECALLS' | translate }}
+    </button>
   </div>
 
   <!-- Tab: Queue -->
@@ -225,6 +228,13 @@
   @if (activeTab() === 'waitlist') {
     <div class="tab-content">
       <app-waitlist-panel (patientClicked)="openSnapshot($event)" />
+    </div>
+  }
+
+  <!-- Tab: Recalls (P3 #22) -->
+  @if (activeTab() === 'recalls') {
+    <div class="tab-content">
+      <app-recalls-panel (patientClicked)="openSnapshot($event)" />
     </div>
   }
 </div>
