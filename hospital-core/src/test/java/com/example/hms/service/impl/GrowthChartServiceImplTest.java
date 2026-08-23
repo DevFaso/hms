@@ -9,7 +9,7 @@ import com.example.hms.model.labor.DeliveryRecord;
 import com.example.hms.model.neonatal.NewbornAssessment;
 import com.example.hms.payload.dto.GrowthChartDTO;
 import com.example.hms.repository.NewbornAssessmentRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PatientVitalSignRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,6 +28,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -39,7 +40,7 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class GrowthChartServiceImplTest {
 
-    @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private PatientVitalSignRepository vitalSignRepository;
     @Mock private NewbornAssessmentRepository newbornAssessmentRepository;
 
@@ -52,7 +53,7 @@ class GrowthChartServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new GrowthChartServiceImpl(
-            patientRepository, vitalSignRepository, newbornAssessmentRepository);
+            patientChartAccess, vitalSignRepository, newbornAssessmentRepository);
 
         patientId = UUID.randomUUID();
         patient = Patient.builder()
@@ -62,7 +63,7 @@ class GrowthChartServiceImplTest {
             .build();
         patient.setId(patientId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(vitalSignRepository.findGrowthSeries(any(), any())).thenReturn(List.of());
         when(newbornAssessmentRepository
             .findFirstByPatient_IdAndDeliveryRecordIsNotNullOrderByAssessmentTimeAsc(any()))
@@ -193,7 +194,11 @@ class GrowthChartServiceImplTest {
 
     @Test
     void aPatientForeignToTheCallersHospitalReadsAsNotFound() {
+        // The scope rule itself is PatientChartAccess's (tested there); this
+        // asserts the growth chart propagates it rather than plotting anyway.
         UUID foreignHospitalId = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, foreignHospitalId))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThatThrownBy(() -> service.getGrowthChart(patientId, foreignHospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -202,7 +207,8 @@ class GrowthChartServiceImplTest {
     @Test
     void anUnknownPatientIsNotFound() {
         UUID unknownId = UUID.randomUUID();
-        when(patientRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(unknownId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", unknownId));
 
         assertThatThrownBy(() -> service.getGrowthChart(unknownId, null))
             .isInstanceOf(ResourceNotFoundException.class);

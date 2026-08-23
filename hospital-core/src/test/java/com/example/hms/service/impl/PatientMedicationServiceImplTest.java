@@ -9,7 +9,7 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,13 +26,15 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PatientMedicationServiceImplTest {
 
     @Mock private PrescriptionRepository prescriptionRepository;
-    @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RefillRequestRepository refillRequestRepository;
 
@@ -53,14 +55,15 @@ class PatientMedicationServiceImplTest {
 
     @Test
     void getMedications_patientNotFound_throws() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientChartAccess.require(eq(patientId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
         assertThatThrownBy(() -> service.getMedicationsForPatient(patientId, hospitalId, 10))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void getMedications_hospitalNotFound_throws() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.getMedicationsForPatient(patientId, hospitalId, 10))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -80,7 +83,7 @@ class PatientMedicationServiceImplTest {
         p2.setMedicationName("Ibuprofen");
         p2.setDuration("14 days");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p1, p2));
@@ -93,7 +96,7 @@ class PatientMedicationServiceImplTest {
 
     @Test
     void getMedications_defaultLimit_appliesWhenZero() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of());
@@ -111,7 +114,7 @@ class PatientMedicationServiceImplTest {
         p.setMedicationName("generic");
         p.setMedicationDisplayName("Brand Name");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p));
@@ -129,7 +132,7 @@ class PatientMedicationServiceImplTest {
         p.setMedicationName("Med");
         p.setDuration("2 weeks");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p));
@@ -147,7 +150,7 @@ class PatientMedicationServiceImplTest {
         p.setMedicationName("Med");
         p.setStatus(PrescriptionStatus.DISCONTINUED);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p));
@@ -166,7 +169,7 @@ class PatientMedicationServiceImplTest {
         p.setDuration("1 days");
         p.setStatus(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p));
@@ -194,7 +197,7 @@ class PatientMedicationServiceImplTest {
     }
 
     private void stubMedicationsFor(Prescription p) {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
                 .thenReturn(List.of(p));

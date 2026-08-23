@@ -36,7 +36,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,12 +55,13 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ChartReviewServiceImplTest {
 
-    private final PatientRepository patientRepo = mock(PatientRepository.class);
+    private final PatientChartAccess patientChartAccess = mock(PatientChartAccess.class);
     private final EncounterRepository encounterRepo = mock(EncounterRepository.class);
     private final EncounterNoteRepository noteRepo = mock(EncounterNoteRepository.class);
     private final LabResultRepository labResultRepo = mock(LabResultRepository.class);
@@ -81,7 +82,7 @@ class ChartReviewServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ChartReviewServiceImpl(
-            patientRepo, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
+            patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
             imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo);
 
         hospital = Hospital.builder().name("Centre Médical Bobo").build();
@@ -95,7 +96,7 @@ class ChartReviewServiceImplTest {
             .build();
         patient.setId(PATIENT_ID);
 
-        when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
         when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
 
         // Default empty results so individual tests only have to populate what they need.
@@ -134,8 +135,9 @@ class ChartReviewServiceImplTest {
 
     @Test
     void missingPatientThrowsNotFound() {
-        when(patientRepo.findById(any(UUID.class))).thenReturn(Optional.empty());
         UUID missingId = UUID.randomUUID();
+        when(patientChartAccess.require(eq(missingId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", missingId));
         assertThatThrownBy(() -> service.getChartReview(missingId, HOSPITAL_ID, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }

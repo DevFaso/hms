@@ -4,7 +4,6 @@ import com.example.hms.enums.AdvanceDirectiveStatus;
 import com.example.hms.enums.AllergySeverity;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.ProblemStatus;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.AdvanceDirective;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
@@ -23,8 +22,8 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientProblemRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.PatientStoryboardService;
+import com.example.hms.service.support.PatientChartAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,7 +58,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     private static final Set<AllergySeverity> HIGH_SEVERITY =
         Set.of(AllergySeverity.SEVERE, AllergySeverity.LIFE_THREATENING);
 
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final PatientAllergyRepository allergyRepository;
     private final PatientProblemRepository problemRepository;
     private final EncounterRepository encounterRepository;
@@ -69,11 +68,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     @Override
     @Transactional(readOnly = true)
     public PatientStoryboardDTO getStoryboard(UUID patientId, UUID hospitalId) {
-        if (patientId == null) {
-            throw new ResourceNotFoundException("patient.notFound", "<null>");
-        }
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        // See PatientChartAccess: the tenant-scoped findById 404'd the whole
+        // storyboard for cross-hospital patients ("Impossible de charger le
+        // résumé patient" on a chart that had otherwise rendered).
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId);

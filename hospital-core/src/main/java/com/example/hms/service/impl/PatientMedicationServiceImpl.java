@@ -10,7 +10,7 @@ import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.PatientMedicationService;
@@ -41,7 +41,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private static final int DEFAULT_LIMIT = 50;
 
     private final PrescriptionRepository prescriptionRepository;
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final RefillRequestRepository refillRequestRepository;
 
@@ -50,8 +50,11 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     public List<PatientMedicationResponseDTO> getMedicationsForPatient(UUID patientId, UUID hospitalId, int limit) {
         log.info("Fetching medications for patient {} in hospital {}", patientId, hospitalId);
 
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+        // Was tenant-scoped findById with NO registration check: cross-hospital
+        // patients 404'd, and the prose passed as a message key rendered as
+        // "[Missing translation] ...". PatientChartAccess fixes both and adds
+        // the authorization this read never had.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         List<Prescription> prescriptions;
         if (hospitalId != null) {

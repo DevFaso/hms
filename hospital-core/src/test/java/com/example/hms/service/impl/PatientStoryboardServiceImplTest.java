@@ -24,7 +24,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientProblemRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -40,12 +40,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class PatientStoryboardServiceImplTest {
 
-    private final PatientRepository patientRepo = mock(PatientRepository.class);
+    private final PatientChartAccess patientChartAccess = mock(PatientChartAccess.class);
     private final PatientAllergyRepository allergyRepo = mock(PatientAllergyRepository.class);
     private final PatientProblemRepository problemRepo = mock(PatientProblemRepository.class);
     private final EncounterRepository encounterRepo = mock(EncounterRepository.class);
@@ -63,21 +64,22 @@ class PatientStoryboardServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new PatientStoryboardServiceImpl(
-            patientRepo, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo);
+            patientChartAccess, allergyRepo, problemRepo, encounterRepo, directiveRepo, hospitalRepo);
 
         hospital = Hospital.builder().name("Centre Médical Bobo").build();
         hospital.setId(HOSPITAL_ID);
 
         patient = buildPatient("MRN-1001", "FULL_CODE");
 
-        when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(patient);
         when(hospitalRepo.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
     }
 
     @Test
     void missingPatientThrowsNotFound() {
-        when(patientRepo.findById(any(UUID.class))).thenReturn(Optional.empty());
         UUID missingId = UUID.randomUUID();
+        when(patientChartAccess.require(eq(missingId), any()))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", missingId));
         assertThatThrownBy(() -> service.getStoryboard(missingId, HOSPITAL_ID))
             .isInstanceOf(ResourceNotFoundException.class);
     }
@@ -144,7 +146,7 @@ class PatientStoryboardServiceImplTest {
         when(directiveRepo.findByPatient_IdAndHospital_Id(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of());
         // Patient with no code status either
         Patient bare = buildPatient("MRN-9999", null);
-        when(patientRepo.findById(PATIENT_ID)).thenReturn(Optional.of(bare));
+        when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(bare);
 
         PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 

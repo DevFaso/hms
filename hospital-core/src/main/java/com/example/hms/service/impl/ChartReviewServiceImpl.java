@@ -1,6 +1,5 @@
 package com.example.hms.service.impl;
 
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.ImagingOrder;
@@ -27,10 +26,10 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabResultRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.service.ChartReviewService;
+import com.example.hms.service.support.PatientChartAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -60,7 +59,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     /** Length used for note / imaging-impression preview snippets. */
     static final int PREVIEW_LENGTH = 280;
 
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final EncounterRepository encounterRepository;
     private final EncounterNoteRepository encounterNoteRepository;
     private final LabResultRepository labResultRepository;
@@ -73,11 +72,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     @Override
     @Transactional(readOnly = true)
     public ChartReviewDTO getChartReview(UUID patientId, UUID hospitalId, Integer limit) {
-        if (patientId == null) {
-            throw new ResourceNotFoundException("patient.notFound", "<null>");
-        }
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        // Resolves unscoped then authorizes against the registration table —
+        // the tenant-scoped findById used to 404 every cross-hospital patient
+        // whose chart header had just loaded fine. See PatientChartAccess.
+        Patient patient = patientChartAccess.require(patientId, hospitalId);
 
         int effectiveLimit = clampLimit(limit);
 
