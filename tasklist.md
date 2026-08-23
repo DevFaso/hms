@@ -989,13 +989,22 @@ PHYSIOTHERAPIST.
   by the portal map; ImagingOrderController gates reads on the
   VIEW_IMAGING_ORDERS authority or SUPER_ADMIN/DOCTOR/NURSE/RADIOLOGIST).
   Same shape as D5 - several annotations, not one matcher.
-- [ ] D7. Patient chart for the treating clinicians who are NOT on the care
-  team's core loop: RADIOLOGIST, ANESTHESIOLOGIST, PHYSIOTHERAPIST. In a real
-  hospital all three read the chart (contrast safety, pre-operative assessment,
-  rehabilitation caseload) and both permission maps used to say so, but the
-  /patients page is a composite: patient read, vitals, encounters, appointments
-  and record-sharing are five separate role lists, so admitting a role to the
-  route alone yields a page that 403s in four panels. Widen all five together
-  (or build a read-only chart view for consulting clinicians) - and note
-  ANESTHESIOLOGIST currently reaches NO role-guarded page at all, which makes
-  it the role this decision matters most for.
+- [x] D7. Patient chart for the treating clinicians who are NOT on the care
+  team's core loop: RADIOLOGIST, ANESTHESIOLOGIST, PHYSIOTHERAPIST.
+  DONE 2026-08-23 (**PR #492**), resolved real-world: in a real hospital all
+  three read the chart, so the product now lets them.
+  The reason D4 refused to do it in one line: the chart page is not one
+  endpoint. Opening it fans out to FIVE independently guarded reads - the
+  patient, vitals, encounters, appointments, and the caller's hospital scope
+  (/me/hospital, which every authenticated page resolves). Admitting the route
+  alone would have moved the 403 from the route to four empty panels, which is
+  worse because the page then LOOKS available. All five moved together.
+  Read-only, deliberately: recording vitals, opening encounters and booking
+  appointments stay with the treating team. Two of those writes were sharing a
+  role literal with a read endpoint, so widening the read would have silently
+  handed them the write - each now carries its own named constant
+  (ENCOUNTER_CREATE_ROLES, APPOINTMENT_BOOK_ROLES) and a test asserts the
+  separation holds. `ConsultingClinicianChartAccessTest` pins all five layers
+  as a set so a future change cannot widen one and forget the rest.
+  'View Patient Records' is restored in both permission maps - D4 had removed
+  it precisely because the grant was a promise the panels could not keep.

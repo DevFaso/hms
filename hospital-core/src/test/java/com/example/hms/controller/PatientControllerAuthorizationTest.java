@@ -23,12 +23,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PatientControllerAuthorizationTest {
 
     /**
-     * Roles that reach a page embedding {@code <app-patient-picker>} but have no
-     * business paging the whole chart: the pharmacist (/medication-history), the
-     * radiologist (/imaging) and the physiotherapist (/treatment-plans).
+     * Roles that reach a page embedding {@code <app-patient-picker>}: the
+     * pharmacist (/medication-history), the radiologist (/imaging) and the
+     * physiotherapist (/treatment-plans).
      */
-    private static final List<String> PICKER_ONLY_ROLES =
+    private static final List<String> PICKER_ROLES =
         List.of("ROLE_PHARMACIST", "ROLE_RADIOLOGIST", "ROLE_PHYSIOTHERAPIST");
+
+    /**
+     * Of those, only the pharmacist looks patients up WITHOUT reading the
+     * chart. The radiologist and physiotherapist gained chart access in role
+     * audit D7 once all five of the chart page's layers were widened together
+     * (see ConsultingClinicianChartAccessTest).
+     */
+    private static final List<String> PICKER_BUT_NOT_CHART = List.of("ROLE_PHARMACIST");
 
     private static String preAuthorizeOf(String methodName) {
         return Arrays.stream(PatientController.class.getDeclaredMethods())
@@ -55,18 +63,18 @@ class PatientControllerAuthorizationTest {
         String search = preAuthorizeOf("searchPatients");
         String lookup = preAuthorizeOf("lookupPatients");
         assertThat(search).isEqualTo(lookup);
-        assertThat(search).contains(PICKER_ONLY_ROLES);
+        assertThat(search).contains(PICKER_ROLES);
     }
 
     @Test
-    @DisplayName("picker-only roles do not get the whole chart")
-    void pickerOnlyRolesCannotPageTheChart() {
-        // The SecurityConfig GET /patients matcher has to admit them — it also
-        // covers /patients/search and /patients/lookup — so the controller is
-        // the layer that keeps the chart itself narrower. Granting these roles
-        // the chart is D7, and needs the page's vitals/encounters/sharing
-        // panels widened too or it just 403s in four places instead of one.
-        assertThat(preAuthorizeOf("getAllPatients")).doesNotContain(PICKER_ONLY_ROLES);
+    @DisplayName("looking patients up is not the same as reading the chart")
+    void pharmacistLooksUpWithoutReadingTheChart() {
+        // The SecurityConfig GET /patients matcher must admit every picker role
+        // — it also covers /patients/search and /patients/lookup — so the
+        // controller is the layer that keeps the chart itself narrower. A
+        // pharmacist resolves a patient to dispense against; that is not a
+        // reason to hand them the whole record.
+        assertThat(preAuthorizeOf("getAllPatients")).doesNotContain(PICKER_BUT_NOT_CHART);
     }
 
     @Test

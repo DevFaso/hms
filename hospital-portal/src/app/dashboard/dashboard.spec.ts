@@ -827,12 +827,13 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.pharmacistWorkflowTiles().length).toBe(5);
   });
 
-  it('radiologistWorkflowTiles returns 6 tiles', () => {
-    // 8 declared; Patients and Encounters drop — neither route admits a
-    // radiologist. The chart itself is D7, not D4: the /patients page's vitals,
-    // encounters and sharing panels would each 403.
+  it('radiologistWorkflowTiles returns 7 tiles', () => {
+    // 8 declared. Patients survives since D7 wired the chart end-to-end for
+    // consulting clinicians. Encounters still drops: the chart's encounter
+    // PANEL is readable (backend), but /encounters is the full encounters
+    // workbench and its route guard deliberately stays with the treating team.
     const c = createComponent(['ROLE_RADIOLOGIST']);
-    expect(c.radiologistWorkflowTiles().length).toBe(6);
+    expect(c.radiologistWorkflowTiles().length).toBe(7);
   });
 
   it('patientQuickLinks returns 8 tiles', () => {

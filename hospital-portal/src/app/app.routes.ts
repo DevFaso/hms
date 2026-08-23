@@ -232,6 +232,14 @@ export const routes: Routes = [
             // guard was the only rejecting layer.
             'ROLE_LAB_TECHNICIAN',
             'ROLE_QUALITY_MANAGER',
+            // Role audit D7: consulting clinicians read the chart. Admitted
+            // only once ALL five backend layers the page calls were widened
+            // (patient read, vitals, encounters, appointments, hospital
+            // scope) — admitting the route alone would have traded one 403
+            // for four empty panels.
+            'ROLE_RADIOLOGIST',
+            'ROLE_ANESTHESIOLOGIST',
+            'ROLE_PHYSIOTHERAPIST',
           ],
         },
         children: [

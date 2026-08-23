@@ -33,6 +33,8 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+
+import static com.example.hms.config.SecurityConstants.CONSULTING_CLINICIANS_AUTHORITIES;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -60,6 +62,32 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EncounterController {
 
+    /**
+     * Creating an encounter — unchanged by role audit D7 and deliberately kept
+     * as its own constant. A consulting clinician reads the visit history; they
+     * do not open visits.
+     */
+    private static final String ENCOUNTER_CREATE_ROLES =
+        "hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')";
+
+    /**
+     * Encounter list READ — the visit history panel on the patient chart. This
+     * is the clinical context a consulting clinician opens the chart for: the
+     * indication behind an imaging request, the surgery an anaesthetist is
+     * assessing for, the injury a physiotherapist is rehabilitating. Role
+     * audit D7.
+     */
+    private static final String ENCOUNTER_LIST_ROLES = "hasAnyAuthority("
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ","
+        + "'ROLE_SUPER_ADMIN')";
+
+    /** As above, plus ROLE_PATIENT for their own encounter. */
+    private static final String ENCOUNTER_DETAIL_ROLES = "hasAnyAuthority("
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT',"
+        + CONSULTING_CLINICIANS_AUTHORITIES + ","
+        + "'ROLE_SUPER_ADMIN')";
+
     private final EncounterService encounterService;
     private final ControllerAuthUtils authUtils;
 
@@ -67,7 +95,7 @@ public class EncounterController {
     // Create (Receptionist can check-in → default ARRIVED)
     // ----------------------------------------------------------
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize(ENCOUNTER_CREATE_ROLES)
     @Operation(
         summary = "Create a new encounter",
         description = "Creates a new patient encounter. " +
@@ -117,7 +145,7 @@ public class EncounterController {
     // Read by ID
     // ----------------------------------------------------------
     @GetMapping(value = "/{id}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(ENCOUNTER_DETAIL_ROLES)
     @Operation(summary = "Get an encounter by ID")
     public ResponseEntity<EncounterResponseDTO> getById(
         @PathVariable UUID id,
@@ -131,7 +159,7 @@ public class EncounterController {
     // Paged & filtered list
     // ----------------------------------------------------------
     @GetMapping(consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize(ENCOUNTER_LIST_ROLES)
     @Operation(summary = "Search/List encounters")
     public ResponseEntity<Page<EncounterResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
