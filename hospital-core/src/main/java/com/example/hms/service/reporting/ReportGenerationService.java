@@ -49,8 +49,36 @@ public class ReportGenerationService {
     private final EncounterRepository encounterRepository;
     private final AppointmentRepository appointmentRepository;
 
-    /** One generated attachment: bytes + the data-row count + a filename. */
-    public record GeneratedReport(byte[] content, int rowCount, String filename) { }
+    /**
+     * One generated attachment: bytes + the data-row count + a filename.
+     * A plain class rather than a record because Sonar S6218 flags records
+     * with array components (array equals/hashCode compare identity) — the
+     * V126 PhotoPayload precedent. Accessor names keep the record shape so
+     * call sites read the same.
+     */
+    public static final class GeneratedReport {
+        private final byte[] content;
+        private final int rowCount;
+        private final String filename;
+
+        public GeneratedReport(byte[] content, int rowCount, String filename) {
+            this.content = content;
+            this.rowCount = rowCount;
+            this.filename = filename;
+        }
+
+        public byte[] content() {
+            return content;
+        }
+
+        public int rowCount() {
+            return rowCount;
+        }
+
+        public String filename() {
+            return filename;
+        }
+    }
 
     /** Closed date range a period token denotes (both ends inclusive). */
     public record PeriodRange(LocalDate start, LocalDate end) { }
