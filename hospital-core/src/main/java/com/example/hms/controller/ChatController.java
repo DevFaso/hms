@@ -129,6 +129,24 @@ public class ChatController {
         return ResponseEntity.noContent().build();
     }
 
+    @GetMapping("/attachments/{attachmentId}/download")
+    @PreAuthorize(CHAT_ROLES)
+    @Operation(summary = "Download a chat attachment",
+            description = "Authenticated, participant-checked streaming — only the carrying "
+                + "message's sender or recipient may read the bytes. Attachment files have no "
+                + "public static mapping.")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadAttachment(
+            @PathVariable UUID attachmentId,
+            org.springframework.security.core.Authentication authentication) {
+        ChatMessageService.ChatAttachmentPayload payload =
+            chatMessageService.downloadAttachment(attachmentId, authentication.getName());
+        return ResponseEntity.ok()
+            .contentType(org.springframework.http.MediaType.parseMediaType(payload.contentType()))
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename=\"" + payload.displayName().replace("\"", "'") + "\"")
+            .body(new org.springframework.core.io.FileSystemResource(payload.path()));
+    }
+
     // --- REST: All Conversations (Inbox) ---
     @GetMapping("/conversations/{userId}")
     @PreAuthorize(CHAT_ROLES)

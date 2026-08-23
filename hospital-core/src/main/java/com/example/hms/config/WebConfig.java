@@ -17,15 +17,22 @@ public class WebConfig implements WebMvcConfigurer {
     private String uploadDir;
 
     /**
-     * Configure static resource handlers for uploaded files
+     * Static serving is limited to profile images — the ONE upload class
+     * that must stay reachable through a bare {@code <img src>} (web +
+     * both mobile apps render avatars without a bearer token). Every
+     * other class under the upload root (patient documents, chat
+     * attachments, chart/referral attachments) is PHI and is served only
+     * through authenticated, ownership-checked endpoints; mapping the
+     * whole tree here is what made the permitAll /uploads/** hole a
+     * download-anything hole.
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-    
-        String uploadPath = Paths.get(uploadDir).toAbsolutePath().toString();
 
-        registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadPath + "/")
+        String profileImagesPath = Paths.get(uploadDir, "profile-images").toAbsolutePath().toString();
+
+        registry.addResourceHandler("/uploads/profile-images/**")
+                .addResourceLocations("file:" + profileImagesPath + "/")
                 .setCachePeriod(3600); // Cache for 1 hour
     }
 }

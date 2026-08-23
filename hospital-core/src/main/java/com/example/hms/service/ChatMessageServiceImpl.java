@@ -528,4 +528,31 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .map(m -> chatMessageMapper.toChatMessageResponseDTO(m, attachmentsByMessage))
             .toList();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ChatAttachmentPayload downloadAttachment(UUID attachmentId, String requesterUsername) {
+        ChatAttachment attachment = chatAttachmentRepository.findById(attachmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("Attachment not found"));
+        ChatMessage message = attachment.getMessage();
+        // Participant gate: only the carrying message's two parties may
+        // read the bytes. Everyone else — including other staff at the
+        // same hospital — collapses to not-found, so attachment ids
+        // reveal nothing about who talks to whom.
+        boolean participant = message != null && requesterUsername != null
+            && ((message.getSender() != null
+                    && requesterUsername.equals(message.getSender().getUsername()))
+                || (message.getRecipient() != null
+                    && requesterUsername.equals(message.getRecipient().getUsername())));
+        if (!participant) {
+            throw new ResourceNotFoundException("Attachment not found");
+        }
+        java.nio.file.Path path =
+            fileUploadService.resolveStoredFile(attachment.getStorageKey(), "chat-attachments");
+        String contentType = attachment.getContentType() != null
+            ? attachment.getContentType() : "application/octet-stream";
+        String displayName = attachment.getDisplayName() != null
+            ? attachment.getDisplayName() : "attachment";
+        return new ChatAttachmentPayload(path, contentType, displayName);
+    }
 }

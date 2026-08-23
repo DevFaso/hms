@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.ChatAttachmentKind;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.service.support.UrlPathNormalizer;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -120,7 +121,12 @@ public class FileUploadService {
 
         String originalFilename = file.getOriginalFilename();
         String extension = getFileExtension(originalFilename);
-        String filename = userId + "_profile_" + System.currentTimeMillis() + extension;
+        // Random suffix: profile images are the one class still served
+        // statically (avatars render via <img src> on web + both mobile
+        // apps, which cannot carry a bearer token), so the filename must
+        // not be derivable from the public userId + a timestamp guess.
+        String filename = userId + "_profile_" + System.currentTimeMillis()
+            + "_" + UUID.randomUUID() + extension;
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
@@ -222,6 +228,33 @@ public class FileUploadService {
             sizeBytes,
             checksum
         );
+    }
+
+    /**
+     * Resolve a stored upload for AUTHENTICATED streaming (P3 follow-up:
+     * closing the permitAll /uploads/** exposure). The storage key comes
+     * from a DB row — never raw client input — and may be either the
+     * relative form ("/uploads/{subdir}/{name}") or a legacy absolute
+     * public URL; both resolve. The returned path is guaranteed to sit
+     * inside the named subdirectory, so traversal has nothing to grab.
+     *
+     * @throws ResourceNotFoundException when the key is not under the
+     *         required subdirectory or the file no longer exists on disk
+     */
+    public Path resolveStoredFile(String storageKey, String requiredSubdirectory) {
+        String marker = "/uploads/" + requiredSubdirectory + "/";
+        int idx = storageKey == null ? -1 : storageKey.indexOf(marker);
+        if (idx < 0) {
+            throw new ResourceNotFoundException(
+                "File is not stored under " + requiredSubdirectory + ".");
+        }
+        String filename = storageKey.substring(idx + marker.length());
+        Path base = Paths.get(uploadDir, requiredSubdirectory).toAbsolutePath().normalize();
+        Path path = base.resolve(filename).normalize();
+        if (!path.startsWith(base) || !Files.exists(path)) {
+            throw new ResourceNotFoundException("The stored file is no longer available.");
+        }
+        return path;
     }
 
     private String buildAttachmentFilename(String sanitizedBaseName, String extension, UUID uploaderId, String fallbackBaseName) {

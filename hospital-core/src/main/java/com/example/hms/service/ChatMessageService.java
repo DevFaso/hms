@@ -27,4 +27,16 @@ public interface ChatMessageService {
     List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username);
     List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username);
 
+    /**
+     * Resolve an attachment's bytes for authenticated streaming. Only the
+     * carrying message's sender or recipient may download; anyone else —
+     * or an unknown id — reads as not-found (no participant enumeration).
+     * This is the ONLY way attachment bytes leave the server: the upload
+     * tree has no public static mapping (the permitAll /uploads/** hole).
+     */
+    ChatAttachmentPayload downloadAttachment(java.util.UUID attachmentId, String requesterUsername);
+
+    /** One downloadable attachment: on-disk path + the headers to serve it with. */
+    record ChatAttachmentPayload(java.nio.file.Path path, String contentType, String displayName) { }
+
 }

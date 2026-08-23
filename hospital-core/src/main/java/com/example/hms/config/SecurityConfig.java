@@ -635,8 +635,17 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR,
                         ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                // Public access to uploaded profile images (static assets)
-                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+                // Public access to profile images ONLY — avatars render via
+                // bare <img src> on web + both mobile apps, which cannot
+                // carry a bearer token, and new filenames embed a random
+                // UUID so they are not guessable. The old "/uploads/**"
+                // form also exposed patient documents, chat attachments
+                // and chart/referral attachments UNAUTHENTICATED; those
+                // classes now have no static mapping at all (WebConfig)
+                // and stream only through authenticated, ownership-checked
+                // endpoints (/me/patient/documents/{id}/download,
+                // /chat/attachments/{id}/download).
+                .requestMatchers(HttpMethod.GET, "/uploads/profile-images/**").permitAll()
 
                 .anyRequest().authenticated()
             )
