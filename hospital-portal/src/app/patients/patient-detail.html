@@ -158,7 +158,7 @@
           {{ 'MICRO.TAB' | translate }}
         </button>
       }
-      @if (canViewEncounters()) {
+      @if (canViewChartReview()) {
         <button
           class="tab"
           [class.active]="activeTab() === 'chart-review'"
@@ -167,6 +167,8 @@
         >
           {{ 'CHART_REVIEW.TAB_LABEL' | translate }}
         </button>
+      }
+      @if (canViewEncounters()) {
         <button
           class="tab"
           [class.active]="activeTab() === 'encounters'"
@@ -350,7 +352,7 @@
     }
 
     <!-- ═══ Chart Review Tab ═══ -->
-    @if (activeTab() === 'chart-review' && canViewEncounters()) {
+    @if (activeTab() === 'chart-review' && canViewChartReview()) {
       <app-chart-review [patientId]="p.id" />
     }
 
