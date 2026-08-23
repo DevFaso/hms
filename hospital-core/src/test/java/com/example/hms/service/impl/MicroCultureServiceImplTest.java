@@ -25,7 +25,7 @@ import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.MicroCultureResultRepository;
 import com.example.hms.repository.MicroIsolateRepository;
 import com.example.hms.repository.MicroSusceptibilityRepository;
-import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NotificationService;
@@ -66,7 +66,7 @@ class MicroCultureServiceImplTest {
     @Mock private MicroSusceptibilityRepository susceptibilityRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabSpecimenRepository specimenRepository;
-    @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
     @Mock private NotificationService notificationService;
@@ -85,7 +85,7 @@ class MicroCultureServiceImplTest {
     void setUp() {
         service = new MicroCultureServiceImpl(
             cultureRepository, isolateRepository, susceptibilityRepository,
-            labOrderRepository, specimenRepository, patientRepository,
+            labOrderRepository, specimenRepository, patientChartAccess,
             staffRepository, userRepository, notificationService);
 
         hospitalId = UUID.randomUUID();
@@ -136,7 +136,7 @@ class MicroCultureServiceImplTest {
         when(isolateRepository.countByCultureResult_Id(any())).thenReturn(0L);
         when(staffRepository.findByUserIdAndHospitalId(any(), any())).thenReturn(Optional.empty());
         when(userRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
-        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patient.getId()), any())).thenReturn(patient);
     }
 
     private MicroIsolate storedIsolate() {
@@ -341,11 +341,14 @@ class MicroCultureServiceImplTest {
     void patientListIs404WhenTheScopedCallerHasNoRegistration() {
         UUID foreignScope = UUID.randomUUID();
         UUID patientId = patient.getId();
+        // The scope decision lives in PatientChartAccess (tested there, including
+        // that unknown and unregistered are indistinguishable); this asserts the
+        // culture list propagates it instead of returning an empty list.
+        when(patientChartAccess.require(patientId, foreignScope))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
-        // Same message as unknown-patient: the caller learns nothing.
         assertThatThrownBy(() -> service.getForPatient(patientId, foreignScope))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

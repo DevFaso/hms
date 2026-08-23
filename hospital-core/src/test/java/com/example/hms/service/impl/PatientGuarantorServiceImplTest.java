@@ -11,6 +11,7 @@ import com.example.hms.payload.dto.GuarantorResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientGuarantorRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.service.support.PatientChartAccess;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
@@ -41,6 +43,7 @@ class PatientGuarantorServiceImplTest {
 
     @Mock private PatientGuarantorRepository guarantorRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private PatientChartAccess patientChartAccess;
     @Mock private HospitalRepository hospitalRepository;
 
     @InjectMocks private PatientGuarantorServiceImpl service;
@@ -65,6 +68,7 @@ class PatientGuarantorServiceImplTest {
         patient.setHospitalRegistrations(Set.of(registration));
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(guarantorRepository.save(any(PatientGuarantor.class))).thenAnswer(i -> i.getArgument(0));
         when(guarantorRepository.findByPatient_IdAndHospital_IdAndActiveTrue(any(), any()))
@@ -195,11 +199,15 @@ class PatientGuarantorServiceImplTest {
 
     @Test
     void listIs404ForAScopedCallerWithoutRegistration() {
+        // The scope rule lives in PatientChartAccess (tested there, including
+        // that unknown and unregistered look identical); this asserts list
+        // propagates it instead of returning an empty guarantor list.
         UUID foreignScope = UUID.randomUUID();
+        when(patientChartAccess.require(patientId, foreignScope))
+            .thenThrow(new ResourceNotFoundException("patient.notFound", patientId));
 
         assertThatThrownBy(() -> service.list(patientId, foreignScope))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Patient not found");
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

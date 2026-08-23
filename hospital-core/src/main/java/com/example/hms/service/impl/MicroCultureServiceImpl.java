@@ -23,11 +23,11 @@ import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.MicroCultureResultRepository;
 import com.example.hms.repository.MicroIsolateRepository;
 import com.example.hms.repository.MicroSusceptibilityRepository;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.MicroCultureService;
 import com.example.hms.service.NotificationService;
+import com.example.hms.service.support.PatientChartAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -61,7 +61,6 @@ import java.util.stream.Collectors;
 public class MicroCultureServiceImpl implements MicroCultureService {
 
     private static final String MSG_CULTURE_NOT_FOUND = "Culture report not found with ID: ";
-    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found with ID: ";
     private static final String MSG_ORDER_NOT_FOUND = "Lab order not found with ID: ";
     private static final String MSG_ISOLATE_NOT_FOUND = "Isolate not found with ID: ";
     private static final String POSITIVE_CULTURE_TYPE = "POSITIVE_CULTURE_RESULT";
@@ -71,7 +70,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     private final MicroSusceptibilityRepository susceptibilityRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabSpecimenRepository specimenRepository;
-    private final PatientRepository patientRepository;
+    private final PatientChartAccess patientChartAccess;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
@@ -137,13 +136,9 @@ public class MicroCultureServiceImpl implements MicroCultureService {
     @Override
     @Transactional(readOnly = true)
     public List<MicroCultureResponseDTO> getForPatient(UUID patientId, UUID hospitalId) {
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
-        // 404-not-403: same message whether the patient is unknown or merely
-        // not registered at the caller's hospital.
-        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
-            throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId);
-        }
+        // 404-not-403, and resolves cross-hospital patients the tenant-scoped
+        // finder used to miss entirely — see PatientChartAccess.
+        patientChartAccess.require(patientId, hospitalId);
         return cultureRepository.findForPatient(patientId, hospitalId).stream()
             .map(this::toDto)
             .toList();
