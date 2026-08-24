@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.enums.ProblemStatus;
 import com.example.hms.mapper.AppointmentMapper;
 import com.example.hms.mapper.FamilyHistoryMapper;
 import com.example.hms.mapper.PatientSurgicalHistoryMapper;
@@ -9,6 +10,7 @@ import com.example.hms.mapper.SocialHistoryMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientDiagnosis;
 import com.example.hms.model.PatientFamilyHistory;
+import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientSocialHistory;
 import com.example.hms.model.PatientSurgicalHistory;
 import com.example.hms.model.Staff;
@@ -51,7 +53,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -107,6 +111,7 @@ class PatientPortalServiceImplHistoryTest {
 
     // History-specific mocks
     @Mock private PatientDiagnosisRepository patientDiagnosisRepository;
+    @Mock private com.example.hms.repository.PatientProblemRepository patientProblemRepository;
     @Mock private PatientSurgicalHistoryRepository surgicalHistoryRepository;
     @Mock private FamilyHistoryRepository familyHistoryRepository;
     @Mock private SocialHistoryRepository socialHistoryRepository;
@@ -214,6 +219,77 @@ class PatientPortalServiceImplHistoryTest {
 
             assertThat(result).hasSize(1);
             assertThat(result.get(0).getDiagnosedByName()).isNull();
+        }
+
+        @Test
+        @DisplayName("shows diagnoses recorded through the CURRENT write path")
+        void includesProblemListEntries() {
+            // The regression this method existed with: /patients/{id}/diagnoses
+            // writes a PatientProblem, so a history built from patient_diagnoses
+            // alone showed the patient nothing recorded since V14.
+            stubPatientResolution();
+
+            Staff doctor = new Staff();
+            User doctorUser = new User();
+            doctorUser.setFirstName("Dr.");
+            doctorUser.setLastName("Sacks");
+            doctor.setUser(doctorUser);
+
+            PatientProblem problem = new PatientProblem();
+            problem.setId(UUID.randomUUID());
+            problem.setProblemDisplay("Malaria, unspecified");
+            problem.setProblemCode("B54");
+            problem.setStatus(ProblemStatus.ACTIVE);
+            problem.setCreatedAt(LocalDateTime.of(2026, 8, 20, 9, 0));
+            problem.setRecordedBy(doctor);
+
+            when(patientProblemRepository.findByPatient_IdOrderByCreatedAtDesc(patientId))
+                    .thenReturn(List.of(problem));
+            when(patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId))
+                    .thenReturn(Collections.emptyList());
+
+            List<PatientDiagnosisSummaryDTO> result = service.getMyMedicalHistory(auth);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getDescription()).isEqualTo("Malaria, unspecified");
+            assertThat(result.get(0).getIcdCode()).isEqualTo("B54");
+            assertThat(result.get(0).getStatus()).isEqualTo("ACTIVE");
+            assertThat(result.get(0).getDiagnosedByName()).isEqualTo("Dr. Sacks");
+            // LocalDateTime -> OffsetDateTime must go through atZone;
+            // OffsetDateTime.from(LocalDateTime) THROWS (PR #494).
+            assertThat(result.get(0).getDiagnosedAt()).isNotNull();
+            assertThat(result.get(0).getDiagnosedAt().toLocalDateTime())
+                    .isEqualTo(LocalDateTime.of(2026, 8, 20, 9, 0));
+        }
+
+        @Test
+        @DisplayName("merges both stores, newest first, so legacy rows are not lost")
+        void mergesLegacyAndCurrentNewestFirst() {
+            stubPatientResolution();
+
+            PatientProblem recent = new PatientProblem();
+            recent.setId(UUID.randomUUID());
+            recent.setProblemDisplay("Recent problem");
+            recent.setStatus(ProblemStatus.ACTIVE);
+            recent.setCreatedAt(LocalDateTime.of(2026, 8, 20, 9, 0));
+
+            PatientDiagnosis older = new PatientDiagnosis();
+            older.setId(UUID.randomUUID());
+            older.setDescription("Older legacy diagnosis");
+            older.setStatus("ACTIVE");
+            older.setDiagnosedAt(OffsetDateTime.of(
+                    LocalDateTime.of(2024, 1, 5, 8, 0), ZoneOffset.UTC));
+
+            when(patientProblemRepository.findByPatient_IdOrderByCreatedAtDesc(patientId))
+                    .thenReturn(List.of(recent));
+            when(patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId))
+                    .thenReturn(List.of(older));
+
+            List<PatientDiagnosisSummaryDTO> result = service.getMyMedicalHistory(auth);
+
+            assertThat(result).hasSize(2);
+            assertThat(result.get(0).getDescription()).isEqualTo("Recent problem");
+            assertThat(result.get(1).getDescription()).isEqualTo("Older legacy diagnosis");
         }
     }
 

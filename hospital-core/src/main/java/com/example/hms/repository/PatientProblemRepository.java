@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.PatientProblem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -16,6 +17,20 @@ public interface PatientProblemRepository extends JpaRepository<PatientProblem, 
     List<PatientProblem> findByPatient_Id(UUID patientId);
 
     List<PatientProblem> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+    /**
+     * A patient's whole problem list, newest first — the patient portal's
+     * own medical history.
+     *
+     * <p>Deliberately NOT hospital-scoped: the caller is the data subject
+     * reading their own record, so a diagnosis made at one hospital must
+     * not vanish because they are viewing from another.
+     */
+    List<PatientProblem> findByPatient_IdOrderByCreatedAtDesc(UUID patientId);
+
+    /** Same, narrowed to one status — the snapshot's "active problems". */
+    List<PatientProblem> findByPatient_IdAndStatusOrderByCreatedAtDesc(
+        UUID patientId, ProblemStatus status);
 
     /** One (code, display, count) row of the morbidity aggregation. */
     interface DiagnosisCount {
