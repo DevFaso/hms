@@ -79,9 +79,18 @@ public class FhirBulkExportRunner {
 
     private static final Logger log = LoggerFactory.getLogger(FhirBulkExportRunner.class);
 
+    // FHIR resource-type names — the wire identity of each NDJSON file, and
+    // the same tokens the caller passes in `_type`. Named so a typo can't
+    // silently split "the type we filter on" from "the file we write to".
+    private static final String TYPE_PATIENT = "Patient";
+    private static final String TYPE_ENCOUNTER = "Encounter";
+    private static final String TYPE_OBSERVATION = "Observation";
+    private static final String TYPE_CONDITION = "Condition";
+    private static final String TYPE_MEDICATION_REQUEST = "MedicationRequest";
+
     /** Emission order — Patient first so consumers can resolve references. */
     private static final List<String> TYPE_ORDER = List.of(
-        "Patient", "Encounter", "Observation", "Condition", "MedicationRequest");
+        TYPE_PATIENT, TYPE_ENCOUNTER, TYPE_OBSERVATION, TYPE_CONDITION, TYPE_MEDICATION_REQUEST);
 
     private static final int PATIENT_PAGE_SIZE = 100;
     private static final int RESOURCE_PAGE_SIZE = 200;
@@ -245,44 +254,44 @@ public class FhirBulkExportRunner {
             return;
         }
         UUID patientId = patient.getId();
-        if (types.contains("Patient") && passesSince(patient.getUpdatedAt(), since)) {
-            sink.write("Patient", patientMapper.toFhir(patient));
+        if (types.contains(TYPE_PATIENT) && passesSince(patient.getUpdatedAt(), since)) {
+            sink.write(TYPE_PATIENT, patientMapper.toFhir(patient));
         }
-        if (types.contains("Encounter")) {
+        if (types.contains(TYPE_ENCOUNTER)) {
             pageThrough(p -> encounterRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
                 e -> {
                     var encounter = (com.example.hms.model.Encounter) e;
                     if (passesSince(encounter.getUpdatedAt(), since)) {
-                        sink.write("Encounter", encounterMapper.toFhir(encounter));
+                        sink.write(TYPE_ENCOUNTER, encounterMapper.toFhir(encounter));
                     }
                 });
         }
-        if (types.contains("Observation")) {
+        if (types.contains(TYPE_OBSERVATION)) {
             pageThrough(p -> vitalSignRepository
                     .findPageByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId, p),
                 v -> {
                     if (passesSince(v.getUpdatedAt(), since)) {
-                        observationMapper.toFhir(v).forEach(o -> sink.write("Observation", o));
+                        observationMapper.toFhir(v).forEach(o -> sink.write(TYPE_OBSERVATION, o));
                     }
                 });
             pageThrough(p -> labResultRepository
                     .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, p),
                 r -> {
                     if (passesSince(r.getUpdatedAt(), since)) {
-                        sink.write("Observation", observationMapper.toFhir(r));
+                        sink.write(TYPE_OBSERVATION, observationMapper.toFhir(r));
                     }
                 });
         }
-        if (types.contains("Condition")) {
+        if (types.contains(TYPE_CONDITION)) {
             patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
                 .filter(c -> passesSince(c.getUpdatedAt(), since))
-                .forEach(c -> sink.write("Condition", conditionMapper.toFhir(c)));
+                .forEach(c -> sink.write(TYPE_CONDITION, conditionMapper.toFhir(c)));
         }
-        if (types.contains("MedicationRequest")) {
+        if (types.contains(TYPE_MEDICATION_REQUEST)) {
             pageThrough(p -> prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, p),
                 rx -> {
                     if (passesSince(rx.getUpdatedAt(), since)) {
-                        sink.write("MedicationRequest", medicationRequestMapper.toFhir(rx));
+                        sink.write(TYPE_MEDICATION_REQUEST, medicationRequestMapper.toFhir(rx));
                     }
                 });
         }

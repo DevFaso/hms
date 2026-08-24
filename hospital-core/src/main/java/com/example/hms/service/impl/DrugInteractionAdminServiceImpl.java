@@ -21,6 +21,8 @@ import java.util.UUID;
 @Slf4j
 public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminService {
 
+    private static final String MSG_NOT_FOUND = "Drug interaction not found with ID: ";
+
     private final DrugInteractionRepository repository;
     private final DrugInteractionMapper mapper;
 
@@ -74,7 +76,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     public DrugInteractionDTO update(UUID id, DrugInteractionDTO request) {
         validate(request);
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Drug interaction not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
         apply(entity, request);
         return mapper.toDTO(repository.save(entity));
     }
@@ -83,7 +85,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     @Transactional
     public DrugInteractionDTO deactivate(UUID id) {
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Drug interaction not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
         entity.setActive(false);
         return mapper.toDTO(repository.save(entity));
     }
@@ -92,7 +94,7 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     @Transactional
     public DrugInteractionDTO reactivate(UUID id) {
         DrugInteraction entity = repository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("Drug interaction not found with ID: " + id));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_NOT_FOUND + id));
         entity.setActive(true);
         return mapper.toDTO(repository.save(entity));
     }

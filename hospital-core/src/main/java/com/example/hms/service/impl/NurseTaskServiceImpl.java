@@ -1358,8 +1358,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .patient(patient)
             .category(request.getCategory().toUpperCase(Locale.ROOT))
             .description(request.getDescription())
-            .priority(request.getPriority() != null ? request.getPriority().toUpperCase(Locale.ROOT) : "ROUTINE")
-            .status("PENDING")
+            .priority(request.getPriority() != null
+                ? request.getPriority().toUpperCase(Locale.ROOT) : PRIORITY_ROUTINE)
+            .status(STATUS_PENDING)
             .dueAt(request.getDueAt())
             .createdByName(createdByName)
             .build();
