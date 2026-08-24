@@ -178,6 +178,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final QuestionnaireMapper questionnaireMapper;
 
     // Medical & Family History
+    private final com.example.hms.repository.PatientProblemRepository patientProblemRepository;
     private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
     private final com.example.hms.repository.PatientSurgicalHistoryRepository surgicalHistoryRepository;
     private final com.example.hms.repository.FamilyHistoryRepository familyHistoryRepository;
@@ -1790,21 +1791,88 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // Medical & Family History
     // ══════════════════════════════════════════════════════════════════════
 
+    /**
+     * The patient's own diagnosis history.
+     *
+     * <p>Reads BOTH stores on purpose. {@code clinical.patient_problems} is
+     * where every current write path lands — the {@code /patients/{id}/diagnoses}
+     * endpoints write a {@code PatientProblem} despite their name — so a
+     * history built from {@code patient_diagnoses} alone showed a patient
+     * NOTHING recorded since that table was superseded. {@code patient_diagnoses}
+     * is still read because V14-era rows may exist in a deployment, and a
+     * patient's medical history must not silently lose records; it is
+     * read-only legacy and this branch can be deleted once every deployment
+     * is confirmed empty.
+     *
+     * <p>Not hospital-scoped: the caller is the data subject reading their
+     * own record, so a diagnosis made at one hospital must not disappear
+     * because they are viewing from another.
+     */
     @Override
     @Transactional(readOnly = true)
     public List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> getMyMedicalHistory(Authentication auth) {
         Patient patient = findPatient(auth);
-        return patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patient.getId())
+
+        java.util.List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> merged =
+                new java.util.ArrayList<>();
+        patientProblemRepository.findByPatient_IdOrderByCreatedAtDesc(patient.getId())
                 .stream()
-                .map(d -> com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO.builder()
-                        .id(d.getId())
-                        .description(d.getDescription())
-                        .icdCode(d.getIcdCode())
-                        .status(d.getStatus())
-                        .diagnosedAt(d.getDiagnosedAt())
-                        .diagnosedByName(d.getDiagnosedBy() != null ? d.getDiagnosedBy().getFullName() : null)
-                        .build())
-                .toList();
+                .map(PatientPortalServiceImpl::toDiagnosisSummary)
+                .forEach(merged::add);
+        patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patient.getId())
+                .stream()
+                .map(PatientPortalServiceImpl::toDiagnosisSummary)
+                .forEach(merged::add);
+
+        // Re-sort across both sources, newest first. Nulls last so a row with
+        // no usable timestamp sinks rather than heading the list.
+        merged.sort(java.util.Comparator.comparing(
+                com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO::getDiagnosedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.reverseOrder())));
+        return java.util.List.copyOf(merged);
+    }
+
+    /** Current store: a problem-list entry. */
+    private static com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO toDiagnosisSummary(
+            com.example.hms.model.PatientProblem problem) {
+        return com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO.builder()
+                .id(problem.getId())
+                .description(problem.getProblemDisplay())
+                .icdCode(problem.getProblemCode())
+                .status(problem.getStatus() != null ? problem.getStatus().name() : null)
+                // When it was RECORDED, not onsetDate — onset is patient-reported,
+                // nullable, and can predate the diagnosis by years.
+                .diagnosedAt(toOffset(problem.getCreatedAt()))
+                .diagnosedByName(problem.getRecordedBy() != null
+                        ? problem.getRecordedBy().getFullName() : null)
+                .build();
+    }
+
+    /** Legacy store: a V14-era row, already OffsetDateTime. */
+    private static com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO toDiagnosisSummary(
+            com.example.hms.model.PatientDiagnosis diagnosis) {
+        return com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO.builder()
+                .id(diagnosis.getId())
+                .description(diagnosis.getDescription())
+                .icdCode(diagnosis.getIcdCode())
+                .status(diagnosis.getStatus())
+                .diagnosedAt(diagnosis.getDiagnosedAt())
+                .diagnosedByName(diagnosis.getDiagnosedBy() != null
+                        ? diagnosis.getDiagnosedBy().getFullName() : null)
+                .build();
+    }
+
+    /**
+     * BaseEntity stores timestamps as LocalDateTime while this DTO exposes
+     * OffsetDateTime. {@code OffsetDateTime.from(LocalDateTime)} does NOT
+     * convert — it throws DateTimeException — which is exactly how
+     * PatientPrimaryCareMapper was broken in production (PR #494). Attach
+     * the system zone, matching that fix and the FHIR mappers' idiom.
+     */
+    private static java.time.OffsetDateTime toOffset(java.time.LocalDateTime value) {
+        return value == null
+                ? null
+                : value.atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime();
     }
 
     @Override
