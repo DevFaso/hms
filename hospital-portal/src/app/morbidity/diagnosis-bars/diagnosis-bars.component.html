@@ -1,0 +1,24 @@
+@if (slices().length === 0) {
+  <p class="dx-bars__empty">{{ 'MORBIDITY.NO_DATA' | translate }}</p>
+} @else {
+  <ol class="dx-bars" [class.dx-bars--compact]="compact()">
+    @for (slice of slices(); track trackKey(slice)) {
+      <li class="dx-bars__row">
+        <span class="dx-bars__name">
+          {{ slice.display }}
+          @if (slice.code) {
+            <span class="dx-bars__code">{{ slice.code }}</span>
+          }
+        </span>
+        <span class="dx-bars__track" aria-hidden="true">
+          <span
+            class="dx-bars__fill"
+            [style.width.%]="widthPercent(slice.count)"
+            [style.background]="color()"
+          ></span>
+        </span>
+        <span class="dx-bars__count">{{ slice.count }}</span>
+      </li>
+    }
+  </ol>
+}

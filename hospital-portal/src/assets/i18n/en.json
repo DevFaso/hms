@@ -2930,6 +2930,7 @@
     "LAB_OUTBOX": "Instrument Outbox",
     "MICROBIOLOGY": "Microbiology",
     "REPORTS": "Scheduled Reports",
+    "MORBIDITY": "Disease Surveillance",
     "EMAR": "eMAR",
     "PHARMACY_CLAIMS": "Pharmacy Claims",
     "PHARMACY_CHECKOUT": "Pharmacy Checkout",
@@ -7840,6 +7841,23 @@
     "STATE": "State",
     "SUBTITLE": "Interaction pairs used by prescribing checks across the platform",
     "TITLE": "Drug Interactions"
+  },
+  "MORBIDITY": {
+    "TITLE": "Disease Surveillance",
+    "SUBTITLE": "Diagnoses recorded most often this month",
+    "SUBTITLE_HOSPITAL": "Diagnoses recorded most often at {{hospital}}",
+    "SUBTITLE_NETWORK": "Diagnoses recorded most often across all hospitals",
+    "AGGREGATE_ONLY_NOTE": "Counts only — this page never shows patient records.",
+    "TOP_DIAGNOSES": "Top diagnoses",
+    "BY_HOSPITAL": "By hospital",
+    "BY_HOSPITAL_HINT": "Each hospital's own leading diagnoses for the month.",
+    "TOTAL_SHOWN": "{{count}} recorded across the diagnoses shown",
+    "RECORDED_TOTAL": "{{count}} recorded",
+    "LEADING": "Leading: {{diagnosis}}",
+    "NO_DATA": "No diagnoses were recorded in this period.",
+    "LOAD_FAILED": "Failed to load the diagnosis data",
+    "PREVIOUS_MONTH": "Previous month",
+    "NEXT_MONTH": "Next month"
   },
   "REPORTS": {
     "TITLE": "Scheduled Reports",

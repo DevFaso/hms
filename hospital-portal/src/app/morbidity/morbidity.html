@@ -1,0 +1,95 @@
+<div class="morbidity-container">
+  <header class="page-header">
+    <div>
+      <h1>{{ 'MORBIDITY.TITLE' | translate }}</h1>
+      <p class="page-subtitle">
+        @if (data()?.scope === 'NETWORK') {
+          {{ 'MORBIDITY.SUBTITLE_NETWORK' | translate }}
+        } @else if (data()?.hospitalName) {
+          {{ 'MORBIDITY.SUBTITLE_HOSPITAL' | translate: { hospital: data()!.hospitalName } }}
+        } @else {
+          {{ 'MORBIDITY.SUBTITLE' | translate }}
+        }
+      </p>
+    </div>
+
+    <div class="month-nav">
+      <button
+        type="button"
+        class="month-nav__btn"
+        [disabled]="loading() || atEarliestMonth()"
+        (click)="previousMonth()"
+        [attr.aria-label]="'MORBIDITY.PREVIOUS_MONTH' | translate"
+      >
+        ‹
+      </button>
+      <span class="month-nav__label">{{ month() }}</span>
+      <button
+        type="button"
+        class="month-nav__btn"
+        [disabled]="loading() || atLatestMonth()"
+        (click)="nextMonth()"
+        [attr.aria-label]="'MORBIDITY.NEXT_MONTH' | translate"
+      >
+        ›
+      </button>
+    </div>
+  </header>
+
+  <p class="privacy-note">
+    {{ 'MORBIDITY.AGGREGATE_ONLY_NOTE' | translate }}
+  </p>
+
+  @if (loading()) {
+    <p class="state-line">{{ 'COMMON.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="state-line state-line--error">{{ 'MORBIDITY.LOAD_FAILED' | translate }}</p>
+    <button type="button" class="retry-btn" (click)="load()">
+      {{ 'COMMON.RETRY' | translate }}
+    </button>
+  } @else if (data()) {
+    <section class="panel">
+      <div class="panel__head">
+        <h2>{{ 'MORBIDITY.TOP_DIAGNOSES' | translate }}</h2>
+        @if (totalShown() > 0) {
+          <span class="panel__total">
+            {{ 'MORBIDITY.TOTAL_SHOWN' | translate: { count: totalShown() } }}
+          </span>
+        }
+      </div>
+      <app-diagnosis-bars [slices]="data()!.overall" />
+    </section>
+
+    @if (hasBreakdown()) {
+      <section class="panel">
+        <div class="panel__head">
+          <h2>{{ 'MORBIDITY.BY_HOSPITAL' | translate }}</h2>
+        </div>
+        <p class="panel__hint">{{ 'MORBIDITY.BY_HOSPITAL_HINT' | translate }}</p>
+
+        <div class="hospital-grid">
+          @for (hospital of data()!.byHospital; track hospital.hospitalId; let i = $index) {
+            <article class="hospital-card">
+              <header class="hospital-card__head">
+                <h3>{{ hospital.hospitalName }}</h3>
+                <span class="hospital-card__total">
+                  {{ 'MORBIDITY.RECORDED_TOTAL' | translate: { count: hospital.totalRecorded } }}
+                </span>
+              </header>
+              @if (leadDiagnosis(i)) {
+                <p class="hospital-card__lead">
+                  {{ 'MORBIDITY.LEADING' | translate: { diagnosis: leadDiagnosis(i) } }}
+                </p>
+              }
+              <app-diagnosis-bars
+                [slices]="hospital.top"
+                [compact]="true"
+                color="var(--dx-bar-alt, #0d9488)"
+              />
+            </article>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>
