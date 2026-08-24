@@ -1490,7 +1490,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseTaskItemDTO toTaskItemDTO(NursingTask t, LocalDateTime now) {
         boolean overdue = t.getDueAt() != null
-            && "PENDING".equals(t.getStatus())
+            && STATUS_PENDING.equals(t.getStatus())
             && t.getDueAt().isBefore(now);
 
         String mrn = null;

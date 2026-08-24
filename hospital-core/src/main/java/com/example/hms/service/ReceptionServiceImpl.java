@@ -59,7 +59,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -407,7 +406,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (walkIn.getStatus() == EncounterStatus.ARRIVED
                 || walkIn.getStatus() == EncounterStatus.TRIAGE
                 || walkIn.getStatus() == EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            waitMins = (int) ChronoUnit.MINUTES.between(walkIn.getEncounterDate(), LocalDateTime.now());
+            waitMins = (int) ElapsedTime.minutesBetween(walkIn.getEncounterDate(), LocalDateTime.now());
         }
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(null)
@@ -507,7 +506,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private int computeWaitMinutes(Encounter encounter) {
         if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
-            return (int) ChronoUnit.MINUTES.between(encounter.getEncounterDate(), LocalDateTime.now());
+            return (int) ElapsedTime.minutesBetween(encounter.getEncounterDate(), LocalDateTime.now());
         }
         return 0;
     }
