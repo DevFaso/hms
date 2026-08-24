@@ -19,6 +19,9 @@ public class PrescriptionMapper {
 
     private static final Logger log = LoggerFactory.getLogger(PrescriptionMapper.class);
 
+    /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
+    private static final String ENTITY = "Prescription";
+
     /* ============================
        Response mapping
        ============================ */
@@ -30,10 +33,10 @@ public class PrescriptionMapper {
         // of letting the lazy proxy throw EntityNotFoundException — which
         // would otherwise 500 the entire list endpoint via
         // GlobalExceptionHandler.handleEntityNotFound.
-        Patient   patient = safeInit(p.getPatient(), "Prescription", p.getId(), "patient");
-        Staff     staff   = safeInit(p.getStaff(),   "Prescription", p.getId(), "staff");
-        Encounter enc     = safeInit(p.getEncounter(), "Prescription", p.getId(), "encounter");
-        Hospital  hospital = safeInit(p.getHospital(), "Prescription", p.getId(), "hospital");
+        Patient   patient  = safeInit(p.getPatient(),   ENTITY, p.getId(), "patient");
+        Staff     staff    = safeInit(p.getStaff(),     ENTITY, p.getId(), "staff");
+        Encounter enc      = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
+        Hospital  hospital = safeInit(p.getHospital(),  ENTITY, p.getId(), "hospital");
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())

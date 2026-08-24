@@ -63,6 +63,9 @@ import java.util.UUID;
 @Transactional
 public class LaborServiceImpl implements LaborService {
 
+    /** Null-check message for the required patient identifier. */
+    private static final String PATIENT_ID_REQUIRED = "patientId is required";
+
     /* ── Clinical thresholds ─────────────────────────────────────────── */
 
     static final int FHR_BRADYCARDIA_BPM = 110;
@@ -96,7 +99,7 @@ public class LaborServiceImpl implements LaborService {
 
     @Override
     public LaborEpisodeResponseDTO startEpisode(UUID patientId, UUID recorderUserId, LaborEpisodeRequestDTO request) {
-        Objects.requireNonNull(patientId, "patientId is required");
+        Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (request == null) {
             throw new BusinessException("Labor episode payload is required.");
         }
@@ -139,7 +142,7 @@ public class LaborServiceImpl implements LaborService {
     @Override
     @Transactional(readOnly = true)
     public List<LaborEpisodeResponseDTO> getEpisodes(UUID patientId, UUID hospitalId, int limit) {
-        Objects.requireNonNull(patientId, "patientId is required");
+        Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (hospitalId == null) {
             throw new BusinessException("Hospital context required to list labor episodes.");
         }
@@ -429,7 +432,7 @@ public class LaborServiceImpl implements LaborService {
     /* ═══════════════════════ Resolvers (house pattern) ═══════════════════════ */
 
     private LaborEpisode loadEpisode(UUID patientId, UUID episodeId, UUID hospitalId) {
-        Objects.requireNonNull(patientId, "patientId is required");
+        Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         Objects.requireNonNull(episodeId, "episodeId is required");
         // ── Tenant isolation: scoped callers go through id + hospital; a
         // cross-tenant episode reads as not-found. Null scope = super-admin. ──

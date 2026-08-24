@@ -58,6 +58,8 @@ import java.util.UUID;
 public class ObservationFhirWriteService {
 
     private static final Logger log = LoggerFactory.getLogger(ObservationFhirWriteService.class);
+    /** FHIR resource-type prefix for the {@code Observation/{id}} references in diagnostics. */
+    private static final String OBSERVATION_REF = "Observation/";
     private static final String LAB_RESULT_PREFIX = "labresult-";
     private static final String VITAL_PREFIX = "vital-";
     private static final String AUDIT_ENTITY_TYPE = "LAB_RESULT";
@@ -104,7 +106,7 @@ public class ObservationFhirWriteService {
         }
         if (!fhirIdPart.startsWith(LAB_RESULT_PREFIX)) {
             throw notFoundWith(
-                "Observation/" + fhirIdPart + " — only the labresult-{uuid} namespace is writable.",
+                OBSERVATION_REF + fhirIdPart + " — only the labresult-{uuid} namespace is writable.",
                 OperationOutcome.IssueType.NOTFOUND
             );
         }
@@ -120,7 +122,7 @@ public class ObservationFhirWriteService {
 
         LabResult existing = labResultRepository.findById(labResultId)
             .orElseThrow(() -> notFoundWith(
-                "Observation/" + fhirIdPart + " not found.",
+                OBSERVATION_REF + fhirIdPart + " not found.",
                 OperationOutcome.IssueType.NOTFOUND
             ));
 
@@ -154,7 +156,7 @@ public class ObservationFhirWriteService {
             return UUID.fromString(raw);
         } catch (IllegalArgumentException ex) {
             throw notFoundWith(
-                "Observation/" + fhirIdPart + " — id suffix is not a valid UUID.",
+                OBSERVATION_REF + fhirIdPart + " — id suffix is not a valid UUID.",
                 OperationOutcome.IssueType.NOTFOUND
             );
         }

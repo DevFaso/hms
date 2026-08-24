@@ -125,7 +125,7 @@ public class KpiDashboardServiceImpl implements KpiDashboardService {
 
     @Override
     public KpiDashboardDTO computeDashboard(LocalDate fromInclusive, LocalDate toInclusive, boolean withTrends) {
-        Objects.requireNonNull(fromInclusive, "fromInclusive");
+        Objects.requireNonNull(fromInclusive, PARAM_FROM_INCLUSIVE);
         Objects.requireNonNull(toInclusive, "toInclusive");
         if (toInclusive.isBefore(fromInclusive)) {
             throw new IllegalArgumentException("toInclusive must be on or after fromInclusive");

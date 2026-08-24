@@ -35,6 +35,8 @@ import java.util.UUID;
 public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private static final String NOTIFICATION_TYPE = "MEDICATION_REFILL";
+    /** Shared opening clause of every refill-decision notification. */
+    private static final String DECISION_PREFIX = "Your refill request for ";
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -250,16 +252,16 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private String buildDecisionMessage(RefillRequest refill, String medicationName, RefillStatus status) {
         if (status == RefillStatus.PAUSED) {
             // The reason is mandatory for a hold, so it is always worth surfacing.
-            return "Your refill request for " + medicationName
+            return DECISION_PREFIX + medicationName
                     + " is on hold: " + refill.getProviderNotes();
         }
         if (status == RefillStatus.APPROVED) {
             // The fill is now in the pharmacy work queue, so tell the patient
             // what to actually do rather than just that a decision was made.
-            return "Your refill request for " + medicationName
+            return DECISION_PREFIX + medicationName
                     + " has been approved and is ready to collect from the pharmacy.";
         }
-        return "Your refill request for " + medicationName + " has been denied.";
+        return DECISION_PREFIX + medicationName + " has been denied.";
     }
 
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {

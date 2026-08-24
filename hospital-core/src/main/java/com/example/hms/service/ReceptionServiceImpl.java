@@ -80,6 +80,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final String WAITLIST_STATUS_WAITING = "WAITING";
     private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
+    private static final String MSG_WAITLIST_NOT_FOUND = "Waitlist entry not found";
     private static final int DEFAULT_OFFER_HOURS = 48;
     private static final String STATUS_ARRIVED = "ARRIVED";
     private static final String STATUS_WALK_IN = "WALK_IN";
@@ -602,7 +603,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .requestedDateTo(req.getRequestedDateTo())
                 .priority(req.getPriority() != null ? req.getPriority() : "ROUTINE")
                 .reason(req.getReason())
-                .status("WAITING")
+                .status(WAITLIST_STATUS_WAITING)
                 .createdBy(actorUsername)
                 .build();
 
@@ -624,7 +625,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     public WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId, UUID slotId,
                                                       Integer expiresInHours) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
         if (!WAITLIST_STATUS_WAITING.equals(entry.getStatus())) {
             throw new BusinessException("Only a waiting entry can be offered a slot.");
         }
@@ -667,7 +668,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public WaitlistEntryResponseDTO acceptWaitlistOffer(UUID waitlistId, UUID hospitalId) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus()) || entry.getOfferedSlot() == null) {
             throw new BusinessException("There is no open offer on this entry.");
         }
@@ -694,7 +695,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public WaitlistEntryResponseDTO declineWaitlistOffer(UUID waitlistId, UUID hospitalId) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
             throw new BusinessException("There is no open offer on this entry.");
         }
@@ -763,7 +764,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Transactional
     public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_WAITLIST_NOT_FOUND));
         entry.setStatus("CLOSED");
         waitlistRepo.save(entry);
     }
