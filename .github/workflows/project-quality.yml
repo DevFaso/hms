@@ -18,25 +18,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A caller job's `permissions` is the CEILING for the token handed to the
+  # reusable workflow — the callee's own block cannot raise it, and omitting
+  # one here leaves the job on the repository default rather than
+  # least-privilege. Each callee needs only contents:read, so that is the
+  # ceiling. (CodeQL actions/missing-workflow-permissions.)
   backend-tests:
     name: Backend (JUnit, Jacoco)
     uses: ./.github/workflows/backend-ci.yml
+    permissions:
+      contents: read
     secrets: inherit
-    # backend-ci.yml declares its own permissions; nothing inherited here.
 
   frontend-tests:
     name: Frontend (Jest, Playwright)
     uses: ./.github/workflows/frontend-ci.yml
+    permissions:
+      contents: read
     secrets: inherit
-    # frontend-ci.yml declares its own permissions; nothing inherited here.
 
   agent-lint:
     name: Agent Lint & Prompt Tests
     uses: ./.github/workflows/agent-lint.yml
+    permissions:
+      contents: read
     secrets: inherit
-    # agent-lint.yml declares its own (`contents: read`) at workflow level
-    # for the callable trigger; that satisfies the S6396 rule for the
-    # callable's own scope.
 
   lint-docker-yaml:
     name: Lint Dockerfiles & YAML

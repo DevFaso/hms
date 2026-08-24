@@ -296,7 +296,7 @@ public class Admission {
      */
     public void calculateLengthOfStay() {
         if (admissionDateTime != null && actualDischargeDateTime != null) {
-            long days = java.time.Duration.between(admissionDateTime, actualDischargeDateTime).toDays();
+            long days = com.example.hms.utility.ElapsedTime.daysBetween(admissionDateTime, actualDischargeDateTime);
             this.lengthOfStayDays = (int) days;
         }
     }

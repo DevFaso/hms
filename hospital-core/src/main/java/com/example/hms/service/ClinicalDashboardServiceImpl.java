@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.RefillStatus;
@@ -160,7 +161,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                                 ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
                                 : 0;
                         long waitMinutes = enc.getEncounterDate() != null
-                                ? java.time.Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes()
+                                ? ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now())
                                 : 0;
                         result.add(RoomedPatientDTO.builder()
                                 .id(p.getId())

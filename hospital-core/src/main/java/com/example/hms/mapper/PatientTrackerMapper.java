@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
@@ -8,7 +9,6 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.PatientTrackerItemDTO;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -91,7 +91,7 @@ public class PatientTrackerMapper {
         if (reference == null) {
             return 0;
         }
-        long minutes = Duration.between(reference, now).toMinutes();
+        long minutes = ElapsedTime.minutesBetween(reference, now);
         return Math.max(minutes, 0);
     }
 

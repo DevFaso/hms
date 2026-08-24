@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy.partner;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PrescriptionStatus;
@@ -95,7 +96,7 @@ public class PartnerExchangeService {
         int reminded = 0;
         int autoRejected = 0;
         for (PrescriptionRoutingDecision d : stale) {
-            Duration idle = Duration.between(d.getDecidedAt(), now);
+            Duration idle = ElapsedTime.between(d.getDecidedAt(), now);
             if (idle.compareTo(AUTO_REJECT_AFTER) >= 0) {
                 autoReject(d);
                 autoRejected++;

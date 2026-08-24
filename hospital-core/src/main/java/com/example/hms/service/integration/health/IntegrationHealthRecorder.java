@@ -1,5 +1,6 @@
 package com.example.hms.service.integration.health;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.integration.IntegrationHealthStatus;
 import com.example.hms.model.Organization;
 import com.example.hms.model.integration.IntegrationHealthEvent;
@@ -142,7 +143,7 @@ public class IntegrationHealthRecorder {
 
     private void rollWindow(IntegrationHealthSnapshot snapshot, LocalDateTime now) {
         LocalDateTime windowStart = snapshot.getCountsWindowStartedAt();
-        if (windowStart == null || Duration.between(windowStart, now).compareTo(COUNTS_WINDOW) >= 0) {
+        if (windowStart == null || ElapsedTime.between(windowStart, now).compareTo(COUNTS_WINDOW) >= 0) {
             snapshot.setCountsWindowStartedAt(now);
             snapshot.setSuccessCount24h(0);
             snapshot.setFailureCount24h(0);

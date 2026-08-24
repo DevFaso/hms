@@ -1137,7 +1137,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Department department = JpaProxyUtils.safeInit(
             a.getDepartment(), ADMISSION_OWNER, admissionId, ASSOCIATION_DEPARTMENT);
         long waitMinutes = a.getAdmissionDateTime() != null
-            ? java.time.Duration.between(a.getAdmissionDateTime(), now).toMinutes() : 0;
+            ? com.example.hms.utility.ElapsedTime.minutesBetween(a.getAdmissionDateTime(), now) : 0;
         UUID hospId = hospital != null ? hospital.getId() : null;
         return NurseFlowPatientCardDTO.builder()
             .patientId(patient.getId())
