@@ -13,6 +13,7 @@ import com.example.hms.repository.CdsAcknowledgementRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.utility.ElapsedTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,7 +107,7 @@ class CdsAcknowledgementServiceImplTest {
         verify(repository).save(captor.capture());
         CdsAcknowledgement saved = captor.getValue();
 
-        long hoursTillExpiry = java.time.Duration.between(LocalDateTime.now(), saved.getExpiresAt()).toHours();
+        long hoursTillExpiry = ElapsedTime.between(LocalDateTime.now(), saved.getExpiresAt()).toHours();
         assertThat(hoursTillExpiry).isBetween(23L, 24L);
         assertThat(result.getAction()).isEqualTo(CdsAcknowledgementAction.ACKNOWLEDGED);
     }
@@ -141,7 +142,7 @@ class CdsAcknowledgementServiceImplTest {
         ArgumentCaptor<CdsAcknowledgement> captor = ArgumentCaptor.forClass(CdsAcknowledgement.class);
         verify(repository).save(captor.capture());
         long hoursTillExpiry =
-                java.time.Duration.between(LocalDateTime.now(), captor.getValue().getExpiresAt()).toHours();
+                ElapsedTime.between(LocalDateTime.now(), captor.getValue().getExpiresAt()).toHours();
         assertThat(hoursTillExpiry).isBetween(71L, 72L);
     }
 
