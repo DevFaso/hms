@@ -46,6 +46,13 @@ class ElapsedTimeTest {
 
     @Test
     @DisplayName("a DST spring-forward counts elapsed real time, not wall-clock")
+    // S8700 asks that LocalDateTime pairs be made zone-aware before a duration
+    // is computed from them. That is precisely what the method under test does
+    // — the atZone conversion happens inside ElapsedTime.between, which the
+    // rule does not follow into — and passing such a pair IS this API's
+    // contract, so the test cannot demonstrate the fix without tripping the
+    // rule that motivated it.
+    @SuppressWarnings("java:S8700")
     void springForwardCountsRealElapsedTime() {
         // The whole reason S8700 exists, and the case this class was written
         // for. Europe/Paris springs forward at 02:00 on 2026-03-29, so the wall
