@@ -12,6 +12,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
+import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
+import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 
 interface NavItem {
@@ -224,7 +226,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
   // and the click landed on the 403 page — the nav item was permission-gated
   // while the route guard is role-gated, and the two vocabularies disagreed
   // for ten roles. The item now carries the guard's role list too.
-  it('accountant sees Billing and Messages but not Patients — nav mirrors the route guard', () => {
+  it('accountant sees Billing but not Patients — nav mirrors the route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_ACCOUNTANT',
       roles: ['ROLE_ACCOUNTANT'],
@@ -241,9 +243,11 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     const routes = items.map((i) => i.route);
     expect(routes).toContain('/billing');
-    expect(routes).toContain('/chat');
-    expect(routes).toContain('/announcements');
     expect(routes).not.toContain('/patients');
+    // Chat and Announcements are still reachable for this role — they moved
+    // to the topbar, so they are no longer nav rows. Covered below.
+    expect(routes).not.toContain('/chat');
+    expect(routes).not.toContain('/announcements');
   });
 
   it('keeps Patients for a role inside the /patients route guard', () => {
@@ -280,7 +284,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/referrals');
   });
 
-  it('radiologist no longer sees dead Appointments/Lab entries, and Messages works', () => {
+  it('radiologist no longer sees dead Appointments/Lab entries', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_RADIOLOGIST',
       roles: ['ROLE_RADIOLOGIST'],
@@ -292,10 +296,10 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/appointments');
     expect(routes).not.toContain('/lab');
     expect(routes).not.toContain('/lab-results');
-    // Chat is open to every authenticated user since decision C3, so the
-    // Messages entry is back — and this time the backend admits the role.
-    expect(routes).toContain('/chat');
     expect(routes).toContain('/imaging');
+    // Chat remains open to every authenticated user (decision C3); it is
+    // reached from the topbar now rather than the side-nav.
+    expect(routes).not.toContain('/chat');
   });
 
   it('pharmacy verifier reaches Dispensing and Stock Routing but not Prescriptions', () => {
@@ -437,7 +441,11 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).toContain('/my-care-team');
     expect(routes).toContain('/my-family-access');
     expect(routes).toContain('/my-documents');
-    expect(routes).toContain('/my-notifications');
+    // Notifications is no longer a patient nav row — it moved to the topbar
+    // bell, which serves patients the same rows /my-notifications did (both
+    // endpoints call notificationService.getNotificationsForUser). Neither
+    // spelling should appear in the side-nav.
+    expect(routes).not.toContain('/my-notifications');
     expect(routes).not.toContain('/notifications');
   });
 });
@@ -581,5 +589,168 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
 
     expect(shell.navItems().map((i) => i.route)).toEqual(['/a', '/b', '/c']);
     expect(persistedOrders).toEqual([]);
+  });
+});
+
+/**
+ * Inbox surfaces moved out of the side-nav (Notifications, Messages,
+ * Announcements). The side-nav lists places you GO; these three are
+ * things that ARRIVE, and Notifications was duplicated — a topbar bell
+ * with a live badge AND a redundant nav row that carried no count.
+ */
+describe('ShellComponent — inbox surfaces live in the topbar', () => {
+  function build(roles: string[], activeRole: string) {
+    // Same shape as the harness above: ngOnInit calls getUserProfile and
+    // formatRole, so a partial stub blows up on the first detectChanges.
+    const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getUserProfile',
+      'hasAnyRole',
+      'getSubject',
+      'formatRole',
+      'logout',
+    ]);
+    authStub.getUserProfile.and.returnValue(null);
+    authStub.hasAnyRole.and.callFake((rs: string[]) => rs.some((r) => roles.includes(r)));
+    // null subject skips the websocket branch in ngOnInit.
+    authStub.getSubject.and.returnValue(null);
+    authStub.formatRole.and.callFake((r: string) => r);
+    Object.defineProperty(authStub, 'currentProfile', { value: () => null });
+
+    // Unlike the harness above, these tests DO run ngOnInit (they assert on
+    // rendered DOM), so the stub also needs what ngOnInit calls.
+    const permStub: Partial<PermissionService> = {
+      hasPermission: () => true,
+      hasAnyPermission: () => true,
+      loadFromBackend: () => undefined,
+    };
+    const notifStub = jasmine.createSpyObj<NotificationService>('NotificationService', [
+      'connectWebSocket',
+      'disconnectWebSocket',
+      'getNotifications',
+      'getNotificationStream',
+      'getReadStream',
+      'getAllReadStream',
+      'markAsReadAndNotify',
+      'markAllReadAndNotify',
+    ]);
+    notifStub.getNotifications.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 10, number: 0 }),
+    );
+    notifStub.getNotificationStream.and.returnValue(of() as never);
+    notifStub.getReadStream.and.returnValue(of() as never);
+    notifStub.getAllReadStream.and.returnValue(of() as never);
+
+    // These tests render the WHOLE shell, so the three banner children mount
+    // too and read signals off their own services. Each stub therefore needs
+    // its signals callable, not just the methods ngOnInit calls.
+    const impersonationStub = jasmine.createSpyObj<ImpersonationService>('ImpersonationService', [
+      'refreshActive',
+      'stop',
+      'forceStop',
+    ]);
+    impersonationStub.refreshActive.and.returnValue(of(null) as never);
+    Object.defineProperty(impersonationStub, 'active', { value: () => null });
+    Object.defineProperty(impersonationStub, 'nearingExpiry', { value: () => false });
+    Object.defineProperty(impersonationStub, 'remainingMs', { value: () => 0 });
+
+    const idleStub = jasmine.createSpyObj<IdleService>('IdleService', ['start', 'stop']);
+    // idle.locked() decides whether the lock screen paints over the shell.
+    Object.defineProperty(idleStub, 'locked', { value: () => false });
+
+    const broadcastStub = jasmine.createSpyObj<EmergencyBroadcastService>(
+      'EmergencyBroadcastService',
+      ['connect', 'disconnect', 'dismiss'],
+    );
+    Object.defineProperty(broadcastStub, 'latest', { value: () => null });
+
+    const downtimeStub = jasmine.createSpyObj<DowntimeService>('DowntimeService', [
+      'startPolling',
+      'stopPolling',
+    ]);
+    Object.defineProperty(downtimeStub, 'status', { value: () => null });
+
+    TestBed.configureTestingModule({
+      imports: [ShellComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: permStub },
+        { provide: NotificationService, useValue: notifStub },
+        { provide: ImpersonationService, useValue: impersonationStub },
+        { provide: IdleService, useValue: idleStub },
+        { provide: EmergencyBroadcastService, useValue: broadcastStub },
+        { provide: DowntimeService, useValue: downtimeStub },
+      ],
+    });
+
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(roles);
+    roleContext.activeRole = activeRole;
+    return TestBed.createComponent(ShellComponent);
+  }
+
+  it('drops all three from the side-nav for staff', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    const routes = (fixture.componentInstance as unknown as { baseNavItems: () => NavItem[] })
+      .baseNavItems()
+      .map((i) => i.route);
+
+    expect(routes).not.toContain('/notifications');
+    expect(routes).not.toContain('/chat');
+    expect(routes).not.toContain('/announcements');
+  });
+
+  it('drops both from the patient side-nav — the topbar bell serves patients too', () => {
+    // /notifications and the patient portal's own endpoint both call
+    // notificationService.getNotificationsForUser(username), so the bell
+    // shows a patient the same rows /my-notifications did.
+    const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+    const routes = (fixture.componentInstance as unknown as { baseNavItems: () => NavItem[] })
+      .baseNavItems()
+      .map((i) => i.route);
+
+    expect(routes).not.toContain('/my-notifications');
+    expect(routes).not.toContain('/chat');
+  });
+
+  it('renders Messages and Announcements links in the topbar', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const hrefs = Array.from(host.querySelectorAll('.topbar-right a.icon-btn')).map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(hrefs).toContain('/chat');
+    expect(hrefs).toContain('/announcements');
+  });
+
+  it('shows the unread-message badge and clamps past 99', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    // detectChanges FIRST: it runs ngOnInit, whose loadUnreadMessages()
+    // resets the count to 0 before its request resolves. Setting the value
+    // beforehand would be overwritten.
+    fixture.detectChanges();
+    fixture.componentInstance.chatUnread.set(120);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const badges = Array.from(host.querySelectorAll('.topbar-right .badge')).map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(badges).toContain('99+');
+  });
+
+  it('hides the badge at zero rather than rendering a 0', () => {
+    const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    fixture.detectChanges();
+    fixture.componentInstance.chatUnread.set(0);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const messagesLink = host.querySelector('.topbar-right a.icon-btn[href="/chat"]');
+    expect(messagesLink?.querySelector('.badge')).toBeNull();
   });
 });
