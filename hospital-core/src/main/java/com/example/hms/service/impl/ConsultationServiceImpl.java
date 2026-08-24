@@ -53,6 +53,8 @@ import java.util.stream.Collectors;
 public class ConsultationServiceImpl implements ConsultationService {
 
     private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
+    /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
+    private static final String ENTITY = "Consultation";
 
     /**
      * Self-reference for proxy-routed internal calls
@@ -667,11 +669,11 @@ public class ConsultationServiceImpl implements ConsultationService {
         // EntityNotFoundException — which would 500 the entire list response
         // via GlobalExceptionHandler.handleEntityNotFound.
         UUID consultationId = consultation.getId();
-        Patient patient   = safeInit(consultation.getPatient(),            "Consultation", consultationId, "patient");
-        Hospital hospital = safeInit(consultation.getHospital(),           "Consultation", consultationId, "hospital");
-        Staff requester   = safeInit(consultation.getRequestingProvider(), "Consultation", consultationId, "requestingProvider");
-        Staff consultant  = safeInit(consultation.getConsultant(),         "Consultation", consultationId, "consultant");
-        Encounter encounter = safeInit(consultation.getEncounter(),        "Consultation", consultationId, "encounter");
+        Patient patient   = safeInit(consultation.getPatient(),            ENTITY, consultationId, "patient");
+        Hospital hospital = safeInit(consultation.getHospital(),           ENTITY, consultationId, "hospital");
+        Staff requester   = safeInit(consultation.getRequestingProvider(), ENTITY, consultationId, "requestingProvider");
+        Staff consultant  = safeInit(consultation.getConsultant(),         ENTITY, consultationId, "consultant");
+        Encounter encounter = safeInit(consultation.getEncounter(),        ENTITY, consultationId, "encounter");
 
         UUID hospitalId = hospital != null ? hospital.getId() : null;
         String patientMrn = null;
