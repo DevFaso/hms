@@ -151,6 +151,37 @@ public class ChatController {
             .body(new org.springframework.core.io.FileSystemResource(payload.path()));
     }
 
+    // --- REST: Unread badge count for the signed-in user ---
+    /**
+     * Total unread messages for the CALLER.
+     *
+     * <p>Deliberately takes no {@code userId}: this feeds the shell's
+     * topbar badge on every page, and a path variable would make one
+     * user's unread count readable by another. The principal is the
+     * only input.
+     *
+     * <p>A scalar rather than reusing {@code /conversations/{userId}},
+     * which returns last-message previews — the shell must not pull
+     * message content it never renders just to draw a number.
+     */
+    @GetMapping("/unread-count")
+    @PreAuthorize(CHAT_ROLES)
+    @Operation(
+            summary = "Total unread messages for the signed-in user",
+            description = "Scalar count for the topbar badge. Scoped to the principal; takes no user id."
+    )
+    public ResponseEntity<java.util.Map<String, Long>> getMyUnreadCount(java.security.Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return userRepository.findByUsername(principal.getName())
+                .map(user -> ResponseEntity.ok(java.util.Map.of(
+                        "unreadCount", chatMessageRepository.countByRecipient_IdAndReadFalse(user.getId()))))
+                // A principal with no User row has no messages: report zero
+                // rather than erroring a badge that renders on every page.
+                .orElseGet(() -> ResponseEntity.ok(java.util.Map.of("unreadCount", 0L)));
+    }
+
     // --- REST: All Conversations (Inbox) ---
     @GetMapping("/conversations/{userId}")
     @PreAuthorize(CHAT_ROLES)
