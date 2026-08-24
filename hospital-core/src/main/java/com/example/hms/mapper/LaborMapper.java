@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.model.labor.DeliveryRecord;
 import com.example.hms.model.labor.LaborAlert;
 import com.example.hms.model.labor.LaborEpisode;
@@ -10,7 +11,6 @@ import com.example.hms.payload.dto.clinical.labor.LaborEpisodeResponseDTO;
 import com.example.hms.payload.dto.clinical.labor.PartographEntryResponseDTO;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -129,6 +129,6 @@ public class LaborMapper {
         if (anchor == null || observationTime == null || observationTime.isBefore(anchor)) {
             return null;
         }
-        return Duration.between(anchor, observationTime).toMinutes() / 60.0;
+        return ElapsedTime.minutesBetween(anchor, observationTime) / 60.0;
     }
 }

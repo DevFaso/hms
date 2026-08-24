@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
@@ -14,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -131,12 +131,12 @@ public class PatientFlowServiceImpl implements PatientFlowService {
 
     private long computeEncounterElapsedMinutes(Encounter enc) {
         if (enc.getEncounterDate() == null) return 0;
-        return Math.max(Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes(), 0);
+        return Math.max(ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now()), 0);
     }
 
     private long computeAdmissionElapsedMinutes(Admission adm) {
         if (adm.getAdmissionDateTime() == null) return 0;
-        return Math.max(Duration.between(adm.getAdmissionDateTime(), LocalDateTime.now()).toMinutes(), 0);
+        return Math.max(ElapsedTime.minutesBetween(adm.getAdmissionDateTime(), LocalDateTime.now()), 0);
     }
 
     private String deriveEncounterUrgency(Encounter enc, long elapsedMinutes) {

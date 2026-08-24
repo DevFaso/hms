@@ -1,5 +1,6 @@
 package com.example.hms.service.emar;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.FiveRightsCheck;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Patient;
@@ -156,7 +157,7 @@ public class FiveRightsVerificationService {
             return;
         }
         LocalDateTime when = administeredAt != null ? administeredAt : LocalDateTime.now();
-        Duration delta = Duration.between(scheduledTime, when).abs();
+        Duration delta = ElapsedTime.between(scheduledTime, when).abs();
         if (delta.compareTo(DEFAULT_TIME_WINDOW) <= 0) {
             b.pass(FiveRightsCheck.TIME);
         } else {

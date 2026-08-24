@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
@@ -28,7 +29,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -90,7 +90,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);
         long waitingLong = activeEncounters.stream()
                 .filter(e -> e.getEncounterDate() != null)
-                .filter(e -> Duration.between(e.getEncounterDate(), LocalDateTime.now()).toMinutes() > LONG_WAIT_THRESHOLD_MINUTES)
+                .filter(e -> ElapsedTime.minutesBetween(e.getEncounterDate(), LocalDateTime.now()) > LONG_WAIT_THRESHOLD_MINUTES)
                 .count();
 
         // Pending consults
@@ -264,7 +264,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private DoctorWorklistItemDTO buildWorklistItem(Patient p, Encounter enc, String mappedStatus, Map<UUID, String> patientRoomBed) {
         int age = computeAge(p);
         int waitMinutes = enc.getEncounterDate() != null
-                ? (int) Math.min(Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes(), Integer.MAX_VALUE)
+                ? (int) Math.min(ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now()), Integer.MAX_VALUE)
                 : 0;
 
         String location = enc.getDepartment() != null ? enc.getDepartment().getName() : null;

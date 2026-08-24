@@ -2,6 +2,8 @@ package com.example.hms.fhir.bulk;
 
 import com.example.hms.model.platform.FhirBulkExportFile;
 import com.example.hms.model.platform.FhirBulkExportJob;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -18,7 +20,10 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -58,6 +63,26 @@ public class FhirBulkExportStatusController {
 
     private static final String FHIR_JSON = "application/fhir+json";
     private static final String NDJSON = "application/fhir+ndjson";
+
+    /**
+     * Every body below is SERIALISED, never concatenated.
+     *
+     * <p>These responses used to be built with string concatenation and a
+     * hand-rolled escape, which is wrong in both directions: it mangled
+     * legitimate quotes inside a diagnostic message, and it did nothing at all
+     * about backslashes, newlines or control characters. The manifest was
+     * worse — it interpolated {@code job.getRequestUrl()}, which is derived
+     * from the caller's own request, straight into a JSON string literal, so a
+     * single quote in a request URL produced a malformed body.
+     *
+     * <p>Letting Jackson emit the JSON makes escaping correct by construction
+     * and removes the value-into-body flow CodeQL reports here. The
+     * {@code jobId} path variable it points at is in fact a parsed
+     * {@link UUID} — Spring rejects anything malformed before the handler runs,
+     * so no payload could survive it — but the concatenation beside it was a
+     * real defect regardless.
+     */
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final FhirBulkExportService service;
 
@@ -140,27 +165,25 @@ public class FhirBulkExportStatusController {
         // way the client reached us.
         String base = ServletUriComponentsBuilder.fromCurrentRequestUri()
             .replaceQuery(null).toUriString();
-        StringBuilder output = new StringBuilder("[");
-        for (int i = 0; i < files.size(); i++) {
-            FhirBulkExportFile file = files.get(i);
-            if (i > 0) output.append(',');
-            output.append("{\"type\":\"").append(file.getResourceType())
-                .append("\",\"url\":\"").append(base).append("/file/").append(file.getFileName())
-                .append("\",\"count\":").append(file.getResourceCount()).append('}');
+        List<Map<String, Object>> output = new ArrayList<>();
+        for (FhirBulkExportFile file : files) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("type", file.getResourceType());
+            entry.put("url", base + "/file/" + file.getFileName());
+            entry.put("count", file.getResourceCount());
+            output.add(entry);
         }
-        output.append(']');
         Instant transactionTime = job.getStartedAt() != null
             ? job.getStartedAt() : job.getRequestedAt();
-        String body = "{"
-            + "\"transactionTime\":\"" + transactionTime + "\","
-            + "\"request\":\"" + (job.getRequestUrl() == null ? "" : job.getRequestUrl()) + "\","
-            + "\"requiresAccessToken\":true,"
-            + "\"output\":" + output + ","
-            + "\"error\":[]"
-            + "}";
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("transactionTime", transactionTime == null ? null : transactionTime.toString());
+        body.put("request", job.getRequestUrl() == null ? "" : job.getRequestUrl());
+        body.put("requiresAccessToken", true);
+        body.put("output", output);
+        body.put("error", List.of());
         return ResponseEntity.ok()
             .contentType(MediaType.APPLICATION_JSON)
-            .body(body);
+            .body(write(body));
     }
 
     private static ResponseEntity<String> failed(FhirBulkExportJob job) {
@@ -168,29 +191,46 @@ public class FhirBulkExportStatusController {
             ? "The bulk-export job failed." : job.getErrorMessage();
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .contentType(MediaType.valueOf(FHIR_JSON))
-            .body("{\"resourceType\":\"OperationOutcome\",\"issue\":[{"
-                + "\"severity\":\"error\",\"code\":\"exception\","
-                + "\"diagnostics\":\"" + message.replace("\"", "'") + "\""
-                + "}]}");
+            .body(operationOutcome("exception", message));
     }
 
     private static ResponseEntity<String> notImplemented() {
         return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
             .contentType(MediaType.valueOf(FHIR_JSON))
-            .body("{\"resourceType\":\"OperationOutcome\",\"issue\":[{"
-                + "\"severity\":\"error\",\"code\":\"not-supported\","
-                + "\"diagnostics\":\"FHIR $export is disabled — set "
-                + "app.fhir.operations.bulk-export.enabled=true to opt in.\""
-                + "}]}");
+            .body(operationOutcome("not-supported",
+                "FHIR $export is disabled — set "
+                    + "app.fhir.operations.bulk-export.enabled=true to opt in."));
     }
 
     private static ResponseEntity<String> notFound(UUID jobId) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
             .contentType(MediaType.valueOf(FHIR_JSON))
-            .body("{\"resourceType\":\"OperationOutcome\",\"issue\":[{"
-                + "\"severity\":\"error\",\"code\":\"not-found\","
-                + "\"diagnostics\":\"No bulk-export job " + jobId
-                + " found at the active hospital scope.\""
-                + "}]}");
+            .body(operationOutcome("not-found",
+                "No bulk-export job " + jobId + " found at the active hospital scope."));
+    }
+
+    /** A FHIR OperationOutcome carrying one error issue — serialised, not built by hand. */
+    private static String operationOutcome(String code, String diagnostics) {
+        Map<String, Object> issue = new LinkedHashMap<>();
+        issue.put("severity", "error");
+        issue.put("code", code);
+        issue.put("diagnostics", diagnostics);
+        Map<String, Object> outcome = new LinkedHashMap<>();
+        outcome.put("resourceType", "OperationOutcome");
+        outcome.put("issue", List.of(issue));
+        return write(outcome);
+    }
+
+    private static String write(Map<String, Object> body) {
+        try {
+            return JSON.writeValueAsString(body);
+        } catch (JsonProcessingException e) {
+            // A map of strings, numbers and booleans cannot fail to serialise.
+            // If it somehow does, emit a valid minimal outcome rather than a
+            // truncated body the client would fail to parse.
+            return "{\"resourceType\":\"OperationOutcome\",\"issue\":[{"
+                + "\"severity\":\"error\",\"code\":\"exception\","
+                + "\"diagnostics\":\"Response could not be serialised.\"}]}";
+        }
     }
 }
