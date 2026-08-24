@@ -47,7 +47,11 @@ export class ReportsComponent implements OnInit {
   period = signal<ReportPeriod>('MONTHLY');
   recipients = signal('');
 
-  readonly reportTypes: ReportType[] = ['ENCOUNTER_ACTIVITY', 'APPOINTMENT_ACTIVITY'];
+  readonly reportTypes: ReportType[] = [
+    'ENCOUNTER_ACTIVITY',
+    'APPOINTMENT_ACTIVITY',
+    'TOP_DIAGNOSES',
+  ];
   readonly periods: ReportPeriod[] = ['DAILY', 'WEEKLY', 'MONTHLY'];
 
   ngOnInit(): void {

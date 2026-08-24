@@ -109,6 +109,24 @@ describe('ReportsComponent', () => {
     expect(mockToast.success).toHaveBeenCalled();
   });
 
+  it('offers the top-diagnoses type and submits it', () => {
+    expect(component.reportTypes).toContain('TOP_DIAGNOSES');
+
+    component.openCreate();
+    component.name.set('Monthly morbidity');
+    component.reportType.set('TOP_DIAGNOSES');
+    component.recipients.set('admin@example.org');
+
+    component.submitCreate();
+
+    expect(mockService.create).toHaveBeenCalledWith({
+      name: 'Monthly morbidity',
+      reportType: 'TOP_DIAGNOSES',
+      period: 'MONTHLY',
+      recipients: 'admin@example.org',
+    });
+  });
+
   it('surfaces the backend refusal verbatim on create failure', () => {
     mockService.create.and.returnValue(
       throwError(() => ({ error: { message: "'nope' is not a valid email address." } })),

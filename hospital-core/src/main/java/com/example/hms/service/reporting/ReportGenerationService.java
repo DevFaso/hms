@@ -9,6 +9,8 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.platform.ReportDefinition;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.PatientProblemRepository;
+import com.example.hms.repository.PatientProblemRepository.DiagnosisCount;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
@@ -35,9 +37,10 @@ import java.util.TreeMap;
  * CSV generation for the canned scheduled reports (P3 #25a).
  *
  * <p><strong>Aggregate-only, by design.</strong> Every report is counts
- * per day — never patient rows, names, or MRNs — because the delivery
- * channel is an email attachment and email must never carry PHI (the
- * recall-SMS stance applied to a second untrusted channel).
+ * per day or per diagnosis code — never patient rows, names, or MRNs —
+ * because the delivery channel is an email attachment and email must
+ * never carry PHI (the recall-SMS stance applied to a second untrusted
+ * channel).
  */
 @Service
 @RequiredArgsConstructor
@@ -48,6 +51,7 @@ public class ReportGenerationService {
 
     private final EncounterRepository encounterRepository;
     private final AppointmentRepository appointmentRepository;
+    private final PatientProblemRepository patientProblemRepository;
 
     /**
      * One generated attachment: bytes + the data-row count + a filename.
@@ -89,6 +93,7 @@ public class ReportGenerationService {
         return switch (definition.getReportType()) {
             case ENCOUNTER_ACTIVITY -> encounterActivity(definition, range, periodToken);
             case APPOINTMENT_ACTIVITY -> appointmentActivity(definition, range, periodToken);
+            case TOP_DIAGNOSES -> topDiagnoses(definition, range, periodToken);
         };
     }
 
@@ -185,6 +190,38 @@ public class ReportGenerationService {
             byDay, 4);
     }
 
+    /**
+     * Diagnoses recorded in the period, ranked by count. The GROUP BY
+     * lives in the repository — unlike the day-keyed reports there is
+     * nothing to derive per row, so paging entities through memory to
+     * count them would be pure overhead.
+     */
+    private GeneratedReport topDiagnoses(ReportDefinition definition, PeriodRange range,
+                                         String periodToken) {
+        List<DiagnosisCount> rows = patientProblemRepository.countDiagnosesRecordedInWindow(
+            definition.getHospital().getId(),
+            range.start().atStartOfDay(),
+            range.end().plusDays(1).atStartOfDay());
+
+        StringWriter out = new StringWriter();
+        try (CSVPrinter printer = new CSVPrinter(out,
+            CSVFormat.DEFAULT.builder().setHeader("rank", "icd_code", "diagnosis", "count").build())) {
+            int rank = 0;
+            for (DiagnosisCount row : rows) {
+                printer.printRecord(
+                    ++rank,
+                    row.getCode() == null ? "" : row.getCode(),
+                    row.getDisplay(),
+                    row.getTotal());
+            }
+        } catch (IOException ex) {
+            throw new UncheckedIOException("CSV generation failed", ex);
+        }
+        return new GeneratedReport(
+            out.toString().getBytes(StandardCharsets.UTF_8), rows.size(),
+            filename(definition, periodToken));
+    }
+
     private GeneratedReport toCsv(ReportDefinition definition, String periodToken,
                                   List<String> header, Map<LocalDate, int[]> byDay, int columns) {
         StringWriter out = new StringWriter();
@@ -201,9 +238,13 @@ public class ReportGenerationService {
         } catch (IOException ex) {
             throw new UncheckedIOException("CSV generation failed", ex);
         }
-        String filename = definition.getReportType().name().toLowerCase()
-            + "_" + periodToken.replace("-", "") + ".csv";
         return new GeneratedReport(
-            out.toString().getBytes(StandardCharsets.UTF_8), byDay.size(), filename);
+            out.toString().getBytes(StandardCharsets.UTF_8), byDay.size(),
+            filename(definition, periodToken));
+    }
+
+    private static String filename(ReportDefinition definition, String periodToken) {
+        return definition.getReportType().name().toLowerCase()
+            + "_" + periodToken.replace("-", "") + ".csv";
     }
 }
