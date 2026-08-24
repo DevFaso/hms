@@ -7,7 +7,7 @@ import { Observable } from 'rxjs';
  * period. Mirrors the backend /reports DTOs field-for-field.
  */
 
-export type ReportType = 'ENCOUNTER_ACTIVITY' | 'APPOINTMENT_ACTIVITY';
+export type ReportType = 'ENCOUNTER_ACTIVITY' | 'APPOINTMENT_ACTIVITY' | 'TOP_DIAGNOSES';
 export type ReportPeriod = 'DAILY' | 'WEEKLY' | 'MONTHLY';
 export type ReportRunStatus = 'GENERATING' | 'SUCCEEDED' | 'FAILED';
 

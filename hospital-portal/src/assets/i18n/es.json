@@ -7875,6 +7875,7 @@
     "ERROR": "Error",
     "TYPE_ENCOUNTER_ACTIVITY": "Actividad de consultas",
     "TYPE_APPOINTMENT_ACTIVITY": "Actividad de citas",
+    "TYPE_TOP_DIAGNOSES": "Diagnósticos más frecuentes",
     "PERIOD_DAILY": "Diario",
     "PERIOD_WEEKLY": "Semanal",
     "PERIOD_MONTHLY": "Mensual",

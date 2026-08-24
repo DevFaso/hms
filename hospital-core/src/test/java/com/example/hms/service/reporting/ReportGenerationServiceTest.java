@@ -18,6 +18,8 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.platform.ReportDefinition;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.PatientProblemRepository;
+import com.example.hms.repository.PatientProblemRepository.DiagnosisCount;
 import com.example.hms.service.reporting.ReportGenerationService.GeneratedReport;
 import com.example.hms.service.reporting.ReportGenerationService.PeriodRange;
 import java.nio.charset.StandardCharsets;
@@ -38,13 +40,15 @@ class ReportGenerationServiceTest {
 
     @Mock private EncounterRepository encounterRepository;
     @Mock private AppointmentRepository appointmentRepository;
+    @Mock private PatientProblemRepository patientProblemRepository;
 
     private ReportGenerationService service;
     private Hospital hospital;
 
     @BeforeEach
     void setUp() {
-        service = new ReportGenerationService(encounterRepository, appointmentRepository);
+        service = new ReportGenerationService(
+            encounterRepository, appointmentRepository, patientProblemRepository);
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
     }
@@ -143,5 +147,41 @@ class ReportGenerationServiceTest {
         assertThat(csv).contains("2026-07-03,2,1,0,1");
         assertThat(csv).contains("2026-07-04,1,0,0,0");
         assertThat(report.rowCount()).isEqualTo(2);
+    }
+
+    @Test
+    void topDiagnosesRanksCountsWithNoPatientData() {
+        // The repository returns rows already ordered (count desc, display
+        // asc) — the service's job is ranking, null-code tolerance, and
+        // keeping the CSV free of anything patient-level.
+        when(patientProblemRepository.countDiagnosesRecordedInWindow(
+            eq(hospital.getId()),
+            eq(LocalDate.of(2026, 7, 1).atStartOfDay()),
+            eq(LocalDate.of(2026, 8, 1).atStartOfDay())))
+            .thenReturn(List.of(
+                diagnosisCount("B54", "Malaria, unspecified", 41),
+                diagnosisCount("I10", "Essential hypertension", 17),
+                diagnosisCount(null, "Free-text diagnosis", 3)));
+
+        GeneratedReport report = service.generate(
+            definition(ReportType.TOP_DIAGNOSES, ReportPeriod.MONTHLY), "202607");
+
+        String csv = new String(report.content(), StandardCharsets.UTF_8);
+        assertThat(csv).contains("rank,icd_code,diagnosis,count");
+        assertThat(csv).contains("1,B54,\"Malaria, unspecified\",41");
+        assertThat(csv).contains("2,I10,Essential hypertension,17");
+        // A null code renders as an empty cell, not the string "null".
+        assertThat(csv).contains("3,,Free-text diagnosis,3");
+        assertThat(csv).doesNotContain("null");
+        assertThat(report.rowCount()).isEqualTo(3);
+        assertThat(report.filename()).isEqualTo("top_diagnoses_202607.csv");
+    }
+
+    private static DiagnosisCount diagnosisCount(String code, String display, long total) {
+        return new DiagnosisCount() {
+            @Override public String getCode() { return code; }
+            @Override public String getDisplay() { return display; }
+            @Override public long getTotal() { return total; }
+        };
     }
 }
