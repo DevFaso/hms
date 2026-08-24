@@ -18,6 +18,7 @@ import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -769,7 +770,7 @@ public class LabResultServiceImpl implements LabResultService {
 
         String currentVal = current.getResultValue();
         String previousVal = previous.getResultValue();
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(previous.getResultDate(), current.getResultDate());
+        long daysBetween = ElapsedTime.daysBetween(previous.getResultDate(), current.getResultDate());
 
         // Attempt numeric comparison
         try {
