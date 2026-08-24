@@ -24,6 +24,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.NotificationService;
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -598,12 +598,12 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         double avgHoursToAssign = all.stream()
             .filter(c -> c.getAssignedAt() != null && c.getRequestedAt() != null)
-            .mapToLong(c -> ChronoUnit.MINUTES.between(c.getRequestedAt(), c.getAssignedAt()))
+            .mapToLong(c -> ElapsedTime.minutesBetween(c.getRequestedAt(), c.getAssignedAt()))
             .average().orElse(0) / 60.0;
 
         double avgHoursToComplete = all.stream()
             .filter(c -> c.getCompletedAt() != null && c.getRequestedAt() != null)
-            .mapToLong(c -> ChronoUnit.MINUTES.between(c.getRequestedAt(), c.getCompletedAt()))
+            .mapToLong(c -> ElapsedTime.minutesBetween(c.getRequestedAt(), c.getCompletedAt()))
             .average().orElse(0) / 60.0;
 
         Map<String, Long> bySpecialty = all.stream()

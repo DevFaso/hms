@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.superadmin.SuperAdminUserImportResultDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminUserResetResultDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminUserPasswordRotationDTO;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.utility.ElapsedTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -164,7 +165,7 @@ public class UserGovernanceService {
     LocalDate rotationDueOn = effectiveChangedAt.toLocalDate().plusDays(MAX_PASSWORD_AGE_DAYS);
     LocalDate warningStartsOn = rotationDueOn.minusDays(WARNING_WINDOW_DAYS);
 
-        long passwordAgeDays = Math.max(0, ChronoUnit.DAYS.between(effectiveChangedAt, now));
+        long passwordAgeDays = Math.max(0, ElapsedTime.daysBetween(effectiveChangedAt, now));
         long daysUntilDue = ChronoUnit.DAYS.between(today, rotationDueOn);
 
         boolean dueReached = !rotationDueOn.isAfter(today);
