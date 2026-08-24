@@ -7875,6 +7875,7 @@
     "ERROR": "Error",
     "TYPE_ENCOUNTER_ACTIVITY": "Encounter activity",
     "TYPE_APPOINTMENT_ACTIVITY": "Appointment activity",
+    "TYPE_TOP_DIAGNOSES": "Top diagnoses",
     "PERIOD_DAILY": "Daily",
     "PERIOD_WEEKLY": "Weekly",
     "PERIOD_MONTHLY": "Monthly",
