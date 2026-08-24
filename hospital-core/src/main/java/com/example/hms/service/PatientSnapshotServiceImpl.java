@@ -9,7 +9,9 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.enums.ProblemStatus;
 import com.example.hms.repository.PatientDiagnosisRepository;
+import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -49,6 +51,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final LabResultRepository labResultRepository;
     private final EncounterRepository encounterRepository;
     private final PatientDiagnosisRepository patientDiagnosisRepository;
+    private final PatientProblemRepository patientProblemRepository;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
@@ -105,14 +108,34 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return allergies;
     }
 
+    /**
+     * Active diagnoses for the snapshot, from BOTH stores.
+     *
+     * <p>{@code clinical.patient_problems} is where every current write path
+     * lands, so reading only {@code patient_diagnoses} meant the snapshot
+     * showed nothing recorded since that table was superseded, then silently
+     * fell through to the legacy free-text chronic conditions as if the
+     * patient had no structured diagnoses at all. {@code patient_diagnoses}
+     * is still read for V14-era rows and is read-only legacy.
+     */
     private List<String> buildActiveDiagnoses(UUID patientId, Patient patient) {
         List<String> diagnoses = new ArrayList<>();
         try {
-            List<PatientDiagnosis> structured = patientDiagnosisRepository
+            patientProblemRepository
+                    .findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE)
+                    .stream()
+                    .map(p -> formatDiagnosis(p.getProblemCode(), p.getProblemDisplay()))
+                    .forEach(diagnoses::add);
+            List<PatientDiagnosis> legacy = patientDiagnosisRepository
                     .findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, DIAGNOSIS_STATUS_ACTIVE);
-            structured.stream().map(this::formatDiagnosis).forEach(diagnoses::add);
-        } catch (Exception e) {
-            log.debug("PatientDiagnosis query error", e);
+            legacy.stream()
+                    .map(d -> formatDiagnosis(d.getIcdCode(), d.getDescription()))
+                    .forEach(diagnoses::add);
+        } catch (RuntimeException e) {
+            // WARN, not debug: this used to hide a query failure behind the
+            // same empty result an absent diagnosis produces, so a broken
+            // read looked identical to a patient with no problems.
+            log.warn("Active-diagnosis lookup failed for patient {}", patientId, e);
         }
         if (diagnoses.isEmpty()) {
             appendLegacyChronicConditions(diagnoses, patient);
@@ -120,10 +143,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         return diagnoses;
     }
 
-    private String formatDiagnosis(PatientDiagnosis d) {
-        return d.getIcdCode() != null
-                ? d.getIcdCode() + " – " + d.getDescription()
-                : d.getDescription();
+    /** "CODE – description", or the description alone when no code was coded. */
+    private String formatDiagnosis(String code, String description) {
+        return code != null ? code + " – " + description : description;
     }
 
     private void appendLegacyChronicConditions(List<String> diagnoses, Patient patient) {

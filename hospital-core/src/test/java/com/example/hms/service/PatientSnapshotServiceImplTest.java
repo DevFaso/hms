@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.enums.ProblemStatus;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
@@ -14,11 +15,13 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.model.PatientDiagnosis;
+import com.example.hms.model.PatientProblem;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientDiagnosisRepository;
+import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -44,7 +47,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -60,6 +65,7 @@ class PatientSnapshotServiceImplTest {
     @Mock private LabResultRepository labResultRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientDiagnosisRepository patientDiagnosisRepository;
+    @Mock private PatientProblemRepository patientProblemRepository;
 
     @InjectMocks
     private PatientSnapshotServiceImpl service;
@@ -750,6 +756,47 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("E11.9 \u2013 Type 2 Diabetes", result.getActiveDiagnoses().get(0));
+    }
+
+    @Test
+    void getSnapshot_withProblemListEntries_shouldShowThemInsteadOfFallingBackToLegacyText() {
+        // The regression: every current write path lands in patient_problems,
+        // so reading only patient_diagnoses left activeDiagnoses empty and the
+        // snapshot silently fell through to free-text chronic conditions \u2014 as
+        // if the patient had no structured diagnoses at all.
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFirstName()).thenReturn("Alice");
+        when(patient.getLastName()).thenReturn("Wong");
+        when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        givenPatient(patientId, patient);
+
+        PatientProblem problem = mock(PatientProblem.class);
+        when(problem.getProblemCode()).thenReturn("B54");
+        when(problem.getProblemDisplay()).thenReturn("Malaria, unspecified");
+
+        when(patientProblemRepository
+                .findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId, ProblemStatus.ACTIVE))
+                .thenReturn(List.of(problem));
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
+
+        assertEquals(1, result.getActiveDiagnoses().size());
+        assertEquals("B54 \u2013 Malaria, unspecified", result.getActiveDiagnoses().get(0));
+        // getChronicConditions() is never consulted \u2014 the fallback did not fire.
+        verify(patient, never()).getChronicConditions();
     }
 
     @Test
