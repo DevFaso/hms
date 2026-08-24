@@ -802,6 +802,19 @@ export const routes: Routes = [
         loadComponent: () => import('./reports/reports').then((m) => m.ReportsComponent),
       },
 
+      // Disease surveillance — top diagnoses per month. Mirrors
+      // MorbidityDashboardController's @PreAuthorize exactly. The BACKEND
+      // decides scope from the caller's authorities (own hospital vs
+      // network), so this guard only controls who reaches the page.
+      {
+        path: 'morbidity',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./morbidity/morbidity').then((m) => m.MorbidityComponent),
+      },
+
       // Discharge (approvals + summaries)
       {
         path: 'discharge',
