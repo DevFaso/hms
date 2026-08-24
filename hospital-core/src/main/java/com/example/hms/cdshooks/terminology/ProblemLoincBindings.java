@@ -40,6 +40,21 @@ import java.util.Optional;
  */
 public final class ProblemLoincBindings {
 
+    // ── Panels shared by more than one ICD prefix ──────────────────
+    // Named once so the table below reads as "these problems point at the
+    // SAME panel", which is the clinical intent, rather than as repetition.
+    // The record is immutable, so one instance is safely shared.
+    private static final LoincCoding BLOOD_PRESSURE_PANEL =
+        loinc("85354-9", "Blood pressure panel");
+    private static final LoincCoding HBA1C =
+        loinc("4548-4", "Hemoglobin A1c/Hemoglobin.total in Blood");
+    private static final LoincCoding SPIROMETRY =
+        loinc("19868-9", "FEV1/FVC.predicted");
+    private static final LoincCoding MALARIA_PARASITE =
+        loinc("32700-7", "Plasmodium sp identified in Blood");
+    private static final LoincCoding TB_SPUTUM =
+        loinc("19836-6", "Tuberculosis [Presence] in Sputum");
+
     /**
      * ICD-10 prefix → LOINC observation-panel code. Keyed on the
      * prefix (typically 3 chars: e.g. "I10", "E11") so a more specific
@@ -48,33 +63,33 @@ public final class ProblemLoincBindings {
      */
     static final Map<String, LoincCoding> ICD10_TO_LOINC = Map.ofEntries(
         // ── Cardiovascular ─────────────────────────────────────────
-        Map.entry("I10",  loinc("85354-9", "Blood pressure panel")),       // Essential hypertension
-        Map.entry("I11",  loinc("85354-9", "Blood pressure panel")),       // Hypertensive heart disease
+        Map.entry("I10",  BLOOD_PRESSURE_PANEL),                           // Essential hypertension
+        Map.entry("I11",  BLOOD_PRESSURE_PANEL),                           // Hypertensive heart disease
         Map.entry("I50",  loinc("71425-3", "Heart failure assessment panel")),
         // ── Endocrine ──────────────────────────────────────────────
-        Map.entry("E10",  loinc("4548-4",  "Hemoglobin A1c/Hemoglobin.total in Blood")),
-        Map.entry("E11",  loinc("4548-4",  "Hemoglobin A1c/Hemoglobin.total in Blood")),
-        Map.entry("E13",  loinc("4548-4",  "Hemoglobin A1c/Hemoglobin.total in Blood")),
+        Map.entry("E10",  HBA1C),
+        Map.entry("E11",  HBA1C),
+        Map.entry("E13",  HBA1C),
         // ── Respiratory ────────────────────────────────────────────
-        Map.entry("J44",  loinc("19868-9", "FEV1/FVC.predicted")),         // COPD
-        Map.entry("J45",  loinc("19868-9", "FEV1/FVC.predicted")),         // Asthma
+        Map.entry("J44",  SPIROMETRY),                                     // COPD
+        Map.entry("J45",  SPIROMETRY),                                     // Asthma
         // ── Hematology (West Africa relevant: sickle cell + anemia) ─
         Map.entry("D57",  loinc("4624-3",  "Hemoglobin S [Mass/volume] in Blood")),   // Sickle cell disorders
         Map.entry("D50",  loinc("718-7",   "Hemoglobin [Mass/volume] in Blood")),     // Iron deficiency anemia
         // ── Infectious (West Africa relevant) ──────────────────────
-        Map.entry("B50",  loinc("32700-7", "Plasmodium sp identified in Blood")),     // P. falciparum malaria
-        Map.entry("B51",  loinc("32700-7", "Plasmodium sp identified in Blood")),     // P. vivax malaria
-        Map.entry("B52",  loinc("32700-7", "Plasmodium sp identified in Blood")),     // P. malariae
-        Map.entry("B53",  loinc("32700-7", "Plasmodium sp identified in Blood")),     // Other parasitologically confirmed
-        Map.entry("B54",  loinc("32700-7", "Plasmodium sp identified in Blood")),     // Unspecified malaria
+        Map.entry("B50",  MALARIA_PARASITE),                               // P. falciparum malaria
+        Map.entry("B51",  MALARIA_PARASITE),                               // P. vivax malaria
+        Map.entry("B52",  MALARIA_PARASITE),                               // P. malariae
+        Map.entry("B53",  MALARIA_PARASITE),                               // Other parasitologically confirmed
+        Map.entry("B54",  MALARIA_PARASITE),                               // Unspecified malaria
         Map.entry("B20",  loinc("25836-8", "HIV 1 antigen and Ab panel")),            // HIV disease
-        Map.entry("A15",  loinc("19836-6", "Tuberculosis [Presence] in Sputum")),     // Respiratory TB, confirmed
-        Map.entry("A16",  loinc("19836-6", "Tuberculosis [Presence] in Sputum")),     // Respiratory TB, unconfirmed
+        Map.entry("A15",  TB_SPUTUM),                                      // Respiratory TB, confirmed
+        Map.entry("A16",  TB_SPUTUM),                                      // Respiratory TB, unconfirmed
         // ── Renal ──────────────────────────────────────────────────
         Map.entry("N18",  loinc("33914-3", "Glomerular filtration rate/1.73 sq M.predicted")),
         // ── Obstetric (relevant for the OB BPA rule) ───────────────
-        Map.entry("O14",  loinc("85354-9", "Blood pressure panel")),       // Pre-eclampsia
-        Map.entry("O24",  loinc("4548-4",  "Hemoglobin A1c/Hemoglobin.total in Blood"))  // Gestational diabetes
+        Map.entry("O14",  BLOOD_PRESSURE_PANEL),                           // Pre-eclampsia
+        Map.entry("O24",  HBA1C)                                           // Gestational diabetes
     );
 
     private ProblemLoincBindings() { /* static-only */ }

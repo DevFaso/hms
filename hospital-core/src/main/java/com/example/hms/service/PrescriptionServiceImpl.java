@@ -315,10 +315,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private String computeSignatureDigest(String payload) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            MessageDigest digest = MessageDigest.getInstance(SIGNATURE_ALGORITHM);
             return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
+            throw new IllegalStateException(SIGNATURE_ALGORITHM + " algorithm not available", e);
         }
     }
 

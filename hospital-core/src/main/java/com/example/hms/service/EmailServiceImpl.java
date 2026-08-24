@@ -23,6 +23,8 @@ public class EmailServiceImpl implements EmailService {
 
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
     private static final String GENERIC_GREETING = "there";
+    /** Opening wrapper for the body column of every templated email. */
+    private static final String BODY_OPEN = "<div style=\"padding:36px 40px;\">";
     private static final String HI_PARAGRAPH = "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi ";
 
     /** Returns the app login URL, driven by the configured frontend base URL. */
@@ -272,7 +274,7 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#a7f3d0;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
             + "</div>";
 
-        String bodyContent = "<div style=\"padding:36px 40px;\">"
+        String bodyContent = BODY_OPEN
             + HI_PARAGRAPH + escapedName + ",</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "Your account password was successfully reset on <strong>" + changedAt + "</strong>."
@@ -324,7 +326,7 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
             + "</div>";
 
-        String bodyContent = "<div style=\"padding:36px 40px;\">"
+        String bodyContent = BODY_OPEN
             + HI_PARAGRAPH + escapedName + ",</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "Your account was <strong>restored</strong> on <strong>" + restoredAt + "</strong> "
@@ -367,7 +369,7 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
             + "</div>";
 
-        String bodyContent = "<div style=\"padding:36px 40px;\">"
+        String bodyContent = BODY_OPEN
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "You requested to add this email address as a recovery contact for your HMS account. "
             + "Please enter the verification code below to confirm ownership:"
@@ -508,7 +510,7 @@ public class EmailServiceImpl implements EmailService {
             + "</div>";
 
         StringBuilder body = new StringBuilder();
-        body.append("<div style=\"padding:36px 40px;\">");
+        body.append(BODY_OPEN);
         if (safeName != null) {
             body.append(HI_PARAGRAPH).append(safeName).append(",</p>");
         }
@@ -554,7 +556,7 @@ public class EmailServiceImpl implements EmailService {
             + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
             + "</div>";
 
-        String bodyContent = "<div style=\"padding:36px 40px;\">"
+        String bodyContent = BODY_OPEN
             + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hello,</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "We received a request to reset the password for your account. "

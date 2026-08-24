@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
 
+    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
+
     private final Dhis2FacilityConfigRepository facilityConfigRepository;
     private final Dhis2DataElementMappingRepository mappingRepository;
     private final HospitalRepository hospitalRepository;
@@ -56,7 +58,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
                                                                Dhis2FacilityConfigRequestDTO request) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+                MSG_HOSPITAL_NOT_FOUND + hospitalId));
 
         final Dhis2FacilityConfig saved = facilityConfigRepository.findByHospital_Id(hospitalId)
             .map(existing -> {
@@ -83,7 +85,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
                                                             Dhis2DataElementMappingRequestDTO request) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+                MSG_HOSPITAL_NOT_FOUND + hospitalId));
         final Dhis2DataElementMapping saved = mappingRepository.save(
             mappingMapper.toEntity(request, hospital));
         return mappingMapper.toResponseDTO(saved);
@@ -95,7 +97,7 @@ public class Dhis2ConfigServiceImpl implements Dhis2ConfigService {
                                                             Dhis2DataElementMappingRequestDTO request) {
         final Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                "Hospital not found: " + hospitalId));
+                MSG_HOSPITAL_NOT_FOUND + hospitalId));
         final Dhis2DataElementMapping existing = mappingRepository.findById(mappingId)
             .orElseThrow(() -> new ResourceNotFoundException(
                 "DHIS2 mapping not found: " + mappingId));
