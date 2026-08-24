@@ -7,7 +7,7 @@ export const environment = {
   apiBase: '/api',
   gaTrackingId: '',
   faroCollectorUrl: '',
-  // Hosted dev tier (Railway, served at https://hms.dev.bitnesttechs.com).
+  // Hosted dev tier (Railway, served at https://dev.e-keneya.com).
   // Targets the per-env Railway Keycloak provisioned per
   // keycloak/prod/README.md. Local laptop dev (`ng serve`) uses
   // environment.ts which still points at localhost:8081 for the
@@ -15,14 +15,14 @@ export const environment = {
   //
   // `enabled` stays false until the hosted-dev cutover (P-2 / Phase 2.8.B
   // in docs/keycloak-implementation-gaps.md). Flip after the realm import
-  // includes hms.dev.bitnesttechs.com redirect URIs and a UAT soak window
+  // includes dev.e-keneya.com redirect URIs and a soak window on dev
   // confirms login + token refresh end to end.
   oidc: {
     enabled: false,
     issuer: 'https://hms-keycloak-dev-dev.up.railway.app/realms/hms',
     clientId: 'hms-portal',
-    redirectUri: 'https://hms.dev.bitnesttechs.com/login',
-    postLogoutRedirectUri: 'https://hms.dev.bitnesttechs.com/login',
+    redirectUri: 'https://dev.e-keneya.com/login',
+    postLogoutRedirectUri: 'https://dev.e-keneya.com/login',
     scope: 'openid profile email roles hms-claims',
     remember: false,
   },

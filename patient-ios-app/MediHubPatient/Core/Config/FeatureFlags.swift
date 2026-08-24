@@ -43,7 +43,7 @@ enum FeatureFlags {
 /// `ProcessInfo` first (for in-Xcode dev runs and tests) and falls back to
 /// `Bundle.main.infoDictionary` (for `xcodebuild archive` builds where
 /// scheme env vars don't propagate). Defaults come from `project.yml`
-/// `settings.base`; per-env values come from `Config/{Dev,UAT,Prod}.xcconfig`.
+/// `settings.base`; per-env values come from `Config/{Dev,Prod}.xcconfig`.
 enum KeycloakConfig {
     static var issuer: String {
         KeycloakRuntimeConfig.value("MEDIHUB_KEYCLOAK_ISSUER") ?? ""

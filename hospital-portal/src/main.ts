@@ -10,10 +10,10 @@ import { environment } from './environments/environment';
  * variable is missing on a per-env service, the image silently ships
  * `environment.prod.ts` — which points Faro at the prod RUM collector and tags every
  * event as `production`. The prod Faro app's allowed-origin list does not include
- * `*.uat.bitnesttechs.com`, so the browser then sees a CORS preflight failure on
+ * `dev.e-keneya.com`, so the browser then sees a CORS preflight failure on
  * every event, which surfaces as red noise in DevTools.
  *
- * Rather than ship telemetry to the wrong app and pollute prod dashboards with UAT
+ * Rather than ship telemetry to the wrong app and pollute prod dashboards with dev
  * traffic, we refuse to initialise Faro when the configured environment doesn't match
  * the hostname we're served from.
  */
@@ -38,9 +38,8 @@ function resolveFaroEnvironment(): { url: string; envName: string } | null {
   return { url: configuredUrl, envName: environment.name };
 }
 
-function inferEnvFromHost(host: string): 'uat' | 'dev' | 'production' | null {
+function inferEnvFromHost(host: string): 'dev' | 'production' | null {
   if (!host) return null;
-  if (host.includes('.uat.') || host.startsWith('uat.')) return 'uat';
   if (host.includes('.dev.') || host.startsWith('dev.')) return 'dev';
   if (host === 'localhost' || host === '127.0.0.1') return null; // local builds are always fine
   return 'production';

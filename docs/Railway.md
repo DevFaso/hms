@@ -11,7 +11,7 @@ How the HMS stack is wired on Railway, and the moving parts an operator has to k
 | `hms-postgres-{env}` | Railway Postgres plugin | One per environment, no cross-env sharing. |
 | `hms-keycloak-{env}` | `keycloak/prod/Dockerfile` | Optional; KC-2b cutover gate. |
 
-Each environment (`dev`, `uat`, `prod`) runs an isolated copy of every service.
+Each environment (`dev`, `prod`) runs an isolated copy of every service.
 
 ## Required service variables
 
@@ -19,12 +19,12 @@ Each environment (`dev`, `uat`, `prod`) runs an isolated copy of every service.
 
 | Variable | Value per env |
 | --- | --- |
-| `BUILD_CONFIG` | `dev` / `uat` / `production` |
+| `BUILD_CONFIG` | `dev` / `production` |
 
-This is the single most common configuration drift on Railway. The Angular bundle hardcodes the API URL, Faro RUM endpoint, and OIDC issuer at build time via Angular's `fileReplacements`. If `BUILD_CONFIG` is missing, Docker uses the default (`production`) and the UAT/dev frontend ships with `environment.prod.ts` baked in:
+This is the single most common configuration drift on Railway. The Angular bundle hardcodes the API URL, Faro RUM endpoint, and OIDC issuer at build time via Angular's `fileReplacements`. If `BUILD_CONFIG` is missing, Docker uses the default (`production`) and the dev frontend ships with `environment.prod.ts` baked in:
 
 - Faro RUM points at the prod collector → CORS-rejected from non-prod hostnames (you'll see `Failed to fetch` from `@grafana/faro-web-sdk` in DevTools).
-- Telemetry that *does* land arrives tagged `environment: production`, polluting prod dashboards with UAT traffic.
+- Telemetry that *does* land arrives tagged `environment: production`, polluting prod dashboards with dev traffic.
 - OIDC redirect URIs point at the prod IdP.
 
 The runtime defence in `src/main.ts` will detect a hostname/env mismatch and refuse to initialise Faro, but the OIDC and API-base settings still come from the wrong file. Set `BUILD_CONFIG` correctly per service.
@@ -39,15 +39,15 @@ The runtime defence in `src/main.ts` will detect a hostname/env mismatch and ref
 
 ### `hms-backend-{env}`
 
-| Variable | Value (UAT example) |
+| Variable | Value (dev example) |
 | --- | --- |
-| `SPRING_PROFILES_ACTIVE` | `uat` |
+| `SPRING_PROFILES_ACTIVE` | `dev` |
 | `DATABASE_URL` | Railway-injected from the Postgres plugin |
 | `SPRING_DATASOURCE_USERNAME` | from Postgres plugin |
 | `SPRING_DATASOURCE_PASSWORD` | from Postgres plugin |
-| `FRONTEND_BASE_URL` | `https://hms.uat.bitnesttechs.com` |
-| `PUBLIC_BASE_URL` | `https://hms.uat.bitnesttechs.com` |
-| `CORS_ALLOWED_ORIGINS` | `https://hms.uat.bitnesttechs.com,https://patient.uat.bitnesttechs.com` |
+| `FRONTEND_BASE_URL` | `https://dev.e-keneya.com` |
+| `PUBLIC_BASE_URL` | `https://dev.e-keneya.com` |
+| `CORS_ALLOWED_ORIGINS` | `https://dev.e-keneya.com,https://patient.dev.e-keneya.com` |
 | `JWT_SECRET` | strong, env-specific |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Grafana Cloud OTLP endpoint (enables the OTel Java agent at startup) |
 
@@ -55,7 +55,7 @@ The runtime defence in `src/main.ts` will detect a hostname/env mismatch and ref
 
 ## Email link host pattern
 
-Outbound email templates must use `hms.{env}.bitnesttechs.com` (dot-separated). The hyphenated form (`hms-{env}.bitnesttechs.com`) is **not** a real DNS record and produces `DNS_PROBE_FINISHED_NXDOMAIN` in users' browsers. Grep email templates for the wrong form before any release.
+Outbound email templates must use `dev.e-keneya.com` (dev) or `e-keneya.com` (prod). Only these are real DNS records — any invented variant (or a leftover `*.bitnesttechs.com` host from before the domain move) produces `DNS_PROBE_FINISHED_NXDOMAIN` in users' browsers. Grep email templates for stray hosts before any release.
 
 ## Observability
 
@@ -66,7 +66,7 @@ The OTel Java agent is auto-attached when `OTEL_EXPORTER_OTLP_ENDPOINT` is set (
 Frontend RUM goes to Grafana Cloud Faro. The collector URL is per-environment:
 
 - prod: configured in `environment.prod.ts`.
-- uat: blank by default — provision a separate Faro app in Grafana Cloud and put its URL in `environment.uat.ts` if you want UAT RUM. Do not reuse the prod URL — its allowed-origins list does not include UAT hostnames.
+- dev: blank by default — provision a separate Faro app in Grafana Cloud and put its URL in `environment.dev.ts` if you want dev RUM. Do not reuse the prod URL — its allowed-origins list does not include dev hostnames.
 
 ### Local dev (docker-compose)
 

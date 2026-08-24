@@ -36,7 +36,7 @@ Adding or removing a registered service is caught by `CdsHooksDiscoveryIT.regist
 
 `SecurityConfig.corsConfigurationSource()` honors three groups of origins on `/**`:
 
-1. Local dev defaults: `http://localhost:*`, `http://127.0.0.1:*`, `https://*.bitnesttechs.com`.
+1. Local dev defaults: `http://localhost:*`, `http://127.0.0.1:*`, `https://e-keneya.com`, `https://*.e-keneya.com`.
 2. Operator-supplied via `APP_CORS_ALLOWED_ORIGINS` (comma-separated).
 3. **CDS Hooks sandbox origins** (new in row 27), gated by `app.cors.cds-hooks-sandbox.enabled=true` (default) and supplied via `app.cors.cds-hooks-sandbox.origins`. The default list covers:
 

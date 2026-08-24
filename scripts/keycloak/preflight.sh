@@ -13,7 +13,7 @@
 # first failure. Safe to re-run after a fix.
 #
 # Required env:
-#   HMS_KC_ENV               dev | uat | prod  (selects the env stanza)
+#   HMS_KC_ENV               dev | prod  (selects the env stanza)
 #   OIDC_ISSUER_URI          e.g. https://keycloak.<env>.example.com/realms/hms
 #                            (the issuer the backend's resource server expects)
 #
@@ -22,7 +22,7 @@
 #                            checks fire (delegated to env-sync-verify.sh --full)
 #   HMS_KC_SMOKE_INBOX_USER  IMAP user — when set, an SMTP test email is sent
 #                            and the IMAP inbox is tailed for receipt
-#   HMS_BACKEND_BASE_URL     e.g. https://api.hms.<env>.example.com — used to
+#   HMS_BACKEND_BASE_URL     e.g. https://api.dev.e-keneya.com — used to
 #                            probe /actuator/health and the SSO discovery link
 #
 # Exit codes:
@@ -31,7 +31,7 @@
 #   2   invocation error — missing required env or missing dependency
 #
 # Usage:
-#   HMS_KC_ENV=uat OIDC_ISSUER_URI=https://keycloak.uat.example.com/realms/hms \
+#   HMS_KC_ENV=dev OIDC_ISSUER_URI=https://keycloak.dev.example.com/realms/hms \
 #     ./scripts/keycloak/preflight.sh
 #
 set -euo pipefail
@@ -40,12 +40,12 @@ err() { printf '[FAIL] %s\n' "$*" >&2; exit 1; }
 ok()  { printf '[ OK ] %s\n' "$*"; }
 info() { printf '[INFO] %s\n' "$*"; }
 
-: "${HMS_KC_ENV:?HMS_KC_ENV must be set (dev | uat | prod)}"
+: "${HMS_KC_ENV:?HMS_KC_ENV must be set (dev | prod)}"
 : "${OIDC_ISSUER_URI:?OIDC_ISSUER_URI must be set, e.g. https://keycloak.<env>.example.com/realms/hms}"
 
 case "${HMS_KC_ENV}" in
-    dev|uat|prod) ;;
-    *) err "HMS_KC_ENV must be one of dev | uat | prod (got '${HMS_KC_ENV}')" ;;
+    dev|prod) ;;
+    *) err "HMS_KC_ENV must be one of dev | prod (got '${HMS_KC_ENV}')" ;;
 esac
 
 command -v curl >/dev/null 2>&1 || err "curl is required"

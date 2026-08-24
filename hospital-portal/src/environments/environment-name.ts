@@ -1,1 +1,1 @@
-export type EnvironmentName = 'local' | 'dev' | 'uat' | 'production';
+export type EnvironmentName = 'local' | 'dev' | 'production';

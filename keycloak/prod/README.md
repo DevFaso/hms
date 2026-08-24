@@ -25,7 +25,7 @@ when needed.
 
 ## One-time provisioning (per environment)
 
-Run this recipe once per environment. The order is **dev → uat → prod**:
+Run this recipe once per environment. The order is **dev → prod**:
 each downstream env reuses settings proven in the previous one.
 
 ### 1. Create the Railway service
@@ -37,13 +37,12 @@ each downstream env reuses settings proven in the previous one.
    directory name is historical; this Dockerfile now serves all envs.)
 4. Under **Settings → Source → Branch**, set the branch to match the
    environment. Railway defaults new services to `main`, which is wrong
-   for dev/uat — without this the service won't pick up Keycloak fixes
+   for dev — without this the service won't pick up Keycloak fixes
    until they're promoted to `main`:
 
    | Service | Branch |
    | --- | --- |
    | `hms-keycloak-dev` | `develop` |
-   | `hms-keycloak-uat` | `uat` |
    | `hms-keycloak-prod` | `main` |
 
 5. Under **Settings → Networking**, enable a public domain. Note the
@@ -65,14 +64,14 @@ Under **Variables**, add:
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `BUILD_CONFIG` | `dev` / `uat` / `prod` | Forwarded to the Dockerfile `ARG`. Drives the `KC_HMS_ENV` runtime tag and the `com.bitnesttechs.hms.env` image label. |
+| `BUILD_CONFIG` | `dev` / `prod` | Forwarded to the Dockerfile `ARG`. Drives the `KC_HMS_ENV` runtime tag and the `com.bitnesttechs.hms.env` image label. |
 | `KC_DB_URL` | `jdbc:postgresql://${{hms-keycloak-<env>-db.PGHOST}}:${{hms-keycloak-<env>-db.PGPORT}}/${{hms-keycloak-<env>-db.PGDATABASE}}` | Reference-style so Railway wires it automatically. |
 | `KC_DB_USERNAME` | `${{hms-keycloak-<env>-db.PGUSER}}` | |
 | `KC_DB_PASSWORD` | `${{hms-keycloak-<env>-db.PGPASSWORD}}` | |
 | `KC_HOSTNAME` | `https://hms-keycloak-<env>.up.railway.app` | **Must include the `https://` scheme.** A bare hostname (no scheme) causes the account console to return HTTP 403 — Keycloak's URL builder gets ambiguous about the scheme behind Railway's edge proxy. No trailing slash. Must match the public domain exactly. |
 | `KC_BOOTSTRAP_ADMIN_USERNAME` | `kc-admin` (or your convention) | Used once on first boot. |
 | `KC_BOOTSTRAP_ADMIN_PASSWORD` | (generate 32 random bytes, base64) | **Rotate within 24 h** via the admin console. |
-| `KC_LOG_LEVEL` | `INFO` (`DEBUG` only for `dev` while troubleshooting) | Don't leave `DEBUG` on in uat/prod. |
+| `KC_LOG_LEVEL` | `INFO` (`DEBUG` only for `dev` while troubleshooting) | Don't leave `DEBUG` on in prod. |
 
 > The `PORT` env var is injected by Railway; the Dockerfile's entrypoint
 > already maps it onto `KC_HTTP_PORT`. Do not set it manually.
@@ -113,7 +112,7 @@ confirm the JSON comes back.
 4. **Prod only:** enable Cloudflare Access or a Railway Private Network
    rule limiting `/admin` to known IPs. The public realm endpoint
    (`/realms/hms/**`) must stay open for OIDC discovery + token
-   issuance. Dev/uat may leave `/admin` open for engineering access; do
+   issuance. Dev may leave `/admin` open for engineering access; do
    not skip this step in prod.
 
 ### 6. Wire the matching backend
@@ -142,7 +141,7 @@ green per Phase 2.7's KC checks 1–5 in
 ### 8. Wire the portal + mobile apps
 
 Update the respective runtime configs to point at the env's issuer URL
-and flip the SSO flag ON. Dev/uat can flip immediately; prod stays OFF
+and flip the SSO flag ON. Dev can flip immediately; prod stays OFF
 until Phase 3 cutover (see Phase 2.8.B/C in the gaps doc).
 
 ## Ongoing operations

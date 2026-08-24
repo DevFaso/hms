@@ -15,9 +15,8 @@ verify their email on first login.
 
 | Env | Trigger |
 |---|---|
-| **dev** | Any time the seed DB grows new user fixtures. |
-| **uat** | Immediately after KC-3 soak, before Phase 2.6 flag flip. |
-| **prod** | Once P-2 (prod Keycloak) is live and the uat soak is clean — scheduled during the announced maintenance window. |
+| **dev** | Any time the seed DB grows new user fixtures. The hosted-dev run doubles as the pre-prod soak (the former uat environment was retired with the e-keneya.com domain move). |
+| **prod** | Once P-2 (prod Keycloak) is live and the hosted-dev soak is clean — scheduled during the announced maintenance window. |
 
 ## Preconditions checklist
 

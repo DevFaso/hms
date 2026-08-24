@@ -5,9 +5,8 @@ import Foundation
 enum AppEnvironment {
     /// Available environments
     enum Environment: String, CaseIterable {
-        case dev = "https://api.hms.dev.bitnesttechs.com/api"
-        case uat = "https://api.hms.uat.bitnesttechs.com/api"
-        case prod = "https://api.hms.bitnesttechs.com/api"
+        case dev = "https://api.dev.e-keneya.com/api"
+        case prod = "https://api.e-keneya.com/api"
         case local = "http://localhost:8081/api"
     }
 

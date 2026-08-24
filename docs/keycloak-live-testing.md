@@ -68,7 +68,7 @@ docker compose --profile keycloak up -d keycloak-db keycloak
 >    `hospital_id` are accepted, (b) creates the four built-in scopes,
 >    (c) attaches them as default scopes on `hms-portal`, and (d) seeds
 >    users from [scripts/seed-keycloak.local.json](../scripts/seed-keycloak.local.json).
->    Drive dev/uat/prod with the matching `seed-keycloak.<env>.json`
+>    Drive dev/prod with the matching `seed-keycloak.<env>.json`
 >    file plus `-Environment <env>` (and `-Confirm` for prod).
 
 ### 0.1 Seed the realm (one command)

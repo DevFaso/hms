@@ -13,9 +13,9 @@
 // cancel). A pure write-only test would over-stress the DB writer and under-
 // stress the query plans we actually care about.
 //
-// How to run (locally against a seeded UAT):
+// How to run (locally against a seeded dev environment):
 //   k6 run \
-//     -e BASE_URL=https://api.hms.uat.bitnesttechs.com \
+//     -e BASE_URL=https://api.dev.e-keneya.com \
 //     -e AUTH_TOKEN="$KC_PHARMACIST_JWT" \
 //     -e PRESCRIPTION_ID=00000000-0000-0000-0000-000000000001 \
 //     -e PATIENT_ID=00000000-0000-0000-0000-000000000002 \
@@ -25,8 +25,8 @@
 //     scripts/perf/dispense-baseline.js
 //
 // In CI the script is invoked from .github/workflows/perf-baseline.yml on
-// workflow_dispatch — never on push, because UAT credentials must not leak
-// into PR runs.
+// workflow_dispatch — never on push, because environment credentials must not
+// leak into PR runs.
 
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';

@@ -127,17 +127,20 @@ carries any users, and that file is dev-only by `_comment`), so a
 Users-tick partial-import would do nothing in this state — but the
 moment someone merges a `realm-export.json` change that *does* include
 a `users` block, the same checkbox would silently overwrite live user
-records in uat/prod. Treat the checkbox as off-limits regardless.
+records in prod. Treat the checkbox as off-limits regardless.
 
 ### 3. Verify with the cutover smoke script
 
 Run the packaged smoke check:
 
 ```bash
-API_BASE_URL=https://api.hms.<env>.bitnesttechs.com \
-ISSUER_URI=https://hms-keycloak-<env>-<env>.up.railway.app/realms/hms \
+API_BASE_URL=https://api.dev.e-keneya.com \
+ISSUER_URI=https://hms-keycloak-dev-dev.up.railway.app/realms/hms \
   scripts/keycloak/cutover-smoke.sh
 ```
+
+(For prod, use `API_BASE_URL=https://api.e-keneya.com` and the
+`hms-keycloak-prod-prod` issuer.)
 
 The smoke script does not yet diff the realm content against the
 export — its scope is the cutover invariants (see

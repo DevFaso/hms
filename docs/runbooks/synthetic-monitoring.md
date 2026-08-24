@@ -45,7 +45,7 @@ Per-region copy of the template — substitute these four placeholders:
 | --- | --- |
 | `${GEO_LABEL}` | `aws-eu-west-1` |
 | `${BLACKBOX_HOST}` | `blackbox-eu-west-1.local:9115` |
-| `${HMS_PUBLIC_BASE_URL}` | `https://api.hms.bitnesttechs.com` |
+| `${HMS_PUBLIC_BASE_URL}` | `https://api.e-keneya.com` |
 | `${MIMIR_REMOTE_WRITE_URL}` | The Grafana Cloud Mimir push URL from project → connections |
 
 **Substitution is NOT automatic.** Prometheus does not understand the `${VAR}` / envsubst shape. The placeholders must be resolved at deploy time — either `envsubst < prometheus-multigeo.example.yml > prometheus.yml` in the container entrypoint, or an explicit `sed` pass per the file header. Loading the template as-is parses fine and starts Prometheus, but every probe target becomes the literal string `${HMS_PUBLIC_BASE_URL}/api/...` and every series carries the literal `${GEO_LABEL}` — the failure mode is silent and only visible once you look at the probe output or the Grafana label values.
@@ -98,7 +98,7 @@ jobs:
         env:
           K6_CLOUD_TOKEN: ${{ secrets.K6_CLOUD_TOKEN }}
           K6_CLOUD_PROJECT_ID: ${{ secrets.K6_CLOUD_PROJECT_ID }}
-          HMS_PUBLIC_BASE_URL: https://api.hms.bitnesttechs.com
+          HMS_PUBLIC_BASE_URL: https://api.e-keneya.com
 ```
 
 The script emits a `probe_success` rate metric and `probe_duration_seconds` trend tagged per probe — k6 cloud's Grafana Cloud integration ships these to the same Mimir tenant the in-cluster Prometheus writes to, so the alert rules fire on identical series shapes.

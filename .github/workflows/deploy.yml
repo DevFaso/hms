@@ -2,18 +2,16 @@ name: Deploy to Railway
 
 on:
   # dev  → Railway auto-deploys via git integration on push to develop
-  # uat  → Railway auto-deploys via git integration on push to uat
   # prod → NO auto-deploy; trigger manually here for safety
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment (dev/uat auto-deploy via git; use prod here)'
+        description: 'Target environment (dev auto-deploys via git; use prod here)'
         required: true
         default: 'prod'
         type: choice
         options:
           - prod
-          - uat
           - dev
       service:
         description: 'Service to deploy'
@@ -31,12 +29,10 @@ permissions:
 # ── Railway project / service / environment IDs ────────────────────────────
 # Project: MediHub  bc9920fa-8753-434c-b812-3fc4b5473542
 #
-# Environments:   prod  e524f68e  | uat  1a5c6418  | dev  6bfeb810
+# Environments:   prod  e524f68e  | dev  6bfeb810
 # backend-core  (prod)  e9013e45-3f63-4534-b13a-7a771001b8e1
-# backend-uat          d86bb1fc-970c-4573-9cae-7dd2dd539d1f
 # backend-dev          648fc1df-151b-4524-8d17-bd92a5317e16
 # frontend-prod        b306a9e8-36f9-477c-813c-c3bb119d2679
-# frontend-uat         042b8787-7455-4cd8-81db-8f4bf7375ca4
 # frontend-dev         9ad9ae6a-6438-4a27-be1f-858644d8955d
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -69,7 +65,6 @@ jobs:
         id: cfg
         env:
           HMS_PROD_TOKEN: ${{ secrets.HMS_PROD_TOKEN }}
-          HMS_UAT_TOKEN: ${{ secrets.HMS_UAT_TOKEN }}
           HMS_DEV_TOKEN: ${{ secrets.HMS_DEV_TOKEN }}
         run: |
           case "${{ github.event.inputs.environment }}" in
@@ -78,12 +73,6 @@ jobs:
               echo "backend_svc=hms-backend-core"   >> "$GITHUB_OUTPUT"
               echo "frontend_svc=hms-frontend-prod" >> "$GITHUB_OUTPUT"
               echo "railway_env=prod"               >> "$GITHUB_OUTPUT"
-              ;;
-            uat)
-              echo "token=$HMS_UAT_TOKEN"           >> "$GITHUB_OUTPUT"
-              echo "backend_svc=hms-backend-uat"    >> "$GITHUB_OUTPUT"
-              echo "frontend_svc=hms-frontend-uat"  >> "$GITHUB_OUTPUT"
-              echo "railway_env=uat"                >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "token=$HMS_DEV_TOKEN"           >> "$GITHUB_OUTPUT"

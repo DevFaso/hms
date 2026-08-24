@@ -33,7 +33,7 @@ android {
         // Build config fields — override with local.properties or CI env vars
         // TODO: revert to production before Play Store release
         // buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
-        buildConfigField("String", "API_BASE_URL", "\"https://api.hms.dev.bitnesttechs.com/api\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
 
         // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
         // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
@@ -76,7 +76,7 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
-            buildConfigField("String", "API_BASE_URL", "\"https://api.hms.dev.bitnesttechs.com/api\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.dev.e-keneya.com/api\"")
         }
         release {
             isMinifyEnabled = true

@@ -120,7 +120,7 @@ health,patient,hospital,appointments,lab,results,medications,vitals,billing,medi
 ### Support URL
 
 ```
-https://bitnesttechs.com/support
+https://e-keneya.com/support
 ```
 
 ---
@@ -128,7 +128,7 @@ https://bitnesttechs.com/support
 ### Marketing URL
 
 ```
-https://bitnesttechs.com/medihub
+https://e-keneya.com
 ```
 
 ---
@@ -224,7 +224,7 @@ iPad 13" Display — Not required (iPhone-only app).
 
 ```text
 Demo account credentials are provided above. The app connects to our
-development backend at https://api.hms.dev.bitnesttechs.com/api.
+development backend at https://api.dev.e-keneya.com/api.
 
 After signing in with the demo credentials, the reviewer will land on the
 Dashboard screen showing the patient's health summary, upcoming
