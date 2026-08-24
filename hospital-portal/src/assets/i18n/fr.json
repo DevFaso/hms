@@ -2872,6 +2872,8 @@
     "LABORATORY": "Laboratoire",
     "MEDICATIONS": "Médicaments",
     "MESSAGES": "Messages",
+    "MESSAGES_ARIA": "Messages ({{count}} non lus)",
+    "NOTIFICATIONS_ARIA": "Notifications ({{count}} non lues)",
     "MY_APPOINTMENTS": "Mes Rendez-vous",
     "MY_RECORDS": "Mes Dossiers",
     "NOTIFICATIONS": "Notifications",

@@ -2877,6 +2877,8 @@
     "MEDICATIONS": "Medicamentos",
     "MEDICAL_HISTORY": "Antecedentes médicos",
     "MESSAGES": "Mensajes",
+    "MESSAGES_ARIA": "Mensajes ({{count}} sin leer)",
+    "NOTIFICATIONS_ARIA": "Notificaciones ({{count}} sin leer)",
     "MY_APPOINTMENTS": "Mis Citas",
     "MY_RECORDS": "Mis Registros",
     "NOTIFICATIONS": "Notificaciones",

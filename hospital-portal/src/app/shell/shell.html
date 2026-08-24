@@ -124,11 +124,39 @@
           </button>
         </div>
 
+        <!--
+          Inbox surfaces. These three are things that ARRIVE, so they live
+          here rather than in the side-nav (which lists places you go to do
+          work) — the badges stay visible from every page.
+        -->
+        <a
+          class="icon-btn"
+          routerLink="/chat"
+          (click)="closeOverlays()"
+          [attr.aria-label]="translate.instant('NAV.MESSAGES_ARIA', { count: chatUnread() })"
+        >
+          <span class="material-symbols-outlined">chat</span>
+          @if (chatUnread() > 0) {
+            <span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
+          }
+        </a>
+
+        <!-- No badge: announcements carry no per-user read state today, and a
+             count that never clears trains people to ignore badges. -->
+        <a
+          class="icon-btn"
+          routerLink="/announcements"
+          (click)="closeOverlays()"
+          [attr.aria-label]="translate.instant('NAV.ANNOUNCEMENTS')"
+        >
+          <span class="material-symbols-outlined">campaign</span>
+        </a>
+
         <!-- Notifications -->
         <button
           class="icon-btn"
           (click)="toggleNotifications()"
-          [attr.aria-label]="'Notifications (' + unreadCount() + ' unread)'"
+          [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
           <span class="material-symbols-outlined">notifications</span>
           @if (unreadCount() > 0) {
