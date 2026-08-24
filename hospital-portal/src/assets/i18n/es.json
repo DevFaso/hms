@@ -2930,6 +2930,7 @@
     "LAB_OUTBOX": "Bandeja de instrumentos",
     "MICROBIOLOGY": "Microbiología",
     "REPORTS": "Informes programados",
+    "MORBIDITY": "Vigilancia de enfermedades",
     "EMAR": "eMAR",
     "PHARMACY_CLAIMS": "Reclamaciones de Farmacia",
     "PHARMACY_CHECKOUT": "Caja de Farmacia",
@@ -7840,6 +7841,23 @@
     "STATE": "Estado",
     "SUBTITLE": "Pares de interacciones utilizados por las comprobaciones de prescripción en toda la plataforma",
     "TITLE": "Interacciones medicamentosas"
+  },
+  "MORBIDITY": {
+    "TITLE": "Vigilancia de enfermedades",
+    "SUBTITLE": "Diagnósticos más registrados este mes",
+    "SUBTITLE_HOSPITAL": "Diagnósticos más registrados en {{hospital}}",
+    "SUBTITLE_NETWORK": "Diagnósticos más registrados en todos los hospitales",
+    "AGGREGATE_ONLY_NOTE": "Solo recuentos: esta página nunca muestra historiales de pacientes.",
+    "TOP_DIAGNOSES": "Diagnósticos principales",
+    "BY_HOSPITAL": "Por hospital",
+    "BY_HOSPITAL_HINT": "Los diagnósticos principales de cada hospital para el mes.",
+    "TOTAL_SHOWN": "{{count}} registrados entre los diagnósticos mostrados",
+    "RECORDED_TOTAL": "{{count}} registrados",
+    "LEADING": "Principal: {{diagnosis}}",
+    "NO_DATA": "No se registraron diagnósticos en este período.",
+    "LOAD_FAILED": "Error al cargar los datos de diagnóstico",
+    "PREVIOUS_MONTH": "Mes anterior",
+    "NEXT_MONTH": "Mes siguiente"
   },
   "REPORTS": {
     "TITLE": "Informes programados",

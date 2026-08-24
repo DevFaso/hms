@@ -2930,6 +2930,7 @@
     "LAB_OUTBOX": "Boîte d’envoi instruments",
     "MICROBIOLOGY": "Microbiologie",
     "REPORTS": "Rapports planifiés",
+    "MORBIDITY": "Surveillance des maladies",
     "EMAR": "eMAR",
     "PHARMACY_CLAIMS": "Réclamations Pharmacie",
     "PHARMACY_CHECKOUT": "Caisse Pharmacie",
@@ -7840,6 +7841,23 @@
     "STATE": "État",
     "SUBTITLE": "Paires d'interactions utilisées par les contrôles de prescription sur toute la plateforme",
     "TITLE": "Interactions médicamenteuses"
+  },
+  "MORBIDITY": {
+    "TITLE": "Surveillance des maladies",
+    "SUBTITLE": "Diagnostics les plus enregistrés ce mois-ci",
+    "SUBTITLE_HOSPITAL": "Diagnostics les plus enregistrés à {{hospital}}",
+    "SUBTITLE_NETWORK": "Diagnostics les plus enregistrés dans tous les hôpitaux",
+    "AGGREGATE_ONLY_NOTE": "Comptages uniquement — cette page n'affiche jamais de dossiers patients.",
+    "TOP_DIAGNOSES": "Principaux diagnostics",
+    "BY_HOSPITAL": "Par hôpital",
+    "BY_HOSPITAL_HINT": "Les principaux diagnostics propres à chaque hôpital pour le mois.",
+    "TOTAL_SHOWN": "{{count}} enregistrés parmi les diagnostics affichés",
+    "RECORDED_TOTAL": "{{count}} enregistrés",
+    "LEADING": "En tête : {{diagnosis}}",
+    "NO_DATA": "Aucun diagnostic n'a été enregistré durant cette période.",
+    "LOAD_FAILED": "Échec du chargement des données de diagnostic",
+    "PREVIOUS_MONTH": "Mois précédent",
+    "NEXT_MONTH": "Mois suivant"
   },
   "REPORTS": {
     "TITLE": "Rapports planifiés",
