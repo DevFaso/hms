@@ -12,7 +12,9 @@ import {
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { Subscription, filter } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Subscription, filter, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -74,6 +76,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
+  private readonly http = inject(HttpClient);
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
   private readonly impersonation = inject(ImpersonationService);
@@ -89,6 +92,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
+  /** Unread chat messages — the topbar Messages badge. */
+  chatUnread = signal(0);
   recentNotifications = signal<Notification[]>([]);
 
   userProfile = signal<LoginUserProfile | null>(null);
@@ -225,14 +230,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           translationKey: 'NAV.VISIT_SUMMARIES',
           route: '/my-summaries',
         },
-        { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
-        {
-          icon: 'notifications',
-          label: 'Notifications',
-          translationKey: 'NAV.NOTIFICATIONS',
-          route: '/my-notifications',
-        },
       ];
+      // Messages and Notifications are NOT nav rows: they are things that
+      // ARRIVE, not places you go, and they live in the topbar where the
+      // badge is visible from every page. /chat and /my-notifications still
+      // route — the topbar links to them.
     }
 
     // MVP-5: when the active role is super admin, the side-nav drops the
@@ -705,24 +707,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           'ROLE_SUPER_ADMIN',
         ],
       },
-      {
-        icon: 'notifications',
-        label: 'Notifications',
-        translationKey: 'NAV.NOTIFICATIONS',
-        route: '/notifications',
-        permission: 'View Notifications',
-      },
-      // Messages is deliberately ungated: chat is open to every
+      // Notifications, Messages and Announcements are NOT nav rows. The
+      // side-nav lists places you GO to do work; those three are things
+      // that ARRIVE at you, and they now live in the topbar where their
+      // badges stay visible from every page. Their routes are unchanged —
+      // the topbar links to /notifications, /chat and /announcements.
+      //
+      // Chat stays ungated wherever it is surfaced: it is open to every
       // authenticated hospital user (role audit decision C3 — the backend
       // matcher and CHAT_ROLES are isAuthenticated(); per-thread participant
       // gating in ChatMessageService is the real protection).
-      { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
-      {
-        icon: 'campaign',
-        label: 'Announcements',
-        translationKey: 'NAV.ANNOUNCEMENTS',
-        route: '/announcements',
-      },
     ];
 
     // Super-Admin control tower (visible only to ROLE_SUPER_ADMIN)
@@ -1294,6 +1288,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.permissions.loadFromBackend();
 
     this.loadNotifications();
+    this.loadUnreadMessages();
     this.idle.start();
 
     // MVP-4: hydrate the impersonation banner state on every shell mount so a
@@ -1364,6 +1359,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         this.unreadCount.set(page.content.filter((n) => !n.read).length);
       },
     });
+  }
+
+  /**
+   * Unread messages for the topbar badge.
+   *
+   * <p>A failure resolves to zero rather than surfacing an error: this
+   * runs on every shell mount for a decoration, and a toast about a
+   * badge would be noise on top of whatever actually broke.
+   */
+  private loadUnreadMessages(): void {
+    this.chatUnread.set(0);
+    this.http
+      .get<{ unreadCount: number }>('/chat/unread-count')
+      .pipe(catchError(() => of({ unreadCount: 0 })))
+      .subscribe((res) => this.chatUnread.set(res.unreadCount ?? 0));
   }
 
   // ── Drag-and-drop handlers ───────────────────────────────────
