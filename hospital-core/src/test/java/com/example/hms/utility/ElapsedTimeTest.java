@@ -45,22 +45,33 @@ class ElapsedTimeTest {
     }
 
     @Test
-    @DisplayName("a DST spring-forward is elapsed real time, not wall-clock")
+    @DisplayName("a DST spring-forward counts elapsed real time, not wall-clock")
     void springForwardCountsRealElapsedTime() {
-        // The whole reason S8700 exists. In a zone that springs forward, the
-        // wall clock jumps an hour, so the naive LocalDateTime difference
-        // over-reports elapsed time by that hour. Asserted against an explicit
-        // zone so the test is meaningful even though the deployment zone
-        // (UTC+0, no DST) would make it a tautology.
+        // The whole reason S8700 exists, and the case this class was written
+        // for. Europe/Paris springs forward at 02:00 on 2026-03-29, so the wall
+        // clock reads two hours later while only one hour has passed.
+        //
+        // The zone is passed explicitly rather than relying on the system
+        // default: the deployment zone is UTC+0 with no transitions, so a test
+        // using the default could never reach this branch — it would pass
+        // whether or not the zone was applied at all.
         ZoneId paris = ZoneId.of("Europe/Paris");
         LocalDateTime before = LocalDateTime.of(2026, 3, 29, 1, 30); // 01:30 CET
         LocalDateTime after = LocalDateTime.of(2026, 3, 29, 3, 30);  // 03:30 CEST
 
-        Duration wallClock = Duration.between(before, after);
-        Duration real = Duration.between(before.atZone(paris), after.atZone(paris));
+        assertThat(ElapsedTime.between(before, after, paris))
+            .as("one real hour elapsed, though the clock advanced two")
+            .isEqualTo(Duration.ofHours(1))
+            .isNotEqualTo(Duration.ofHours(2));
+    }
 
-        assertThat(wallClock).isEqualTo(Duration.ofHours(2));
-        assertThat(real).isEqualTo(Duration.ofHours(1));
-        assertThat(real).isNotEqualTo(wallClock);
+    @Test
+    @DisplayName("a zone without transitions matches the plain wall-clock reading")
+    void noTransitionZoneMatchesWallClock() {
+        // Ouagadougou is UTC+0 year-round — the deployment case. Here the
+        // zone-anchored result and the naive one coincide, which is why this
+        // change is a no-op today and correct tomorrow.
+        assertThat(ElapsedTime.between(NOON, NOON.plusHours(2), ZoneId.of("Africa/Ouagadougou")))
+            .isEqualTo(Duration.ofHours(2));
     }
 }

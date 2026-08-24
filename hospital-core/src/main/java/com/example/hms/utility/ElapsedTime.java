@@ -44,7 +44,19 @@ public final class ElapsedTime {
 
     /** Elapsed real time from {@code from} to {@code to}, DST included. */
     public static Duration between(LocalDateTime from, LocalDateTime to) {
-        ZoneId zone = ZoneId.systemDefault();
+        return between(from, to, ZoneId.systemDefault());
+    }
+
+    /**
+     * Same, against an explicit zone.
+     *
+     * <p>Exists so the DST behaviour can actually be TESTED. The deployment
+     * zone is UTC+0 with no transitions, so a test that relied on
+     * {@link ZoneId#systemDefault()} could never exercise the case this class
+     * was written for — it would assert a tautology and pass whether or not the
+     * zone was applied at all.
+     */
+    public static Duration between(LocalDateTime from, LocalDateTime to, ZoneId zone) {
         return Duration.between(from.atZone(zone), to.atZone(zone));
     }
 
