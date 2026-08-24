@@ -1,0 +1,105 @@
+.dx-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dx-bars__row {
+  display: grid;
+  // Name column is flexible, bar takes the slack, count is fixed and
+  // right-aligned so the digits form a readable column.
+  grid-template-columns: minmax(9rem, 16rem) 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.dx-bars__name {
+  font-size: 0.9rem;
+  color: var(--text-primary, #0f172a);
+  // Long ICD descriptions wrap rather than pushing the bar off-screen.
+  overflow-wrap: anywhere;
+}
+
+.dx-bars__code {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-subtle, #f1f5f9);
+  border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-secondary, #64748b);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dx-bars__track {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-subtle, #f1f5f9);
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.dx-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: 7px;
+  transition: width 220ms ease-out;
+}
+
+.dx-bars__count {
+  min-width: 3.5rem;
+  text-align: right;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary, #0f172a);
+  font-variant-numeric: tabular-nums;
+}
+
+.dx-bars__empty {
+  margin: 0;
+  padding: 18px 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.9rem;
+}
+
+// Compact variant for the per-hospital cards: tighter rows, smaller type.
+.dx-bars--compact {
+  gap: 6px;
+
+  .dx-bars__row {
+    grid-template-columns: minmax(7rem, 11rem) 1fr auto;
+    gap: 8px;
+  }
+
+  .dx-bars__name,
+  .dx-bars__count {
+    font-size: 0.82rem;
+  }
+
+  .dx-bars__track {
+    height: 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dx-bars__row {
+    // Stack on narrow screens: the bar and count sit under the name
+    // rather than squeezing a 16rem label into a phone width.
+    grid-template-columns: 1fr auto;
+
+    .dx-bars__name {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dx-bars__fill {
+    transition: none;
+  }
+}

@@ -1,0 +1,152 @@
+.morbidity-container {
+  padding: 1.5rem;
+  max-width: 1100px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 1.4rem;
+  }
+}
+
+.page-subtitle {
+  margin: 0;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.9rem;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.month-nav__btn {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface, #fff);
+  color: var(--text-primary, #0f172a);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+.month-nav__label {
+  min-width: 5.5rem;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.privacy-note {
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 16px;
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85rem;
+}
+
+.state-line {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.9rem;
+}
+
+.state-line--error {
+  color: var(--danger, #b91c1c);
+}
+
+.retry-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface, #fff);
+  cursor: pointer;
+}
+
+.panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: 1.05rem;
+  }
+}
+
+.panel__total,
+.panel__hint {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.85rem;
+}
+
+.panel__hint {
+  margin: -4px 0 14px;
+}
+
+.hospital-grid {
+  display: grid;
+  // Auto-fit so two hospitals sit side by side and eight wrap into a
+  // grid, without hard-coding a column count the deployment may not match.
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.hospital-card {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--surface-subtle, #f8fafc);
+}
+
+.hospital-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
+  }
+}
+
+.hospital-card__total {
+  color: var(--text-secondary, #64748b);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.hospital-card__lead {
+  margin: 4px 0 10px;
+  font-size: 0.82rem;
+  color: var(--text-secondary, #64748b);
+}

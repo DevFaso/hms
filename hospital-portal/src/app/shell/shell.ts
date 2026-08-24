@@ -436,6 +436,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
       },
       {
+        icon: 'monitoring',
+        label: 'Disease Surveillance',
+        translationKey: 'NAV.MORBIDITY',
+        route: '/morbidity',
+        // Mirrors MorbidityDashboardController's @PreAuthorize and the
+        // route guard. Scope within the page is the backend's decision.
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      },
+      {
         icon: 'medication_liquid',
         label: 'Medication History',
         translationKey: 'NAV.MEDICATION_HISTORY',
