@@ -2412,7 +2412,10 @@
     "SIGNED_UNVERIFIABLE": "signed outside this system — no digest on record",
     "VOID_REPORT": "Void report",
     "VOID_HINT": "Cancels an unsigned report. A signed report must be superseded by a corrected version instead.",
-    "VOID_REASON_REQUIRED": "A reason is required to void a report"
+    "VOID_REASON_REQUIRED": "A reason is required to void a report",
+    "CRITICAL_NOTIFIED_AT": "ordering provider notified {{time}}",
+    "CRITICAL_NOT_YET_NOTIFIED": "no alert sent yet",
+    "CRITICAL_ESCALATED_ROUNDS": "escalated ×{{count}}"
   },
   "LAB": {
     "ABNORMAL": "Abnormal",

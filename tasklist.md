@@ -1108,7 +1108,28 @@ checked against this list before it is believed.**
   lifecycle plus version demotion the impl **already implements** and nothing
   can reach. Attachments go through the authenticated document path (#482
   precedent), never `/uploads/**`.
-- [ ] 27. **Critical imaging findings have no escalation loop.**
+- [x] 27. **Critical imaging findings have no escalation loop.**
+  ✅ DONE 2026-08-24 (**PR #509** `feature/imaging-critical-escalation`, V133,
+  stacked on #508 as a DRAFT per [[stacked-pr-protocol]]).
+  `ImagingCriticalNotificationService` + `ImagingCriticalEscalationScheduler`,
+  modelled directly on the lab pair so the two behave identically when a
+  clinician meets them. Notify-on-flag hooks into all three authoring paths
+  (create / revise / sign), idempotent on `criticalNotifiedAt` so repeated
+  saves raise exactly one first alert. The sweep **repeats** (no round cap)
+  and **widens** to hospital admins from round 2 with the ordering provider
+  staying on the list — both copied deliberately, because the lab loop only
+  acquired them after the 2026-08-21 reassessment found a one-shot escalation
+  that re-notified the same person and then went permanently silent. Manual
+  trigger `POST /imaging/results/critical-escalation/run` (the lab twin).
+  V133 gives imaging its OWN ledger columns — the lab stamps live on
+  `lab.lab_results`, the same reason V130 deferred tiering vitals through
+  that service. NO read-back column, deliberately: a read-back catches
+  mis-transcription of a NUMBER relayed by phone, and an imaging impression
+  is prose read in the chart — the radiology analogue ("communicated to Dr X
+  at HH:MM") is already `criticalResultAcknowledgedBy`/`...At` from item 26.
+  SMS carries a truncated impression, never full findings (the recall-SMS
+  stance). Portal: the critical banner now shows who was called and how many
+  rounds have fired. Original finding:
   `acknowledgeCriticalResult` exists; nothing notifies anyone that there is
   something to acknowledge. Lab has the full notify → read-back → timer →
   widen chain (V109/V116, `CriticalValueNotificationService`); imaging has the

@@ -2412,7 +2412,10 @@
     "SIGNED_UNVERIFIABLE": "signé hors de ce système — aucune empreinte enregistrée",
     "VOID_REPORT": "Annuler le compte rendu",
     "VOID_HINT": "Annule un compte rendu non signé. Un compte rendu signé doit être remplacé par une version corrigée.",
-    "VOID_REASON_REQUIRED": "Un motif est obligatoire pour annuler un compte rendu"
+    "VOID_REASON_REQUIRED": "Un motif est obligatoire pour annuler un compte rendu",
+    "CRITICAL_NOTIFIED_AT": "prescripteur notifié {{time}}",
+    "CRITICAL_NOT_YET_NOTIFIED": "aucune alerte envoyée",
+    "CRITICAL_ESCALATED_ROUNDS": "escaladé ×{{count}}"
   },
   "LAB": {
     "ABNORMAL": "Anormal",

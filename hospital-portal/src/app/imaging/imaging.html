@@ -358,7 +358,29 @@
           @if (isCriticalUnacked(rep)) {
             <div class="critical-banner">
               <span class="material-symbols-outlined">warning</span>
-              {{ 'IMAGING.CRITICAL_UNACKED' | translate }}
+              <span class="critical-text">
+                {{ 'IMAGING.CRITICAL_UNACKED' | translate }}
+                <!-- Item 27: who has been called, and how many rounds in. A
+                     clinician deciding whether to act needs to know the chain
+                     is live, not just that a flag exists. -->
+                <small class="critical-chain">
+                  @if (rep.criticalNotifiedAt) {
+                    {{
+                      'IMAGING.CRITICAL_NOTIFIED_AT'
+                        | translate: { time: rep.criticalNotifiedAt | date: 'short' }
+                    }}
+                  } @else {
+                    {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
+                  }
+                  @if (rep.criticalEscalationLevel) {
+                    ·
+                    {{
+                      'IMAGING.CRITICAL_ESCALATED_ROUNDS'
+                        | translate: { count: rep.criticalEscalationLevel }
+                    }}
+                  }
+                </small>
+              </span>
               @if (canAckCritical) {
                 <button
                   class="btn-danger"

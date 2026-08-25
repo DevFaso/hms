@@ -2412,7 +2412,10 @@
     "SIGNED_UNVERIFIABLE": "firmado fuera de este sistema — sin huella registrada",
     "VOID_REPORT": "Anular informe",
     "VOID_HINT": "Anula un informe sin firmar. Un informe firmado debe sustituirse por una versión corregida.",
-    "VOID_REASON_REQUIRED": "Se requiere un motivo para anular un informe"
+    "VOID_REASON_REQUIRED": "Se requiere un motivo para anular un informe",
+    "CRITICAL_NOTIFIED_AT": "médico solicitante notificado {{time}}",
+    "CRITICAL_NOT_YET_NOTIFIED": "aún sin alerta enviada",
+    "CRITICAL_ESCALATED_ROUNDS": "escalado ×{{count}}"
   },
   "LAB": {
     "ABNORMAL": "Abnormal",

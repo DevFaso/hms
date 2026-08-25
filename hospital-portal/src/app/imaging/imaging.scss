@@ -654,3 +654,19 @@
   font-weight: 600;
   color: #b3261e;
 }
+
+/* Item 27: chain state under the critical banner headline. Deliberately
+   subordinate — the call to act is the headline, the provenance is context. */
+.critical-banner {
+  .critical-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .critical-chain {
+    font-weight: 400;
+    font-size: 0.78rem;
+    opacity: 0.85;
+  }
+}
