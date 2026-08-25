@@ -32,6 +32,7 @@ import { DowntimeBannerComponent } from '../downtime/downtime-banner';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 
 interface NavItem {
@@ -57,6 +58,7 @@ interface NavItem {
     DowntimeBannerComponent,
     TranslateModule,
     SkipLinkComponent,
+    BrandMarkComponent,
   ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',

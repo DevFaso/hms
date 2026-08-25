@@ -1082,7 +1082,7 @@
     "UPDATE": "Update"
   },
   "APP": {
-    "TITLE": "Hospital Management System"
+    "TITLE": "e-Keneya — Digital health"
   },
   "APPOINTMENTS": {
     "ADDRESS": "Address",
@@ -2804,7 +2804,7 @@
     "SIGNING_IN": "Signing in",
     "SIGN_IN": "Sign In",
     "SUBMIT": "Log In",
-    "SUBTITLE": "Hospital Management System",
+    "SUBTITLE": "e-Keneya — Digital health",
     "TITLE": "Sign In",
     "USERNAME": "Username",
     "FIRST_NAME_PLACEHOLDER": "First name",
@@ -5364,7 +5364,7 @@
     "MY_PROFILE": "My Profile",
     "NOTIFICATIONS": "Notifications",
     "NO_NOTIFICATIONS": "No notifications",
-    "PAGE_TITLE": "Hospital Management System",
+    "PAGE_TITLE": "e-Keneya — Digital health",
     "SETTINGS": "Settings",
     "SIGN_OUT": "Sign Out",
     "TOGGLE_SIDEBAR": "Toggle sidebar"
