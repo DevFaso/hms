@@ -41,6 +41,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -95,6 +96,7 @@ public class MortalityServiceImpl implements MortalityService {
 
     private static final String CLOSURE_REASON = "Patient deceased";
 
+    private final Clock clock;
     private final DeathRecordRepository deathRecordRepository;
     private final PatientRepository patientRepository;
     private final AdmissionRepository admissionRepository;
@@ -117,7 +119,7 @@ public class MortalityServiceImpl implements MortalityService {
                 "A death is already recorded for this patient. Amend that record rather than "
                     + "filing a second one.");
         }
-        if (request.getDiedAt().isAfter(LocalDateTime.now())) {
+        if (request.getDiedAt().isAfter(LocalDateTime.now(clock))) {
             throw new BusinessException("The time of death cannot be in the future.");
         }
         validateMortalityFlags(request);
@@ -139,7 +141,7 @@ public class MortalityServiceImpl implements MortalityService {
             .perinatalType(request.getPerinatalType())
             .autopsyRequested(Boolean.TRUE.equals(request.getAutopsyRequested()))
             .certifiedBy(resolveCertifier(request.getCertifiedByStaffId(), hospitalId))
-            .certifiedAt(request.getCertifiedByStaffId() != null ? LocalDateTime.now() : null)
+            .certifiedAt(request.getCertifiedByStaffId() != null ? LocalDateTime.now(clock) : null)
             .notes(request.getNotes())
             .recordedBy(currentStaff(hospitalId))
             .build();
@@ -212,7 +214,7 @@ public class MortalityServiceImpl implements MortalityService {
                 "A perinatal death must state whether it was a stillbirth or a neonatal death.");
         }
 
-        deathRecord.setAmendedAt(LocalDateTime.now());
+        deathRecord.setAmendedAt(LocalDateTime.now(clock));
         deathRecord.setAmendmentReason(request.getAmendmentReason());
 
         return mapper.toDto(deathRecordRepository.save(deathRecord));
