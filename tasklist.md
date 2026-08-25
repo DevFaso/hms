@@ -1109,8 +1109,11 @@ checked against this list before it is believed.**
   can reach. Attachments go through the authenticated document path (#482
   precedent), never `/uploads/**`.
 - [x] 27. **Critical imaging findings have no escalation loop.**
-  ✅ DONE 2026-08-24 (**PR #509** `feature/imaging-critical-escalation`, V133,
-  stacked on #508 as a DRAFT per [[stacked-pr-protocol]]).
+  ✅ DONE 2026-08-25 (**PR #512** `feature/imaging-critical-escalation`, V133).
+  Originally opened as #509 stacked on #508; it merged into the feature base
+  AFTER #508 had already reached develop, so none of its content landed. #512
+  is the re-target into develop. Fourth strand of its kind — stacking is now
+  banned outright rather than mitigated.
   `ImagingCriticalNotificationService` + `ImagingCriticalEscalationScheduler`,
   modelled directly on the lab pair so the two behave identically when a
   clinician meets them. Notify-on-flag hooks into all three authoring paths
@@ -1144,7 +1147,17 @@ The ledger's own verdict is that this is "a maternal-newborn EHR with
 generalist modules". Both items below are the missing halves of workflows the
 OB suite already models.
 
-- [ ] 28. **Blood bank / transfusion.** Verified zero code: `Transfusion`,
+- [x] 28. **Blood bank / transfusion.**
+  ✅ DONE 2026-08-25 (**PR #510** `feature/blood-bank-transfusion`, V134).
+  Six tables, the type & screen → request → crossmatch → issue →
+  administration → reaction chain, and `AboGroup.isCompatible` as the safety
+  core with 43 tests covering all 16 ABO pairs in **both** directions —
+  because the rule inverts between components: red cells carry antigens (O
+  universal donor) while plasma carries antibodies (AB universal donor).
+  ⚠️ **Platelet compatibility is a POLICY CHOICE awaiting a haematologist's
+  sign-off** — the conservative reading (plasma-side ABO + Rh) is implemented;
+  it is not a clinical fact and should be confirmed before go-live.
+  Original finding: verified zero code: `Transfusion`,
   `BloodBank`, `CrossMatch` return nothing; `bloodProductsRequired` is one
   boolean on `ProcedureOrder` and that is the entire footprint. #437 shipped
   the partograph with PPH alerts — and postpartum haemorrhage is the leading
@@ -1154,7 +1167,20 @@ OB suite already models.
   administration verified through the **existing** five-rights barcode service
   → transfusion-reaction report. Deliberately NOT donor recruitment or a donor
   inventory chain: that is a blood-bank LIS, not an EHR.
-- [ ] 29. **Death & mortality workflow.** Verified zero code: no `dateOfDeath`,
+- [x] 29. **Death & mortality workflow.**
+  ✅ DONE 2026-08-25 (**PR #511** `feature/death-mortality`, V135).
+  `clinical.patients.deceased_at` (the flag every sweep reads) plus
+  `clinical.death_records` (the certificate, one per patient). Recording a
+  death cascades: closes admissions — the first-ever writer of
+  `AdmissionStatus.DECEASED`, which had existed since V1 with no writer —
+  closes encounters, cancels **future-only** appointments (a past one the
+  patient attended is history), and closes recalls. The reminder and recall
+  sweeps now exclude the deceased, which is what stops the SMS to the family.
+  `isWhoMaternalDeath()` excludes LATE_MATERNAL both in Java and in the JPQL
+  feeding DHIS2: 42 days to a year falls OUTSIDE the WHO definition, and
+  counting it in would overstate the ratio the facility is judged on.
+  Deferred: deceased banner on the chart, certificate PDF, DHIS2 export
+  mapping. Original finding: verified zero code: no `dateOfDeath`,
   no `DeathRecord`, no deceased state anywhere. A patient who dies stays ACTIVE
   — open encounters, live appointments, and recall/reminder sweeps that will
   cheerfully SMS the family. It also blocks the maternal and perinatal

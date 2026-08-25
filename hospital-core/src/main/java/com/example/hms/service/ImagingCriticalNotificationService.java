@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -72,6 +73,7 @@ public class ImagingCriticalNotificationService {
     /** SMS is a 320-char channel and carries no findings text (the recall-SMS stance). */
     private static final int IMPRESSION_SNIPPET_LIMIT = 140;
 
+    private final Clock clock;
     private final NotificationService notificationService;
     private final SmsService smsService;
     private final ImagingReportRepository imagingReportRepository;
@@ -105,16 +107,35 @@ public class ImagingCriticalNotificationService {
                 log.warn("Critical imaging report {} has no resolvable ordering user; skipping notification",
                     report.getId());
             } else {
-                String message = buildMessage(report, false);
-                notificationService.createNotification(message, username, NOTIFICATION_TYPE);
-                sendSmsBestEffort(report, message);
+                sendFirstAlertBestEffort(report, username);
             }
-            report.setCriticalNotifiedAt(LocalDateTime.now());
+            report.setCriticalNotifiedAt(LocalDateTime.now(clock));
             imagingReportRepository.save(report);
         } catch (RuntimeException ex) {
             log.warn("Critical-imaging notification failed for report {}: {}",
                 report != null ? report.getId() : null, ex.getMessage(), ex);
         }
+    }
+
+    /**
+     * Send the first alert, absorbing a transport failure.
+     *
+     * <p>The alert is best-effort; the STAMP that follows it is not. The
+     * escalation sweep selects on {@code criticalNotifiedAt IS NOT NULL}, so a
+     * report left unstamped because the notification bus was down would drop
+     * out of the escalation path altogether and the finding would go
+     * permanently silent — the exact failure this service exists to prevent.
+     * Stamping means the sweep still owns the row and round 1 retries it.
+     */
+    private void sendFirstAlertBestEffort(ImagingReport report, String username) {
+        String message = buildMessage(report, false);
+        try {
+            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+        } catch (RuntimeException ex) {
+            log.warn("Critical-imaging notification failed for report {}; stamping anyway so the "
+                + "escalation sweep still owns it: {}", report.getId(), ex.getMessage(), ex);
+        }
+        sendSmsBestEffort(report, message);
     }
 
     /**
@@ -127,7 +148,7 @@ public class ImagingCriticalNotificationService {
      */
     @Transactional
     public int escalateOverdue() {
-        LocalDateTime cutoff = LocalDateTime.now().minus(Duration.ofMinutes(escalateAfterMinutes));
+        LocalDateTime cutoff = LocalDateTime.now(clock).minus(Duration.ofMinutes(escalateAfterMinutes));
         List<ImagingReport> overdue = imagingReportRepository.findCriticalAwaitingEscalation(cutoff);
         int escalated = 0;
         for (ImagingReport report : overdue) {
@@ -157,7 +178,7 @@ public class ImagingCriticalNotificationService {
         // Stamp even with no resolvable recipient, so the interval advances and
         // the sweep does not reconsider the row every pass.
         report.setCriticalEscalationLevel((short) Math.min(round, Short.MAX_VALUE));
-        report.setCriticalEscalatedAt(LocalDateTime.now());
+        report.setCriticalEscalatedAt(LocalDateTime.now(clock));
         imagingReportRepository.save(report);
 
         if (round >= TIER_TWO_ROUND) {
@@ -226,9 +247,7 @@ public class ImagingCriticalNotificationService {
      */
     private String buildMessage(ImagingReport report, boolean escalation) {
         ImagingOrder order = report.getImagingOrder();
-        String study = report.getReportTitle() != null && !report.getReportTitle().isBlank()
-            ? report.getReportTitle()
-            : (order != null && order.getStudyType() != null ? order.getStudyType() : "Imaging study");
+        String study = studyLabel(report, order);
         String patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName() : "patient";
         String prefix = escalation
@@ -236,6 +255,17 @@ public class ImagingCriticalNotificationService {
             : "Critical imaging finding: ";
         return prefix + study + " for " + patientName + "." + impressionSnippet(report)
             + " Review and acknowledge in HMS.";
+    }
+
+    /** The report's own title if it has one, else the ordered study type. */
+    private String studyLabel(ImagingReport report, ImagingOrder order) {
+        if (report.getReportTitle() != null && !report.getReportTitle().isBlank()) {
+            return report.getReportTitle();
+        }
+        if (order != null && order.getStudyType() != null) {
+            return order.getStudyType();
+        }
+        return "Imaging study";
     }
 
     private String impressionSnippet(ImagingReport report) {

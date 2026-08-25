@@ -44,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -80,6 +81,7 @@ class MortalityServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
+    @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
 
     @InjectMocks private MortalityServiceImpl service;
