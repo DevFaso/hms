@@ -20,6 +20,7 @@ import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -181,5 +182,108 @@ class BedAssignmentServiceTest {
 
         assertThat(bed.getStatus()).isEqualTo(BedStatus.AVAILABLE);
         verify(bedRepository).save(bed);
+    }
+
+    // ── Reservations, for transfer orders (Tier 2 item 30) ──────────────
+    //
+    // These write Bed.status, so they belong to this class rather than the
+    // transfer service — and they need testing HERE, because
+    // TransferServiceImplTest mocks this class and therefore exercises none
+    // of the actual state transitions.
+
+    @Test
+    void reserveBedHoldsAnAvailableBedWithoutOccupyingIt() {
+        Bed bed = bed("B07", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId))
+            .thenReturn(Optional.of(bed));
+
+        Bed held = service.reserveBed(bed.getId(), hospitalId);
+
+        // RESERVED, not OCCUPIED: nobody is in it yet, and the census counts
+        // the two separately.
+        assertThat(held.getStatus()).isEqualTo(BedStatus.RESERVED);
+        verify(bedRepository).save(bed);
+    }
+
+    @Test
+    void reserveBedRefusesABedSomebodyIsAlreadyIn() {
+        Bed bed = bed("B07", BedStatus.OCCUPIED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId))
+            .thenReturn(Optional.of(bed));
+        UUID bedId = bed.getId();
+
+        assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("not available");
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    @Test
+    void reserveBedRefusesABedAtAnotherHospital() {
+        UUID bedId = UUID.randomUUID();
+        when(bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void aReservedBedCanBeClaimedByTheTransferThatHeldIt() {
+        // The completion path: the destination has been RESERVED since the
+        // order was raised, so plain AVAILABLE-only assignment would refuse it.
+        Bed bed = bed("B08", BedStatus.RESERVED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId))
+            .thenReturn(Optional.of(bed));
+
+        service.assignBed(admission, bed.getId(),
+            Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        assertThat(admission.getBed()).isEqualTo(bed);
+        assertThat(admission.getRoomBed()).isEqualTo("MAT01/B08");
+    }
+
+    @Test
+    void ordinaryAssignmentStillRefusesAReservedBed() {
+        // Somebody else's transfer is on its way to it.
+        Bed bed = bed("B08", BedStatus.RESERVED);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId))
+            .thenReturn(Optional.of(bed));
+        UUID bedId = bed.getId();
+
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("not available");
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.RESERVED);
+    }
+
+    @Test
+    void releaseReservationHandsAHeldBedBack() {
+        Bed bed = bed("B09", BedStatus.RESERVED);
+
+        service.releaseReservation(bed);
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        verify(bedRepository).save(bed);
+    }
+
+    @Test
+    void releaseReservationWillNotEvictSomebodyWhoIsActuallyInTheBed() {
+        // Cancelling a stale transfer must not turf out a patient who has
+        // since been put in the destination.
+        Bed bed = bed("B09", BedStatus.OCCUPIED);
+
+        service.releaseReservation(bed);
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+        verify(bedRepository, never()).save(bed);
+    }
+
+    @Test
+    void releaseReservationToleratesNoBed() {
+        service.releaseReservation(null);
+
+        verify(bedRepository, never()).save(any());
     }
 }
