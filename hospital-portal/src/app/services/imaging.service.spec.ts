@@ -61,29 +61,56 @@ describe('ImagingService — results', () => {
     req.flush([report]);
   });
 
-  it('updates report status with reason and staff id', () => {
+  it('voids a report with a reason and carries no client-asserted identity', () => {
     service
       .updateReportStatus('rep-1', {
-        status: 'AMENDED',
-        statusReason: 'addendum requested',
-        changedByStaffId: 's-1',
+        status: 'CANCELLED',
+        statusReason: 'study repeated',
       })
       .subscribe();
 
     const req = httpMock.expectOne('/imaging/results/rep-1/status');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body.status).toBe('AMENDED');
-    expect(req.request.body.changedByStaffId).toBe('s-1');
-    req.flush({ ...report, reportStatus: 'AMENDED' });
+    expect(req.request.body.status).toBe('CANCELLED');
+    expect(req.request.body.statusReason).toBe('study repeated');
+    // The server resolves the actor; a staff id must never travel again.
+    expect(req.request.body.changedByStaffId).toBeUndefined();
+    req.flush({ ...report, reportStatus: 'CANCELLED' });
   });
 
-  it('acknowledges a critical report with the staff id as query param', () => {
-    service.acknowledgeCriticalReport('rep-1', 's-1').subscribe();
+  it('acknowledges a critical report without naming the acknowledging clinician', () => {
+    service.acknowledgeCriticalReport('rep-1').subscribe();
 
     const req = httpMock.expectOne(
       (r) => r.url === '/imaging/results/rep-1/acknowledge-critical' && r.method === 'PUT',
     );
-    expect(req.request.params.get('acknowledgingStaffId')).toBe('s-1');
+    expect(req.request.params.keys().length).toBe(0);
     req.flush(report);
+  });
+
+  it('authors a report against an order', () => {
+    service.createReport({ imagingOrderId: 'ord-1', impression: 'No acute finding.' }).subscribe();
+
+    const req = httpMock.expectOne('/imaging/results');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body.imagingOrderId).toBe('ord-1');
+    req.flush(report);
+  });
+
+  it('revises an unsigned report', () => {
+    service.updateReport('rep-1', { findings: 'revised' }).subscribe();
+
+    const req = httpMock.expectOne('/imaging/results/rep-1');
+    expect(req.request.method).toBe('PUT');
+    req.flush(report);
+  });
+
+  it('signs a report with no body — identity comes from the session', () => {
+    service.signReport('rep-1').subscribe();
+
+    const req = httpMock.expectOne('/imaging/results/rep-1/sign');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toBeNull();
+    req.flush({ ...report, reportStatus: 'FINAL', signed: true });
   });
 });

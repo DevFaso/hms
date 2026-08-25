@@ -1960,15 +1960,14 @@
     </changeSet>
 
     <!-- =================================================================
-         V134 - blood bank and transfusion: patient_blood_groups (the
-         lab-verified type and screen, distinct from the free-text
-         clinical.patients.blood_type), transfusion_requests, blood_units,
-         transfusion_crossmatches, transfusion_administrations and
-         transfusion_reactions. No DO block, so no splitStatements
+         V132 - imaging report signing ceremony: signature_algorithm +
+         signature_value on clinical.imaging_reports, plus the unsigned
+         worklist and unacknowledged-critical partial indexes the
+         reading room reads. No DO block, so no splitStatements
          attribute.
          ================================================================= -->
-    <changeSet id="V134-blood-bank-transfusion" author="hms-team" runOnChange="false">
-        <sqlFile path="V134__blood_bank_transfusion.sql"
+    <changeSet id="V132-imaging-report-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V132__imaging_report_signature.sql"
                  relativeToChangelogFile="true"
                  stripComments="false"/>
     </changeSet>
