@@ -1,0 +1,430 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'MORTALITY.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'MORTALITY.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      @if (canRecord) {
+        <button class="btn-primary" (click)="openRecord()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'MORTALITY.RECORD_DEATH' | translate }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- What the cascade closed. Reported, never silent. -->
+  @if (lastClosure(); as c) {
+    <div class="closure-banner">
+      <span class="material-symbols-outlined">fact_check</span>
+      <div class="closure-body">
+        <strong>{{ 'MORTALITY.CLOSURE_TITLE' | translate }}</strong>
+        @if (closureHasContent(c)) {
+          <ul class="closure-list">
+            @if (c.admissionsClosed) {
+              <li>
+                {{ 'MORTALITY.CLOSURE_ADMISSIONS' | translate: { count: c.admissionsClosed } }}
+              </li>
+            }
+            @if (c.encountersClosed) {
+              <li>
+                {{ 'MORTALITY.CLOSURE_ENCOUNTERS' | translate: { count: c.encountersClosed } }}
+              </li>
+            }
+            @if (c.appointmentsCancelled) {
+              <li>
+                {{
+                  'MORTALITY.CLOSURE_APPOINTMENTS' | translate: { count: c.appointmentsCancelled }
+                }}
+              </li>
+            }
+            @if (c.recallsClosed) {
+              <li>{{ 'MORTALITY.CLOSURE_RECALLS' | translate: { count: c.recallsClosed } }}</li>
+            }
+          </ul>
+        } @else {
+          <span class="muted">{{ 'MORTALITY.CLOSURE_NOTHING' | translate }}</span>
+        }
+      </div>
+      <button class="btn-close" (click)="dismissClosure()" [title]="'COMMON.CLOSE' | translate">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  }
+
+  <div class="filter-bar">
+    <div class="period-picker">
+      <label for="mort-from">{{ 'MORTALITY.FROM' | translate }}</label>
+      <input id="mort-from" type="date" [(ngModel)]="from" (change)="loadRegister()" />
+      <label for="mort-to">{{ 'MORTALITY.TO' | translate }}</label>
+      <input id="mort-to" type="date" [(ngModel)]="to" (change)="loadRegister()" />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && register(); as reg) {
+    <div class="summary-cards">
+      <div class="summary-card">
+        <div class="card-info">
+          <span class="card-value">{{ reg.totalDeaths }}</span>
+          <span class="card-label">{{ 'MORTALITY.TOTAL_DEATHS' | translate }}</span>
+        </div>
+      </div>
+      <div class="summary-card maternal">
+        <div class="card-info">
+          <span class="card-value">{{ reg.maternalDeaths }}</span>
+          <span class="card-label">{{ 'MORTALITY.MATERNAL_DEATHS' | translate }}</span>
+          <small class="card-note">{{ 'MORTALITY.WHO_DEFINITION' | translate }}</small>
+        </div>
+      </div>
+      <div class="summary-card">
+        <div class="card-info">
+          <span class="card-value">{{ reg.lateMaternalDeaths }}</span>
+          <span class="card-label">{{ 'MORTALITY.LATE_MATERNAL' | translate }}</span>
+          <small class="card-note">{{ 'MORTALITY.LATE_MATERNAL_NOTE' | translate }}</small>
+        </div>
+      </div>
+      <div class="summary-card perinatal">
+        <div class="card-info">
+          <span class="card-value">{{ reg.perinatalDeaths }}</span>
+          <span class="card-label">{{ 'MORTALITY.PERINATAL_DEATHS' | translate }}</span>
+          <small class="card-note"
+            >{{ 'MORTALITY.STILLBIRTHS' | translate }}: {{ reg.stillbirths }}</small
+          >
+        </div>
+      </div>
+    </div>
+
+    @if (reg.deaths.length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">description</span>
+        <h3>{{ 'MORTALITY.NO_DEATHS' | translate }}</h3>
+        <p>{{ 'MORTALITY.NO_DEATHS_HINT' | translate }}</p>
+      </div>
+    } @else {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+              <th scope="col">{{ 'MORTALITY.DIED_AT' | translate }}</th>
+              <th scope="col">{{ 'MORTALITY.PLACE' | translate }}</th>
+              <th scope="col">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</th>
+              <th scope="col">{{ 'MORTALITY.FLAGS' | translate }}</th>
+              <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of reg.deaths; track d.id) {
+              <tr class="data-row">
+                <td>
+                  <div class="cell-primary">{{ d.patientName }}</div>
+                  <div class="cell-secondary">{{ d.patientMrn || '—' }}</div>
+                </td>
+                <td>{{ d.diedAt | date: 'short' }}</td>
+                <td>{{ 'MORTALITY.PLACE_' + d.placeOfDeath | translate }}</td>
+                <td>{{ d.underlyingCause || d.immediateCause }}</td>
+                <td>
+                  @if (d.whoMaternalDeath) {
+                    <span class="flag maternal">{{ 'MORTALITY.MATERNAL' | translate }}</span>
+                  } @else if (d.maternalDeath) {
+                    <span class="flag late">{{ 'MORTALITY.LATE_MATERNAL' | translate }}</span>
+                  }
+                  @if (d.perinatalDeath) {
+                    <span class="flag perinatal">{{
+                      'MORTALITY.PERINATAL_' + d.perinatalType | translate
+                    }}</span>
+                  }
+                  @if (d.amended) {
+                    <span class="flag amended">{{ 'MORTALITY.AMENDED' | translate }}</span>
+                  }
+                </td>
+                <td>
+                  <div class="action-group">
+                    <button
+                      class="action-link"
+                      (click)="openDetail(d)"
+                      [title]="'COMMON.VIEW' | translate"
+                    >
+                      <span class="material-symbols-outlined">visibility</span>
+                    </button>
+                    @if (canRecord) {
+                      <button
+                        class="action-link"
+                        (click)="openAmend(d)"
+                        [title]="'MORTALITY.AMEND' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ══ Detail ══ -->
+  @if (selected(); as rec) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>{{ rec.patientName }}</h2>
+          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          @if (rec.amended) {
+            <div class="amended-banner">
+              <span class="material-symbols-outlined">history_edu</span>
+              <span>
+                {{ 'MORTALITY.AMENDED_ON' | translate }} {{ rec.amendedAt | date: 'short' }} —
+                {{ rec.amendmentReason }}
+              </span>
+            </div>
+          }
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">{{ 'MORTALITY.DIED_AT' | translate }}</span>
+              <span class="field-value">{{ rec.diedAt | date: 'medium' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'MORTALITY.PLACE' | translate }}</span>
+              <span class="field-value">{{
+                'MORTALITY.PLACE_' + rec.placeOfDeath | translate
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'MORTALITY.MANNER' | translate }}</span>
+              <span class="field-value">{{
+                'MORTALITY.MANNER_' + rec.mannerOfDeath | translate
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'MORTALITY.CERTIFIED_BY' | translate }}</span>
+              <span class="field-value">{{ rec.certifiedByName || '—' }}</span>
+            </div>
+          </div>
+
+          <div class="detail-notes">
+            <span class="field-label">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</span>
+            <p>
+              {{ rec.immediateCause }}
+              {{ rec.immediateCauseCode ? '(' + rec.immediateCauseCode + ')' : '' }}
+            </p>
+          </div>
+          @if (rec.underlyingCause) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</span>
+              <p>
+                {{ rec.underlyingCause }}
+                {{ rec.underlyingCauseCode ? '(' + rec.underlyingCauseCode + ')' : '' }}
+              </p>
+              <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
+            </div>
+          }
+          @if (rec.contributingCauses) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'MORTALITY.CONTRIBUTING' | translate }}</span>
+              <p>{{ rec.contributingCauses }}</p>
+            </div>
+          }
+          @if (rec.notes) {
+            <div class="detail-notes">
+              <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
+              <p>{{ rec.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Record modal ══ -->
+  @if (showRecordModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeRecord()"
+      (keydown.escape)="closeRecord()"
+    ></div>
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
+        <button class="modal-close" (click)="closeRecord()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
+
+        <app-patient-picker
+          inputId="mort-patientSearch"
+          [selected]="selectedPatient()"
+          (selectedChange)="onPatientPicked($event)"
+        />
+
+        <div class="field-row">
+          <div class="field">
+            <label for="d-when">{{ 'MORTALITY.DIED_AT' | translate }} *</label>
+            <input id="d-when" type="datetime-local" [(ngModel)]="form.diedAt" />
+          </div>
+          <div class="field">
+            <label for="d-place">{{ 'MORTALITY.PLACE' | translate }}</label>
+            <select id="d-place" [(ngModel)]="form.placeOfDeath">
+              @for (p of placesOfDeath; track p) {
+                <option [value]="p">{{ 'MORTALITY.PLACE_' + p | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="d-manner">{{ 'MORTALITY.MANNER' | translate }}</label>
+            <select id="d-manner" [(ngModel)]="form.mannerOfDeath">
+              @for (m of mannersOfDeath; track m) {
+                <option [value]="m">{{ 'MORTALITY.MANNER_' + m | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field grow">
+            <label for="d-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }} *</label>
+            <input id="d-immediate" type="text" [(ngModel)]="form.immediateCause" />
+          </div>
+          <div class="field">
+            <label for="d-immediate-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+            <input id="d-immediate-code" type="text" [(ngModel)]="form.immediateCauseCode" />
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field grow">
+            <label for="d-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+            <input id="d-underlying" type="text" [(ngModel)]="form.underlyingCause" />
+          </div>
+          <div class="field">
+            <label for="d-underlying-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+            <input id="d-underlying-code" type="text" [(ngModel)]="form.underlyingCauseCode" />
+          </div>
+        </div>
+        <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
+
+        <div class="field">
+          <label for="d-contributing">{{ 'MORTALITY.CONTRIBUTING' | translate }}</label>
+          <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
+        </div>
+
+        <label class="checkbox-field">
+          <input type="checkbox" [(ngModel)]="form.maternalDeath" />
+          {{ 'MORTALITY.IS_MATERNAL' | translate }}
+        </label>
+        @if (form.maternalDeath) {
+          <div class="field">
+            <label for="d-maternal-timing">{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label>
+            <select id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
+              @for (t of maternalTimings; track t) {
+                <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
+              }
+            </select>
+            <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
+          </div>
+        }
+
+        <label class="checkbox-field">
+          <input type="checkbox" [(ngModel)]="form.perinatalDeath" />
+          {{ 'MORTALITY.IS_PERINATAL' | translate }}
+        </label>
+        @if (form.perinatalDeath) {
+          <div class="field">
+            <label for="d-perinatal-type">{{ 'MORTALITY.PERINATAL_TYPE' | translate }} *</label>
+            <select id="d-perinatal-type" [(ngModel)]="form.perinatalType">
+              @for (t of perinatalTypes; track t) {
+                <option [value]="t">{{ 'MORTALITY.PERINATAL_' + t | translate }}</option>
+              }
+            </select>
+            <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
+          </div>
+        }
+
+        <label class="checkbox-field">
+          <input type="checkbox" [(ngModel)]="form.autopsyRequested" />
+          {{ 'MORTALITY.AUTOPSY' | translate }}
+        </label>
+
+        <div class="field">
+          <label for="d-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea id="d-notes" rows="2" [(ngModel)]="form.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeRecord()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-danger"
+          (click)="submitRecord()"
+          [disabled]="recording() || !form.patientId || !form.diedAt || !form.immediateCause"
+        >
+          {{ 'MORTALITY.RECORD_DEATH' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Amend modal ══ -->
+  @if (showAmendModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeAmend()"
+      (keydown.escape)="closeAmend()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>{{ 'MORTALITY.AMEND' | translate }}</h2>
+        <button class="modal-close" (click)="closeAmend()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">{{ 'MORTALITY.AMEND_HINT' | translate }}</p>
+        <div class="field">
+          <label for="a-reason">{{ 'MORTALITY.AMENDMENT_REASON' | translate }} *</label>
+          <input id="a-reason" type="text" [(ngModel)]="amendForm.amendmentReason" />
+        </div>
+        <div class="field">
+          <label for="a-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</label>
+          <input id="a-immediate" type="text" [(ngModel)]="amendForm.immediateCause" />
+        </div>
+        <div class="field">
+          <label for="a-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+          <input id="a-underlying" type="text" [(ngModel)]="amendForm.underlyingCause" />
+        </div>
+        <div class="field">
+          <label for="a-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea id="a-notes" rows="2" [(ngModel)]="amendForm.notes"></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAmend()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="submitAmend()"
+          [disabled]="amending() || !amendForm.amendmentReason"
+        >
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+</div>
