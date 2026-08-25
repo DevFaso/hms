@@ -158,6 +158,22 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
     @Column(name = "critical_result_acknowledged_at")
     private LocalDateTime criticalResultAcknowledgedAt;
 
+    /**
+     * Notification ledger for the critical-finding chain (V133, item 27).
+     * Set once the ordering provider has been told; the sweep reads it to
+     * know a first alert actually went out before it starts escalating.
+     */
+    @Column(name = "critical_notified_at")
+    private LocalDateTime criticalNotifiedAt;
+
+    @Column(name = "critical_escalated_at")
+    private LocalDateTime criticalEscalatedAt;
+
+    /** Rounds fired so far. Deliberately uncapped — see the notification service. */
+    @Column(name = "critical_escalation_level", nullable = false)
+    @Builder.Default
+    private Short criticalEscalationLevel = 0;
+
     @Column(name = "technique", columnDefinition = "TEXT")
     private String technique;
 
@@ -208,6 +224,18 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
     @Column(name = "external_report_id", length = 120)
     private String externalReportId;
 
+    /**
+     * Set only by the signing ceremony (V132), never from a request body.
+     * A row with {@link #signedAt} set while this is null means "signed
+     * outside this ceremony" — an externally ingested report, or a row
+     * predating V132 — not a tampered one.
+     */
+    @Column(name = "signature_algorithm", length = 32)
+    private String signatureAlgorithm;
+
+    @Column(name = "signature_value", length = 128)
+    private String signatureValue;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -231,6 +259,23 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
 
     public boolean isPatientNotified() {
         return patientNotifiedAt != null;
+    }
+
+    /**
+     * A signed report is closed to content edits — corrections go through a
+     * new version (ADDENDUM / CORRECTED), which is what {@code reportVersion}
+     * and {@code latestVersion} have modelled since V1.
+     */
+    public boolean isSigned() {
+        return signedAt != null;
+    }
+
+    public boolean isCriticalFlagged() {
+        return criticalResultFlaggedAt != null;
+    }
+
+    public boolean isCriticalAcknowledged() {
+        return criticalResultAcknowledgedAt != null;
     }
 
     @Override

@@ -108,6 +108,36 @@ public class ImagingReportResponseDTO {
 
     private String lockReason;
 
+    /**
+     * Signing evidence (V132). {@code signed} true with a null
+     * {@code signatureAlgorithm} means the row was signed outside this
+     * ceremony — externally ingested, or written before V132 — rather than
+     * tampered with. The portal renders that distinction rather than hiding it.
+     */
+    private Boolean signed;
+
+    private String signatureAlgorithm;
+
+    private String signatureValue;
+
+    /** True once the author has declared a critical finding on this read. */
+    private Boolean criticalFinding;
+
+    /** True once a clinician has acknowledged that critical finding. */
+    private Boolean criticalAcknowledged;
+
+    /**
+     * Critical-finding chain state (V133, item 27). {@code criticalNotifiedAt}
+     * is when the ordering provider was first told; the level counts escalation
+     * rounds fired since. A non-zero level on an unacknowledged finding means
+     * the chain has already widened past the ordering provider.
+     */
+    private LocalDateTime criticalNotifiedAt;
+
+    private LocalDateTime criticalEscalatedAt;
+
+    private Short criticalEscalationLevel;
+
     private String externalSystemName;
 
     private String externalReportId;

@@ -35,6 +35,7 @@ public interface PatientRecallRepository extends JpaRepository<PatientRecall, UU
             SELECT r FROM PatientRecall r
             WHERE r.status = com.example.hms.enums.RecallStatus.PENDING
                 AND r.notifiedAt IS NULL
+                AND r.patient.deceasedAt IS NULL
                 AND r.dueDate <= :windowEnd
             ORDER BY r.dueDate ASC
     """)
@@ -42,4 +43,14 @@ public interface PatientRecallRepository extends JpaRepository<PatientRecall, UU
 
     /** Scoped single-row load — the 404-not-403 tenancy idiom. */
     Optional<PatientRecall> findByIdAndHospital_Id(UUID id, UUID hospitalId);
+
+    /**
+     * Open recalls for one patient (Tier 2 item 29).
+     *
+     * <p>Recording a death closes these. A recall is a promise to chase the
+     * patient up, and the sweep that fulfils it selects purely on recall state
+     * — so without this, a deceased patient's follow-up reminder still goes out
+     * to the family.
+     */
+    List<PatientRecall> findByPatient_IdAndStatusIn(UUID patientId, java.util.Collection<RecallStatus> statuses);
 }

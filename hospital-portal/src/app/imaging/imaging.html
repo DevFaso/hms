@@ -164,6 +164,15 @@
                         <span class="material-symbols-outlined">description</span>
                       </button>
                     }
+                    @if (canAuthorForOrder(o)) {
+                      <button
+                        class="action-link"
+                        (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
+                        [title]="'IMAGING.AUTHOR_REPORT' | translate"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span>
+                      </button>
+                    }
                     @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
                       <button
                         class="action-link"
@@ -314,15 +323,64 @@
       <div class="detail-panel">
         <div class="detail-header">
           <h2>{{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}</h2>
-          <button class="btn-close" (click)="closeReport()" [title]="'COMMON.CLOSE' | translate">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+          <div class="header-actions">
+            @if (canAuthorReports && !rep.signed) {
+              <button class="btn-secondary" (click)="openEditReport(rep)">
+                <span class="material-symbols-outlined">edit</span>
+                {{ 'COMMON.EDIT' | translate }}
+              </button>
+              <button class="btn-primary" (click)="signReport(rep)" [disabled]="signing()">
+                <span class="material-symbols-outlined">draw</span>
+                {{ 'IMAGING.SIGN_REPORT' | translate }}
+              </button>
+            }
+            <button class="btn-close" (click)="closeReport()" [title]="'COMMON.CLOSE' | translate">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
         </div>
         <div class="detail-body">
+          @if (rep.signed) {
+            <div class="signed-banner">
+              <span class="material-symbols-outlined">verified</span>
+              <span>
+                {{ 'IMAGING.SIGNED_LOCKED' | translate }}
+                @if (rep.signatureValue) {
+                  <code class="signature-digest" [title]="rep.signatureValue">{{
+                    rep.signatureValue.slice(0, 16)
+                  }}</code>
+                } @else {
+                  <em>{{ 'IMAGING.SIGNED_UNVERIFIABLE' | translate }}</em>
+                }
+              </span>
+            </div>
+          }
           @if (isCriticalUnacked(rep)) {
             <div class="critical-banner">
               <span class="material-symbols-outlined">warning</span>
-              {{ 'IMAGING.CRITICAL_UNACKED' | translate }}
+              <span class="critical-text">
+                {{ 'IMAGING.CRITICAL_UNACKED' | translate }}
+                <!-- Item 27: who has been called, and how many rounds in. A
+                     clinician deciding whether to act needs to know the chain
+                     is live, not just that a flag exists. -->
+                <small class="critical-chain">
+                  @if (rep.criticalNotifiedAt) {
+                    {{
+                      'IMAGING.CRITICAL_NOTIFIED_AT'
+                        | translate: { time: rep.criticalNotifiedAt | date: 'short' }
+                    }}
+                  } @else {
+                    {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
+                  }
+                  @if (rep.criticalEscalationLevel) {
+                    ·
+                    {{
+                      'IMAGING.CRITICAL_ESCALATED_ROUNDS'
+                        | translate: { count: rep.criticalEscalationLevel }
+                    }}
+                  }
+                </small>
+              </span>
               @if (canAckCritical) {
                 <button
                   class="btn-danger"
@@ -450,7 +508,7 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>{{ 'IMAGING.UPDATE_STATUS' | translate }}</h2>
+        <h2>{{ 'IMAGING.VOID_REPORT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeStatusUpdate()"
@@ -460,17 +518,23 @@
         </button>
       </div>
       <div class="modal-body">
+        <p class="modal-hint">{{ 'IMAGING.VOID_HINT' | translate }}</p>
         <div class="field">
           <label for="report-status">{{ 'COMMON.STATUS' | translate }}</label>
           <select id="report-status" [(ngModel)]="statusForm.status">
-            @for (st of reportStatuses; track st) {
+            @for (st of voidStatuses; track st) {
               <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
             }
           </select>
         </div>
         <div class="field">
-          <label for="report-status-reason">{{ 'IMAGING.STATUS_REASON' | translate }}</label>
-          <textarea id="report-status-reason" rows="3" [(ngModel)]="statusForm.statusReason">
+          <label for="report-status-reason">{{ 'IMAGING.STATUS_REASON' | translate }} *</label>
+          <textarea
+            id="report-status-reason"
+            rows="3"
+            required
+            [(ngModel)]="statusForm.statusReason"
+          >
           </textarea>
         </div>
       </div>
@@ -479,6 +543,118 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button class="btn-primary" (click)="submitStatusUpdate()" [disabled]="statusSubmitting()">
+          {{ 'COMMON.SAVE' | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- ══ Report authoring modal (Tier 2 item 26) ══ -->
+  @if (showReportModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeReportModal()"
+      (keydown.escape)="closeReportModal()"
+    ></div>
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2>
+          {{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR_REPORT') | translate }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeReportModal()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="rep-title">{{ 'IMAGING.REPORT_TITLE' | translate }}</label>
+            <input id="rep-title" type="text" [(ngModel)]="reportForm.reportTitle" />
+          </div>
+          <div class="field">
+            <label for="rep-status">{{ 'COMMON.STATUS' | translate }}</label>
+            <select id="rep-status" [(ngModel)]="reportForm.reportStatus">
+              @for (st of authorableStatuses; track st) {
+                <option [value]="st">{{ 'IMAGING.REPORT_STATUS_' + st | translate }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="rep-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
+            <select id="rep-modality" [(ngModel)]="reportForm.modality">
+              @for (m of modalities; track m) {
+                <option [value]="m">{{ m | enumLabel }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="rep-region">{{ 'IMAGING.BODY_REGION' | translate }}</label>
+            <input id="rep-region" type="text" [(ngModel)]="reportForm.bodyRegion" />
+          </div>
+          <div class="field">
+            <label for="rep-accession">{{ 'IMAGING.ACCESSION' | translate }}</label>
+            <input id="rep-accession" type="text" [(ngModel)]="reportForm.accessionNumber" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="rep-technique">{{ 'IMAGING.TECHNIQUE' | translate }}</label>
+          <textarea id="rep-technique" rows="2" [(ngModel)]="reportForm.technique"></textarea>
+        </div>
+        <div class="field">
+          <label for="rep-comparison">{{ 'IMAGING.COMPARISON' | translate }}</label>
+          <textarea
+            id="rep-comparison"
+            rows="2"
+            [(ngModel)]="reportForm.comparisonStudies"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="rep-findings">{{ 'IMAGING.FINDINGS' | translate }}</label>
+          <textarea id="rep-findings" rows="6" [(ngModel)]="reportForm.findings"></textarea>
+        </div>
+        <div class="field">
+          <label for="rep-impression">{{ 'IMAGING.IMPRESSION' | translate }} *</label>
+          <textarea id="rep-impression" rows="4" [(ngModel)]="reportForm.impression"></textarea>
+          <small class="field-hint">{{ 'IMAGING.IMPRESSION_HINT' | translate }}</small>
+        </div>
+        <div class="field">
+          <label for="rep-recommendations">{{ 'IMAGING.RECOMMENDATIONS' | translate }}</label>
+          <textarea
+            id="rep-recommendations"
+            rows="3"
+            [(ngModel)]="reportForm.recommendations"
+          ></textarea>
+        </div>
+        <div class="field-row">
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="reportForm.contrastAdministered" />
+            {{ 'IMAGING.CONTRAST_ADMINISTERED' | translate }}
+          </label>
+          @if (reportForm.contrastAdministered) {
+            <div class="field">
+              <label for="rep-contrast">{{ 'IMAGING.CONTRAST_DETAILS' | translate }}</label>
+              <input id="rep-contrast" type="text" [(ngModel)]="reportForm.contrastDetails" />
+            </div>
+          }
+        </div>
+        <label class="checkbox-field critical-toggle">
+          <input type="checkbox" [(ngModel)]="reportForm.criticalFinding" />
+          {{ 'IMAGING.FLAG_CRITICAL' | translate }}
+        </label>
+        <small class="field-hint">{{ 'IMAGING.FLAG_CRITICAL_HINT' | translate }}</small>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReportModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-primary" (click)="submitReport()" [disabled]="reportSubmitting()">
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>

@@ -109,12 +109,19 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
      * narrowed in Java because appointment date and start time are
      * separate columns. EntityGraph pulls what the reminder needs:
      * patient (+user for the in-app push), staff, hospital.
+     *
+     * <p>Tier 2 item 29 added the {@code deceasedAt IS NULL} clause. This
+     * sweep selected purely on appointment state, so a patient who died last
+     * week still had their follow-up reminder texted to the family. The
+     * predicate is a column on the patient rather than a join to the death
+     * record precisely so it stays cheap enough to belong here.
      */
     @org.springframework.data.jpa.repository.EntityGraph(
         attributePaths = {"patient", "patient.user", "staff", "staff.user", "hospital"})
     @org.springframework.data.jpa.repository.Query(
         "SELECT a FROM Appointment a WHERE a.reminderSentAt IS NULL "
         + "AND a.status IN :statuses "
+        + "AND a.patient.deceasedAt IS NULL "
         + "AND a.appointmentDate BETWEEN :fromDate AND :toDate")
     java.util.List<com.example.hms.model.Appointment> findAwaitingReminder(
         @org.springframework.data.repository.query.Param("statuses")

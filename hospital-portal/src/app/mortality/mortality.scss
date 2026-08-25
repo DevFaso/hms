@@ -1,0 +1,172 @@
+@use '../shared/styles/page-common';
+
+/* ── The cascade receipt ──────────────────────────────────────────────
+   Recording a death closes admissions, appointments and recalls. That is
+   reported here rather than happening unseen, so the operator can see what
+   their keystroke just cancelled. */
+
+.closure-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  border-radius: 10px;
+  background: #eef3f2;
+  border-left: 4px solid #46585e;
+
+  .closure-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.92rem;
+  }
+
+  .closure-list {
+    margin: 0;
+    padding-left: 18px;
+    color: #46585e;
+
+    li {
+      margin: 2px 0;
+    }
+  }
+
+  .btn-close {
+    margin-left: auto;
+  }
+}
+
+/* ── Period picker ── */
+
+.period-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+
+  input[type='date'] {
+    width: auto;
+  }
+}
+
+/* ── Register counts ──────────────────────────────────────────────────
+   Maternal and perinatal get their own accent because they are the two
+   numbers the facility is actually measured on. */
+
+.summary-card {
+  &.maternal .card-value {
+    color: #b3261e;
+  }
+  &.perinatal .card-value {
+    color: #8a5a00;
+  }
+}
+
+.card-note {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.74rem;
+  color: #5a6672;
+}
+
+/* ── Flags ── */
+
+.flag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-right: 4px;
+  white-space: nowrap;
+
+  &.maternal {
+    background: #fdecea;
+    color: #b3261e;
+  }
+  /* Visually distinct from a WHO maternal death, because it is NOT one and
+     the register counts them separately. */
+  &.late {
+    background: #f2eef7;
+    color: #5b4a86;
+  }
+  &.perinatal {
+    background: #fdf0dc;
+    color: #8a5a00;
+  }
+  &.amended {
+    background: #eef3f2;
+    color: #46585e;
+  }
+}
+
+.amended-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #eef3f2;
+  color: #46585e;
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+}
+
+/* ── Form layout ── */
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  > .field {
+    flex: 1 1 170px;
+    min-width: 0;
+
+    &.grow {
+      flex: 3 1 260px;
+    }
+  }
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  cursor: pointer;
+  margin: 10px 0 2px;
+
+  input[type='checkbox'] {
+    width: auto;
+    margin: 0;
+  }
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #5a6672;
+}
+
+.modal-hint {
+  margin: 0 0 14px;
+  font-size: 0.88rem;
+  color: #5a6672;
+
+  &.warn {
+    color: #b3261e;
+    font-weight: 600;
+  }
+}
+
+.modal-wide {
+  max-width: 760px;
+  width: min(92vw, 760px);
+}
