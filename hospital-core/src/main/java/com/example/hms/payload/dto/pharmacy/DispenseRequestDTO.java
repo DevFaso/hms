@@ -81,4 +81,30 @@ public class DispenseRequestDTO {
      */
     @Size(max = 64)
     private String idempotencyKey;
+
+    /**
+     * Tier 2 item 34 — raw value scanned from the patient's wristband,
+     * which encodes the bare patient UUID (#475's printed wristband is the
+     * scan target).
+     *
+     * <p>Optional by design. Most sites in this deployment have no scanner
+     * and dispense against a paper slip; requiring a scan would take the
+     * pharmacy offline rather than make it safer. When it IS supplied the
+     * server verifies it and refuses a mismatch — an unverifiable scan is
+     * never treated as a pass.
+     */
+    @Size(max = 255)
+    private String patientScanValue;
+
+    /**
+     * Tier 2 item 34 — raw value scanned from the stock lot's printed label
+     * ({@code "LOT-" + 12 hex}, minted by the server in V138).
+     *
+     * <p>Also optional, and for the same reason. Note that the checks it
+     * strengthens — that the lot is the prescribed drug and is in date —
+     * run whether or not anybody scans, because both are answerable from
+     * the lot the pharmacist already named.
+     */
+    @Size(max = 255)
+    private String productScanValue;
 }

@@ -2044,4 +2044,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V138 - dispense-time verification. Gives the stock lot a
+         server-minted barcode (the product scan target did not exist; the
+         wristband from #475 is only the patient half) and the dispense a
+         verification record mirroring the eMAR's five-rights columns. The
+         scan stays optional for paper-fallback sites, but the two server
+         checks it enables are always enforced: expiry_date had NO reader
+         anywhere in the application, and the lot's drug was never compared
+         to the prescription's. No DO block, so no splitStatements
+         attribute.
+         ================================================================= -->
+    <changeSet id="V138-dispense-verification" author="hms-team" runOnChange="false">
+        <sqlFile path="V138__dispense_verification.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

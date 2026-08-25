@@ -115,11 +115,17 @@
         <div class="form-row">
           <div class="field">
             <label for="stockLot">{{ 'PHARMACY.STOCK_LOT' | translate }}</label>
-            <select id="stockLot" [(ngModel)]="form.stockLotId" name="stockLotId">
+            <select
+              id="stockLot"
+              [(ngModel)]="form.stockLotId"
+              name="stockLotId"
+              (ngModelChange)="onLotChange()"
+            >
               <option value="">— {{ 'PHARMACY.NO_LOT' | translate }} —</option>
-              @for (item of inventoryItems(); track item.id) {
-                <option [value]="item.id">
-                  {{ item.medicationName }} ({{ item.quantityOnHand }} avail.)
+              @for (lot of dispensableLots(); track lot.id) {
+                <option [value]="lot.id">
+                  {{ lot.lotNumber }} · {{ 'PHARMACY.EXP_SHORT' | translate }}
+                  {{ lot.expiryDate | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
                 </option>
               }
             </select>
@@ -130,6 +136,57 @@
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
             </label>
           </div>
+        </div>
+
+        <!--
+          Tier 2 item 34 — the counter-side scan. Optional throughout: most
+          sites here dispense against a paper slip with no scanner, and the
+          server's expiry and drug-match checks run either way.
+        -->
+        <div class="scan-panel">
+          <div class="scan-panel__head">
+            <span class="scan-panel__title">{{ 'PHARMACY.SCAN_TITLE' | translate }}</span>
+            <span class="scan-panel__hint">{{ 'PHARMACY.SCAN_OPTIONAL' | translate }}</span>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="patientScan">{{ 'PHARMACY.PATIENT_SCAN' | translate }}</label>
+              <input
+                id="patientScan"
+                type="text"
+                [(ngModel)]="form.patientScanValue"
+                name="patientScanValue"
+                autocomplete="off"
+                [placeholder]="'PHARMACY.PATIENT_SCAN_PLACEHOLDER' | translate"
+              />
+            </div>
+            <div class="field">
+              <label for="productScan">{{ 'PHARMACY.PRODUCT_SCAN' | translate }}</label>
+              <input
+                id="productScan"
+                type="text"
+                [(ngModel)]="form.productScanValue"
+                name="productScanValue"
+                autocomplete="off"
+                [disabled]="!form.stockLotId"
+                [placeholder]="'PHARMACY.PRODUCT_SCAN_PLACEHOLDER' | translate"
+              />
+            </div>
+          </div>
+          @if (form.stockLotId && !selectedLot()?.barcodeValue) {
+            <p class="scan-panel__warn">
+              {{ 'PHARMACY.LOT_NOT_LABELLED' | translate }}
+              <button type="button" class="link-btn" (click)="printLotLabel()">
+                {{ 'PHARMACY.PRINT_LOT_LABEL' | translate }}
+              </button>
+            </p>
+          } @else if (form.stockLotId) {
+            <p class="scan-panel__hint">
+              <button type="button" class="link-btn" (click)="printLotLabel()">
+                {{ 'PHARMACY.PRINT_LOT_LABEL' | translate }}
+              </button>
+            </p>
+          }
         </div>
 
         @if (form.substitution) {
@@ -297,6 +354,7 @@
               <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
               <th>{{ 'PHARMACY.QTY_DISPENSED' | translate }}</th>
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+              <th>{{ 'PHARMACY.VERIFICATION' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_BY' | translate }}</th>
               <th>{{ 'PHARMACY.DISPENSED_AT' | translate }}</th>
               <th>{{ 'COMMON.ACTIONS' | translate }}</th>
@@ -311,6 +369,30 @@
                   <span class="badge" [ngClass]="getStatusClass(d.status)">{{
                     d.status | enumLabel: 'dispenseStatus'
                   }}</span>
+                </td>
+                <td>
+                  <!--
+                    NOT_VERIFIED is the paper-fallback path and a legitimate
+                    outcome — rendered neutral, never as an error.
+                  -->
+                  @if (d.verificationStatus === 'VERIFIED') {
+                    <span class="badge badge-verified">
+                      <span class="material-symbols-outlined">verified</span>
+                      {{ 'PHARMACY.VERIFIED' | translate }}
+                    </span>
+                  } @else if (d.verificationStatus === 'OVERRIDDEN') {
+                    <span
+                      class="badge badge-overridden"
+                      [title]="d.verificationOverrideReason ?? ''"
+                    >
+                      {{ 'PHARMACY.OVERRIDDEN' | translate }}
+                      @if (d.verificationOverrides?.length) {
+                        ({{ d.verificationOverrides!.join(', ') }})
+                      }
+                    </span>
+                  } @else {
+                    <span class="badge badge-muted">{{ 'PHARMACY.NOT_SCANNED' | translate }}</span>
+                  }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
                 <td>{{ d.dispensedAt | date: 'short' }}</td>

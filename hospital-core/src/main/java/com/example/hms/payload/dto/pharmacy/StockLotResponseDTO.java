@@ -31,6 +31,12 @@ public class StockLotResponseDTO {
     private LocalDate receivedDate;
     private UUID receivedBy;
     private String notes;
+
+    /**
+     * Scannable identifier printed on the lot label (V138). Null on lots
+     * received before the migration — printing a label backfills it.
+     */
+    private String barcodeValue;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

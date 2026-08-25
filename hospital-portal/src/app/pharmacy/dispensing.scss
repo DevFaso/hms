@@ -275,3 +275,71 @@
     margin-left: auto;
   }
 }
+
+/* ── Counter-side scan (Tier 2 item 34) ──────────────────────────────── */
+/*
+  Visually set apart from the rest of the form because it is the one block
+  a pharmacist may legitimately leave empty — most sites here have no
+  scanner. Grouping it stops the empty inputs reading as unfinished work.
+*/
+.scan-panel {
+  margin: 0.5rem 0 1rem;
+  padding: 0.75rem 1rem 0.25rem;
+  border: 1px dashed var(--border-color, #d5d9e0);
+  border-radius: 6px;
+  background-color: var(--surface-subtle, #fafbfc);
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  &__title {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+
+  &__hint {
+    font-size: 0.85rem;
+    color: var(--text-muted, #6b7280);
+  }
+
+  &__warn {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    color: #8a5300;
+  }
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--primary-color, #1a73e8);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.badge-verified {
+  background-color: #e6f4ea;
+  color: #1e6b34;
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+    vertical-align: text-bottom;
+  }
+}
+
+.badge-overridden {
+  background-color: #fff4e5;
+  color: #8a5300;
+}
+
+/* Not an error state: no scanner is the norm, not a lapse. */
+.badge-muted {
+  background-color: var(--surface-subtle, #f1f3f5);
+  color: var(--text-muted, #6b7280);
+}

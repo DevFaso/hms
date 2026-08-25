@@ -3,12 +3,14 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.pharmacy.DispenseMapper;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
@@ -31,6 +33,7 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.utility.LotBarcode;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -83,6 +86,26 @@ class DispenseServiceImplTest {
     @org.mockito.Spy
     private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
 
+    /**
+     * Also real, for the same reason — a pure rule with its own test
+     * (DispenseVerificationServiceTest). Mocking it here would make these
+     * tests assert that the service CALLS a gate rather than that the gate
+     * stops anything, which is exactly how the reservation transitions in
+     * #515 ended up with no test at all.
+     */
+    private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 8, 25);
+
+    private static final java.time.Clock FIXED_CLOCK = java.time.Clock.fixed(
+        TODAY.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(), java.time.ZoneOffset.UTC);
+
+    @org.mockito.Spy
+    private DispenseVerificationService dispenseVerificationService =
+        new DispenseVerificationService(FIXED_CLOCK);
+
+    /** The service's own clock, so dispensedAt and scanVerifiedAt are pinned too. */
+    @org.mockito.Spy
+    private java.time.Clock clock = FIXED_CLOCK;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -101,6 +124,7 @@ class DispenseServiceImplTest {
     private User user;
     private StockLot stockLot;
     private InventoryItem inventoryItem;
+    private MedicationCatalogItem catalogItem;
 
     @BeforeEach
     void setUp() {
@@ -124,15 +148,29 @@ class DispenseServiceImplTest {
         user = new User();
         user.setId(userId);
 
+        // The catalogue item and the expiry date are not decoration: expiry
+        // is NOT NULL in the schema, so the lot this fixture used to build —
+        // no expiry, no linked medication — could never have existed in a
+        // real database. V138 made that unreality visible by giving the
+        // columns their first reader.
+        catalogItem = new MedicationCatalogItem();
+        catalogItem.setId(UUID.randomUUID());
+        catalogItem.setGenericName("Amoxicillin");
+        catalogItem.setNameFr("Amoxicilline");
+
         inventoryItem = InventoryItem.builder()
                 .pharmacy(pharmacy)
+                .medicationCatalogItem(catalogItem)
                 .quantityOnHand(BigDecimal.valueOf(100))
                 .build();
         inventoryItem.setId(UUID.randomUUID());
 
         stockLot = StockLot.builder()
                 .inventoryItem(inventoryItem)
+                .lotNumber("AMX-2291")
+                .expiryDate(TODAY.plusMonths(9))
                 .remainingQuantity(BigDecimal.valueOf(50))
+                .barcodeValue(LotBarcode.mint())
                 .build();
         stockLot.setId(stockLotId);
     }
@@ -1020,6 +1058,224 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(racing))
                     .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
+    }
+
+    /**
+     * Tier 2 item 34 — the counter-side gate, tested through the service
+     * rather than only against the rule class, because what matters here is
+     * that a refusal happens BEFORE stock moves. The rule returning
+     * "expired" is worth nothing if the shelf has already been decremented
+     * by the time anybody reads it.
+     */
+    @Nested
+    @DisplayName("dispense-time verification")
+    class DispenseVerification {
+
+        /** Everything a create needs up to the point verification runs. */
+        private void stubUpToVerification() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        }
+
+        /** The rest, for the paths that are expected to succeed. */
+        private void stubThroughSave(DispenseRequestDTO dto, Dispense entity) {
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).status("COMPLETED").build();
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+        }
+
+        @Test
+        @DisplayName("expired stock is refused and the shelf is left alone")
+        void expiredStockIsRefusedWithoutDecrementingAnything() {
+            // The defect this closes: expiry_date was written at goods-in and
+            // read by NOTHING. findAvailableLotsByFEFO filters it; the
+            // dispense path called findById and went straight past.
+            stockLot.setExpiryDate(TODAY.minusDays(1));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("expired on");
+
+            // The whole point of splitting load from consume.
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(50));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.valueOf(100));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).save(any());
+            verify(stockTransactionRepository, never()).save(any());
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a lot of the wrong drug is refused")
+        void aLotOfTheWrongDrugIsRefused() {
+            catalogItem.setGenericName("Methotrexate");
+            catalogItem.setNameFr("Methotrexate");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Methotrexate")
+                    .hasMessageContaining("Amoxicillin")
+                    .hasMessageNotContaining("%s");
+
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a wrong-drug lot IS allowed as a recorded substitution")
+        void aRecordedSubstitutionCarriesTheDrugCheck() {
+            // Generic for brand, two 250s for a 500 — a real workflow the
+            // request already models. Reusing it beats inventing a second
+            // override that would need its own audit event.
+            catalogItem.setGenericName("Amoxicilline trihydrate");
+            catalogItem.setNameFr("Amoxicilline trihydrate");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Prescribed brand out of stock");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            stubUpToVerification();
+            stubThroughSave(dto, entity);
+
+            service.createDispense(dto);
+
+            assertThat(entity.getVerificationStatus())
+                    .isEqualTo(DispenseVerificationStatus.OVERRIDDEN);
+            assertThat(entity.getVerificationOverrides()).contains("DRUG");
+            assertThat(entity.getVerificationOverrideReason()).isEqualTo("Prescribed brand out of stock");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(40));
+        }
+
+        @Test
+        @DisplayName("substitution without a reason does not carry the drug check")
+        void aSubstitutionFlagWithoutAReasonIsNotAnOverride() {
+            // Otherwise a single boolean is a one-click bypass of the only
+            // check standing between a prescription and the wrong drug.
+            catalogItem.setGenericName("Methotrexate");
+            catalogItem.setNameFr("Methotrexate");
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("   ");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a substitution never carries an expired lot")
+        void aSubstitutionDoesNotCarryAnExpiredLot() {
+            // EXPIRY is the one check with no override at all: unlike the
+            // isolation override in V137, there is no circumstance where
+            // out-of-date medication is the better of two options.
+            stockLot.setExpiryDate(TODAY.minusMonths(2));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Prescribed brand out of stock");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("expired on");
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("the wrong wristband is refused, substitution or not")
+        void theWrongWristbandIsRefusedAndIsNotOverridable() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setPatientScanValue(UUID.randomUUID().toString());
+            dto.setSubstitution(true);
+            dto.setSubstitutionReason("Prescribed brand out of stock");
+            stubUpToVerification();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("different patient");
+            verify(dispenseRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a clean scan is stamped VERIFIED")
+        void aCleanScanIsStampedVerified() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setPatientScanValue(patientId.toString());
+            dto.setProductScanValue(stockLot.getBarcodeValue());
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            stubUpToVerification();
+            stubThroughSave(dto, entity);
+
+            service.createDispense(dto);
+
+            assertThat(entity.getVerificationStatus())
+                    .isEqualTo(DispenseVerificationStatus.VERIFIED);
+            assertThat(entity.getPatientScanValue()).isEqualTo(patientId.toString());
+            assertThat(entity.getProductScanValue()).isEqualTo(stockLot.getBarcodeValue());
+            assertThat(entity.getScanVerifiedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("dispensing without a scan is NOT_VERIFIED, not a failure")
+        void thePaperFallbackPathIsNotVerifiedRatherThanRefused() {
+            // Most sites here have no scanner. Requiring one would take the
+            // pharmacy offline rather than make it safer.
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            stubUpToVerification();
+            stubThroughSave(dto, entity);
+
+            service.createDispense(dto);
+
+            assertThat(entity.getVerificationStatus())
+                    .isEqualTo(DispenseVerificationStatus.NOT_VERIFIED);
+            assertThat(entity.getScanVerifiedAt()).isNull();
+            // ...but the checks that need no scan still ran and passed.
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(40));
+        }
+
+        @Test
+        @DisplayName("an unscanned dispense is never recorded as VERIFIED")
+        void anUnscannedDispenseIsNeverRecordedAsVerified() {
+            // The record must not be able to claim the right patient was
+            // confirmed when nobody confirmed anything. With no lot named
+            // there is nothing at all to evaluate.
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            stubThroughSave(dto, entity);
+
+            service.createDispense(dto);
+
+            assertThat(entity.getVerificationStatus())
+                    .isEqualTo(DispenseVerificationStatus.NOT_VERIFIED);
+            assertThat(entity.getVerificationOverrides()).isNull();
         }
     }
 }

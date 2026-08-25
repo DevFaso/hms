@@ -89,4 +89,22 @@ public class StockLot extends BaseEntity {
     @Size(max = 1000)
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /**
+     * Server-minted scannable identifier for this lot, printed on the lot
+     * label and compared to the product scan at dispense time (Tier 2
+     * item 34).
+     *
+     * <p>Minted by the system rather than read off the pack because stock
+     * here arrives from government allocation, donation and local purchase:
+     * manufacturer barcodes are inconsistent where they exist and absent on
+     * repackaged stock, so verifying against one would work for some
+     * consignments and silently not for others. Same reasoning, and the same
+     * shape, as {@code LabSpecimen.barcodeValue}.
+     *
+     * <p>Null on lots received before V138 — printing a label backfills it.
+     */
+    @Size(max = 64)
+    @Column(name = "barcode_value", length = 64)
+    private String barcodeValue;
 }
