@@ -1959,4 +1959,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V134 - blood bank and transfusion: patient_blood_groups (the
+         lab-verified type and screen, distinct from the free-text
+         clinical.patients.blood_type), transfusion_requests, blood_units,
+         transfusion_crossmatches, transfusion_administrations and
+         transfusion_reactions. No DO block, so no splitStatements
+         attribute.
+         ================================================================= -->
+    <changeSet id="V134-blood-bank-transfusion" author="hms-team" runOnChange="false">
+        <sqlFile path="V134__blood_bank_transfusion.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
