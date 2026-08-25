@@ -1104,25 +1104,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         },
       );
     }
-    // Mortality register (Tier 2 item 29). Gate mirrors the /mortality route
-    // guard, which mirrors MortalityController's reader set.
+    // Blood bank workbench (Tier 2 item 28). Gate mirrors the /transfusions
+    // route guard, which mirrors TransfusionController's reader set.
     if (
       this.hasAnyRole([
         'ROLE_DOCTOR',
         'ROLE_SURGEON',
         'ROLE_MIDWIFE',
         'ROLE_NURSE',
-        'ROLE_QUALITY_MANAGER',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
         'ROLE_HOSPITAL_ADMIN',
-        'ROLE_ADMIN',
         'ROLE_SUPER_ADMIN',
       ])
     ) {
       items.push({
-        icon: 'description',
-        label: 'Mortality',
-        translationKey: 'NAV.MORTALITY',
-        route: '/mortality',
+        icon: 'bloodtype',
+        label: 'Blood Bank',
+        translationKey: 'NAV.TRANSFUSIONS',
+        route: '/transfusions',
       });
     }
     // Microbiology workbench (P3 #19). Gate mirrors the /microbiology route

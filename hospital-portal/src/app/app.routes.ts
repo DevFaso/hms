@@ -468,11 +468,12 @@ export const routes: Routes = [
           import('./lab/lab-results/lab-results').then((m) => m.LabResultsComponent),
       },
       {
-        // Mortality register (Tier 2 item 29). Roles mirror
-        // MortalityController's READER set; recording and amending are gated
-        // in-component to the narrower RECORDER set, which the backend also
-        // enforces.
-        path: 'mortality',
+        // Blood bank workbench (Tier 2 item 28). Roles mirror
+        // TransfusionController's READER set exactly; the request / laboratory
+        // / bedside actions are gated in-component to the narrower sets, which
+        // are themselves the controller's PRESCRIBER, LABORATORY and BEDSIDE
+        // expressions.
+        path: 'transfusions',
         canActivate: [RoleGuard],
         data: {
           roles: [
@@ -480,13 +481,16 @@ export const routes: Routes = [
             'ROLE_SURGEON',
             'ROLE_MIDWIFE',
             'ROLE_NURSE',
-            'ROLE_QUALITY_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
             'ROLE_HOSPITAL_ADMIN',
-            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
-        loadComponent: () => import('./mortality/mortality').then((m) => m.MortalityComponent),
+        loadComponent: () =>
+          import('./transfusion/transfusion').then((m) => m.TransfusionComponent),
       },
       {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —

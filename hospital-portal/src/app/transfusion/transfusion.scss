@@ -1,0 +1,196 @@
+@use '../shared/styles/page-common';
+
+/* ── Blood group and unit identity ── */
+
+.group-badge {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  padding: 2px 9px;
+  border-radius: 12px;
+  background: #fdecea;
+  color: #b3261e;
+  white-space: nowrap;
+
+  &.untyped {
+    background: #f0f2f4;
+    color: #5a6672;
+    font-weight: 600;
+  }
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 0.86em;
+}
+
+/* ── Urgency ── */
+
+.urgency-badge {
+  display: inline-block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.urgency-routine {
+  background: #eef3f2;
+  color: #46585e;
+}
+.urgency-urgent {
+  background: #fdf0dc;
+  color: #8a5a00;
+}
+.urgency-emergency {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+/* ── Banners: one says act now, one says check something first ── */
+
+.emergency-banner,
+.warn-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+.emergency-banner {
+  background: #fdecea;
+  color: #b3261e;
+}
+.warn-banner {
+  background: #fdf0dc;
+  color: #8a5a00;
+}
+
+.warn-inline {
+  color: #8a5a00;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* ── Expiry: visible on the row, not only in the date column ── */
+
+.row-expired {
+  opacity: 0.72;
+}
+
+.expired-flag {
+  margin-left: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #b3261e;
+}
+
+.screen-lapsed {
+  color: #8a5a00;
+  vertical-align: middle;
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
+/* ── Crossmatch verdicts ── */
+
+.xm-ok {
+  color: #1e6f4a;
+  font-weight: 600;
+}
+.xm-bad {
+  color: #b3261e;
+  font-weight: 700;
+}
+.xm-lapsed {
+  margin-left: 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: #8a5a00;
+}
+
+/* ── Layout helpers ── */
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 10px;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+}
+
+.group-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: #f4f6f7;
+  font-size: 0.9rem;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  > .field {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  cursor: pointer;
+  margin: 8px 0;
+
+  input[type='checkbox'] {
+    width: auto;
+    margin: 0;
+  }
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: #5a6672;
+}
+
+.modal-hint {
+  margin: 0 0 14px;
+  font-size: 0.88rem;
+  color: #5a6672;
+
+  &.warn {
+    color: #8a5a00;
+    font-weight: 600;
+  }
+}
+
+.modal-wide {
+  max-width: 720px;
+  width: min(92vw, 720px);
+}
+
+.data-table.compact table {
+  font-size: 0.88rem;
+}

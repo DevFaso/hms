@@ -1973,15 +1973,15 @@
     </changeSet>
 
     <!-- =================================================================
-         V135 - death and mortality: clinical.patients.deceased_at (the
-         flag every sweep and worklist reads) plus clinical.death_records
-         (the certificate, one row per patient). V133 and V134 belong to
-         the imaging-escalation and blood-bank branches still in flight;
-         the numbers are reserved so nothing collides on merge. No DO
-         block, so no splitStatements attribute.
+         V134 - blood bank and transfusion: patient_blood_groups (the
+         lab-verified type and screen, distinct from the free-text
+         clinical.patients.blood_type), transfusion_requests, blood_units,
+         transfusion_crossmatches, transfusion_administrations and
+         transfusion_reactions. No DO block, so no splitStatements
+         attribute.
          ================================================================= -->
-    <changeSet id="V135-death-and-mortality" author="hms-team" runOnChange="false">
-        <sqlFile path="V135__death_and_mortality.sql"
+    <changeSet id="V134-blood-bank-transfusion" author="hms-team" runOnChange="false">
+        <sqlFile path="V134__blood_bank_transfusion.sql"
                  relativeToChangelogFile="true"
                  stripComments="false"/>
     </changeSet>
