@@ -122,7 +122,7 @@ public class MortalityServiceImpl implements MortalityService {
         }
         validateMortalityFlags(request);
 
-        DeathRecord record = DeathRecord.builder()
+        DeathRecord deathRecord = DeathRecord.builder()
             .patient(patient)
             .hospital(hospitalRef(hospitalId))
             .diedAt(request.getDiedAt())
@@ -149,7 +149,7 @@ public class MortalityServiceImpl implements MortalityService {
         patient.setDeceasedAt(request.getDiedAt());
         patientRepository.save(patient);
 
-        DeathRecord saved = deathRecordRepository.save(record);
+        DeathRecord saved = deathRecordRepository.save(deathRecord);
         DeathClosureSummaryDTO closure = closeOpenRecords(patient, hospitalId, saved);
 
         if (saved.isWhoMaternalDeath()) {
@@ -158,7 +158,7 @@ public class MortalityServiceImpl implements MortalityService {
         }
 
         return RecordDeathResponseDTO.builder()
-            .record(mapper.toDto(saved))
+            .deathRecord(mapper.toDto(saved))
             .closure(closure)
             .build();
     }
@@ -168,53 +168,54 @@ public class MortalityServiceImpl implements MortalityService {
         if (!StringUtils.hasText(request.getAmendmentReason())) {
             throw new BusinessException("An amendment reason is required.");
         }
-        DeathRecord record = loadScoped(recordId);
+        DeathRecord deathRecord = loadScoped(recordId);
 
         if (request.getImmediateCause() != null) {
-            record.setImmediateCause(request.getImmediateCause());
+            deathRecord.setImmediateCause(request.getImmediateCause());
         }
         if (request.getImmediateCauseCode() != null) {
-            record.setImmediateCauseCode(request.getImmediateCauseCode());
+            deathRecord.setImmediateCauseCode(request.getImmediateCauseCode());
         }
         if (request.getUnderlyingCause() != null) {
-            record.setUnderlyingCause(request.getUnderlyingCause());
+            deathRecord.setUnderlyingCause(request.getUnderlyingCause());
         }
         if (request.getUnderlyingCauseCode() != null) {
-            record.setUnderlyingCauseCode(request.getUnderlyingCauseCode());
+            deathRecord.setUnderlyingCauseCode(request.getUnderlyingCauseCode());
         }
         if (request.getContributingCauses() != null) {
-            record.setContributingCauses(request.getContributingCauses());
+            deathRecord.setContributingCauses(request.getContributingCauses());
         }
         if (request.getMannerOfDeath() != null) {
-            record.setMannerOfDeath(request.getMannerOfDeath());
+            deathRecord.setMannerOfDeath(request.getMannerOfDeath());
         }
         if (request.getMaternalDeath() != null) {
-            record.setMaternalDeath(request.getMaternalDeath());
-            record.setMaternalDeathTiming(request.getMaternalDeathTiming());
+            deathRecord.setMaternalDeath(request.getMaternalDeath());
+            deathRecord.setMaternalDeathTiming(request.getMaternalDeathTiming());
         }
         if (request.getPerinatalDeath() != null) {
-            record.setPerinatalDeath(request.getPerinatalDeath());
-            record.setPerinatalType(request.getPerinatalType());
+            deathRecord.setPerinatalDeath(request.getPerinatalDeath());
+            deathRecord.setPerinatalType(request.getPerinatalType());
         }
         if (request.getNotes() != null) {
-            record.setNotes(request.getNotes());
+            deathRecord.setNotes(request.getNotes());
         }
 
         // Re-check the pairing AFTER the edits: an amendment that turns a death
         // maternal without saying when would break the reporting query.
-        if (Boolean.TRUE.equals(record.getMaternalDeath()) && record.getMaternalDeathTiming() == null) {
+        if (Boolean.TRUE.equals(deathRecord.getMaternalDeath())
+            && deathRecord.getMaternalDeathTiming() == null) {
             throw new BusinessException(
                 "A maternal death must state when it occurred relative to the pregnancy.");
         }
-        if (Boolean.TRUE.equals(record.getPerinatalDeath()) && record.getPerinatalType() == null) {
+        if (Boolean.TRUE.equals(deathRecord.getPerinatalDeath()) && deathRecord.getPerinatalType() == null) {
             throw new BusinessException(
                 "A perinatal death must state whether it was a stillbirth or a neonatal death.");
         }
 
-        record.setAmendedAt(LocalDateTime.now());
-        record.setAmendmentReason(request.getAmendmentReason());
+        deathRecord.setAmendedAt(LocalDateTime.now());
+        deathRecord.setAmendmentReason(request.getAmendmentReason());
 
-        return mapper.toDto(deathRecordRepository.save(record));
+        return mapper.toDto(deathRecordRepository.save(deathRecord));
     }
 
     @Override
@@ -274,16 +275,22 @@ public class MortalityServiceImpl implements MortalityService {
      * Close everything that would otherwise keep running against a person who
      * has died.
      *
-     * <p>Each of these is a real failure mode, not tidiness: an open admission
-     * holds a bed and keeps the patient on the ward board; a live appointment
-     * is a slot nobody will use and a reminder to a bereaved family; an open
-     * recall is a follow-up chase for someone who cannot be chased.
-     *
-     * <p>Only FUTURE appointments are cancelled. A past appointment the patient
-     * actually attended is history and rewriting it would falsify the record.
+     * <p>Each of these is a real failure mode, not tidiness — see the individual
+     * methods for what each one would otherwise cost. Every count is reported
+     * back to the caller rather than closed silently.
      */
-    private DeathClosureSummaryDTO closeOpenRecords(Patient patient, UUID hospitalId, DeathRecord record) {
-        int admissionsClosed = 0;
+    private DeathClosureSummaryDTO closeOpenRecords(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+        return DeathClosureSummaryDTO.builder()
+            .admissionsClosed(closeAdmissions(patient, hospitalId, deathRecord))
+            .encountersClosed(closeEncounters(patient, hospitalId, deathRecord))
+            .appointmentsCancelled(cancelFutureAppointments(patient, hospitalId, deathRecord))
+            .recallsClosed(closeRecalls(patient, hospitalId))
+            .build();
+    }
+
+    /** An open admission holds a bed and keeps the patient on the ward board. */
+    private int closeAdmissions(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+        int closed = 0;
         for (Admission admission : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId())) {
             if (!inScope(admission.getHospital(), hospitalId) || !OPEN_ADMISSIONS.contains(admission.getStatus())) {
                 continue;
@@ -293,27 +300,39 @@ public class MortalityServiceImpl implements MortalityService {
             // exclusion. This is its first writer.
             admission.setStatus(AdmissionStatus.DECEASED);
             admissionRepository.save(admission);
-            if (record.getAdmissionId() == null) {
-                record.setAdmissionId(admission.getId());
+            if (deathRecord.getAdmissionId() == null) {
+                deathRecord.setAdmissionId(admission.getId());
             }
-            admissionsClosed++;
+            closed++;
         }
+        return closed;
+    }
 
-        int encountersClosed = 0;
+    /** An encounter left open keeps the patient on a worklist someone will work. */
+    private int closeEncounters(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+        int closed = 0;
         for (Encounter encounter : encounterRepository.findByPatient_Id(patient.getId())) {
             if (!inScope(encounter.getHospital(), hospitalId) || !OPEN_ENCOUNTERS.contains(encounter.getStatus())) {
                 continue;
             }
             encounter.setStatus(EncounterStatus.COMPLETED);
             encounterRepository.save(encounter);
-            if (record.getEncounterId() == null) {
-                record.setEncounterId(encounter.getId());
+            if (deathRecord.getEncounterId() == null) {
+                deathRecord.setEncounterId(encounter.getId());
             }
-            encountersClosed++;
+            closed++;
         }
+        return closed;
+    }
 
-        int appointmentsCancelled = 0;
-        LocalDate diedOn = record.getDiedAt().toLocalDate();
+    /**
+     * A live appointment is a slot nobody will use and a reminder to a bereaved
+     * family. Only FUTURE ones are cancelled — a past appointment the patient
+     * actually attended is history, and rewriting it would falsify the record.
+     */
+    private int cancelFutureAppointments(Patient patient, UUID hospitalId, DeathRecord deathRecord) {
+        int cancelled = 0;
+        LocalDate diedOn = deathRecord.getDiedAt().toLocalDate();
         for (Appointment appointment
             : appointmentRepository.findByPatient_IdAndAppointmentDateAfter(patient.getId(), diedOn)) {
             if (!inScope(appointment.getHospital(), hospitalId)
@@ -323,25 +342,23 @@ public class MortalityServiceImpl implements MortalityService {
             appointment.setStatus(AppointmentStatus.CANCELLED);
             appointment.setNotes(appendReason(appointment.getNotes()));
             appointmentRepository.save(appointment);
-            appointmentsCancelled++;
+            cancelled++;
         }
+        return cancelled;
+    }
 
-        int recallsClosed = 0;
+    /** An open recall is a follow-up chase for someone who cannot be chased. */
+    private int closeRecalls(Patient patient, UUID hospitalId) {
+        int closed = 0;
         for (PatientRecall recall : recallRepository.findByPatient_IdAndStatusIn(patient.getId(), OPEN_RECALLS)) {
             if (!inScope(recall.getHospital(), hospitalId)) {
                 continue;
             }
             recall.setStatus(RecallStatus.CANCELLED);
-            recallsClosed++;
             recallRepository.save(recall);
+            closed++;
         }
-
-        return DeathClosureSummaryDTO.builder()
-            .admissionsClosed(admissionsClosed)
-            .encountersClosed(encountersClosed)
-            .appointmentsCancelled(appointmentsCancelled)
-            .recallsClosed(recallsClosed)
-            .build();
+        return closed;
     }
 
     private String appendReason(String existing) {
@@ -365,13 +382,14 @@ public class MortalityServiceImpl implements MortalityService {
 
     /** 404-not-403 — a record at another hospital is indistinguishable from a missing one. */
     private DeathRecord loadScoped(UUID recordId) {
-        DeathRecord record = deathRecordRepository.findById(recordId)
+        DeathRecord deathRecord = deathRecordRepository.findById(recordId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DEATH_NOT_FOUND, recordId));
         UUID scope = roleValidator.requireActiveHospitalId();
-        if (scope != null && record.getHospital() != null && !scope.equals(record.getHospital().getId())) {
+        if (scope != null && deathRecord.getHospital() != null
+            && !scope.equals(deathRecord.getHospital().getId())) {
             throw new ResourceNotFoundException(MSG_DEATH_NOT_FOUND, recordId);
         }
-        return record;
+        return deathRecord;
     }
 
     /**

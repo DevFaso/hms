@@ -126,7 +126,7 @@ describe('MortalityComponent', () => {
   it('records a death and reports what the cascade closed', () => {
     spyOn(window, 'confirm').and.returnValue(true);
     const response: RecordDeathResponse = {
-      record: mockDeath(),
+      deathRecord: mockDeath(),
       closure: {
         admissionsClosed: 1,
         encountersClosed: 0,
@@ -152,7 +152,7 @@ describe('MortalityComponent', () => {
   it('omits the maternal timing when the death is not maternal', () => {
     spyOn(window, 'confirm').and.returnValue(true);
     mortalitySpy.recordDeath.and.returnValue(
-      of({ record: mockDeath(), closure: {} } as RecordDeathResponse),
+      of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
     component.openRecord();
     component.form.patientId = 'p1';
@@ -168,7 +168,7 @@ describe('MortalityComponent', () => {
   it('sends the maternal timing when the death is maternal', () => {
     spyOn(window, 'confirm').and.returnValue(true);
     mortalitySpy.recordDeath.and.returnValue(
-      of({ record: mockDeath(), closure: {} } as RecordDeathResponse),
+      of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
     component.openRecord();
     component.form.patientId = 'p1';

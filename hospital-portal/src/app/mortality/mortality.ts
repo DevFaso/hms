@@ -155,7 +155,7 @@ export class MortalityComponent implements OnInit {
           this.showRecordModal.set(false);
           // Surface the cascade rather than letting it happen unseen.
           this.lastClosure.set(result.closure);
-          this.selected.set(result.record);
+          this.selected.set(result.deathRecord);
           this.loadRegister();
         },
         error: () => {

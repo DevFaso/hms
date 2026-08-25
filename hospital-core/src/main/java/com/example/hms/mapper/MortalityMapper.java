@@ -18,45 +18,45 @@ import java.util.UUID;
 @Component
 public class MortalityMapper {
 
-    public DeathRecordResponseDTO toDto(DeathRecord record) {
-        if (record == null) {
+    public DeathRecordResponseDTO toDto(DeathRecord deathRecord) {
+        if (deathRecord == null) {
             return null;
         }
-        Patient patient = record.getPatient();
+        Patient patient = deathRecord.getPatient();
         // MRN is per-hospital, so it resolves against the certifying facility
         // rather than being read off the patient as a single global identifier.
-        UUID hospitalId = record.getHospital() != null ? record.getHospital().getId() : null;
+        UUID hospitalId = deathRecord.getHospital() != null ? deathRecord.getHospital().getId() : null;
 
         return DeathRecordResponseDTO.builder()
-            .id(record.getId())
+            .id(deathRecord.getId())
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patient != null && hospitalId != null
                 ? patient.getMrnForHospital(hospitalId) : null)
             .patientDateOfBirth(patient != null ? patient.getDateOfBirth() : null)
             .hospitalId(hospitalId)
-            .diedAt(record.getDiedAt())
-            .placeOfDeath(record.getPlaceOfDeath())
-            .mannerOfDeath(record.getMannerOfDeath())
-            .immediateCause(record.getImmediateCause())
-            .immediateCauseCode(record.getImmediateCauseCode())
-            .underlyingCause(record.getUnderlyingCause())
-            .underlyingCauseCode(record.getUnderlyingCauseCode())
-            .contributingCauses(record.getContributingCauses())
-            .maternalDeath(record.getMaternalDeath())
-            .maternalDeathTiming(record.getMaternalDeathTiming())
-            .whoMaternalDeath(record.isWhoMaternalDeath())
-            .perinatalDeath(record.getPerinatalDeath())
-            .perinatalType(record.getPerinatalType())
-            .autopsyRequested(record.getAutopsyRequested())
-            .certifiedByName(staffName(record.getCertifiedBy()))
-            .certifiedAt(record.getCertifiedAt())
-            .amended(record.isAmended())
-            .amendedAt(record.getAmendedAt())
-            .amendmentReason(record.getAmendmentReason())
-            .notes(record.getNotes())
-            .recordedByName(staffName(record.getRecordedBy()))
-            .createdAt(record.getCreatedAt())
+            .diedAt(deathRecord.getDiedAt())
+            .placeOfDeath(deathRecord.getPlaceOfDeath())
+            .mannerOfDeath(deathRecord.getMannerOfDeath())
+            .immediateCause(deathRecord.getImmediateCause())
+            .immediateCauseCode(deathRecord.getImmediateCauseCode())
+            .underlyingCause(deathRecord.getUnderlyingCause())
+            .underlyingCauseCode(deathRecord.getUnderlyingCauseCode())
+            .contributingCauses(deathRecord.getContributingCauses())
+            .maternalDeath(deathRecord.getMaternalDeath())
+            .maternalDeathTiming(deathRecord.getMaternalDeathTiming())
+            .whoMaternalDeath(deathRecord.isWhoMaternalDeath())
+            .perinatalDeath(deathRecord.getPerinatalDeath())
+            .perinatalType(deathRecord.getPerinatalType())
+            .autopsyRequested(deathRecord.getAutopsyRequested())
+            .certifiedByName(staffName(deathRecord.getCertifiedBy()))
+            .certifiedAt(deathRecord.getCertifiedAt())
+            .amended(deathRecord.isAmended())
+            .amendedAt(deathRecord.getAmendedAt())
+            .amendmentReason(deathRecord.getAmendmentReason())
+            .notes(deathRecord.getNotes())
+            .recordedByName(staffName(deathRecord.getRecordedBy()))
+            .createdAt(deathRecord.getCreatedAt())
             .build();
     }
 

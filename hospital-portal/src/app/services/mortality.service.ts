@@ -92,7 +92,7 @@ export interface DeathClosureSummary {
 }
 
 export interface RecordDeathResponse {
-  record: DeathRecordResponse;
+  deathRecord: DeathRecordResponse;
   closure: DeathClosureSummary;
 }
 

@@ -138,15 +138,16 @@ class MortalityServiceImplTest {
 
         assertThat(patient.getDeceasedAt()).isNotNull();
         assertThat(patient.isDeceased()).isTrue();
-        assertThat(result.getRecord().getImmediateCause()).isEqualTo("Hypovolaemic shock");
+        assertThat(result.getDeathRecord().getImmediateCause()).isEqualTo("Hypovolaemic shock");
         verify(patientRepository).save(patient);
     }
 
     @Test
     void aSecondDeathRecordIsRefused() {
         when(deathRecordRepository.existsByPatient_Id(patientId)).thenReturn(true);
+        DeathRecordRequestDTO request = base().build();
 
-        assertThatThrownBy(() -> service.recordDeath(base().build()))
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already recorded");
         verify(deathRecordRepository, never()).save(any());
@@ -154,8 +155,9 @@ class MortalityServiceImplTest {
 
     @Test
     void aDeathCannotBeRecordedInTheFuture() {
-        assertThatThrownBy(() -> service.recordDeath(base()
-            .diedAt(LocalDateTime.now().plusDays(1)).build()))
+        DeathRecordRequestDTO request = base().diedAt(LocalDateTime.now().plusDays(1)).build();
+
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cannot be in the future");
     }
@@ -279,8 +281,9 @@ class MortalityServiceImplTest {
 
     @Test
     void aMaternalDeathMustSayWhenItOccurred() {
-        assertThatThrownBy(() -> service.recordDeath(base()
-            .maternalDeath(Boolean.TRUE).build()))
+        DeathRecordRequestDTO request = base().maternalDeath(Boolean.TRUE).build();
+
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("when it occurred relative to the pregnancy");
     }
@@ -292,7 +295,7 @@ class MortalityServiceImplTest {
             .maternalDeathTiming(MaternalDeathTiming.WITHIN_42_DAYS_POSTPARTUM)
             .build());
 
-        assertThat(result.getRecord().getWhoMaternalDeath()).isTrue();
+        assertThat(result.getDeathRecord().getWhoMaternalDeath()).isTrue();
     }
 
     @Test
@@ -304,16 +307,17 @@ class MortalityServiceImplTest {
             .maternalDeathTiming(MaternalDeathTiming.LATE_MATERNAL)
             .build());
 
-        assertThat(result.getRecord().getMaternalDeath()).isTrue();
-        assertThat(result.getRecord().getWhoMaternalDeath()).isFalse();
+        assertThat(result.getDeathRecord().getMaternalDeath()).isTrue();
+        assertThat(result.getDeathRecord().getWhoMaternalDeath()).isFalse();
     }
 
     @Test
     void aPerinatalDeathMustSayWhetherItWasAStillbirth() {
         // A stillborn infant was never born alive, so it has no neonatal
         // period and the two are never summed.
-        assertThatThrownBy(() -> service.recordDeath(base()
-            .perinatalDeath(Boolean.TRUE).build()))
+        DeathRecordRequestDTO request = base().perinatalDeath(Boolean.TRUE).build();
+
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("stillbirth or a neonatal death");
     }
@@ -321,7 +325,7 @@ class MortalityServiceImplTest {
     // ── Amendment ───────────────────────────────────────────────────────
 
     private DeathRecord persisted() {
-        DeathRecord record = DeathRecord.builder()
+        DeathRecord deathRecord = DeathRecord.builder()
             .patient(patient)
             .hospital(hospital)
             .diedAt(LocalDateTime.now().minusDays(3))
@@ -332,34 +336,35 @@ class MortalityServiceImplTest {
             .perinatalDeath(Boolean.FALSE)
             .autopsyRequested(Boolean.TRUE)
             .build();
-        record.setId(UUID.randomUUID());
-        when(deathRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
-        return record;
+        deathRecord.setId(UUID.randomUUID());
+        when(deathRecordRepository.findById(deathRecord.getId())).thenReturn(Optional.of(deathRecord));
+        return deathRecord;
     }
 
     @Test
     void anAutopsyCanReviseTheCause() {
-        DeathRecord record = persisted();
+        DeathRecord deathRecord = persisted();
 
-        service.amendDeathRecord(record.getId(), DeathRecordAmendmentDTO.builder()
+        service.amendDeathRecord(deathRecord.getId(), DeathRecordAmendmentDTO.builder()
             .amendmentReason("Post-mortem findings")
             .underlyingCause("Pulmonary embolism")
             .underlyingCauseCode("I26.9")
             .build());
 
-        assertThat(record.getUnderlyingCause()).isEqualTo("Pulmonary embolism");
-        assertThat(record.isAmended()).isTrue();
-        assertThat(record.getAmendmentReason()).isEqualTo("Post-mortem findings");
+        assertThat(deathRecord.getUnderlyingCause()).isEqualTo("Pulmonary embolism");
+        assertThat(deathRecord.isAmended()).isTrue();
+        assertThat(deathRecord.getAmendmentReason()).isEqualTo("Post-mortem findings");
         // The FACT of death is untouched — only the account of it.
-        assertThat(record.getDiedAt()).isNotNull();
+        assertThat(deathRecord.getDiedAt()).isNotNull();
     }
 
     @Test
     void anAmendmentRequiresAReason() {
-        DeathRecord record = persisted();
+        UUID recordId = persisted().getId();
+        DeathRecordAmendmentDTO blankReason =
+            DeathRecordAmendmentDTO.builder().amendmentReason("  ").build();
 
-        assertThatThrownBy(() -> service.amendDeathRecord(record.getId(),
-            DeathRecordAmendmentDTO.builder().amendmentReason("  ").build()))
+        assertThatThrownBy(() -> service.amendDeathRecord(recordId, blankReason))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -367,26 +372,26 @@ class MortalityServiceImplTest {
     void anAmendmentCannotMakeADeathMaternalWithoutSayingWhen() {
         // Re-checked AFTER the edits: otherwise the reporting query breaks on
         // a maternal death with no timing.
-        DeathRecord record = persisted();
+        UUID recordId = persisted().getId();
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder()
+            .amendmentReason("Reclassified after review")
+            .maternalDeath(Boolean.TRUE)
+            .build();
 
-        assertThatThrownBy(() -> service.amendDeathRecord(record.getId(),
-            DeathRecordAmendmentDTO.builder()
-                .amendmentReason("Reclassified after review")
-                .maternalDeath(Boolean.TRUE)
-                .build()))
+        assertThatThrownBy(() -> service.amendDeathRecord(recordId, amendment))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("when it occurred");
     }
 
     @Test
     void anAmendmentCannotMakeADeathPerinatalWithoutAType() {
-        DeathRecord record = persisted();
+        UUID recordId = persisted().getId();
+        DeathRecordAmendmentDTO amendment = DeathRecordAmendmentDTO.builder()
+            .amendmentReason("Reclassified after review")
+            .perinatalDeath(Boolean.TRUE)
+            .build();
 
-        assertThatThrownBy(() -> service.amendDeathRecord(record.getId(),
-            DeathRecordAmendmentDTO.builder()
-                .amendmentReason("Reclassified after review")
-                .perinatalDeath(Boolean.TRUE)
-                .build()))
+        assertThatThrownBy(() -> service.amendDeathRecord(recordId, amendment))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("stillbirth or a neonatal death");
     }
@@ -429,14 +434,19 @@ class MortalityServiceImplTest {
 
     @Test
     void theRegisterRefusesAnInvertedPeriod() {
-        assertThatThrownBy(() -> service.getRegister(LocalDate.now(), LocalDate.now().minusDays(7)))
+        LocalDate from = LocalDate.now();
+        LocalDate to = from.minusDays(7);
+
+        assertThatThrownBy(() -> service.getRegister(from, to))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cannot precede");
     }
 
     @Test
     void theRegisterNeedsAPeriod() {
-        assertThatThrownBy(() -> service.getRegister(null, LocalDate.now()))
+        LocalDate to = LocalDate.now();
+
+        assertThatThrownBy(() -> service.getRegister(null, to))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("period is required");
     }
@@ -445,8 +455,8 @@ class MortalityServiceImplTest {
 
     @Test
     void aPatientDeathRecordIsReadable() {
-        DeathRecord record = persisted();
-        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(record));
+        DeathRecord deathRecord = persisted();
+        when(deathRecordRepository.findByPatient_Id(patientId)).thenReturn(Optional.of(deathRecord));
 
         assertThat(service.getForPatient(patientId).getImmediateCause()).isEqualTo("Cardiac arrest");
     }
@@ -467,17 +477,19 @@ class MortalityServiceImplTest {
         UUID id = UUID.randomUUID();
         foreign.setId(id);
         when(deathRecordRepository.findById(id)).thenReturn(Optional.of(foreign));
+        DeathRecordAmendmentDTO amendment =
+            DeathRecordAmendmentDTO.builder().amendmentReason("Not mine").build();
 
-        assertThatThrownBy(() -> service.amendDeathRecord(id,
-            DeathRecordAmendmentDTO.builder().amendmentReason("Not mine").build()))
+        assertThatThrownBy(() -> service.amendDeathRecord(id, amendment))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void aSuperAdminWithNoActiveHospitalCannotCertifyADeath() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        DeathRecordRequestDTO request = base().build();
 
-        assertThatThrownBy(() -> service.recordDeath(base().build()))
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active hospital is required");
     }
@@ -490,9 +502,9 @@ class MortalityServiceImplTest {
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(other);
         when(staffRepository.findById(foreign.getId())).thenReturn(Optional.of(foreign));
+        DeathRecordRequestDTO request = base().certifiedByStaffId(foreign.getId()).build();
 
-        assertThatThrownBy(() -> service.recordDeath(base()
-            .certifiedByStaffId(foreign.getId()).build()))
+        assertThatThrownBy(() -> service.recordDeath(request))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -506,6 +518,6 @@ class MortalityServiceImplTest {
         RecordDeathResponseDTO result = service.recordDeath(base()
             .certifiedByStaffId(certifier.getId()).build());
 
-        assertThat(result.getRecord().getCertifiedAt()).isNotNull();
+        assertThat(result.getDeathRecord().getCertifiedAt()).isNotNull();
     }
 }

@@ -12,6 +12,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class RecordDeathResponseDTO {
 
-    private DeathRecordResponseDTO record;
+    private DeathRecordResponseDTO deathRecord;
     private DeathClosureSummaryDTO closure;
 }
