@@ -9,8 +9,8 @@
 
 | File | Purpose |
 |------|---------|
-| `realm-export.json` | Full HMS realm export (4 clients, realm roles aligned 1:1 with backend `ROLE_*` authorities in [`SecurityConstants.java`](../hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java), TOTP policy, custom claim mappers for `hospital_id` + `role_assignments`). Safe to import in any environment (dev/UAT/prod). Imported on first boot via `--import-realm`. |
-| `realm-export.dev-users.json` | **Dev-only.** Three seeded users (`dev.admin`, `dev.doctor`, `dev.patient`) with temporary passwords. NOT mounted by the compose stack — apply manually via the admin console's **Partial Import** when you need them locally. Never import in UAT/prod. |
+| `realm-export.json` | Full HMS realm export (4 clients, realm roles aligned 1:1 with backend `ROLE_*` authorities in [`SecurityConstants.java`](../hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java), TOTP policy, custom claim mappers for `hospital_id` + `role_assignments`). Safe to import in any environment (dev/prod). Imported on first boot via `--import-realm`. |
+| `realm-export.dev-users.json` | **Dev-only.** Three seeded users (`dev.admin`, `dev.doctor`, `dev.patient`) with temporary passwords. NOT mounted by the compose stack — apply manually via the admin console's **Partial Import** when you need them locally. Never import in prod. |
 | `redirect-uris.md`  | Registered redirect URI matrix per client and environment. Keep this file in sync with `realm-export.json`. |
 
 ## Boot
@@ -73,16 +73,16 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8081/admin/realms/hms/parti
 
 All three are imported with `temporary: true` — first login forces a
 password reset. They live in `realm-export.dev-users.json` so they
-cannot accidentally be created in UAT or prod by a `docker compose up`
+cannot accidentally be created in prod by a `docker compose up`
 in the wrong directory.
 
 ## Policy — which dev users are OK on which environment
 
-| User | Local docker-compose | Hosted dev (`hms-keycloak-dev-dev.up.railway.app`) | Hosted uat | Hosted prod |
-| --- | --- | --- | --- | --- |
-| `dev.admin` (`ROLE_SUPER_ADMIN`) | ✅ allowed | ❌ **forbidden** — super-admin via repo-published password is sharp | ❌ forbidden | ❌ forbidden |
-| `dev.doctor` (`ROLE_DOCTOR`, `ROLE_STAFF`) | ✅ allowed | ✅ allowed (engineering convenience for SSO smoke / Playwright runs) | ❌ forbidden | ❌ forbidden |
-| `dev.patient` (`ROLE_PATIENT`) | ✅ allowed | ✅ allowed | ❌ forbidden | ❌ forbidden |
+| User | Local docker-compose | Hosted dev (`hms-keycloak-dev-dev.up.railway.app`) | Hosted prod |
+| --- | --- | --- | --- |
+| `dev.admin` (`ROLE_SUPER_ADMIN`) | ✅ allowed | ❌ **forbidden** — super-admin via repo-published password is sharp | ❌ forbidden |
+| `dev.doctor` (`ROLE_DOCTOR`, `ROLE_STAFF`) | ✅ allowed | ✅ allowed (engineering convenience for SSO smoke / Playwright runs) | ❌ forbidden |
+| `dev.patient` (`ROLE_PATIENT`) | ✅ allowed | ✅ allowed | ❌ forbidden |
 
 **Why `dev.admin` is forbidden on hosted dev:** `realm-export.dev-users.json`
 is checked into git, so the seed password (`DevAdmin#2026`) and the
@@ -112,7 +112,7 @@ local docker-compose flow is unchanged.
 
 **Enforcement:** `scripts/keycloak/env-sync-verify.sh` check **A3**
 fails on hosted dev if `dev.admin` is present (any role assignment),
-and on hosted uat/prod if any of the three `dev.*` users are present.
+and on hosted prod if any of the three `dev.*` users are present.
 Run `--full` per env to verify.
 
 ## Hooking up the backend

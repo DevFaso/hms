@@ -16,12 +16,11 @@
 
 ## Angular portal — `hms-portal`
 
-| Environment | Origin | Login redirect URI | Post-logout redirect URI |
-|-------------|--------|--------------------|--------------------------|
-| Local dev   | `http://localhost:4200`               | `http://localhost:4200/*`               | `http://localhost:4200/login` |
-| Hosted dev  | `https://hms.dev.bitnesttechs.com`    | `https://hms.dev.bitnesttechs.com/*`    | `https://hms.dev.bitnesttechs.com/login` |
-| UAT         | `https://hms.uat.bitnesttechs.com`    | `https://hms.uat.bitnesttechs.com/*`    | `https://hms.uat.bitnesttechs.com/login` |
-| Prod        | `https://hms.bitnesttechs.com`        | `https://hms.bitnesttechs.com/*`        | `https://hms.bitnesttechs.com/login` |
+| Environment | Origin                     | Login redirect URI           | Post-logout redirect URI         |
+|-------------|----------------------------|------------------------------|----------------------------------|
+| Local dev   | `http://localhost:4200`    | `http://localhost:4200/*`    | `http://localhost:4200/login`    |
+| Hosted dev  | `https://dev.e-keneya.com` | `https://dev.e-keneya.com/*` | `https://dev.e-keneya.com/login` |
+| Prod        | `https://e-keneya.com`     | `https://e-keneya.com/*`     | `https://e-keneya.com/login`     |
 
 Notes:
 - Web Origins (for silent refresh + CORS) are registered as exact
@@ -46,8 +45,8 @@ and the RP-initiated end-session redirect target the same URI —
 registered exactly as above.
 
 To switch to Android App Links (verified HTTPS redirects) later, add
-`https://hms.example.com/.well-known/assetlinks.json` and register
-`https://hms.example.com/app/oauth/callback` as a redirect URI.
+`https://e-keneya.com/.well-known/assetlinks.json` and register
+`https://e-keneya.com/app/oauth/callback` as a redirect URI.
 
 ## iOS — `hms-patient-ios`
 
@@ -65,8 +64,8 @@ wired in iOS, but the realm registers the same URI for symmetry with
 Android so it will work when added.
 
 To switch to Universal Links later, add
-`https://hms.example.com/.well-known/apple-app-site-association` and
-register `https://hms.example.com/app/oauth/callback`.
+`https://e-keneya.com/.well-known/apple-app-site-association` and
+register `https://e-keneya.com/app/oauth/callback`.
 
 ## Change procedure
 
@@ -76,8 +75,8 @@ register `https://hms.example.com/app/oauth/callback`.
 4. On dev, apply the change one of two ways:
    - **Partial import** via the admin console (**Realm Settings \u2192 Action \u2192 Partial Import \u2192 Overwrite**), or
    - **Wipe the realm DB** (`docker compose --profile keycloak rm -sf keycloak keycloak-db && docker volume rm hms_keycloak_pgdata`) and bring the stack back up so `--import-realm` runs from scratch.
-5. On UAT/prod: re-import the realm via the admin console or API. Realm
-   import is partial \u2014 use `Overwrite` strategy when re-importing.
+5. On hosted dev/prod: re-import the realm via the admin console or API.
+   Realm import is partial \u2014 use `Overwrite` strategy when re-importing.
 6. Deploy client apps. A mismatch between app-side config and the
    realm's registered redirect URIs causes Keycloak to show
    `Invalid parameter: redirect_uri`.

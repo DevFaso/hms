@@ -48,7 +48,7 @@ secret into the database.
 ## Railway operator runbook
 
 1. Configure the DHIS2 endpoint in the admin UI:
-   `https://hms.<env>.bitnesttechs.com/admin/integrations/dhis2` →
+   `https://dev.e-keneya.com/admin/integrations/dhis2` (prod: `https://e-keneya.com/admin/integrations/dhis2`) →
    **Facility config** tab. Fill `baseUrl`, `authMode`, `authSecretEnvVar`,
    `defaultPeriodType`, `defaultDatasetUid`. Save.
 2. On Railway, set the env var named in `authSecretEnvVar` on

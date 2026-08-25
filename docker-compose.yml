@@ -37,24 +37,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── UAT PostgreSQL (profile: uat) ──────────────────────────
-  postgres-uat:
-    image: postgres:16-alpine
-    container_name: hms-postgres-uat
-    environment:
-      POSTGRES_DB: hms_uat
-      POSTGRES_USER: hms_uat_user
-      POSTGRES_PASSWORD: hms_uat_pass
-    ports:
-      - "5434:5432"
-    volumes:
-      - pgdata_uat:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hms_uat_user -d hms_uat"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # ── Redis (token blacklist, shared across instances) ──────
   # Enable in the backend with REDIS_TOKEN_BLACKLIST_ENABLED=true and
   # REDIS_HOST=redis. No auth is configured here — treat as local/dev only.
@@ -230,7 +212,7 @@ services:
   # ── postgres-exporter (profile: observability) ────────────
   # Scrapes the local Postgres container so the HMS PostgreSQL dashboard has
   # data. DATA_SOURCE_NAME points at the `postgres` service from this compose
-  # file (profile: local). To monitor postgres-dev / postgres-uat instead,
+  # file (profile: local). To monitor postgres-dev instead,
   # add additional postgres-exporter-* services or override DATA_SOURCE_NAME.
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.15.0

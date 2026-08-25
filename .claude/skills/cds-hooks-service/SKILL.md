@@ -97,7 +97,7 @@ shape + CORS allowlist + prefetch templates.
 
 `SecurityConfig` honors three groups of origins on `/**`:
 
-1. Local dev defaults (`http://localhost:*`, `https://*.bitnesttechs.com`).
+1. Local dev defaults (`http://localhost:*`, `https://e-keneya.com`, `https://*.e-keneya.com`).
 2. `APP_CORS_ALLOWED_ORIGINS` (comma-separated, operator-supplied).
 3. **CDS Hooks sandbox origins**: gated by
    `app.cors.cds-hooks-sandbox.enabled=true` (default), supplied via

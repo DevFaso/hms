@@ -15,7 +15,7 @@
     5. Creates/updates each user: attributes, password, realm-role mappings.
 
 .PARAMETER Environment
-  local | dev | uat | prod. Selects scripts/seed-keycloak.<env>.json as the
+  local | dev | prod. Selects scripts/seed-keycloak.<env>.json as the
   source of truth for baseUrl, realm, admin creds, hospitals, and users.
 
 .PARAMETER BaseUrl
@@ -48,7 +48,7 @@
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('local','dev','uat','prod')] [string] $Environment = 'local',
+  [ValidateSet('local','dev','prod')] [string] $Environment = 'local',
   [string] $BaseUrl,
   [string] $AdminUser,
   [string] $AdminPassword,
@@ -94,7 +94,7 @@ if ($Environment -eq 'prod' -and -not $Confirm) {
 if ($BASE -notmatch '^https?://') {
   throw "baseUrl must start with http:// or https:// (got '$BASE')."
 }
-if ($Environment -in @('uat','prod') -and $BASE -notmatch '^https://') {
+if ($Environment -in @('prod') -and $BASE -notmatch '^https://') {
   throw "Refusing to use non-https baseUrl for '$Environment': $BASE"
 }
 

@@ -33,7 +33,7 @@ The row's dependency is row 23 (ORU^R01 → LabResult persistence). Row 23 is `s
 
 The row-36 follow-on plan therefore waits on:
 
-- Row 23 soak verdict — 14-day clean soak in UAT against a representative analyzer load.
+- Row 23 soak verdict — 14-day clean soak on hosted dev against a representative analyzer load.
 - Decision: keep the synchronous path as the hot path and use Kafka only for the dispense-settlement fan-out (audit + stock + SMS), OR move ORU to Kafka outright. The decision drives the producer-side topology.
 
 ---

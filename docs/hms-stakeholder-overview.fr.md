@@ -23,7 +23,7 @@ Chaque choix de conception reflète la réalité du terrain :
 
 ## 2. Ce que HMS sait faire aujourd'hui
 
-Ces fonctionnalités sont en production (`api.hms.bitnesttechs.com`) au mois de mai 2026.
+Ces fonctionnalités sont en production (`api.e-keneya.com`) au mois de mai 2026.
 
 ### Garde-fous de sécurité clinique
 
@@ -211,11 +211,10 @@ La vérification est rejouée au moment de l'administration pour que le contrôl
 
 | Environnement | URL | Rôle |
 |---|---|---|
-| **Dev** | `api.hms.dev.bitnesttechs.com` | Déploiement continu depuis la branche `develop` ; tests d'ingénierie |
-| **UAT** | `api.hms.uat.bitnesttechs.com` | Validation pré-production, tests d'intégration partenaires |
-| **Production** | `api.hms.bitnesttechs.com` | Usage clinique en réel |
+| **Dev** | `api.dev.e-keneya.com` | Déploiement continu depuis la branche `develop` ; tests d'ingénierie et validation pré-production |
+| **Production** | `api.e-keneya.com` | Usage clinique en réel |
 
-Les trois environnements sont fronts par Railway, utilisent PostgreSQL 16 managé, et appliquent les migrations Liquibase au démarrage. Chacun a sa propre configuration de point d'accès DHIS2 (la production pointe sur l'instance nationale en réel ; dev/uat pointent sur un sandbox).
+Les deux environnements sont fronts par Railway, utilisent PostgreSQL 16 managé, et appliquent les migrations Liquibase au démarrage. Chacun a sa propre configuration de point d'accès DHIS2 (la production pointe sur l'instance nationale en réel ; dev pointe sur un sandbox).
 
 ---
 

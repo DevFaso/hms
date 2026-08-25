@@ -3,7 +3,7 @@
 > Authoritative list of the env-var contract that every Railway
 > service in the `MediHub` project must satisfy, per environment.
 > Drift here is the most common cause of "works in dev, breaks in
-> uat" auth failures because the values live outside the repo and
+> prod" auth failures because the values live outside the repo and
 > nothing on the codebase side enforces them.
 >
 > Companion to:
@@ -18,8 +18,9 @@
 
 ## Project structure
 
-The `MediHub` Railway project is organised as **one project × three
-environments × per-env service names**:
+The `MediHub` Railway project is organised as **one project × two
+environments × per-env service names** (the former `uat` environment
+was retired with the e-keneya.com domain move):
 
 ```text
 MediHub (project)
@@ -27,10 +28,6 @@ MediHub (project)
 │   ├── hms-keycloak-dev          + hms-keycloak-dev-db (Postgres)
 │   ├── hms-backend-dev           + hms-db-dev (Postgres)
 │   └── hospital-portal-dev
-├── uat       (environment)   ◄─ tracks branch `uat`
-│   ├── hms-keycloak-uat          + hms-keycloak-uat-db
-│   ├── hms-backend-uat           + hms-db-uat
-│   └── hospital-portal-uat
 └── prod      (environment)   ◄─ tracks branch `main`
     ├── hms-keycloak-prod         + hms-keycloak-prod-db
     ├── hms-backend-prod          + hms-db-prod
@@ -50,9 +47,9 @@ MediHub (project)
 > and [keycloak-admin-recovery-2026-05-09.md §3](keycloak-admin-recovery-2026-05-09.md#3-verify-uat-admin-login)
 > for the same naming.
 
-The single `railway.toml` per Dockerfile is shared across all three
+The single `railway.toml` per Dockerfile is shared across all
 services of the same kind (one `keycloak/prod/railway.toml` referenced
-by `hms-keycloak-{dev,uat,prod}` etc.). Env vars are per-service
+by `hms-keycloak-{dev,prod}` etc.). Env vars are per-service
 per-environment via Railway's variables UI. That's the intended
 split: code in the repo, secrets and per-env hostnames in Railway.
 
@@ -75,17 +72,17 @@ not breaking, but worth keeping consistent across envs.
 
 ## 1. `hms-keycloak-<env>` (one per environment)
 
-| Variable | Type | dev | uat | prod | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `BUILD_CONFIG` | public | `dev` | `uat` | `prod` | **MUST.** Forwarded to the `ARG BUILD_CONFIG` in [`keycloak/prod/Dockerfile`](../../keycloak/prod/Dockerfile). Drives both the `KC_HMS_ENV` runtime tag (grep-able from boot logs) and the `com.bitnesttechs.hms.env` image label. |
-| `KC_DB_URL` | derived | `jdbc:postgresql://${{hms-keycloak-dev-db.PGHOST}}:${{...PGPORT}}/${{...PGDATABASE}}` | same shape, `-uat-db` | same shape, `-prod-db` | **MUST.** Reference-style so Railway wires it automatically. Don't hard-code. |
-| `KC_DB_USERNAME` | derived | `${{hms-keycloak-dev-db.PGUSER}}` | same, `-uat-db` | same, `-prod-db` | **MUST.** |
-| `KC_DB_PASSWORD` | secret (derived) | `${{hms-keycloak-dev-db.PGPASSWORD}}` | same, `-uat-db` | same, `-prod-db` | **MUST.** Rotates with the linked Postgres. |
-| `KC_HOSTNAME` | public | `https://hms-keycloak-dev-dev.up.railway.app` | `https://hms-keycloak-uat-uat.up.railway.app` | `https://hms-keycloak-prod-prod.up.railway.app` | **MUST include `https://` scheme.** Bare hostname → account console returns HTTP 403 (KC URL builder gets ambiguous behind Railway's edge). No trailing slash. The doubled `-dev`/`-uat`/`-prod` suffix is Railway's auto-generated public domain — confirm in the **Networking** tab. |
-| `KC_BOOTSTRAP_ADMIN_USERNAME` | secret | `kc-admin` (transitional, until lock-down) | same | **REMOVED** post-lockdown (per [keycloak-admin-recovery-2026-05-09.md](keycloak-admin-recovery-2026-05-09.md)) | Once a named admin exists and the bootstrap admin is retired, this var must be *removed* from Railway — the entrypoint's `[ -n ]` guard turns the bootstrap step into a no-op when it's absent. |
-| `KC_BOOTSTRAP_ADMIN_PASSWORD` | secret | (32-byte random, base64) | same | **REMOVED** post-lockdown | Same as username — paired removal. |
-| `KC_LOG_LEVEL` | public | `INFO` (`DEBUG` only while troubleshooting) | `INFO` | `INFO` | **SHOULD.** Don't leave `DEBUG` on in uat/prod — it spams the metrics scrape and surfaces realm internals in tail logs. |
-| `PORT` | public (Railway-injected) | auto | auto | auto | **MUST NOT** set manually. The entrypoint forwards it to `kc.sh start --http-port="${PORT:-8080}"` per [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh). |
+| Variable | Type | dev | prod | Notes |
+| --- | --- | --- | --- | --- |
+| `BUILD_CONFIG` | public | `dev` | `prod` | **MUST.** Forwarded to the `ARG BUILD_CONFIG` in [`keycloak/prod/Dockerfile`](../../keycloak/prod/Dockerfile). Drives both the `KC_HMS_ENV` runtime tag (grep-able from boot logs) and the `com.bitnesttechs.hms.env` image label. |
+| `KC_DB_URL` | derived | `jdbc:postgresql://${{hms-keycloak-dev-db.PGHOST}}:${{...PGPORT}}/${{...PGDATABASE}}` | same shape, `-prod-db` | **MUST.** Reference-style so Railway wires it automatically. Don't hard-code. |
+| `KC_DB_USERNAME` | derived | `${{hms-keycloak-dev-db.PGUSER}}` | same, `-prod-db` | **MUST.** |
+| `KC_DB_PASSWORD` | secret (derived) | `${{hms-keycloak-dev-db.PGPASSWORD}}` | same, `-prod-db` | **MUST.** Rotates with the linked Postgres. |
+| `KC_HOSTNAME` | public | `https://hms-keycloak-dev-dev.up.railway.app` | `https://hms-keycloak-prod-prod.up.railway.app` | **MUST include `https://` scheme.** Bare hostname → account console returns HTTP 403 (KC URL builder gets ambiguous behind Railway's edge). No trailing slash. The doubled `-dev`/`-prod` suffix is Railway's auto-generated public domain — confirm in the **Networking** tab. |
+| `KC_BOOTSTRAP_ADMIN_USERNAME` | secret | `kc-admin` (transitional, until lock-down) | **REMOVED** post-lockdown (per [keycloak-admin-recovery-2026-05-09.md](keycloak-admin-recovery-2026-05-09.md)) | Once a named admin exists and the bootstrap admin is retired, this var must be *removed* from Railway — the entrypoint's `[ -n ]` guard turns the bootstrap step into a no-op when it's absent. |
+| `KC_BOOTSTRAP_ADMIN_PASSWORD` | secret | (32-byte random, base64) | **REMOVED** post-lockdown | Same as username — paired removal. |
+| `KC_LOG_LEVEL` | public | `INFO` (`DEBUG` only while troubleshooting) | `INFO` | **SHOULD.** Don't leave `DEBUG` on in prod — it spams the metrics scrape and surfaces realm internals in tail logs. |
+| `PORT` | public (Railway-injected) | auto | auto | **MUST NOT** set manually. The entrypoint forwards it to `kc.sh start --http-port="${PORT:-8080}"` per [`keycloak/prod/entrypoint.sh`](../../keycloak/prod/entrypoint.sh). |
 
 **Verify with:** Railway service → **Logs** → grep for `Listening on http://0.0.0.0:` and `Imported realm hms`. Then hit `https://<KC_HOSTNAME>/realms/hms/.well-known/openid-configuration` — if it returns valid JSON, the contract holds.
 
@@ -102,15 +99,15 @@ app.auth.oidc.audience=${OIDC_AUDIENCE:}
 app.auth.oidc.required=${OIDC_REQUIRED:false}
 ```
 
-| Variable | Type | dev | uat | prod | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
-| `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
-| `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
-| `JWT_SECRET` | secret | (env-specific) | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
-| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
-| `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-uat` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
-| Encryption keys (AES) | secret | (env-specific) | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
+| Variable | Type | dev | prod | Notes |
+| --- | --- | --- | --- | --- |
+| `OIDC_ISSUER_URI` | public | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** match the `hms-keycloak-<env>` `KC_HOSTNAME` value above + `/realms/hms`. When unset, the OIDC bean graph stays off and the backend is pre-S-03 behavior. |
+| `OIDC_AUDIENCE` | public | `hms-backend` | `hms-backend` | **MUST.** Strict `aud` claim validation. The realm export hard-codes this audience on the issued tokens; mismatch → all KC-issued tokens rejected by the resource server. |
+| `OIDC_REQUIRED` | public | per phase plan (see [keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) §3 Phase 3) | per phase plan | **MUST.** Controls whether legacy `POST /api/auth/login` returns 410. The intended per-env value is documented in the gaps doc; this matrix only owns the *contract*, not the schedule. |
+| `JWT_SECRET` | secret | (env-specific) | (env-specific) | **MUST.** HMAC signing for the legacy issuer (still active until Phase 4 cleanup). 32-byte minimum. |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
+| `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
+| Encryption keys (AES) | secret | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
 
 **Verify with:** the boot log of each backend should print:
 
@@ -130,11 +127,11 @@ Portal env vars are baked at build time into [`hospital-portal/src/environments/
 no Railway runtime-var override for the portal — the contract is enforced
 at PR-review time.
 
-| Setting (in `environment.<env>.ts`) | dev | uat | prod | Notes |
-| --- | --- | --- | --- | --- |
-| `oidc.issuer` | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-uat-uat.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** equal the matching `hms-backend-<env>` `OIDC_ISSUER_URI` and the matching `hms-keycloak-<env>` `KC_HOSTNAME`+`/realms/hms`. Three-way agreement. |
-| `oidc.clientId` | `hms-portal` | `hms-portal` | `hms-portal` | Hard-coded; matches the realm-export client. |
-| `oidc.enabled` | `true` (when ready per phase 2.8.B) | `true` (post KC-4) | `false` until Phase 3 cutover | Drives whether the SSO button is rendered. Keep `false` in any env where the realm isn't yet imported / users aren't migrated. |
+| Setting (in `environment.<env>.ts`) | dev | prod | Notes |
+| --- | --- | --- | --- |
+| `oidc.issuer` | `https://hms-keycloak-dev-dev.up.railway.app/realms/hms` | `https://hms-keycloak-prod-prod.up.railway.app/realms/hms` | **MUST** equal the matching `hms-backend-<env>` `OIDC_ISSUER_URI` and the matching `hms-keycloak-<env>` `KC_HOSTNAME`+`/realms/hms`. Three-way agreement. |
+| `oidc.clientId` | `hms-portal` | `hms-portal` | Hard-coded; matches the realm-export client. |
+| `oidc.enabled` | `true` (when ready per phase 2.8.B) | `false` until Phase 3 cutover | Drives whether the SSO button is rendered. Keep `false` in any env where the realm isn't yet imported / users aren't migrated. |
 
 **Verify with:** open the portal in each env, check `window.OIDC_ISSUER` (or the dev-tools network tab on `/realms/hms/.well-known/openid-configuration`) and confirm the issuer matches the realm.
 
@@ -162,7 +159,7 @@ To audit the matrix against reality without touching anything:
 
 ```bash
 # Per env, per service, list configured variables (names only — values stay in Railway)
-for env in dev uat prod; do
+for env in dev prod; do
   for svc in hms-keycloak-$env hms-backend-$env hospital-portal-$env; do
     echo "=== $env / $svc ==="
     railway environment $env
@@ -187,7 +184,7 @@ cron. Tracked as a follow-up to this runbook.
 1. PR that adds, removes, or renames any variable above must update
    this matrix in the same commit.
 2. PR description must list which envs the change has been applied to
-   in Railway (dev, uat, prod, or "doc-only — no Railway change yet").
+   in Railway (dev, prod, or "doc-only — no Railway change yet").
 3. Reviewer checks the description before approving.
 
 This is the same discipline as

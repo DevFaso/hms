@@ -112,7 +112,7 @@ Answer the questionnaire as follows:
 ### 2.3 Privacy Policy
 
 ```
-https://hms.bitnesttechs.com/privacy-policy
+https://e-keneya.com/privacy-policy
 ```
 
 (I've created the privacy policy page in the hospital-portal. It will be accessible at this URL once deployed.)
@@ -179,7 +179,7 @@ Category: Medical
 |-------|-------|
 | **Developer name** | Bitnest Technologies |
 | **Email** | contact@bitnesttechs.com |
-| **Website** | https://hms.bitnesttechs.com |
+| **Website** | https://e-keneya.com |
 | **Phone** | (add your phone number) |
 
 ### Tags (select up to 5)
@@ -211,7 +211,7 @@ Add testers via:
 - [ ] Fill in Store Listing (name, descriptions, screenshots, icon, feature graphic)
 - [ ] Submit Content Rating questionnaire
 - [ ] Set Target Audience to 18+
-- [ ] Set Privacy Policy URL: `https://hms.bitnesttechs.com/privacy-policy`
+- [ ] Set Privacy Policy URL: `https://e-keneya.com/privacy-policy`
 - [ ] Declare "No ads"
 - [ ] Complete Data Safety questionnaire
 - [ ] Set App Category to "Medical"

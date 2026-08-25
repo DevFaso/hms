@@ -31,7 +31,7 @@ class EmailServiceImplTest {
     @InjectMocks
     private EmailServiceImpl emailService;
 
-    private static final String FRONTEND_BASE_URL = "https://hms.dev.bitnesttechs.com";
+    private static final String FRONTEND_BASE_URL = "https://dev.e-keneya.com";
 
     @BeforeEach
     void injectFrontendBaseUrl() {

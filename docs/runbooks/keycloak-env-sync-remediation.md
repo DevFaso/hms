@@ -339,7 +339,7 @@ diff <(jq -S '.clients[] | select(.clientId=="hms-portal") | { redirectUris, web
 Then run the cutover smoke script against uat:
 
 ```bash
-API_BASE_URL=https://api.hms.uat.bitnesttechs.com \
+API_BASE_URL=https://api.dev.e-keneya.com \
 ISSUER_URI=https://hms-keycloak-uat-uat.up.railway.app/realms/hms \
   scripts/keycloak/cutover-smoke.sh
 # expect: "[smoke] OK — Phase C cutover invariants hold against ..."

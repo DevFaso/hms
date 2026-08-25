@@ -51,7 +51,7 @@ profiles.
 ## Enabling Splunk in an environment
 
 1. Provision an HEC token in Splunk: **Settings → Data inputs → HTTP Event Collector → New
-   Token**. Pin the token to the `hms_prod` (or `hms_uat`) index and the
+   Token**. Pin the token to the `hms_prod` (or `hms_dev`) index and the
    `spring-boot:json` sourcetype.
 1. Set the following env vars on the Railway service for that environment:
 
@@ -60,7 +60,7 @@ profiles.
    | `SPLUNK_HEC_ENABLED` | yes | `true` flips the appender on. |
    | `SPLUNK_HEC_URL` | yes | HTTPS only. App fails to boot on plain HTTP. |
    | `SPLUNK_HEC_TOKEN` | yes | The HEC token created in step 1. Treat as a secret. |
-   | `SPLUNK_HEC_INDEX` | no | Defaults to `hms_prod` / `hms_uat` per profile. |
+   | `SPLUNK_HEC_INDEX` | no | Defaults to `hms_prod` / `hms_dev` per profile. |
    | `SPLUNK_HEC_SOURCE` | no | Defaults to `hms-backend`. |
    | `SPLUNK_HEC_SOURCETYPE` | no | Defaults to `spring-boot:json`. |
    | `SPLUNK_HEC_HOST` | no | Defaults to the container hostname when blank. |
@@ -94,7 +94,7 @@ shippers that capture only stderr will not.
 | Symptom | Where to look |
 | --- | --- |
 | App fails to start with `IllegalStateException: hec.url is blank` | `SPLUNK_HEC_ENABLED=true` but URL/token unset on Railway. Either set them or flip enabled back to `false`. |
-| App fails to start with `must be HTTPS` | URL begins with `http://`. Either fix the URL or set `SPLUNK_HEC_ALLOW_INSECURE_URL=true` (local dev only — never set this in UAT/prod). |
+| App fails to start with `must be HTTPS` | URL begins with `http://`. Either fix the URL or set `SPLUNK_HEC_ALLOW_INSECURE_URL=true` (local dev only — never set this in hosted dev/prod). |
 | App boots, no events in Splunk | Check container `stdout` for `WARN in [SplunkHecAppender]` lines from the status listener. `401`/`403` → token wrong or expired; `404` → URL missing the HEC port (`:8088`) or the wrong host; connect-timeout → network ACL between Railway and the HEC. |
 | Burst of warnings, then quiet | HEC backpressure or transient outage. The appender increments an internal failure counter and never throws; console + Loki paths are unaffected. |
 
@@ -115,7 +115,7 @@ token valid", the unit tests are the right harness — no Docker needed.
 ### Option 2 — `SPLUNK_HEC_ALLOW_INSECURE_URL=true` against an HTTP mock
 
 A local-only escape hatch lets the URL be plain HTTP. Use only on a developer machine —
-Railway env vars MUST NOT set this in UAT/prod.
+Railway env vars MUST NOT set this in hosted dev/prod.
 
 ```bash
 docker run -d --name splunk-mock -p 8088:8088 mocoso/splunk-hec-mock:latest

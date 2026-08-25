@@ -19,7 +19,7 @@
 #
 #     sed -e "s|\${GEO_LABEL}|aws-eu-west-1|g" \
 #         -e "s|\${BLACKBOX_HOST}|blackbox-eu-west-1.local:9115|g" \
-#         -e "s|\${HMS_PUBLIC_BASE_URL}|https://api.hms.bitnesttechs.com|g" \
+#         -e "s|\${HMS_PUBLIC_BASE_URL}|https://api.e-keneya.com|g" \
 #         -e "s|\${MIMIR_REMOTE_WRITE_URL}|https://mimir.tenant/api/v1/push|g" \
 #         prometheus-multigeo.example.yml > prometheus.yml
 #
@@ -36,7 +36,7 @@
 #      sed/envsubst-replace the four placeholders:
 #        ${GEO_LABEL}             — e.g. "aws-eu-west-1"
 #        ${BLACKBOX_HOST}         — e.g. "blackbox-eu-west-1.local:9115"
-#        ${HMS_PUBLIC_BASE_URL}   — e.g. "https://api.hms.bitnesttechs.com"
+#        ${HMS_PUBLIC_BASE_URL}   — e.g. "https://api.e-keneya.com"
 #        ${MIMIR_REMOTE_WRITE_URL} — Grafana Cloud Mimir push endpoint
 #   3. Remote-write to the same Grafana Cloud Mimir tenant from every
 #      region so the HmsSyntheticProbeFailureRate alert evaluates

@@ -25,14 +25,6 @@
 ## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
 ## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
 
-## --- Release-UAT (`hms-keycloak-uat` Railway service) -------------
-## Internal Testing UAT track, SSO ON for the pre-cutover soak.
-## KEYCLOAK_SSO_ENABLED=true
-## KEYCLOAK_ISSUER=https://hms-keycloak-uat.up.railway.app/realms/hms
-## KEYCLOAK_CLIENT_ID=hms-patient-android
-## KEYCLOAK_REDIRECT_SCHEME=com.bitnesttechs.hms.patient
-## KEYCLOAK_REDIRECT_URI=com.bitnesttechs.hms.patient:/oauth2redirect
-
 ## --- Release-Prod (`hms-keycloak-prod` Railway service) -----------
 ## Production track. SSO stays OFF until Phase 3 cutover (see
 ## docs/keycloak-implementation-gaps.md Phase 2.8.C). The issuer URL

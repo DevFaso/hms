@@ -650,20 +650,18 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/login##https://hms.dev.bitnesttechs.com/login##https://hms.uat.bitnesttechs.com/login##https://hms.bitnesttechs.com/login",
+        "post.logout.redirect.uris": "http://localhost:4200/login##https://dev.e-keneya.com/login##https://e-keneya.com/login",
         "access.token.lifespan": "900"
       },
       "redirectUris": [
         "http://localhost:4200/*",
-        "https://hms.dev.bitnesttechs.com/*",
-        "https://hms.uat.bitnesttechs.com/*",
-        "https://hms.bitnesttechs.com/*"
+        "https://dev.e-keneya.com/*",
+        "https://e-keneya.com/*"
       ],
       "webOrigins": [
         "http://localhost:4200",
-        "https://hms.dev.bitnesttechs.com",
-        "https://hms.uat.bitnesttechs.com",
-        "https://hms.bitnesttechs.com"
+        "https://dev.e-keneya.com",
+        "https://e-keneya.com"
       ],
       "defaultClientScopes": [
         "profile",

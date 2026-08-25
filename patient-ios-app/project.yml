@@ -8,14 +8,13 @@ options:
   groupSortPosition: top
 
 # Phase 2.8.B: per-env release configurations for the Keycloak cutover.
-# Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/UAT/Prod
-# layer xcconfig files (Config/{Dev,UAT,Prod}.xcconfig) on top of the
+# Default Debug/Release stay unchanged (in-Xcode dev). Release-Dev/Prod
+# layer xcconfig files (Config/{Dev,Prod}.xcconfig) on top of the
 # Release defaults to populate MEDIHUB_KEYCLOAK_* per environment.
 configurations:
   Debug: debug
   Release: release
   Release-Dev: release
-  Release-UAT: release
   Release-Prod: release
 
 packages:
@@ -25,7 +24,6 @@ packages:
 
 configFiles:
   Release-Dev: Config/Dev.xcconfig
-  Release-UAT: Config/UAT.xcconfig
   Release-Prod: Config/Prod.xcconfig
 
 settings:
@@ -38,7 +36,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     # MEDIHUB_KEYCLOAK_* defaults — empty issuer keeps SSO disabled in
     # Debug/Release builds. Per-env xcconfigs override these for
-    # Release-{Dev,UAT,Prod}. See Config/README.md.
+    # Release-{Dev,Prod}. See Config/README.md.
     MEDIHUB_KEYCLOAK_ISSUER: ""
     MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
     MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
@@ -95,7 +93,7 @@ targets:
       gatherCoverageData: true
       environmentVariables:
         # KC-3: keep scheme defaults hermetic for Run and test actions.
-        # Release-Dev/UAT/Prod archive values come from Config/*.xcconfig;
+        # Release-Dev/Prod archive values come from Config/*.xcconfig;
         # local live SSO can be enabled by overriding these in an Xcode scheme.
         MEDIHUB_KEYCLOAK_ISSUER: ""
         MEDIHUB_KEYCLOAK_CLIENT_ID: ""

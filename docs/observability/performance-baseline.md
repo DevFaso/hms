@@ -70,19 +70,19 @@ If you don't have seeded IDs, omit them. The script auto-detects this and skips
 the `post_dispense` scenario, running the two read scenarios only:
 
 ```bash
-k6 run -e BASE_URL=https://api.hms.uat.bitnesttechs.com \
+k6 run -e BASE_URL=https://api.dev.e-keneya.com \
        -e AUTH_TOKEN="$KC_PHARMACIST_JWT" \
        scripts/perf/dispense-baseline.js
 ```
 
 This is what the manual `perf-baseline` GitHub Actions workflow runs against
-UAT — see [`.github/workflows/perf-baseline.yml`](../../.github/workflows/perf-baseline.yml).
+dev — see [`.github/workflows/perf-baseline.yml`](../../.github/workflows/perf-baseline.yml).
 
 ### CI invocation
 
-The workflow is `workflow_dispatch` only — it never runs on push, because UAT
+The workflow is `workflow_dispatch` only — it never runs on push, because environment
 credentials must not be exposed in PR runs from forks. Trigger it from the
-Actions tab and pass the environment (`uat` or `prod`) as input. Output:
+Actions tab and pass the environment (`dev` or `prod`) as input. Output:
 
 - A one-line summary in the workflow log (`[perf-baseline] work_queue_p95=…`).
 - The full k6 JSON summary uploaded as the `perf-baseline-summary` artifact.

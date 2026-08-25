@@ -19,8 +19,7 @@ expire (≤ 15 min) — no in-flight session is killed.
 
 | Env | Trigger |
 |---|---|
-| **dev** | Anytime, to exercise the 410 path locally. |
-| **uat** | After KC-4 migration is green (zero `failed`, zero unexpected `orphaned`) and the OIDC integration suite passes against the uat realm. Soak for ≥ 5 business days before promoting to prod. |
+| **dev** | Locally: anytime, to exercise the 410 path. Hosted dev: after KC-4 migration is green (zero `failed`, zero unexpected `orphaned`) and the OIDC integration suite passes against the dev realm. Soak for ≥ 5 business days before promoting to prod — hosted dev is the soak surface now that uat is retired. |
 | **prod** | During the announced maintenance window, with ops + clinical leads on the call. Do **not** flip on a Friday. |
 
 ## Preconditions checklist

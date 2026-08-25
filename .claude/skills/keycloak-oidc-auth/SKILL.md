@@ -83,7 +83,7 @@ context explicitly if they need tenant-scoped repository finds.
 
 ## Env-sync discipline
 
-The Keycloak realm config drifts across `dev` / `uat` / `prod` if the
+The Keycloak realm config drifts across `dev` / `prod` if the
 discipline isn't enforced. Three load-bearing artefacts:
 
 - `keycloak/realm-export.json` — the canonical export, source of truth
@@ -98,7 +98,7 @@ discipline isn't enforced. Three load-bearing artefacts:
 Run the verify script before touching any realm config:
 
 ```bash
-./scripts/keycloak/env-sync-verify.sh --full --env=uat
+./scripts/keycloak/env-sync-verify.sh --full --env=dev
 ```
 
 ## Dev user policy
@@ -119,11 +119,12 @@ realm:
 - `docs/runbooks/keycloak-migration-runbook.md` — full procedure
 - `docs/runbooks/keycloak-cutover-runbook.md` — production cutover
 - `docs/runbooks/keycloak-cutover-sequence.md` — conductor playbook
-  chaining row 18 → 19 → 8(uat) → 8(prod) with soak gates
-  (rolled out on PR #352).
+  chaining row 18 → 19 → 8(dev soak) → 8(prod) with soak gates
+  (rolled out on PR #352; the former uat environment was retired
+  2026-08 — dev is now the soak surface).
 
-UAT (row 18) and prod (row 19) migrations are still pending; require
-real-env access and a documented soak window.
+The hosted-env (row 18) and prod (row 19) migrations are still pending;
+they require real-env access and a documented soak window.
 
 ## Preflight harness (`scripts/keycloak/preflight.sh`)
 
@@ -131,8 +132,8 @@ Wraps every precondition in the migration + cutover runbooks into
 a single command. **Required env vars** (the script fails fast
 without them):
 
-- `HMS_KC_ENV` — `dev` / `uat` / `prod`
-- `OIDC_ISSUER_URI` — e.g. `https://keycloak.uat.example.com/realms/hms`
+- `HMS_KC_ENV` — `dev` / `prod`
+- `OIDC_ISSUER_URI` — e.g. `https://keycloak.dev.example.com/realms/hms`
 
 Optional:
 
@@ -146,8 +147,8 @@ Runbooks must include both required vars on the example
 invocation:
 
 ```bash
-HMS_KC_ENV=uat \
-OIDC_ISSUER_URI=https://keycloak.uat.example.com/realms/hms \
+HMS_KC_ENV=dev \
+OIDC_ISSUER_URI=https://keycloak.dev.example.com/realms/hms \
   ./scripts/keycloak/preflight.sh
 ```
 

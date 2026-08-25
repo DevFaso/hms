@@ -20,10 +20,9 @@ COPY . .
 
 # Build for production by default. Per-environment Railway services MUST set
 # BUILD_CONFIG as a Service Variable so it is exposed at build time:
-#   hms-frontend-uat  → BUILD_CONFIG=uat
 #   hms-frontend-dev  → BUILD_CONFIG=dev
 #   hms-frontend-prod → BUILD_CONFIG=production (or unset)
-# A wrong BUILD_CONFIG ships UAT/dev with environment.prod.ts, which routes
+# A wrong BUILD_CONFIG ships dev with environment.prod.ts, which routes
 # Faro RUM to the prod collector and tags traffic as `production`.
 ARG BUILD_CONFIG=production
 RUN echo ">>> Building hospital-portal with --configuration=${BUILD_CONFIG}" \

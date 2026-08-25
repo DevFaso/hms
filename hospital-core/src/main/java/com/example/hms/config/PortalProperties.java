@@ -43,7 +43,8 @@ public class PortalProperties {
     /**
      * Logs the resolved portal URL templates at startup so operators can verify the
      * Railway-injected {@code FRONTEND_BASE_URL} resolved to the expected hostname
-     * (e.g. {@code https://hms.uat.bitnesttechs.com} not {@code https://hms-uat.bitnesttechs.com}).
+     * ({@code https://dev.e-keneya.com} on dev, {@code https://e-keneya.com} on prod —
+     * not a stale pre-move {@code *.bitnesttechs.com} host).
      * Verification emails go out with whatever this base URL resolves to — a wrong
      * value silently breaks every onboarding link.
      */
