@@ -14,17 +14,20 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -45,6 +48,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ImagingCriticalNotificationServiceTest {
 
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
     @Mock
     private NotificationService notificationService;
     @Mock
@@ -76,6 +81,8 @@ class ImagingCriticalNotificationServiceTest {
 
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
+        patient.setFirstName("Aminata");
+        patient.setLastName("Diallo");
 
         order = new ImagingOrder();
         order.setId(UUID.randomUUID());
@@ -125,6 +132,48 @@ class ImagingCriticalNotificationServiceTest {
     }
 
     @Test
+    void theAlertNamesTheReportTitleWhenTheReportHasOne() {
+        ImagingReport report = flagged();
+        report.setReportTitle("CT Head without contrast");
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("CT Head without contrast");
+    }
+
+    @Test
+    void theAlertStillNamesAStudyWhenNeitherTitleNorStudyTypeIsKnown() {
+        // An externally ingested study can arrive with neither. The alert still
+        // has to say something a clinician can act on rather than read "null".
+        ImagingReport report = flagged();
+        order.setStudyType(null);
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("Imaging study").doesNotContain("null");
+    }
+
+    @Test
+    void theAlertNeverRendersTheWordNullWhenThePatientHasNoRecordedName() {
+        // getFullName() returns null for a patient with no names, which was
+        // being concatenated straight into the alert: "…finding: CT Head for
+        // null." That text reaches a clinician and goes out over SMS.
+        ImagingReport report = flagged();
+        order.getPatient().setFirstName(null);
+        order.getPatient().setLastName(null);
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("for patient.").doesNotContain("null");
+    }
+
+    @Test
     void doesNothingForAReportWithNoCriticalFlag() {
         service.notifyIfCritical(report());
 
@@ -160,8 +209,27 @@ class ImagingCriticalNotificationServiceTest {
         when(notificationService.createNotification(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("notification bus down"));
 
+        assertThatCode(() -> service.notifyIfCritical(report)).doesNotThrowAnyException();
+
+        // Pin that the throwing path was actually exercised. Without this the
+        // test would pass just as happily against a method that never notified.
+        verify(notificationService).createNotification(anyString(), anyString(), eq("CRITICAL_IMAGING_FINDING"));
+    }
+
+    @Test
+    void aFailedFirstAlertIsStillStampedSoTheFindingCannotGoSilent() {
+        // The sweep selects on criticalNotifiedAt IS NOT NULL. A report left
+        // unstamped because the bus was down would drop out of the escalation
+        // path entirely and nobody would ever be told — the exact failure this
+        // service exists to prevent, arriving through the back door.
+        ImagingReport report = flagged();
+        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+            .thenThrow(new IllegalStateException("notification bus down"));
+
         service.notifyIfCritical(report);
-        // No exception escaped; that is the assertion.
+
+        assertThat(report.getCriticalNotifiedAt()).isNotNull();
+        verify(imagingReportRepository).save(report);
     }
 
     @Test
