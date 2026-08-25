@@ -81,6 +81,8 @@ class ImagingCriticalNotificationServiceTest {
 
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
+        patient.setFirstName("Aminata");
+        patient.setLastName("Diallo");
 
         order = new ImagingOrder();
         order.setId(UUID.randomUUID());
@@ -127,6 +129,48 @@ class ImagingCriticalNotificationServiceTest {
             message.capture(), eq("dr.ordering"), eq("CRITICAL_IMAGING_FINDING"));
         assertThat(message.getValue()).contains("Critical imaging finding");
         assertThat(report.getCriticalNotifiedAt()).isNotNull();
+    }
+
+    @Test
+    void theAlertNamesTheReportTitleWhenTheReportHasOne() {
+        ImagingReport report = flagged();
+        report.setReportTitle("CT Head without contrast");
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("CT Head without contrast");
+    }
+
+    @Test
+    void theAlertStillNamesAStudyWhenNeitherTitleNorStudyTypeIsKnown() {
+        // An externally ingested study can arrive with neither. The alert still
+        // has to say something a clinician can act on rather than read "null".
+        ImagingReport report = flagged();
+        order.setStudyType(null);
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("Imaging study").doesNotContain("null");
+    }
+
+    @Test
+    void theAlertNeverRendersTheWordNullWhenThePatientHasNoRecordedName() {
+        // getFullName() returns null for a patient with no names, which was
+        // being concatenated straight into the alert: "…finding: CT Head for
+        // null." That text reaches a clinician and goes out over SMS.
+        ImagingReport report = flagged();
+        order.getPatient().setFirstName(null);
+        order.getPatient().setLastName(null);
+
+        service.notifyIfCritical(report);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString(), anyString());
+        assertThat(message.getValue()).contains("for patient.").doesNotContain("null");
     }
 
     @Test

@@ -248,8 +248,7 @@ public class ImagingCriticalNotificationService {
     private String buildMessage(ImagingReport report, boolean escalation) {
         ImagingOrder order = report.getImagingOrder();
         String study = studyLabel(report, order);
-        String patientName = order != null && order.getPatient() != null
-            ? order.getPatient().getFullName() : "patient";
+        String patientName = patientLabel(order);
         String prefix = escalation
             ? "ESCALATION - unacknowledged critical imaging finding: "
             : "Critical imaging finding: ";
@@ -262,10 +261,27 @@ public class ImagingCriticalNotificationService {
         if (report.getReportTitle() != null && !report.getReportTitle().isBlank()) {
             return report.getReportTitle();
         }
-        if (order != null && order.getStudyType() != null) {
+        if (order != null && order.getStudyType() != null && !order.getStudyType().isBlank()) {
             return order.getStudyType();
         }
         return "Imaging study";
+    }
+
+    /**
+     * The patient's name, or a neutral placeholder.
+     *
+     * <p>Guards the NAME, not just the patient reference: a patient row with no
+     * recorded name rendered the literal string "null" into an alert a clinician
+     * reads and an SMS that goes out of the building.
+     */
+    private String patientLabel(ImagingOrder order) {
+        if (order != null && order.getPatient() != null) {
+            String fullName = order.getPatient().getFullName();
+            if (fullName != null && !fullName.isBlank()) {
+                return fullName;
+            }
+        }
+        return "patient";
     }
 
     private String impressionSnippet(ImagingReport report) {
