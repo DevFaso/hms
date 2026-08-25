@@ -244,9 +244,13 @@ public class TransferServiceImpl implements TransferService {
             return false;
         }
         if (!request.isIsolationOverride()) {
+            // Parenthesised deliberately: .formatted binds tighter than +, so
+            // without them it applies to the SECOND literal — which carries no
+            // specifier — and the clinician is refused with a raw "%s" where
+            // the bed should be.
             throw new BusinessException(
-                "This patient is on airborne precautions and bed %s is not in an isolation ward. "
-                    + "Move them to an isolation ward, or override with a reason."
+                ("This patient is on airborne precautions and bed %s is not in an isolation ward. "
+                    + "Move them to an isolation ward, or override with a reason.")
                     .formatted(BedAssignmentService.bedLabel(destination)));
         }
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {

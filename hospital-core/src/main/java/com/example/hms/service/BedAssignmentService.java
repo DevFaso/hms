@@ -46,7 +46,10 @@ public class BedAssignmentService {
      */
     @Transactional
     public void assignBed(Admission admission, UUID bedId) {
-        assignBed(admission, bedId, Set.of(BedStatus.AVAILABLE));
+        // Delegates to a private helper rather than the overload below: a
+        // self-invocation of a @Transactional method bypasses the Spring proxy,
+        // so the annotation on the inner call would silently do nothing.
+        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE));
     }
 
     /**
@@ -63,6 +66,11 @@ public class BedAssignmentService {
      */
     @Transactional
     public void assignBed(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
+        doAssign(admission, bedId, claimableFrom);
+    }
+
+    /** The actual work, shared by both public entry points. */
+    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
             throw new BusinessException("Beds can only be assigned to active admissions.");
         }

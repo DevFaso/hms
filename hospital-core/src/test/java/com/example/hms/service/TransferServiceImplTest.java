@@ -276,7 +276,13 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("airborne precautions");
+            .hasMessageContaining("airborne precautions")
+            // The refusal must NAME the bed. Asserting only on the prose let a
+            // precedence bug through: .formatted binds tighter than +, so it
+            // applied to the second literal and the clinician was refused with
+            // a raw "%s" where the bed should have been.
+            .hasMessageContaining(BedAssignmentService.bedLabel(destinationBed))
+            .hasMessageNotContaining("%s");
         // A refused order must not strand the bed it was going to use.
         verify(bedAssignmentService, never()).reserveBed(any(), any());
     }
@@ -359,8 +365,8 @@ class TransferServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo(TransferOrderStatus.COMPLETED);
         assertThat(result.getCompletedAt()).isNotNull();
-        verify(bedAssignmentService).assignBed(eq(admission), eq(destinationBed.getId()),
-            eq(Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED)));
+        verify(bedAssignmentService).assignBed(admission, destinationBed.getId(),
+            Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
     }
 
     @Test
