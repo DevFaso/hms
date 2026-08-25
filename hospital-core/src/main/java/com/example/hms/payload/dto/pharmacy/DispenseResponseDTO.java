@@ -9,6 +9,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -36,6 +37,24 @@ public class DispenseResponseDTO {
     private String status;
     private String notes;
     private LocalDateTime dispensedAt;
+
+    /* ── Counter-side verification (Tier 2 item 34) ─────────────────────── */
+
+    /** NOT_VERIFIED / VERIFIED / OVERRIDDEN. */
+    private String verificationStatus;
+
+    /** When the scan was performed; null on the paper-fallback path. */
+    private LocalDateTime scanVerifiedAt;
+
+    /**
+     * Names of the checks that failed and were overridden. Empty unless the
+     * status is OVERRIDDEN — a list rather than the raw JSON string the
+     * column holds, so the portal renders it without parsing.
+     */
+    private List<String> verificationOverrides;
+
+    private String verificationOverrideReason;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

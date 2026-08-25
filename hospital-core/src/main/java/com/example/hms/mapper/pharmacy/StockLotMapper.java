@@ -5,6 +5,7 @@ import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.payload.dto.pharmacy.StockLotRequestDTO;
 import com.example.hms.payload.dto.pharmacy.StockLotResponseDTO;
+import com.example.hms.utility.LotBarcode;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -27,6 +28,7 @@ public class StockLotMapper {
             .receivedDate(entity.getReceivedDate())
             .receivedBy(entity.getReceivedByUser() != null ? entity.getReceivedByUser().getId() : null)
             .notes(entity.getNotes())
+            .barcodeValue(entity.getBarcodeValue())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
@@ -49,6 +51,10 @@ public class StockLotMapper {
             .receivedDate(dto.getReceivedDate())
             .receivedByUser(receivedByUser)
             .notes(dto.getNotes())
+            // Minted at goods-in so every lot received from V138 onward is
+            // scannable the moment its label prints. Lots that predate the
+            // migration are backfilled by the print endpoint instead.
+            .barcodeValue(LotBarcode.mint())
             .build();
     }
 

@@ -1,5 +1,6 @@
 package com.example.hms.mapper.pharmacy;
 
+import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
@@ -10,6 +11,9 @@ import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -49,9 +53,31 @@ public class DispenseMapper {
             .status(entity.getStatus() != null ? entity.getStatus().name() : null)
             .notes(entity.getNotes())
             .dispensedAt(entity.getDispensedAt())
+            .verificationStatus(entity.getVerificationStatus() != null
+                ? entity.getVerificationStatus().name() : null)
+            .scanVerifiedAt(entity.getScanVerifiedAt())
+            .verificationOverrides(parseOverrides(entity.getVerificationOverrides()))
+            .verificationOverrideReason(entity.getVerificationOverrideReason())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * The column holds a JSON array of {@link DispenseCheck} names. Parsed by
+     * matching against the enum rather than by reading the JSON, so a
+     * malformed or hand-edited value yields the checks it does name and
+     * silently drops anything that is not a real check — a display field
+     * must not be able to fail a dispense read.
+     */
+    private List<String> parseOverrides(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(DispenseCheck.values())
+            .map(Enum::name)
+            .filter(name -> json.contains("\"" + name + "\""))
+            .toList();
     }
 
     public Dispense toEntity(DispenseRequestDTO dto, DispenseContext ctx) {
