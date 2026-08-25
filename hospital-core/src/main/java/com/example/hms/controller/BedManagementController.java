@@ -1,10 +1,12 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.bed.BedBoardDTO;
 import com.example.hms.payload.dto.bed.BedRequestDTO;
 import com.example.hms.payload.dto.bed.BedResponseDTO;
 import com.example.hms.payload.dto.bed.BedStatusUpdateRequestDTO;
 import com.example.hms.payload.dto.bed.WardRequestDTO;
 import com.example.hms.payload.dto.bed.WardResponseDTO;
+import com.example.hms.service.BedBoardService;
 import com.example.hms.service.BedManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,6 +43,16 @@ public class BedManagementController {
         "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')";
 
     private final BedManagementService bedManagementService;
+    private final BedBoardService bedBoardService;
+
+    /* ── The board (Tier 2 item 31) ───────────────────────────────────── */
+
+    @GetMapping("/bed-board")
+    @PreAuthorize(READ_ROLES)
+    @Operation(summary = "Ward → room → bed with occupants, isolation flags and the census")
+    public ResponseEntity<BedBoardDTO> getBedBoard() {
+        return ResponseEntity.ok(bedBoardService.getBoard());
+    }
 
     /* ── Wards ────────────────────────────────────────────────────────── */
 

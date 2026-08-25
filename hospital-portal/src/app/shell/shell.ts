@@ -412,6 +412,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         ],
       },
       {
+        icon: 'grid_view',
+        label: 'Bed Board',
+        translationKey: 'NAV.BED_BOARD',
+        route: '/bed-board',
+        // Wider than Bed Management on purpose: the board is a clinical tool
+        // for placing patients, and the backend allows the whole ward team.
+        roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+        ],
+      },
+      {
         icon: 'bed',
         label: 'Bed Management',
         translationKey: 'NAV.BED_MANAGEMENT',

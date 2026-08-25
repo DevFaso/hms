@@ -1,0 +1,334 @@
+@use '../shared/styles/page-common';
+
+/* ── The two banners ──────────────────────────────────────────────────
+   An airborne case in the wrong ward, and a bed nobody can allocate. Both
+   are conditions the board exists to surface, so they sit above the grid
+   rather than inside it. */
+
+.alert-banner,
+.warn-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.alert-banner {
+  background: var(--color-danger-bg, #fdecea);
+  border: 1px solid var(--color-danger, #d93025);
+  color: var(--color-danger-text, #611a15);
+}
+
+.warn-banner {
+  background: var(--color-warning-bg, #fff4e5);
+  border: 1px solid var(--color-warning, #f59e0b);
+  color: var(--color-warning-text, #7a4b00);
+}
+
+.mismatch-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* ── Census ───────────────────────────────────────────────────────── */
+
+.census-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.census-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  background: var(--color-surface, #fff);
+}
+
+.census-value {
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.census-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #5f6368);
+}
+
+/* ── Filters ──────────────────────────────────────────────────────── */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.filters .check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Ward and room ────────────────────────────────────────────────── */
+
+.ward-block {
+  margin-bottom: 26px;
+}
+
+.ward-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+.ward-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.ward-code,
+.ward-type {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #5f6368);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ward-stats {
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #5f6368);
+  font-variant-numeric: tabular-nums;
+}
+
+.room-block {
+  margin-bottom: 14px;
+}
+
+.room-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #5f6368);
+  margin: 0 0 8px;
+}
+
+/* ── The bed grid ─────────────────────────────────────────────────── */
+
+.bed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.bed-tile {
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--color-surface, #fff);
+  min-height: 92px;
+}
+
+.bed-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.bed-number {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.bed-status {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted, #5f6368);
+}
+
+/* Status carries colour as well as text — a board is scanned, not read. */
+.bed-available {
+  border-left-color: var(--color-success, #1e8e3e);
+}
+
+.bed-occupied {
+  border-left-color: var(--color-primary, #1a73e8);
+}
+
+.bed-reserved {
+  border-left-color: var(--color-warning, #f59e0b);
+}
+
+.bed-maintenance,
+.bed-out-of-service {
+  border-left-color: var(--color-text-muted, #9aa0a6);
+  background: var(--color-surface-muted, #f6f7f8);
+}
+
+.bed-isolation {
+  border-left-color: var(--color-warning, #f59e0b);
+}
+
+.bed-mismatch {
+  border-left-color: var(--color-danger, #d93025);
+  background: var(--color-danger-bg, #fdecea);
+}
+
+.occupant {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.occupant-name {
+  font-weight: 600;
+}
+
+.occupant-mrn {
+  font-size: 0.75rem;
+  color: var(--color-text-muted, #5f6368);
+  font-variant-numeric: tabular-nums;
+}
+
+.occupant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  font-size: 0.75rem;
+}
+
+.occupant-meta div {
+  display: flex;
+  gap: 4px;
+}
+
+.occupant-meta dt {
+  color: var(--color-text-muted, #5f6368);
+  margin: 0;
+}
+
+.occupant-meta dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.bed-empty {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #5f6368);
+  margin: 0;
+}
+
+/* ── Precaution chips ─────────────────────────────────────────────── */
+
+.precautions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.chip-contact {
+  background: #e8f0fe;
+  color: #174ea6;
+  border-color: #a8c7fa;
+}
+
+.chip-droplet {
+  background: #fef7e0;
+  color: #7a5900;
+  border-color: #f3d17a;
+}
+
+/* Airborne is the one that constrains placement, so it is the loudest. */
+.chip-airborne {
+  background: #fce8e6;
+  color: #a50e0e;
+  border-color: #f0a9a4;
+}
+
+/* Protective shields the PATIENT — deliberately a different colour family
+   so it does not read as an infectious risk. */
+.chip-protective {
+  background: #e6f4ea;
+  color: #0d652d;
+  border-color: #a3d5b3;
+}
+
+.chip-mismatch {
+  background: var(--color-danger, #d93025);
+  color: #fff;
+}
+
+.chip-capable {
+  background: #e6f4ea;
+  color: #0d652d;
+  border-color: #a3d5b3;
+}
+
+/* ── Modal ────────────────────────────────────────────────────────── */
+
+.precaution-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+
+.precaution-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border, #e0e0e0);
+}
+
+.precaution-reason {
+  flex: 1 1 auto;
+  font-size: 0.85rem;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted, #5f6368);
+  margin: 4px 0 8px;
+}
+
+.hint.warn {
+  color: var(--color-danger-text, #a50e0e);
+  font-weight: 600;
+}
+
+.btn-link.danger {
+  color: var(--color-danger, #d93025);
+}

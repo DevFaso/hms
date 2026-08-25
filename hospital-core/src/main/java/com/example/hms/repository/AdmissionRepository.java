@@ -30,6 +30,23 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
         UUID patientId, UUID hospitalId, java.util.Collection<AdmissionStatus> statuses);
 
     /**
+     * The occupants of the bed board (Tier 2 item 31): every admission at this
+     * hospital that is holding a bed.
+     *
+     * <p>Patient and attending physician are fetched with it because the board
+     * shows both for every occupied bed, and resolving them lazily is one
+     * query per bed. {@code a.bed IS NOT NULL} rather than reading
+     * {@code Bed.status}: the admission is the authority on who is in a bed,
+     * and a bed marked OCCUPIED with no admission pointing at it is a defect
+     * the board should make visible rather than hide.
+     */
+    @EntityGraph(attributePaths = {"patient", "attendingPhysician", "attendingPhysician.user"})
+    @Query("SELECT a FROM Admission a "
+        + "WHERE a.hospital.id = :hospitalId AND a.bed IS NOT NULL AND a.status IN :statuses")
+    List<Admission> findBedHoldingAdmissions(@Param("hospitalId") UUID hospitalId,
+                                             @Param("statuses") java.util.Collection<AdmissionStatus> statuses);
+
+    /**
      * Find admissions by hospital
      */
     @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})

@@ -792,6 +792,27 @@ export const routes: Routes = [
         loadComponent: () => import('./admissions/admissions').then((m) => m.AdmissionsComponent),
       },
 
+      // The ward board (Tier 2 items 31/32 — occupants, census, isolation).
+      // Deliberately NOT under bed-management: that route is admin CRUD and
+      // guards to HOSPITAL_ADMIN/SUPER_ADMIN, whereas the board is a clinical
+      // tool and its backend allows the whole ward team. Guarding it the same
+      // way would make it unreachable for the charge nurse it exists for.
+      {
+        path: 'bed-board',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
+          ],
+        },
+        loadComponent: () => import('./bed-board/bed-board').then((m) => m.BedBoardComponent),
+      },
+
       // Bed management (P0 #4 — ward/bed CRUD + occupancy)
       {
         path: 'bed-management',
