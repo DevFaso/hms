@@ -332,3 +332,120 @@
 .btn-link.danger {
   color: var(--color-danger, #d93025);
 }
+
+/* ── The transfer worklist ────────────────────────────────────────────
+   Every row here is holding a bed RESERVED, so a stale order takes real
+   capacity out of circulation. It sits above the grid for that reason. */
+
+.transfer-worklist {
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background: var(--color-surface, #fff);
+}
+
+.transfer-worklist h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  margin: 0 0 8px;
+}
+
+.transfer-worklist .count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary, #1a73e8);
+  color: #fff;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.transfer-worklist ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.transfer-worklist li {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(160px, 1fr) minmax(140px, 1.4fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-border, #e0e0e0);
+}
+
+/* An override moved somebody into a ward that cannot contain them. */
+.transfer-worklist li.override {
+  border-left: 3px solid var(--color-danger, #d93025);
+  padding-left: 8px;
+}
+
+.transfer-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.transfer-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.transfer-route .material-symbols-outlined {
+  font-size: 1rem;
+  color: var(--color-text-muted, #5f6368);
+}
+
+.transfer-reason {
+  font-size: 0.82rem;
+  color: var(--color-text-muted, #5f6368);
+}
+
+.transfer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+}
+
+.btn-primary.small {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.bed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.override-block {
+  border: 1px solid var(--color-danger, #d93025);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--color-danger-bg, #fdecea);
+}
+
+@media (max-width: 720px) {
+  .transfer-worklist li {
+    grid-template-columns: 1fr;
+  }
+
+  .transfer-actions {
+    justify-self: start;
+  }
+}

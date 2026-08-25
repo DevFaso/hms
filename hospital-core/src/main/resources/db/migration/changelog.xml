@@ -2029,4 +2029,19 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V137 - in-app transfer orders: clinical.transfer_orders. An
+         orchestration and audit layer over the Admission.bed <-> Bed.status
+         invariant BedAssignmentService has owned since P0 #4, not a second
+         writer of it. Two steps, because a transfer is ordered by one person
+         and carried out by another; the destination is held RESERVED in
+         between so it cannot be allocated twice. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V137-transfer-orders" author="hms-team" runOnChange="false">
+        <sqlFile path="V137__transfer_orders.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
