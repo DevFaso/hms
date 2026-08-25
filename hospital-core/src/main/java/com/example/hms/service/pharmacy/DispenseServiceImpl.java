@@ -45,6 +45,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -73,6 +74,12 @@ public class DispenseServiceImpl implements DispenseService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final DispenseVerificationService dispenseVerificationService;
+
+    /**
+     * From config/TimeConfig. Server clock, injectable — a test that has to
+     * wait for real time to pass is a test that flakes.
+     */
+    private final Clock clock;
     private final CdsCheckService cdsCheckService;
     private final ControlledSubstanceGuard controlledSubstanceGuard;
 
@@ -234,7 +241,7 @@ public class DispenseServiceImpl implements DispenseService {
                 prescription, patient, pharmacy, stockLot,
                 actors.dispensedBy(), actors.verifiedBy(), catalogItem);
         Dispense dispense = dispenseMapper.toEntity(dto, ctx);
-        dispense.setDispensedAt(LocalDateTime.now());
+        dispense.setDispensedAt(LocalDateTime.now(clock));
         recordVerification(dispense, dto, verification);
         Dispense saved = dispenseRepository.save(dispense);
 
@@ -453,7 +460,7 @@ public class DispenseServiceImpl implements DispenseService {
         boolean scanned = dispense.getPatientScanValue() != null
                 || dispense.getProductScanValue() != null;
         if (scanned) {
-            dispense.setScanVerifiedAt(LocalDateTime.now());
+            dispense.setScanVerifiedAt(LocalDateTime.now(clock));
         }
 
         Set<DispenseCheck> failed = verification.failedChecks();

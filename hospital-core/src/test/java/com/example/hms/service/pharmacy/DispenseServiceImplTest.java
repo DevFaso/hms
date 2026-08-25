@@ -95,10 +95,16 @@ class DispenseServiceImplTest {
      */
     private static final java.time.LocalDate TODAY = java.time.LocalDate.of(2026, 8, 25);
 
+    private static final java.time.Clock FIXED_CLOCK = java.time.Clock.fixed(
+        TODAY.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(), java.time.ZoneOffset.UTC);
+
     @org.mockito.Spy
     private DispenseVerificationService dispenseVerificationService =
-        new DispenseVerificationService(java.time.Clock.fixed(
-            TODAY.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(), java.time.ZoneOffset.UTC));
+        new DispenseVerificationService(FIXED_CLOCK);
+
+    /** The service's own clock, so dispensedAt and scanVerifiedAt are pinned too. */
+    @org.mockito.Spy
+    private java.time.Clock clock = FIXED_CLOCK;
 
     @InjectMocks
     private DispenseServiceImpl service;

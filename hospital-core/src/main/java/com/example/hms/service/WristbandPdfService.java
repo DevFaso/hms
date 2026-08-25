@@ -129,13 +129,9 @@ public class WristbandPdfService {
             .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId));
 
         InventoryItem inventoryItem = lot.getInventoryItem();
-        Pharmacy pharmacy = inventoryItem != null ? inventoryItem.getPharmacy() : null;
-        UUID lotHospitalId = pharmacy != null && pharmacy.getHospital() != null
-            ? pharmacy.getHospital().getId()
-            : null;
         // 404-not-403: another hospital's lot is indistinguishable from one
         // that does not exist.
-        if (hospitalId != null && !Objects.equals(lotHospitalId, hospitalId)) {
+        if (hospitalId != null && !Objects.equals(hospitalOf(inventoryItem), hospitalId)) {
             throw new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId);
         }
 
@@ -146,12 +142,8 @@ public class WristbandPdfService {
 
         MedicationCatalogItem item = inventoryItem != null
             ? inventoryItem.getMedicationCatalogItem() : null;
-        String drugLine = item != null
-            ? truncate(safe(item.getGenericName()).isBlank() ? safe(item.getNameFr()) : safe(item.getGenericName()), 28)
-            : "—";
-        String strengthLine = item != null && item.getStrength() != null
-            ? (item.getStrength() + safe(item.getStrengthUnit())).trim()
-            : "";
+        String drugLine = truncate(drugNameOf(item), 28);
+        String strengthLine = strengthOf(item);
 
         return renderLabel(cs -> {
             writeText(cs, 10, 8, LABEL_HEIGHT - 16, drugLine);
@@ -163,6 +155,38 @@ public class WristbandPdfService {
                 "EXP: " + (lot.getExpiryDate() != null ? lot.getExpiryDate() : "—"));
             writeText(cs, 6, 8, 8, safe(lot.getBarcodeValue()));
         }, lot.getBarcodeValue());
+    }
+
+    /** Which hospital a lot belongs to, via its inventory item's pharmacy. */
+    private static UUID hospitalOf(InventoryItem inventoryItem) {
+        Pharmacy pharmacy = inventoryItem != null ? inventoryItem.getPharmacy() : null;
+        return pharmacy != null && pharmacy.getHospital() != null
+            ? pharmacy.getHospital().getId()
+            : null;
+    }
+
+    /**
+     * Generic name for the label, falling back to the French name.
+     *
+     * <p>Generic first because that is what the pharmacist matches against
+     * the prescription, and the dispense-time drug check compares codes and
+     * generic names — a label showing only a brand would disagree with the
+     * refusal message when the two differ.
+     */
+    private static String drugNameOf(MedicationCatalogItem item) {
+        if (item == null) {
+            return "—";
+        }
+        String generic = safe(item.getGenericName());
+        return generic.isBlank() ? safe(item.getNameFr()) : generic;
+    }
+
+    /** e.g. "500mg", or empty when the catalogue records no strength. */
+    private static String strengthOf(MedicationCatalogItem item) {
+        if (item == null || item.getStrength() == null) {
+            return "";
+        }
+        return (item.getStrength() + safe(item.getStrengthUnit())).trim();
     }
 
     /** Package-visible so the test can pin the bare-UUID contract. */
