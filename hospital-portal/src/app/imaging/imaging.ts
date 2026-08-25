@@ -10,6 +10,7 @@ import {
   ImagingLaterality,
   ImagingReportResponse,
   ImagingReportStatus,
+  ImagingReportAuthorRequest,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -23,6 +24,35 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
 };
+
+/** The statuses a radiologist may assert while authoring. */
+type AuthorableReportStatus = Extract<
+  ImagingReportStatus,
+  'DRAFT' | 'PRELIMINARY' | 'ADDENDUM' | 'CORRECTED' | 'AMENDED'
+>;
+
+/** The administrative outcomes the void modal may write. */
+type VoidReportStatus = Extract<ImagingReportStatus, 'CANCELLED' | 'ERROR'>;
+
+/**
+ * Bound to the authoring form. Strings rather than optionals throughout so
+ * `[(ngModel)]` never sees undefined; they are trimmed to undefined on submit.
+ */
+interface ReportForm {
+  reportTitle: string;
+  modality: ImagingModality;
+  bodyRegion: string;
+  accessionNumber: string;
+  technique: string;
+  comparisonStudies: string;
+  findings: string;
+  impression: string;
+  recommendations: string;
+  contrastAdministered: boolean;
+  contrastDetails: string;
+  criticalFinding: boolean;
+  reportStatus: AuthorableReportStatus;
+}
 
 @Component({
   selector: 'app-imaging',
@@ -77,10 +107,23 @@ export class ImagingComponent implements OnInit {
   showStatusModal = signal(false);
   /** Separate from selectedReport so the status modal never drags the detail overlay open. */
   statusTarget = signal<ImagingReportResponse | null>(null);
-  statusForm = { status: 'FINAL' as ImagingReportStatus, statusReason: '' };
+  statusForm: { status: VoidReportStatus; statusReason: string } = {
+    status: 'CANCELLED',
+    statusReason: '',
+  };
   statusSubmitting = signal(false);
   acknowledging = signal(false);
 
+  /* ── Authoring state (Tier 2 item 26) ── */
+  showReportModal = signal(false);
+  reportSubmitting = signal(false);
+  signing = signal(false);
+  /** Set when revising an existing draft; null when authoring a new report. */
+  reportEditId = signal<string | null>(null);
+  reportOrderId = signal<string | null>(null);
+  reportForm: ReportForm = this.emptyReportForm();
+
+  /** Filter tabs on the Results view — reading by any status is fine. */
   readonly reportStatuses: ImagingReportStatus[] = [
     'DRAFT',
     'PRELIMINARY',
@@ -91,18 +134,42 @@ export class ImagingComponent implements OnInit {
     'CANCELLED',
   ];
 
+  /**
+   * The statuses an author may assert. FINAL is absent because signing is the
+   * only path to it, and CANCELLED/ERROR because those are administrative
+   * outcomes that require a reason — both enforced backend-side too, so this
+   * list is a convenience, not the gate.
+   */
+  readonly authorableStatuses = [
+    'DRAFT',
+    'PRELIMINARY',
+    'ADDENDUM',
+    'CORRECTED',
+    'AMENDED',
+  ] as const;
+
+  /** What the void modal may write. */
+  readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
+
   readonly canSeeResults = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_RADIOLOGIST',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole([
+  /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
+  readonly canAuthorReports = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_RADIOLOGIST',
     'ROLE_SUPER_ADMIN',
   ]);
-  readonly canAckCritical = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+  readonly canUpdateReportStatus = this.canAuthorReports;
+  /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
+  readonly canAckCritical = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_RADIOLOGIST',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   modalities: ImagingModality[] = [
     'XRAY',
@@ -448,14 +515,10 @@ export class ImagingComponent implements OnInit {
     });
   }
 
+  /** The server stamps the authenticated caller; no staff id travels. */
   acknowledgeCritical(report: ImagingReportResponse): void {
-    const staffId = this.auth.getUserProfile()?.staffId;
-    if (!staffId) {
-      this.toast.error(this.translate.instant('IMAGING.NO_STAFF_CONTEXT'));
-      return;
-    }
     this.acknowledging.set(true);
-    this.imagingService.acknowledgeCriticalReport(report.id, staffId).subscribe({
+    this.imagingService.acknowledgeCriticalReport(report.id).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('IMAGING.CRITICAL_ACKED'));
         this.acknowledging.set(false);
@@ -469,9 +532,144 @@ export class ImagingComponent implements OnInit {
     });
   }
 
+  /* ── Authoring (Tier 2 item 26) ── */
+
+  /**
+   * Author a report against an order. A study that already carries a signed
+   * read may only receive a revision, so the form opens pre-set to ADDENDUM
+   * and the backend enforces the same rule.
+   */
+  openAuthorReport(order: ImagingOrderResponse, existingSigned = false): void {
+    this.reportForm = {
+      reportTitle: order.studyType ?? '',
+      modality: order.modality,
+      bodyRegion: order.bodyRegion ?? '',
+      accessionNumber: '',
+      technique: '',
+      comparisonStudies: '',
+      findings: '',
+      impression: '',
+      recommendations: '',
+      contrastAdministered: false,
+      contrastDetails: '',
+      criticalFinding: false,
+      reportStatus: existingSigned ? 'ADDENDUM' : 'PRELIMINARY',
+    };
+    this.reportOrderId.set(order.id);
+    this.reportEditId.set(null);
+    this.showReportModal.set(true);
+  }
+
+  /** Revise an unsigned draft. Signed reports are read-only by contract. */
+  openEditReport(report: ImagingReportResponse): void {
+    if (report.signed) {
+      this.toast.error(this.translate.instant('IMAGING.REPORT_LOCKED'));
+      return;
+    }
+    this.reportForm = {
+      reportTitle: report.reportTitle ?? '',
+      modality: report.modality,
+      bodyRegion: report.bodyRegion ?? '',
+      accessionNumber: report.accessionNumber ?? '',
+      technique: report.technique ?? '',
+      comparisonStudies: report.comparisonStudies ?? '',
+      findings: report.findings ?? '',
+      impression: report.impression ?? '',
+      recommendations: report.recommendations ?? '',
+      contrastAdministered: !!report.contrastAdministered,
+      contrastDetails: '',
+      criticalFinding: report.criticalFinding,
+      reportStatus: this.authorableStatusOf(report.reportStatus),
+    };
+    this.reportOrderId.set(report.imagingOrderId);
+    this.reportEditId.set(report.id);
+    this.showReportModal.set(true);
+  }
+
+  closeReportModal(): void {
+    this.showReportModal.set(false);
+    this.reportEditId.set(null);
+    this.reportOrderId.set(null);
+  }
+
+  submitReport(): void {
+    const orderId = this.reportOrderId();
+    if (!orderId) return;
+    const editId = this.reportEditId();
+    const payload: ImagingReportAuthorRequest = {
+      ...this.reportForm,
+      bodyRegion: this.reportForm.bodyRegion.trim() || undefined,
+      accessionNumber: this.reportForm.accessionNumber.trim() || undefined,
+      technique: this.reportForm.technique.trim() || undefined,
+      comparisonStudies: this.reportForm.comparisonStudies.trim() || undefined,
+      findings: this.reportForm.findings.trim() || undefined,
+      impression: this.reportForm.impression.trim() || undefined,
+      recommendations: this.reportForm.recommendations.trim() || undefined,
+      contrastDetails: this.reportForm.contrastDetails.trim() || undefined,
+      reportTitle: this.reportForm.reportTitle.trim() || undefined,
+      imagingOrderId: orderId,
+    };
+
+    this.reportSubmitting.set(true);
+    const request$ = editId
+      ? this.imagingService.updateReport(editId, payload)
+      : this.imagingService.createReport(payload);
+
+    request$.subscribe({
+      next: (saved) => {
+        this.toast.success(
+          this.translate.instant(editId ? 'IMAGING.REPORT_UPDATED' : 'IMAGING.REPORT_CREATED'),
+        );
+        this.reportSubmitting.set(false);
+        this.closeReportModal();
+        this.selectedReport.set(saved);
+        this.loadReports();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
+        this.reportSubmitting.set(false);
+      },
+    });
+  }
+
+  /**
+   * Sign the open report. Signing is irreversible and closes the report to
+   * edits, so it asks first — the backend refuses a re-sign outright and the
+   * only way back is a corrected version.
+   */
+  signReport(report: ImagingReportResponse): void {
+    if (!window.confirm(this.translate.instant('IMAGING.SIGN_CONFIRM'))) return;
+    this.signing.set(true);
+    this.imagingService.signReport(report.id).subscribe({
+      next: (signed) => {
+        this.toast.success(this.translate.instant('IMAGING.REPORT_SIGNED'));
+        this.signing.set(false);
+        this.selectedReport.set(signed);
+        this.loadReports();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
+        this.signing.set(false);
+      },
+    });
+  }
+
+  /**
+   * The form only offers statuses an author may assert. A report already at
+   * FINAL or a terminal state has no authorable equivalent, so it falls back
+   * to PRELIMINARY rather than sending a value the backend will refuse.
+   */
+  private authorableStatusOf(status: ImagingReportStatus): AuthorableReportStatus {
+    return (this.authorableStatuses as readonly string[]).includes(status)
+      ? (status as AuthorableReportStatus)
+      : 'PRELIMINARY';
+  }
+
+  /* ── Administrative void ── */
+
   openStatusUpdate(report: ImagingReportResponse): void {
     this.statusTarget.set(report);
-    this.statusForm = { status: report.reportStatus, statusReason: '' };
+    this.statusForm = { status: 'CANCELLED', statusReason: '' };
     this.showStatusModal.set(true);
   }
 
@@ -483,12 +681,18 @@ export class ImagingComponent implements OnInit {
   submitStatusUpdate(): void {
     const report = this.statusTarget();
     if (!report) return;
+    const reason = this.statusForm.statusReason.trim();
+    // Mirrors the backend rule rather than letting the server bounce it: a
+    // voided radiology report with no account of why is a hole in the chart.
+    if (!reason) {
+      this.toast.error(this.translate.instant('IMAGING.VOID_REASON_REQUIRED'));
+      return;
+    }
     this.statusSubmitting.set(true);
     this.imagingService
       .updateReportStatus(report.id, {
         status: this.statusForm.status,
-        statusReason: this.statusForm.statusReason.trim() || undefined,
-        changedByStaffId: this.auth.getUserProfile()?.staffId,
+        statusReason: reason,
       })
       .subscribe({
         next: (updated) => {
@@ -505,6 +709,34 @@ export class ImagingComponent implements OnInit {
           this.statusSubmitting.set(false);
         },
       });
+  }
+
+  private emptyReportForm(): ReportForm {
+    return {
+      reportTitle: '',
+      modality: 'XRAY',
+      bodyRegion: '',
+      accessionNumber: '',
+      technique: '',
+      comparisonStudies: '',
+      findings: '',
+      impression: '',
+      recommendations: '',
+      contrastAdministered: false,
+      contrastDetails: '',
+      criticalFinding: false,
+      reportStatus: 'PRELIMINARY',
+    };
+  }
+
+  /** An order can only be read once the study has actually been acquired. */
+  canAuthorForOrder(order: ImagingOrderResponse): boolean {
+    return (
+      this.canAuthorReports &&
+      (order.status === 'COMPLETED' ||
+        order.status === 'RESULTS_AVAILABLE' ||
+        order.status === 'IN_PROGRESS')
+    );
   }
 
   getReportStatusClass(status: string): string {

@@ -1040,3 +1040,231 @@ PHYSIOTHERAPIST.
   as a set so a future change cannot widen one and forget the rest.
   'View Patient Records' is restored in both permission maps - D4 had removed
   it precisely because the grant was a promise the panels could not keep.
+
+---
+
+# Epic Parity Tier 2 — 2026-08-24
+
+> Successor to the **Epic Parity Gap Tasklist — 2026-08-20** (items 1–25, all closed
+> and promoted). Source audit: <https://claude.ai/code/artifact/a2d071f3-8b46-49a6-b2f1-10ad85ae87f2>
+> — but that artifact is now **stale as a document**, so every item below was
+> re-verified by search against `develop @ 30f07e8f` rather than taken from it.
+> One item = one PR into develop unless noted. Next free migration: **V132**.
+
+**What the ledger's own "if the goal is closing the gaps that matter" top-8 became:**
+all eight shipped — synthetic surfaces (#431/#432), bed decision (#433),
+L&D (#437), turn-on-what's-built (#438/#439/#457), slot inventory (#459/#467),
+critical values (#434/#451/#462), web cancel/reschedule + proxy (#440),
+patient education (#441). Since then PRs #472 microbiology, #473 note co-sign,
+#474 registration extras, #475 downtime + printing, #476 recalls/waitlist,
+#477 bulk export and #478 report builder + NEWS2 closed most of what the
+ledger listed as absent. **Anything the artifact still shows red should be
+checked against this list before it is believed.**
+
+## E0 — A loop that cannot close (clinical truth)
+
+- [ ] 26. **Radiology reading room — imaging reports can never be created.**
+  ⚠ NEW FINDING, not in the 2026-08-20 audit (which recorded only "no
+  report-authoring UI"). The truth is worse: `ImagingReportService.createReport`
+  and `updateReport` have **zero production callers**. The only references
+  anywhere are the interface, `ImagingReportServiceImpl`, and
+  `ImagingReportServiceImplTest`. `ImagingResultController` exposes reads,
+  `PUT /{reportId}/status`, and `acknowledge-critical` — no create, no update.
+  `ImagingReportUpsertRequestDTO` is referenced by nothing but its own mapper
+  and those same files. So an imaging order is placed, the radiologist has no
+  path to enter findings, and `/imaging`'s Results view is a worklist over rows
+  that cannot exist. This is the built-but-unreachable defect class in its
+  purest form and it breaks a whole clinical loop.
+  Scope: `POST`/`PUT` endpoints (mirror the microbiology root-path decision —
+  a `POST /imaging/**` matcher may 403 the radiology roles first-match, check
+  before choosing the path), a radiologist authoring surface (technique /
+  comparison / findings / impression), and the PRELIMINARY→FINAL→ADDENDUM
+  lifecycle plus version demotion the impl **already implements** and nothing
+  can reach. Attachments go through the authenticated document path (#482
+  precedent), never `/uploads/**`.
+- [ ] 27. **Critical imaging findings have no escalation loop.**
+  `acknowledgeCriticalResult` exists; nothing notifies anyone that there is
+  something to acknowledge. Lab has the full notify → read-back → timer →
+  widen chain (V109/V116, `CriticalValueNotificationService`); imaging has the
+  flag and the acknowledge button and nothing between them. Note the shape
+  problem the NEWS2 deferral already hit: the escalation stamps/rounds live on
+  `lab.lab_results`, so imaging needs its own ledger columns rather than a
+  reused one. Depends on #26 (a report has to exist before a finding can).
+
+## E1 — The specialty's own emergencies
+
+The ledger's own verdict is that this is "a maternal-newborn EHR with
+generalist modules". Both items below are the missing halves of workflows the
+OB suite already models.
+
+- [ ] 28. **Blood bank / transfusion.** Verified zero code: `Transfusion`,
+  `BloodBank`, `CrossMatch` return nothing; `bloodProductsRequired` is one
+  boolean on `ProcedureOrder` and that is the entire footprint. #437 shipped
+  the partograph with PPH alerts — and postpartum haemorrhage is the leading
+  cause of maternal death — so the product raises the alarm and then has
+  nowhere to record the intervention. Scope v1: ABO/Rh + antibody screen on the
+  patient record, transfusion request → crossmatch → unit issue →
+  administration verified through the **existing** five-rights barcode service
+  → transfusion-reaction report. Deliberately NOT donor recruitment or a donor
+  inventory chain: that is a blood-bank LIS, not an EHR.
+- [ ] 29. **Death & mortality workflow.** Verified zero code: no `dateOfDeath`,
+  no `DeathRecord`, no deceased state anywhere. A patient who dies stays ACTIVE
+  — open encounters, live appointments, and recall/reminder sweeps that will
+  cheerfully SMS the family. It also blocks the maternal and perinatal
+  mortality indicators the DHIS2 ADX export otherwise exists to report. Scope:
+  death record (datetime, place, immediate + underlying cause ICD-10,
+  certifier), a state transition that closes admissions/encounters/appointments
+  and stops every outreach sweep, and maternal/perinatal death flags feeding the
+  reporting tier.
+
+## E2 — Inpatient logistics remainder (unblocked by #433)
+
+- [ ] 30. **In-app transfer orders (bed→bed, ward→ward).** Verified zero code:
+  `TransferOrder`, `transferPatient`, `InternalTransfer` all empty. Transfers
+  exist ONLY as inbound HL7 A02. `BedAssignmentService` already owns the
+  `Admission.bed` ↔ `Bed.status` invariant, so this is an orchestration +
+  audit layer over an invariant that already holds — not new schema risk.
+- [ ] 31. **Bed board / census.** #433 gave beds real writers; what is still
+  missing is the ward-level board (grid by ward → room → bed with occupant,
+  isolation flag, expected discharge) and a census number the admin dashboard
+  can trust. Check what the existing occupancy tiles show post-#433 before
+  scoping — they were built against the orphan schema.
+- [ ] 32. **Isolation precautions.** Verified zero code (every `Isolation` hit
+  is `TenantIsolationMode` or social history). For TB, cholera, Lassa and
+  measles this is a storyboard banner + bed-board flag + a nursing-task
+  modifier — a cross-cutting attribute, not a module. Pairs naturally with #31.
+
+## E3 — Safety gates that are absent, not merely unenforced
+
+- [ ] 33. **Pharmacist verification gate before eMAR.** Verified zero code
+  (`pharmacistVerified`, `verifiedByPharmacist` — nothing). Today a SIGNED
+  prescription is immediately administrable; the verify step Willow puts
+  between prescriber and nurse does not exist. ⚠ DECIDE FIRST whether it
+  belongs in this deployment model (community hospital, single pharmacy,
+  paper-fallback dispensing) — it may be a deliberate non-goal, and building
+  it would insert a blocking human step into every inpatient med.
+- [ ] 34. **Dispense-time barcode verification.** The five-rights scan is
+  server-authoritative and fail-closed at the MAR; dispensing has no scan at
+  all. #475's wristband and specimen-label printing means the scan targets now
+  physically exist.
+
+## E4 — Population health, on this product's terms
+
+Epic calls it Healthy Planet; here it is defaulter tracing and programme
+cohorts. The DHIS2 ADX export is already wired, so these feed a reporting path
+that exists rather than inventing one.
+
+- [ ] 35. **Disease registries / cohorts** — HIV, TB, malaria, hypertension,
+  diabetes, ANC. Enrolment + status + programme visit cadence.
+- [ ] 36. **Care-gap worklist + defaulter tracing.** A care gap is structurally
+  the same row as a recall with a rule behind it instead of a clinician, and
+  `PatientOutreachNotifier` (#476) is already the transport with preference
+  and SMS-guard handling solved.
+- [ ] 37. **Panel management** — provider / CHW panels, empanelment.
+  Verified zero code for all three (`CareGap`, `QualityMeasure`,
+  `PanelManagement`, `Cohort`, `Readmission` all empty).
+
+## E5 — Records, identity, HIM
+
+- [ ] 38. **Demographics depth** — ethnicity, preferred language, address
+  history. `ethnicity` and `AddressHistory` are zero-file; `preferredLanguage`
+  appears in 4. Language is operational here, not decorative: the UI is EN/FR/ES
+  while patients speak Bambara, Dioula and Mooré, and the SMS channel picks a
+  locale per message.
+- [ ] 39. **Release of information + disclosure accounting.** Break-the-glass
+  already audits every read with a per-read counter; disclosure accounting is
+  the patient-facing report over that existing ledger, plus a request workflow.
+  Verified zero code for both.
+- [ ] 40. **Provider credentialing renewal.** `Staff.licenseExpiry` exists and
+  `HospitalAdminDashboardServiceImpl` counts it — nothing verifies, renews, or
+  alerts. Small, and it makes an already-collected column mean something.
+- [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
+  alias reassignment and audit shipped in #439/#449 and explicitly deferred
+  A40. This is the inbound trigger for work that already exists.
+
+## E6 — Interop breadth that fits this deployment
+
+- [ ] 42. **FHIR DiagnosticReport + ServiceRequest providers.** Seven providers
+  exist (Patient, Encounter, Condition, Observation, Immunization,
+  MedicationRequest). Orders and reports — labs, the new microbiology cultures,
+  the #26 imaging reports — have no FHIR face at all.
+- [ ] 43. **FHIR Appointment + Slot providers.** Newly populatable: V121/V128
+  gave slots a real inventory and a booking writer, which is why the audit
+  correctly called this absent at the time and why it is now cheap.
+- [ ] 44. **FHIR DocumentReference + patient record download.** The portal is
+  print-only. #477's bulk exporter already streams NDJSON through
+  patient-scoped queries, so a single-patient download is a narrow lift.
+- [ ] 45. **Outbound webhooks / API-key management** for third-party clients.
+  `apiKeyReference` exists on `PlatformService` as a pointer with no issuance,
+  rotation or verification behind it.
+
+## E7 — Engagement
+
+- [ ] 46. **Day-of self check-in / kiosk.** E-check-in with dynamic
+  questionnaires covers BEFORE the visit; arrival at the desk has no
+  self-service path. Verified zero code (`SelfCheckIn`, `Kiosk`).
+- [ ] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
+  entirely absent (no PHQ-9, no GAD-7 anywhere). The one that belongs in this
+  product first is the **Edinburgh Postnatal Depression Scale** in the
+  postpartum module, where there is already a care plan, an alert engine and a
+  visit cadence to hang it on. PHQ-9/GAD-7 follow as generic instruments.
+
+## Standing platform debt — owed, not parity
+
+- UI palette migration `--primary: #2563eb` → Keneya green. The brand shipped
+  (#505–#507); the design tokens did not, so teal/ochre currently coexist with
+  blue. Touches contrast ratios, focus rings and the axe gate — its own PR.
+- `java:S8700` project-wide decision: 21 findings across 18 files, all
+  `Duration.between(LocalDateTime, LocalDateTime)`. This is one call about
+  whether clinical timestamps move to `Instant`/`OffsetDateTime` on
+  `BaseEntity`, not 21 edits. It resurfaces in every Sonar run until decided.
+- ShedLock / `@Version` on the remaining check-then-act races.
+- Audit events on the write surfaces added since #431.
+- WHO LMS growth-reference import — needs a verified source + clinical
+  sign-off. Never from model memory (V120 precedent).
+- Drug-interaction KB seed still needs a pharmacist's sign-off.
+- `R__prod_role_grants.sql` — a Flyway `R__` name in a Liquibase repo, so those
+  production role grants have never run. Registering it would `GRANT` on every
+  deploy and fail where the roles don't exist. Operational call.
+- Two-factor transport for controlled substances; `app.empi.probabilistic.enabled`
+  still defaults false.
+
+## Operational, open right now
+
+- Deploy prod (Deploy-to-Railway, `environment: prod`) — prod still runs the
+  pre-#504 build with staged-but-inactive vars, so its emails still link to the
+  old domain.
+- `api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare: Universal SSL
+  covers `*.e-keneya.com` but not second-level `*.dev.e-keneya.com`.
+- Keycloak `hms-portal` partial-import on the dev + prod realms before any SSO flip.
+- Remove the old `*.bitnesttechs.com` custom domains from all Railway services.
+- Revoke the chat-exposed SonarCloud token.
+- Play Store privacy-policy URL.
+
+## Deliberate non-goals — recorded so they stop resurfacing
+
+Revenue cycle beyond receivables (the roadmap's own entry: partner with a
+billing vendor). **All** of perioperative/OpTime — OR scheduling, anesthesia
+record, WHO surgical safety checklist, PACU — verified zero-file and out of
+scope for a facility without an OR programme. US exchange rails: C-CDA,
+IHE XDS/PIX/PDQ, IIS VXU, Carequality/TEFCA/Direct. SNOMED CT (licensing).
+Surescripts/NCPDP and EPCS. Video visits (bandwidth — audio memos and
+diagnostic photos are the deliberate substitute). Specialty modules beyond OB
+(oncology, cardiology, dialysis, ophthalmology, dental). Device integration
+with no devices: dispensing cabinets, smart pumps, bedside monitors. Sterile
+processing, patient transport, dietary/food service, research & clinical
+trials, genomics/PGx, home health & hospice.
+
+**Just outside the line:** anatomic pathology is not a non-goal — it needs a
+histopathology service to exist at the facility first. Warehouse/ETL is not a
+non-goal either — materialized views and read-replica routing already cover
+what the reporting tier asks of it today.
+
+## Recommended order
+
+E0 first and alone (#26 → #27): a clinical loop that cannot close outranks
+every breadth item on this page, and #26 is the same defect class the
+2026-08-21 reassessment named as the recurring one. Then E1 (#28, #29) —
+the emergencies belonging to the specialty this product is deepest in. Then
+E2 as one batch (#30–#32, all three touch the same board). E3 needs the #33
+decision before it can be scoped. E4–E7 are pick-by-demand.

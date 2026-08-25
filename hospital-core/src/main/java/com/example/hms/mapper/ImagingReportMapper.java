@@ -109,6 +109,11 @@ public class ImagingReportMapper {
             .patientNotified(report.isPatientNotified())
             .lockedForEditing(report.getLockedForEditing())
             .lockReason(report.getLockReason())
+            .signed(report.isSigned())
+            .signatureAlgorithm(report.getSignatureAlgorithm())
+            .signatureValue(report.getSignatureValue())
+            .criticalFinding(report.isCriticalFlagged())
+            .criticalAcknowledged(report.isCriticalAcknowledged())
             .externalSystemName(report.getExternalSystemName())
             .externalReportId(report.getExternalReportId())
             .createdBy(report.getCreatedBy())
@@ -121,21 +126,32 @@ public class ImagingReportMapper {
             .build();
     }
 
+    /**
+     * Copy authorable content onto the report.
+     *
+     * <p>Content fields are applied unconditionally — a radiologist clearing
+     * the Comparison box means the field is now empty, and an omitted field on
+     * a full-document PUT is a deletion, not "leave alone".
+     *
+     * <p>Provenance fields are NOT here at all. This method previously did
+     * {@code report.setSignedAt(request.getSignedAt())} and the same for
+     * {@code criticalResultAcknowledgedAt} and {@code lockedForEditing},
+     * which had two failure modes at once: the client could assert a
+     * signature, and any update that omitted those keys silently NULLED a
+     * signature the server had stamped. Both are gone — the sign and
+     * acknowledge ceremonies own those columns now.
+     *
+     * <p>{@code reportVersion} and {@code latestVersion} are likewise absent:
+     * they are derived from the order's existing reports in the service, so a
+     * request can neither forge a version number nor collide two rows onto
+     * "latest".
+     */
     public void updateReportFromRequest(ImagingReport report, ImagingReportUpsertRequestDTO request) {
         if (report == null || request == null) {
             return;
         }
         if (request.getReportNumber() != null) {
             report.setReportNumber(request.getReportNumber());
-        }
-        if (request.getReportStatus() != null) {
-            report.setReportStatus(request.getReportStatus());
-        }
-        if (request.getReportVersion() != null) {
-            report.setReportVersion(request.getReportVersion());
-        }
-        if (request.getLatestVersion() != null) {
-            report.setLatestVersion(request.getLatestVersion());
         }
         report.setStudyInstanceUid(request.getStudyInstanceUid());
         report.setSeriesInstanceUid(request.getSeriesInstanceUid());
@@ -146,11 +162,6 @@ public class ImagingReportMapper {
         report.setReportTitle(request.getReportTitle());
         report.setPerformedAt(request.getPerformedAt());
         report.setCompletedAt(request.getCompletedAt());
-        report.setInterpretedAt(request.getInterpretedAt());
-        report.setSignedAt(request.getSignedAt());
-        report.setCriticalResultFlaggedAt(request.getCriticalResultFlaggedAt());
-        report.setCriticalResultAcknowledgedAt(request.getCriticalResultAcknowledgedAt());
-        report.setPatientNotifiedAt(request.getPatientNotifiedAt());
         report.setTechnique(request.getTechnique());
         report.setFindings(request.getFindings());
         report.setImpression(request.getImpression());
@@ -159,8 +170,6 @@ public class ImagingReportMapper {
         report.setContrastAdministered(request.getContrastAdministered());
         report.setContrastDetails(request.getContrastDetails());
         report.setRadiationDoseMgy(request.getRadiationDoseMgy());
-        report.setLockedForEditing(request.getLockedForEditing());
-        report.setLockReason(request.getLockReason());
         report.setExternalSystemName(request.getExternalSystemName());
         report.setExternalReportId(request.getExternalReportId());
         synchronizeMeasurements(report, request.getMeasurements());

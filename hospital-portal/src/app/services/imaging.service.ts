@@ -112,6 +112,17 @@ export interface ImagingReportResponse {
   criticalResultFlaggedAt: string | null;
   criticalResultAcknowledgedAt: string | null;
   criticalResultAckByName: string | null;
+  /** True once signed. Drives the read-only lock on the authoring form. */
+  signed: boolean;
+  /**
+   * Null on a signed row means "signed outside this ceremony" — an externally
+   * ingested report, or one written before V132 — not a tampered one.
+   */
+  signatureAlgorithm: string | null;
+  signatureValue: string | null;
+  criticalFinding: boolean;
+  criticalAcknowledged: boolean;
+  lockedForEditing?: boolean | null;
   measurements?: ImagingReportMeasurement[] | null;
   statusHistory?: ImagingReportStatusEntry[] | null;
   studyInstanceUid?: string | null;
@@ -122,11 +133,53 @@ export interface ImagingReportResponse {
   updatedAt: string;
 }
 
+/**
+ * Administrative void only. The backend restricts `status` to CANCELLED or
+ * ERROR and requires a reason — content states come from authoring the report
+ * and FINAL only from signing it. `changedByStaffId` is gone: the server
+ * resolves the actor from the authenticated caller.
+ */
 export interface ImagingReportStatusUpdateRequest {
-  status?: ImagingReportStatus;
-  statusReason?: string;
-  changedByStaffId?: string;
+  status: Extract<ImagingReportStatus, 'CANCELLED' | 'ERROR'>;
+  statusReason: string;
+  clientSource?: string;
   notes?: string;
+}
+
+/**
+ * What a radiologist may assert when authoring. Provenance is deliberately
+ * absent — signer, sign time, acknowledger, version and latest-flag are all
+ * server-owned. See ImagingReportUpsertRequestDTO on the backend.
+ */
+export interface ImagingReportAuthorRequest {
+  imagingOrderId?: string;
+  departmentId?: string;
+  performedByStaffId?: string;
+  interpretingProviderId?: string;
+  reportNumber?: string;
+  reportStatus?: Extract<
+    ImagingReportStatus,
+    'DRAFT' | 'PRELIMINARY' | 'ADDENDUM' | 'CORRECTED' | 'AMENDED'
+  >;
+  studyInstanceUid?: string;
+  seriesInstanceUid?: string;
+  accessionNumber?: string;
+  pacsViewerUrl?: string;
+  modality?: ImagingModality;
+  bodyRegion?: string;
+  reportTitle?: string;
+  performedAt?: string;
+  completedAt?: string;
+  technique?: string;
+  findings?: string;
+  impression?: string;
+  recommendations?: string;
+  comparisonStudies?: string;
+  contrastAdministered?: boolean;
+  contrastDetails?: string;
+  radiationDoseMgy?: number;
+  /** Set-only: the backend never lowers a raised critical flag. */
+  criticalFinding?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -231,15 +284,34 @@ export class ImagingService {
     );
   }
 
-  acknowledgeCriticalReport(
-    reportId: string,
-    acknowledgingStaffId: string,
-  ): Observable<ImagingReportResponse> {
-    const params = new HttpParams().set('acknowledgingStaffId', acknowledgingStaffId);
+  /**
+   * The acknowledging clinician is the authenticated caller. It used to be an
+   * `acknowledgingStaffId` query parameter — so a caller could record someone
+   * else as having taken the call — and the endpoint threw on every request
+   * regardless, because it forwarded a status-update payload with no status.
+   */
+  acknowledgeCriticalReport(reportId: string): Observable<ImagingReportResponse> {
     return this.http.put<ImagingReportResponse>(
       `${this.baseUrl}/results/${reportId}/acknowledge-critical`,
       null,
-      { params },
     );
+  }
+
+  /* ── Authoring (Tier 2 item 26) ── */
+
+  createReport(req: ImagingReportAuthorRequest): Observable<ImagingReportResponse> {
+    return this.http.post<ImagingReportResponse>(`${this.baseUrl}/results`, req);
+  }
+
+  updateReport(
+    reportId: string,
+    req: ImagingReportAuthorRequest,
+  ): Observable<ImagingReportResponse> {
+    return this.http.put<ImagingReportResponse>(`${this.baseUrl}/results/${reportId}`, req);
+  }
+
+  /** The only path to FINAL. Signer and time are stamped server-side. */
+  signReport(reportId: string): Observable<ImagingReportResponse> {
+    return this.http.post<ImagingReportResponse>(`${this.baseUrl}/results/${reportId}/sign`, null);
   }
 }
