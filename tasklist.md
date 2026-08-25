@@ -1049,8 +1049,8 @@ PHYSIOTHERAPIST.
 > and promoted). Source audit: <https://claude.ai/code/artifact/a2d071f3-8b46-49a6-b2f1-10ad85ae87f2>
 > — but that artifact is now **stale as a document**, so every item below was
 > re-verified by search against `develop @ 30f07e8f` rather than taken from it.
-> One item = one PR into develop unless noted. Next free migration: **V138**
-> (V132–V137 consumed by items 26, 27, 28, 29, 32 and 30 in that order).
+> One item = one PR into develop unless noted. Next free migration: **V139**
+> (V132–V138 consumed by items 26, 27, 28, 29, 32, 30 and 34 in that order).
 > **Never stack PRs**: branch every one off develop and pre-allocate the
 > migration number. Four strands were lost to stacking; #509 had to be
 > re-cut as #512. And after ANY merge into a branch carrying a migration or
@@ -1296,7 +1296,47 @@ OB suite already models.
   belongs in this deployment model (community hospital, single pharmacy,
   paper-fallback dispensing) — it may be a deliberate non-goal, and building
   it would insert a blocking human step into every inpatient med.
-- [ ] 34. **Dispense-time barcode verification.** The five-rights scan is
+- [x] 34. **Dispense-time barcode verification.**
+  ✅ DONE 2026-08-25 (**PR #518** `feature/dispense-verification`, V138).
+  `DispenseVerificationService` mirroring `FiveRightsVerificationService`, so
+  the two ends of one medication chain read the same way to whoever audits
+  them. **Three checks, not five** — dose, route and time are administration
+  questions the eMAR already owns; what a pharmacist can verify handing a
+  pack across a counter is who it is for, that it is the right drug, and
+  that it is fit to give. **The scan is optional, the server checks are
+  not**: requiring a scanner would take every paper-fallback site offline
+  rather than make it safer, so expiry and drug-match — both answerable from
+  the lot the pharmacist already named — run on every dispense regardless.
+  Overrides: EXPIRY and PATIENT never; DRUG only as a recorded substitution,
+  reusing the `substitution`/`substitutionReason` the request already models
+  rather than inventing a second override with its own audit event (a bare
+  `substitution=true` with no reason is not an override). Load is split from
+  consume so a refusal happens BEFORE stock moves. VERIFIED is keyed on a
+  scan having HAPPENED, not on the checks having passed — the checks run
+  every time, so letting them alone stamp VERIFIED would put it on nearly
+  every row and it would stop meaning anything.
+  ⚠️ **The original finding understated this badly. FOUR defects, three of
+  them pre-existing:** (1) `StockLot.expiryDate` was written at goods-in and
+  **read by nothing anywhere in the application** — `findAvailableLotsByFEFO`
+  filters `expiry_date >= CURRENT_DATE` and the dispense path called
+  `findById` straight past it, so a lot two years out of date dispensed
+  normally; (2) the lot's drug was never compared to the prescription's, only
+  its pharmacy; (3) `medicationName` was free text on the request flowing
+  into the row, the audit entry and the patient's ready-for-pickup SMS; and
+  (4) **the lot picker never worked** — it listed inventory items and bound
+  their ids to `stockLotId`, so the backend 404'd every time. That fourth one
+  is why the first three went unnoticed: in practice every dispense went
+  through with no lot, so no stock decrement either, and the code path that
+  would have exposed them was unreachable. Also **the claimed scan target
+  only half existed**: #475's wristband is the patient half, but there is no
+  medication barcode anywhere and no medication label printed. V138 mints one
+  per LOT (not per catalogue item — the lot is what gets picked up and what
+  carries the expiry), server-side rather than a manufacturer GTIN, because
+  stock arrives from government allocation, donation and local purchase so
+  barcodes are inconsistent where present at all. Same shape as
+  `lab.lab_specimens.barcode_value`, through the same label renderer;
+  `GET /pharmacy/stock-lots/{id}/label.pdf` backfills pre-V138 lots on first
+  print. Original finding: The five-rights scan is
   server-authoritative and fail-closed at the MAR; dispensing has no scan at
   all. #475's wristband and specimen-label printing means the scan targets now
   physically exist.
