@@ -43,16 +43,18 @@ $sidebar-active: #2563eb;
   gap: 0.75rem;
 }
 
-.logo-icon {
-  font-size: 28px;
-  color: $primary;
-}
-
 .logo-text {
   font-size: 1.25rem;
   font-weight: 700;
   color: #fff;
-  letter-spacing: 1px;
+  // Tight, not the 1px tracking the old all-caps "HMS" wordmark needed —
+  // "e-Keneya" is mixed case and letter-spacing pulls it apart.
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.logo-accent {
+  color: #e39a2b;
 }
 
 .toggle-btn {

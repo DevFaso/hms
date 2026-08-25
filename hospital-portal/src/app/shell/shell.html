@@ -17,9 +17,9 @@
   <aside class="sidebar">
     <div class="sidebar-header">
       <div class="logo-area">
-        <span class="material-symbols-outlined logo-icon">local_hospital</span>
+        <app-brand-mark [size]="30" tone="onDark" />
         @if (!sidebarCollapsed()) {
-          <span class="logo-text">HMS</span>
+          <span class="logo-text">e-<span class="logo-accent">Keneya</span></span>
         }
       </div>
       <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">

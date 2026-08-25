@@ -1,7 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- HMS Blue background -->
-  <rect width="32" height="32" rx="6" fill="#1565C0"/>
-  <!-- White medical cross -->
-  <rect x="12" y="6" width="8" height="20" fill="white"/>
-  <rect x="6" y="12" width="20" height="8" fill="white"/>
+  <!-- e-Keneya mark, simplified build. Below ~24px the woven strip gaps of the
+       full mark (src/app/shared/brand-mark) stop resolving, so the arms are
+       solid here and the weave is kept as two contrast cells. -->
+  <rect width="32" height="32" rx="7" fill="#0A1614"/>
+  <path d="M12 3h8v9h9v8h-9v9h-8v-9H3v-8h9z" fill="#23B79C"/>
+  <rect x="16" y="12" width="4" height="4" fill="#E39A2B"/>
+  <rect x="12" y="16" width="4" height="4" fill="#E39A2B"/>
 </svg>
