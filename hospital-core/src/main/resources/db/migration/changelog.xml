@@ -1960,12 +1960,25 @@
     </changeSet>
 
     <!-- =================================================================
+         V132 - imaging report signing ceremony: signature_algorithm +
+         signature_value on clinical.imaging_reports, plus the unsigned
+         worklist and unacknowledged-critical partial indexes the
+         reading room reads. No DO block, so no splitStatements
+         attribute.
+         ================================================================= -->
+    <changeSet id="V132-imaging-report-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V132__imaging_report_signature.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V135 - death and mortality: clinical.patients.deceased_at (the
          flag every sweep and worklist reads) plus clinical.death_records
-         (the certificate, one row per patient). V132-V134 are allocated
-         to the imaging and blood-bank branches in flight; the numbers are
-         reserved so nothing collides on merge. No DO block, so no
-         splitStatements attribute.
+         (the certificate, one row per patient). V133 and V134 belong to
+         the imaging-escalation and blood-bank branches still in flight;
+         the numbers are reserved so nothing collides on merge. No DO
+         block, so no splitStatements attribute.
          ================================================================= -->
     <changeSet id="V135-death-and-mortality" author="hms-team" runOnChange="false">
         <sqlFile path="V135__death_and_mortality.sql"
