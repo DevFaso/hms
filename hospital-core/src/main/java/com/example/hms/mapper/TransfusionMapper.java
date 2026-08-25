@@ -14,8 +14,10 @@ import com.example.hms.payload.dto.transfusion.PatientBloodGroupResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionAdministrationResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionReactionResponseDTO;
 import com.example.hms.payload.dto.transfusion.TransfusionRequestResponseDTO;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,7 +32,15 @@ import java.util.UUID;
  * stored staleness flag is a staleness bug waiting to happen.
  */
 @Component
+@RequiredArgsConstructor
 public class TransfusionMapper {
+
+    /**
+     * The derived flags below — screenCurrent, expired, usable — are all
+     * "is this still valid NOW" questions, so the clock is injected here too
+     * rather than read inline.
+     */
+    private final Clock clock;
 
     public PatientBloodGroupResponseDTO toDto(PatientBloodGroup group) {
         if (group == null) {
@@ -50,7 +60,7 @@ public class TransfusionMapper {
             .expiresAt(group.getExpiresAt())
             .performedByName(staffName(group.getPerformedBy()))
             .superseded(group.getSuperseded())
-            .screenCurrent(group.screenIsCurrent(LocalDateTime.now()))
+            .screenCurrent(group.screenIsCurrent(LocalDateTime.now(clock)))
             .notes(group.getNotes())
             .createdAt(group.getCreatedAt())
             .build();
@@ -71,7 +81,7 @@ public class TransfusionMapper {
             .volumeMl(unit.getVolumeMl())
             .collectedOn(unit.getCollectedOn())
             .expiresOn(unit.getExpiresOn())
-            .expired(unit.isExpiredOn(LocalDate.now()))
+            .expired(unit.isExpiredOn(LocalDate.now(clock)))
             .source(unit.getSource())
             .status(unit.getStatus())
             .discardReason(unit.getDiscardReason())
@@ -96,7 +106,7 @@ public class TransfusionMapper {
             .performedByName(staffName(crossmatch.getPerformedBy()))
             .performedAt(crossmatch.getPerformedAt())
             .expiresAt(crossmatch.getExpiresAt())
-            .usable(crossmatch.isUsableAt(LocalDateTime.now()))
+            .usable(crossmatch.isUsableAt(LocalDateTime.now(clock)))
             .build();
     }
 
@@ -133,7 +143,7 @@ public class TransfusionMapper {
             .bloodGroupId(group != null ? group.getId() : null)
             .patientAboGroup(group != null ? group.getAboGroup() : null)
             .patientRhFactor(group != null ? group.getRhFactor() : null)
-            .screenCurrent(group != null && group.screenIsCurrent(LocalDateTime.now()))
+            .screenCurrent(group != null && group.screenIsCurrent(LocalDateTime.now(clock)))
             .units(units == null ? List.of() : units.stream().map(this::toDto).toList())
             .crossmatches(crossmatches == null ? List.of()
                 : crossmatches.stream().map(this::toDto).toList())

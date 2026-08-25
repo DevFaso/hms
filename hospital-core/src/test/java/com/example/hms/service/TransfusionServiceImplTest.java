@@ -54,6 +54,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -91,7 +92,14 @@ class TransfusionServiceImplTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
-    @Spy private TransfusionMapper mapper = new TransfusionMapper();
+    /**
+     * A real system clock, not a mock: the fixtures below build their own
+     * timestamps from LocalDateTime.now(), so moving the service's clock away
+     * from the system one would make expiry assertions lie. The injection point
+     * exists so a future test CAN move it.
+     */
+    @Spy private Clock clock = Clock.systemDefaultZone();
+    @Spy private TransfusionMapper mapper = new TransfusionMapper(Clock.systemDefaultZone());
 
     @InjectMocks private TransfusionServiceImpl service;
 
@@ -168,6 +176,42 @@ class TransfusionServiceImplTest {
         return u;
     }
 
+    /**
+     * Argument builders for the assertion lambdas below.
+     *
+     * <p>These exist so that {@code assertThatThrownBy(() -> ...)} holds exactly
+     * ONE call that can throw — the service call under test (java:S5778). With
+     * the builder chain and the {@code getId()} calls inline, a failure inside
+     * the fixture would be caught by the assertion and read as the service
+     * refusing, which is the opposite of what the test claims to prove.
+     */
+    private CrossmatchRequestDTO compatibleCrossmatch(BloodUnit unit) {
+        return CrossmatchRequestDTO.builder()
+            .bloodUnitId(unit.getId())
+            .compatible(Boolean.TRUE)
+            .build();
+    }
+
+    private TransfusionAdministrationRequestDTO hangRequest(TransfusionRequest req,
+                                                            BloodUnit unit,
+                                                            Staff verifier) {
+        return TransfusionAdministrationRequestDTO.builder()
+            .requestId(req.getId())
+            .bloodUnitId(unit.getId())
+            .verifiedByStaffId(verifier.getId())
+            .build();
+    }
+
+    private BloodUnitRequestDTO incomingUnit(String unitNumber, LocalDate expiresOn) {
+        return BloodUnitRequestDTO.builder()
+            .unitNumber(unitNumber)
+            .productType(BloodProductType.PACKED_RED_CELLS)
+            .aboGroup(AboGroup.O)
+            .rhFactor(RhFactor.NEGATIVE)
+            .expiresOn(expiresOn)
+            .build();
+    }
+
     private TransfusionRequest request(PatientBloodGroup grp, TransfusionUrgency urgency) {
         TransfusionRequest r = TransfusionRequest.builder()
             .patient(patient)
@@ -208,12 +252,14 @@ class TransfusionServiceImplTest {
         when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
             .thenReturn(Optional.of(group(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE)));
 
-        assertThatThrownBy(() -> service.recordBloodGroup(PatientBloodGroupRequestDTO.builder()
+        PatientBloodGroupRequestDTO changed = PatientBloodGroupRequestDTO.builder()
             .patientId(patientId)
             .aboGroup(AboGroup.B)
             .rhFactor(RhFactor.POSITIVE)
             .antibodyScreen(AntibodyScreenResult.NEGATIVE)
-            .build()))
+            .build();
+
+        assertThatThrownBy(() -> service.recordBloodGroup(changed))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("A blood group does not change");
     }
@@ -242,12 +288,14 @@ class TransfusionServiceImplTest {
         when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.createRequest(TransfusionRequestRequestDTO.builder()
+        TransfusionRequestRequestDTO routine = TransfusionRequestRequestDTO.builder()
             .patientId(patientId)
             .productType(BloodProductType.PACKED_RED_CELLS)
             .unitsRequested(2)
             .indication("Anaemia")
-            .build()))
+            .build();
+
+        assertThatThrownBy(() -> service.createRequest(routine))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("no type and screen on record");
     }
@@ -289,7 +337,9 @@ class TransfusionServiceImplTest {
         TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
             TransfusionUrgency.ROUTINE);
 
-        assertThatThrownBy(() -> service.cancelRequest(req.getId(), "  "))
+        UUID requestId = req.getId();
+
+        assertThatThrownBy(() -> service.cancelRequest(requestId, "  "))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -303,10 +353,10 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId())
-            .compatible(Boolean.TRUE)
-            .build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("ABO/Rh incompatible");
         verify(crossmatchRepository, never()).save(any());
@@ -319,10 +369,10 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId())
-            .compatible(Boolean.TRUE)
-            .build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("incompatible");
     }
@@ -373,8 +423,10 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("antibody screen");
     }
@@ -386,8 +438,10 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("antibody screen");
     }
@@ -400,8 +454,10 @@ class TransfusionServiceImplTest {
             BloodUnitStatus.AVAILABLE);
         donor.setExpiresOn(LocalDate.now().minusDays(1));
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("expired");
     }
@@ -413,8 +469,10 @@ class TransfusionServiceImplTest {
         BloodUnit plasma = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.FRESH_FROZEN_PLASMA,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(plasma.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(plasma);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("but the request is for");
     }
@@ -430,7 +488,10 @@ class TransfusionServiceImplTest {
         when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), donor.getId()))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.issueUnit(req.getId(), donor.getId()))
+        UUID requestId = req.getId();
+        UUID unitId = donor.getId();
+
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("has not been crossmatched");
     }
@@ -457,7 +518,10 @@ class TransfusionServiceImplTest {
         when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), aPos.getId()))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.issueUnit(req.getId(), aPos.getId()))
+        UUID requestId = req.getId();
+        UUID unitId = aPos.getId();
+
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Only group O Rh-negative");
     }
@@ -477,7 +541,10 @@ class TransfusionServiceImplTest {
         when(crossmatchRepository.findByRequest_IdAndBloodUnit_Id(req.getId(), donor.getId()))
             .thenReturn(Optional.of(lapsed));
 
-        assertThatThrownBy(() -> service.issueUnit(req.getId(), donor.getId()))
+        UUID requestId = req.getId();
+        UUID unitId = donor.getId();
+
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("expired");
     }
@@ -500,7 +567,9 @@ class TransfusionServiceImplTest {
 
     @Test
     void onlyAnIssuedUnitCanBeHung() {
-        assertThatThrownBy(() -> hang(BloodUnitStatus.AVAILABLE, second.getId()))
+        UUID verifierId = second.getId();
+
+        assertThatThrownBy(() -> hang(BloodUnitStatus.AVAILABLE, verifierId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Only an issued unit can be hung");
     }
@@ -511,7 +580,9 @@ class TransfusionServiceImplTest {
         // practice anywhere.
         when(staffRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
 
-        assertThatThrownBy(() -> hang(BloodUnitStatus.ISSUED, caller.getId()))
+        UUID verifierId = caller.getId();
+
+        assertThatThrownBy(() -> hang(BloodUnitStatus.ISSUED, verifierId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("requires two people");
     }
@@ -531,8 +602,9 @@ class TransfusionServiceImplTest {
         when(administrationRepository.findByBloodUnit_Id(donor.getId()))
             .thenReturn(Optional.of(new TransfusionAdministration()));
 
-        assertThatThrownBy(() -> service.startAdministration(TransfusionAdministrationRequestDTO.builder()
-            .requestId(req.getId()).bloodUnitId(donor.getId()).verifiedByStaffId(second.getId()).build()))
+        TransfusionAdministrationRequestDTO hang = hangRequest(req, donor, second);
+
+        assertThatThrownBy(() -> service.startAdministration(hang))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been hung");
     }
@@ -590,7 +662,9 @@ class TransfusionServiceImplTest {
     void stoppingRequiresAReason() {
         TransfusionAdministration admin = inProgress();
 
-        assertThatThrownBy(() -> service.stopAdministration(admin.getId(), " "))
+        UUID administrationId = admin.getId();
+
+        assertThatThrownBy(() -> service.stopAdministration(administrationId, " "))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -598,14 +672,9 @@ class TransfusionServiceImplTest {
 
     @Test
     void anAlreadyExpiredUnitCannotBeReceived() {
-        assertThatThrownBy(() -> service.receiveUnit(
-            BloodUnitRequestDTO.builder()
-                .unitNumber("U-1")
-                .productType(BloodProductType.PACKED_RED_CELLS)
-                .aboGroup(AboGroup.O)
-                .rhFactor(RhFactor.NEGATIVE)
-                .expiresOn(LocalDate.now().minusDays(1))
-                .build()))
+        BloodUnitRequestDTO expired = incomingUnit("U-1", LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() -> service.receiveUnit(expired))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already expired");
     }
@@ -617,14 +686,9 @@ class TransfusionServiceImplTest {
         when(unitRepository.findByHospital_IdAndUnitNumber(hospitalId, "U-1"))
             .thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> service.receiveUnit(
-            BloodUnitRequestDTO.builder()
-                .unitNumber("U-1")
-                .productType(BloodProductType.PACKED_RED_CELLS)
-                .aboGroup(AboGroup.O)
-                .rhFactor(RhFactor.NEGATIVE)
-                .expiresOn(LocalDate.now().plusDays(10))
-                .build()))
+        BloodUnitRequestDTO duplicate = incomingUnit("U-1", LocalDate.now().plusDays(10));
+
+        assertThatThrownBy(() -> service.receiveUnit(duplicate))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already on record");
     }
@@ -753,12 +817,16 @@ class TransfusionServiceImplTest {
     void discardingRequiresAReasonAndRefusesAnAlreadyTransfusedUnit() {
         BloodUnit fresh = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
             BloodUnitStatus.AVAILABLE);
-        assertThatThrownBy(() -> service.discardUnit(fresh.getId(), " "))
+        UUID freshId = fresh.getId();
+
+        assertThatThrownBy(() -> service.discardUnit(freshId, " "))
             .isInstanceOf(BusinessException.class);
 
         BloodUnit given = unit(AboGroup.B, RhFactor.POSITIVE, BloodProductType.PLATELETS,
             BloodUnitStatus.TRANSFUSED);
-        assertThatThrownBy(() -> service.discardUnit(given.getId(), "Changed my mind"))
+        UUID givenId = given.getId();
+
+        assertThatThrownBy(() -> service.discardUnit(givenId, "Changed my mind"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been transfused");
     }
@@ -796,13 +864,15 @@ class TransfusionServiceImplTest {
         foreign.setHospital(other);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.createRequest(TransfusionRequestRequestDTO.builder()
+        TransfusionRequestRequestDTO withEncounter = TransfusionRequestRequestDTO.builder()
             .patientId(patientId)
             .encounterId(encounterId)
             .productType(BloodProductType.PACKED_RED_CELLS)
             .unitsRequested(1)
             .indication("Symptomatic anaemia")
-            .build()))
+            .build();
+
+        assertThatThrownBy(() -> service.createRequest(withEncounter))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -830,14 +900,17 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.cancelRequest(done.getId(), "Too late"))
+        UUID requestId = done.getId();
+        UUID unitId = donor.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.cancelRequest(requestId, "Too late"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already COMPLETED");
-        assertThatThrownBy(() -> service.recordCrossmatch(done.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId()).compatible(Boolean.TRUE).build()))
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cannot be crossmatched against");
-        assertThatThrownBy(() -> service.issueUnit(done.getId(), donor.getId()))
+        assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -848,8 +921,10 @@ class TransfusionServiceImplTest {
         BloodUnit discarded = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.DISCARDED);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(discarded.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(discarded);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("no longer usable");
     }
@@ -862,8 +937,10 @@ class TransfusionServiceImplTest {
         BloodUnit donor = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
             BloodUnitStatus.AVAILABLE);
 
-        assertThatThrownBy(() -> service.recordCrossmatch(req.getId(), CrossmatchRequestDTO.builder()
-            .bloodUnitId(donor.getId()).compatible(Boolean.TRUE).build()))
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("no type and screen on record");
     }
@@ -896,11 +973,14 @@ class TransfusionServiceImplTest {
             .thenReturn(Optional.empty());
         when(administrationRepository.findByBloodUnit_Id(stale.getId())).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.issueUnit(req.getId(), stale.getId()))
+        UUID requestId = req.getId();
+        UUID staleId = stale.getId();
+        TransfusionAdministrationRequestDTO hangStale = hangRequest(req, stale, second);
+
+        assertThatThrownBy(() -> service.issueUnit(requestId, staleId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cannot be issued");
-        assertThatThrownBy(() -> service.startAdministration(TransfusionAdministrationRequestDTO.builder()
-            .requestId(req.getId()).bloodUnitId(stale.getId()).verifiedByStaffId(second.getId()).build()))
+        assertThatThrownBy(() -> service.startAdministration(hangStale))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("must not be transfused");
     }
@@ -914,8 +994,9 @@ class TransfusionServiceImplTest {
         when(administrationRepository.findByBloodUnit_Id(donor.getId())).thenReturn(Optional.empty());
         when(staffRepository.findByUserIdAndHospitalId(callerUserId, hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.startAdministration(TransfusionAdministrationRequestDTO.builder()
-            .requestId(req.getId()).bloodUnitId(donor.getId()).verifiedByStaffId(second.getId()).build()))
+        TransfusionAdministrationRequestDTO hang = hangRequest(req, donor, second);
+
+        assertThatThrownBy(() -> service.startAdministration(hang))
             .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -942,10 +1023,12 @@ class TransfusionServiceImplTest {
         TransfusionAdministration admin = inProgress();
         admin.setStatus(TransfusionAdministrationStatus.COMPLETED);
 
-        assertThatThrownBy(() -> service.completeAdministration(admin.getId(), 200))
+        UUID administrationId = admin.getId();
+
+        assertThatThrownBy(() -> service.completeAdministration(administrationId, 200))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already COMPLETED");
-        assertThatThrownBy(() -> service.stopAdministration(admin.getId(), "Too late"))
+        assertThatThrownBy(() -> service.stopAdministration(administrationId, "Too late"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already COMPLETED");
     }

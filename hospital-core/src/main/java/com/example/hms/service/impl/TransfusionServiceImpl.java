@@ -49,6 +49,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -88,6 +89,13 @@ public class TransfusionServiceImpl implements TransfusionService {
     private final PatientChartAccess patientChartAccess;
     private final TransfusionMapper mapper;
     private final RoleValidator roleValidator;
+    /**
+     * Injected rather than reading the system clock inline, following
+     * ReferralExpiryServiceImpl and PrenatalSchedulingServiceImpl. Expiry is
+     * load-bearing here — a crossmatch reservation lapses, a screen goes
+     * stale, a unit dates — so "now" has to be something a test can move.
+     */
+    private final Clock clock;
 
     // ── Type and screen ─────────────────────────────────────────────────
 
@@ -116,7 +124,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 bloodGroupRepository.save(current);
             });
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         PatientBloodGroup group = PatientBloodGroup.builder()
             .patient(patient)
             .hospital(hospitalRef(hospitalId))
@@ -169,7 +177,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                         .formatted(request.getUnitNumber())
                         + "wrong-unit incident waiting to happen.");
             });
-        if (request.getExpiresOn() != null && !request.getExpiresOn().isAfter(LocalDate.now())) {
+        if (request.getExpiresOn() != null && !request.getExpiresOn().isAfter(LocalDate.now(clock))) {
             throw new BusinessException("Unit %s is already expired and cannot be received into stock."
                 .formatted(request.getUnitNumber()));
         }
@@ -205,7 +213,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     @Override
     @Transactional(readOnly = true)
     public List<BloodUnitResponseDTO> listAssignableUnits() {
-        return unitRepository.findAssignable(requireHospital(), LocalDate.now())
+        return unitRepository.findAssignable(requireHospital(), LocalDate.now(clock))
             .stream().map(mapper::toDto).toList();
     }
 
@@ -265,7 +273,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .urgency(urgency)
             .status(TransfusionRequestStatus.REQUESTED)
             .requestedBy(currentStaff(hospitalId))
-            .requestedAt(LocalDateTime.now())
+            .requestedAt(LocalDateTime.now(clock))
             .requiredBy(request.getRequiredBy())
             .notes(request.getNotes())
             .build();
@@ -336,7 +344,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
 
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
-        if (unit.isExpiredOn(LocalDate.now())) {
+        if (unit.isExpiredOn(LocalDate.now(clock))) {
             throw new BusinessException("Unit %s expired on %s and cannot be crossmatched."
                 .formatted(unit.getUnitNumber(), unit.getExpiresOn()));
         }
@@ -355,7 +363,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 "This patient has no type and screen on record, so no unit can be crossmatched. "
                     + "Emergency release issues group O Rh-negative uncrossmatched instead.");
         }
-        if (!group.screenIsCurrent(LocalDateTime.now())) {
+        if (!group.screenIsCurrent(LocalDateTime.now(clock))) {
             throw new BusinessException(
                 "The antibody screen for this patient has lapsed or was never performed. Repeat the "
                     + "screen before crossmatching — a patient transfused or pregnant since the last "
@@ -378,7 +386,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                         group.getAboGroup(), group.getRhFactor(), transfusionRequest.getProductType()));
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unit.getId())
             .orElseGet(() -> TransfusionCrossmatch.builder()
@@ -424,7 +432,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new BusinessException("This request is %s.".formatted(request.getStatus()));
         }
         BloodUnit unit = loadUnitScoped(unitId);
-        if (unit.isExpiredOn(LocalDate.now())) {
+        if (unit.isExpiredOn(LocalDate.now(clock))) {
             throw new BusinessException("Unit %s expired on %s and cannot be issued."
                 .formatted(unit.getUnitNumber(), unit.getExpiresOn()));
         }
@@ -432,7 +440,7 @@ public class TransfusionServiceImpl implements TransfusionService {
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unitId).orElse(null);
 
-        if (crossmatch == null || !crossmatch.isUsableAt(LocalDateTime.now())) {
+        if (crossmatch == null || !crossmatch.isUsableAt(LocalDateTime.now(clock))) {
             // Emergency release: group O Rh-negative may go out uncrossmatched,
             // because in a haemorrhage the crossmatch takes longer than the
             // patient has. Anything else must be crossmatched first.
@@ -440,13 +448,7 @@ public class TransfusionServiceImpl implements TransfusionService {
                 && unit.getAboGroup() == AboGroup.emergencyReleaseGroup()
                 && unit.getRhFactor() == AboGroup.emergencyReleaseRh();
             if (!emergencyRelease) {
-                throw new BusinessException(crossmatch == null
-                    ? ("Unit %s has not been crossmatched against this request. Only group O "
-                        + "Rh-negative may be issued uncrossmatched, and only on an EMERGENCY request.")
-                        .formatted(unit.getUnitNumber())
-                    : ("The crossmatch for unit %s is %s. Repeat it before issuing.")
-                        .formatted(unit.getUnitNumber(),
-                            Boolean.TRUE.equals(crossmatch.getCompatible()) ? "expired" : "incompatible"));
+                throw new BusinessException(issueRefusal(unit, crossmatch));
             }
             log.warn("EMERGENCY uncrossmatched release of unit {} against request {}",
                 unit.getUnitNumber(), requestId);
@@ -477,7 +479,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new BusinessException(
                 "Unit %s is %s. Only an issued unit can be hung.".formatted(unit.getUnitNumber(), unit.getStatus()));
         }
-        if (unit.isExpiredOn(LocalDate.now())) {
+        if (unit.isExpiredOn(LocalDate.now(clock))) {
             throw new BusinessException("Unit %s expired on %s and must not be transfused."
                 .formatted(unit.getUnitNumber(), unit.getExpiresOn()));
         }
@@ -508,7 +510,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .patient(transfusionRequest.getPatient())
             .hospital(transfusionRequest.getHospital())
             .status(TransfusionAdministrationStatus.IN_PROGRESS)
-            .startedAt(LocalDateTime.now())
+            .startedAt(LocalDateTime.now(clock))
             .administeredBy(administering)
             .verifiedBy(verifier)
             .verificationMethod(request.getVerificationMethod())
@@ -526,7 +528,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new BusinessException("This transfusion is already %s.".formatted(administration.getStatus()));
         }
         administration.setStatus(TransfusionAdministrationStatus.COMPLETED);
-        administration.setCompletedAt(LocalDateTime.now());
+        administration.setCompletedAt(LocalDateTime.now(clock));
         administration.setVolumeTransfusedMl(volumeMl);
 
         BloodUnit unit = administration.getBloodUnit();
@@ -580,7 +582,7 @@ public class TransfusionServiceImpl implements TransfusionService {
             .actionsTaken(request.getActionsTaken())
             .unitReturnedToLab(Boolean.TRUE.equals(request.getUnitReturnedToLab()))
             .reportedBy(currentStaff(administration.getHospital().getId()))
-            .reportedAt(LocalDateTime.now())
+            .reportedAt(LocalDateTime.now(clock))
             .build();
 
         TransfusionReaction saved = reactionRepository.save(reaction);
@@ -621,9 +623,32 @@ public class TransfusionServiceImpl implements TransfusionService {
 
     // ── Internals ───────────────────────────────────────────────────────
 
+    /**
+     * Why this unit cannot go out.
+     *
+     * <p>Three different situations, and the message has to name the right one:
+     * nobody ever crossmatched it, the crossmatch was done and has since
+     * lapsed, or the crossmatch came back incompatible. "Repeat it" is correct
+     * advice for the second and dangerously wrong for the third, so they are
+     * not collapsed.
+     */
+    private String issueRefusal(BloodUnit unit, TransfusionCrossmatch crossmatch) {
+        if (crossmatch == null) {
+            return ("Unit %s has not been crossmatched against this request. Only group O "
+                + "Rh-negative may be issued uncrossmatched, and only on an EMERGENCY request.")
+                .formatted(unit.getUnitNumber());
+        }
+        if (Boolean.TRUE.equals(crossmatch.getCompatible())) {
+            return "The crossmatch for unit %s has expired. Repeat it before issuing."
+                .formatted(unit.getUnitNumber());
+        }
+        return "The crossmatch for unit %s came back incompatible. It must not be issued."
+            .formatted(unit.getUnitNumber());
+    }
+
     private void stopInternal(TransfusionAdministration administration, String reason) {
         administration.setStatus(TransfusionAdministrationStatus.STOPPED);
-        administration.setCompletedAt(LocalDateTime.now());
+        administration.setCompletedAt(LocalDateTime.now(clock));
         administration.setStopReason(reason);
     }
 
