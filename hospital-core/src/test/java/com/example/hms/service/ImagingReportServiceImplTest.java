@@ -73,6 +73,9 @@ class ImagingReportServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private RoleValidator roleValidator;
+    /** Item 27's chain. Its own contract lives in ImagingCriticalNotificationServiceTest. */
+    @Mock
+    private ImagingCriticalNotificationService criticalNotificationService;
     @Spy
     private ImagingReportMapper imagingReportMapper = new ImagingReportMapper();
 

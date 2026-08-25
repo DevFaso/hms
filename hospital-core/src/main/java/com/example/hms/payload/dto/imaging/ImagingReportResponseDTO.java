@@ -126,6 +126,18 @@ public class ImagingReportResponseDTO {
     /** True once a clinician has acknowledged that critical finding. */
     private Boolean criticalAcknowledged;
 
+    /**
+     * Critical-finding chain state (V133, item 27). {@code criticalNotifiedAt}
+     * is when the ordering provider was first told; the level counts escalation
+     * rounds fired since. A non-zero level on an unacknowledged finding means
+     * the chain has already widened past the ordering provider.
+     */
+    private LocalDateTime criticalNotifiedAt;
+
+    private LocalDateTime criticalEscalatedAt;
+
+    private Short criticalEscalationLevel;
+
     private String externalSystemName;
 
     private String externalReportId;

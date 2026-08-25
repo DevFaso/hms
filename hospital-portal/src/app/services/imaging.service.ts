@@ -123,6 +123,11 @@ export interface ImagingReportResponse {
   criticalFinding: boolean;
   criticalAcknowledged: boolean;
   lockedForEditing?: boolean | null;
+  /** When the ordering provider was first told (item 27). Null = nobody called yet. */
+  criticalNotifiedAt: string | null;
+  criticalEscalatedAt: string | null;
+  /** Escalation rounds fired. Non-zero means the chain has widened past the provider. */
+  criticalEscalationLevel: number | null;
   measurements?: ImagingReportMeasurement[] | null;
   statusHistory?: ImagingReportStatusEntry[] | null;
   studyInstanceUid?: string | null;

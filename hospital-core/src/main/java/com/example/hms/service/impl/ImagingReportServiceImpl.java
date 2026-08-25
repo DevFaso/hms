@@ -20,6 +20,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -92,6 +93,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private final StaffRepository staffRepository;
     private final ImagingReportMapper imagingReportMapper;
     private final RoleValidator roleValidator;
+    private final ImagingCriticalNotificationService criticalNotificationService;
 
     // ── Authoring ────────────────────────────────────────────────────────
 
@@ -130,7 +132,11 @@ public class ImagingReportServiceImpl implements ImagingReportService {
 
         ImagingReport saved = imagingReportRepository.save(report);
         appendStatusHistory(saved, saved.getReportStatus(), "Report authored", currentStaff(hospital), null);
-        return imagingReportMapper.toResponseDTO(imagingReportRepository.save(saved));
+        saved = imagingReportRepository.save(saved);
+        // Item 27: raising the flag is what calls someone. Best-effort by
+        // contract — a notification failure must not roll back the report.
+        criticalNotificationService.notifyIfCritical(saved);
+        return imagingReportMapper.toResponseDTO(saved);
     }
 
     @Override
@@ -173,7 +179,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         enforceUniqueReportNumber(report.getReportNumber(), hospital != null ? hospital.getId() : null, report.getId());
         report.setUpdatedBy(roleValidator.getCurrentUserId());
 
-        return imagingReportMapper.toResponseDTO(imagingReportRepository.save(report));
+        ImagingReport saved = imagingReportRepository.save(report);
+        // A revision is where a flag is most often raised — the first read was
+        // preliminary and the finding emerged on review. Idempotent on
+        // criticalNotifiedAt, so re-saving never re-alerts.
+        criticalNotificationService.notifyIfCritical(saved);
+        return imagingReportMapper.toResponseDTO(saved);
     }
 
     // ── Ceremonies ───────────────────────────────────────────────────────
@@ -223,7 +234,12 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // forever and the requester has no signal that the read landed.
         promoteOrderToResultsAvailable(report.getImagingOrder());
 
-        return imagingReportMapper.toResponseDTO(imagingReportRepository.save(report));
+        ImagingReport saved = imagingReportRepository.save(report);
+        // Backstop for the case that matters most: a critical finding flagged
+        // on a draft that was never separately saved still calls someone the
+        // moment it is signed.
+        criticalNotificationService.notifyIfCritical(saved);
+        return imagingReportMapper.toResponseDTO(saved);
     }
 
     @Override

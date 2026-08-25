@@ -52,4 +52,28 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
      * report at the active hospital scope.
      */
     boolean existsByHospital_IdAndStudyInstanceUid(UUID hospitalId, String studyInstanceUid);
+
+    /**
+     * Critical findings whose first alert has gone out and which nobody has
+     * acknowledged since (Tier 2 item 27).
+     *
+     * <p>Mirrors {@code LabResultRepository.findCriticalAwaitingEscalation}.
+     * Two details matter and are the reason that query looks the way it does:
+     *
+     * <p>{@code criticalNotifiedAt IS NOT NULL} — a report never notified has
+     * no first alert to escalate from, so it must not skip straight to the
+     * chain.
+     *
+     * <p>{@code criticalEscalatedAt IS NULL OR < :cutoff} — this is what makes
+     * the sweep REPEAT. A query that excluded every already-escalated row would
+     * fire once and then go silent on a finding nobody has acknowledged, which
+     * is the failure mode the whole loop exists to prevent.
+     */
+    @org.springframework.data.jpa.repository.Query(
+        "SELECT r FROM ImagingReport r WHERE r.criticalResultFlaggedAt IS NOT NULL "
+        + "AND r.criticalResultAcknowledgedAt IS NULL "
+        + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
+        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
+    List<ImagingReport> findCriticalAwaitingEscalation(
+        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
 }
