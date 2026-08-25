@@ -1082,7 +1082,7 @@
     "UPDATE": "Mettre à jour"
   },
   "APP": {
-    "TITLE": "e-Keneya — Santé digitale"
+    "TITLE": "e-Keneya"
   },
   "APPOINTMENTS": {
     "ADDRESS": "Adresse",
@@ -2804,7 +2804,7 @@
     "SIGNING_IN": "Connexion en cours",
     "SIGN_IN": "Se connecter",
     "SUBMIT": "Se connecter",
-    "SUBTITLE": "e-Keneya — Santé digitale",
+    "SUBTITLE": "e-Keneya",
     "TITLE": "Connexion",
     "USERNAME": "Nom d'utilisateur",
     "FIRST_NAME_PLACEHOLDER": "Prénom",
@@ -5364,7 +5364,7 @@
     "MY_PROFILE": "Mon Profil",
     "NOTIFICATIONS": "Notifications",
     "NO_NOTIFICATIONS": "Aucune notification",
-    "PAGE_TITLE": "e-Keneya — Santé digitale",
+    "PAGE_TITLE": "e-Keneya",
     "SETTINGS": "Paramètres",
     "SIGN_OUT": "Déconnexion",
     "TOGGLE_SIDEBAR": "Basculer la barre latérale"
