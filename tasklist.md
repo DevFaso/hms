@@ -1049,7 +1049,14 @@ PHYSIOTHERAPIST.
 > and promoted). Source audit: <https://claude.ai/code/artifact/a2d071f3-8b46-49a6-b2f1-10ad85ae87f2>
 > — but that artifact is now **stale as a document**, so every item below was
 > re-verified by search against `develop @ 30f07e8f` rather than taken from it.
-> One item = one PR into develop unless noted. Next free migration: **V132**.
+> One item = one PR into develop unless noted. Next free migration: **V138**
+> (V132–V137 consumed by items 26, 27, 28, 29, 32 and 30 in that order).
+> **Never stack PRs**: branch every one off develop and pre-allocate the
+> migration number. Four strands were lost to stacking; #509 had to be
+> re-cut as #512. And after ANY merge into a branch carrying a migration or
+> i18n, diff registered-vs-disk changesets and count keys per locale by hand
+> — `changelog.xml` and `assets/i18n/*.json` are pure append points, so git
+> resolves a collision as EITHER/OR and a clean auto-merge is not proof.
 
 **What the ledger's own "if the goal is closing the gaps that matter" top-8 became:**
 all eight shipped — synthetic surfaces (#431/#432), bed decision (#433),
@@ -1192,17 +1199,90 @@ OB suite already models.
 
 ## E2 — Inpatient logistics remainder (unblocked by #433)
 
-- [ ] 30. **In-app transfer orders (bed→bed, ward→ward).** Verified zero code:
+- [x] 30. **In-app transfer orders (bed→bed, ward→ward).**
+  ✅ DONE 2026-08-25 (**PR #515** `feature/transfer-orders`, V137;
+  corrected by **PR #516**).
+  `clinical.transfer_orders` + `/transfers` (request / complete / cancel /
+  pending / per-admission history). **Two steps, because the person who
+  orders a move is not the person who makes it**: `REQUESTED` holds the
+  destination as `RESERVED` so the ward clerk cannot allocate it to somebody
+  else in the interval — that hold is the entire reason the order is worth
+  having rather than a log written afterwards. Two partial unique indexes
+  (`WHERE status = 'REQUESTED'`) stop a bed being promised twice and stop one
+  admission having two live orders. `from_bed_id`/`from_ward_id` are a
+  **snapshot, not a join**: read back off the admission later they would show
+  where the patient is NOW, so for a completed transfer "where did they come
+  from" would answer itself with the destination. Isolation is **recorded,
+  not prevented** — airborne (V136) into a non-isolation ward is refused
+  unless overridden with a reason, because refusing outright pushes the
+  decision outside the system where nothing records it. Every bed-status
+  write still goes through `BedAssignmentService`, which gained `reserveBed`
+  / `releaseReservation` and a `Set<BedStatus>` overload so the completing
+  transfer can claim the bed it reserved while ordinary assignment still
+  refuses a RESERVED one. Two defects found after merge and fixed in #516:
+  (1) `.formatted` binds tighter than `+`, so it applied to the SECOND
+  literal of a concatenated refusal and the clinician was told "bed %s is not
+  in an isolation ward" — the test asserted on text from the first literal
+  and missed it; (2) both `assignBed` overloads called each other through
+  `this`, so the `@Transactional` proxy was bypassed on the delegating path
+  (now a private `doAssign`). #516 also added the seven `BedAssignmentService`
+  tests that should have existed with #515: `TransferServiceImplTest` mocks
+  that class, so the reservation transitions had **no direct test at all** —
+  including that cancelling a stale transfer must not evict a patient who has
+  since been put in the destination. Original finding: verified zero code:
   `TransferOrder`, `transferPatient`, `InternalTransfer` all empty. Transfers
   exist ONLY as inbound HL7 A02. `BedAssignmentService` already owns the
   `Admission.bed` ↔ `Bed.status` invariant, so this is an orchestration +
   audit layer over an invariant that already holds — not new schema risk.
-- [ ] 31. **Bed board / census.** #433 gave beds real writers; what is still
+- [x] 31. **Bed board / census.**
+  ✅ DONE 2026-08-25 (**PR #514** `feature/isolation-and-bed-board`, no
+  migration).
+  `GET /bed-board` → ward → room → bed with occupant, length of stay,
+  expected discharge, attending, and the isolation flags from #32. Three
+  queries joined in memory rather than one wide join, so a ward with no
+  admissions still renders its empty beds. **The census reports its own
+  disagreement instead of hiding it.** Inpatients are counted from
+  `admissions`, occupied beds from `Bed.status` — two independently written
+  numbers that should agree — and `orphanedOccupiedBeds` surfaces
+  `max(0, occupied − inpatients)` on the board rather than silently
+  preferring one source. A bed left OCCUPIED after a discharge is a bed the
+  clerk cannot allocate and nobody can see is wrong; that was exactly the
+  pre-#433 failure and the board now names it. `isolationMismatch` marks a
+  patient on airborne precautions sitting in a ward that cannot contain
+  them. Sonar caught a real MAJOR here (`java:S8700`): length of stay used
+  `Duration.between` on two `LocalDateTime`s, which ignores DST and could
+  report a 3-day stay as 2 — the house `utility/ElapsedTime` exists for
+  precisely this and I had reached past it. Portal: `/bed-board` with ward
+  and availability filters, guarded **wider** than `/bed-management` because
+  the people who need to read a board are not the people who administer
+  wards. 71 BED_BOARD i18n keys ×3. Original finding:
+  #433 gave beds real writers; what is still
   missing is the ward-level board (grid by ward → room → bed with occupant,
   isolation flag, expected discharge) and a census number the admin dashboard
   can trust. Check what the existing occupancy tiles show post-#433 before
   scoping — they were built against the orphan schema.
-- [ ] 32. **Isolation precautions.** Verified zero code (every `Isolation` hit
+- [x] 32. **Isolation precautions.**
+  ✅ DONE 2026-08-25 (**PR #514** `feature/isolation-and-bed-board`, V136).
+  `clinical.isolation_precautions` + `/isolation/precautions` (order /
+  discontinue / active / history). CONTACT, DROPLET, AIRBORNE, PROTECTIVE.
+  **Its own table, not `Admission.metadata`** — whose column comment
+  suggested exactly this use and is the wrong home: a precaution has to be
+  queryable (the board filters on it), indexable (the board loads a whole
+  ward at once), constrained (a closed clinical vocabulary, not free text)
+  and auditable (who ordered it, who stopped it, when). **A child table, not
+  an enum column**, because concurrent precautions are normal — a viral
+  haemorrhagic fever is contact AND droplet, a neutropenic patient on
+  protective isolation may also be on contact for a colonising organism, and
+  collapsing that to one value forces a clinician to choose which risk to
+  under-communicate. Active is `ended_at IS NULL`; precautions are
+  discontinued, never deleted, so partial indexes carry the active reads and
+  a unique partial index stops the same type being ordered twice on one
+  patient. Only `AIRBORNE` returns true from `requiresIsolationWard()` —
+  contact and droplet are practice, not placement — and PROTECTIVE inverts
+  the direction entirely: it shields the patient FROM the ward, so it must
+  never be read as a containment requirement. That asymmetry is why the check
+  is a method on the enum rather than a set membership test at each call
+  site. Original finding: verified zero code (every `Isolation` hit
   is `TenantIsolationMode` or social history). For TB, cholera, Lassa and
   measles this is a storyboard banner + bed-board flag + a nursing-task
   modifier — a cross-cutting attribute, not a module. Pairs naturally with #31.
