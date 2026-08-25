@@ -16,6 +16,7 @@ import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
 import com.example.hms.repository.IsolationPrecautionRepository;
 import com.example.hms.service.BedBoardService;
+import com.example.hms.utility.ElapsedTime;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -298,13 +299,21 @@ public class BedBoardServiceImpl implements BedBoardService {
             .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
     }
 
-    /** Days resident so far — the board wants current stay, not final length. */
+    /**
+     * Days resident so far — the board wants the current stay, not the final
+     * length.
+     *
+     * <p>Through {@link ElapsedTime} rather than a bare
+     * {@code Duration.between}: two {@code LocalDateTime}s carry no offset, so
+     * across a daylight-saving transition the wall-clock difference is an hour
+     * short of the elapsed time and a three-day stay reports as two.
+     */
     private Integer daysResident(Admission admission) {
         LocalDateTime admitted = admission.getAdmissionDateTime();
         if (admitted == null) {
             return null;
         }
-        return (int) java.time.Duration.between(admitted, LocalDateTime.now(clock)).toDays();
+        return (int) ElapsedTime.daysBetween(admitted, LocalDateTime.now(clock));
     }
 
     private String staffName(Staff staff) {
