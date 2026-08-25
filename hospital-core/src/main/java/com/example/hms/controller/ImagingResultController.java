@@ -5,6 +5,7 @@ import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.payload.dto.imaging.ImagingReportResponseDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportStatusUpdateRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingReportUpsertRequestDTO;
+import com.example.hms.service.ImagingCriticalNotificationService;
 import com.example.hms.service.ImagingReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -53,6 +55,7 @@ import java.util.UUID;
 public class ImagingResultController {
 
     private final ImagingReportService imagingReportService;
+    private final ImagingCriticalNotificationService criticalNotificationService;
 
     // ── Authoring ────────────────────────────────────────────────────────
 
@@ -179,5 +182,21 @@ public class ImagingResultController {
                    + "critical finding. Refused when the report carries no critical flag.")
     public ResponseEntity<ImagingReportResponseDTO> acknowledgeCriticalResult(@PathVariable UUID reportId) {
         return ResponseEntity.ok(imagingReportService.acknowledgeCriticalResult(reportId));
+    }
+
+    /**
+     * Run the critical-finding escalation sweep now.
+     *
+     * <p>Twin of {@code POST /lab-results/critical-escalation/run}: the
+     * scheduled sweep runs every five minutes, and a manual trigger is what
+     * makes the loop testable in a deployed environment without waiting for it.
+     */
+    @PostMapping("/critical-escalation/run")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @Operation(summary = "Run the critical imaging escalation sweep",
+               description = "Escalates critical findings still unacknowledged past the configured delay. "
+                   + "Returns the number of reports escalated on this pass.")
+    public ResponseEntity<Map<String, Integer>> runCriticalEscalation() {
+        return ResponseEntity.ok(Map.of("escalated", criticalNotificationService.escalateOverdue()));
     }
 }

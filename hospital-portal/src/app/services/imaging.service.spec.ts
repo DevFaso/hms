@@ -89,9 +89,7 @@ describe('ImagingService — results', () => {
   });
 
   it('authors a report against an order', () => {
-    service
-      .createReport({ imagingOrderId: 'ord-1', impression: 'No acute finding.' })
-      .subscribe();
+    service.createReport({ imagingOrderId: 'ord-1', impression: 'No acute finding.' }).subscribe();
 
     const req = httpMock.expectOne('/imaging/results');
     expect(req.request.method).toBe('POST');

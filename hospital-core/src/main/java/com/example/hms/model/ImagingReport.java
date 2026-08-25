@@ -158,6 +158,22 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
     @Column(name = "critical_result_acknowledged_at")
     private LocalDateTime criticalResultAcknowledgedAt;
 
+    /**
+     * Notification ledger for the critical-finding chain (V133, item 27).
+     * Set once the ordering provider has been told; the sweep reads it to
+     * know a first alert actually went out before it starts escalating.
+     */
+    @Column(name = "critical_notified_at")
+    private LocalDateTime criticalNotifiedAt;
+
+    @Column(name = "critical_escalated_at")
+    private LocalDateTime criticalEscalatedAt;
+
+    /** Rounds fired so far. Deliberately uncapped — see the notification service. */
+    @Column(name = "critical_escalation_level", nullable = false)
+    @Builder.Default
+    private Short criticalEscalationLevel = 0;
+
     @Column(name = "technique", columnDefinition = "TEXT")
     private String technique;
 
