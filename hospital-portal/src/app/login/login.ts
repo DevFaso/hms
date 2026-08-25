@@ -21,11 +21,12 @@ import {
 } from '../auth/auth.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule],
+  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent],
   templateUrl: './login.html',
   styleUrls: ['./login.scss'],
 })

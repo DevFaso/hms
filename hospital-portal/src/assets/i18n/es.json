@@ -1082,7 +1082,7 @@
     "UPDATE": "Actualizar"
   },
   "APP": {
-    "TITLE": "Sistema de Gestión Hospitalaria"
+    "TITLE": "e-Keneya — Salud digital"
   },
   "APPOINTMENTS": {
     "ADDRESS": "Dirección",
@@ -2804,7 +2804,7 @@
     "SIGNING_IN": "Iniciando sesión",
     "SIGN_IN": "Iniciar sesión",
     "SUBMIT": "Entrar",
-    "SUBTITLE": "Sistema de Gestión Hospitalaria",
+    "SUBTITLE": "e-Keneya — Salud digital",
     "TITLE": "Iniciar Sesión",
     "USERNAME": "Nombre de usuario",
     "FIRST_NAME_PLACEHOLDER": "Nombre",
@@ -5364,7 +5364,7 @@
     "MY_PROFILE": "Mi Perfil",
     "NOTIFICATIONS": "Notificaciones",
     "NO_NOTIFICATIONS": "Sin notificaciones",
-    "PAGE_TITLE": "Sistema de Gestión Hospitalaria",
+    "PAGE_TITLE": "e-Keneya — Salud digital",
     "SETTINGS": "Configuración",
     "SIGN_OUT": "Cerrar Sesión",
     "TOGGLE_SIDEBAR": "Alternar barra lateral"
