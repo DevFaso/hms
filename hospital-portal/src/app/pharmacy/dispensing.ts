@@ -1,4 +1,4 @@
-import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -13,6 +13,7 @@ import {
   DispenseResponse,
   WorkQueuePrescription,
   RefillDecisionStatus,
+  StockLotResponse,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -54,6 +55,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   // Inventory items for stock lot selection
   inventoryItems = signal<InventoryItemResponse[]>([]);
+
+  // Tier 2 item 34 — the real stock lots the picker binds to.
+  stockLots = signal<StockLotResponse[]>([]);
+  readonly selectedLotId = signal('');
 
   // Dispensing form
   showForm = signal(false);
@@ -131,6 +136,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
           this.loadWorkQueue();
           this.loadRecentDispenses();
           this.loadInventory();
+          this.loadStockLots();
         }
       },
       error: () => this.toast.error('Failed to load pharmacies'),
@@ -179,6 +185,64 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Tier 2 item 34 — real stock lots for the lot picker.
+   *
+   * The picker previously listed INVENTORY ITEMS and put their ids into
+   * `form.stockLotId`, so the backend looked each one up in the stock-lot
+   * table and returned 404. Choosing a lot could therefore never succeed,
+   * which is why the expiry and drug-match holes V138 closes went unnoticed
+   * for so long: in practice every dispense went through with no lot at all,
+   * and so with no stock decrement either.
+   */
+  private loadStockLots(): void {
+    if (!this.selectedPharmacyId) {
+      this.stockLots.set([]);
+      return;
+    }
+    this.svc.listLotsByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
+      next: (res) => this.stockLots.set(res?.data?.content ?? []),
+      error: () => this.stockLots.set([]),
+    });
+  }
+
+  /**
+   * Lots with stock left, shortest-dated first (FEFO), expired ones dropped.
+   *
+   * Filtering client-side is a convenience, not the control: the server
+   * refuses an expired lot regardless of what this list shows.
+   */
+  readonly dispensableLots = computed(() =>
+    this.stockLots()
+      .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
+      .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
+  );
+
+  isExpired(lot: StockLotResponse): boolean {
+    if (!lot?.expiryDate) return false;
+    // Date-only comparison: a lot is good through the end of its expiry day,
+    // which is what "use before end of" on the pack means.
+    return lot.expiryDate < new Date().toISOString().slice(0, 10);
+  }
+
+  /** The lot currently chosen in the form, if any. */
+  readonly selectedLot = computed(() =>
+    this.stockLots().find((lot) => lot.id === this.selectedLotId()),
+  );
+
+  onLotChange(): void {
+    this.selectedLotId.set(this.form.stockLotId ?? '');
+    // A new lot invalidates a scan taken against the previous one.
+    this.form.productScanValue = '';
+  }
+
+  /** Open the printable label so the pharmacist has something to scan. */
+  printLotLabel(): void {
+    const lotId = this.form.stockLotId;
+    if (!lotId) return;
+    window.open(`/pharmacy/stock-lots/${lotId}/label.pdf`, '_blank', 'noopener');
+  }
+
   onPharmacyChange(): void {
     // Reset pagination and close any in-progress form — context is tied to pharmacy.
     this.queuePage = 0;
@@ -186,6 +250,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.loadWorkQueue();
     this.loadRecentDispenses();
     this.loadInventory();
+    this.loadStockLots();
   }
 
   /**
@@ -290,6 +355,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   private emptyForm(): DispenseRequest {
+    this.selectedLotId.set('');
     return {
       prescriptionId: '',
       patientId: '',
@@ -298,6 +364,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
       medicationName: '',
       quantityRequested: 0,
       quantityDispensed: 0,
+      patientScanValue: '',
+      productScanValue: '',
     };
   }
 }

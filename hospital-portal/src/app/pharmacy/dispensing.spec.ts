@@ -74,12 +74,62 @@ describe('DispensingComponent', () => {
     },
   };
 
+  // Tier 2 item 34 — real stock lots. The picker used to be fed INVENTORY
+  // ITEMS, whose ids the backend then failed to find in the stock-lot table,
+  // so choosing a lot always 404'd.
+  const mockLots = {
+    data: {
+      content: [
+        {
+          id: 'lot-fresh',
+          inventoryItemId: 'inv-1',
+          lotNumber: 'AMX-2291',
+          expiryDate: '2099-03-31',
+          initialQuantity: 100,
+          remainingQuantity: 60,
+          barcodeValue: 'LOT-4f2a91c07b3e',
+        },
+        {
+          id: 'lot-expired',
+          inventoryItemId: 'inv-1',
+          lotNumber: 'AMX-1180',
+          expiryDate: '2020-01-31',
+          initialQuantity: 100,
+          remainingQuantity: 40,
+          barcodeValue: 'LOT-aaaaaaaaaaaa',
+        },
+        {
+          id: 'lot-empty',
+          inventoryItemId: 'inv-1',
+          lotNumber: 'AMX-9000',
+          expiryDate: '2099-12-31',
+          initialQuantity: 100,
+          remainingQuantity: 0,
+          barcodeValue: 'LOT-bbbbbbbbbbbb',
+        },
+        {
+          id: 'lot-unlabelled',
+          inventoryItemId: 'inv-1',
+          lotNumber: 'AMX-7777',
+          expiryDate: '2098-06-30',
+          initialQuantity: 50,
+          remainingQuantity: 50,
+        },
+      ],
+      totalElements: 4,
+      totalPages: 1,
+      size: 200,
+      number: 0,
+    },
+  };
+
   beforeEach(async () => {
     pharmacySvc = jasmine.createSpyObj('PharmacyService', [
       'listPharmacies',
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
+      'listLotsByPharmacy',
       'createDispense',
       'cancelDispense',
     ]);
@@ -92,6 +142,7 @@ describe('DispensingComponent', () => {
     pharmacySvc.getDispenseWorkQueue.and.returnValue(of(mockWorkQueue as any));
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
+    pharmacySvc.listLotsByPharmacy.and.returnValue(of(mockLots as any));
 
     // Roadmap row 4 / T-68 — substitute the offline queue with a stub so the
     // existing dispensing tests don't open the real IndexedDB. The pending$
@@ -207,6 +258,76 @@ describe('DispensingComponent', () => {
     expect(toastSvc.success).toHaveBeenCalledWith('Dispense cancelled');
   });
 
+  // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────
+
+  it('offers real stock lots, not inventory items', () => {
+    // The defect this replaces: the picker listed inventory items and put
+    // their ids into stockLotId, so the backend looked each one up in the
+    // stock-lot table and 404'd. Selecting a lot could never succeed.
+    const ids = component.dispensableLots().map((lot) => lot.id);
+
+    expect(ids).toContain('lot-fresh');
+    expect(ids).not.toContain('inv-1');
+  });
+
+  it('keeps expired and empty lots out of the picker', () => {
+    const ids = component.dispensableLots().map((lot) => lot.id);
+
+    expect(ids).not.toContain('lot-expired');
+    expect(ids).not.toContain('lot-empty');
+  });
+
+  it('offers the shortest-dated lot first so stock is used before it expires', () => {
+    const ids = component.dispensableLots().map((lot) => lot.id);
+
+    // lot-unlabelled expires 2098, lot-fresh 2099.
+    expect(ids[0]).toBe('lot-unlabelled');
+  });
+
+  it('clears a product scan when the lot changes', () => {
+    // The scan was taken against the previous pack; carrying it over would
+    // send the server a value that cannot match the new lot.
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    component.form.productScanValue = 'LOT-4f2a91c07b3e';
+
+    component.form.stockLotId = 'lot-unlabelled';
+    component.onLotChange();
+
+    expect(component.form.productScanValue).toBe('');
+    expect(component.selectedLot()?.id).toBe('lot-unlabelled');
+  });
+
+  it('sends the scan values through to the backend', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-2' } } as any));
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+    component.form.quantityDispensed = 30;
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    component.form.patientScanValue = 'pat-1';
+    component.form.productScanValue = 'LOT-4f2a91c07b3e';
+
+    component.submitDispense();
+
+    const sent = pharmacySvc.createDispense.calls.mostRecent().args[0];
+    expect(sent.patientScanValue).toBe('pat-1');
+    expect(sent.productScanValue).toBe('LOT-4f2a91c07b3e');
+    expect(sent.stockLotId).toBe('lot-fresh');
+  });
+
+  it('starts every new dispense with the previous scans cleared', () => {
+    // Otherwise the wristband from the last patient at the counter would be
+    // submitted against the next one, and the server would refuse a dispense
+    // that is actually correct.
+    component.form.patientScanValue = 'pat-1';
+    component.form.productScanValue = 'LOT-4f2a91c07b3e';
+
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+
+    expect(component.form.patientScanValue).toBe('');
+    expect(component.form.productScanValue).toBe('');
+  });
+
   it('should return correct badge class for status', () => {
     expect(component.getStatusClass('COMPLETED')).toBe('badge-success');
     expect(component.getStatusClass('PARTIAL')).toBe('badge-warning');
@@ -270,6 +391,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
       'getDispenseWorkQueue',
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
+      'listLotsByPharmacy',
       'createDispense',
       'cancelDispense',
     ]);
@@ -287,6 +409,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     pharmacySvc.getDispenseWorkQueue.and.returnValue(of(queueWith(refill)) as never);
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
 
     const offlineQueueStub: Pick<
       OfflineDispenseQueueService,
