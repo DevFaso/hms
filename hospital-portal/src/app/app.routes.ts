@@ -468,6 +468,31 @@ export const routes: Routes = [
           import('./lab/lab-results/lab-results').then((m) => m.LabResultsComponent),
       },
       {
+        // Blood bank workbench (Tier 2 item 28). Roles mirror
+        // TransfusionController's READER set exactly; the request / laboratory
+        // / bedside actions are gated in-component to the narrower sets, which
+        // are themselves the controller's PRESCRIBER, LABORATORY and BEDSIDE
+        // expressions.
+        path: 'transfusions',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_MIDWIFE',
+            'ROLE_NURSE',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./transfusion/transfusion').then((m) => m.TransfusionComponent),
+      },
+      {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
         // resulting/finalize buttons are gated in-component to the narrower
         // ENTRY/FINALIZE role sets.
