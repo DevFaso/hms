@@ -46,6 +46,31 @@ public class BedAssignmentService {
      */
     @Transactional
     public void assignBed(Admission admission, UUID bedId) {
+        // Delegates to a private helper rather than the overload below: a
+        // self-invocation of a @Transactional method bypasses the Spring proxy,
+        // so the annotation on the inner call would silently do nothing.
+        doAssign(admission, bedId, Set.of(BedStatus.AVAILABLE));
+    }
+
+    /**
+     * Same, but accepting a wider set of source states.
+     *
+     * <p>Exists for transfer completion (Tier 2 item 30), where the
+     * destination has been held {@link BedStatus#RESERVED} since the order was
+     * raised precisely so nobody else could take it. Without this the transfer
+     * would have to write {@code Bed.status} itself, which would make it a
+     * second writer of the invariant this class exists to own.
+     *
+     * <p>Callers passing RESERVED must already have established that the
+     * reservation belongs to them.
+     */
+    @Transactional
+    public void assignBed(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
+        doAssign(admission, bedId, claimableFrom);
+    }
+
+    /** The actual work, shared by both public entry points. */
+    private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
             throw new BusinessException("Beds can only be assigned to active admissions.");
         }
@@ -58,7 +83,7 @@ public class BedAssignmentService {
         if (current != null && current.getId().equals(bed.getId())) {
             return; // already assigned — idempotent
         }
-        if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
+        if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
             throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
         }
 
@@ -117,6 +142,44 @@ public class BedAssignmentService {
         for (Admission admission : admissions) {
             releaseBed(admission);
         }
+    }
+
+    /**
+     * Hold a bed for a transfer that has been ordered but not yet carried out
+     * (Tier 2 item 30).
+     *
+     * <p>Kept here rather than in the transfer service so every write of
+     * {@code Bed.status} still happens in one class. A bed that is merely
+     * reserved is not occupied — the census counts it separately — but it is
+     * no longer allocatable, which is the whole point of ordering a transfer
+     * ahead of making it.
+     */
+    @Transactional
+    public Bed reserveBed(UUID bedId, UUID hospitalId) {
+        Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Bed not found: " + bedId));
+        if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
+            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+        }
+        bed.setStatus(BedStatus.RESERVED);
+        bedRepository.save(bed);
+        log.info("Bed {} reserved at hospital {}", bedLabel(bed), hospitalId);
+        return bed;
+    }
+
+    /**
+     * Give a reservation back. Only touches a bed that is actually RESERVED,
+     * so cancelling a transfer whose destination has since been occupied by
+     * somebody else cannot evict them.
+     */
+    @Transactional
+    public void releaseReservation(Bed bed) {
+        if (bed == null || bed.getStatus() != BedStatus.RESERVED) {
+            return;
+        }
+        bed.setStatus(BedStatus.AVAILABLE);
+        bedRepository.save(bed);
+        log.info("Reservation on bed {} released", bedLabel(bed));
     }
 
     private void markAvailable(Bed bed) {

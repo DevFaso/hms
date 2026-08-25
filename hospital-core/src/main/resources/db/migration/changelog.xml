@@ -2014,4 +2014,34 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V136 - isolation precautions: clinical.isolation_precautions, a
+         child table rather than an enum on the admission because concurrent
+         precautions are normal (a VHF is contact AND droplet). Active is
+         ended_at IS NULL; rows are discontinued, never deleted, because
+         contact tracing asks what WAS in force. V137 is reserved for the
+         transfer-order branch so the numbers cannot collide on merge. No DO
+         block, so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V136-isolation-precautions" author="hms-team" runOnChange="false">
+        <sqlFile path="V136__isolation_precautions.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V137 - in-app transfer orders: clinical.transfer_orders. An
+         orchestration and audit layer over the Admission.bed <-> Bed.status
+         invariant BedAssignmentService has owned since P0 #4, not a second
+         writer of it. Two steps, because a transfer is ordered by one person
+         and carried out by another; the destination is held RESERVED in
+         between so it cannot be allocated twice. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V137-transfer-orders" author="hms-team" runOnChange="false">
+        <sqlFile path="V137__transfer_orders.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

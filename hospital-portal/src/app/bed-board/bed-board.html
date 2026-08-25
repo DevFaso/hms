@@ -1,0 +1,469 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'BED_BOARD.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'BED_BOARD.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn-secondary" (click)="loadBoard()" [disabled]="loading()">
+        <span class="material-symbols-outlined">refresh</span>
+        {{ 'BED_BOARD.REFRESH' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- An airborne case in a ward that cannot contain it. This is the board's
+       reason for existing, so it sits above everything else. -->
+  @if (mismatches().length > 0) {
+    <div class="alert-banner" role="alert">
+      <span class="material-symbols-outlined">coronavirus</span>
+      <div>
+        <strong>{{ 'BED_BOARD.MISMATCH_TITLE' | translate }}</strong>
+        <ul class="mismatch-list">
+          @for (m of mismatches(); track m.admissionId) {
+            <li>{{ 'BED_BOARD.MISMATCH_ROW' | translate: { name: m.patientName } }}</li>
+          }
+        </ul>
+      </div>
+    </div>
+  }
+
+  <!-- A bed marked OCCUPIED that no admission points at cannot be allocated
+       by anyone, and stays lost until something says so. -->
+  @if (hasOrphanedBeds) {
+    <div class="warn-banner" role="status">
+      <span class="material-symbols-outlined">report</span>
+      <span>
+        {{
+          'BED_BOARD.ORPHANED_BEDS'
+            | translate: { count: board()?.census?.orphanedOccupiedBeds ?? 0 }
+        }}
+      </span>
+    </div>
+  }
+
+  <!-- Ordered but not yet carried out. The destination bed is held RESERVED
+       for each of these, so a stale one takes a bed out of circulation. -->
+  @if (pendingTransfers().length > 0) {
+    <section
+      class="transfer-worklist"
+      [attr.aria-label]="'BED_BOARD.PENDING_TRANSFERS' | translate"
+    >
+      <h2>
+        {{ 'BED_BOARD.PENDING_TRANSFERS' | translate }}
+        <span class="count">{{ pendingTransfers().length }}</span>
+      </h2>
+      <ul>
+        @for (t of pendingTransfers(); track t.id) {
+          <li [class.override]="t.isolationOverride">
+            <div class="transfer-who">
+              <strong>{{ t.patientName }}</strong>
+              @if (t.mrn) {
+                <span class="occupant-mrn">{{ t.mrn }}</span>
+              }
+              @for (p of t.isolationPrecautions; track p) {
+                <span [class]="precautionClass(p)">{{ p | enumLabel }}</span>
+              }
+              @if (t.isolationOverride) {
+                <span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
+              }
+            </div>
+            <div class="transfer-route">
+              <span>{{ t.fromBedLabel || ('BED_BOARD.NO_BED' | translate) }}</span>
+              <span class="material-symbols-outlined">arrow_forward</span>
+              <span>{{ t.toBedLabel }}</span>
+              <span class="ward-type">{{ t.toWardName }}</span>
+            </div>
+            <div class="transfer-reason">{{ t.reason }}</div>
+            @if (canTransfer) {
+              <div class="transfer-actions">
+                <button class="btn-primary small" (click)="completeTransfer(t)">
+                  {{ 'BED_BOARD.TRANSFER_COMPLETE' | translate }}
+                </button>
+                <button class="btn-link danger" (click)="cancelTransfer(t)">
+                  {{ 'BED_BOARD.TRANSFER_CANCEL' | translate }}
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
+  @if (board(); as b) {
+    <section class="census-grid" [attr.aria-label]="'BED_BOARD.CENSUS' | translate">
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.inpatientCount }}</span>
+        <span class="census-label">{{ 'BED_BOARD.INPATIENTS' | translate }}</span>
+      </div>
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.availableBeds }}</span>
+        <span class="census-label">{{ 'BED_BOARD.AVAILABLE' | translate }}</span>
+      </div>
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.occupancyRate }}%</span>
+        <span class="census-label">{{ 'BED_BOARD.OCCUPANCY' | translate }}</span>
+      </div>
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.expectedDischargesToday }}</span>
+        <span class="census-label">{{ 'BED_BOARD.DISCHARGES_TODAY' | translate }}</span>
+      </div>
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.patientsOnIsolation }}</span>
+        <span class="census-label">{{ 'BED_BOARD.ON_ISOLATION' | translate }}</span>
+      </div>
+      <div class="census-tile">
+        <span class="census-value">{{ b.census.outOfServiceBeds }}</span>
+        <span class="census-label">{{ 'BED_BOARD.OUT_OF_SERVICE' | translate }}</span>
+      </div>
+    </section>
+
+    <section class="filters">
+      <label for="ward-filter">{{ 'BED_BOARD.FILTER_WARD' | translate }}</label>
+      <select
+        id="ward-filter"
+        [ngModel]="wardFilter()"
+        (ngModelChange)="wardFilter.set($event)"
+        name="wardFilter"
+      >
+        <option value="">{{ 'BED_BOARD.ALL_WARDS' | translate }}</option>
+        @for (w of b.wards; track w.wardId) {
+          <option [value]="w.wardId">{{ w.wardName }}</option>
+        }
+      </select>
+
+      <label class="check">
+        <input
+          type="checkbox"
+          [ngModel]="showOnlyAvailable()"
+          (ngModelChange)="showOnlyAvailable.set($event)"
+          name="availableOnly"
+        />
+        {{ 'BED_BOARD.ONLY_AVAILABLE' | translate }}
+      </label>
+
+      <label class="check">
+        <input
+          type="checkbox"
+          [ngModel]="showOnlyIsolation()"
+          (ngModelChange)="showOnlyIsolation.set($event)"
+          name="isolationOnly"
+        />
+        {{ 'BED_BOARD.ONLY_ISOLATION' | translate }}
+      </label>
+    </section>
+
+    @if (loading()) {
+      <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (visibleWards().length === 0) {
+      <p class="empty-state">{{ 'BED_BOARD.EMPTY' | translate }}</p>
+    } @else {
+      @for (ward of visibleWards(); track ward.wardId) {
+        <section class="ward-block">
+          <header class="ward-header">
+            <h2>
+              {{ ward.wardName }}
+              <span class="ward-code">{{ ward.wardCode }}</span>
+              <span class="ward-type">{{ ward.wardType | enumLabel }}</span>
+              @if (ward.isolationCapable) {
+                <span class="chip chip-capable">{{
+                  'BED_BOARD.ISOLATION_CAPABLE' | translate
+                }}</span>
+              }
+            </h2>
+            <span class="ward-stats">
+              {{
+                'BED_BOARD.WARD_STATS'
+                  | translate
+                    : {
+                        occupied: ward.occupiedBeds,
+                        total: ward.totalBeds,
+                        rate: ward.occupancyRate,
+                      }
+              }}
+            </span>
+          </header>
+
+          @for (room of ward.rooms; track room.roomNumber) {
+            <div class="room-block">
+              <h3 class="room-title">
+                {{
+                  room.roomNumber
+                    ? ('BED_BOARD.ROOM' | translate: { room: room.roomNumber })
+                    : ('BED_BOARD.NO_ROOM' | translate)
+                }}
+              </h3>
+              <div class="bed-grid">
+                @for (bed of room.beds; track bed.bedId) {
+                  <article [class]="bedStatusClass(bed)">
+                    <header class="bed-head">
+                      <span class="bed-number">{{ bed.bedNumber }}</span>
+                      <span class="bed-status">{{ bed.status | enumLabel }}</span>
+                    </header>
+
+                    @if (bed.occupant; as o) {
+                      <div class="occupant">
+                        <span class="occupant-name">{{ o.patientName }}</span>
+                        @if (o.mrn) {
+                          <span class="occupant-mrn">{{ o.mrn }}</span>
+                        }
+                        <dl class="occupant-meta">
+                          <div>
+                            <dt>{{ 'BED_BOARD.LOS' | translate }}</dt>
+                            <dd>
+                              {{ 'BED_BOARD.DAYS' | translate: { count: o.lengthOfStayDays } }}
+                            </dd>
+                          </div>
+                          @if (o.expectedDischargeAt) {
+                            <div>
+                              <dt>{{ 'BED_BOARD.EDD' | translate }}</dt>
+                              <dd>{{ o.expectedDischargeAt | date: 'shortDate' }}</dd>
+                            </div>
+                          }
+                          @if (o.attendingPhysicianName) {
+                            <div>
+                              <dt>{{ 'BED_BOARD.ATTENDING' | translate }}</dt>
+                              <dd>{{ o.attendingPhysicianName }}</dd>
+                            </div>
+                          }
+                        </dl>
+
+                        @if (o.isolationPrecautions.length > 0) {
+                          <div class="precautions">
+                            @for (p of o.isolationPrecautions; track p) {
+                              <span [class]="precautionClass(p)">{{ p | enumLabel }}</span>
+                            }
+                            @if (o.isolationMismatch) {
+                              <span class="chip chip-mismatch">{{
+                                'BED_BOARD.WRONG_WARD' | translate
+                              }}</span>
+                            }
+                          </div>
+                        }
+
+                        <div class="bed-actions">
+                          @if (canManagePrecautions) {
+                            <button class="btn-link" (click)="openPrecautions(o)">
+                              {{ 'BED_BOARD.MANAGE_PRECAUTIONS' | translate }}
+                            </button>
+                          }
+                          @if (canTransfer) {
+                            <button class="btn-link" (click)="openTransfer(o)">
+                              {{ 'BED_BOARD.TRANSFER' | translate }}
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    } @else {
+                      <p class="bed-empty">{{ 'BED_BOARD.EMPTY_BED' | translate }}</p>
+                    }
+                  </article>
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
+    }
+  } @else if (loading()) {
+    <p class="muted">{{ 'COMMON.LOADING' | translate }}</p>
+  }
+</div>
+
+<!-- Precautions for one occupant. -->
+@if (showPrecautionModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closePrecautions()"
+    (keydown.escape)="closePrecautions()"
+  ></div>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'BED_BOARD.PRECAUTIONS' | translate"
+  >
+    <header class="modal-header">
+      <h2>
+        {{ 'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precautionTarget()?.patientName } }}
+      </h2>
+      <button class="btn-close" (click)="closePrecautions()" [title]="'COMMON.CLOSE' | translate">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      @if (precautionHistory().length > 0) {
+        <ul class="precaution-list">
+          @for (p of precautionHistory(); track p.id) {
+            <li>
+              <span [class]="precautionClass(p.precautionType)">{{
+                p.precautionType | enumLabel
+              }}</span>
+              <span class="precaution-reason">{{ p.reason }}</span>
+              @if (p.requiresIsolationWard) {
+                <span class="chip chip-mismatch">{{
+                  'BED_BOARD.NEEDS_ISOLATION_WARD' | translate
+                }}</span>
+              }
+              <button class="btn-link danger" (click)="discontinue(p)">
+                {{ 'BED_BOARD.DISCONTINUE' | translate }}
+              </button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted">{{ 'BED_BOARD.NO_PRECAUTIONS' | translate }}</p>
+      }
+
+      <hr />
+
+      <h3>{{ 'BED_BOARD.ADD_PRECAUTION' | translate }}</h3>
+      <div class="form-row">
+        <label for="precaution-type">{{ 'BED_BOARD.TYPE' | translate }}</label>
+        <select id="precaution-type" [(ngModel)]="precautionForm.precautionType" name="type">
+          @for (t of precautionTypes; track t) {
+            <option [value]="t">{{ t | enumLabel }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Only airborne constrains placement; saying so at the point of entry
+           stops protective isolation being treated as an infectious risk. -->
+      @if (precautionForm.precautionType === 'AIRBORNE') {
+        <p class="hint warn">{{ 'BED_BOARD.AIRBORNE_HINT' | translate }}</p>
+      }
+      @if (precautionForm.precautionType === 'PROTECTIVE') {
+        <p class="hint">{{ 'BED_BOARD.PROTECTIVE_HINT' | translate }}</p>
+      }
+
+      <div class="form-row">
+        <label for="precaution-reason">{{ 'BED_BOARD.REASON' | translate }}</label>
+        <input
+          id="precaution-reason"
+          type="text"
+          [(ngModel)]="precautionForm.reason"
+          name="reason"
+          maxlength="500"
+        />
+      </div>
+
+      <div class="form-row">
+        <label for="precaution-organism">{{ 'BED_BOARD.ORGANISM' | translate }}</label>
+        <input
+          id="precaution-organism"
+          type="text"
+          [(ngModel)]="precautionForm.organism"
+          name="organism"
+          maxlength="120"
+        />
+      </div>
+    </div>
+
+    <footer class="modal-footer">
+      <button class="btn-secondary" (click)="closePrecautions()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        (click)="submitPrecaution()"
+        [disabled]="savingPrecaution() || !precautionForm.reason.trim()"
+      >
+        {{ 'BED_BOARD.START_PRECAUTION' | translate }}
+      </button>
+    </footer>
+  </div>
+}
+
+<!-- Order a move. The destination picker is the board itself. -->
+@if (showTransferModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeTransfer()"
+    (keydown.escape)="closeTransfer()"
+  ></div>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'BED_BOARD.TRANSFER' | translate"
+  >
+    <header class="modal-header">
+      <h2>{{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName } }}</h2>
+      <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      <div class="form-row">
+        <label for="transfer-destination">{{ 'BED_BOARD.DESTINATION' | translate }}</label>
+        <select id="transfer-destination" [(ngModel)]="transferForm.toBedId" name="destination">
+          <option value="">{{ 'BED_BOARD.CHOOSE_BED' | translate }}</option>
+          @for (o of destinationOptions(); track o.bedId) {
+            <option [value]="o.bedId">
+              {{ o.label
+              }}{{ o.isolation ? ' — ' + ('BED_BOARD.ISOLATION_CAPABLE' | translate) : '' }}
+            </option>
+          }
+        </select>
+      </div>
+
+      @if (destinationOptions().length === 0) {
+        <p class="hint warn">{{ 'BED_BOARD.NO_FREE_BEDS' | translate }}</p>
+      }
+
+      <!-- Told BEFORE submitting, so a refusal is not the first they hear of it. -->
+      @if (destinationNeedsOverride()) {
+        <div class="override-block">
+          <p class="hint warn">{{ 'BED_BOARD.OVERRIDE_WARNING' | translate }}</p>
+          <label class="check">
+            <input type="checkbox" [(ngModel)]="transferForm.isolationOverride" name="override" />
+            {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }}
+          </label>
+          @if (transferForm.isolationOverride) {
+            <div class="form-row">
+              <label for="override-reason">{{ 'BED_BOARD.OVERRIDE_REASON' | translate }}</label>
+              <input
+                id="override-reason"
+                type="text"
+                [(ngModel)]="transferForm.isolationOverrideReason"
+                name="overrideReason"
+                maxlength="500"
+              />
+            </div>
+          }
+        </div>
+      }
+
+      <div class="form-row">
+        <label for="transfer-reason">{{ 'BED_BOARD.REASON' | translate }}</label>
+        <input
+          id="transfer-reason"
+          type="text"
+          [(ngModel)]="transferForm.reason"
+          name="transferReason"
+          maxlength="500"
+        />
+      </div>
+
+      <p class="hint">{{ 'BED_BOARD.TRANSFER_HINT' | translate }}</p>
+    </div>
+
+    <footer class="modal-footer">
+      <button class="btn-secondary" (click)="closeTransfer()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        (click)="submitTransfer()"
+        [disabled]="savingTransfer() || !transferSubmittable"
+      >
+        {{ 'BED_BOARD.ORDER_TRANSFER' | translate }}
+      </button>
+    </footer>
+  </div>
+}

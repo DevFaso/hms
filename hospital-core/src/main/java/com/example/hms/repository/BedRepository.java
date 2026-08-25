@@ -25,6 +25,20 @@ public interface BedRepository extends JpaRepository<Bed, UUID> {
 
     List<Bed> findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(UUID hospitalId, BedStatus status);
 
+    /**
+     * Every bed on the board for one hospital, ward already fetched (Tier 2
+     * item 31).
+     *
+     * <p>The board renders whole wards at a time, so the ward is join-fetched
+     * rather than left to a lazy proxy per bed — sixty beds would otherwise be
+     * sixty extra queries. Inactive beds and inactive wards are excluded: a
+     * decommissioned bed is not a placement option and would distort the
+     * denominator of the occupancy rate.
+     */
+    @Query("SELECT b FROM Bed b JOIN FETCH b.ward w "
+        + "WHERE w.hospital.id = :hospitalId AND b.active = true AND w.active = true")
+    List<Bed> findBoardBeds(@Param("hospitalId") UUID hospitalId);
+
     boolean existsByWard_IdAndBedNumberIgnoreCase(UUID wardId, String bedNumber);
 
     boolean existsByWard_IdAndBedNumberIgnoreCaseAndIdNot(UUID wardId, String bedNumber, UUID id);
