@@ -215,7 +215,7 @@ the only Keycloak that's been exercised against this code is the local
 docker-compose profile.
 
 Pre-Phase-2.8 state for reference: apps were pinned to
-`https://api.hms.dev.bitnesttechs.com` with `MEDIHUB_KEYCLOAK_*` only
+`https://api.dev.e-keneya.com` with `MEDIHUB_KEYCLOAK_*` only
 populated through Xcode scheme env vars (which inject for Run/Test,
 not archive) and Android `local.properties` defaults at
 `KEYCLOAK_SSO_ENABLED=false` / `KEYCLOAK_ISSUER=""`.
@@ -224,7 +224,7 @@ not archive) and Android `local.properties` defaults at
 
 **Status:** ⏳ pending (waiting on DevOps to click through the Railway
 recipe). Engineering side is shipped: one Dockerfile, one `railway.toml`,
-parameterized via `BUILD_CONFIG={dev,uat,prod}` —
+parameterized via `BUILD_CONFIG={dev,prod}` —
 [`keycloak/prod/Dockerfile`](../keycloak/prod/Dockerfile),
 [`keycloak/prod/railway.toml`](../keycloak/prod/railway.toml), and
 [`keycloak/prod/README.md`](../keycloak/prod/README.md) (the per-env
@@ -233,7 +233,7 @@ carries every fix from Phase 2.7 (standard scopes, user-profile config,
 `role_assignments` mapper). The directory name `prod/` is historical —
 the Dockerfile now serves all envs.
 
-Per-env recipe (one execution per environment, in order **dev → uat → prod**):
+Per-env recipe (one execution per environment, in order **dev → prod**):
 
 1. **Stand up `hms-keycloak-dev` first.** Follow steps 1–7 of
    [`keycloak/prod/README.md`](../keycloak/prod/README.md), setting the
@@ -241,17 +241,15 @@ Per-env recipe (one execution per environment, in order **dev → uat → prod**
    (e.g. `hms-keycloak-dev.up.railway.app`). The `KC_HMS_ENV=dev` runtime
    tag and the `com.bitnesttechs.hms.env=dev` Docker label make the env
    grep-able from boot logs and metrics.
-2. **Stand up `hms-keycloak-uat`.** Same recipe, `BUILD_CONFIG=uat`. Note
-   the domain.
-3. **Stand up `hms-keycloak-prod`.** P-2 from
+2. **Stand up `hms-keycloak-prod`.** P-2 from
    [`docs/tasks-keycloak.md`](tasks-keycloak.md). Same recipe,
    `BUILD_CONFIG=prod`, plus the admin-console allow-list / VPN gate per
    the runbook §5 (prod-only).
-4. For each, set `OIDC_ISSUER_URI` and `OIDC_AUDIENCE` on the matching
+3. For each, set `OIDC_ISSUER_URI` and `OIDC_AUDIENCE` on the matching
    Railway backend service (`hms-backend-{env}`). Backend boots with
    OIDC beans active when these are set; without them it stays on the
    legacy auth path (correct rollback posture).
-5. For each, run [`scripts/keycloak-migration`](../scripts/keycloak-migration/)
+4. For each, run [`scripts/keycloak-migration`](../scripts/keycloak-migration/)
    in dry-run, then live, against that realm. Acceptance: zero
    `failed`, zero unexpected `orphaned`, full round-trip
    (`POST /users` → JWT → backend filter → `permittedHospitalIds`)
@@ -272,16 +270,16 @@ are pre-staged so each release is one config flip, not a code edit.
 
 Per-env recipe:
 
-1. **iOS** — three new build configurations (`Release-Dev`,
-   `Release-UAT`, `Release-Prod`) wired to xcconfig files in
+1. **iOS** — per-env build configurations (`Release-Dev`,
+   `Release-Prod`) wired to xcconfig files in
    [`patient-ios-app/Config/`](../patient-ios-app/Config/):
     - Per-env defaults already populated (issuer URL, SSO flag,
-      client ID, redirect URI). Dev/UAT default to SSO=1; Prod
+      client ID, redirect URI). Dev defaults to SSO=1; Prod
       defaults to SSO=0 until cutover.
     - To release: bump `CURRENT_PROJECT_VERSION` in
       [`project.yml`](../patient-ios-app/project.yml), run
       `xcodegen generate`, then
-      `xcodebuild archive -configuration Release-{Dev,UAT,Prod}`.
+      `xcodebuild archive -configuration Release-{Dev,Prod}`.
       Upload to App Store Connect → TestFlight internal track.
     - Marketing version stays at `1.0.3` until prod cutover.
     - Detail: [`patient-ios-app/Config/README.md`](../patient-ios-app/Config/README.md).
@@ -301,7 +299,7 @@ Per-env recipe:
    token lands in keychain/keystore, and protected API calls return
    200. The legacy form must still work for users not yet migrated.
 
-Order is **dev → uat → prod**, gated on each environment's Keycloak
+Order is **dev → prod**, gated on each environment's Keycloak
 being live and the backend `OIDC_ISSUER_URI` set.
 
 ### Phase 2.8.C — Cutover sequencing (Phase 3 + mobile coordination)
@@ -347,8 +345,7 @@ value is **per environment**:
 
 | Env | `OIDC_REQUIRED` | When | Why |
 | --- | --- | --- | --- |
-| **dev** (`hms-backend` in Railway env `dev`) | `true` | After Phase 2.1 ships and dev users are seeded | Forces engineers to exercise the SSO path locally; cheap to roll back via the Railway env-var UI. |
-| **uat** (`hms-backend` in Railway env `uat`) | `true` | After KC-4 user migration is green in uat **and** the OIDC integration suite passes against the uat realm; soak ≥ 5 business days before promoting to prod | This is the soak surface; if it stays `false` in uat, prod cutover has zero pre-production validation. |
+| **dev** (`hms-backend` in Railway env `dev`) | `true` | After KC-4 user migration is green on hosted dev **and** the OIDC integration suite passes against the dev realm; soak ≥ 5 business days before promoting to prod | Hosted dev is the soak surface (the former uat env was retired with the e-keneya.com move); if it stays `false` here, prod cutover has zero pre-production validation. |
 | **prod** (`hms-backend` in Railway env `prod`) | `false` until Phase 3 cutover window; `true` after | Per the announced maintenance window in the cutover runbook; do not flip on a Friday | The flip itself is reversible (legacy auth stack still wired); the *user comms* around it are the long-pole, hence the explicit window. |
 
 This intent is **not enforced by anything in the repo** — it lives
@@ -376,7 +373,7 @@ on startup.
   with `MIGRATION_DRY_RUN`, idempotent rerun, role resolution, orphan tracking
   (22/22 tests green per the live-testing log).
 - [scripts/seed-keycloak.ps1](../scripts/seed-keycloak.ps1) with
-  `-Environment local|dev|uat|prod` and `-Confirm` for prod, plus matching
+  `-Environment local|dev|prod` and `-Confirm` for prod, plus matching
   `seed-keycloak.<env>.json` files.
 
 ### 1.3 Angular portal — `hospital-portal/`
@@ -636,9 +633,9 @@ the cutover on-call can confirm the flag took effect from boot logs.
 
 Top-level sequencing remains:
 
-1. Run the migration runbook (dry-run → live) in `uat` first; soak ≥ 5
+1. Run the migration runbook (dry-run → live) on hosted dev first; soak ≥ 5
    business days. Acceptance: zero `failed`, zero unexpected `orphaned`,
-   `OidcResourceServerIntegrationTest` green against the uat realm.
+   `OidcResourceServerIntegrationTest` green against the dev realm.
 2. Schedule a maintenance window with ops + clinical leads.
 3. Execute
    [`keycloak-cutover-runbook.md`](runbooks/keycloak-cutover-runbook.md)

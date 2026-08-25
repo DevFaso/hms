@@ -93,16 +93,16 @@ app:
   encryption:
     key: ${APP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
-  # Set FRONTEND_BASE_URL=https://hms.bitnesttechs.com in Railway env vars.
+  # Set FRONTEND_BASE_URL=https://e-keneya.com in Railway env vars.
   frontend:
-    base-url: ${FRONTEND_BASE_URL:https://hms.bitnesttechs.com}
+    base-url: ${FRONTEND_BASE_URL:https://e-keneya.com}
   # Set PUBLIC_BASE_URL to the public-facing HTTPS domain so that uploaded
   # file links returned to the browser point to a reachable URL rather than
   # the internal Railway hostname.
-  # Example: PUBLIC_BASE_URL=https://api.hms.bitnesttechs.com
+  # Example: PUBLIC_BASE_URL=https://api.e-keneya.com
   public-base-url: ${PUBLIC_BASE_URL:}
   # CORS allowed origins: must include the public frontend domain and patient app.
-  # Set CORS_ALLOWED_ORIGINS=https://hms.bitnesttechs.com,https://patient.bitnesttechs.com in Railway env vars.
+  # Set CORS_ALLOWED_ORIGINS=https://e-keneya.com,https://patient.e-keneya.com in Railway env vars.
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:5173}
   # Directory where uploaded files are stored.

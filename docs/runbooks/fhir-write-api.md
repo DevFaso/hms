@@ -23,7 +23,7 @@ With the flag off:
 
 Provider methods short-circuit on the flag check **before** any request-shape validation runs, so flag-off + malformed body still surfaces as 405, not 422. (Caught on the Patient provider during PR #343 Copilot review; the same fix is applied uniformly on the Encounter + Observation providers in this follow-on.)
 
-Enable on a per-environment basis via `FHIR_WRITE_ENABLED=true`. Recommend turning on in `dev` first, soaking against the SMART app launcher, then `uat`.
+Enable on a per-environment basis via `FHIR_WRITE_ENABLED=true`. Recommend turning on in `dev` first, soaking against the SMART app launcher, then `prod`.
 
 ---
 

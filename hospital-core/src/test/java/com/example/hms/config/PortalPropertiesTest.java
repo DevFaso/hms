@@ -10,15 +10,15 @@ class PortalPropertiesTest {
     @Test
     void settersRoundTrip() {
         PortalProperties props = new PortalProperties();
-        props.setProfileCompletionUrlTemplate("https://hms.uat.bitnesttechs.com/onboarding/role-welcome?assignment=%s");
-        props.setAssignerConfirmationUrlTemplate("https://hms.uat.bitnesttechs.com/super/assignments?confirm=%s");
+        props.setProfileCompletionUrlTemplate("https://e-keneya.com/onboarding/role-welcome?assignment=%s");
+        props.setAssignerConfirmationUrlTemplate("https://e-keneya.com/super/assignments?confirm=%s");
 
         assertThat(props.getProfileCompletionUrlTemplate())
-                .startsWith("https://hms.uat.bitnesttechs.com/")
-                .doesNotContain("hms-uat.bitnesttechs.com");
+                .startsWith("https://e-keneya.com/")
+                .doesNotContain("bitnesttechs.com");
         assertThat(props.getAssignerConfirmationUrlTemplate())
-                .startsWith("https://hms.uat.bitnesttechs.com/")
-                .doesNotContain("hms-uat.bitnesttechs.com");
+                .startsWith("https://e-keneya.com/")
+                .doesNotContain("bitnesttechs.com");
     }
 
     @Test

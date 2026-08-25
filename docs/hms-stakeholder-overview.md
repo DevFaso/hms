@@ -23,7 +23,7 @@ Every design decision reflects the deployment reality:
 
 ## 2. What HMS can do today
 
-These capabilities are live on production (`api.hms.bitnesttechs.com`) as of May 2026.
+These capabilities are live on production (`api.e-keneya.com`) as of May 2026.
 
 ### Clinical safety guardrails
 
@@ -211,11 +211,10 @@ The verification re-runs at administer time so the **time** check uses the actua
 
 | Environment | URL | Purpose |
 |---|---|---|
-| **Dev** | `api.hms.dev.bitnesttechs.com` | Continuous deploy from `develop` branch; engineering smoke tests |
-| **UAT** | `api.hms.uat.bitnesttechs.com` | Pre-production validation, partner integration testing |
-| **Production** | `api.hms.bitnesttechs.com` | Live clinical use |
+| **Dev** | `api.dev.e-keneya.com` | Continuous deploy from `develop` branch; engineering smoke tests and pre-production validation |
+| **Production** | `api.e-keneya.com` | Live clinical use |
 
-All three environments are fronted by Railway, use managed PostgreSQL 16, and apply Liquibase migrations on boot. Each has its own DHIS2 endpoint configuration (production points at the live national instance; dev/uat point at sandbox).
+Both environments are fronted by Railway, use managed PostgreSQL 16, and apply Liquibase migrations on boot. Each has its own DHIS2 endpoint configuration (production points at the live national instance; dev points at sandbox).
 
 ---
 

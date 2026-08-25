@@ -12,7 +12,7 @@
 //
 // How it runs in k6 Cloud:
 //   k6 cloud --vus 1 --duration 5m \
-//     -e HMS_PUBLIC_BASE_URL=https://api.hms.bitnesttechs.com \
+//     -e HMS_PUBLIC_BASE_URL=https://api.e-keneya.com \
 //     scripts/perf/synthetic-canary-k6.js
 //
 // In the k6 Cloud project settings, schedule via the "Scheduled tests"
@@ -38,7 +38,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
 
-const HMS_PUBLIC_BASE_URL = __ENV.HMS_PUBLIC_BASE_URL || 'https://api.hms.bitnesttechs.com';
+const HMS_PUBLIC_BASE_URL = __ENV.HMS_PUBLIC_BASE_URL || 'https://api.e-keneya.com';
 
 // k6 Cloud reads the `ext.loadimpact.distribution` block to pick the
 // load zones. Three zones, 1 VU each — the alert rule keys off the

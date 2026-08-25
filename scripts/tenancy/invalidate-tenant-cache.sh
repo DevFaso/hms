@@ -19,7 +19,7 @@
 # case rather than pretending success.
 #
 # Required env:
-#   HMS_BACKEND_BASE_URL   e.g. https://api.hms.uat.example.com
+#   HMS_BACKEND_BASE_URL   e.g. https://api.dev.e-keneya.com
 #   HMS_ADMIN_TOKEN        super-admin bearer token (NEVER log this)
 #
 # Usage:
@@ -64,7 +64,7 @@ UUID_REGEX='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-f
     err "hospital UUID '${HOSPITAL_UUID}' is not a well-formed UUID"
 
 command -v curl >/dev/null 2>&1 || err "curl is required"
-: "${HMS_BACKEND_BASE_URL:?HMS_BACKEND_BASE_URL must be set, e.g. https://api.hms.uat.example.com (with or without the /api context path; the script normalises both)}"
+: "${HMS_BACKEND_BASE_URL:?HMS_BACKEND_BASE_URL must be set, e.g. https://api.dev.e-keneya.com (with or without the /api context path; the script normalises both)}"
 : "${HMS_ADMIN_TOKEN:?HMS_ADMIN_TOKEN must be set (super-admin bearer)}"
 
 # The backend mounts every controller under server.servlet.context-path=/api,

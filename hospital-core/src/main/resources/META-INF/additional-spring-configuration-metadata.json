@@ -9,7 +9,7 @@
     {
       "name": "app.public-base-url",
       "type": "java.lang.String",
-      "description": "Public-facing base URL prepended to uploaded file paths returned to the browser. Set PUBLIC_BASE_URL to the production domain (e.g. https://hms.dev.bitnesttechs.com).",
+      "description": "Public-facing base URL prepended to uploaded file paths returned to the browser. Set PUBLIC_BASE_URL to the production domain (e.g. https://dev.e-keneya.com).",
       "defaultValue": ""
     },
     {
@@ -22,7 +22,7 @@
       "name": "app.frontend.base-url",
       "type": "java.lang.String",
       "description": "Frontend base URL used for links in outbound emails and notifications.",
-      "defaultValue": "https://hms.dev.bitnesttechs.com"
+      "defaultValue": "https://dev.e-keneya.com"
     },
     {
       "name": "app.cors.allowed-origins",

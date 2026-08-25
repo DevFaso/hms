@@ -143,7 +143,7 @@ fun ProfileScreen(
                             val imageUrl = profileImageUrl
                             if (!imageUrl.isNullOrBlank()) {
                                 val fullUrl = if (imageUrl.startsWith("http")) imageUrl
-                                    else "https://api.hms.dev.bitnesttechs.com$imageUrl"
+                                    else "https://api.dev.e-keneya.com$imageUrl"
                                 AsyncImage(
                                     model = ImageRequest.Builder(context)
                                         .data(fullUrl)

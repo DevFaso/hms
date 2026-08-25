@@ -2,9 +2,9 @@ name: Project Quality Gates
 
 on:
   pull_request:
-    branches: [main, develop, uat]
+    branches: [main, develop]
   push:
-    branches: [main, develop, uat]
+    branches: [main, develop]
 
 # SonarCloud row 11 / Sonar S6396: permissions declared at the workflow
 # level inherit to every job (and to every callable workflow this file

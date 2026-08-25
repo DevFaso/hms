@@ -5,7 +5,7 @@
 # Companion to docs/runbooks/keycloak-env-sync-audit-2026-05-12.md and
 # docs/runbooks/keycloak-realm-sync.md.
 #
-# Verifies that the Keycloak deployment in dev/uat/prod agrees with what
+# Verifies that the Keycloak deployment in dev/prod agrees with what
 # this repo describes. Designed to be runnable from anywhere — not from
 # inside the Railway container — and to fail loudly when drift appears.
 #
@@ -16,8 +16,8 @@
 #     P3. Discovery exposes authorization/token/jwks endpoints over HTTPS
 #     P4. Frontend env file's oidc.issuer matches discovery's issuer
 #     Plus repo-wide:
-#     R1. Branch divergence (develop vs uat vs main)
-#     R2. realm-export.json hms-portal redirect URIs cover all four host envs
+#     R1. Branch divergence (develop vs main)
+#     R2. realm-export.json hms-portal redirect URIs cover all three host envs
 #     R3. realm-export.json + redirect-uris.md agree
 #     R4. Frontend env files point at distinct env hostnames
 #
@@ -26,7 +26,6 @@
 #     A2. Live realm role count matches realm-export.json (currently 26)
 #     A3. dev.* user policy per keycloak/README.md § Policy:
 #           hosted dev  — dev.admin FORBIDDEN, dev.doctor/dev.patient OK
-#           hosted uat  — all three FORBIDDEN
 #           hosted prod — all three FORBIDDEN
 #
 # Exit codes:
@@ -39,7 +38,7 @@
 # Usage:
 #   scripts/keycloak/env-sync-verify.sh                 # public-only
 #   scripts/keycloak/env-sync-verify.sh --full          # also live-realm diffs
-#   scripts/keycloak/env-sync-verify.sh --env uat       # restrict to one env
+#   scripts/keycloak/env-sync-verify.sh --env dev       # restrict to one env
 #   scripts/keycloak/env-sync-verify.sh --json          # machine-readable output
 #
 set -euo pipefail
@@ -58,13 +57,13 @@ while [[ $# -gt 0 ]]; do
       # with "unbound variable" if --env is the final arg or followed by
       # another flag. Validate up front and emit a helpful exit-2 message.
       if [[ $# -lt 2 || "$2" == --* ]]; then
-        echo "ERROR: --env requires a value (one of: dev | uat | prod)" >&2
+        echo "ERROR: --env requires a value (one of: dev | prod)" >&2
         exit 2
       fi
       shift
       case "$1" in
-        dev|uat|prod) ENV_FILTER="$1" ;;
-        *) echo "ERROR: --env must be one of dev|uat|prod (got: $1)" >&2; exit 2 ;;
+        dev|prod) ENV_FILTER="$1" ;;
+        *) echo "ERROR: --env must be one of dev|prod (got: $1)" >&2; exit 2 ;;
       esac
       ;;
     --json)        JSON_OUTPUT=true ;;
@@ -116,13 +115,12 @@ declare -a ENVS
 if [[ -n "$ENV_FILTER" ]]; then
   ENVS=("$ENV_FILTER")
 else
-  ENVS=(dev uat prod)
+  ENVS=(dev prod)
 fi
 
 kc_host_for() {
   case "$1" in
     dev)  echo "https://hms-keycloak-dev-dev.up.railway.app" ;;
-    uat)  echo "https://hms-keycloak-uat-uat.up.railway.app" ;;
     prod) echo "https://hms-keycloak-prod-prod.up.railway.app" ;;
     *)    echo "ERROR: unknown env '$1'" >&2; return 2 ;;
   esac
@@ -131,7 +129,6 @@ kc_host_for() {
 frontend_env_file_for() {
   case "$1" in
     dev)  echo "hospital-portal/src/environments/environment.dev.ts" ;;
-    uat)  echo "hospital-portal/src/environments/environment.uat.ts" ;;
     prod) echo "hospital-portal/src/environments/environment.prod.ts" ;;
   esac
 }
@@ -229,14 +226,12 @@ run_public_env_checks() {
 }
 
 run_repo_checks() {
-  # R1. Branch divergence — informational; surfaces if any pair has diverged
+  # R1. Branch divergence — informational; surfaces if the pair has diverged
   # in keycloak/ or scripts/keycloak/ paths.
-  local d_uat d_main uat_main
-  if git fetch -q origin develop uat main 2>/dev/null; then
-    d_uat=$(git rev-list --left-right --count origin/develop...origin/uat 2>/dev/null || echo "?/?")
+  local d_main
+  if git fetch -q origin develop main 2>/dev/null; then
     d_main=$(git rev-list --left-right --count origin/develop...origin/main 2>/dev/null || echo "?/?")
-    uat_main=$(git rev-list --left-right --count origin/uat...origin/main 2>/dev/null || echo "?/?")
-    record PASS repo R1 "branch divergence: develop↔uat=${d_uat//	/ / }, develop↔main=${d_main//	/ / }, uat↔main=${uat_main//	/ / }"
+    record PASS repo R1 "branch divergence: develop↔main=${d_main//	/ / }"
     pass_count=$((pass_count + 1))
   else
     record SKIP repo R1 "skipped: git fetch failed (offline?)"
@@ -257,17 +252,16 @@ run_repo_checks() {
   fi
 
   if [[ "$hms_portal_present" == "true" ]]; then
-    # R2. realm-export.json's hms-portal carries all four host envs
+    # R2. realm-export.json's hms-portal carries all three host envs
     local missing_uris
     missing_uris=$(jq -r '
       .clients[] | select(.clientId=="hms-portal") | .redirectUris | sort |
       (["http://localhost:4200/*",
-        "https://hms.dev.bitnesttechs.com/*",
-        "https://hms.uat.bitnesttechs.com/*",
-        "https://hms.bitnesttechs.com/*"] - .) | .[]
+        "https://dev.e-keneya.com/*",
+        "https://e-keneya.com/*"] - .) | .[]
     ' "$REALM_EXPORT")
     if [[ -z "$missing_uris" ]]; then
-      record PASS repo R2 "hms-portal redirectUris cover localhost + dev + uat + prod hosts"
+      record PASS repo R2 "hms-portal redirectUris cover localhost + dev + prod hosts"
       pass_count=$((pass_count + 1))
     else
       record FAIL repo R2 "hms-portal redirectUris missing: ${missing_uris//$'\n'/, }"
@@ -296,7 +290,7 @@ run_repo_checks() {
   fi
 
   # R4. Frontend env files point at distinct hosts (catch a paste-bug where
-  # env.dev.ts accidentally points at uat or prod).
+  # env.dev.ts accidentally points at prod).
   local seen=""
   local dup=false
   for env in "${ENVS[@]}"; do
@@ -439,7 +433,6 @@ run_authenticated_env_checks() {
   # A3. dev.* user policy (per keycloak/README.md § "Policy — which dev
   # users are OK on which environment"):
   #   hosted dev  — dev.doctor + dev.patient ALLOWED, dev.admin FORBIDDEN
-  #   hosted uat  — all three FORBIDDEN
   #   hosted prod — all three FORBIDDEN
   local present=""
   for u in dev.admin dev.doctor dev.patient; do
@@ -456,7 +449,7 @@ run_authenticated_env_checks() {
       # dev.admin is the only forbidden one on hosted dev.
       [[ "$present" == *"dev.admin"* ]] && violations="dev.admin"
       ;;
-    uat|prod)
+    prod)
       # All three are forbidden.
       violations="$present"
       ;;

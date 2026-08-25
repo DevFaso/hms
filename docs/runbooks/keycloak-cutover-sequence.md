@@ -1,20 +1,20 @@
-# Keycloak cutover sequence — UAT → prod playbook
+# Keycloak cutover sequence — dev-soak → prod playbook
 
-> Wraps roadmap rows **18** (KC-4 uat user migration), **19** (KC-4 prod user migration), and **8** (KC-5 backend cutover — `OIDC_REQUIRED=true` flip + legacy `/auth/login` → 410 Gone) into a single ordered sequence.
+> Wraps roadmap rows **18** (KC-4 pre-prod user migration — hosted dev since the uat environment was retired), **19** (KC-4 prod user migration), and **8** (KC-5 backend cutover — `OIDC_REQUIRED=true` flip + legacy `/auth/login` → 410 Gone) into a single ordered sequence.
 > Each step has a hard go/no-go gate against the previous step's soak window. **Do not skip a gate** — the existing component runbooks are referenced inline and remain the authoritative procedure for each individual step; this document is the conductor.
 
-**Status:** foundation pass shipped on `chore/v1.0-keycloak-cutover-and-cost-obs`. Rows 8 / 18 / 19 stay `started` until the actual cutover is executed in UAT and prod with the soak gates met — the rows flip to `completed` after the prod cutover smoke is green for 48 h.
+**Status:** foundation pass shipped on `chore/v1.0-keycloak-cutover-and-cost-obs`. Rows 8 / 18 / 19 stay `started` until the actual cutover is executed on hosted dev and prod with the soak gates met — the rows flip to `completed` after the prod cutover smoke is green for 48 h.
 
 ---
 
 ## Sequence overview
 
 ```
-1.  KC-4 uat migration (row 18)          ──┐
+1.  KC-4 hosted-dev migration (row 18)          ──┐
                                             │  5 business-day soak
 2.  KC-4 prod migration (row 19)         ──┤
                                             │  observe prod migration metrics ≥ 24 h
-3.  Phase C UAT cutover (row 8 — uat)    ──┤
+3.  Phase C dev cutover (row 8 — dev)    ──┤
                                             │  7-calendar-day soak per docs/keycloak-implementation-gaps.md
 4.  Phase C prod cutover (row 8 — prod)  ──┘
                                             │  48-hour post-cutover smoke ⇒ flip 8 / 18 / 19 to completed
@@ -29,7 +29,7 @@ Each step is a separate change-control window. The expected minimum end-to-end d
 Before kicking off step 1, run the preflight harness:
 
 ```bash
-HMS_KC_ENV=uat ./scripts/keycloak/preflight.sh
+HMS_KC_ENV=dev ./scripts/keycloak/preflight.sh
 ```
 
 The script wraps every precondition in [keycloak-migration-runbook.md](keycloak-migration-runbook.md) and [keycloak-cutover-runbook.md](keycloak-cutover-runbook.md):
@@ -45,20 +45,20 @@ Stop and escalate on the first non-zero exit. The script is idempotent and safe 
 
 ---
 
-## Step 1 — Row 18: KC-4 user migration to UAT
+## Step 1 — Row 18: KC-4 user migration to hosted dev
 
-**Goal:** every active HMS DB user has a Keycloak account on `hms-keycloak-uat` with their hospital scope + role assignments preserved, password-reset + email-verify required actions queued.
+**Goal:** every active HMS DB user has a Keycloak account on `hms-keycloak-dev` with their hospital scope + role assignments preserved, password-reset + email-verify required actions queued.
 
-Procedure: [keycloak-migration-runbook.md](keycloak-migration-runbook.md), applied with `HMS_KC_ENV=uat`. Notable uat-specific overrides:
+Procedure: [keycloak-migration-runbook.md](keycloak-migration-runbook.md), applied with `HMS_KC_ENV=dev`. Notable hosted-dev-specific overrides:
 
 - Dedicated `migration-admin` user in the master realm (gitignored credential rotated post-migration).
-- `hms_read` role on `hms-Postgres-uat` with `SELECT` on `security.users`, `security.user_role_hospital_assignment`, `security.roles`.
-- SMTP configured on the uat `hms` realm (Gmail App Password via the same recipe used for hosted-dev in row 17).
-- After live run, partial-import realm clients from `keycloak/realm-export.json` to align redirect URIs and web origins (HMS portal + Android + iOS for uat).
+- `hms_read` role on `hms-Postgres-dev` with `SELECT` on `security.users`, `security.user_role_hospital_assignment`, `security.roles`.
+- SMTP configured on the hosted-dev `hms` realm (Gmail App Password per row 17).
+- After live run, partial-import realm clients from `keycloak/realm-export.json` to align redirect URIs and web origins (HMS portal + Android + iOS for dev).
 
 **Exit gate:** dry-run summary then live-run summary both show `failed: 0`, expected `created: N`, plausible `orphaned: X`. Spot-check at least three users in the Keycloak admin UI (required actions, attributes, role mappings).
 
-**Soak before step 2:** **5 business days.** No SSO traffic is required during soak; the gate is that no operator manually edits Keycloak state and no incident is opened against the uat realm.
+**Soak before step 2:** **5 business days.** No SSO traffic is required during soak; the gate is that no operator manually edits Keycloak state and no incident is opened against the dev realm.
 
 ---
 
@@ -78,16 +78,16 @@ Procedure: same [keycloak-migration-runbook.md](keycloak-migration-runbook.md), 
 
 ---
 
-## Step 3 — Row 8 (uat): `OIDC_REQUIRED=true` flip in UAT
+## Step 3 — Row 8 (dev): `OIDC_REQUIRED=true` flip on hosted dev
 
-**Goal:** flip the backend feature gate `app.auth.oidc.required` from `false` to `true` on uat so legacy `/api/auth/login` and `/api/auth/token/refresh` respond **HTTP 410 Gone** with the runbook message.
+**Goal:** flip the backend feature gate `app.auth.oidc.required` from `false` to `true` on hosted dev so legacy `/api/auth/login` and `/api/auth/token/refresh` respond **HTTP 410 Gone** with the runbook message.
 
-Procedure: [keycloak-cutover-runbook.md](keycloak-cutover-runbook.md), `HMS_KC_ENV=uat`. This is the Phase C cutover from `docs/keycloak-implementation-gaps.md`.
+Procedure: [keycloak-cutover-runbook.md](keycloak-cutover-runbook.md), `HMS_KC_ENV=dev`. This is the Phase C cutover from `docs/keycloak-implementation-gaps.md`.
 
-**Exit gate:** the smoke script confirms SSO end-to-end, legacy endpoints return 410, and `OidcResourceServerIntegrationTest` + `AuthControllerOidcRequiredTest` are green against the uat realm:
+**Exit gate:** the smoke script confirms SSO end-to-end, legacy endpoints return 410, and `OidcResourceServerIntegrationTest` + `AuthControllerOidcRequiredTest` are green against the dev realm:
 
 ```bash
-HMS_KC_ENV=uat ./scripts/keycloak/cutover-smoke.sh
+HMS_KC_ENV=dev ./scripts/keycloak/cutover-smoke.sh
 ```
 
 **Soak before step 4:** **7 calendar days.** The published Phase C target in [docs/keycloak-implementation-gaps.md](../keycloak-implementation-gaps.md) is "soak 7 days; promote to prod". Use the soak to surface every login-path edge case (Android cold launch, iOS background refresh, browser cookie expiry, the lab printer's machine account if it still uses `/auth/login`).
@@ -117,9 +117,9 @@ Procedure: same [keycloak-cutover-runbook.md](keycloak-cutover-runbook.md), `HMS
 
 | Stage | Symptom | Action |
 |---|---|---|
-| After step 1 | uat migration metric anomalies (high orphaned count, missing role mappings) | Re-run dry-run against the offending subset; fix in HMS DB; re-run live (idempotent). Soak clock restarts. |
+| After step 1 | dev migration metric anomalies (high orphaned count, missing role mappings) | Re-run dry-run against the offending subset; fix in HMS DB; re-run live (idempotent). Soak clock restarts. |
 | After step 2 | prod migration `failed > 0` or post-run spot-check fails | Restore the Keycloak DB from the pre-run `pg_dump`. Cancel step 3. Open postmortem. |
-| After step 3 | uat login failures during the 7-day soak | Flip `app.auth.oidc.required=false` on uat. Diagnose. Re-flip when fix lands. Soak clock restarts. |
+| After step 3 | dev login failures during the 7-day soak | Flip `app.auth.oidc.required=false` on dev. Diagnose. Re-flip when fix lands. Soak clock restarts. |
 | After step 4 | prod login failures in the 48 h smoke window | Flip `app.auth.oidc.required=false` on prod. Open SEV-1 postmortem. Do NOT roll back the KC-4 migration — those records are stable. |
 
 ---

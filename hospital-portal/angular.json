@@ -82,16 +82,6 @@
                   "with": "src/environments/environment.dev.ts"
                 }
               ]
-            },
-            "uat": {
-              "optimization": true,
-              "outputHashing": "all",
-              "fileReplacements": [
-                {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.uat.ts"
-                }
-              ]
             }
           },
           "defaultConfiguration": "production"

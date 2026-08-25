@@ -242,7 +242,8 @@ public class SecurityConfig {
         var patterns = new java.util.ArrayList<>(List.of(
                 "http://localhost:*",
                 "http://127.0.0.1:*",
-                "https://*.bitnesttechs.com"   // deployed portals (dev/uat/prod)
+                "https://e-keneya.com",        // prod portal — the apex is NOT matched by the wildcard below
+                "https://*.e-keneya.com"       // deployed portals + patient app (dev/prod)
         ));
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
             for (String origin : allowedOrigins.split(",")) {

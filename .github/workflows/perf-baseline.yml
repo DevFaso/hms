@@ -1,18 +1,18 @@
 name: "Pharmacy perf baseline (k6)"
 
 # Manual-only — performance runs are an explicit decision, not an on-push side
-# effect. They consume UAT-environment secrets which must never be exposed in
+# effect. They consume environment secrets which must never be exposed in
 # PR runs from forks. See docs/observability/performance-baseline.md.
 on:
   workflow_dispatch:
     inputs:
       target_environment:
-        description: "Environment to load-test (uat | prod)"
+        description: "Environment to load-test (dev | prod)"
         required: true
-        default: "uat"
+        default: "dev"
         type: choice
         options:
-          - uat
+          - dev
           - prod
       base_url_override:
         description: "Optional BASE_URL override (leave blank to use the env default)"
@@ -27,7 +27,7 @@ jobs:
     name: "k6 dispense baseline"
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # The same job runs against either UAT or prod — all secrets come from a
+    # The same job runs against either dev or prod — all secrets come from a
     # GitHub Environment (configured under Settings → Environments) so prod
     # access requires a reviewer per the deploy.yml pattern.
     environment: ${{ inputs.target_environment }}

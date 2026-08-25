@@ -8,12 +8,11 @@
 
 ## How it works
 
-Three xcconfig files live next to this README:
+Two xcconfig files live next to this README:
 
 | File | Build configuration | Issuer host | SSO default | TestFlight track |
 | --- | --- | --- | --- | --- |
 | [`Dev.xcconfig`](Dev.xcconfig) | `Release-Dev` | `hms-keycloak-dev.up.railway.app` | ON | Internal |
-| [`UAT.xcconfig`](UAT.xcconfig) | `Release-UAT` | `hms-keycloak-uat.up.railway.app` | ON | Internal (UAT track) |
 | [`Prod.xcconfig`](Prod.xcconfig) | `Release-Prod` | `hms-keycloak-prod.up.railway.app` | OFF until cutover | Production |
 
 The "Issuer host" column is the bare hostname for readability; the
@@ -36,7 +35,7 @@ sessions — useful for QA against a local docker-compose Keycloak.
 
 ## Building per env
 
-All three commands need `-project` and `-scheme` — `xcodebuild archive`
+Both commands need `-project` and `-scheme` — `xcodebuild archive`
 fails or builds the wrong target without them.
 
 ```bash
@@ -45,13 +44,6 @@ xcodebuild -project MediHubPatient.xcodeproj \
            -scheme MediHubPatient \
            -configuration Release-Dev \
            -archivePath build/MediHubPatient-Dev.xcarchive \
-           archive
-
-# UAT
-xcodebuild -project MediHubPatient.xcodeproj \
-           -scheme MediHubPatient \
-           -configuration Release-UAT \
-           -archivePath build/MediHubPatient-UAT.xcarchive \
            archive
 
 # Prod
@@ -66,7 +58,7 @@ Default `Debug` and `Release` build settings remain unchanged; local
 Xcode Run/Test sessions use the scheme environment variables from
 [`../project.yml`](../project.yml), which point at the dev Keycloak
 realm with SSO enabled. Archive builds still take their values from the
-selected `Config/{Dev,UAT,Prod}.xcconfig` file.
+selected `Config/{Dev,Prod}.xcconfig` file.
 
 ## Flipping SSO on in prod (Phase 3 cutover)
 

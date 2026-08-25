@@ -20,10 +20,10 @@
 #   2 — invocation error (missing curl/jq, missing required env)
 #
 # Required env:
-#   API_BASE_URL   e.g. https://api.hms.uat.bitnesttechs.com (no trailing slash)
+#   API_BASE_URL   e.g. https://api.dev.e-keneya.com (no trailing slash)
 #
 # Optional env:
-#   ISSUER_URI     e.g. https://keycloak.uat.example.com/realms/hms
+#   ISSUER_URI     e.g. https://keycloak.example.com/realms/hms
 #                  When set, the script asserts the Link header carries the
 #                  matching discovery URL. When unset, the Link assertion is
 #                  relaxed to "header is either absent or non-empty".
@@ -32,8 +32,8 @@
 #                  before authentication.
 #
 # Usage:
-#   API_BASE_URL=https://api.hms.uat.bitnesttechs.com \
-#   ISSUER_URI=https://keycloak.uat.example.com/realms/hms \
+#   API_BASE_URL=https://api.dev.e-keneya.com \
+#   ISSUER_URI=https://keycloak.example.com/realms/hms \
 #     scripts/keycloak/cutover-smoke.sh
 #
 set -euo pipefail
@@ -47,7 +47,7 @@ for tool in curl jq; do
 done
 
 if [[ -z "${API_BASE_URL:-}" ]]; then
-  echo "ERROR: API_BASE_URL must be set (e.g. https://api.hms.uat.bitnesttechs.com)" >&2
+  echo "ERROR: API_BASE_URL must be set (e.g. https://api.dev.e-keneya.com)" >&2
   exit 2
 fi
 API_BASE_URL="${API_BASE_URL%/}"

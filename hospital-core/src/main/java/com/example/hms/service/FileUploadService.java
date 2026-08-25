@@ -76,7 +76,7 @@ public class FileUploadService {
      * Public base URL for file links returned to the browser.
      * <p>
      * Set this to your public-facing domain, e.g.
-     * {@code https://hms.dev.bitnesttechs.com} so that the browser can reach the
+     * {@code https://dev.e-keneya.com} so that the browser can reach the
      * uploaded files through the Nginx reverse-proxy, not through an internal
      * Railway hostname that is unreachable from the public internet.
      * <p>
@@ -363,7 +363,7 @@ public class FileUploadService {
     private String buildPublicUrl(String relativePath) {
         String normalized = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
 
-        // Prefer the explicitly configured public URL (e.g. https://hms.dev.bitnesttechs.com).
+        // Prefer the explicitly configured public URL (e.g. https://dev.e-keneya.com).
         // This avoids leaking the internal Railway hostname to the browser.
         // The Spring Boot context-path is "/api", so the resource handler registered at
         // "/uploads/**" is reachable from the browser at "/api/uploads/**" (via Nginx which

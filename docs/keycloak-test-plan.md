@@ -210,8 +210,8 @@ These are the gates in the spec (Phase 3 precondition + 2.6 rollout):
 
 | Check | Where | Pass criterion |
 |---|---|---|
-| No traffic on `JwtAuthenticationFilter` | Grafana/Loki query on UAT | 0 hits for ≥ 48 h with `OIDC_REQUIRED=true` |
-| Legacy endpoints refuse traffic | [`http/01-auth.http`](../http/01-auth.http) against UAT | `POST /auth/login` + `/auth/token/refresh` return 410 Gone |
+| No traffic on `JwtAuthenticationFilter` | Grafana/Loki query on dev | 0 hits for ≥ 48 h with `OIDC_REQUIRED=true` |
+| Legacy endpoints refuse traffic | [`http/01-auth.http`](../http/01-auth.http) against dev | `POST /auth/login` + `/auth/token/refresh` return 410 Gone |
 | Clients only acquire Keycloak tokens | Browser devtools + mobile proxy (Charles) | Zero calls to `/auth/login`; all tokens come from `/realms/hms/protocol/openid-connect/token` |
 | Role/hospital scoping preserved | Pick a multi-hospital user, log in, create an appointment | Appointment's `hospital_id` matches the `hospital_id` claim in their Keycloak token |
 | Rollback proven | Flip `OIDC_REQUIRED=false` | Legacy login succeeds within 60 s of the flip |
