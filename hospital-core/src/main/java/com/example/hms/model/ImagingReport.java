@@ -208,6 +208,18 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
     @Column(name = "external_report_id", length = 120)
     private String externalReportId;
 
+    /**
+     * Set only by the signing ceremony (V132), never from a request body.
+     * A row with {@link #signedAt} set while this is null means "signed
+     * outside this ceremony" — an externally ingested report, or a row
+     * predating V132 — not a tampered one.
+     */
+    @Column(name = "signature_algorithm", length = 32)
+    private String signatureAlgorithm;
+
+    @Column(name = "signature_value", length = 128)
+    private String signatureValue;
+
     @Column(name = "created_by")
     private UUID createdBy;
 
@@ -231,6 +243,23 @@ public class ImagingReport extends BaseEntity implements TenantScoped {
 
     public boolean isPatientNotified() {
         return patientNotifiedAt != null;
+    }
+
+    /**
+     * A signed report is closed to content edits — corrections go through a
+     * new version (ADDENDUM / CORRECTED), which is what {@code reportVersion}
+     * and {@code latestVersion} have modelled since V1.
+     */
+    public boolean isSigned() {
+        return signedAt != null;
+    }
+
+    public boolean isCriticalFlagged() {
+        return criticalResultFlaggedAt != null;
+    }
+
+    public boolean isCriticalAcknowledged() {
+        return criticalResultAcknowledgedAt != null;
     }
 
     @Override

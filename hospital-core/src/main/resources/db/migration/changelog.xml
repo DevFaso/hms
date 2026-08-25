@@ -1959,4 +1959,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V132 - imaging report signing ceremony: signature_algorithm +
+         signature_value on clinical.imaging_reports, plus the unsigned
+         worklist and unacknowledged-critical partial indexes the
+         reading room reads. No DO block, so no splitStatements
+         attribute.
+         ================================================================= -->
+    <changeSet id="V132-imaging-report-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V132__imaging_report_signature.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

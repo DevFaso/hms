@@ -58,6 +58,9 @@ describe('ImagingComponent', () => {
       'getLatestReportByOrder',
       'acknowledgeCriticalReport',
       'updateReportStatus',
+      'createReport',
+      'updateReport',
+      'signReport',
     ]);
     imagingSpy.getAllOrders.and.returnValue(
       of([
@@ -216,39 +219,116 @@ describe('ImagingComponent', () => {
     expect(component.isCritical(mockReport())).toBeFalse();
   });
 
-  it('acknowledgeCritical requires a staff context', () => {
-    authSpy.getUserProfile.and.returnValue(null);
-    component.acknowledgeCritical(mockReport());
-    expect(toastSpy.error).toHaveBeenCalled();
-    expect(imagingSpy.acknowledgeCriticalReport).not.toHaveBeenCalled();
-  });
-
-  it('acknowledgeCritical acknowledges with the staff id and refreshes', () => {
+  it('acknowledgeCritical sends no staff id — the server stamps the caller', () => {
     imagingSpy.getReportsByHospital.and.returnValue(of([]));
     const updated = mockReport({ criticalResultAcknowledgedAt: '2026-08-18T11:00:00' });
     imagingSpy.acknowledgeCriticalReport.and.returnValue(of(updated));
     component.acknowledgeCritical(mockReport());
-    expect(imagingSpy.acknowledgeCriticalReport).toHaveBeenCalledWith('r1', 'st1');
+    expect(imagingSpy.acknowledgeCriticalReport).toHaveBeenCalledWith('r1');
     expect(component.selectedReport()).toBe(updated);
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
-  it('submitStatusUpdate patches the open report and closes the modal', () => {
+  it('submitStatusUpdate voids the open report and closes the modal', () => {
     imagingSpy.getReportsByHospital.and.returnValue(of([]));
     const report = mockReport();
-    const updated = mockReport({ reportStatus: 'AMENDED' });
+    const updated = mockReport({ reportStatus: 'CANCELLED' });
     imagingSpy.updateReportStatus.and.returnValue(of(updated));
     component.selectedReport.set(report);
     component.openStatusUpdate(report);
-    component.statusForm.status = 'AMENDED';
-    component.statusForm.statusReason = 'typo fix';
+    component.statusForm.statusReason = 'study repeated';
     component.submitStatusUpdate();
     const [id, req] = imagingSpy.updateReportStatus.calls.mostRecent().args;
     expect(id).toBe('r1');
-    expect(req.status).toBe('AMENDED');
-    expect(req.statusReason).toBe('typo fix');
+    expect(req.status).toBe('CANCELLED');
+    expect(req.statusReason).toBe('study repeated');
     expect(component.selectedReport()).toBe(updated);
     expect(component.showStatusModal()).toBeFalse();
+  });
+
+  it('submitStatusUpdate refuses to void without a reason', () => {
+    const report = mockReport();
+    component.openStatusUpdate(report);
+    component.statusForm.statusReason = '   ';
+    component.submitStatusUpdate();
+    expect(imagingSpy.updateReportStatus).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  /* ── Authoring (Tier 2 item 26) ── */
+
+  it('openAuthorReport seeds the form from the order and defaults to PRELIMINARY', () => {
+    component.openAuthorReport(mockOrder({ studyType: 'CT Head', bodyRegion: 'Head' }));
+    expect(component.showReportModal()).toBeTrue();
+    expect(component.reportEditId()).toBeNull();
+    expect(component.reportForm.reportTitle).toBe('CT Head');
+    expect(component.reportForm.bodyRegion).toBe('Head');
+    expect(component.reportForm.reportStatus).toBe('PRELIMINARY');
+  });
+
+  it('openAuthorReport opens as ADDENDUM when the study already has a signed read', () => {
+    component.openAuthorReport(mockOrder({ status: 'RESULTS_AVAILABLE' }), true);
+    expect(component.reportForm.reportStatus).toBe('ADDENDUM');
+  });
+
+  it('openEditReport refuses a signed report rather than letting the server bounce it', () => {
+    component.openEditReport(mockReport({ signed: true }));
+    expect(component.showReportModal()).toBeFalse();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('openEditReport falls back to PRELIMINARY for a status an author cannot assert', () => {
+    component.openEditReport(mockReport({ reportStatus: 'FINAL', signed: false }));
+    expect(component.reportForm.reportStatus).toBe('PRELIMINARY');
+  });
+
+  it('submitReport creates when there is no edit id and trims empties away', () => {
+    imagingSpy.getReportsByHospital.and.returnValue(of([]));
+    const saved = mockReport();
+    imagingSpy.createReport.and.returnValue(of(saved));
+    component.openAuthorReport(mockOrder());
+    component.reportForm.impression = '  Acute appendicitis.  ';
+    component.reportForm.findings = '   ';
+    component.submitReport();
+    const [req] = imagingSpy.createReport.calls.mostRecent().args;
+    expect(req.imagingOrderId).toBe('o1');
+    expect(req.impression).toBe('Acute appendicitis.');
+    expect(req.findings).toBeUndefined();
+    expect(component.showReportModal()).toBeFalse();
+    expect(component.selectedReport()).toBe(saved);
+  });
+
+  it('submitReport updates when an edit id is set', () => {
+    imagingSpy.getReportsByHospital.and.returnValue(of([]));
+    imagingSpy.updateReport.and.returnValue(of(mockReport()));
+    component.openEditReport(mockReport({ signed: false }));
+    component.submitReport();
+    expect(imagingSpy.updateReport).toHaveBeenCalled();
+    expect(imagingSpy.createReport).not.toHaveBeenCalled();
+  });
+
+  it('signReport asks before signing and does nothing when declined', () => {
+    spyOn(window, 'confirm').and.returnValue(false);
+    component.signReport(mockReport());
+    expect(imagingSpy.signReport).not.toHaveBeenCalled();
+  });
+
+  it('signReport signs and refreshes when confirmed', () => {
+    spyOn(window, 'confirm').and.returnValue(true);
+    imagingSpy.getReportsByHospital.and.returnValue(of([]));
+    const signed = mockReport({ reportStatus: 'FINAL', signed: true });
+    imagingSpy.signReport.and.returnValue(of(signed));
+    component.signReport(mockReport());
+    expect(imagingSpy.signReport).toHaveBeenCalledWith('r1');
+    expect(component.selectedReport()).toBe(signed);
+    expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('canAuthorForOrder only admits orders whose study has been acquired', () => {
+    expect(component.canAuthorForOrder(mockOrder({ status: 'COMPLETED' }))).toBeTrue();
+    expect(component.canAuthorForOrder(mockOrder({ status: 'IN_PROGRESS' }))).toBeTrue();
+    expect(component.canAuthorForOrder(mockOrder({ status: 'ORDERED' }))).toBeFalse();
+    expect(component.canAuthorForOrder(mockOrder({ status: 'CANCELLED' }))).toBeFalse();
   });
 
   it('viewReportForOrder opens the latest report and closes the order detail', () => {
