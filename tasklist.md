@@ -1049,7 +1049,14 @@ PHYSIOTHERAPIST.
 > and promoted). Source audit: <https://claude.ai/code/artifact/a2d071f3-8b46-49a6-b2f1-10ad85ae87f2>
 > — but that artifact is now **stale as a document**, so every item below was
 > re-verified by search against `develop @ 30f07e8f` rather than taken from it.
-> One item = one PR into develop unless noted. Next free migration: **V132**.
+> One item = one PR into develop unless noted. Next free migration: **V139**
+> (V132–V138 consumed by items 26, 27, 28, 29, 32, 30 and 34 in that order).
+> **Never stack PRs**: branch every one off develop and pre-allocate the
+> migration number. Four strands were lost to stacking; #509 had to be
+> re-cut as #512. And after ANY merge into a branch carrying a migration or
+> i18n, diff registered-vs-disk changesets and count keys per locale by hand
+> — `changelog.xml` and `assets/i18n/*.json` are pure append points, so git
+> resolves a collision as EITHER/OR and a clean auto-merge is not proof.
 
 **What the ledger's own "if the goal is closing the gaps that matter" top-8 became:**
 all eight shipped — synthetic surfaces (#431/#432), bed decision (#433),
@@ -1192,17 +1199,90 @@ OB suite already models.
 
 ## E2 — Inpatient logistics remainder (unblocked by #433)
 
-- [ ] 30. **In-app transfer orders (bed→bed, ward→ward).** Verified zero code:
+- [x] 30. **In-app transfer orders (bed→bed, ward→ward).**
+  ✅ DONE 2026-08-25 (**PR #515** `feature/transfer-orders`, V137;
+  corrected by **PR #516**).
+  `clinical.transfer_orders` + `/transfers` (request / complete / cancel /
+  pending / per-admission history). **Two steps, because the person who
+  orders a move is not the person who makes it**: `REQUESTED` holds the
+  destination as `RESERVED` so the ward clerk cannot allocate it to somebody
+  else in the interval — that hold is the entire reason the order is worth
+  having rather than a log written afterwards. Two partial unique indexes
+  (`WHERE status = 'REQUESTED'`) stop a bed being promised twice and stop one
+  admission having two live orders. `from_bed_id`/`from_ward_id` are a
+  **snapshot, not a join**: read back off the admission later they would show
+  where the patient is NOW, so for a completed transfer "where did they come
+  from" would answer itself with the destination. Isolation is **recorded,
+  not prevented** — airborne (V136) into a non-isolation ward is refused
+  unless overridden with a reason, because refusing outright pushes the
+  decision outside the system where nothing records it. Every bed-status
+  write still goes through `BedAssignmentService`, which gained `reserveBed`
+  / `releaseReservation` and a `Set<BedStatus>` overload so the completing
+  transfer can claim the bed it reserved while ordinary assignment still
+  refuses a RESERVED one. Two defects found after merge and fixed in #516:
+  (1) `.formatted` binds tighter than `+`, so it applied to the SECOND
+  literal of a concatenated refusal and the clinician was told "bed %s is not
+  in an isolation ward" — the test asserted on text from the first literal
+  and missed it; (2) both `assignBed` overloads called each other through
+  `this`, so the `@Transactional` proxy was bypassed on the delegating path
+  (now a private `doAssign`). #516 also added the seven `BedAssignmentService`
+  tests that should have existed with #515: `TransferServiceImplTest` mocks
+  that class, so the reservation transitions had **no direct test at all** —
+  including that cancelling a stale transfer must not evict a patient who has
+  since been put in the destination. Original finding: verified zero code:
   `TransferOrder`, `transferPatient`, `InternalTransfer` all empty. Transfers
   exist ONLY as inbound HL7 A02. `BedAssignmentService` already owns the
   `Admission.bed` ↔ `Bed.status` invariant, so this is an orchestration +
   audit layer over an invariant that already holds — not new schema risk.
-- [ ] 31. **Bed board / census.** #433 gave beds real writers; what is still
+- [x] 31. **Bed board / census.**
+  ✅ DONE 2026-08-25 (**PR #514** `feature/isolation-and-bed-board`, no
+  migration).
+  `GET /bed-board` → ward → room → bed with occupant, length of stay,
+  expected discharge, attending, and the isolation flags from #32. Three
+  queries joined in memory rather than one wide join, so a ward with no
+  admissions still renders its empty beds. **The census reports its own
+  disagreement instead of hiding it.** Inpatients are counted from
+  `admissions`, occupied beds from `Bed.status` — two independently written
+  numbers that should agree — and `orphanedOccupiedBeds` surfaces
+  `max(0, occupied − inpatients)` on the board rather than silently
+  preferring one source. A bed left OCCUPIED after a discharge is a bed the
+  clerk cannot allocate and nobody can see is wrong; that was exactly the
+  pre-#433 failure and the board now names it. `isolationMismatch` marks a
+  patient on airborne precautions sitting in a ward that cannot contain
+  them. Sonar caught a real MAJOR here (`java:S8700`): length of stay used
+  `Duration.between` on two `LocalDateTime`s, which ignores DST and could
+  report a 3-day stay as 2 — the house `utility/ElapsedTime` exists for
+  precisely this and I had reached past it. Portal: `/bed-board` with ward
+  and availability filters, guarded **wider** than `/bed-management` because
+  the people who need to read a board are not the people who administer
+  wards. 71 BED_BOARD i18n keys ×3. Original finding:
+  #433 gave beds real writers; what is still
   missing is the ward-level board (grid by ward → room → bed with occupant,
   isolation flag, expected discharge) and a census number the admin dashboard
   can trust. Check what the existing occupancy tiles show post-#433 before
   scoping — they were built against the orphan schema.
-- [ ] 32. **Isolation precautions.** Verified zero code (every `Isolation` hit
+- [x] 32. **Isolation precautions.**
+  ✅ DONE 2026-08-25 (**PR #514** `feature/isolation-and-bed-board`, V136).
+  `clinical.isolation_precautions` + `/isolation/precautions` (order /
+  discontinue / active / history). CONTACT, DROPLET, AIRBORNE, PROTECTIVE.
+  **Its own table, not `Admission.metadata`** — whose column comment
+  suggested exactly this use and is the wrong home: a precaution has to be
+  queryable (the board filters on it), indexable (the board loads a whole
+  ward at once), constrained (a closed clinical vocabulary, not free text)
+  and auditable (who ordered it, who stopped it, when). **A child table, not
+  an enum column**, because concurrent precautions are normal — a viral
+  haemorrhagic fever is contact AND droplet, a neutropenic patient on
+  protective isolation may also be on contact for a colonising organism, and
+  collapsing that to one value forces a clinician to choose which risk to
+  under-communicate. Active is `ended_at IS NULL`; precautions are
+  discontinued, never deleted, so partial indexes carry the active reads and
+  a unique partial index stops the same type being ordered twice on one
+  patient. Only `AIRBORNE` returns true from `requiresIsolationWard()` —
+  contact and droplet are practice, not placement — and PROTECTIVE inverts
+  the direction entirely: it shields the patient FROM the ward, so it must
+  never be read as a containment requirement. That asymmetry is why the check
+  is a method on the enum rather than a set membership test at each call
+  site. Original finding: verified zero code (every `Isolation` hit
   is `TenantIsolationMode` or social history). For TB, cholera, Lassa and
   measles this is a storyboard banner + bed-board flag + a nursing-task
   modifier — a cross-cutting attribute, not a module. Pairs naturally with #31.
@@ -1216,7 +1296,47 @@ OB suite already models.
   belongs in this deployment model (community hospital, single pharmacy,
   paper-fallback dispensing) — it may be a deliberate non-goal, and building
   it would insert a blocking human step into every inpatient med.
-- [ ] 34. **Dispense-time barcode verification.** The five-rights scan is
+- [x] 34. **Dispense-time barcode verification.**
+  ✅ DONE 2026-08-25 (**PR #518** `feature/dispense-verification`, V138).
+  `DispenseVerificationService` mirroring `FiveRightsVerificationService`, so
+  the two ends of one medication chain read the same way to whoever audits
+  them. **Three checks, not five** — dose, route and time are administration
+  questions the eMAR already owns; what a pharmacist can verify handing a
+  pack across a counter is who it is for, that it is the right drug, and
+  that it is fit to give. **The scan is optional, the server checks are
+  not**: requiring a scanner would take every paper-fallback site offline
+  rather than make it safer, so expiry and drug-match — both answerable from
+  the lot the pharmacist already named — run on every dispense regardless.
+  Overrides: EXPIRY and PATIENT never; DRUG only as a recorded substitution,
+  reusing the `substitution`/`substitutionReason` the request already models
+  rather than inventing a second override with its own audit event (a bare
+  `substitution=true` with no reason is not an override). Load is split from
+  consume so a refusal happens BEFORE stock moves. VERIFIED is keyed on a
+  scan having HAPPENED, not on the checks having passed — the checks run
+  every time, so letting them alone stamp VERIFIED would put it on nearly
+  every row and it would stop meaning anything.
+  ⚠️ **The original finding understated this badly. FOUR defects, three of
+  them pre-existing:** (1) `StockLot.expiryDate` was written at goods-in and
+  **read by nothing anywhere in the application** — `findAvailableLotsByFEFO`
+  filters `expiry_date >= CURRENT_DATE` and the dispense path called
+  `findById` straight past it, so a lot two years out of date dispensed
+  normally; (2) the lot's drug was never compared to the prescription's, only
+  its pharmacy; (3) `medicationName` was free text on the request flowing
+  into the row, the audit entry and the patient's ready-for-pickup SMS; and
+  (4) **the lot picker never worked** — it listed inventory items and bound
+  their ids to `stockLotId`, so the backend 404'd every time. That fourth one
+  is why the first three went unnoticed: in practice every dispense went
+  through with no lot, so no stock decrement either, and the code path that
+  would have exposed them was unreachable. Also **the claimed scan target
+  only half existed**: #475's wristband is the patient half, but there is no
+  medication barcode anywhere and no medication label printed. V138 mints one
+  per LOT (not per catalogue item — the lot is what gets picked up and what
+  carries the expiry), server-side rather than a manufacturer GTIN, because
+  stock arrives from government allocation, donation and local purchase so
+  barcodes are inconsistent where present at all. Same shape as
+  `lab.lab_specimens.barcode_value`, through the same label renderer;
+  `GET /pharmacy/stock-lots/{id}/label.pdf` backfills pre-V138 lots on first
+  print. Original finding: The five-rights scan is
   server-authoritative and fail-closed at the MAR; dispensing has no scan at
   all. #475's wristband and specimen-label printing means the scan targets now
   physically exist.
