@@ -11,7 +11,7 @@ class PortalPropertiesTest {
     void settersRoundTrip() {
         PortalProperties props = new PortalProperties();
         props.setProfileCompletionUrlTemplate("https://e-keneya.com/onboarding/role-welcome?assignment=%s");
-        props.setAssignerConfirmationUrlTemplate("https://e-keneya.com/super/assignments?confirm=%s");
+        props.setAssignerConfirmationUrlTemplate("https://e-keneya.com/admin-assignments?confirm=%s");
 
         assertThat(props.getProfileCompletionUrlTemplate())
                 .startsWith("https://e-keneya.com/")

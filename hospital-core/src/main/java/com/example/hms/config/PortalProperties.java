@@ -36,7 +36,14 @@ public class PortalProperties {
      * Template used to generate the confirmation link for assigners when we need to deep-link them
      * back into the admin console. The assignment code is substituted similar to the profile template.
      * Resolved from {@code application.properties} — defaults to
-     * {@code ${app.frontend.base-url}/super/assignments?confirm=%s}.
+     * {@code ${app.frontend.base-url}/admin-assignments?confirm=%s}.
+     *
+     * <p>It pointed at {@code /super/assignments} until 2026-08-25 — a path
+     * that has never existed in the Angular app, so every assigner-confirmation
+     * email ever sent linked to the wildcard route. Nobody hit the 404 because
+     * the base URL resolved to a non-production host at the time. If this
+     * template is ever changed again, check the value against
+     * {@code app.routes.ts}: nothing else does.
      */
     private String assignerConfirmationUrlTemplate;
 

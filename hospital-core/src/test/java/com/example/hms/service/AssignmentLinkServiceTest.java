@@ -18,7 +18,7 @@ class AssignmentLinkServiceTest {
         portalProperties = new PortalProperties();
         // Simulate Spring-resolved defaults (tests have no property resolution)
         portalProperties.setProfileCompletionUrlTemplate("https://dev.e-keneya.com/onboarding/role-welcome?assignment=%s");
-        portalProperties.setAssignerConfirmationUrlTemplate("https://dev.e-keneya.com/super/assignments?confirm=%s");
+        portalProperties.setAssignerConfirmationUrlTemplate("https://dev.e-keneya.com/admin-assignments?confirm=%s");
         service = new AssignmentLinkService(portalProperties);
     }
 
@@ -83,7 +83,7 @@ class AssignmentLinkServiceTest {
         @DisplayName("uses default template with %s placeholder")
         void defaultTemplate() {
             String result = service.buildAssignerConfirmationUrl("XYZ789");
-            assertThat(result).isEqualTo("https://dev.e-keneya.com/super/assignments?confirm=XYZ789");
+            assertThat(result).isEqualTo("https://dev.e-keneya.com/admin-assignments?confirm=XYZ789");
         }
 
         @Test

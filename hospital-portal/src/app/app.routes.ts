@@ -5,6 +5,7 @@ import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
 import { SuperAdminRedirectGuard } from './auth/super-admin-redirect.guard';
 import { superAdminPathRewriteGuard } from './auth/super-admin-path-rewrite.guard';
+import { AppointmentLinkGuard } from './patient-portal/my-appointments/appointment-link.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: 'login', pathMatch: 'full' },
@@ -68,6 +69,27 @@ export const routes: Routes = [
           import('./patient-portal/my-appointments/my-appointments.component').then(
             (m) => m.MyAppointmentsComponent,
           ),
+      },
+      // The two URL shapes appointment confirmation emails have always used
+      // (`app.frontend.appointments.*-path` + appointmentId). Neither had a
+      // route until 2026-08-25, so every one of those links landed on the
+      // wildcard. They redirect into the view above with the right modal
+      // open. NO RoleGuard here deliberately: the guard 403s a signed-out
+      // visitor, and someone arriving from an email is signed out by
+      // default — AuthGuard on the parent bounces them to login with a
+      // returnUrl, and RoleGuard on /my-appointments does the role check
+      // once they land.
+      {
+        path: 'appointments/reschedule/:id',
+        canActivate: [AppointmentLinkGuard],
+        data: { action: 'reschedule' },
+        children: [],
+      },
+      {
+        path: 'appointments/cancel/:id',
+        canActivate: [AppointmentLinkGuard],
+        data: { action: 'cancel' },
+        children: [],
       },
       {
         path: 'my-education',
