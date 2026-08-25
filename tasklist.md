@@ -1063,7 +1063,33 @@ checked against this list before it is believed.**
 
 ## E0 — A loop that cannot close (clinical truth)
 
-- [ ] 26. **Radiology reading room — imaging reports can never be created.**
+- [x] 26. **Radiology reading room — imaging reports can never be created.**
+  ✅ DONE 2026-08-24 (**PR #508** `feature/imaging-report-authoring`, V132).
+  `POST /imaging/results` + `PUT /{id}` (content only) + `POST /{id}/sign`
+  (the only path to FINAL: server identity, server clock, SHA-256 digest,
+  re-sign refused, locks the report) + a study with a signed read accepting
+  only ADDENDUM/CORRECTED/AMENDED. Signing promotes the order to
+  RESULTS_AVAILABLE. The request DTO lost `signedByStaffId`, `signedAt`,
+  `criticalResultAckByStaffId`, `criticalResultAcknowledgedAt`,
+  `reportVersion`, `latestVersion` and `lockedForEditing` — all
+  client-assertable before. FOUR defects fixed in the same surface:
+  (1) `acknowledge-critical` could NEVER succeed (forwarded a status payload
+  with no status → 400 every time; never touched the acknowledgement columns;
+  took the clinician as a query param); (2) NO tenant guard anywhere — bare
+  `findById` on every read and write, and `getReportsByHospital` trusted a
+  path variable, so any authenticated caller could read or rewrite a foreign
+  hospital's report by UUID (now 404-not-403, #483's stance); (3)
+  `ResourceNotFoundException` was passed prose instead of a message key, so
+  every 404 rendered as `[Missing translation] ...` (#490's defect class);
+  (4) the mapper blind-copied `signedAt`/`criticalResultAcknowledgedAt` from
+  the request, so an update omitting them NULLED a server-stamped signature.
+  `updateReportStatus` is now administrative only (CANCELLED/ERROR, reason
+  mandatory, signed reports refused) — FINAL there would have been #463's
+  TRANSMITTED hole again. Permissions `CREATE_RADIOLOGY_REPORTS` /
+  `SIGN_IMAGING_REPORTS` already existed in PermissionCatalog, granted to
+  RADIOLOGY_OPERATIONS, never built against; class-level `@PreAuthorize`
+  because there is no `/imaging/**` matcher. Portal: authoring modal, sign +
+  digest chip, read-only once signed, 23 i18n keys ×3. Original finding:
   ⚠ NEW FINDING, not in the 2026-08-20 audit (which recorded only "no
   report-authoring UI"). The truth is worse: `ImagingReportService.createReport`
   and `updateReport` have **zero production callers**. The only references
