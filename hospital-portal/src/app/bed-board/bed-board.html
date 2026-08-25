@@ -42,6 +42,55 @@
     </div>
   }
 
+  <!-- Ordered but not yet carried out. The destination bed is held RESERVED
+       for each of these, so a stale one takes a bed out of circulation. -->
+  @if (pendingTransfers().length > 0) {
+    <section
+      class="transfer-worklist"
+      [attr.aria-label]="'BED_BOARD.PENDING_TRANSFERS' | translate"
+    >
+      <h2>
+        {{ 'BED_BOARD.PENDING_TRANSFERS' | translate }}
+        <span class="count">{{ pendingTransfers().length }}</span>
+      </h2>
+      <ul>
+        @for (t of pendingTransfers(); track t.id) {
+          <li [class.override]="t.isolationOverride">
+            <div class="transfer-who">
+              <strong>{{ t.patientName }}</strong>
+              @if (t.mrn) {
+                <span class="occupant-mrn">{{ t.mrn }}</span>
+              }
+              @for (p of t.isolationPrecautions; track p) {
+                <span [class]="precautionClass(p)">{{ p | enumLabel }}</span>
+              }
+              @if (t.isolationOverride) {
+                <span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
+              }
+            </div>
+            <div class="transfer-route">
+              <span>{{ t.fromBedLabel || ('BED_BOARD.NO_BED' | translate) }}</span>
+              <span class="material-symbols-outlined">arrow_forward</span>
+              <span>{{ t.toBedLabel }}</span>
+              <span class="ward-type">{{ t.toWardName }}</span>
+            </div>
+            <div class="transfer-reason">{{ t.reason }}</div>
+            @if (canTransfer) {
+              <div class="transfer-actions">
+                <button class="btn-primary small" (click)="completeTransfer(t)">
+                  {{ 'BED_BOARD.TRANSFER_COMPLETE' | translate }}
+                </button>
+                <button class="btn-link danger" (click)="cancelTransfer(t)">
+                  {{ 'BED_BOARD.TRANSFER_CANCEL' | translate }}
+                </button>
+              </div>
+            }
+          </li>
+        }
+      </ul>
+    </section>
+  }
+
   @if (board(); as b) {
     <section class="census-grid" [attr.aria-label]="'BED_BOARD.CENSUS' | translate">
       <div class="census-tile">
@@ -193,11 +242,18 @@
                           </div>
                         }
 
-                        @if (canManagePrecautions) {
-                          <button class="btn-link" (click)="openPrecautions(o)">
-                            {{ 'BED_BOARD.MANAGE_PRECAUTIONS' | translate }}
-                          </button>
-                        }
+                        <div class="bed-actions">
+                          @if (canManagePrecautions) {
+                            <button class="btn-link" (click)="openPrecautions(o)">
+                              {{ 'BED_BOARD.MANAGE_PRECAUTIONS' | translate }}
+                            </button>
+                          }
+                          @if (canTransfer) {
+                            <button class="btn-link" (click)="openTransfer(o)">
+                              {{ 'BED_BOARD.TRANSFER' | translate }}
+                            </button>
+                          }
+                        </div>
                       </div>
                     } @else {
                       <p class="bed-empty">{{ 'BED_BOARD.EMPTY_BED' | translate }}</p>
@@ -316,6 +372,97 @@
         [disabled]="savingPrecaution() || !precautionForm.reason.trim()"
       >
         {{ 'BED_BOARD.START_PRECAUTION' | translate }}
+      </button>
+    </footer>
+  </div>
+}
+
+<!-- Order a move. The destination picker is the board itself. -->
+@if (showTransferModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeTransfer()"
+    (keydown.escape)="closeTransfer()"
+  ></div>
+  <div
+    class="modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'BED_BOARD.TRANSFER' | translate"
+  >
+    <header class="modal-header">
+      <h2>{{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName } }}</h2>
+      <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      <div class="form-row">
+        <label for="transfer-destination">{{ 'BED_BOARD.DESTINATION' | translate }}</label>
+        <select id="transfer-destination" [(ngModel)]="transferForm.toBedId" name="destination">
+          <option value="">{{ 'BED_BOARD.CHOOSE_BED' | translate }}</option>
+          @for (o of destinationOptions(); track o.bedId) {
+            <option [value]="o.bedId">
+              {{ o.label
+              }}{{ o.isolation ? ' — ' + ('BED_BOARD.ISOLATION_CAPABLE' | translate) : '' }}
+            </option>
+          }
+        </select>
+      </div>
+
+      @if (destinationOptions().length === 0) {
+        <p class="hint warn">{{ 'BED_BOARD.NO_FREE_BEDS' | translate }}</p>
+      }
+
+      <!-- Told BEFORE submitting, so a refusal is not the first they hear of it. -->
+      @if (destinationNeedsOverride()) {
+        <div class="override-block">
+          <p class="hint warn">{{ 'BED_BOARD.OVERRIDE_WARNING' | translate }}</p>
+          <label class="check">
+            <input type="checkbox" [(ngModel)]="transferForm.isolationOverride" name="override" />
+            {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }}
+          </label>
+          @if (transferForm.isolationOverride) {
+            <div class="form-row">
+              <label for="override-reason">{{ 'BED_BOARD.OVERRIDE_REASON' | translate }}</label>
+              <input
+                id="override-reason"
+                type="text"
+                [(ngModel)]="transferForm.isolationOverrideReason"
+                name="overrideReason"
+                maxlength="500"
+              />
+            </div>
+          }
+        </div>
+      }
+
+      <div class="form-row">
+        <label for="transfer-reason">{{ 'BED_BOARD.REASON' | translate }}</label>
+        <input
+          id="transfer-reason"
+          type="text"
+          [(ngModel)]="transferForm.reason"
+          name="transferReason"
+          maxlength="500"
+        />
+      </div>
+
+      <p class="hint">{{ 'BED_BOARD.TRANSFER_HINT' | translate }}</p>
+    </div>
+
+    <footer class="modal-footer">
+      <button class="btn-secondary" (click)="closeTransfer()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        (click)="submitTransfer()"
+        [disabled]="savingTransfer() || !transferSubmittable"
+      >
+        {{ 'BED_BOARD.ORDER_TRANSFER' | translate }}
       </button>
     </footer>
   </div>
