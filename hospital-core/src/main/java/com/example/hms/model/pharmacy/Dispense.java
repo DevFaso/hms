@@ -1,6 +1,7 @@
 package com.example.hms.model.pharmacy;
 
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.Patient;
@@ -159,4 +160,47 @@ public class Dispense extends BaseEntity {
     @Size(max = 64)
     @Column(name = "idempotency_key", length = 64, unique = true)
     private String idempotencyKey;
+
+    /* ── Counter-side verification (Tier 2 item 34) ─────────────────────── */
+    //
+    // Mirrors the bedside five-rights columns on
+    // MedicationAdministrationRecord, so the two steps of one medication
+    // chain read the same way to anyone auditing them.
+
+    /** Raw value scanned from the patient's wristband (the bare patient UUID). */
+    @Size(max = 255)
+    @Column(name = "patient_scan_value", length = 255)
+    private String patientScanValue;
+
+    /** Raw value scanned from the stock lot's printed label. */
+    @Size(max = 255)
+    @Column(name = "product_scan_value", length = 255)
+    private String productScanValue;
+
+    /** When the scan was performed. Null on the paper-fallback path. */
+    @Column(name = "scan_verified_at")
+    private LocalDateTime scanVerifiedAt;
+
+    /**
+     * NOT_VERIFIED is the honest default, not a failure: most sites in this
+     * deployment have no scanner, and the server-side expiry and drug-match
+     * checks run regardless of what this says.
+     */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verification_status", nullable = false, length = 20)
+    @Builder.Default
+    private DispenseVerificationStatus verificationStatus = DispenseVerificationStatus.NOT_VERIFIED;
+
+    /**
+     * JSON array of {@link com.example.hms.enums.DispenseCheck} names that
+     * failed and were overridden. Null unless the status is OVERRIDDEN.
+     */
+    @Column(name = "verification_overrides", columnDefinition = "JSONB")
+    private String verificationOverrides;
+
+    /** Why the pharmacist proceeded past a failed check. */
+    @Size(max = 1024)
+    @Column(name = "verification_override_reason", length = 1024)
+    private String verificationOverrideReason;
 }

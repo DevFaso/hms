@@ -6265,7 +6265,20 @@
     "REFILL": "Renouvellement",
     "REFILL_NONE": "Première délivrance",
     "REFILL_REMAINING": "{{count}} renouvellement(s) restant(s)",
-    "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait"
+    "REFILL_AWAITING_PICKUP": "Approuvé — en attente de retrait",
+    "VERIFICATION": "Vérification",
+    "VERIFIED": "Vérifié",
+    "OVERRIDDEN": "Dérogation",
+    "NOT_SCANNED": "Non scanné",
+    "EXP_SHORT": "exp.",
+    "SCAN_TITLE": "Contrôle par scan",
+    "SCAN_OPTIONAL": "Facultatif — la péremption et le médicament sont vérifiés dans tous les cas",
+    "PATIENT_SCAN": "Bracelet du patient",
+    "PATIENT_SCAN_PLACEHOLDER": "Scanner le bracelet",
+    "PRODUCT_SCAN": "Étiquette de la boîte",
+    "PRODUCT_SCAN_PLACEHOLDER": "Scanner l’étiquette du lot",
+    "LOT_NOT_LABELLED": "Ce lot n'a pas encore d'étiquette imprimée, il ne peut donc pas être scanné.",
+    "PRINT_LOT_LABEL": "Imprimer l’étiquette du lot"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

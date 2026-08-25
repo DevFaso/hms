@@ -3,8 +3,14 @@ package com.example.hms.service;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.LabSpecimen;
 import com.example.hms.model.Patient;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.pharmacy.InventoryItem;
+import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.pharmacy.StockLotRepository;
+import com.example.hms.utility.LotBarcode;
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.EncodeHintType;
 import com.google.zxing.MultiFormatWriter;
@@ -49,6 +55,7 @@ public class WristbandPdfService {
 
     private final PatientRepository patientRepository;
     private final LabSpecimenRepository specimenRepository;
+    private final StockLotRepository stockLotRepository;
 
     @Transactional(readOnly = true)
     public byte[] generateWristbandPdf(UUID patientId, UUID hospitalId) {
@@ -98,6 +105,88 @@ public class WristbandPdfService {
                 truncate(safe(specimen.getSpecimenType()), 22)
                     + (specimen.getCollectedAt() != null ? "  " + specimen.getCollectedAt() : ""));
         }, qrPayload);
+    }
+
+    /**
+     * Stock-lot label (Tier 2 item 34) — the scan target for dispense-time
+     * product verification, which did not physically exist before this.
+     *
+     * <p>NOT read-only, unlike its two siblings: a lot received before V138
+     * has no {@code barcode_value}, and printing its label is the natural
+     * moment to mint one. Doing it here rather than in a backfill migration
+     * means only lots somebody actually prints acquire a barcode, which is
+     * the same set of lots that can ever be scanned.
+     *
+     * <p>The QR carries the {@code "LOT-"} value rather than the row UUID,
+     * mirroring the specimen label. The wristband's bare-UUID rule is a
+     * constraint of the eMAR patient check specifically and does not apply
+     * here — indeed the prefix is load-bearing at the counter, where it is
+     * what lets a mis-scanned wristband be named as such.
+     */
+    @Transactional
+    public byte[] generateStockLotLabelPdf(UUID stockLotId, UUID hospitalId) {
+        StockLot lot = stockLotRepository.findById(stockLotId)
+            .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId));
+
+        InventoryItem inventoryItem = lot.getInventoryItem();
+        // 404-not-403: another hospital's lot is indistinguishable from one
+        // that does not exist.
+        if (hospitalId != null && !Objects.equals(hospitalOf(inventoryItem), hospitalId)) {
+            throw new ResourceNotFoundException("Stock lot not found with ID: " + stockLotId);
+        }
+
+        if (lot.getBarcodeValue() == null || lot.getBarcodeValue().isBlank()) {
+            lot.setBarcodeValue(LotBarcode.mint());
+            stockLotRepository.save(lot);
+        }
+
+        MedicationCatalogItem item = inventoryItem != null
+            ? inventoryItem.getMedicationCatalogItem() : null;
+        String drugLine = truncate(drugNameOf(item), 28);
+        String strengthLine = strengthOf(item);
+
+        return renderLabel(cs -> {
+            writeText(cs, 10, 8, LABEL_HEIGHT - 16, drugLine);
+            writeText(cs, 8, 8, LABEL_HEIGHT - 30,
+                (strengthLine.isBlank() ? "" : strengthLine + "  ") + "Lot " + safe(lot.getLotNumber()));
+            // Expiry is on the label because the pharmacist reads it before
+            // the scanner does, and V138 makes it a hard refusal.
+            writeText(cs, 8, 8, LABEL_HEIGHT - 42,
+                "EXP: " + (lot.getExpiryDate() != null ? lot.getExpiryDate() : "—"));
+            writeText(cs, 6, 8, 8, safe(lot.getBarcodeValue()));
+        }, lot.getBarcodeValue());
+    }
+
+    /** Which hospital a lot belongs to, via its inventory item's pharmacy. */
+    private static UUID hospitalOf(InventoryItem inventoryItem) {
+        Pharmacy pharmacy = inventoryItem != null ? inventoryItem.getPharmacy() : null;
+        return pharmacy != null && pharmacy.getHospital() != null
+            ? pharmacy.getHospital().getId()
+            : null;
+    }
+
+    /**
+     * Generic name for the label, falling back to the French name.
+     *
+     * <p>Generic first because that is what the pharmacist matches against
+     * the prescription, and the dispense-time drug check compares codes and
+     * generic names — a label showing only a brand would disagree with the
+     * refusal message when the two differ.
+     */
+    private static String drugNameOf(MedicationCatalogItem item) {
+        if (item == null) {
+            return "—";
+        }
+        String generic = safe(item.getGenericName());
+        return generic.isBlank() ? safe(item.getNameFr()) : generic;
+    }
+
+    /** e.g. "500mg", or empty when the catalogue records no strength. */
+    private static String strengthOf(MedicationCatalogItem item) {
+        if (item == null || item.getStrength() == null) {
+            return "";
+        }
+        return (item.getStrength() + safe(item.getStrengthUnit())).trim();
     }
 
     /** Package-visible so the test can pin the bare-UUID contract. */

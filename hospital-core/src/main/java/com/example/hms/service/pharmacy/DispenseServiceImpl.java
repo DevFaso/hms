@@ -1,7 +1,9 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.DispenseCheck;
 import com.example.hms.enums.DispenseStatus;
+import com.example.hms.enums.DispenseVerificationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.StockTransactionType;
@@ -43,12 +45,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -68,6 +73,13 @@ public class DispenseServiceImpl implements DispenseService {
     private final DispenseMapper dispenseMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final DispenseVerificationService dispenseVerificationService;
+
+    /**
+     * From config/TimeConfig. Server clock, injectable — a test that has to
+     * wait for real time to pass is a test that flakes.
+     */
+    private final Clock clock;
     private final CdsCheckService cdsCheckService;
     private final ControlledSubstanceGuard controlledSubstanceGuard;
 
@@ -213,14 +225,24 @@ public class DispenseServiceImpl implements DispenseService {
 
         MedicationCatalogItem catalogItem = resolveCatalogItem(dto);
 
-        StockLot stockLot = consumeStockLotIfPresent(dto, pharmacy, prescription, actors.dispensedBy());
+        // Tier 2 item 34: verify BEFORE any stock moves. The lot is loaded
+        // and checked here; it is decremented only once verification has
+        // been resolved, so a refused dispense leaves the shelf untouched.
+        StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        DispenseVerificationResult verification =
+                dispenseVerificationService.verify(prescription, stockLot,
+                        dto.getPatientScanValue(), dto.getProductScanValue());
+        applyVerificationOutcome(dto, verification);
+
+        consumeStockLot(dto, stockLot, prescription, actors.dispensedBy());
 
         // Build and save the dispense record
         DispenseMapper.DispenseContext ctx = new DispenseMapper.DispenseContext(
                 prescription, patient, pharmacy, stockLot,
                 actors.dispensedBy(), actors.verifiedBy(), catalogItem);
         Dispense dispense = dispenseMapper.toEntity(dto, ctx);
-        dispense.setDispensedAt(LocalDateTime.now());
+        dispense.setDispensedAt(LocalDateTime.now(clock));
+        recordVerification(dispense, dto, verification);
         Dispense saved = dispenseRepository.save(dispense);
 
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
@@ -307,8 +329,15 @@ public class DispenseServiceImpl implements DispenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
     }
 
-    private StockLot consumeStockLotIfPresent(DispenseRequestDTO dto, Pharmacy pharmacy,
-                                              Prescription prescription, User performer) {
+    /**
+     * Load the named lot and confirm it belongs to the target pharmacy.
+     *
+     * <p>Split out from {@link #consumeStockLot} so verification can run
+     * against the real lot BEFORE any stock moves. Previously load, check
+     * and decrement were one method, which left no point in the flow where
+     * the lot was known but nothing had been written yet.
+     */
+    private StockLot loadStockLotIfPresent(DispenseRequestDTO dto, Pharmacy pharmacy) {
         if (dto.getStockLotId() == null) {
             return null;
         }
@@ -322,7 +351,15 @@ public class DispenseServiceImpl implements DispenseService {
                 || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
             throw new BusinessException("Stock lot does not belong to the selected pharmacy");
         }
+        return stockLot;
+    }
 
+    private StockLot consumeStockLot(DispenseRequestDTO dto, StockLot stockLot,
+                                     Prescription prescription, User performer) {
+        if (stockLot == null) {
+            return null;
+        }
+        InventoryItem inventoryItem = stockLot.getInventoryItem();
         BigDecimal requested = dto.getQuantityDispensed();
         if (stockLot.getRemainingQuantity().compareTo(requested) < 0) {
             throw new BusinessException("Insufficient lot stock: "
@@ -348,6 +385,120 @@ public class DispenseServiceImpl implements DispenseService {
                 .build();
         stockTransactionRepository.save(tx);
         return stockLot;
+    }
+
+    /* ── Dispense-time verification (Tier 2 item 34) ────────────────────── */
+
+    /**
+     * Decide whether the verification outcome permits the dispense to
+     * proceed, and refuse it if not.
+     *
+     * <p>The rules, and why each is where it is:
+     *
+     * <ul>
+     *   <li><b>EXPIRY is never overridable.</b> Unlike the isolation
+     *       override in V137 — where a clinician may genuinely have to move
+     *       an airborne case because no isolation bed exists — there is no
+     *       circumstance in which handing out expired medication is the
+     *       better of two options. So this refuses outright and no row is
+     *       written at all.</li>
+     *   <li><b>PATIENT is never overridable.</b> A scanned wristband that
+     *       belongs to somebody else means the person at the counter is not
+     *       the patient on the prescription. Nothing about that is
+     *       proceedable.</li>
+     *   <li><b>DRUG is overridable only as a recorded substitution.</b>
+     *       Dispensing a different product than prescribed is a real
+     *       pharmacy workflow — generic for brand, two 250s for a 500 —
+     *       and the request already models it with {@code substitution} +
+     *       {@code substitutionReason}. Reusing that rather than inventing a
+     *       second override keeps one concept with one audit event
+     *       (DISPENSE_SUBSTITUTED) instead of two ways to record the same
+     *       act.</li>
+     * </ul>
+     */
+    private void applyVerificationOutcome(DispenseRequestDTO dto,
+                                          DispenseVerificationResult verification) {
+        Set<DispenseCheck> failed = verification.failedChecks();
+        if (failed.isEmpty()) {
+            return;
+        }
+
+        Set<DispenseCheck> blocking = EnumSet.copyOf(failed);
+        if (isRecordedSubstitution(dto)) {
+            blocking.remove(DispenseCheck.DRUG);
+        }
+        if (blocking.isEmpty()) {
+            return;
+        }
+
+        throw new BusinessException("Dispense refused — " + verification.failureSummary());
+    }
+
+    /**
+     * A substitution is only a substitution when the pharmacist said so AND
+     * said why. A bare {@code substitution=true} with no reason would
+     * otherwise be a one-flag bypass of the drug check.
+     */
+    private boolean isRecordedSubstitution(DispenseRequestDTO dto) {
+        return Boolean.TRUE.equals(dto.getSubstitution())
+                && dto.getSubstitutionReason() != null
+                && !dto.getSubstitutionReason().isBlank();
+    }
+
+    /**
+     * Stamp the outcome onto the row. Reaching here means the dispense was
+     * permitted, so the only two states possible are VERIFIED (something was
+     * checked and everything passed) and OVERRIDDEN (a substitution carried
+     * a failed drug check through) — plus NOT_VERIFIED when there was
+     * nothing to check at all.
+     */
+    private void recordVerification(Dispense dispense, DispenseRequestDTO dto,
+                                    DispenseVerificationResult verification) {
+        dispense.setPatientScanValue(trimToNull(dto.getPatientScanValue()));
+        dispense.setProductScanValue(trimToNull(dto.getProductScanValue()));
+
+        boolean scanned = dispense.getPatientScanValue() != null
+                || dispense.getProductScanValue() != null;
+        if (scanned) {
+            dispense.setScanVerifiedAt(LocalDateTime.now(clock));
+        }
+
+        Set<DispenseCheck> failed = verification.failedChecks();
+        if (!failed.isEmpty()) {
+            dispense.setVerificationStatus(DispenseVerificationStatus.OVERRIDDEN);
+            dispense.setVerificationOverrides(toJsonArray(failed));
+            dispense.setVerificationOverrideReason(dto.getSubstitutionReason());
+        } else if (scanned) {
+            dispense.setVerificationStatus(DispenseVerificationStatus.VERIFIED);
+        } else {
+            // VERIFIED is keyed on a SCAN having happened, not on the server
+            // checks having passed. The expiry and drug-match checks run on
+            // every dispense, so letting them alone produce VERIFIED would
+            // stamp it on essentially every row and it would stop meaning
+            // anything. An auditor reading VERIFIED has to be able to
+            // conclude that somebody scanned a wristband.
+            dispense.setVerificationStatus(DispenseVerificationStatus.NOT_VERIFIED);
+        }
+    }
+
+    /**
+     * Hand-rolled rather than routed through Jackson: the values are enum
+     * names from a closed set, so there is nothing to escape, and this keeps
+     * an ObjectMapper out of a path that must not fail while deciding
+     * whether a drug may be handed over.
+     */
+    private String toJsonArray(Set<DispenseCheck> checks) {
+        return checks.stream()
+                .map(c -> "\"" + c.name() + "\"")
+                .collect(Collectors.joining(",", "[", "]"));
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) {
+            return null;
+        }
+        String trimmed = s.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private record ActorPair(User dispensedBy, User verifiedBy) {}

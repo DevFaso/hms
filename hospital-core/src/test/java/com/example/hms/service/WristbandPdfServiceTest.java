@@ -6,8 +6,13 @@ import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabSpecimen;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.pharmacy.InventoryItem;
+import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.pharmacy.StockLotRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +30,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -39,6 +46,7 @@ class WristbandPdfServiceTest {
 
     @Mock private PatientRepository patientRepository;
     @Mock private LabSpecimenRepository specimenRepository;
+    @Mock private StockLotRepository stockLotRepository;
 
     @InjectMocks private WristbandPdfService service;
 
@@ -129,5 +137,79 @@ class WristbandPdfServiceTest {
         assertThatThrownBy(() -> service.generateSpecimenLabelPdf(specimenId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Specimen not found");
+    }
+
+    // ── Stock-lot label (Tier 2 item 34) ────────────────────────────────
+
+    private StockLot stockLot(Hospital owner, String barcodeValue) {
+        Pharmacy pharmacy = Pharmacy.builder().hospital(owner).name("Main Pharmacy").build();
+        pharmacy.setId(UUID.randomUUID());
+        MedicationCatalogItem item = new MedicationCatalogItem();
+        item.setGenericName("Amoxicillin");
+        item.setNameFr("Amoxicilline");
+        item.setStrength("500");
+        item.setStrengthUnit("mg");
+        InventoryItem inventoryItem = InventoryItem.builder()
+            .pharmacy(pharmacy).medicationCatalogItem(item).build();
+        inventoryItem.setId(UUID.randomUUID());
+        StockLot lot = StockLot.builder()
+            .inventoryItem(inventoryItem)
+            .lotNumber("AMX-2291")
+            .expiryDate(LocalDate.of(2027, 3, 31))
+            .barcodeValue(barcodeValue)
+            .build();
+        lot.setId(UUID.randomUUID());
+        return lot;
+    }
+
+    @Test
+    void stockLotLabelIsAPdf() {
+        StockLot lot = stockLot(hospital, "LOT-4f2a91c07b3e");
+        when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+
+        byte[] pdf = service.generateStockLotLabelPdf(lot.getId(), hospitalId);
+
+        assertThat(new String(pdf, 0, 5, StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+    }
+
+    @Test
+    void printingALotReceivedBeforeV138MintsItsBarcode() {
+        // Backfill-on-print rather than a backfill migration: only lots
+        // somebody actually prints can ever be scanned, so those are the
+        // only ones that need a value.
+        StockLot legacy = stockLot(hospital, null);
+        when(stockLotRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+
+        service.generateStockLotLabelPdf(legacy.getId(), hospitalId);
+
+        assertThat(legacy.getBarcodeValue()).startsWith("LOT-");
+        verify(stockLotRepository).save(legacy);
+    }
+
+    @Test
+    void reprintingALabelKeepsTheSameBarcode() {
+        // A reminted barcode would orphan every pack already on the shelf
+        // carrying the old label.
+        StockLot lot = stockLot(hospital, "LOT-4f2a91c07b3e");
+        when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+
+        service.generateStockLotLabelPdf(lot.getId(), hospitalId);
+        service.generateStockLotLabelPdf(lot.getId(), hospitalId);
+
+        assertThat(lot.getBarcodeValue()).isEqualTo("LOT-4f2a91c07b3e");
+        verify(stockLotRepository, never()).save(lot);
+    }
+
+    @Test
+    void stockLotLabelIs404ForAForeignHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        StockLot lot = stockLot(other, "LOT-4f2a91c07b3e");
+        when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+        UUID lotId = lot.getId();
+
+        assertThatThrownBy(() -> service.generateStockLotLabelPdf(lotId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining("Stock lot not found");
     }
 }

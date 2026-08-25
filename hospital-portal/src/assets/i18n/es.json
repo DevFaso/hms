@@ -6265,7 +6265,20 @@
     "REFILL": "Reposición",
     "REFILL_NONE": "Primera dispensación",
     "REFILL_REMAINING": "{{count}} reposición(es) restante(s)",
-    "REFILL_AWAITING_PICKUP": "Aprobada — pendiente de recogida"
+    "REFILL_AWAITING_PICKUP": "Aprobada — pendiente de recogida",
+    "VERIFICATION": "Verificación",
+    "VERIFIED": "Verificado",
+    "OVERRIDDEN": "Anulado",
+    "NOT_SCANNED": "Sin escanear",
+    "EXP_SHORT": "cad.",
+    "SCAN_TITLE": "Control por escaneo",
+    "SCAN_OPTIONAL": "Opcional — la caducidad y el medicamento se verifican igualmente",
+    "PATIENT_SCAN": "Pulsera del paciente",
+    "PATIENT_SCAN_PLACEHOLDER": "Escanear la pulsera",
+    "PRODUCT_SCAN": "Etiqueta del envase",
+    "PRODUCT_SCAN_PLACEHOLDER": "Escanear la etiqueta del lote",
+    "LOT_NOT_LABELLED": "Este lote aún no tiene etiqueta impresa, por lo que no se puede escanear.",
+    "PRINT_LOT_LABEL": "Imprimir etiqueta del lote"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

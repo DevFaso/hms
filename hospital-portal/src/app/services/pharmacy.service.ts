@@ -138,6 +138,12 @@ export interface StockLotResponse {
   receivedDate?: string;
   receivedBy?: string;
   notes?: string;
+  /**
+   * Tier 2 item 34 — scannable identifier printed on the lot label
+   * ("LOT-" + 12 hex). Null on lots received before V138; printing a label
+   * mints one.
+   */
+  barcodeValue?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,7 +225,30 @@ export interface DispenseRequest {
    * contract: see DispenseRequestDTO.idempotencyKey + V94 migration.
    */
   idempotencyKey?: string;
+
+  /**
+   * Tier 2 item 34 — raw value scanned from the patient wristband (the bare
+   * patient UUID, per #475's printed wristband).
+   *
+   * Optional: most sites here dispense against a paper slip with no
+   * scanner. When supplied the server verifies it and refuses a mismatch.
+   */
+  patientScanValue?: string;
+
+  /**
+   * Tier 2 item 34 — raw value scanned from the stock lot label
+   * ("LOT-" + 12 hex, minted server-side).
+   *
+   * Note that the checks it strengthens — that the lot is the prescribed
+   * drug and is in date — run server-side whether or not anybody scans.
+   */
+  productScanValue?: string;
 }
+
+export type DispenseVerificationStatus = 'NOT_VERIFIED' | 'VERIFIED' | 'OVERRIDDEN';
+
+/** Which dispense-time check was overridden. Mirrors the backend enum. */
+export type DispenseCheck = 'PATIENT' | 'DRUG' | 'EXPIRY';
 
 export interface DispenseResponse {
   id: string;
@@ -243,6 +272,14 @@ export interface DispenseResponse {
   status: string;
   notes?: string;
   dispensedAt: string;
+  /**
+   * NOT_VERIFIED is the paper-fallback path and a legitimate outcome, not a
+   * failure — do not render it as an error.
+   */
+  verificationStatus?: DispenseVerificationStatus;
+  scanVerifiedAt?: string;
+  verificationOverrides?: DispenseCheck[];
+  verificationOverrideReason?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -44,6 +44,21 @@ public class PrintLabelController {
             + "'ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR',"
             + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
+    /**
+     * Whoever handles stock: the pharmacist who dispenses against the label
+     * and the storekeeper who prints it at goods-in. There is no
+     * {@code /pharmacy/**} matcher in SecurityConfig, so — as with the
+     * specimen label above — this annotation is the sole gate.
+     *
+     * <p>{@code hasAnyAuthority} with the ROLE_ prefix spelled out, matching
+     * the two constants above rather than the {@code hasAnyRole} used inside
+     * the pharmacy package; the two are equivalent, and consistency within
+     * one file wins.
+     */
+    private static final String STOCK_LOT_ROLES =
+        "hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_HOSPITAL_ADMIN',"
+            + "'ROLE_SUPER_ADMIN')";
+
     private final WristbandPdfService wristbandPdfService;
     private final ControllerAuthUtils authUtils;
 
@@ -78,6 +93,24 @@ public class PrintLabelController {
         UUID scope = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
         byte[] pdf = wristbandPdfService.generateSpecimenLabelPdf(specimenId, scope);
         return pdfResponse(pdf, "specimen-label-" + specimenId + ".pdf");
+    }
+
+    @GetMapping("/pharmacy/stock-lots/{stockLotId}/label.pdf")
+    @PreAuthorize(STOCK_LOT_ROLES)
+    @Operation(summary = "Pharmacy stock-lot label PDF",
+        description = "QR encodes the lot's barcode_value (LOT-{12 hex}) — the scan target for "
+            + "dispense-time product verification. Mints the value on first print for lots "
+            + "received before V138.",
+        security = @SecurityRequirement(name = "bearerAuth"))
+    public ResponseEntity<byte[]> stockLotLabel(
+        @PathVariable UUID stockLotId,
+        @RequestParam(required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID scope = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
+        byte[] pdf = wristbandPdfService.generateStockLotLabelPdf(stockLotId, scope);
+        return pdfResponse(pdf, "stock-lot-label-" + stockLotId + ".pdf");
     }
 
     private ResponseEntity<byte[]> pdfResponse(byte[] pdf, String filename) {
