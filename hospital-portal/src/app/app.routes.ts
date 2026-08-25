@@ -468,6 +468,27 @@ export const routes: Routes = [
           import('./lab/lab-results/lab-results').then((m) => m.LabResultsComponent),
       },
       {
+        // Mortality register (Tier 2 item 29). Roles mirror
+        // MortalityController's READER set; recording and amending are gated
+        // in-component to the narrower RECORDER set, which the backend also
+        // enforces.
+        path: 'mortality',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_SURGEON',
+            'ROLE_MIDWIFE',
+            'ROLE_NURSE',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./mortality/mortality').then((m) => m.MortalityComponent),
+      },
+      {
         // Roles mirror MicroCultureController.READ_ROLES exactly (P3 #19) —
         // resulting/finalize buttons are gated in-component to the narrower
         // ENTRY/FINALIZE role sets.

@@ -196,6 +196,26 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /**
+     * When this patient died (V135, Tier 2 item 29).
+     *
+     * <p>Deliberately a flag ON THE PATIENT rather than a join to
+     * {@code DeathRecord}: every sweep and worklist that must skip the dead
+     * reads it, and those need a column scan rather than a join. Reaching for a
+     * join in a safety check is how the cross-tenant holes in lab acknowledge
+     * and read-back happened.
+     *
+     * <p>Distinct from {@link #active}, which is an administrative
+     * soft-delete. A deceased patient's record stays fully readable — their
+     * chart is still evidence, and the mortality register is built from it.
+     */
+    @Column(name = "deceased_at")
+    private LocalDateTime deceasedAt;
+
+    public boolean isDeceased() {
+        return deceasedAt != null;
+    }
+
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true,
         foreignKey = @ForeignKey(name = "fk_patient_user"))

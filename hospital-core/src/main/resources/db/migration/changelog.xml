@@ -1959,4 +1959,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V135 - death and mortality: clinical.patients.deceased_at (the
+         flag every sweep and worklist reads) plus clinical.death_records
+         (the certificate, one row per patient). V132-V134 are allocated
+         to the imaging and blood-bank branches in flight; the numbers are
+         reserved so nothing collides on merge. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V135-death-and-mortality" author="hms-team" runOnChange="false">
+        <sqlFile path="V135__death_and_mortality.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
