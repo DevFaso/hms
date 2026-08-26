@@ -8172,7 +8172,9 @@
     "HUNG": "Transfusion démarrée",
     "HANG_ERROR": "La transfusion n'a pas pu être démarrée",
     "REACTION_RECORDED": "Réaction enregistrée, transfusion arrêtée",
-    "REACTION_ERROR": "La réaction n'a pas pu être enregistrée"
+    "REACTION_ERROR": "La réaction n'a pas pu être enregistrée",
+    "PLATELET_O_TO_B": "Confirmation attendue",
+    "PLATELET_O_TO_B_DETAIL": "Plaquettes de groupe O pour un receveur de groupe B. Autorisé par le protocole de cet établissement — cette transfusion n'est ni bloquée ni remise en cause. Le protocole exclut les plaquettes O pour les receveurs A et AB mais pas pour les receveurs B ; le caractère intentionnel de cette différence n'a pas encore été confirmé avec l'hématologie. À soulever lors de la prochaine revue."
   },
   "MORTALITY": {
     "TITLE": "Registre de mortalité",

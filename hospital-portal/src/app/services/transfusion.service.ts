@@ -107,6 +107,17 @@ export interface CrossmatchResponse {
   expiresAt: string | null;
   /** Compatible AND unexpired — what the issue path actually requires. */
   usable: boolean;
+  /**
+   * The one pairing this facility's platelet protocol permits and nobody has
+   * confirmed was meant: group O platelets to a group B recipient.
+   *
+   * Advisory only. It does NOT affect `compatible` or `usable` and must never
+   * be allowed to — the 2026-08-25 sign-off permits the pairing. It is here so
+   * an open clinical question is visible to the blood-bank scientist who can
+   * raise it. Optional because it is derived server-side and older responses
+   * do not carry it.
+   */
+  plateletPairingPendingConfirmation?: boolean;
 }
 
 export interface CrossmatchRequest {

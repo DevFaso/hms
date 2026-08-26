@@ -208,4 +208,66 @@ class AboGroupTest {
         assertThat(group.compatibleRedCellDonors()).contains(group);
         assertThat(group.compatiblePlasmaDonors()).contains(group);
     }
+
+    /* -- The open O-to-B question (product-owner decision 2026-08-26) ----- */
+
+    @Test
+    void theOpenQuestionNamesExactlyTheOneUnconfirmedPairing() {
+        // O platelets to a B recipient: permitted by the sign-off, never
+        // confirmed as intended rather than a transcription slip.
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.B, AboGroup.O, BloodProductType.PLATELETS)).isTrue();
+
+        // The pairings the protocol actually EXCLUDES are not open questions,
+        // they are settled refusals.
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.A, AboGroup.O, BloodProductType.PLATELETS)).isFalse();
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.AB, AboGroup.O, BloodProductType.PLATELETS)).isFalse();
+
+        // Nor is any pairing the protocol never had a view about.
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.B, AboGroup.A, BloodProductType.PLATELETS)).isFalse();
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.O, AboGroup.O, BloodProductType.PLATELETS)).isFalse();
+    }
+
+    @Test
+    void theOpenQuestionIsAboutPlateletsAndNoOtherProduct() {
+        for (BloodProductType product : BloodProductType.values()) {
+            if (product == BloodProductType.PLATELETS) {
+                continue;
+            }
+            assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+                AboGroup.B, AboGroup.O, product))
+                .withFailMessage("%s is not covered by the platelet protocol question", product)
+                .isFalse();
+        }
+    }
+
+    @Test
+    void flaggingTheQuestionDoesNotMakeThePairingIncompatible() {
+        // THE point of the whole thing. The sign-off permits O platelets for a
+        // B recipient and the software must keep permitting them; the flag is
+        // advisory and must never acquire the power to refuse a transfusion.
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.B, AboGroup.O, BloodProductType.PLATELETS)).isTrue();
+        assertThat(AboGroup.isCompatible(
+            AboGroup.B, RhFactor.POSITIVE,
+            AboGroup.O, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.NO))
+            .isTrue();
+    }
+
+    @Test
+    void aMissingGroupOrProductIsNotAnOpenQuestion() {
+        // Fails to false, deliberately unlike the fail-CLOSED compatibility
+        // rule: a spurious advisory costs a clinician's attention for nothing.
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            null, AboGroup.O, BloodProductType.PLATELETS)).isFalse();
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.B, null, BloodProductType.PLATELETS)).isFalse();
+        assertThat(AboGroup.isPlateletPairingPendingConfirmation(
+            AboGroup.B, AboGroup.O, null)).isFalse();
+    }
 }
