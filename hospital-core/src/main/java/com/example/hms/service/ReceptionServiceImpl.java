@@ -92,6 +92,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final PatientInsuranceRepository insuranceRepo;
     private final BillingInvoiceRepository invoiceRepo;
     private final PatientRepository patientRepo;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
     private final AppointmentWaitlistRepository waitlistRepo;
     private final HospitalRepository hospitalRepo;
     private final DepartmentRepository departmentRepo;
@@ -188,8 +189,23 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     public FrontDeskPatientSnapshotDTO getPatientSnapshot(UUID patientId, UUID hospitalId) {
-        Patient patient = patientRepo.findById(patientId)
-                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Patient not found"));
+        // Unscoped lookup plus an explicit registration check — the pattern
+        // PatientRepository.findByIdUnscoped's javadoc prescribes.
+        //
+        // The tenant-scoped findById filters on Patient.hospital_id, which is
+        // the hospital the patient was FIRST registered at. A patient
+        // registered here but originally seen elsewhere therefore vanished,
+        // and the front desk got "Patient not found" for somebody standing in
+        // front of them. Cross-hospital registration is a shipped feature
+        // (#429), so this was not an edge case.
+        Patient patient = patientRepo.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
+        // Access control is the caller's job once the scope filter is off.
+        // 404-not-403: a patient at another hospital reads the same as one
+        // that does not exist.
+        if (hospitalId != null && !registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
+            throw new ResourceNotFoundException("patient.notfound", patientId);
+        }
 
         // MRN from hospital registration
         String mrn = patient.getHospitalRegistrations().stream()
@@ -587,8 +603,13 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
         Department department = departmentRepo.findById(req.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
-        Patient patient = patientRepo.findById(req.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        // Same fix as the snapshot above: a waitlist entry for a patient whose
+        // first hospital is elsewhere would otherwise be impossible to create.
+        Patient patient = patientRepo.findByIdUnscoped(req.getPatientId())
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", req.getPatientId()));
+        if (!registrationRepo.existsByPatientIdAndHospitalId(req.getPatientId(), hospitalId)) {
+            throw new ResourceNotFoundException("patient.notfound", req.getPatientId());
+        }
         Staff provider = (req.getPreferredProviderId() != null)
                 ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
                 : null;

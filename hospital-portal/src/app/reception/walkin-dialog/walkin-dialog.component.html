@@ -116,6 +116,26 @@
       }
     </div>
 
+    <!-- Department — required by the backend and previously never collected,
+         so every walk-in registration returned 400. Pre-filled from the
+         provider, but editable: it decides which queue the patient joins. -->
+    <div class="field-group">
+      <label for="walkinDept">
+        {{ 'RECEPTION.DEPARTMENT' | translate }} <span class="required">*</span>
+      </label>
+      <select
+        id="walkinDept"
+        class="form-control"
+        [ngModel]="departmentId()"
+        (ngModelChange)="departmentId.set($event)"
+      >
+        <option value="">— {{ 'RECEPTION.SELECT_DEPARTMENT' | translate }} —</option>
+        @for (d of departments(); track d.id) {
+          <option [value]="d.id">{{ d.name }}</option>
+        }
+      </select>
+    </div>
+
     <!-- Encounter Type -->
     <div class="field-group">
       <label for="encType">{{ 'RECEPTION.TYPE' | translate }}</label>
@@ -126,7 +146,7 @@
         (ngModelChange)="encounterType.set($event)"
       >
         @for (t of encounterTypes; track t) {
-          <option [value]="t">{{ 'ENCOUNTERS.' + t | translate }}</option>
+          <option [value]="t">{{ 'PORTAL.ENUM.ENCOUNTER_TYPE.' + t | translate }}</option>
         }
       </select>
     </div>

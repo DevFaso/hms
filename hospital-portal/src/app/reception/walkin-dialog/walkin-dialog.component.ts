@@ -45,6 +45,15 @@ export class WalkInDialogComponent implements OnInit {
   });
   selectedStaff = signal<StaffResponse | null>(null);
 
+  /* ── Department ─────────────────────────
+     Required by the backend (EncounterRequestDTO.departmentId is @NotNull)
+     and never collected here, so walk-in registration returned 400 every
+     time. Pre-filled from the chosen provider, but EDITABLE: an emergency
+     walk-in seen by a midwife belongs in the emergency queue, not in
+     maternity, and this field is what decides which queue they land in. */
+  departments = signal<{ id: string; name: string }[]>([]);
+  departmentId = signal('');
+
   /* ── Form ───────────────────────────────── */
   encounterType = signal<EncounterType>('OUTPATIENT');
   notes = signal('');
@@ -62,6 +71,12 @@ export class WalkInDialogComponent implements OnInit {
     const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
     this.staffService.list(hospitalId).subscribe({
       next: (list) => this.allStaff.set(list),
+    });
+
+    // GET /departments admits RECEPTIONIST (verified against the controller).
+    this.http.get<{ id: string; name: string }[]>('/departments').subscribe({
+      next: (list) => this.departments.set(list ?? []),
+      error: () => this.departments.set([]),
     });
 
     this.patientSearch$
@@ -95,6 +110,11 @@ export class WalkInDialogComponent implements OnInit {
   selectStaff(s: StaffResponse): void {
     this.selectedStaff.set(s);
     this.staffQuery.set(s.name);
+    // Pre-fill only while the receptionist has not chosen for themselves —
+    // picking a provider afterwards must not silently reroute the patient.
+    if (!this.departmentId() && s.departmentId) {
+      this.departmentId.set(s.departmentId);
+    }
   }
 
   submit(): void {
@@ -102,7 +122,7 @@ export class WalkInDialogComponent implements OnInit {
     const staff = this.selectedStaff();
     const hospitalId = this.roleCtx.activeHospitalId;
 
-    if (!patient || !staff || !hospitalId) {
+    if (!patient || !staff || !hospitalId || !this.departmentId()) {
       this.toast.error(this.translate.instant('RECEPTION.WALKIN_VALIDATION_ERROR'));
       return;
     }
@@ -112,6 +132,7 @@ export class WalkInDialogComponent implements OnInit {
       patientId: patient.id,
       staffId: staff.id,
       hospitalId,
+      departmentId: this.departmentId(),
       encounterType: this.encounterType(),
       encounterDate: new Date().toISOString(),
       notes: this.notes() || undefined,
