@@ -10,7 +10,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterModule } from '@angular/router';
+import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { catchError, of } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
@@ -20,6 +20,7 @@ import {
   type SessionBootstrapResponse,
 } from '../auth/auth.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
+import { safeReturnUrl } from '../auth/return-url';
 import { RoleContextService } from '../core/role-context.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 
@@ -80,6 +81,7 @@ export class Login implements OnInit, AfterViewInit {
 
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly auth = inject(AuthService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
@@ -431,7 +433,14 @@ export class Login implements OnInit, AfterViewInit {
               }
 
               const needsSetup = forcePasswordChange || forceUsernameChange;
-              const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
+              // A returnUrl means the user clicked a deep link (almost always
+              // from an email) and was bounced here to sign in. Honour it —
+              // but account setup still wins, since a forced password or
+              // username change has to happen before anything else.
+              const returnUrl = safeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl'));
+              const dest = needsSetup
+                ? '/account-setup'
+                : (returnUrl ?? this.auth.resolveLandingPath());
               void this.router.navigateByUrl(dest);
               this.loading = false;
             });

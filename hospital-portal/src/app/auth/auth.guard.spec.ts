@@ -18,7 +18,8 @@ describe('AuthGuard', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  const run = () => TestBed.runInInjectionContext(() => AuthGuard({} as never, {} as never));
+  const run = (url = '/') =>
+    TestBed.runInInjectionContext(() => AuthGuard({} as never, { url } as never));
 
   it('admits an authenticated caller', () => {
     auth.isAuthenticated.and.returnValue(true);
@@ -33,6 +34,19 @@ describe('AuthGuard', () => {
     const result = run();
 
     expect(result).toEqual(jasmine.any(UrlTree));
-    expect(router.serializeUrl(result as UrlTree)).toBe('/login');
+    expect(router.serializeUrl(result as UrlTree)).toBe('/login?returnUrl=%2F');
+  });
+
+  it('carries the attempted URL so an emailed deep link survives login', () => {
+    // Every deep link this app emits arrives by email, so the recipient is
+    // usually signed out when they click. Dropping the target here is what
+    // made those links look like they did nothing.
+    auth.isAuthenticated.and.returnValue(false);
+
+    const result = run('/my-appointments?cancel=appt-1');
+
+    expect(router.serializeUrl(result as UrlTree)).toBe(
+      '/login?returnUrl=%2Fmy-appointments%3Fcancel%3Dappt-1',
+    );
   });
 });

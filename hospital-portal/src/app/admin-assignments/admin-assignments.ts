@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute } from '@angular/router';
 import {
   AssignmentAdminService,
   AssignmentBatchResponse,
@@ -38,6 +39,7 @@ export class AdminAssignmentsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly route = inject(ActivatedRoute);
 
   /* List state */
   rows = signal<AssignmentResponse[]>([]);
@@ -96,6 +98,20 @@ export class AdminAssignmentsComponent implements OnInit {
     if (!this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN'])) {
       this.filterHospitalId.set(this.roleContext.activeHospitalId ?? '');
     }
+
+    // `?confirm=<assignmentCode>` is the assigner-confirmation link from
+    // AssignmentLinkService. It used to point at /super/assignments, a route
+    // that does not exist in this app, so the link went nowhere. Landing on
+    // the code-filtered list puts the assigner on the one row they were
+    // emailed about; the confirmation code itself is theirs to enter, and
+    // the hospital pre-filter is cleared so a code from another scope is
+    // still found.
+    const confirmCode = this.route.snapshot.queryParamMap.get('confirm')?.trim();
+    if (confirmCode) {
+      this.filterCode.set(confirmCode);
+      this.filterHospitalId.set('');
+    }
+
     this.load();
     this.hospitalService.list().subscribe({
       next: (h) => this.hospitals.set(h),

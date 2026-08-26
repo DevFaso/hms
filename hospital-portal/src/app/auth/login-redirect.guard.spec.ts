@@ -21,8 +21,13 @@ describe('LoginRedirectGuard', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  const run = () =>
-    TestBed.runInInjectionContext(() => LoginRedirectGuard({} as never, {} as never));
+  const run = (returnUrl: string | null = null) =>
+    TestBed.runInInjectionContext(() =>
+      LoginRedirectGuard(
+        { queryParamMap: { get: (k: string) => (k === 'returnUrl' ? returnUrl : null) } } as never,
+        {} as never,
+      ),
+    );
 
   it('lets an anonymous caller reach the login page', () => {
     auth.isAuthenticated.and.returnValue(false);
@@ -48,5 +53,25 @@ describe('LoginRedirectGuard', () => {
     auth.resolveLandingPath.and.returnValue('/dashboard');
 
     expect(router.serializeUrl(run() as UrlTree)).toBe('/dashboard');
+  });
+
+  it('honours a returnUrl so a still-signed-in patient reaches the emailed link', () => {
+    auth.isAuthenticated.and.returnValue(true);
+
+    const result = run('/my-appointments?cancel=appt-1');
+
+    expect(router.serializeUrl(result as UrlTree)).toBe('/my-appointments?cancel=appt-1');
+    expect(auth.resolveLandingPath).not.toHaveBeenCalled();
+  });
+
+  it('ignores an off-origin returnUrl and uses the landing path', () => {
+    // The value is attacker-controllable and is navigated to right after a
+    // successful sign-in.
+    auth.isAuthenticated.and.returnValue(true);
+    auth.resolveLandingPath.and.returnValue('/dashboard');
+
+    const result = run('//evil.example');
+
+    expect(router.serializeUrl(result as UrlTree)).toBe('/dashboard');
   });
 });

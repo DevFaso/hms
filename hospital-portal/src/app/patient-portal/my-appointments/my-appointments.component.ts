@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
@@ -30,6 +31,7 @@ import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.com
 export class MyAppointmentsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly translate = inject(TranslateService);
+  private readonly route = inject(ActivatedRoute);
   appointments = signal<PortalAppointment[]>([]);
   loading = signal(true);
   expandedId = signal<string | null>(null);
@@ -78,6 +80,38 @@ export class MyAppointmentsComponent implements OnInit {
     this.loadAppointments();
   }
 
+  /**
+   * Open the modal an emailed link asked for, once the data it needs is in.
+   *
+   * <p>Confirmation emails link to `/appointments/cancel/{id}` and
+   * `/appointments/reschedule/{id}`; AppointmentLinkGuard rewrites those to
+   * `?cancel=` / `?reschedule=` on this route. Applied AFTER the load
+   * because both modals bind to a PortalAppointment, not to an id.
+   *
+   * <p>An id that does not resolve is left alone deliberately - the patient
+   * still gets their appointment list, which beats an error for a link that
+   * may simply be stale (already cancelled, or a since-rebooked visit).
+   */
+  private applyDeepLink(appts: PortalAppointment[]): void {
+    const params = this.route.snapshot.queryParamMap;
+    const cancelId = params.get('cancel');
+    const rescheduleId = params.get('reschedule');
+    if (!cancelId && !rescheduleId) {
+      return;
+    }
+
+    const target = appts.find((a) => a.id === (cancelId ?? rescheduleId));
+    if (!target || !this.canModify(target)) {
+      return;
+    }
+
+    if (cancelId) {
+      this.openCancel(target);
+    } else {
+      this.openReschedule(target);
+    }
+  }
+
   private loadAppointments(): void {
     this.loading.set(true);
     this.portal.getMyAppointments().subscribe({
@@ -93,6 +127,7 @@ export class MyAppointmentsComponent implements OnInit {
           ),
         );
         this.loading.set(false);
+        this.applyDeepLink(appts);
       },
       error: () => this.loading.set(false),
     });

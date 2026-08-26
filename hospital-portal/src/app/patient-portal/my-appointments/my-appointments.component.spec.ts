@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyAppointmentsComponent } from './my-appointments.component';
@@ -9,6 +10,11 @@ describe('MyAppointmentsComponent', () => {
   let fixture: ComponentFixture<MyAppointmentsComponent>;
   let portalService: jasmine.SpyObj<PatientPortalService>;
 
+  // Mutable so a deep-link test can set the params and re-run ngOnInit.
+  // The component reads the SNAPSHOT, matching how it is actually entered:
+  // one navigation from an emailed link, not a live param stream.
+  let queryParams: Record<string, string> = {};
+
   beforeEach(async () => {
     const spy = jasmine.createSpyObj('PatientPortalService', [
       'getMyAppointments',
@@ -17,6 +23,7 @@ describe('MyAppointmentsComponent', () => {
       'getSchedulingProviders',
       'bookAppointment',
     ]);
+    queryParams = {};
     spy.getMyAppointments.and.returnValue(of([]));
     spy.getSchedulingHospitals.and.returnValue(of([]));
     spy.getSchedulingDepartments.and.returnValue(of([]));
@@ -25,7 +32,15 @@ describe('MyAppointmentsComponent', () => {
 
     await TestBed.configureTestingModule({
       imports: [MyAppointmentsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: spy }],
+      providers: [
+        { provide: PatientPortalService, useValue: spy },
+        {
+          provide: ActivatedRoute,
+          useValue: {
+            snapshot: { queryParamMap: { get: (k: string) => queryParams[k] ?? null } },
+          },
+        },
+      ],
     }).compileComponents();
 
     portalService = TestBed.inject(PatientPortalService) as jasmine.SpyObj<PatientPortalService>;
@@ -140,6 +155,77 @@ describe('MyAppointmentsComponent', () => {
       expect(component.bookingLoading()).toBeFalse();
     });
   });
+
+  // ── Emailed deep links (appointment confirmation emails) ──────────
+  //
+  // AppointmentLinkGuard rewrites /appointments/cancel/{id} and
+  // /appointments/reschedule/{id} onto this route as query params. Those
+  // two URL shapes had no route at all before 2026-08-25, so every emailed
+  // link landed on the wildcard route.
+
+  describe('deep links', () => {
+    const linked = (over: Partial<PortalAppointment> = {}): PortalAppointment =>
+      ({
+        id: 'appt-1',
+        date: '2099-01-01',
+        rawStartTime: '09:00',
+        rawEndTime: '09:30',
+        status: 'SCHEDULED',
+        ...over,
+      }) as PortalAppointment;
+
+    it('opens the cancel modal for the appointment in the link', () => {
+      portalService.getMyAppointments.and.returnValue(of([linked()]));
+      queryParams = { cancel: 'appt-1' };
+
+      component.ngOnInit();
+
+      expect(component.cancelTarget()?.id).toBe('appt-1');
+      expect(component.rescheduleTarget()).toBeNull();
+    });
+
+    it('opens the reschedule modal for the appointment in the link', () => {
+      portalService.getMyAppointments.and.returnValue(of([linked()]));
+      queryParams = { reschedule: 'appt-1' };
+
+      component.ngOnInit();
+
+      expect(component.rescheduleTarget()?.id).toBe('appt-1');
+      expect(component.cancelTarget()).toBeNull();
+    });
+
+    it('opens nothing when no deep link is present', () => {
+      portalService.getMyAppointments.and.returnValue(of([linked()]));
+
+      component.ngOnInit();
+
+      expect(component.cancelTarget()).toBeNull();
+      expect(component.rescheduleTarget()).toBeNull();
+    });
+
+    it('shows the list rather than an error when the link is stale', () => {
+      // An id that no longer resolves is expected, not exceptional: the
+      // visit may already have been cancelled or rebooked since the email.
+      portalService.getMyAppointments.and.returnValue(of([linked()]));
+      queryParams = { cancel: 'long-gone' };
+
+      component.ngOnInit();
+
+      expect(component.cancelTarget()).toBeNull();
+      expect(component.appointments().length).toBe(1);
+    });
+
+    it('will not open a modal for an appointment that cannot be modified', () => {
+      // Otherwise an old email offers to cancel a visit the patient already
+      // attended, and the backend refuses it on submit.
+      portalService.getMyAppointments.and.returnValue(of([linked({ status: 'COMPLETED' })]));
+      queryParams = { cancel: 'appt-1' };
+
+      component.ngOnInit();
+
+      expect(component.cancelTarget()).toBeNull();
+    });
+  });
 });
 
 /* ── P1 #9: cancel + reschedule ── */
@@ -181,7 +267,15 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
 
     await TestBed.configureTestingModule({
       imports: [MyAppointmentsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: portal }],
+      providers: [
+        { provide: PatientPortalService, useValue: portal },
+        // No deep link in this block — the component reads the snapshot on
+        // init, so it needs a route even when there is nothing on it.
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: { get: () => null } } },
+        },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MyAppointmentsComponent);
