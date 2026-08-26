@@ -99,6 +99,7 @@ class ReceptionServiceImplTest {
     @Mock private SlotInventoryService slotInventoryService;
     @Mock private PatientOutreachNotifier outreachNotifier;
     @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -477,7 +478,8 @@ class ReceptionServiceImplTest {
         @DisplayName("returns snapshot with billing and insurance info")
         void returnsSnapshot() {
             patient.setHospitalRegistrations(Collections.emptySet());
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
                     .thenReturn(Collections.emptyList());
             when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
@@ -493,7 +495,7 @@ class ReceptionServiceImplTest {
         @Test
         @DisplayName("throws when patient not found")
         void throwsWhenNotFound() {
-            when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getPatientSnapshot(patientId, hospitalId))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -508,7 +510,8 @@ class ReceptionServiceImplTest {
             when(expired.isPrimary()).thenReturn(true);
             when(expired.getId()).thenReturn(UUID.randomUUID());
 
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
                     .thenReturn(List.of(expired));
             when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
@@ -524,7 +527,8 @@ class ReceptionServiceImplTest {
         @DisplayName("detects outstanding balance")
         void detectsOutstandingBalance() {
             patient.setHospitalRegistrations(Collections.emptySet());
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
                     .thenReturn(Collections.emptyList());
 
@@ -552,7 +556,8 @@ class ReceptionServiceImplTest {
             when(reg.getMrn()).thenReturn("MRN-001");
             patient.setHospitalRegistrations(Set.of(reg));
 
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
                     .thenReturn(Collections.emptyList());
             when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
@@ -568,7 +573,8 @@ class ReceptionServiceImplTest {
         void detectsIncompleteDemographics() {
             patient.setPhoneNumberPrimary(null);
             patient.setHospitalRegistrations(Collections.emptySet());
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
                     .thenReturn(Collections.emptyList());
             when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
@@ -790,7 +796,8 @@ class ReceptionServiceImplTest {
 
             when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
-            when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
 
             AppointmentWaitlist saved = mock(AppointmentWaitlist.class);
             when(saved.getId()).thenReturn(UUID.randomUUID());
@@ -1505,5 +1512,57 @@ class ReceptionServiceImplTest {
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
                     .isInstanceOf(AccessDeniedException.class);
         }
+    }
+
+    // ── Front-desk snapshot and the tenant-scope trap ────────────────────
+    //
+    // Reported from dev 2026-08-26: the snapshot 404'd with "Patient not
+    // found" for a patient standing at the desk. The scoped findById filters
+    // on Patient.hospital_id — the hospital the patient was FIRST registered
+    // at — so anybody registered here but originally seen elsewhere
+    // disappeared. Cross-hospital registration is a shipped feature (#429),
+    // so this was the normal case, not an edge one.
+
+    @Test
+    void theSnapshotFindsAPatientWhoseFirstHospitalIsElsewhere() {
+        // The SCOPED findById returns empty for exactly this patient — that
+        // is the bug — while the unscoped one finds them.
+        when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        patient.setHospitalRegistrations(Collections.emptySet());
+        when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                .thenReturn(Collections.emptyList());
+        when(invoiceRepo.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+        FrontDeskPatientSnapshotDTO snapshot = service.getPatientSnapshot(patientId, hospitalId);
+
+        assertThat(snapshot).isNotNull();
+        assertThat(snapshot.getPatientId()).isEqualTo(patientId);
+    }
+
+    @Test
+    void theSnapshotStillRefusesAPatientNotRegisteredHere() {
+        // Dropping the scope filter means access control becomes this
+        // method's job. 404-not-403: another hospital's patient reads the
+        // same as one that does not exist.
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getPatientSnapshot(patientId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void theSnapshot404CarriesAMessageKeyNotProse() {
+        // "[Missing translation] Patient not found" is what the front desk
+        // actually saw. ResourceNotFoundException takes a KEY.
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getPatientSnapshot(patientId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining("patient.notfound")
+            .hasMessageNotContaining("Patient not found");
     }
 }

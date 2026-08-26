@@ -63,6 +63,20 @@ public class AppointmentController {
     private static final String APPOINTMENT_BOOK_ROLES =
         "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')";
 
+    /**
+     * Everyone who may CHANGE an appointment: move it, change its status,
+     * check the patient in, cancel it.
+     *
+     * <p>A constant because this list was pasted inline at five call sites
+     * and one copy silently lost RECEPTIONIST — so a receptionist could book
+     * an appointment and cancel it but not move it, which is the commonest
+     * task at a front desk. It returned a bare 403 from PUT /appointments/{id}
+     * while the portal route guard happily let them reach the button.
+     * Reported from dev 2026-08-26.
+     */
+    private static final String APPOINTMENT_MANAGE_ROLES =
+        "hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')";
+
     private static final String APPOINTMENT_READ_ROLES = "hasAnyRole("
         + "'SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT',"
         + CONSULTING_CLINICIANS_ROLES + ")";
@@ -121,7 +135,7 @@ public class AppointmentController {
 
     // ---- UPDATE ----
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
     public ResponseEntity<AppointmentResponseDTO> updateAppointment(
         @PathVariable UUID id,
         @Valid @RequestBody AppointmentRequestDTO request,
@@ -136,7 +150,7 @@ public class AppointmentController {
 
     // ---- STATUS ----
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
     public ResponseEntity<AppointmentResponseDTO> updateAppointmentStatus(
         @PathVariable UUID id,
         @RequestParam(name = "action") String action,
@@ -183,7 +197,7 @@ public class AppointmentController {
 
     // ---- LIST ALL (with optional query-param filtering) ----
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAllAppointments(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID staffId,
@@ -230,6 +244,10 @@ public class AppointmentController {
 
     // ---- DELETE ----
     @DeleteMapping("/{id}")
+    // Deliberately NARROWER than APPOINTMENT_MANAGE_ROLES: a receptionist
+    // cancels an appointment (which keeps the record and its history) rather
+    // than deleting it. Not the same omission as the PUT above — this one is
+    // on purpose.
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     public ResponseEntity<String> deleteAppointment(
         @PathVariable UUID id,
@@ -261,7 +279,7 @@ public class AppointmentController {
 
     // ---- LIST BY STAFF ----
     @GetMapping("/staff/{staffId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByStaffId(
         @PathVariable UUID staffId,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
@@ -417,7 +435,7 @@ public class AppointmentController {
      * keep the result set bounded; broader ranges return 400.
      */
     @GetMapping("/calendar")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
     @Operation(summary = "List appointments in a date range for calendar rendering")
     public ResponseEntity<List<com.example.hms.payload.dto.appointment.AppointmentCalendarEventDTO>> getCalendarEvents(
         @RequestParam UUID hospitalId,
