@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject, Subscription } from 'rxjs';
@@ -15,6 +15,9 @@ import {
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
+  // Describe-scoped so the layout tests below can assert on rendered DOM;
+  // the polling tests that predate them only ever needed the instance.
+  let fixture: ComponentFixture<NurseStationComponent>;
   let nurseServiceSpy: jasmine.SpyObj<NurseTaskService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
   let routerSpy: jasmine.SpyObj<Router>;
@@ -83,7 +86,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       ],
     }).compileComponents();
 
-    const fixture = TestBed.createComponent(NurseStationComponent);
+    fixture = TestBed.createComponent(NurseStationComponent);
     component = fixture.componentInstance;
   });
 
@@ -336,5 +339,57 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     component.setHandoffView('PENDING');
     expect(component.handoffView()).toBe('PENDING');
+  });
+
+  // ── Announcements sidebar layout ──────────────────────────────
+  //
+  // Reported from production: the "No announcements" card sat mid-page,
+  // level with the tab row, and the 260px column it reserved squeezed the
+  // tabs until Inbox wrapped onto a second line.
+
+  it('renders no announcements sidebar when there is nothing to announce', () => {
+    fixture.detectChanges();
+
+    expect(component.announcements().length).toBe(0);
+    expect(fixture.nativeElement.querySelector('.announcements-sidebar')).toBeNull();
+  });
+
+  it('drops the reserved sidebar column when the sidebar is absent', () => {
+    // Without this the content panel stays 260px narrow to hold a sidebar
+    // that is not rendered.
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.station-layout.no-sidebar')).not.toBeNull();
+  });
+
+  it('renders the sidebar once an announcement exists', () => {
+    nurseServiceSpy.getAnnouncements.and.returnValue(
+      of([
+        {
+          id: 'a-1',
+          text: 'Fire drill at 14:00',
+          category: 'SAFETY',
+          createdAt: '2026-08-25T10:00:00',
+          startsAt: '2026-08-25T09:00:00',
+          expiresAt: '2026-08-26T09:00:00',
+        },
+      ]),
+    );
+
+    component.ngOnInit();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.announcements-sidebar')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.station-layout.no-sidebar')).toBeNull();
+  });
+
+  it('keeps the tabs out of the sidebar column so they get the full width', () => {
+    // The tabs used to live inside .main-content, sharing the grid row with
+    // the sidebar. That is what made them wrap.
+    fixture.detectChanges();
+
+    const tabs = fixture.nativeElement.querySelector('.section-tabs');
+    expect(tabs).not.toBeNull();
+    expect(tabs.closest('.station-layout')).toBeNull();
   });
 });
