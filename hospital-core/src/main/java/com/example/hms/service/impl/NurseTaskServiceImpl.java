@@ -173,6 +173,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final PatientRepository patientRepository;
     private final NursingTaskRepository nursingTaskRepository;
     private final NursingNoteRepository nursingNoteRepository;
+    private final com.example.hms.service.pharmacy.PharmacistVerificationService
+        pharmacistVerificationService;
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final NurseHandoffRepository nurseHandoffRepository;
@@ -276,6 +278,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .route(rx.getRoute() != null ? rx.getRoute() : "PO")
                     .dueTime(computeMedicationDueTime(rx, now))
                     .status(marStatus)
+                    .requiresPharmacistVerification(
+                        pharmacistVerificationService.requiresVerification(rx))
+                    .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
                     .build());
             }
         }
@@ -309,6 +314,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
+            requirePharmacistVerification(rx, marStatus);
             return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason);
         }
 
@@ -317,6 +323,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
+            requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
             marRecord.setNotes(note);
@@ -855,6 +862,36 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /** Persist a MedicationAdministrationRecord linked to a real Prescription. */
+    /**
+     * Tier 2 item 33 — refuse administration of a high-risk medication that
+     * no pharmacist has verified.
+     *
+     * <p><b>Only GIVEN is blocked.</b> A nurse must always be able to
+     * record that a dose was held, refused or missed: those are clinical
+     * facts about what happened to the patient, and a gate that swallowed
+     * them would destroy the record it exists to protect. Blocking a HELD
+     * would also be perverse — holding the dose is exactly what a nurse
+     * should do when it cannot be verified.
+     *
+     * <p>Scope lives in PharmacistVerificationService, not here, so
+     * widening it later is one edit.
+     */
+    private void requirePharmacistVerification(
+        Prescription rx, MedicationAdministrationStatus status
+    ) {
+        if (status != MedicationAdministrationStatus.GIVEN) {
+            return;
+        }
+        if (!pharmacistVerificationService.blocksAdministration(rx)) {
+            return;
+        }
+        throw new BusinessException(
+            ("%s has not been verified by a pharmacist. It is a high-risk medication, so it "
+                + "cannot be administered until a pharmacist verifies it. Record the dose as "
+                + "HELD if the patient is waiting.")
+                .formatted(rx.getMedicationName() != null ? rx.getMedicationName() : "This medication"));
+    }
+
     private NurseMedicationTaskResponseDTO persistMarRecord(
         Prescription rx, UUID nurseUserId, UUID hospitalId,
         MedicationAdministrationStatus status, String note, String overrideReason
@@ -895,6 +932,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
 
         return NurseMedicationTaskResponseDTO.builder()
+            .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
+            .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
             .id(saved.getId())
             .patientId(rx.getPatient().getId())
             .patientName(rx.getPatient().getFullName())

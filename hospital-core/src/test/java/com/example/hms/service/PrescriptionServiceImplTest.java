@@ -83,6 +83,16 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard =
         new com.example.hms.service.pharmacy.ControlledSubstanceGuard();
 
+    // Also real, same reasoning. updatePrescription calls invalidateOnChange,
+    // which is a pure mutation of the passed Prescription — mocking it would
+    // let an edit keep a stale pharmacist verification while these tests
+    // still passed, which is exactly the failure the rule exists to stop.
+    @org.mockito.Spy
+    private com.example.hms.service.pharmacy.PharmacistVerificationService
+        pharmacistVerificationService =
+            new com.example.hms.service.pharmacy.PharmacistVerificationService(
+                null, null, null, java.time.Clock.systemUTC());
+
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
@@ -1280,6 +1290,50 @@ class PrescriptionServiceImplTest {
 
         PrescriptionResponseDTO result = prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
         assertThat(result.getId()).isEqualTo(prescriptionId);
+    }
+
+    /**
+     * Tier 2 item 33 — the load-bearing rule, proved through the real update
+     * path rather than against the service in isolation.
+     *
+     * <p>updatePrescription has NO status guard, so a SIGNED prescription's
+     * medication and dosage stay editable. A verification that outlived that
+     * edit would assert a pharmacist checked a drug they never saw, which is
+     * a false assurance rather than an absent one.
+     */
+    @Test
+    void updatingAPrescriptionClearsAnyPharmacistVerification() {
+        UUID prescriptionId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        existing.setControlledSubstance(true);
+        // The real ControlledSubstanceGuard refuses a SIGNED controlled
+        // substance without two-factor, so this is what a valid one looks
+        // like — the test stays about the verification rule, not that one.
+        existing.setTwoFactorVerifiedAt(java.time.LocalDateTime.now().minusHours(3));
+        existing.setPharmacistVerifiedAt(java.time.LocalDateTime.now().minusHours(2));
+        existing.setPharmacistVerificationNote("Dose checked");
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR")))
+            .thenReturn(Optional.of(assignment));
+        when(prescriptionRepository.save(any())).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(prescriptionId).build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(existing.getPharmacistVerifiedAt()).isNull();
+        assertThat(existing.getPharmacistVerifiedBy()).isNull();
+        assertThat(existing.getPharmacistVerificationNote()).isNull();
     }
 
     @Test

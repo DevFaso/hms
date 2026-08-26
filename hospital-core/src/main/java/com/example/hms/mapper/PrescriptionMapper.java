@@ -67,6 +67,18 @@ public class PrescriptionMapper {
             .requiresCosign(p.isRequiresCosign())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
+            // Tier 2 item 33. requiresPharmacistVerification mirrors
+            // PharmacistVerificationService.requiresVerification — kept in
+            // sync deliberately rather than injecting the service into a
+            // mapper; the service test pins the rule and the mapper test
+            // pins this projection.
+            .requiresPharmacistVerification(p.isControlledSubstance() || p.isRequiresCosign())
+            .pharmacistVerifiedAt(p.getPharmacistVerifiedAt())
+            .pharmacistVerifiedByUserId(
+                p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getId() : null)
+            .pharmacistVerifiedByName(
+                p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getUsername() : null)
+            .pharmacistVerificationNote(p.getPharmacistVerificationNote())
             .cosignedByStaffId(p.getCosignedBy() != null ? p.getCosignedBy().getId() : null)
             .signatureValue(p.getSignatureValue())
             .signatureAlgorithm(p.getSignatureAlgorithm())
