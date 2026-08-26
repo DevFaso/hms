@@ -4747,7 +4747,9 @@
       "SIGNED": "Prescripción firmada",
       "SIGN_FAILED": "Error al firmar",
       "COSIGNED": "Prescripción refrendada",
-      "COSIGN_FAILED": "Error al refrendar"
+      "COSIGN_FAILED": "Error al refrendar",
+      "PHARMACIST_VERIFIED": "Prescripción verificada",
+      "PHARMACIST_VERIFY_FAILED": "Error en la verificación"
     },
     "SIGN": "Firmar",
     "COSIGN": "Refrendar",
@@ -4757,7 +4759,19 @@
     "COSIGN_PENDING": "Pendiente — un segundo prescriptor debe refrendar",
     "CONTROLLED_SUBSTANCE": "Sustancia controlada — verificación de dos factores",
     "TWO_FACTOR_PENDING": "Pendiente — sin verificar",
-    "SIGNED_PRE_V118": "Firmada antes de que existieran las pruebas de firma; no verificable."
+    "SIGNED_PRE_V118": "Firmada antes de que existieran las pruebas de firma; no verificable.",
+    "PHARMACIST_VERIFY": "Verificación farmacéutica",
+    "PHARMACIST_VERIFY_TITLE": "Verificar la prescripción",
+    "PHARMACIST_VERIFY_FOR": "Verificación de",
+    "PHARMACIST_VERIFY_HINT": "Compruebe el medicamento, la dosis, la vía y la frecuencia frente a la prescripción. Cualquier modificación posterior anula esta verificación, que deberá repetirse.",
+    "PHARMACIST_VERIFY_NOTE": "Nota (opcional)",
+    "PHARMACIST_VERIFY_NOTE_PLACEHOLDER": "Lo que ha comprobado, o una advertencia para enfermería",
+    "PHARMACIST_VERIFY_NOTE_RECORDED": "Nota de verificación",
+    "PHARMACIST_VERIFY_CONFIRM": "Registrar la verificación",
+    "PHARMACIST_VERIFYING": "Registrando…",
+    "PHARMACIST_VERIFY_STATE": "Verificación farmacéutica",
+    "PHARMACIST_VERIFY_PENDING": "Pendiente — un farmacéutico debe verificar antes de administrar",
+    "PHARMACIST_VERIFIED_BY": "Verificada por"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",
@@ -8301,5 +8315,10 @@
     "TRANSFER_CANCELLED": "Traslado cancelado y cama liberada.",
     "TRANSFER_CANCEL_ERROR": "No se pudo cancelar el traslado.",
     "TRANSFERS_LOAD_ERROR": "No se pudieron cargar los traslados pendientes."
+  },
+  "EMAR": {
+    "PHARMACIST_BLOCKED_BODY": "Esta dosis no puede registrarse como administrada hasta que un farmacéutico haya verificado la prescripción. Suspenda la dosis y contacte con la farmacia — Suspendida, Rechazada y Omitida siguen siendo registrables.",
+    "PHARMACIST_BLOCKED_TITLE": "Pendiente de verificación farmacéutica",
+    "PHARMACIST_PENDING_CHIP": "Espera farmacia"
   }
 }

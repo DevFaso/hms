@@ -45,6 +45,22 @@ export interface PrescriptionResponse {
   signatureAlgorithm?: string | null;
   signedAt?: string | null;
   signedByStaffId?: string | null;
+  /**
+   * Pharmacist verification (Tier 2 item 33). In scope only for controlled
+   * substances and prescriptions flagged requiresCosign; everything else
+   * reports false and administers as before.
+   */
+  requiresPharmacistVerification?: boolean;
+  /**
+   * Null means unverified — either never verified, or invalidated because the
+   * prescription was edited after verification. The two are deliberately
+   * indistinguishable here: both mean a pharmacist has not checked the drug
+   * and dose currently on the row.
+   */
+  pharmacistVerifiedAt?: string | null;
+  pharmacistVerifiedByUserId?: string | null;
+  pharmacistVerifiedByName?: string | null;
+  pharmacistVerificationNote?: string | null;
 }
 
 export type PrescriptionStatusType =
@@ -131,6 +147,20 @@ export class PrescriptionService {
    */
   cosign(id: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/cosign`, {});
+  }
+
+  /**
+   * Pharmacist-verification ceremony (Tier 2 item 33): the check between
+   * prescriber and nurse. Pharmacist roles only, and the backend refuses the
+   * prescribing clinician even if they hold one.
+   *
+   * <p>The note is optional by design — the common case is a clean check with
+   * nothing to add, and a mandatory field there trains people to type "ok".
+   */
+  pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
+      note: note?.trim() || undefined,
+    });
   }
 
   dispatchSms(

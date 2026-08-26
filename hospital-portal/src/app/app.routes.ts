@@ -931,6 +931,11 @@ export const routes: Routes = [
             // (POST /prescriptions still excludes midwives at the controller.)
             'ROLE_MIDWIFE',
             'ROLE_PHARMACIST',
+            // Tier 2 item 33: the pharmacist-verification button lives on this
+            // page, and PHARMACY_VERIFIER is on the backend's endpoint — but
+            // the guard rejected it, so the role that exists to do this job
+            // could not reach the page it is done on.
+            'ROLE_PHARMACY_VERIFIER',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',

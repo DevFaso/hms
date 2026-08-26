@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import {
@@ -57,7 +58,11 @@ const FIVE_RIGHTS_LABELS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  // TranslateModule is here for the pharmacist-verification strings (Tier 2
+  // item 33). The rest of this template is still hard-coded English — a
+  // pre-existing gap, not swept here, but a new string that refuses a dose is
+  // not one to add to the pile untranslated.
+  imports: [CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',
@@ -98,7 +103,22 @@ export class EmarComponent implements OnInit, OnDestroy {
     return !!v && !v.allPassed;
   });
 
+  /**
+   * Pharmacist verification outstanding (Tier 2 item 33). Distinct from a
+   * failed five-rights check: the five rights are about this dose at this
+   * bedside and a nurse may override them with a recorded reason, whereas
+   * this one says nobody with a pharmacy qualification has looked at the
+   * prescription yet. **There is no override for it here.** The server
+   * refuses GIVEN regardless, so offering an override box would only
+   * manufacture a reason for a refusal that is going to happen anyway.
+   */
+  protected readonly blockedPendingPharmacist = computed(() => {
+    const t = this.activeTask();
+    return !!t && !!t.requiresPharmacistVerification && !t.pharmacistVerified;
+  });
+
   protected readonly canAdminister = computed(() => {
+    if (this.blockedPendingPharmacist()) return false;
     const v = this.verification();
     if (!v) return false;
     if (v.allPassed) return true;
