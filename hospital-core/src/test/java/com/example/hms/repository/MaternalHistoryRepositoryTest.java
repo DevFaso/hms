@@ -201,7 +201,14 @@ class MaternalHistoryRepositoryTest {
     @Test
     void findByPatientIdAndDateRange_shouldFilterByDateRange() {
         LocalDateTime startDate = LocalDateTime.now().minusDays(7);
-        LocalDateTime endDate = LocalDateTime.now();
+        // Headroom on the upper bound, not another now() read. maternalHistory2
+        // is stamped LocalDateTime.now() during setUp and this line runs after
+        // it — but LocalDateTime.now() is neither monotonic nor fine-grained,
+        // so the two can come back equal or inverted and the row the test is
+        // looking for falls outside its own window. Intermittent red for
+        // years. The discriminating bound is startDate, which still excludes
+        // the 10-day-old row, so the test loses nothing.
+        LocalDateTime endDate = LocalDateTime.now().plusDays(1);
 
         List<MaternalHistory> results = maternalHistoryRepository
                 .findByPatientIdAndDateRange(patient.getId(), startDate, endDate);

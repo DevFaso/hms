@@ -1,6 +1,8 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.AboGroup;
+import com.example.hms.enums.BloodProductType;
+import com.example.hms.enums.ChildbearingPotential;
 import com.example.hms.enums.BloodUnitStatus;
 import com.example.hms.enums.TransfusionAdministrationStatus;
 import com.example.hms.enums.TransfusionRequestStatus;
@@ -370,20 +372,47 @@ public class TransfusionServiceImpl implements TransfusionService {
                     + "one can have developed new antibodies.");
         }
 
+        // The platelet Rh rule turns on whether this recipient is someone a
+        // future pregnancy could be affected for (haematologist sign-off
+        // 2026-08-25). Derived from the patient record here rather than
+        // inside AboGroup, which stays a pure serology rule; UNKNOWN — an
+        // unrecognised or missing gender or date of birth — protects.
+        Patient recipient = transfusionRequest.getPatient();
+        ChildbearingPotential childbearingPotential = recipient == null
+            ? ChildbearingPotential.UNKNOWN
+            : ChildbearingPotential.of(
+                recipient.getGender(), recipient.getDateOfBirth(), LocalDate.now(clock));
+
         boolean serologicallyCompatible = AboGroup.isCompatible(
             group.getAboGroup(), group.getRhFactor(),
             unit.getAboGroup(), unit.getRhFactor(),
-            transfusionRequest.getProductType());
+            transfusionRequest.getProductType(), childbearingPotential);
 
         // THE rule. A tick box cannot overrule antigen biology: if the caller
         // says compatible and the ABO/Rh rules disagree, the write is refused
         // outright rather than warned about.
+        //
+        // ONE EXCEPTION, signed off 2026-08-25: for PLATELETS whose only
+        // disagreement is the Rh restriction, a recorded reason permits the
+        // pairing. The ABO exclusion (O platelets to an A or AB recipient) is
+        // NOT overridable this way — an override reason is not a substitute
+        // for the one ABO rule the protocol keeps.
         if (Boolean.TRUE.equals(request.getCompatible()) && !serologicallyCompatible) {
-            throw new BusinessException(
-                ("Unit %s is %s %s and this patient is %s %s: that pairing is ABO/Rh incompatible for "
-                    + "%s and cannot be recorded as compatible.")
-                    .formatted(unit.getUnitNumber(), unit.getAboGroup(), unit.getRhFactor(),
-                        group.getAboGroup(), group.getRhFactor(), transfusionRequest.getProductType()));
+            boolean rhOnly = isPlateletRhOnlyMismatch(group, unit, transfusionRequest);
+            boolean overridden = rhOnly && hasText(request.getIncompatibilityReason());
+            if (!overridden) {
+                throw new BusinessException(
+                    ("Unit %s is %s %s and this patient is %s %s: that pairing is ABO/Rh incompatible "
+                        + "for %s and cannot be recorded as compatible.%s")
+                        .formatted(unit.getUnitNumber(), unit.getAboGroup(), unit.getRhFactor(),
+                            group.getAboGroup(), group.getRhFactor(),
+                            transfusionRequest.getProductType(),
+                            rhOnly
+                                ? " Give a reason to override the platelet Rh restriction."
+                                : ""));
+            }
+            log.warn("Platelet Rh restriction overridden for request {} with unit {}: {}",
+                transfusionRequest.getId(), unit.getUnitNumber(), request.getIncompatibilityReason());
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
@@ -742,5 +771,29 @@ public class TransfusionServiceImpl implements TransfusionService {
         } catch (IllegalArgumentException ex) {
             throw new BusinessException("Unknown transfusion request status: %s".formatted(raw));
         }
+    }
+
+    /**
+     * True when a platelet pairing fails ONLY on the Rh restriction — the ABO
+     * half is acceptable under the signed-off platelet rule.
+     *
+     * <p>Answered by re-running the check with the Rh restriction lifted,
+     * rather than by re-deriving groups here, so the single definition of
+     * platelet ABO stays in AboGroup and this cannot drift away from it.
+     */
+    private boolean isPlateletRhOnlyMismatch(PatientBloodGroup group,
+                                             BloodUnit unit,
+                                             TransfusionRequest transfusionRequest) {
+        if (transfusionRequest.getProductType() != BloodProductType.PLATELETS) {
+            return false;
+        }
+        return AboGroup.isCompatible(
+            group.getAboGroup(), group.getRhFactor(),
+            unit.getAboGroup(), unit.getRhFactor(),
+            BloodProductType.PLATELETS, ChildbearingPotential.NO);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }
