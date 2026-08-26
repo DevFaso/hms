@@ -5,6 +5,7 @@ import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
+import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
@@ -42,6 +43,13 @@ import java.util.UUID;
  *       Admission with a {@code DISCHARGED} status. Both are
  *       reconcile-only — no Admission/Encounter auto-create on the
  *       lifecycle triggers.</li>
+ *   <li>{@code ADT^A40} — patient merge (Tier 2 item 41). Parsed via
+ *       {@link Hl7v2MessageBuilder#parseAdtA40} (PID-3 survives, MRG-1 is
+ *       retired) and applied through {@link MllpInboundMergeService}, which
+ *       enforces its own cross-tenant gate because the EMPI merge service's
+ *       guards read the caller's hospital from a security context this
+ *       thread does not have. Never auto-creates: both identifiers must
+ *       already be known to EMPI.</li>
  *   <li>Anything else — AR (Application Reject).</li>
  * </ul>
  *
@@ -57,21 +65,32 @@ public class Hl7MessageDispatcher {
 
     private static final Set<String> ACCEPTED_ADT_EVENTS = Set.of("A01", "A02", "A03", "A04", "A08");
 
+    /**
+     * A40 is deliberately NOT in {@link #ACCEPTED_ADT_EVENTS}. It carries an
+     * MRG segment the demographic parser does not read and it changes
+     * identity rather than attributes, so it routes to its own handler
+     * (Tier 2 item 41).
+     */
+    private static final String MERGE_EVENT = "A40";
+
     private final Hl7v2MessageBuilder messageBuilder;
     private final MllpAllowedSenderService allowlist;
     private final MllpInboundLabService inboundLab;
     private final MllpInboundAdtService inboundAdt;
+    private final MllpInboundMergeService inboundMerge;
     private final IntegrationMessageRecorder messageRecorder;
 
     public Hl7MessageDispatcher(Hl7v2MessageBuilder messageBuilder,
                                 MllpAllowedSenderService allowlist,
                                 MllpInboundLabService inboundLab,
                                 MllpInboundAdtService inboundAdt,
+                                MllpInboundMergeService inboundMerge,
                                 IntegrationMessageRecorder messageRecorder) {
         this.messageBuilder = messageBuilder;
         this.allowlist = allowlist;
         this.inboundLab = inboundLab;
         this.inboundAdt = inboundAdt;
+        this.inboundMerge = inboundMerge;
         this.messageRecorder = messageRecorder;
     }
 
@@ -113,6 +132,9 @@ public class Hl7MessageDispatcher {
 
         if ("ORU".equals(code) && "R01".equals(trigger)) {
             return handleOru(header, hl7Body, remoteAddress, hospital.get());
+        }
+        if ("ADT".equals(code) && MERGE_EVENT.equals(trigger)) {
+            return handleMerge(header, hl7Body, remoteAddress, hospital.get());
         }
         if ("ADT".equals(code) && trigger != null && ACCEPTED_ADT_EVENTS.contains(trigger)) {
             return handleAdt(header, hl7Body, remoteAddress, hospital.get());
@@ -167,6 +189,34 @@ public class Hl7MessageDispatcher {
             parsed, hospital, header.sendingApplication(), header.sendingFacility(),
             header.messageControlId());
         return ackForOutcome(header, outcome, header.messageType());
+    }
+
+    /**
+     * {@code ADT^A40} — patient merge (Tier 2 item 41).
+     *
+     * <p>Its own handler rather than another entry in
+     * {@link #ACCEPTED_ADT_EVENTS}: A40 carries an MRG segment the
+     * demographic parser never looks at, and a merge changes who a record IS
+     * rather than what it says. Routing it through {@code handleAdt} would
+     * have parsed the PID, found no MRG, and quietly applied a demographic
+     * update instead of a merge — a silent wrong-thing rather than a reject.
+     */
+    private String handleMerge(Hl7MessageHeader header, String hl7Body,
+                               String remoteAddress, Hospital hospital) {
+        Hl7v2MessageBuilder.ParsedMergeMessage parsed = messageBuilder.parseAdtA40(hl7Body);
+        if (parsed == null) {
+            log.warn("[MLLP {}] ADT^A40 from {}/{} unparseable (missing PID-3 or MRG-1)",
+                remoteAddress, header.sendingApplication(), header.sendingFacility());
+            recordReject(integrationIdFor(header), organizationIdOf(hospital),
+                "ADT^A40", hl7Body,
+                "unparseable ADT^A40 — missing PID-3 or MRG-1");
+            return Hl7AckBuilder.buildAck(header, Hl7AckBuilder.AckCode.AE,
+                "Unparseable ADT^A40 — missing PID-3 or MRG-1");
+        }
+        MllpInboundOutcome outcome = inboundMerge.processMerge(
+            parsed, hospital, header.sendingApplication(), header.sendingFacility(),
+            header.messageControlId());
+        return ackForOutcome(header, outcome, "ADT^A40");
     }
 
     /**

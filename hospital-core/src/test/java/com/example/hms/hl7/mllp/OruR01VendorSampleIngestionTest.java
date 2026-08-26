@@ -2,6 +2,7 @@ package com.example.hms.hl7.mllp;
 
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
+import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.MllpInboundLabService;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
@@ -54,6 +55,7 @@ class OruR01VendorSampleIngestionTest {
     @Mock private MllpAllowedSenderService allowlist;
     @Mock private MllpInboundLabService inboundLab;
     @Mock private MllpInboundAdtService inboundAdt;
+    @Mock private MllpInboundMergeService inboundMerge;
     @Mock private IntegrationMessageRecorder messageRecorder;
 
     private Hl7MessageDispatcher dispatcher;
@@ -62,7 +64,8 @@ class OruR01VendorSampleIngestionTest {
     @BeforeEach
     void setUp() {
         Hl7v2MessageBuilder builder = new Hl7v2MessageBuilder();
-        dispatcher = new Hl7MessageDispatcher(builder, allowlist, inboundLab, inboundAdt, messageRecorder);
+        dispatcher = new Hl7MessageDispatcher(builder, allowlist, inboundLab, inboundAdt, inboundMerge,
+            messageRecorder);
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
     }
