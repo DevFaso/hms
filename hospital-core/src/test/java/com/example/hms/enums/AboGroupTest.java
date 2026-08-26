@@ -33,7 +33,7 @@ class AboGroupTest {
     })
     void redCellCompatibility(AboGroup recipient, AboGroup donor, boolean expected) {
         assertThat(AboGroup.isCompatible(recipient, RhFactor.POSITIVE, donor, RhFactor.POSITIVE,
-            BloodProductType.PACKED_RED_CELLS)).isEqualTo(expected);
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isEqualTo(expected);
     }
 
     // ── Plasma: the rule reverses, because plasma carries the antibodies ─
@@ -49,7 +49,7 @@ class AboGroupTest {
     })
     void plasmaCompatibility(AboGroup recipient, AboGroup donor, boolean expected) {
         assertThat(AboGroup.isCompatible(recipient, RhFactor.POSITIVE, donor, RhFactor.POSITIVE,
-            BloodProductType.FRESH_FROZEN_PLASMA)).isEqualTo(expected);
+            BloodProductType.FRESH_FROZEN_PLASMA, ChildbearingPotential.UNKNOWN)).isEqualTo(expected);
     }
 
     @Test
@@ -69,17 +69,17 @@ class AboGroupTest {
     @Test
     void rhNegativeRecipientsMayNotReceiveRhPositiveRedCells() {
         assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.O, RhFactor.POSITIVE,
-            BloodProductType.PACKED_RED_CELLS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isFalse();
         assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.O, RhFactor.NEGATIVE,
-            BloodProductType.PACKED_RED_CELLS)).isTrue();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isTrue();
     }
 
     @Test
     void rhPositiveRecipientsMayReceiveEither() {
         assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.POSITIVE, AboGroup.O, RhFactor.NEGATIVE,
-            BloodProductType.PACKED_RED_CELLS)).isTrue();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isTrue();
         assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.POSITIVE, AboGroup.O, RhFactor.POSITIVE,
-            BloodProductType.PACKED_RED_CELLS)).isTrue();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isTrue();
     }
 
     @Test
@@ -87,24 +87,87 @@ class AboGroupTest {
         // FFP and cryo carry no meaningful red cells, so D status does not gate
         // them; an Rh-negative recipient may receive Rh-positive plasma.
         assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.AB, RhFactor.POSITIVE,
-            BloodProductType.FRESH_FROZEN_PLASMA)).isTrue();
+            BloodProductType.FRESH_FROZEN_PLASMA, ChildbearingPotential.UNKNOWN)).isTrue();
         assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.AB, RhFactor.POSITIVE,
-            BloodProductType.CRYOPRECIPITATE)).isTrue();
+            BloodProductType.CRYOPRECIPITATE, ChildbearingPotential.UNKNOWN)).isTrue();
+    }
+
+    // ── Platelets: this facility's protocol, signed off 2026-08-25 ───────
+    //
+    // NOT the plasma-side default this module originally shipped with. ABO
+    // compatibility is prioritised but incompatibility is acceptable, with
+    // one exclusion: O platelets are not given to A or AB recipients.
+
+    @ParameterizedTest(name = "platelets: {0} may receive {1} = {2}")
+    @CsvSource({
+        // The exclusion, and only the exclusion.
+        "A,  O,  false", "AB, O,  false",
+        // Everything else passes, INCLUDING O to B. The asymmetry is the
+        // protocol as signed off, not a transcription slip — a later reader
+        // must not "tidy" B into matching A.
+        "B,  O,  true",  "O,  O,  true",
+        "A,  A,  true",  "A,  B,  true",  "A,  AB, true",
+        "B,  A,  true",  "B,  B,  true",  "B,  AB, true",
+        "AB, A,  true",  "AB, B,  true",  "AB, AB, true",
+        "O,  A,  true",  "O,  B,  true",  "O,  AB, true",
+    })
+    void plateletAboFollowsTheSignedOffProtocol(AboGroup recipient, AboGroup donor, boolean expected) {
+        assertThat(AboGroup.isCompatible(recipient, RhFactor.POSITIVE, donor, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.NO)).isEqualTo(expected);
     }
 
     @Test
-    void plateletsTakeTheConservativeReadingOnBothAxes() {
-        // Documented as a POLICY CHOICE awaiting haematologist sign-off:
-        // plasma-side ABO (platelet concentrates carry donor plasma) plus Rh
-        // (residual red cells alloimmunise). This can refuse a pair a given
-        // protocol allows — the emergency path is what keeps that from
-        // blocking a resuscitation.
-        assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.POSITIVE, AboGroup.A, RhFactor.POSITIVE,
-            BloodProductType.PLATELETS)).isTrue();
-        assertThat(AboGroup.isCompatible(AboGroup.AB, RhFactor.POSITIVE, AboGroup.O, RhFactor.POSITIVE,
-            BloodProductType.PLATELETS)).isFalse();
+    void plateletAboIsNotThePlasmaRule() {
+        // Guards the specific regression of reverting to the pre-sign-off
+        // reading: under plasma rules an AB recipient could take ONLY AB,
+        // and an A recipient could not take B.
+        assertThat(AboGroup.AB.compatiblePlateletDonors())
+            .containsExactlyInAnyOrder(AboGroup.A, AboGroup.B, AboGroup.AB);
+        assertThat(AboGroup.A.compatiblePlateletDonors())
+            .containsExactlyInAnyOrder(AboGroup.A, AboGroup.B, AboGroup.AB);
+        assertThat(AboGroup.AB.compatiblePlasmaDonors()).containsExactly(AboGroup.AB);
+    }
+
+    // ── Platelet Rh: turns on who the restriction protects ───────────────
+
+    @Test
+    void anRhNegativeWomanUnderFiftyFiveIsProtectedFromRhPositivePlatelets() {
+        assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.NEGATIVE, AboGroup.A, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.YES)).isFalse();
+    }
+
+    @Test
+    void aManOrOlderWomanMayReceiveRhPositivePlatelets() {
+        // The restriction exists to protect a future pregnancy, so it does
+        // not apply here.
+        assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.NEGATIVE, AboGroup.A, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.NO)).isTrue();
+    }
+
+    @Test
+    void unknownChildbearingPotentialProtectsRatherThanPermits() {
+        // gender is a free-text column with no canonical vocabulary, so
+        // UNKNOWN is common and must not read as "no restriction".
+        assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.NEGATIVE, AboGroup.A, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.UNKNOWN)).isFalse();
+        assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.NEGATIVE, AboGroup.A, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, null)).isFalse();
+    }
+
+    @Test
+    void theRhExemptionNeverRelaxesTheAboExclusion() {
+        // Being male does not make O platelets acceptable for an A recipient.
+        assertThat(AboGroup.isCompatible(AboGroup.A, RhFactor.POSITIVE, AboGroup.O, RhFactor.POSITIVE,
+            BloodProductType.PLATELETS, ChildbearingPotential.NO)).isFalse();
+    }
+
+    @Test
+    void theRhExemptionDoesNotLeakIntoRedCells() {
+        // Red cells keep the unconditional Rh rule for every recipient.
         assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.O, RhFactor.POSITIVE,
-            BloodProductType.PLATELETS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.NO)).isFalse();
+        assertThat(AboGroup.isCompatible(AboGroup.O, RhFactor.NEGATIVE, AboGroup.O, RhFactor.POSITIVE,
+            BloodProductType.WHOLE_BLOOD, ChildbearingPotential.NO)).isFalse();
     }
 
     // ── Fail-closed ──────────────────────────────────────────────────────
@@ -112,16 +175,16 @@ class AboGroupTest {
     @Test
     void anyMissingFactMeansIncompatible() {
         assertThat(AboGroup.isCompatible(null, RhFactor.POSITIVE, AboGroup.O, RhFactor.POSITIVE,
-            BloodProductType.PACKED_RED_CELLS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isFalse();
         assertThat(AboGroup.isCompatible(AboGroup.AB, RhFactor.POSITIVE, null, RhFactor.POSITIVE,
-            BloodProductType.PACKED_RED_CELLS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isFalse();
         assertThat(AboGroup.isCompatible(AboGroup.AB, RhFactor.POSITIVE, AboGroup.O, RhFactor.POSITIVE,
-            null)).isFalse();
+            null, ChildbearingPotential.UNKNOWN)).isFalse();
         // Unknown Rh on a red-cell product is NOT treated as positive-and-fine.
         assertThat(AboGroup.isCompatible(AboGroup.AB, null, AboGroup.O, RhFactor.NEGATIVE,
-            BloodProductType.PACKED_RED_CELLS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isFalse();
         assertThat(AboGroup.isCompatible(AboGroup.AB, RhFactor.NEGATIVE, AboGroup.O, null,
-            BloodProductType.PACKED_RED_CELLS)).isFalse();
+            BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN)).isFalse();
     }
 
     @Test
@@ -132,7 +195,7 @@ class AboGroupTest {
             for (RhFactor rh : RhFactor.values()) {
                 assertThat(AboGroup.isCompatible(recipient, rh,
                     AboGroup.emergencyReleaseGroup(), AboGroup.emergencyReleaseRh(),
-                    BloodProductType.PACKED_RED_CELLS))
+                    BloodProductType.PACKED_RED_CELLS, ChildbearingPotential.UNKNOWN))
                     .as("O negative must clear %s %s", recipient, rh)
                     .isTrue();
             }
