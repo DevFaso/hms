@@ -5,6 +5,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.PrescriptionRequestDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import jakarta.persistence.EntityNotFoundException;
@@ -76,8 +77,7 @@ public class PrescriptionMapper {
             .pharmacistVerifiedAt(p.getPharmacistVerifiedAt())
             .pharmacistVerifiedByUserId(
                 p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getId() : null)
-            .pharmacistVerifiedByName(
-                p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getUsername() : null)
+            .pharmacistVerifiedByName(displayName(p.getPharmacistVerifiedBy()))
             .pharmacistVerificationNote(p.getPharmacistVerificationNote())
             .cosignedByStaffId(p.getCosignedBy() != null ? p.getCosignedBy().getId() : null)
             .signatureValue(p.getSignatureValue())
@@ -249,5 +249,21 @@ public class PrescriptionMapper {
         String l = last  == null ? "" : last.trim();
         String full = (f + " " + l).trim();
         return full.isEmpty() ? "" : full;
+    }
+
+    /**
+     * The name to put in front of a clinician (Tier 2 item 33).
+     *
+     * <p>Falls back to the login name only when there is nothing else, because
+     * "Verified by pharm1" tells a nurse rather less than "Verified by Awa
+     * Traoré" about who checked the drug they are holding. Same shape as
+     * {@code ObgynReferralMapper.buildDisplayName}.
+     */
+    private String displayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String full = buildFullName(user.getFirstName(), user.getLastName());
+        return full.isEmpty() ? user.getUsername() : full;
     }
 }
