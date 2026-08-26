@@ -8320,5 +8320,28 @@
     "PHARMACIST_BLOCKED_BODY": "Cette dose ne peut pas être enregistrée comme administrée tant qu'un pharmacien n'a pas vérifié la prescription. Suspendez la dose et contactez la pharmacie — Suspendue, Refusée et Manquée restent enregistrables.",
     "PHARMACIST_BLOCKED_TITLE": "En attente de vérification pharmacien",
     "PHARMACIST_PENDING_CHIP": "Attente pharmacie"
+  },
+  "CREDENTIALING": {
+    "CURRENT_EXPIRY": "Expiration actuelle",
+    "FIRST_RECORDING": "Aucune date d'expiration enregistrée",
+    "HISTORY": "Historique des renouvellements",
+    "HISTORY_EMPTY": "Aucun renouvellement n'a été enregistré pour ce praticien.",
+    "HISTORY_FAILED": "L'historique des renouvellements n'a pas pu être chargé.",
+    "ISSUING_AUTHORITY": "Autorité de délivrance",
+    "ISSUING_AUTHORITY_PLACEHOLDER": "Laisser vide pour conserver la valeur enregistrée",
+    "LICENSE_NUMBER": "Numéro de licence",
+    "LICENSE_NUMBER_PLACEHOLDER": "Laisser vide pour conserver le numéro enregistré",
+    "NEW_EXPIRY": "Nouvelle date d'expiration",
+    "NOTE": "Note",
+    "NOTE_PLACEHOLDER": "Ce que vous avez constaté, ou tout élément à consigner",
+    "RECORDS_ONLY": "Ceci enregistre le renouvellement. Une licence expirée ne bloque pas l'activité clinique.",
+    "RECORD_RENEWAL": "Enregistrer le renouvellement",
+    "RENEW": "Renouveler",
+    "RENEW_TITLE": "Enregistrer le renouvellement",
+    "SAVING": "Enregistrement…",
+    "TOAST": {
+      "RENEWED": "Renouvellement enregistré",
+      "RENEW_FAILED": "Impossible d'enregistrer le renouvellement"
+    }
   }
 }

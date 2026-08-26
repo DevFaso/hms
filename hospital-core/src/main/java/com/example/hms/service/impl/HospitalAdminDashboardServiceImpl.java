@@ -5,6 +5,7 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.BedStatus;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.enums.LicenseAlertStage;
 import com.example.hms.enums.PaymentMethod;
 import com.example.hms.enums.StaffShiftStatus;
 import com.example.hms.enums.WardType;
@@ -414,19 +415,17 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
 
     private List<HospitalAdminSummaryDTO.LicenseExpiryAlert> buildLicenseAlerts(UUID hospitalId) {
         LocalDate today = LocalDate.now();
-        LocalDate cutoff90 = today.plusDays(90);
-        var staff = staffRepository.findByHospitalIdAndLicenseExpiringBefore(hospitalId, cutoff90);
+        LocalDate cutoff = today.plusDays(LicenseAlertStage.WARNING_DAYS);
+        var staff = staffRepository.findByHospitalIdAndLicenseExpiringBefore(hospitalId, cutoff);
 
         return staff.stream().map(s -> {
             long daysUntil = ChronoUnit.DAYS.between(today, s.getLicenseExpiryDate());
-            String severity;
-            if (daysUntil < 0) {
-                severity = "EXPIRED";
-            } else if (daysUntil <= 30) {
-                severity = "CRITICAL";
-            } else {
-                severity = "WARNING";
-            }
+            // Delegated to the enum (Tier 2 item 40). The thresholds used to
+            // live here as an if/else chain, which was fine while this screen
+            // was the only reader and became a drift hazard the moment the
+            // nightly sweep needed the same grading. One owner, two callers.
+            LicenseAlertStage stage = LicenseAlertStage.grade(s.getLicenseExpiryDate(), today);
+            String severity = stage != null ? stage.name() : LicenseAlertStage.WARNING.name();
             return HospitalAdminSummaryDTO.LicenseExpiryAlert.builder()
                 .staffId(s.getId().toString())
                 .staffName(s.getFullName())

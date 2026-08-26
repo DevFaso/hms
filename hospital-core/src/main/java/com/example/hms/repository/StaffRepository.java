@@ -132,6 +132,27 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         @Param("hospitalId") UUID hospitalId,
         @Param("cutoff") LocalDate cutoff);
 
+    /**
+     * Every hospital's expiring licences, for the nightly sweep (Tier 2 item
+     * 40).
+     *
+     * <p>Deliberately NOT scoped to one hospital: the sweep runs on a
+     * scheduler with no request context, so there is no active tenant to scope
+     * by. It is the only unscoped read of this data, and it never returns a
+     * row to a user — it turns rows into notifications addressed to the
+     * administrators of the row's own hospital.
+     */
+    @EntityGraph(attributePaths = {"user", "hospital"})
+    @Query("""
+        SELECT s FROM Staff s
+        WHERE s.active = true
+          AND s.user.isDeleted = false
+          AND s.licenseExpiryDate IS NOT NULL
+          AND s.licenseExpiryDate <= :cutoff
+        ORDER BY s.licenseExpiryDate ASC
+    """)
+    List<Staff> findAllWithLicenseExpiringBefore(@Param("cutoff") LocalDate cutoff);
+
     // ── Portal: active providers by hospital + department (for patient booking) ──
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("""
