@@ -8172,7 +8172,9 @@
     "HUNG": "Transfusión iniciada",
     "HANG_ERROR": "No se pudo iniciar la transfusión",
     "REACTION_RECORDED": "Reacción registrada y transfusión detenida",
-    "REACTION_ERROR": "No se pudo registrar la reacción"
+    "REACTION_ERROR": "No se pudo registrar la reacción",
+    "PLATELET_O_TO_B": "Pendiente de confirmación",
+    "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión."
   },
   "MORTALITY": {
     "TITLE": "Registro de mortalidad",

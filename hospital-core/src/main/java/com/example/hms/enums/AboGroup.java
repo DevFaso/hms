@@ -91,8 +91,17 @@ public enum AboGroup {
      *
      * <p>Note the asymmetry — a B recipient MAY receive O platelets under
      * this protocol while an A or AB recipient may not. That is the rule as
-     * signed off; it is not a transcription slip, and it should not be
+     * signed off, and it is implemented exactly as written; it must not be
      * "tidied" into symmetry by a later reader.
+     *
+     * <p><b>Whether that asymmetry is intended remains an OPEN clinical
+     * question</b>, deliberately left open by the product owner on
+     * 2026-08-26 rather than assumed either way. It is not a blocker — the
+     * rule is permissive here, so the software does exactly what the
+     * sign-off said — but it has never been confirmed as protocol rather
+     * than a transcription slip. {@link #isPlateletPairingPendingConfirmation}
+     * identifies the pairing so the question is visible to the people who
+     * can settle it instead of living only in this comment.
      */
     public Set<AboGroup> compatiblePlateletDonors() {
         return switch (this) {
@@ -101,6 +110,30 @@ public enum AboGroup {
             case A -> Set.of(A, B, AB);
             case AB -> Set.of(A, B, AB);
         };
+    }
+
+    /**
+     * The one pairing this facility's platelet protocol permits and nobody
+     * has yet confirmed was meant: <b>group O platelets to a group B
+     * recipient</b>.
+     *
+     * <p>The 2026-08-25 sign-off excluded O platelets for A and AB recipients
+     * and not for B. That is implemented as written and this method does NOT
+     * refuse it — the transfusion goes ahead. What it does is let the pairing
+     * be named wherever it occurs, so an open clinical question is visible to
+     * a haematologist rather than buried in a javadoc that only developers
+     * read. Product-owner decision, 2026-08-26: keep the question open and
+     * make it known.
+     *
+     * <p>Delete this method the day the asymmetry is confirmed or corrected.
+     * It carries no rule of its own and has no reason to outlive the answer.
+     */
+    public static boolean isPlateletPairingPendingConfirmation(AboGroup recipientGroup,
+                                                               AboGroup donorGroup,
+                                                               BloodProductType product) {
+        return product == BloodProductType.PLATELETS
+            && recipientGroup == B
+            && donorGroup == O;
     }
 
     /**

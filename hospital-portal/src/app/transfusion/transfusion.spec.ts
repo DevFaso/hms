@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -259,5 +259,130 @@ describe('TransfusionComponent', () => {
     expect(component.statusClass('ISSUED')).toBe('status-progress');
     expect(component.urgencyClass('EMERGENCY')).toBe('urgency-emergency');
     expect(component.urgencyClass('ROUTINE')).toBe('urgency-routine');
+  });
+});
+
+/**
+ * The open O-to-B platelet question (product-owner decision, 2026-08-26:
+ * keep it open and make it known).
+ *
+ * The pairing is PERMITTED and stays permitted — the sign-off said so. What
+ * these pin is that the advisory appears where a blood-bank scientist will
+ * see it, and that it never disguises itself as a compatibility problem.
+ */
+describe('TransfusionComponent — platelet pairing pending confirmation', () => {
+  let fixture: ComponentFixture<TransfusionComponent>;
+  let component: TransfusionComponent;
+  let txSpy: jasmine.SpyObj<TransfusionService>;
+
+  function crossmatch(overrides: Partial<CrossmatchResponse> = {}): CrossmatchResponse {
+    return {
+      id: 'xm-1',
+      requestId: 'req-1',
+      bloodUnitId: 'u1',
+      unitNumber: 'BU-001',
+      compatible: true,
+      method: 'Immediate spin',
+      incompatibilityReason: null,
+      performedByName: 'Lab One',
+      performedAt: '2026-08-26T09:00:00',
+      expiresAt: '2026-08-27T09:00:00',
+      usable: true,
+      ...overrides,
+    } as CrossmatchResponse;
+  }
+
+  beforeEach(async () => {
+    txSpy = jasmine.createSpyObj('TransfusionService', [
+      'listRequests',
+      'getRequest',
+      'createRequest',
+      'cancelRequest',
+      'listUnits',
+      'listAssignableUnits',
+      'receiveUnit',
+      'discardUnit',
+      'recordBloodGroup',
+      'getCurrentBloodGroup',
+      'recordCrossmatch',
+      'issueUnit',
+      'startAdministration',
+      'recordReaction',
+    ]);
+    txSpy.listRequests.and.returnValue(of([mockRequest()]));
+    txSpy.listUnits.and.returnValue(of([]));
+    txSpy.listAssignableUnits.and.returnValue(of([]));
+
+    await TestBed.configureTestingModule({
+      imports: [TransfusionComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: TransfusionService, useValue: txSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        {
+          provide: RoleContextService,
+          useValue: {
+            hasAnyActiveRole: () => true,
+            isSuperAdmin: () => false,
+            activeHospitalId: 'h1',
+          } as unknown as RoleContextService,
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(TransfusionComponent);
+    component = fixture.componentInstance;
+  });
+
+  function showRequestWith(xm: CrossmatchResponse): void {
+    component.selectedRequest.set(
+      mockRequest({
+        productType: 'PLATELETS',
+        units: [mockUnit({ id: 'u1', aboGroup: 'O', productType: 'PLATELETS' })],
+        crossmatches: [xm],
+      }),
+    );
+    fixture.detectChanges();
+  }
+
+  it('shows the advisory on the pairing the protocol has not confirmed', () => {
+    showRequestWith(crossmatch({ plateletPairingPendingConfirmation: true }));
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="xm-pending-confirmation-u1"]'),
+    ).not.toBeNull();
+  });
+
+  it('still reads as compatible — the advisory is not a compatibility problem', () => {
+    // If this ever inverts, the software has started refusing a transfusion
+    // the haematologist explicitly permitted.
+    showRequestWith(crossmatch({ plateletPairingPendingConfirmation: true }));
+
+    const cell = fixture.nativeElement.querySelector('[data-testid="xm-pending-confirmation-u1"]')
+      .parentElement as HTMLElement;
+    expect(cell.querySelector('.xm-ok')).not.toBeNull();
+    expect(cell.querySelector('.xm-bad')).toBeNull();
+  });
+
+  it('shows nothing for pairings the protocol has settled', () => {
+    showRequestWith(crossmatch({ plateletPairingPendingConfirmation: false }));
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="xm-pending-confirmation-u1"]'),
+    ).toBeNull();
+  });
+
+  it('shows nothing when the server did not send the flag at all', () => {
+    // Older responses predate the field; absent must read as "no question",
+    // never as a truthy object.
+    showRequestWith(crossmatch());
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="xm-pending-confirmation-u1"]'),
+    ).toBeNull();
   });
 });

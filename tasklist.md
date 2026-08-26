@@ -1412,12 +1412,14 @@ that exists rather than inventing one.
   the administrators — the practitioner is the only person who can actually
   obtain the renewal. **Scheduler defaults ON** (`matchIfMissing = true`);
   shipping the fix off-by-default would have reproduced the exact finding one
-  config key further away. ⚠ **DECISION LEFT OPEN, deliberately: nothing is
-  blocked.** An expired licence still prescribes, signs and logs in. Whether
-  it should is a policy call with consequences both ways — an administrator
-  who forgets to enter a renewal could take a working doctor offline mid-shift
-  in a hospital that may have one — and it is not a decision to make from a
-  service class. Thresholds moved out of the dashboard's inline if/else into
+  config key further away. ✅ **DECIDED 2026-08-26 — an expired licence does
+  NOT block clinical work, and that is the chosen behaviour, not an unfinished
+  edge.** It still prescribes, signs and logs in. An administrator who forgets
+  to enter a renewal would otherwise take a working doctor offline mid-shift
+  in a hospital that may have one, and that failure costs more than a lapsed
+  date going unenforced by software. Recorded in
+  `CredentialRenewalService`'s javadoc; do not add a block without a new
+  decision. Thresholds moved out of the dashboard's inline if/else into
   `LicenseAlertStage` so the sweep and the screen cannot drift.
 - [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
   alias reassignment and audit shipped in #439/#449 and explicitly deferred
@@ -1473,11 +1475,41 @@ that exists rather than inventing one.
 - Two-factor transport for controlled substances; `app.empi.probabilistic.enabled`
   still defaults false.
 
+## Open clinical questions — kept open on purpose, not forgotten
+
+These are questions only a clinician can settle. None of them blocks anything:
+the software already does what the last sign-off said. They are listed here so
+they stay visible instead of living in a javadoc.
+
+- **Are group O platelets to a group B recipient intended?** The 2026-08-25
+  haematologist sign-off excludes O platelets for A and AB recipients and not
+  for B. That asymmetry is implemented exactly as written and the pairing is
+  PERMITTED. Whether it is protocol or a transcription slip has never been
+  confirmed. **Product-owner decision 2026-08-26: keep the question open and
+  make it known** — so it is surfaced three ways rather than one: an advisory
+  chip on the crossmatch row where the pairing actually occurs (blood-bank
+  scientist sees it, transfusion is not blocked or delayed), an INFO log line
+  each time it happens (so the next review knows how often it arises, which a
+  javadoc cannot tell anyone), and `AboGroup.isPlateletPairingPendingConfirmation`
+  as the single greppable owner. Delete that method the day it is answered — it
+  carries no rule and has no reason to outlive the answer.
+- **Should the system prompt for anti-D prophylaxis?** Decided as far as
+  engineering can take it: it RECORDS the decision, it does not make it. The
+  software surfaces that the recipient is Rh-negative and the unit Rh-positive
+  and asks the clinician to record what was decided; it asserts nothing about
+  dose, timing or eligibility. Making it advise needs its own sign-off with the
+  protocol written out.
+
 ## Operational, open right now
 
-- Deploy prod (Deploy-to-Railway, `environment: prod`) — prod still runs the
-  pre-#504 build with staged-but-inactive vars, so its emails still link to the
-  old domain.
+- ~~Deploy prod~~ ✅ prod is on `7ff43fba` (2026-08-26), both Railway services
+  SUCCESS, `/api/actuator/health` UP. `ddl-auto: validate` means that healthy
+  boot proves V140 applied and matches the deployed JAR.
+- ⚠ **The licence-expiry sweep is new, defaults ON, fires 06:00 UTC.** Its
+  first prod run notifies on every licence inside the 90-day horizon at once
+  (`license_alert_stage` starts NULL and any grade beats nothing). One-off
+  backlog, not recurring. Disable with
+  `hms.credentialing.expiry.enabled=false` to defer it.
 - `api.dev.e-keneya.com` → DNS-only (grey cloud) in Cloudflare: Universal SSL
   covers `*.e-keneya.com` but not second-level `*.dev.e-keneya.com`.
 - Keycloak `hms-portal` partial-import on the dev + prod realms before any SSO flip.

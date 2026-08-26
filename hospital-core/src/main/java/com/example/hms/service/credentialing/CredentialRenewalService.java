@@ -32,12 +32,14 @@ import java.util.UUID;
  * The system knew a clinician's licence expired next week and mentioned it
  * only to whoever happened to open a dashboard page.
  *
- * <p><b>This records, it does not block.</b> An expired licence still
- * prescribes, still signs, still logs in. Whether it should is a policy
- * decision with consequences in both directions — an administrator who
- * forgets to enter a renewal could otherwise take a working doctor offline
- * mid-shift in a hospital that may have one — and it is not a decision to
- * make from a service class. Left on the roadmap for a decision.
+ * <p><b>This records, it does not block, and that is now a settled
+ * decision.</b> An expired licence still prescribes, still signs, still logs
+ * in. The product owner decided on 2026-08-26 that it stays that way: an
+ * administrator who forgets to enter a renewal would otherwise take a working
+ * doctor offline mid-shift in a hospital that may have one, and the cost of
+ * that failure is worse than the cost of a lapsed date going unenforced by
+ * software. <b>Do not add a block here without a new decision</b> — this is
+ * not an unfinished edge, it is the chosen behaviour.
  *
  * <p><b>Not self-service.</b> A practitioner cannot record their own
  * renewal. Credentialing is somebody attesting they saw the document; a
