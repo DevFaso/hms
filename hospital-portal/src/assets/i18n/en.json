@@ -4209,7 +4209,9 @@
         "DISCHARGE": "Discharge",
         "WALK_IN": "Walk-In",
         "TELEMEDICINE": "Telemedicine",
-        "REFERRAL": "Referral"
+        "REFERRAL": "Referral",
+        "OUTPATIENT": "Outpatient",
+        "INPATIENT": "Inpatient"
       },
       "STATUS": {
         "SCHEDULED": "Scheduled",

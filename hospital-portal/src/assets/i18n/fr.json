@@ -4175,7 +4175,9 @@
         "DISCHARGE": "Sortie",
         "WALK_IN": "Sans rendez-vous",
         "TELEMEDICINE": "Télémédecine",
-        "REFERRAL": "Orientation"
+        "REFERRAL": "Orientation",
+        "OUTPATIENT": "Ambulatoire",
+        "INPATIENT": "Hospitalisé"
       },
       "STATUS": {
         "SCHEDULED": "Planifié",

@@ -4209,7 +4209,9 @@
         "DISCHARGE": "Alta",
         "WALK_IN": "Sin cita",
         "TELEMEDICINE": "Telemedicina",
-        "REFERRAL": "Derivación"
+        "REFERRAL": "Derivación",
+        "OUTPATIENT": "Ambulatorio",
+        "INPATIENT": "Hospitalizado"
       },
       "STATUS": {
         "SCHEDULED": "Programado",
