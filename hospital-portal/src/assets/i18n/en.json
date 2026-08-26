@@ -8320,5 +8320,28 @@
     "PHARMACIST_BLOCKED_BODY": "This dose cannot be recorded as given until a pharmacist has verified the prescription. Hold the dose and contact the pharmacy — Hold, Refused and Missed can still be recorded.",
     "PHARMACIST_BLOCKED_TITLE": "Awaiting pharmacist verification",
     "PHARMACIST_PENDING_CHIP": "Pharmacy hold"
+  },
+  "CREDENTIALING": {
+    "CURRENT_EXPIRY": "Current expiry",
+    "FIRST_RECORDING": "No expiry on file",
+    "HISTORY": "Renewal history",
+    "HISTORY_EMPTY": "No renewal has been recorded for this practitioner.",
+    "HISTORY_FAILED": "The renewal history could not be loaded.",
+    "ISSUING_AUTHORITY": "Issuing authority",
+    "ISSUING_AUTHORITY_PLACEHOLDER": "Leave blank to keep what is on file",
+    "LICENSE_NUMBER": "Licence number",
+    "LICENSE_NUMBER_PLACEHOLDER": "Leave blank to keep the number on file",
+    "NEW_EXPIRY": "New expiry date",
+    "NOTE": "Note",
+    "NOTE_PLACEHOLDER": "What you saw, or anything worth recording",
+    "RECORDS_ONLY": "This records the renewal. An expired licence does not block clinical work.",
+    "RECORD_RENEWAL": "Record renewal",
+    "RENEW": "Renew",
+    "RENEW_TITLE": "Record credential renewal",
+    "SAVING": "Recording…",
+    "TOAST": {
+      "RENEWED": "Credential renewal recorded",
+      "RENEW_FAILED": "Could not record the renewal"
+    }
   }
 }

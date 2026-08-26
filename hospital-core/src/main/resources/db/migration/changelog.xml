@@ -2078,4 +2078,23 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V140 - provider credentialing renewal. license_number and
+         license_expiry_date have existed since V1 and nothing ever renewed,
+         verified or alerted on them. Adds a renewal HISTORY table rather
+         than columns alone - the opposite call from V139 and deliberately
+         so: a licence is renewed repeatedly, and "was this clinician
+         licensed on the day they prescribed that" is only answerable from
+         history. license_alert_stage keeps the daily sweep from
+         re-notifying the same expiry until administrators stop reading the
+         category. Blocks nothing: whether an expired licence should stop
+         clinical work is a policy decision, not a schema one. No DO block,
+         so no splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V140-provider-credentialing" author="hms-team" runOnChange="false">
+        <sqlFile path="V140__provider_credentialing.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

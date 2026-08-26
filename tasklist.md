@@ -1390,9 +1390,38 @@ that exists rather than inventing one.
   already audits every read with a per-read counter; disclosure accounting is
   the patient-facing report over that existing ledger, plus a request workflow.
   Verified zero code for both.
-- [ ] 40. **Provider credentialing renewal.** `Staff.licenseExpiry` exists and
-  `HospitalAdminDashboardServiceImpl` counts it — nothing verifies, renews, or
-  alerts. Small, and it makes an already-collected column mean something.
+- [x] 40. **Provider credentialing renewal.**
+  ✅ DONE 2026-08-26 (**PR #525** `feature/provider-credentialing`, V140).
+  The gap was worse than "nothing verifies": `license_number` and
+  `license_expiry_date` have been on `hospital.staff` since V1,
+  `StaffRepository` has a query literally named *"MVP 19: License expiry
+  alerts"*, and `HospitalAdminDashboardServiceImpl` already graded each result
+  EXPIRED / CRITICAL / WARNING. **The alert existed and had no delivery and no
+  action** — an administrator learned a doctor's licence had expired by
+  opening a dashboard page and noticing, which in practice means learning it
+  when somebody else did. **A HISTORY TABLE, deliberately the opposite call
+  from V139's three-columns-no-child-table:** a licence is renewed repeatedly,
+  and the question after an incident is not "is this clinician licensed now"
+  but *"was this clinician licensed on the day they prescribed that"* — only a
+  history answers it, and overwriting the expiry in place destroys the
+  evidence that somebody practised past theirs. **`license_alert_stage` keeps
+  the alert an alert**: the nightly sweep fires only when the grade *advances*
+  (nothing → WARNING → CRITICAL → EXPIRED), because a daily re-notification
+  trains an administrator to filter the category and the one that mattered
+  goes with it. Renewal clears the stage. Notifies the practitioner as well as
+  the administrators — the practitioner is the only person who can actually
+  obtain the renewal. **Scheduler defaults ON** (`matchIfMissing = true`);
+  shipping the fix off-by-default would have reproduced the exact finding one
+  config key further away. ⚠ **DECISION LEFT OPEN, deliberately: nothing is
+  blocked.** An expired licence still prescribes, signs and logs in. Whether
+  it should is a policy call with consequences both ways — an administrator
+  who forgets to enter a renewal could take a working doctor offline mid-shift
+  in a hospital that may have one — and it is not a decision to make from a
+  service class. Thresholds moved out of the dashboard's inline if/else into
+  `LicenseAlertStage` so the sweep and the screen cannot drift.
+- [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
+  alias reassignment and audit shipped in #439/#449 and explicitly deferred
+  A40. This is the inbound trigger for work that already exists.
 - [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
   alias reassignment and audit shipped in #439/#449 and explicitly deferred
   A40. This is the inbound trigger for work that already exists.
