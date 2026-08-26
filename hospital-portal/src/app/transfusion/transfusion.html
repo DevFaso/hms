@@ -310,6 +310,18 @@
                                 'TRANSFUSION.CROSSMATCH_LAPSED' | translate
                               }}</span>
                             }
+                            <!-- Open clinical question, not a warning about
+                                 this transfusion: the pairing is permitted and
+                                 stays permitted. Shown so a blood-bank
+                                 scientist can raise it with haematology. -->
+                            @if (xm.plateletPairingPendingConfirmation) {
+                              <span
+                                class="xm-open-question"
+                                [title]="'TRANSFUSION.PLATELET_O_TO_B_DETAIL' | translate"
+                                [attr.data-testid]="'xm-pending-confirmation-' + u.id"
+                                >{{ 'TRANSFUSION.PLATELET_O_TO_B' | translate }}</span
+                              >
+                            }
                           } @else {
                             <span class="xm-bad">{{ 'TRANSFUSION.INCOMPATIBLE' | translate }}</span>
                           }

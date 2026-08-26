@@ -415,6 +415,22 @@ public class TransfusionServiceImpl implements TransfusionService {
                 transfusionRequest.getId(), unit.getUnitNumber(), request.getIncompatibilityReason());
         }
 
+        // The one pairing the protocol permits and nobody has confirmed was
+        // meant: O platelets to a B recipient (open question, 2026-08-26).
+        // Logged, never refused — the sign-off permits it. Logging it is how
+        // the question gets an answer: a haematologist deciding whether the
+        // asymmetry was intended needs to know how often it actually arises,
+        // and a javadoc cannot tell them that.
+        if (Boolean.TRUE.equals(request.getCompatible())
+                && AboGroup.isPlateletPairingPendingConfirmation(
+                    group.getAboGroup(), unit.getAboGroup(),
+                    transfusionRequest.getProductType())) {
+            log.info("Platelet pairing pending clinical confirmation: group O unit {} crossmatched "
+                + "compatible for group B recipient on request {}. Permitted by the 2026-08-25 "
+                + "sign-off; whether the O-to-B exception is intended is still open.",
+                unit.getUnitNumber(), transfusionRequest.getId());
+        }
+
         LocalDateTime now = LocalDateTime.now(clock);
         TransfusionCrossmatch crossmatch = crossmatchRepository
             .findByRequest_IdAndBloodUnit_Id(requestId, unit.getId())

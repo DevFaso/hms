@@ -116,6 +116,20 @@
   color: #8a5a00;
 }
 
+/* An open clinical question, NOT a warning about this transfusion — the
+   pairing is permitted. Styled quieter than .xm-lapsed on purpose: a
+   scientist should notice it and be able to ignore it in the moment. */
+.xm-open-question {
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  cursor: help;
+}
+
 /* ── Layout helpers ── */
 
 .section-head {

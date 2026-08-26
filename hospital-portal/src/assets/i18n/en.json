@@ -8172,7 +8172,9 @@
     "HUNG": "Transfusion started",
     "HANG_ERROR": "The transfusion could not be started",
     "REACTION_RECORDED": "Reaction recorded and transfusion stopped",
-    "REACTION_ERROR": "The reaction could not be recorded"
+    "REACTION_ERROR": "The reaction could not be recorded",
+    "PLATELET_O_TO_B": "Pending confirmation",
+    "PLATELET_O_TO_B_DETAIL": "Group O platelets to a group B recipient. Permitted by this facility's protocol — this transfusion is not blocked or in question. The protocol excludes O platelets for A and AB recipients but not for B, and whether that difference is intended has not yet been confirmed with haematology. Raise it at the next review."
   },
   "MORTALITY": {
     "TITLE": "Mortality register",

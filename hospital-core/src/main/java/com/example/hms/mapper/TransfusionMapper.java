@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.enums.AboGroup;
 import com.example.hms.model.BloodUnit;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientBloodGroup;
@@ -107,7 +108,30 @@ public class TransfusionMapper {
             .performedAt(crossmatch.getPerformedAt())
             .expiresAt(crossmatch.getExpiresAt())
             .usable(crossmatch.isUsableAt(LocalDateTime.now(clock)))
+            // Advisory only — computed from the pairing, never stored, and
+            // deliberately not part of compatible/usable. See the DTO field.
+            .plateletPairingPendingConfirmation(pendingConfirmation(crossmatch, unit))
             .build();
+    }
+
+    /**
+     * Whether this crossmatch is the O-platelets-to-a-B-recipient pairing
+     * whose intent is still an open clinical question (2026-08-26).
+     *
+     * <p>Fails to {@code false} on missing data rather than raising a flag
+     * about a pairing it cannot actually identify — the opposite of the
+     * fail-closed stance {@code AboGroup} takes, and correct here: this is an
+     * advisory, and a spurious one costs a clinician's attention for nothing.
+     */
+    private boolean pendingConfirmation(TransfusionCrossmatch crossmatch, BloodUnit unit) {
+        TransfusionRequest request = crossmatch.getRequest();
+        if (unit == null || request == null || request.getBloodGroup() == null) {
+            return false;
+        }
+        return AboGroup.isPlateletPairingPendingConfirmation(
+            request.getBloodGroup().getAboGroup(),
+            unit.getAboGroup(),
+            request.getProductType());
     }
 
     public TransfusionRequestResponseDTO toDto(TransfusionRequest request,
