@@ -193,6 +193,56 @@ public class Hl7v2MessageBuilder {
     ) {}
 
     /**
+     * Parsed representation of an inbound {@code ADT^A40} — patient merge
+     * (Tier 2 item 41).
+     *
+     * <p><b>The direction is the part that is easy to get backwards, so it is
+     * named rather than positional.</b> In an A40 the <b>PID</b> segment
+     * carries the identifier that SURVIVES and the <b>MRG</b> segment
+     * (MRG-1) carries the identifier being retired. Reading it the other way
+     * round merges the wrong patient away, and the operation is not
+     * meaningfully reversible from the receiving side.
+     */
+    public record ParsedMergeMessage(
+        /** PID-3 — the identifier that survives the merge. */
+        String survivingMrn,
+        String survivingMrnAssigningAuthority,
+        /** MRG-1 — the identifier being retired into the survivor. */
+        String priorMrn,
+        String priorMrnAssigningAuthority
+    ) {}
+
+    /**
+     * Parses an inbound {@code ADT^A40} patient-merge message.
+     *
+     * <p>Returns {@code null} when either identifier is absent — a merge
+     * message that names only one side is not a merge, and guessing the
+     * other half is not something a parser gets to do.
+     */
+    public ParsedMergeMessage parseAdtA40(String hl7Message) {
+        if (hl7Message == null || hl7Message.isBlank()) return null;
+        try {
+            String[] segments = hl7Message.split("[\r\n]+");
+
+            String[] pid = findSegment(segments, "PID");
+            if (pid.length == 0) return null;
+            String[] surviving = parseIdentifierList(field(pid, 3));
+            if (surviving[0] == null || surviving[0].isBlank()) return null;
+
+            String[] mrg = findSegment(segments, "MRG");
+            if (mrg.length == 0) return null;
+            String[] prior = parseIdentifierList(field(mrg, 1));
+            if (prior[0] == null || prior[0].isBlank()) return null;
+
+            return new ParsedMergeMessage(
+                surviving[0], surviving[1],
+                prior[0], prior[1]);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /**
      * Parses an inbound ADT message into the fields needed to project
      * a {@code Patient} demographic record. Required: a PID segment
      * with a non-blank PID-3 (MRN). PV1 is optional — when absent,

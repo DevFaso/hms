@@ -13,6 +13,7 @@ import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.integration.MllpInboundAdtService;
+import com.example.hms.service.integration.MllpInboundMergeService;
 import com.example.hms.service.integration.impl.MllpInboundLabServiceImpl;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
@@ -67,6 +68,7 @@ class OruR01EndToEndIngestionTest {
 
     @Mock private MllpAllowedSenderService allowlist;
     @Mock private MllpInboundAdtService inboundAdt;
+    @Mock private MllpInboundMergeService inboundMerge;
     @Mock private LabSpecimenRepository specimenRepository;
     @Mock private LabResultRepository labResultRepository;
     @Mock private IntegrationMessageRecorder messageRecorder;
@@ -85,7 +87,7 @@ class OruR01EndToEndIngestionTest {
             specimenRepository, labResultRepository, messageRecorder, auditEventLogService,
             criticalValueNotificationService);
         dispatcher = new Hl7MessageDispatcher(
-            new Hl7v2MessageBuilder(), allowlist, labService, inboundAdt, messageRecorder);
+            new Hl7v2MessageBuilder(), allowlist, labService, inboundAdt, inboundMerge, messageRecorder);
 
         hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
