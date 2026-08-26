@@ -4209,7 +4209,9 @@
         "DISCHARGE": "Discharge",
         "WALK_IN": "Walk-In",
         "TELEMEDICINE": "Telemedicine",
-        "REFERRAL": "Referral"
+        "REFERRAL": "Referral",
+        "OUTPATIENT": "Outpatient",
+        "INPATIENT": "Inpatient"
       },
       "STATUS": {
         "SCHEDULED": "Scheduled",
@@ -4745,7 +4747,9 @@
       "SIGNED": "Prescription signed",
       "SIGN_FAILED": "Signing failed",
       "COSIGNED": "Prescription co-signed",
-      "COSIGN_FAILED": "Co-signing failed"
+      "COSIGN_FAILED": "Co-signing failed",
+      "PHARMACIST_VERIFIED": "Prescription verified",
+      "PHARMACIST_VERIFY_FAILED": "Verification failed"
     },
     "SIGN": "Sign",
     "COSIGN": "Co-sign",
@@ -4755,7 +4759,19 @@
     "COSIGN_PENDING": "Pending — a second prescriber must co-sign",
     "CONTROLLED_SUBSTANCE": "Controlled substance — two-factor verification",
     "TWO_FACTOR_PENDING": "Pending — not yet verified",
-    "SIGNED_PRE_V118": "Signed before signature evidence existed; cannot be verified."
+    "SIGNED_PRE_V118": "Signed before signature evidence existed; cannot be verified.",
+    "PHARMACIST_VERIFY": "Pharmacist verification",
+    "PHARMACIST_VERIFY_TITLE": "Verify prescription",
+    "PHARMACIST_VERIFY_FOR": "Verifying",
+    "PHARMACIST_VERIFY_HINT": "Check the drug, dose, route and frequency against the order. Any later edit to the prescription clears this verification and it must be repeated.",
+    "PHARMACIST_VERIFY_NOTE": "Note (optional)",
+    "PHARMACIST_VERIFY_NOTE_PLACEHOLDER": "What you checked, or a caveat for the nurse",
+    "PHARMACIST_VERIFY_NOTE_RECORDED": "Verification note",
+    "PHARMACIST_VERIFY_CONFIRM": "Record verification",
+    "PHARMACIST_VERIFYING": "Recording…",
+    "PHARMACIST_VERIFY_STATE": "Pharmacist verification",
+    "PHARMACIST_VERIFY_PENDING": "Pending — a pharmacist must verify before this may be given",
+    "PHARMACIST_VERIFIED_BY": "Verified by"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
@@ -8299,5 +8315,10 @@
     "TRANSFER_CANCELLED": "Transfer cancelled and the bed released.",
     "TRANSFER_CANCEL_ERROR": "The transfer could not be cancelled.",
     "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded."
+  },
+  "EMAR": {
+    "PHARMACIST_BLOCKED_BODY": "This dose cannot be recorded as given until a pharmacist has verified the prescription. Hold the dose and contact the pharmacy — Hold, Refused and Missed can still be recorded.",
+    "PHARMACIST_BLOCKED_TITLE": "Awaiting pharmacist verification",
+    "PHARMACIST_PENDING_CHIP": "Pharmacy hold"
   }
 }

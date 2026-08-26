@@ -290,3 +290,189 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.signingId()).toBeNull();
   });
 });
+
+/**
+ * Pharmacist verification (Tier 2 item 33).
+ *
+ * The check that stands between a prescriber and a nurse giving a controlled
+ * drug. The backend owns the rule; these guard the surface — that the action
+ * is offered exactly when the endpoint would accept it, that the refusals a
+ * pharmacist needs to read are not collapsed into a generic string, and that
+ * the optional note actually reaches the wire rather than being a field
+ * nothing sends.
+ */
+describe('PrescriptionsComponent — pharmacist verification', () => {
+  let fixture: ComponentFixture<PrescriptionsComponent>;
+  let component: PrescriptionsComponent;
+  let prescriptionService: jasmine.SpyObj<PrescriptionService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  let activeRoles: string[];
+
+  function rx(id: string, status: string, extra: Partial<PrescriptionResponse> = {}) {
+    return { id, status, ...extra } as PrescriptionResponse;
+  }
+
+  /** In scope for the gate, signed, and nobody has verified it yet. */
+  function verifiable(id = 'rx-1'): PrescriptionResponse {
+    return rx(id, 'SIGNED', { requiresPharmacistVerification: true });
+  }
+
+  beforeEach(async () => {
+    activeRoles = ['ROLE_PHARMACIST'];
+
+    prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+      'pharmacistVerify',
+    ]);
+    prescriptionService.list.and.returnValue(of([]));
+    prescriptionService.pharmacistVerify.and.returnValue(of(verifiable()));
+
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+
+    const communityPharmacyService = jasmine.createSpyObj<CommunityPharmacyService>(
+      'CommunityPharmacyService',
+      ['list'],
+    );
+    communityPharmacyService.list.and.returnValue(of([]));
+
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: communityPharmacyService },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            // Mirrors the real service: the caller's active role decides.
+            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(PrescriptionsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('offers verification only for an in-scope prescription that reached SIGNED', () => {
+    expect(component.canPharmacistVerify(verifiable())).toBeTrue();
+    expect(
+      component.canPharmacistVerify(
+        rx('b', 'TRANSMITTED', { requiresPharmacistVerification: true }),
+      ),
+    ).toBeTrue();
+
+    // Out of scope entirely — everything else administers as before.
+    expect(component.canPharmacistVerify(rx('c', 'SIGNED'))).toBeFalse();
+
+    // A draft is still freely rewritable, and the edit would clear the stamp
+    // the moment it happened.
+    expect(
+      component.canPharmacistVerify(rx('d', 'DRAFT', { requiresPharmacistVerification: true })),
+    ).toBeFalse();
+
+    // Already verified — the backend refuses a second verification.
+    expect(
+      component.canPharmacistVerify(
+        rx('e', 'SIGNED', {
+          requiresPharmacistVerification: true,
+          pharmacistVerifiedAt: '2026-08-26T09:00:00',
+        }),
+      ),
+    ).toBeFalse();
+  });
+
+  it('does not offer verification to a role the endpoint would reject', () => {
+    activeRoles = ['ROLE_DOCTOR'];
+    expect(component.canPharmacistVerify(verifiable())).toBeFalse();
+
+    activeRoles = ['ROLE_NURSE'];
+    expect(component.canPharmacistVerify(verifiable())).toBeFalse();
+
+    // The seeded pharmacy-verifier role is on the backend endpoint and must
+    // reach the action here too — it is the role that exists to do this job.
+    activeRoles = ['ROLE_PHARMACY_VERIFIER'];
+    expect(component.canPharmacistVerify(verifiable())).toBeTrue();
+  });
+
+  it('renders the verify button only on verifiable rows', () => {
+    component.filtered.set([verifiable('rx-1'), rx('rx-2', 'SIGNED')]);
+    fixture.detectChanges();
+
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-pharmacist-verify-rx-1"]'),
+    ).not.toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="rx-pharmacist-verify-rx-2"]'),
+    ).toBeNull();
+  });
+
+  it('sends the optional note to the ceremony endpoint and reloads', () => {
+    component.openVerifyModal(verifiable());
+    component.verifyNote = 'Dose confirmed against the ward protocol.';
+
+    component.submitPharmacistVerify();
+
+    expect(prescriptionService.pharmacistVerify).toHaveBeenCalledWith(
+      'rx-1',
+      'Dose confirmed against the ward protocol.',
+    );
+    expect(toast.success).toHaveBeenCalled();
+    expect(component.showVerifyModal()).toBeFalse();
+    expect(component.verifying()).toBeFalse();
+  });
+
+  it('surfaces the backend refusal verbatim rather than a generic failure', () => {
+    // "A prescription cannot be verified by the clinician who prescribed it"
+    // tells a pharmacist to fetch a colleague; "Verification failed" does not.
+    const message = 'A prescription cannot be verified by the clinician who prescribed it.';
+    prescriptionService.pharmacistVerify.and.returnValue(
+      throwError(() => ({ error: { message } }) as unknown),
+    );
+
+    component.openVerifyModal(verifiable());
+    component.submitPharmacistVerify();
+
+    expect(toast.error).toHaveBeenCalledWith(message);
+    // The modal stays open on failure — closing it would discard a note the
+    // pharmacist may want to keep while they resolve the refusal.
+    expect(component.showVerifyModal()).toBeTrue();
+    expect(component.verifying()).toBeFalse();
+  });
+
+  it('renders the verification state in the detail panel, pending included', () => {
+    component.selectedPrescription.set(verifiable());
+    fixture.detectChanges();
+
+    const field = fixture.nativeElement.querySelector(
+      '[data-testid="rx-pharmacist-verification"]',
+    ) as HTMLElement;
+    expect(field)
+      .withContext('a nurse needs to see PENDING — it is the state that refuses the dose')
+      .not.toBeNull();
+  });
+});

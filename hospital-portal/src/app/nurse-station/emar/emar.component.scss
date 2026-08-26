@@ -84,6 +84,45 @@
   color: var(--color-text-muted, #4a5568);
 }
 
+/* Pharmacist verification outstanding (Tier 2 item 33). Carries a word as
+   well as a colour — the state has to survive a monochrome screen and a
+   colour-blind reader, and it is the reason a dose cannot be given. */
+.emar__queue-chip {
+  /* The queue button is already a flex column with a gap — no margins here. */
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.emar__queue-chip--blocked {
+  border: 1px solid var(--color-warning, #b7791f);
+  color: var(--color-warning, #b7791f);
+  background: transparent;
+}
+
+.emar__blocked {
+  border: 1px solid var(--color-warning, #b7791f);
+  border-left-width: 4px;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+}
+
+.emar__blocked-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+  color: var(--color-warning, #b7791f);
+}
+
+.emar__blocked-body {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted, #4a5568);
+}
+
 .emar__detail {
   border: 1px solid var(--color-border, #cbd5e0);
   border-radius: 0.5rem;

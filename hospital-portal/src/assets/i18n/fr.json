@@ -4175,7 +4175,9 @@
         "DISCHARGE": "Sortie",
         "WALK_IN": "Sans rendez-vous",
         "TELEMEDICINE": "Télémédecine",
-        "REFERRAL": "Orientation"
+        "REFERRAL": "Orientation",
+        "OUTPATIENT": "Ambulatoire",
+        "INPATIENT": "Hospitalisé"
       },
       "STATUS": {
         "SCHEDULED": "Planifié",
@@ -4745,7 +4747,9 @@
       "SIGNED": "Prescription signée",
       "SIGN_FAILED": "Échec de la signature",
       "COSIGNED": "Prescription contresignée",
-      "COSIGN_FAILED": "Échec du contreseing"
+      "COSIGN_FAILED": "Échec du contreseing",
+      "PHARMACIST_VERIFIED": "Prescription vérifiée",
+      "PHARMACIST_VERIFY_FAILED": "Échec de la vérification"
     },
     "SIGN": "Signer",
     "COSIGN": "Contresigner",
@@ -4755,7 +4759,19 @@
     "COSIGN_PENDING": "En attente — un second prescripteur doit contresigner",
     "CONTROLLED_SUBSTANCE": "Substance contrôlée — vérification à deux facteurs",
     "TWO_FACTOR_PENDING": "En attente — non vérifiée",
-    "SIGNED_PRE_V118": "Signée avant l'existence des preuves de signature ; non vérifiable."
+    "SIGNED_PRE_V118": "Signée avant l'existence des preuves de signature ; non vérifiable.",
+    "PHARMACIST_VERIFY": "Vérification pharmacien",
+    "PHARMACIST_VERIFY_TITLE": "Vérifier la prescription",
+    "PHARMACIST_VERIFY_FOR": "Vérification de",
+    "PHARMACIST_VERIFY_HINT": "Contrôlez le médicament, la dose, la voie et la fréquence par rapport à la prescription. Toute modification ultérieure annule cette vérification, qui devra être refaite.",
+    "PHARMACIST_VERIFY_NOTE": "Note (optionnelle)",
+    "PHARMACIST_VERIFY_NOTE_PLACEHOLDER": "Ce que vous avez contrôlé, ou une réserve à l'attention du soignant",
+    "PHARMACIST_VERIFY_NOTE_RECORDED": "Note de vérification",
+    "PHARMACIST_VERIFY_CONFIRM": "Enregistrer la vérification",
+    "PHARMACIST_VERIFYING": "Enregistrement…",
+    "PHARMACIST_VERIFY_STATE": "Vérification pharmacien",
+    "PHARMACIST_VERIFY_PENDING": "En attente — un pharmacien doit vérifier avant toute administration",
+    "PHARMACIST_VERIFIED_BY": "Vérifiée par"
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
@@ -8299,5 +8315,10 @@
     "TRANSFER_CANCELLED": "Transfert annulé et lit libéré.",
     "TRANSFER_CANCEL_ERROR": "Le transfert n'a pas pu être annulé.",
     "TRANSFERS_LOAD_ERROR": "Les transferts en attente n'ont pas pu être chargés."
+  },
+  "EMAR": {
+    "PHARMACIST_BLOCKED_BODY": "Cette dose ne peut pas être enregistrée comme administrée tant qu'un pharmacien n'a pas vérifié la prescription. Suspendez la dose et contactez la pharmacie — Suspendue, Refusée et Manquée restent enregistrables.",
+    "PHARMACIST_BLOCKED_TITLE": "En attente de vérification pharmacien",
+    "PHARMACIST_PENDING_CHIP": "Attente pharmacie"
   }
 }

@@ -31,16 +31,28 @@ import java.util.Set;
  * which in a maternal-newborn EHR is not a theoretical concern. An Rh-positive
  * recipient may receive either.
  *
- * <p>⚠ <b>PLATELETS ARE A POLICY CHOICE, NOT A SETTLED RULE.</b> Platelet
- * concentrates carry donor plasma (so the plasma-side ABO rule applies) and
- * residual red cells (so Rh matters for alloimmunisation). Practice varies, and
- * in an emergency ABO-non-identical platelets are routinely given. This class
- * takes the CONSERVATIVE reading — plasma-side ABO plus the Rh rule — which can
- * refuse a pair a particular facility's protocol would allow. That is a
- * deliberate fail-closed default and <b>it needs a haematologist's sign-off
- * before this module is relied on in production</b>, in the same way the V120
- * drug-interaction seed needs a pharmacist's. The emergency-release path exists
- * precisely so a conservative default cannot block a resuscitation.
+ * <p><b>PLATELETS FOLLOW THIS FACILITY'S SIGNED-OFF PROTOCOL, NOT A TEXTBOOK
+ * DEFAULT.</b> Haematologist sign-off 2026-08-25 replaced the conservative
+ * plasma-side reading this class originally shipped with. Two changes:
+ *
+ * <ul>
+ *   <li><b>ABO:</b> compatibility is prioritised but incompatibility is
+ *       acceptable, EXCEPT that group O platelets are not given to A or AB
+ *       recipients. Note the asymmetry — a B recipient may receive O
+ *       platelets. That is the protocol as signed off, not an oversight.</li>
+ *   <li><b>Rh:</b> the restriction protects a future pregnancy, so it applies
+ *       to females under 55 and not to males or to females 55 and over. See
+ *       {@link ChildbearingPotential}, which fails closed on an unrecognised
+ *       or missing sex or age. Where it does apply it may be overridden with
+ *       a recorded reason.</li>
+ * </ul>
+ *
+ * <p>Plasma and cryoprecipitate carry NO Rh restriction — also confirmed at
+ * sign-off.
+ *
+ * <p>Changing any of this needs a haematologist, not a code review. The
+ * emergency-release path remains available so no rule here can block a
+ * resuscitation.
  */
 public enum AboGroup {
     A,
@@ -69,27 +81,61 @@ public enum AboGroup {
     }
 
     /**
+     * Donor groups whose PLATELETS this group may receive.
+     *
+     * <p>Set by haematologist sign-off on 2026-08-25, replacing the
+     * conservative plasma-side reading this class shipped with. <b>ABO
+     * compatibility is prioritised but ABO incompatibility is acceptable
+     * for platelets</b>, with one exclusion: <b>group O platelets are not
+     * given to A or AB recipients.</b>
+     *
+     * <p>Note the asymmetry — a B recipient MAY receive O platelets under
+     * this protocol while an A or AB recipient may not. That is the rule as
+     * signed off; it is not a transcription slip, and it should not be
+     * "tidied" into symmetry by a later reader.
+     */
+    public Set<AboGroup> compatiblePlateletDonors() {
+        return switch (this) {
+            case O -> Set.of(O, A, B, AB);
+            case B -> Set.of(O, A, B, AB);
+            case A -> Set.of(A, B, AB);
+            case AB -> Set.of(A, B, AB);
+        };
+    }
+
+    /**
      * Whether a unit of {@code product} from {@code donorGroup}/{@code donorRh}
      * may be given to a recipient of {@code recipientGroup}/{@code recipientRh}.
      *
      * <p>Fail-closed on every axis: a null anywhere is incompatible, because
      * "we don't know" and "it's fine" must never be the same answer here.
+     *
+     * @param childbearingPotential governs the platelet Rh rule only. The
+     *     restriction protects a future pregnancy, so it applies to females
+     *     under 55 and not to males or older females; UNKNOWN protects. Pass
+     *     {@link ChildbearingPotential#UNKNOWN} when the caller has no
+     *     patient context — it is the safe default, not a neutral one.
      */
     public static boolean isCompatible(AboGroup recipientGroup,
                                        RhFactor recipientRh,
                                        AboGroup donorGroup,
                                        RhFactor donorRh,
-                                       BloodProductType product) {
+                                       BloodProductType product,
+                                       ChildbearingPotential childbearingPotential) {
         if (recipientGroup == null || donorGroup == null || product == null) {
             return false;
         }
-        boolean aboOk = plasmaSideProduct(product)
-            ? recipientGroup.compatiblePlasmaDonors().contains(donorGroup)
-            : recipientGroup.compatibleRedCellDonors().contains(donorGroup);
-        if (!aboOk) {
+        if (!aboCompatible(recipientGroup, donorGroup, product)) {
             return false;
         }
         if (!rhRelevant(product)) {
+            return true;
+        }
+        if (product == BloodProductType.PLATELETS
+                && childbearingPotential != null
+                && !childbearingPotential.requiresRhProtection()) {
+            // Male, or female 55+: no D-alloimmunisation restriction on
+            // platelets for this recipient.
             return true;
         }
         if (recipientRh == null || donorRh == null) {
@@ -100,14 +146,37 @@ public enum AboGroup {
         return recipientRh == RhFactor.POSITIVE || donorRh == RhFactor.NEGATIVE;
     }
 
+    /**
+     * Whether the ABO pairing is acceptable for this product.
+     *
+     * <p>Three rules, not two: red cells follow the donor's cells, plasma and
+     * cryoprecipitate follow the donor's plasma, and platelets have their own
+     * (see {@link #compatiblePlateletDonors()}).
+     */
+    private static boolean aboCompatible(AboGroup recipientGroup,
+                                         AboGroup donorGroup,
+                                         BloodProductType product) {
+        if (product == BloodProductType.PLATELETS) {
+            return recipientGroup.compatiblePlateletDonors().contains(donorGroup);
+        }
+        if (plasmaSideProduct(product)) {
+            return recipientGroup.compatiblePlasmaDonors().contains(donorGroup);
+        }
+        return recipientGroup.compatibleRedCellDonors().contains(donorGroup);
+    }
+
     /** Products whose ABO rule follows the donor's PLASMA rather than their cells. */
     private static boolean plasmaSideProduct(BloodProductType product) {
         return product == BloodProductType.FRESH_FROZEN_PLASMA
-            || product == BloodProductType.CRYOPRECIPITATE
-            || product == BloodProductType.PLATELETS;
+            || product == BloodProductType.CRYOPRECIPITATE;
     }
 
-    /** Products carrying enough red cells for D alloimmunisation to matter. */
+    /**
+     * Products carrying enough red cells for D alloimmunisation to matter.
+     *
+     * <p>Plasma and cryoprecipitate are deliberately absent — confirmed at
+     * sign-off: no Rh restriction is needed for plasma.
+     */
     private static boolean rhRelevant(BloodProductType product) {
         return product == BloodProductType.WHOLE_BLOOD
             || product == BloodProductType.PACKED_RED_CELLS

@@ -2061,4 +2061,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V139 - pharmacist verification before administration. SCOPED to
+         controlled substances and requiresCosign prescriptions, not
+         universal: clinical.pharmacies has no operating-hours model, so a
+         universal gate could never fail open when the single pharmacist is
+         off-shift. Verification is CLEARED on every prescription update,
+         because updatePrescription has no status guard and a SIGNED
+         prescription's drug and dose remain mutable - a stale stamp would
+         assert a check that never happened. No DO block, so no
+         splitStatements attribute.
+         ================================================================= -->
+    <changeSet id="V139-pharmacist-verification" author="hms-team" runOnChange="false">
+        <sqlFile path="V139__pharmacist_verification.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

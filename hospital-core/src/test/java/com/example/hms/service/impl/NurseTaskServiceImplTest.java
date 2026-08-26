@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -122,8 +123,22 @@ class NurseTaskServiceImplTest {
     @Mock private ImagingOrderRepository imagingOrderRepository;
     @Mock private ProcedureOrderRepository procedureOrderRepository;
 
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
+
     private NurseTaskServiceImpl service;
     private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
+
+    /**
+     * Real, not mocked — same reasoning as fiveRightsService above. The three
+     * methods NurseTaskServiceImpl calls on it are pure functions of the
+     * Prescription, so these tests exercise the actual gate rather than
+     * asserting that it gets called. Mocking it is how #515's reservation
+     * transitions ended up with no test at all.
+     */
+    private final com.example.hms.service.pharmacy.PharmacistVerificationService
+        pharmacistVerificationService =
+            new com.example.hms.service.pharmacy.PharmacistVerificationService(
+                null, null, null, java.time.Clock.systemUTC());
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
@@ -132,7 +147,7 @@ class NurseTaskServiceImplTest {
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
-            nursingNoteRepository, notificationRepository, userRepository,
+            nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper));
 
@@ -2579,5 +2594,133 @@ class NurseTaskServiceImplTest {
         // marRepository.save is called twice: once to materialize the new
         // MAR from the prescription, then again to stamp the verification.
         verify(marRepository, atLeastOnce()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    // ── Pharmacist verification gate (Tier 2 item 33) ───────────────────
+    //
+    // Scoped deliberately: high-risk medications are blocked until a
+    // pharmacist verifies; routine ones keep flowing exactly as before.
+
+    private Prescription highRiskRx(UUID hospitalId, boolean verified) {
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setFirstName("Awa");
+        patient.setLastName("Kabore");
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setHospital(hospital);
+        rx.setPatient(patient);
+        rx.setMedicationName("Morphine");
+        rx.setControlledSubstance(true);
+        if (verified) {
+            rx.setPharmacistVerifiedAt(LocalDateTime.now().minusHours(1));
+        }
+        return rx;
+    }
+
+    /** Lets the MAR write through, so a test failure is about the gate. */
+    private void marSaveEchoes() {
+        when(marRepository.save(any(MedicationAdministrationRecord.class)))
+            .thenAnswer(i -> {
+                MedicationAdministrationRecord r = i.getArgument(0);
+                if (r.getId() == null) {
+                    r.setId(UUID.randomUUID());
+                }
+                return r;
+            });
+    }
+
+    private NurseMedicationAdministrationRequestDTO statusRequest(String status) {
+        NurseMedicationAdministrationRequestDTO request =
+            new NurseMedicationAdministrationRequestDTO();
+        request.setStatus(status);
+        return request;
+    }
+
+    /**
+     * GIVEN also has to clear the PRE-EXISTING five-rights gate (P1 #8),
+     * which refuses an unscanned dose without a reason. Supplying one keeps
+     * these tests about the pharmacist gate rather than about that one.
+     */
+    private NurseMedicationAdministrationRequestDTO givenRequest() {
+        NurseMedicationAdministrationRequestDTO request = statusRequest("GIVEN");
+        request.setOverrideReason("Scanner unavailable on this ward");
+        return request;
+    }
+
+    @Test
+    void anUnverifiedControlledSubstanceCannotBeGiven() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() ->
+            service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Morphine")
+            .hasMessageContaining("verified by a pharmacist")
+            .hasMessageNotContaining("%s");
+
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void aVerifiedControlledSubstanceCanBeGiven() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, true);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        marSaveEchoes();
+
+        assertThatCode(() -> service.recordMedicationAdministration(
+            rx.getId(), UUID.randomUUID(), hospitalId, givenRequest()))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void anUnverifiedHighRiskDoseCanStillBeRecordedAsHELD() {
+        // The gate must never destroy the clinical record. Holding the dose
+        // is exactly what a nurse SHOULD do when it cannot be verified, so
+        // blocking that would be perverse as well as lossy.
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        marSaveEchoes();
+
+        assertThatCode(() -> service.recordMedicationAdministration(
+            rx.getId(), UUID.randomUUID(), hospitalId, statusRequest("HELD")))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void anUnverifiedHighRiskDoseCanStillBeRecordedAsREFUSED() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        marSaveEchoes();
+
+        assertThatCode(() -> service.recordMedicationAdministration(
+            rx.getId(), UUID.randomUUID(), hospitalId, statusRequest("REFUSED")))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void anOrdinaryMedicationIsUnaffectedByTheGate() {
+        // The scoped decision in one test: routine meds keep flowing with no
+        // pharmacist in the loop.
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        rx.setControlledSubstance(false);
+        rx.setMedicationName("Paracetamol");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        marSaveEchoes();
+
+        assertThatCode(() -> service.recordMedicationAdministration(
+            rx.getId(), UUID.randomUUID(), hospitalId, givenRequest()))
+            .doesNotThrowAnyException();
     }
 }

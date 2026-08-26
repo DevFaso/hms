@@ -1,12 +1,31 @@
 name: Deploy to Railway
 
 on:
-  # dev  → Railway auto-deploys via git integration on push to develop
-  # prod → NO auto-deploy; trigger manually here for safety
+  # ⚠ BOTH environments auto-deploy from Railway's git integration:
+  #     develop → hms-backend-dev  + hms-frontend-dev
+  #     main    → hms-backend-core + hms-frontend-prod   ← PRODUCTION
+  #
+  # So MERGING TO `main` SHIPS TO PRODUCTION. There is no manual gate in
+  # front of it, and this workflow is not what deploys prod — it has not
+  # been run successfully since 2026-02, and its last run (2026-03-16,
+  # against develop) failed.
+  #
+  # This block used to claim "prod → NO auto-deploy; trigger manually here
+  # for safety". That was false, and it cost a full session of working from
+  # the wrong operational model — promotions were treated as a git
+  # operation while they were in fact shipping to a live hospital system.
+  # Verify against Railway before trusting any comment here:
+  #   railway deployment list --service hms-backend-core --environment prod
+  #
+  # What genuinely does protect prod: the `/api/actuator/health` healthcheck
+  # gates each deploy, and `ddl-auto: validate` means a schema that does not
+  # match the deployed JAR refuses to boot rather than serving a broken app.
+  # That is also why every migration must be idempotent — a deploy killed
+  # mid-Liquibase otherwise wedges the environment (see V108, 2026-08-20).
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Target environment (dev auto-deploys via git; use prod here)'
+        description: 'Target environment (both auto-deploy on push; this is a manual re-trigger)'
         required: true
         default: 'prod'
         type: choice

@@ -69,6 +69,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final UserRoleHospitalAssignmentRepository urhaRepository;
     private final CdsRuleEngine cdsRuleEngine;
     private final com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard;
+    private final com.example.hms.service.pharmacy.PharmacistVerificationService pharmacistVerificationService;
 
     @Override
     @Transactional
@@ -456,6 +457,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // Tier 2 item 33: an edit invalidates any pharmacist verification.
+        // updateEntity rewrites medicationName, dosage and frequency, and
+        // there is no status guard above — so a SIGNED prescription's drug
+        // and dose can change here. A verification that survived that would
+        // assert a check of a drug the pharmacist never saw.
+        pharmacistVerificationService.invalidateOnChange(existing);
         controlledSubstanceGuard.requireSafeguardsFor(existing, existing.getStatus());
 
         Prescription saved = prescriptionRepository.save(existing);

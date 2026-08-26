@@ -134,8 +134,18 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
   gap: 1.25rem;
+
+  /* No announcements, no reserved column — otherwise the content panel
+     stays 260px narrow to hold a sidebar that is not rendered. */
+  &.no-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
+/* Above .station-layout, not inside its first column: sharing the row with
+   the 260px sidebar squeezed the tabs until Inbox wrapped onto a second
+   line, and top-aligned the sidebar with the tab row so it read as part of
+   it rather than as a sidebar. */
 .section-tabs {
   display: flex;
   gap: 0.5rem;

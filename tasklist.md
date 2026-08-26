@@ -1289,13 +1289,35 @@ OB suite already models.
 
 ## E3 — Safety gates that are absent, not merely unenforced
 
-- [ ] 33. **Pharmacist verification gate before eMAR.** Verified zero code
-  (`pharmacistVerified`, `verifiedByPharmacist` — nothing). Today a SIGNED
-  prescription is immediately administrable; the verify step Willow puts
-  between prescriber and nurse does not exist. ⚠ DECIDE FIRST whether it
-  belongs in this deployment model (community hospital, single pharmacy,
-  paper-fallback dispensing) — it may be a deliberate non-goal, and building
-  it would insert a blocking human step into every inpatient med.
+- [x] 33. **Pharmacist verification gate before eMAR.**
+  ✅ DONE 2026-08-26 (**PR #524** `feature/pharmacist-verification`, V139).
+  Verified zero code before starting (`pharmacistVerified`,
+  `verifiedByPharmacist` — nothing), so a SIGNED prescription was immediately
+  administrable and the step between prescriber and nurse did not exist.
+  **The decision the ⚠ asked for was made and it is SCOPED, not universal:**
+  the gate blocks only controlled substances and prescriptions already flagged
+  `requiresCosign`; everything else administers exactly as before with an
+  advisory marker. A universal gate needs a dispensary pharmacist reachable
+  whenever a dose falls due, and nothing here models dispensary staffing or
+  cover — so it could never fail open, and with one dispensary it would block
+  every night-time dose. (Community *pharmacies de garde* run a real rotating
+  roster, but they serve the public and do not verify an inpatient MAR — noted
+  in the migration so a later reader does not mistake them for a reason to
+  widen the gate.) **Verification does not survive an edit** — `update` has no
+  status guard, so drug/dose/frequency stay mutable on a SIGNED row, and a
+  stamp that outlived that would assert a check nobody performed. **Only GIVEN
+  is blocked**: HELD, REFUSED and MISSED always record, because they are facts
+  about the patient and holding the dose is the right action when it cannot be
+  verified. Portal half: verify ceremony on the prescriptions page (modal with
+  the optional note, so the note is reachable rather than a field nothing
+  sends), pending/verified state in the detail panel, and the eMAR refuses
+  GIVEN with the reason stated **before** the scan steps and a chip in the
+  queue. **No override on the eMAR side** — the server refuses regardless, so
+  an override box would only manufacture a reason for a certain refusal.
+  ⚠ Found on the way in: `ROLE_PHARMACY_VERIFIER` is on the backend endpoint
+  and seeded since V43, but the `prescriptions` route guard rejected it — the
+  role that exists to do this job could not reach the page it is done on.
+  Fixed in the same PR.
 - [x] 34. **Dispense-time barcode verification.**
   ✅ DONE 2026-08-25 (**PR #518** `feature/dispense-verification`, V138).
   `DispenseVerificationService` mirroring `FiveRightsVerificationService`, so
@@ -1459,5 +1481,7 @@ E0 first and alone (#26 → #27): a clinical loop that cannot close outranks
 every breadth item on this page, and #26 is the same defect class the
 2026-08-21 reassessment named as the recurring one. Then E1 (#28, #29) —
 the emergencies belonging to the specialty this product is deepest in. Then
-E2 as one batch (#30–#32, all three touch the same board). E3 needs the #33
-decision before it can be scoped. E4–E7 are pick-by-demand.
+E2 as one batch (#30–#32, all three touch the same board). E3 is now closed —
+the #33 decision was made (scoped to controlled + co-sign-required, not
+universal) and both #33 and #34 shipped. **E4–E7 (#35–#47) are the remaining
+Tier 2 work, all pick-by-demand.**

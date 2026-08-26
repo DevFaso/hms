@@ -248,6 +248,34 @@ public class Prescription extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_rx_cosign_staff"))
     private Staff cosignedBy;
 
+    /* ── Pharmacist verification (Tier 2 item 33) ───────────────────────── */
+
+    /**
+     * When a pharmacist verified this prescription, or null if unverified.
+     *
+     * <p>Null covers two cases that are deliberately not distinguished:
+     * never verified, and verified-then-invalidated by an edit. Both mean
+     * the same thing to the nurse at the bedside — nobody has checked THIS
+     * version of this prescription.
+     *
+     * <p>Cleared on every update. {@code updatePrescription} has no status
+     * guard, so a SIGNED prescription's medication and dosage remain
+     * mutable; a stamp that survived an edit would assert a check that never
+     * happened, which is worse than no gate at all.
+     */
+    @Column(name = "pharmacist_verified_at")
+    private LocalDateTime pharmacistVerifiedAt;
+
+    /** The verifying pharmacist. Never the prescriber — self-verification is refused. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pharmacist_verified_by",
+        foreignKey = @ForeignKey(name = "fk_rx_pharmacist_verified_by"))
+    private User pharmacistVerifiedBy;
+
+    @Size(max = 1000)
+    @Column(name = "pharmacist_verification_note", length = 1000)
+    private String pharmacistVerificationNote;
+
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
 

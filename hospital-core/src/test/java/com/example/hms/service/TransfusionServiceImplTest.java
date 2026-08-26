@@ -62,6 +62,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1101,5 +1102,159 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.discardUnit(id, "Not mine"))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── Platelets: this facility's protocol, signed off 2026-08-25 ───────
+    //
+    // Exercised through the service, not just against AboGroup, because the
+    // Rh half depends on patient demographics the enum deliberately does not
+    // see, and the override path lives here.
+
+    private TransfusionRequest plateletRequest(PatientBloodGroup grp) {
+        TransfusionRequest r = TransfusionRequest.builder()
+            .patient(patient)
+            .hospital(hospital)
+            .bloodGroup(grp)
+            .productType(BloodProductType.PLATELETS)
+            .unitsRequested(1)
+            .indication("Thrombocytopenia")
+            .urgency(TransfusionUrgency.ROUTINE)
+            .status(TransfusionRequestStatus.REQUESTED)
+            .requestedAt(LocalDateTime.now())
+            .build();
+        r.setId(UUID.randomUUID());
+        when(requestRepository.findById(r.getId())).thenReturn(Optional.of(r));
+        return r;
+    }
+
+    private CrossmatchRequestDTO crossmatchWithReason(BloodUnit unit, String reason) {
+        return CrossmatchRequestDTO.builder()
+            .bloodUnitId(unit.getId())
+            .compatible(Boolean.TRUE)
+            .incompatibilityReason(reason)
+            .build();
+    }
+
+    @Test
+    void oPlateletsCannotBeRecordedCompatibleForAnARecipient() {
+        // The one ABO exclusion the protocol keeps.
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("incompatible");
+    }
+
+    @Test
+    void aReasonDoesNotOverrideThePlateletAboExclusion() {
+        // An override reason is not a substitute for the one ABO rule.
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.AB, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = crossmatchWithReason(donor, "No other units held");
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void aboIncompatiblePlateletsAreAcceptedWhereTheProtocolAllowsThem() {
+        // B receiving O platelets: permitted, and the asymmetry with A is
+        // the protocol as signed off.
+        patient.setGender("M");
+        patient.setDateOfBirth(java.time.LocalDate.of(1990, 1, 1));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.B, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+
+        assertThatCode(() -> service.recordCrossmatch(req.getId(), compatibleCrossmatch(donor)))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void aManMayReceiveRhPositivePlateletsWithNoOverrideNeeded() {
+        patient.setGender("M");
+        patient.setDateOfBirth(java.time.LocalDate.of(1985, 4, 2));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+
+        assertThatCode(() -> service.recordCrossmatch(req.getId(), compatibleCrossmatch(donor)))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void aWomanUnderFiftyFiveIsRefusedRhPositivePlateletsWithoutAReason() {
+        patient.setGender("F");
+        patient.setDateOfBirth(java.time.LocalDate.of(1995, 6, 1));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOf(BusinessException.class)
+            // The refusal must say how to proceed, not just that it refused.
+            .hasMessageContaining("reason to override");
+    }
+
+    @Test
+    void aRecordedReasonCarriesThePlateletRhRestriction() {
+        patient.setGender("F");
+        patient.setDateOfBirth(java.time.LocalDate.of(1995, 6, 1));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+
+        assertThatCode(() -> service.recordCrossmatch(req.getId(),
+            crossmatchWithReason(donor, "Only units held; haematologist consulted")))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void anUnrecordedGenderIsProtectedRatherThanPermitted() {
+        // gender is free text with no canonical vocabulary, so this is the
+        // common case, not the exotic one.
+        patient.setGender(null);
+        patient.setDateOfBirth(java.time.LocalDate.of(1995, 6, 1));
+        TransfusionRequest req = plateletRequest(
+            group(AboGroup.A, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE));
+        BloodUnit donor = unit(AboGroup.A, RhFactor.POSITIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(donor);
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void theRhOverrideDoesNotLeakIntoRedCells() {
+        // Red cells keep the unconditional rule: a reason must not buy an
+        // Rh-positive red cell unit for an Rh-negative recipient.
+        patient.setGender("M");
+        patient.setDateOfBirth(java.time.LocalDate.of(1985, 4, 2));
+        TransfusionRequest req = request(
+            group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit donor = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = crossmatchWithReason(donor, "Nothing else available");
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .isInstanceOf(BusinessException.class);
     }
 }

@@ -22,6 +22,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
+import com.example.hms.payload.dto.PharmacistVerificationRequestDTO;
+import com.example.hms.service.pharmacy.PharmacistVerificationService;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -43,6 +45,7 @@ import java.util.UUID;
 public class PrescriptionController {
 
     private final PrescriptionService prescriptionService;
+    private final PharmacistVerificationService pharmacistVerificationService;
     private final PrescriptionSmsDispatchService smsDispatchService;
     private final MessageSource messageSource;
 
@@ -98,6 +101,31 @@ public class PrescriptionController {
         @PathVariable UUID id,
         Locale locale) {
         return ResponseEntity.ok(prescriptionService.cosignPrescription(id, locale));
+    }
+
+    /**
+     * Tier 2 item 33 — the pharmacist-verification ceremony.
+     *
+     * <p>Pharmacist roles only, and deliberately NOT the prescriber roles:
+     * the service refuses self-verification, but keeping doctors off the
+     * endpoint entirely means the refusal is never the first thing they
+     * learn about the rule.
+     */
+    @PostMapping("/{id}/pharmacist-verify")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Verify a prescription as a pharmacist",
+        description = "Records the pharmacist check that a controlled or co-sign-required "
+            + "prescription needs before a nurse may administer it. Server identity and server "
+            + "clock; the prescribing clinician cannot verify their own prescription; only a "
+            + "SIGNED or TRANSMITTED prescription can be verified. Any later edit to the "
+            + "prescription clears the verification and it must be repeated.")
+    public ResponseEntity<PrescriptionResponseDTO> pharmacistVerify(
+        @PathVariable UUID id,
+        @RequestBody(required = false) PharmacistVerificationRequestDTO request,
+        Locale locale) {
+        String note = request != null ? request.getNote() : null;
+        pharmacistVerificationService.verify(id, note);
+        return ResponseEntity.ok(prescriptionService.getPrescriptionById(id, locale));
     }
 
     @GetMapping("/{id}")
