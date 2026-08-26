@@ -71,6 +71,10 @@ import { RefillApprovalService } from '../services/refill-approval.service';
 import { ImagingService } from '../services/imaging.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import {
+  CredentialRenewalComponent,
+  CredentialRenewalTarget,
+} from './credential-renewal/credential-renewal.component';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -132,6 +136,7 @@ interface NavTile {
     PatientSnapshotDrawerComponent,
     InBasketPanelComponent,
     EnumLabelPipe,
+    CredentialRenewalComponent,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -1079,6 +1084,32 @@ export class DashboardComponent implements OnInit, OnDestroy {
   expiredLicenseCount = computed<number>(() => {
     return this.licenseAlerts().filter((a) => a.severity === 'EXPIRED').length;
   });
+
+  /* ── Credential renewal (Tier 2 item 40) ─────────────────────── */
+
+  /** Null keeps the renewal dialog closed. */
+  credentialRenewalTarget = signal<CredentialRenewalTarget | null>(null);
+
+  openCredentialRenewal(alert: LicenseExpiryAlert): void {
+    this.credentialRenewalTarget.set({
+      staffId: alert.staffId,
+      staffName: alert.staffName,
+      licenseNumber: alert.licenseNumber ?? null,
+      licenseExpiryDate: alert.licenseExpiryDate ?? null,
+    });
+  }
+
+  closeCredentialRenewal(): void {
+    this.credentialRenewalTarget.set(null);
+  }
+
+  onCredentialRenewed(): void {
+    // Reload rather than patch the row: the renewal also clears the alert
+    // stage server-side, and a locally-patched card would keep showing a
+    // severity the backend no longer agrees with.
+    this.closeCredentialRenewal();
+    this.loadDashboardData();
+  }
 
   criticalLicenseCount = computed<number>(() => {
     return this.licenseAlerts().filter((a) => a.severity === 'CRITICAL').length;

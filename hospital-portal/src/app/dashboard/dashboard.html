@@ -873,8 +873,8 @@
                     >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
                   >
                   <span class="sched-reason"
-                    >License: {{ alert.licenseNumber }} — {{ 'DASHBOARD.EXPIRES' | translate }}:
-                    {{ alert.licenseExpiryDate }}</span
+                    >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
+                    {{ 'DASHBOARD.EXPIRES' | translate }}: {{ alert.licenseExpiryDate }}</span
                   >
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
@@ -890,6 +890,17 @@
                       {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
                     }
                   </span>
+                  <!-- Tier 2 item 40. The alert used to be the end of the
+                       road: it told an administrator a licence was expiring
+                       and gave them nowhere to act on it. -->
+                  <button
+                    type="button"
+                    class="card-link"
+                    (click)="openCredentialRenewal(alert)"
+                    [attr.data-testid]="'renew-license-' + alert.staffId"
+                  >
+                    {{ 'CREDENTIALING.RENEW' | translate }}
+                  </button>
                 </div>
               </div>
             }
@@ -3253,3 +3264,12 @@
     </div>
   }
 </div>
+
+<!-- Credential renewal (Tier 2 item 40). Outside the role-gated sections so
+     the dialog is not torn down by a section re-render mid-edit; the button
+     that opens it lives inside the hospital-admin licence card. -->
+<app-credential-renewal
+  [target]="credentialRenewalTarget()"
+  (renewed)="onCredentialRenewed()"
+  (closed)="closeCredentialRenewal()"
+/>

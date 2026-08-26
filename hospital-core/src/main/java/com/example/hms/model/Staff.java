@@ -2,6 +2,7 @@ package com.example.hms.model;
 
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.JobTitle;
+import com.example.hms.enums.LicenseAlertStage;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -96,6 +97,40 @@ public class Staff extends BaseEntity {
 
     @Column(name = "license_expiry_date")
     private LocalDate licenseExpiryDate;
+
+    /* ── Credentialing (Tier 2 item 40, V140) ─────────────────────────── */
+
+    /**
+     * The body that issued the licence. Free text because this deployment
+     * spans professions whose registries are not modelled here, and a lookup
+     * table nobody maintains is worse than a field somebody fills in.
+     */
+    @Column(name = "license_issuing_authority", length = 200)
+    private String licenseIssuingAuthority;
+
+    /**
+     * When somebody last checked this licence against its issuing authority.
+     * {@code null} means never — which is the honest state of every row that
+     * predates V140: the number was typed into a form and never verified.
+     */
+    @Column(name = "license_verified_at")
+    private LocalDateTime licenseVerifiedAt;
+
+    /** Who performed that check. Never the staff member themselves. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "license_verified_by",
+        foreignKey = @ForeignKey(name = "fk_staff_license_verified_by"))
+    private User licenseVerifiedBy;
+
+    /**
+     * Most severe expiry threshold this staff member has already been
+     * notified about. The sweep notifies only when it advances, so an
+     * administrator is not sent the same warning every morning until they
+     * stop reading the category entirely. Cleared on renewal.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "license_alert_stage", length = 16)
+    private LicenseAlertStage licenseAlertStage;
 
     @Column(name = "npi", length = 20, unique = true)
     private String npi;

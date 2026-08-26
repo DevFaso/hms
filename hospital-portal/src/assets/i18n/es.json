@@ -8320,5 +8320,28 @@
     "PHARMACIST_BLOCKED_BODY": "Esta dosis no puede registrarse como administrada hasta que un farmacéutico haya verificado la prescripción. Suspenda la dosis y contacte con la farmacia — Suspendida, Rechazada y Omitida siguen siendo registrables.",
     "PHARMACIST_BLOCKED_TITLE": "Pendiente de verificación farmacéutica",
     "PHARMACIST_PENDING_CHIP": "Espera farmacia"
+  },
+  "CREDENTIALING": {
+    "CURRENT_EXPIRY": "Caducidad actual",
+    "FIRST_RECORDING": "Sin fecha de caducidad registrada",
+    "HISTORY": "Historial de renovaciones",
+    "HISTORY_EMPTY": "No se ha registrado ninguna renovación para este profesional.",
+    "HISTORY_FAILED": "No se ha podido cargar el historial de renovaciones.",
+    "ISSUING_AUTHORITY": "Autoridad emisora",
+    "ISSUING_AUTHORITY_PLACEHOLDER": "Dejar en blanco para conservar lo registrado",
+    "LICENSE_NUMBER": "Número de licencia",
+    "LICENSE_NUMBER_PLACEHOLDER": "Dejar en blanco para conservar el número registrado",
+    "NEW_EXPIRY": "Nueva fecha de caducidad",
+    "NOTE": "Nota",
+    "NOTE_PLACEHOLDER": "Lo que ha comprobado, o cualquier dato que convenga dejar por escrito",
+    "RECORDS_ONLY": "Esto registra la renovación. Una licencia caducada no bloquea la actividad clínica.",
+    "RECORD_RENEWAL": "Registrar la renovación",
+    "RENEW": "Renovar",
+    "RENEW_TITLE": "Registrar la renovación",
+    "SAVING": "Registrando…",
+    "TOAST": {
+      "RENEWED": "Renovación registrada",
+      "RENEW_FAILED": "No se ha podido registrar la renovación"
+    }
   }
 }
