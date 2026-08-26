@@ -68,6 +68,18 @@ public class PrescriptionResponseDTO {
     private java.time.LocalDateTime cosignedAt;
     private java.util.UUID cosignedByStaffId;
 
+    /* ── Pharmacist verification (Tier 2 item 33) ───────────────────────── */
+
+    /** Whether this prescription is in scope for the verification gate at all. */
+    private boolean requiresPharmacistVerification;
+
+    /** Null when unverified — either never verified, or invalidated by an edit. */
+    private java.time.LocalDateTime pharmacistVerifiedAt;
+
+    private java.util.UUID pharmacistVerifiedByUserId;
+    private String pharmacistVerifiedByName;
+    private String pharmacistVerificationNote;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 

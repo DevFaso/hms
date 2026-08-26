@@ -20,6 +20,18 @@ export interface NurseMedicationTask {
   route: string;
   dueTime: string;
   status: string;
+  /**
+   * Pharmacist verification (Tier 2 item 33). Both flags come from the server
+   * on the task itself rather than being derived in the UI, so a nurse sees
+   * WHY a dose is blocked before pressing the button rather than after.
+   *
+   * True on `requiresPharmacistVerification` means this medication cannot be
+   * given until a pharmacist has verified it; `pharmacistVerified` says
+   * whether that has happened for the version of the prescription currently
+   * in force. Optional because rows served before V139 carry neither.
+   */
+  requiresPharmacistVerification?: boolean;
+  pharmacistVerified?: boolean;
 }
 
 /** Bedside five-rights barcode-scan check (P1 #8). */

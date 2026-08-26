@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject, throwError } from 'rxjs';
 
 import { EmarComponent } from './emar.component';
@@ -35,7 +36,7 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
 
     await TestBed.configureTestingModule({
-      imports: [EmarComponent],
+      imports: [EmarComponent, TranslateModule.forRoot()],
       providers: [
         { provide: NurseTaskService, useValue: nurseSpy },
         { provide: ToastService, useValue: toastSpy },
@@ -194,6 +195,105 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     expect(component['verification']()).toBeNull();
     expect(component['overrideReason']()).toBe('');
+  });
+
+  /* ── Pharmacist verification gate (Tier 2 item 33) ─────────────────── */
+
+  /** In scope for the gate, and no pharmacist has verified it. */
+  const blockedTask: NurseMedicationTask = {
+    ...sampleTask,
+    id: 'task-blocked',
+    medication: 'Morphine',
+    requiresPharmacistVerification: true,
+    pharmacistVerified: false,
+  };
+
+  const allRightsPassed: MarVerificationResponse = {
+    marId: blockedTask.id,
+    outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+    failedChecks: [],
+    failureReasons: {},
+    allPassed: true,
+    verifiedAt: '2026-04-30T08:01:00',
+  };
+
+  it('refuses GIVEN while pharmacist verification is outstanding, even with all five rights passed', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([blockedTask]));
+    nurseSpy.administerMedication.and.returnValue(of(blockedTask));
+
+    fixture.detectChanges();
+    component['selectTask'](blockedTask);
+    component['verification'].set(allRightsPassed);
+
+    component['administer']('GIVEN');
+
+    // The five rights are about this dose at this bedside; this gate is about
+    // whether anyone with a pharmacy qualification has read the prescription.
+    // Passing the first does not answer the second.
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+  });
+
+  it('offers no override for the pharmacist gate — the server refuses GIVEN regardless', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([blockedTask]));
+    nurseSpy.administerMedication.and.returnValue(of(blockedTask));
+
+    fixture.detectChanges();
+    component['selectTask'](blockedTask);
+    component['verification'].set(allRightsPassed);
+    // An override reason is the escape hatch for a FAILED five-rights check.
+    // It must not double as one for this gate, or the UI would manufacture a
+    // reason for a refusal that is going to happen anyway.
+    component['overrideReason'].set('Ward pharmacist unreachable, giving anyway.');
+
+    component['administer']('GIVEN');
+
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+  });
+
+  it('still records HELD and REFUSED — they are facts about the patient, not permissions', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([blockedTask]));
+    nurseSpy.administerMedication.and.returnValue(of(blockedTask));
+
+    fixture.detectChanges();
+    component['selectTask'](blockedTask);
+
+    component['administer']('HELD');
+
+    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(blockedTask.id, { status: 'HELD' });
+  });
+
+  it('states the block before the scan steps, and marks the row in the queue', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([blockedTask]));
+
+    fixture.detectChanges();
+
+    // Visible in the queue so a nurse planning a round sees it before walking
+    // to the bed, not after scanning.
+    expect(
+      root().querySelector(`[data-testid="emar-pharm-chip-${blockedTask.id}"]`),
+    ).not.toBeNull();
+
+    component['selectTask'](blockedTask);
+    fixture.detectChanges();
+
+    expect(root().querySelector('[data-testid="emar-pharmacist-blocked"]')).not.toBeNull();
+  });
+
+  it('does not block a verified prescription, nor one out of scope for the gate', () => {
+    const verified: NurseMedicationTask = { ...blockedTask, pharmacistVerified: true };
+    nurseSpy.getMedicationMAR.and.returnValue(of([verified, sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(of(verified));
+
+    fixture.detectChanges();
+    component['selectTask'](verified);
+    component['verification'].set(allRightsPassed);
+
+    component['administer']('GIVEN');
+
+    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(verified.id, { status: 'GIVEN' });
+    expect(root().querySelector(`[data-testid="emar-pharm-chip-${verified.id}"]`)).toBeNull();
+    // sampleTask carries neither flag — a pre-V139 row must administer as before.
+    expect(root().querySelector(`[data-testid="emar-pharm-chip-${sampleTask.id}"]`)).toBeNull();
   });
 
   it('does not invalidate verification when an input handler is called with the same value', () => {

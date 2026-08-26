@@ -213,4 +213,62 @@ class PrescriptionMapperResilienceTest {
         p.setHospital(hospital);
         return p;
     }
+
+    /* -- Pharmacist verification projection (Tier 2 item 33) ------------- */
+
+    @Test
+    void pharmacistVerifierIsNamed_notReducedToTheirLoginHandle() {
+        User verifier = new User();
+        verifier.setId(UUID.randomUUID());
+        verifier.setUsername("pharm1");
+        verifier.setFirstName("Awa");
+        verifier.setLastName("Traore");
+
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setPharmacistVerifiedBy(verifier);
+
+        // "Verified by pharm1" tells a nurse rather less than "Verified by
+        // Awa Traore" about who checked the drug they are holding.
+        assertThat(mapper.toResponseDTO(p).getPharmacistVerifiedByName()).isEqualTo("Awa Traore");
+    }
+
+    @Test
+    void pharmacistVerifierFallsBackToTheLoginHandleWhenNoNameIsRecorded() {
+        User verifier = new User();
+        verifier.setId(UUID.randomUUID());
+        verifier.setUsername("pharm1");
+
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setPharmacistVerifiedBy(verifier);
+
+        // A handle beats an empty cell on an audit surface.
+        assertThat(mapper.toResponseDTO(p).getPharmacistVerifiedByName()).isEqualTo("pharm1");
+    }
+
+    @Test
+    void anUnverifiedPrescriptionCarriesNoVerifierName() {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+
+        assertThat(mapper.toResponseDTO(p).getPharmacistVerifiedByName()).isNull();
+    }
+
+    @Test
+    void requiresPharmacistVerificationMirrorsTheTwoSafetyFlags() {
+        Prescription ordinary = new Prescription();
+        ordinary.setId(UUID.randomUUID());
+        assertThat(mapper.toResponseDTO(ordinary).isRequiresPharmacistVerification()).isFalse();
+
+        Prescription controlled = new Prescription();
+        controlled.setId(UUID.randomUUID());
+        controlled.setControlledSubstance(true);
+        assertThat(mapper.toResponseDTO(controlled).isRequiresPharmacistVerification()).isTrue();
+
+        Prescription cosign = new Prescription();
+        cosign.setId(UUID.randomUUID());
+        cosign.setRequiresCosign(true);
+        assertThat(mapper.toResponseDTO(cosign).isRequiresPharmacistVerification()).isTrue();
+    }
 }

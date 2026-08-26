@@ -42,6 +42,16 @@
                 <span class="emar__queue-meta">
                   {{ task.dose }} · {{ task.route }} · {{ task.dueTime | date: 'HH:mm' }}
                 </span>
+                <!-- Marked in the queue, not only in the detail: a nurse
+                     planning a round needs to see which doses they cannot give
+                     before they walk to the bed. -->
+                @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
+                  <span
+                    class="emar__queue-chip emar__queue-chip--blocked"
+                    [attr.data-testid]="'emar-pharm-chip-' + task.id"
+                    >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span
+                  >
+                }
               </button>
             </li>
           }
@@ -60,6 +70,20 @@
                 Close
               </button>
             </header>
+
+            <!-- Pharmacist verification outstanding (Tier 2 item 33). Stated
+                 before the scan steps, not next to the disabled button: the
+                 nurse should know the dose cannot be given before they spend
+                 time scanning for it. Hold stays available and is the right
+                 action here. -->
+            @if (blockedPendingPharmacist()) {
+              <div class="emar__blocked" role="status" data-testid="emar-pharmacist-blocked">
+                <h3 class="emar__blocked-title">
+                  {{ 'EMAR.PHARMACIST_BLOCKED_TITLE' | translate }}
+                </h3>
+                <p class="emar__blocked-body">{{ 'EMAR.PHARMACIST_BLOCKED_BODY' | translate }}</p>
+              </div>
+            }
 
             <section class="emar__scan">
               <h3>1. Scan patient wristband</h3>
@@ -196,6 +220,9 @@
                 class="emar__btn emar__btn--success"
                 data-testid="emar-administer-given"
                 [disabled]="!canAdminister() || administerInFlight()"
+                [attr.title]="
+                  blockedPendingPharmacist() ? ('EMAR.PHARMACIST_BLOCKED_TITLE' | translate) : null
+                "
                 (click)="administer('GIVEN')"
               >
                 Record GIVEN

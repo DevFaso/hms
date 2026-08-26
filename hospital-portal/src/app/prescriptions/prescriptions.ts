@@ -81,6 +81,12 @@ export class PrescriptionsComponent implements OnInit {
   /** Id of the prescription currently being signed, so only its button spins. */
   signingId = signal<string | null>(null);
 
+  /* ── Pharmacist verification (Tier 2 item 33) ── */
+  showVerifyModal = signal(false);
+  verifyTarget = signal<PrescriptionResponse | null>(null);
+  verifyNote = '';
+  verifying = signal(false);
+
   /** CDS rule-engine cards from the most recent submit attempt. */
   cdsAdvisories = signal<CdsCard[]>([]);
   /**
@@ -363,6 +369,78 @@ export class PrescriptionsComponent implements OnInit {
         const msg = this.extractErrorMessage(err);
         this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
         this.signingId.set(null);
+      },
+    });
+  }
+
+  /* ── Pharmacist verification (Tier 2 item 33) ───────────────────────── */
+
+  /**
+   * Roles the backend's `/pharmacist-verify` endpoint admits. Kept as one
+   * named list rather than pasted at each call site: the recurring defect in
+   * this codebase is copies of a role list drifting apart (#523).
+   */
+  private static readonly VERIFIER_ROLES = [
+    'ROLE_PHARMACIST',
+    'ROLE_PHARMACY_VERIFIER',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /**
+   * Offered when the prescription is in scope for the gate, nobody has
+   * verified the version currently on the row, and it has reached a state
+   * worth verifying — a draft is still freely rewritable, and the edit would
+   * clear the verification the moment it happened.
+   *
+   * <p>Whether the CALLER may verify is still the backend's call: it refuses
+   * the prescribing clinician even when they hold a pharmacist role, and the
+   * row does not carry the prescriber's user id to decide that here. The role
+   * check below only hides a button that would certainly 403; the
+   * self-verification refusal surfaces verbatim.
+   */
+  canPharmacistVerify(p: PrescriptionResponse): boolean {
+    return (
+      !!p.requiresPharmacistVerification &&
+      !p.pharmacistVerifiedAt &&
+      (p.status === 'SIGNED' || p.status === 'TRANSMITTED') &&
+      this.roleContext.hasAnyActiveRole(PrescriptionsComponent.VERIFIER_ROLES)
+    );
+  }
+
+  openVerifyModal(p: PrescriptionResponse): void {
+    this.verifyTarget.set(p);
+    this.verifyNote = '';
+    this.showVerifyModal.set(true);
+  }
+
+  closeVerifyModal(): void {
+    this.showVerifyModal.set(false);
+    this.verifyTarget.set(null);
+    this.verifyNote = '';
+  }
+
+  submitPharmacistVerify(): void {
+    const target = this.verifyTarget();
+    if (!target || this.verifying()) return;
+    this.verifying.set(true);
+    this.prescriptionService.pharmacistVerify(target.id, this.verifyNote).subscribe({
+      next: () => {
+        this.verifying.set(false);
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.PHARMACIST_VERIFIED'));
+        this.closeVerifyModal();
+        this.load();
+      },
+      error: (err: unknown) => {
+        // The refusals are all things the pharmacist must read: already
+        // verified, not yours to verify, wrong status. Collapsing them into
+        // one string would leave them with no idea what to do next — the
+        // same reason signPrescription surfaces its message verbatim.
+        this.verifying.set(false);
+        const msg = this.extractErrorMessage(err);
+        this.toast.error(
+          msg || this.translate.instant('PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
+        );
       },
     });
   }

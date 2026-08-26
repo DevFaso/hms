@@ -188,6 +188,17 @@
                       <span class="material-symbols-outlined">approval</span>
                     </button>
                   }
+                  @if (canPharmacistVerify(p)) {
+                    <button
+                      class="action-link sign-link"
+                      (click)="openVerifyModal(p)"
+                      [title]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.PHARMACIST_VERIFY' | translate"
+                      [attr.data-testid]="'rx-pharmacist-verify-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">verified_user</span>
+                    </button>
+                  }
                   <button
                     class="action-link"
                     (click)="openDispatchModal(p)"
@@ -274,7 +285,12 @@
           <!-- Signature + safeguard evidence (P2 #15/#16). The mapper emitted
                all of this and no template read it — evidence nobody can see is
                not evidence. -->
-          @if (rx.signedAt || rx.requiresCosign || rx.controlledSubstance) {
+          @if (
+            rx.signedAt ||
+            rx.requiresCosign ||
+            rx.controlledSubstance ||
+            rx.requiresPharmacistVerification
+          ) {
             <div class="detail-notes" data-testid="rx-evidence">
               @if (rx.signedAt) {
                 <div class="detail-field">
@@ -303,6 +319,38 @@
                       : ('PRESCRIPTIONS.TWO_FACTOR_PENDING' | translate)
                   }}</span>
                 </div>
+              }
+              <!-- Pharmacist verification (Tier 2 item 33). Shown whenever the
+                   prescription is in scope, verified or not: "pending" is the
+                   state a nurse most needs to see, because it is the one that
+                   refuses the dose. -->
+              @if (rx.requiresPharmacistVerification) {
+                <div class="detail-field" data-testid="rx-pharmacist-verification">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.PHARMACIST_VERIFY_STATE' | translate
+                  }}</span
+                  ><span class="field-value">{{
+                    rx.pharmacistVerifiedAt
+                      ? (rx.pharmacistVerifiedAt | date: 'medium')
+                      : ('PRESCRIPTIONS.PHARMACIST_VERIFY_PENDING' | translate)
+                  }}</span>
+                </div>
+                @if (rx.pharmacistVerifiedAt && rx.pharmacistVerifiedByName) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACIST_VERIFIED_BY' | translate
+                    }}</span
+                    ><span class="field-value">{{ rx.pharmacistVerifiedByName }}</span>
+                  </div>
+                }
+                @if (rx.pharmacistVerificationNote) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE_RECORDED' | translate
+                    }}</span
+                    ><span class="field-value">{{ rx.pharmacistVerificationNote }}</span>
+                  </div>
+                }
               }
               @if (rx.status === 'SIGNED' && !rx.signatureValue) {
                 <p class="muted">{{ 'PRESCRIPTIONS.SIGNED_PRE_V118' | translate }}</p>
@@ -649,6 +697,86 @@
             dispatching()
               ? ('PRESCRIPTIONS.DISPATCH_SENDING' | translate)
               : ('PRESCRIPTIONS.DISPATCH_SEND' | translate)
+          }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ PHARMACIST VERIFICATION (Tier 2 item 33) ═══
+     A modal rather than a bare button: this is the check that stands between
+     a prescriber and a nurse giving a controlled drug, so it gets a deliberate
+     pause and somewhere to put what was checked. The note is optional — the
+     common case is a clean check with nothing to add. -->
+@if (showVerifyModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeVerifyModal()"
+    (keydown.escape)="closeVerifyModal()"
+    data-testid="rx-verify-modal"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="btn-close"
+          (click)="closeVerifyModal()"
+          [title]="'COMMON.CANCEL' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_FOR' | translate }}:
+          <strong>{{
+            verifyTarget()?.medicationDisplayName || verifyTarget()?.medicationName
+          }}</strong>
+          — {{ verifyTarget()?.dosage }} {{ verifyTarget()?.frequency }}
+        </p>
+        <p class="muted">{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_HINT' | translate }}</p>
+        <label class="form-field">
+          <span>{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE' | translate }}</span>
+          <textarea
+            rows="3"
+            maxlength="1000"
+            [(ngModel)]="verifyNote"
+            name="verifyNote"
+            [placeholder]="'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE_PLACEHOLDER' | translate"
+            data-testid="rx-verify-note"
+          ></textarea>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="verifying()"
+          (click)="closeVerifyModal()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="verifying()"
+          (click)="submitPharmacistVerify()"
+          data-testid="rx-verify-submit"
+        >
+          {{
+            verifying()
+              ? ('PRESCRIPTIONS.PHARMACIST_VERIFYING' | translate)
+              : ('PRESCRIPTIONS.PHARMACIST_VERIFY_CONFIRM' | translate)
           }}
         </button>
       </div>
