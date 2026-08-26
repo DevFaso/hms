@@ -5,6 +5,8 @@ import com.example.hms.enums.integration.IntegrationMessageStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.service.integration.MllpInboundAdtService;
 import com.example.hms.service.integration.MllpInboundLabService;
+import com.example.hms.service.integration.MllpInboundMergeService;
+import com.example.hms.utility.Hl7v2MessageBuilder.ParsedMergeMessage;
 import com.example.hms.service.integration.MllpInboundOutcome;
 import com.example.hms.service.integration.message.IntegrationMessageRecorder;
 import com.example.hms.service.platform.MllpAllowedSenderService;
@@ -12,6 +14,7 @@ import com.example.hms.utility.Hl7v2MessageBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,6 +38,7 @@ class Hl7MessageDispatcherTest {
     @Mock private MllpAllowedSenderService allowlist;
     @Mock private MllpInboundLabService inboundLab;
     @Mock private MllpInboundAdtService inboundAdt;
+    @Mock private MllpInboundMergeService inboundMerge;
     @Mock private IntegrationMessageRecorder messageRecorder;
 
     // The dispatcher is constructed manually rather than via @InjectMocks
@@ -52,6 +56,7 @@ class Hl7MessageDispatcherTest {
             allowlist,
             inboundLab,
             inboundAdt,
+            inboundMerge,
             messageRecorder
         );
 
@@ -303,5 +308,83 @@ class Hl7MessageDispatcherTest {
         // recording at both layers would double-count successful
         // ingestions in the DLQ surface.
         verifyNoInteractions(messageRecorder);
+    }
+
+    /* ── ADT^A40 patient merge (Tier 2 item 41) ──────────────────────── */
+
+    private static final String A40 =
+        "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260826120000||ADT^A40|CTRL-A40|P|2.5\r"
+        + "EVN|A40|20260826120000\r"
+        + "PID|1||MRN-SURVIVOR^^^HOSP1^MR||Traore^Awa||19900101|F\r"
+        + "MRG|MRN-RETIRED^^^HOSP1^MR\r";
+
+    @Test
+    void routesA40ToTheMergeHandlerAndNotTheDemographicOne() {
+        // The failure this guards is silent: handleAdt would have parsed the
+        // PID, never looked for MRG, and applied a demographic update instead
+        // of a merge — the wrong thing done quietly rather than a reject.
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.ACCEPTED);
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.60:1024")).contains("MSA|AA|CTRL-A40");
+
+        verify(inboundMerge).processMerge(any(), eq(hospital),
+            eq("REGISTRATION"), eq("HOSP1"), eq("CTRL-A40"));
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void passesTheSurvivorAndRetireeToTheMergeServiceTheRightWayRound() {
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.ACCEPTED);
+
+        dispatcher.dispatch(A40, "10.0.0.60:1024");
+
+        ArgumentCaptor<ParsedMergeMessage> parsed = ArgumentCaptor.forClass(ParsedMergeMessage.class);
+        verify(inboundMerge).processMerge(parsed.capture(), any(), anyString(), anyString(), any());
+        // Backwards here merges away the patient that was meant to survive.
+        assertThat(parsed.getValue().survivingMrn()).isEqualTo("MRN-SURVIVOR");
+        assertThat(parsed.getValue().priorMrn()).isEqualTo("MRN-RETIRED");
+    }
+
+    @Test
+    void anA40WithoutAnMrgSegmentIsAeAndNeverReachesTheMergeService() {
+        allowSender();
+
+        String noMrg = "MSH|^~\\&|REGISTRATION|HOSP1|HMS|HOSP1|20260826||ADT^A40|CTRL-BAD|P|2.5\r"
+                     + "PID|1||MRN-SURVIVOR||Traore^Awa\r";
+
+        assertThat(dispatcher.dispatch(noMrg, "10.0.0.61:1")).contains("MSA|AE|CTRL-BAD");
+        verifyNoInteractions(inboundMerge);
+        verify(inboundAdt, never()).processAdt(any(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void aCrossTenantMergeRejectionBecomesAr() {
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_CROSS_TENANT);
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.62:1")).contains("MSA|AR|CTRL-A40");
+    }
+
+    @Test
+    void anUnknownIdentifierMergeRejectionBecomesAe() {
+        allowSender();
+        when(inboundMerge.processMerge(any(), eq(hospital), anyString(), anyString(), any()))
+            .thenReturn(MllpInboundOutcome.REJECTED_NOT_FOUND);
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.63:1")).contains("MSA|AE|CTRL-A40");
+    }
+
+    @Test
+    void anA40FromAnUnknownSenderNeverReachesTheMergeService() {
+        // The allowlist gate runs before any parsing or domain work.
+        when(allowlist.resolveHospital(anyString(), anyString())).thenReturn(Optional.empty());
+
+        assertThat(dispatcher.dispatch(A40, "10.0.0.64:1")).contains("MSA|AR|CTRL-A40");
+        verifyNoInteractions(inboundMerge);
     }
 }

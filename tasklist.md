@@ -1421,12 +1421,35 @@ that exists rather than inventing one.
   `CredentialRenewalService`'s javadoc; do not add a block without a new
   decision. Thresholds moved out of the dashboard's inline if/else into
   `LicenseAlertStage` so the sweep and the screen cannot drift.
-- [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
-  alias reassignment and audit shipped in #439/#449 and explicitly deferred
-  A40. This is the inbound trigger for work that already exists.
-- [ ] 41. **HL7 A40 patient-merge inbound.** The merge service, REST surface,
-  alias reassignment and audit shipped in #439/#449 and explicitly deferred
-  A40. This is the inbound trigger for work that already exists.
+- [x] 41. **HL7 A40 patient-merge inbound.**
+  ✅ DONE 2026-08-26 (**PR #527** `feature/hl7-a40-patient-merge`, no migration).
+  The merge service, alias reassignment and PATIENT_MERGE audit did already
+  exist from #439/#449, so this is the inbound trigger — but it is **not** the
+  thin adapter the entry implied, and the reason is a security one.
+  ⚠ **EVERY EMPI TENANT GUARD IS A NO-OP ON AN MLLP THREAD.**
+  `EmpiServiceImpl.isVisibleToCaller` resolves the caller's hospital from the
+  security context and treats a **null** active hospital as "unscoped, allow";
+  `requirePatientInTenant` returns early on the same null. There is no security
+  context on an MLLP worker thread, so wiring A40 straight through to
+  `mergePatients` would have handed an allowlisted sender the ability to merge
+  **any two patients in the system** — the allowlist decides which sender may
+  connect, nothing would have decided which patients they may merge. So
+  `MllpInboundMergeServiceImpl` enforces the boundary itself: **BOTH** patients
+  must be registered at the receiving hospital. Both, not just the survivor —
+  merging a stranger's record INTO a local patient is as damaging as the
+  reverse. **Direction is the other risk:** in an A40 the PID survives and MRG-1
+  is retired; backwards merges away the patient that was meant to survive, and
+  it is not reversible from the receiving side. Named rather than positional in
+  `ParsedMergeMessage`, and pinned by tests at both the parser and the service.
+  A40 gets its **own dispatcher branch**, deliberately not another entry in
+  `ACCEPTED_ADT_EVENTS`: routed through `handleAdt` it would have parsed the
+  PID, never looked for MRG, and silently applied a demographic update instead
+  of a merge — a quiet wrong-thing rather than a reject. Merges are
+  `AUTOMATED`, never `MANUAL`: no human made the call and `mergedBy` is null on
+  this path, so the sender and MSH-10 go in the notes as the row's only
+  provenance. Unknown identifiers are rejected, never provisioned. A resend
+  after the merge is ACCEPTED (both MRNs resolve to one patient by then) so a
+  repeat does not park a permanent AE in the sender's queue.
 
 ## E6 — Interop breadth that fits this deployment
 
