@@ -125,4 +125,16 @@ describe('WalkInDialogComponent', () => {
 
     expect(component.departmentId()).toBe('chosen-by-hand');
   });
+
+  it('degrades to an empty department list rather than breaking the dialog', () => {
+    // A failed /departments load must not leave the receptionist staring at
+    // a dialog that cannot be submitted with no explanation — the field
+    // renders empty and the required-check gives them the message.
+    const httpMock = TestBed.inject(HttpTestingController);
+    httpMock
+      .match('/departments')
+      .forEach((r) => r.flush('nope', { status: 500, statusText: 'Server Error' }));
+
+    expect(component.departments()).toEqual([]);
+  });
 });

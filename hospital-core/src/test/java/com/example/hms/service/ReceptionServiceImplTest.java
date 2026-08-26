@@ -69,6 +69,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -831,6 +832,48 @@ class ReceptionServiceImplTest {
 
             assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("waitlists a patient whose first hospital is elsewhere")
+        void waitlistsACrossRegisteredPatient() {
+            // Same trap as the snapshot: the scoped findById filters on
+            // Patient.hospital_id — the hospital the patient was FIRST
+            // registered at — so this patient was previously unwaitlistable.
+            WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
+            req.setDepartmentId(departmentId);
+            req.setPatientId(patientId);
+            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
+            when(patientRepo.findById(patientId)).thenReturn(Optional.empty());
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(true);
+            when(waitlistRepo.save(any(AppointmentWaitlist.class)))
+                    .thenAnswer(i -> i.getArgument(0));
+
+            assertThatCode(() -> service.addToWaitlist(req, hospitalId, "receptionist1"))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        @DisplayName("refuses a patient not registered at this hospital")
+        void refusesAnUnregisteredPatient() {
+            // Dropping the scope filter moves access control into this
+            // method. Without this check the unscoped lookup would let any
+            // hospital waitlist any patient by id.
+            WaitlistEntryRequestDTO req = new WaitlistEntryRequestDTO();
+            req.setDepartmentId(departmentId);
+            req.setPatientId(patientId);
+            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(departmentRepo.findById(departmentId)).thenReturn(Optional.of(department));
+            when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepo.existsByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(false);
+
+            assertThatThrownBy(() -> service.addToWaitlist(req, hospitalId, "user"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(waitlistRepo, never()).save(any(AppointmentWaitlist.class));
         }
     }
 
