@@ -1522,9 +1522,13 @@ that exists rather than inventing one.
 
 ## E7 — Engagement
 
-- [ ] 46. **Day-of self check-in / kiosk.** E-check-in with dynamic
-  questionnaires covers BEFORE the visit; arrival at the desk has no
-  self-service path. Verified zero code (`SelfCheckIn`, `Kiosk`).
+- [ ] 46. **Day-of self check-in / kiosk.** ⏸ **DEFERRED by the user
+  2026-08-27 — not needed for now.** Not a non-goal: the reasoning below still
+  holds and it can be picked up when arrival volume asks for it. Do not
+  propose it as pickable work in the meantime.
+  E-check-in with dynamic questionnaires covers BEFORE the visit; arrival at
+  the desk has no self-service path. Verified zero code (`SelfCheckIn`,
+  `Kiosk`).
 - [ ] 47. **Standardized PROs — starting with EPDS.** Behavioral health is
   entirely absent (no PHQ-9, no GAD-7 anywhere). The one that belongs in this
   product first is the **Edinburgh Postnatal Depression Scale** in the
