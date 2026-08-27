@@ -16,6 +16,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -45,6 +46,7 @@ export class EncountersComponent implements OnInit {
   private readonly encounterService = inject(EncounterService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
+  private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly auth = inject(AuthService);
@@ -97,7 +99,14 @@ export class EncountersComponent implements OnInit {
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<{ id: string; name: string }[]>([]);
   private allStaff: StaffResponse[] = [];
-  departments = signal<{ id: string; name: string }[]>([]);
+  departments = signal<DepartmentOption[]>([]);
+  departmentsLoading = signal(false);
+  /**
+   * Distinguished from an empty list on purpose: "this hospital has no
+   * departments" and "we could not ask" look identical in a bare dropdown and
+   * mean opposite things.
+   */
+  departmentsFailed = signal(false);
 
   // Patient picker
   patientQuery = signal('');
@@ -247,22 +256,39 @@ export class EncountersComponent implements OnInit {
     this.loadDepartmentsFor(hospitalId);
   }
 
+  /**
+   * Load the departments a user may pick from.
+   *
+   * <p>This used to build the list from `allStaff` — collecting the distinct
+   * `departmentId` values off staff members — so a department appeared only
+   * if somebody was assigned to it. A real, active department with no staff
+   * yet was invisible, which is why "General Practices" could be edited in
+   * the admin screens and still be unselectable here. The nurse then had no
+   * option to choose, left the field on its empty value, and got a 400 from
+   * `departmentId: must not be null`.
+   *
+   * <p>`/departments/active-minimal` is purpose-built for this and already
+   * permits NURSE, so nothing forced the workaround.
+   */
   loadDepartmentsFor(hospitalId: string): void {
     if (!hospitalId) {
       this.departments.set([]);
+      this.departmentsFailed.set(false);
       return;
     }
-    const seen = new Set<string>();
-    const depts = this.allStaff
-      .filter((s) => s.hospitalId === hospitalId && s.departmentId)
-      .reduce<{ id: string; name: string }[]>((acc, s) => {
-        if (!seen.has(s.departmentId!)) {
-          seen.add(s.departmentId!);
-          acc.push({ id: s.departmentId!, name: s.departmentName || s.departmentId! });
-        }
-        return acc;
-      }, []);
-    this.departments.set(depts);
+    this.departmentsLoading.set(true);
+    this.departmentsFailed.set(false);
+    this.departmentLookup.getActiveDepartments(hospitalId).subscribe({
+      next: (depts) => {
+        this.departments.set(depts);
+        this.departmentsLoading.set(false);
+      },
+      error: () => {
+        this.departments.set([]);
+        this.departmentsFailed.set(true);
+        this.departmentsLoading.set(false);
+      },
+    });
   }
 
   // ── CRUD ──

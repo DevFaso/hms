@@ -2189,7 +2189,14 @@
     "NOTE_COSIGN_PENDING": "En espera de la contrafirma del médico adjunto",
     "COSIGN_NOTE": "Contrafirmar la nota",
     "NOTE_COSIGNING": "Contrafirmando…",
-    "NOTE_COSIGNED_AT": "Contrafirmada"
+    "NOTE_COSIGNED_AT": "Contrafirmada",
+    "DEPT_CHOOSE": "Seleccione un departamento…",
+    "DEPT_LOADING": "Cargando departamentos…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Seleccione primero un hospital",
+    "DEPT_NONE": "No hay departamentos activos",
+    "DEPT_NONE_HINT": "Este hospital no tiene departamentos activos. Un administrador debe crear uno antes de poder registrar un encuentro.",
+    "DEPT_LOAD_FAILED": "Departamentos no disponibles",
+    "DEPT_LOAD_FAILED_HINT": "No se pudo cargar la lista de departamentos. Esto no significa que no haya ninguno — vuelva a intentarlo."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
