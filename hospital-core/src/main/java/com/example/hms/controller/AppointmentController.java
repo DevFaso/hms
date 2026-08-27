@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.payload.dto.AppointmentFilterDTO;
+import com.example.hms.security.audit.PatientAccessAudited;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
@@ -84,6 +85,13 @@ public class AppointmentController {
     private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
 
     // ---- LIST BY PATIENT USERNAME ----
+    // Not attributable by PatientAccessAuditInterceptor: the patient arrives
+    // as a username, and turning that into an id is a database lookup the
+    // interceptor should not be doing on every request. This IS a real read of
+    // one patient's data, so the gap is marked rather than left to look like
+    // an oversight — the fix is an explicit emission in the service, which
+    // already resolves the patient.
+    @PatientAccessAudited(skip = true)
     @GetMapping("/patients/username/{patientUsername}")
     @PreAuthorize(APPOINTMENT_READ_ROLES)
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientUsername(
