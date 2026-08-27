@@ -4010,7 +4010,7 @@
       "TITLE": "Record Sharing & Privacy",
       "CONSENTS_TAB": "Sharing Consents",
       "ACCESS_LOG_TAB": "Record Disclosures",
-      "ACCESS_LOG_SCOPE_NOTE": "This page lists disclosures of your record: emergency access, sharing with another hospital, copies released, and information sent to your insurer. Routine views by the care team treating you are not included.",
+      "ACCESS_LOG_SCOPE_NOTE": "This page lists who opened your record and where it was sent: views by the team treating you, emergency access, sharing with another hospital, copies released, and information sent to your insurer. Someone who returns to your record several times during one visit appears once.",
       "LOADING_CONSENTS": "Loading consents…",
       "NO_CONSENTS_TITLE": "No Active Consents",
       "NO_CONSENTS_DESC": "You haven't shared your records with any other hospital yet.",

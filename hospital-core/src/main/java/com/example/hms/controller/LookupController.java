@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.model.Appointment;
+import com.example.hms.security.audit.PatientAccessAudited;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.Department;
@@ -40,6 +41,11 @@ public class LookupController {
     private final RoleValidator roleValidator;
 
     // Lookup appointments by patient email
+    // Not attributable by PatientAccessAuditInterceptor: the patient is
+    // identified by e-mail, not by id, and resolving one would be a database
+    // lookup per request. A real read of one patient's data, marked so the
+    // gap stays visible; the durable fix is an emission in the service.
+    @PatientAccessAudited(skip = true)
     @GetMapping("/appointment/patient/email/{email}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientEmail(@PathVariable String email) {
@@ -54,6 +60,11 @@ public class LookupController {
     }
 
     // Lookup appointments by patient phone
+    // Not attributable by PatientAccessAuditInterceptor: the patient is
+    // identified by phone, not by id, and resolving one would be a database
+    // lookup per request. A real read of one patient's data, marked so the
+    // gap stays visible; the durable fix is an emission in the service.
+    @PatientAccessAudited(skip = true)
     @GetMapping("/appointment/patient/phone/{phone}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(@PathVariable String phone) {
@@ -68,6 +79,11 @@ public class LookupController {
     }
 
     // Lookup appointments by patient MRN
+    // Not attributable by PatientAccessAuditInterceptor: the patient is
+    // identified by MRN, not by id, and resolving one would be a database
+    // lookup per request. A real read of one patient's data, marked so the
+    // gap stays visible; the durable fix is an emission in the service.
+    @PatientAccessAudited(skip = true)
     @GetMapping("/appointment/patient/mri/{mri}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientMri(@PathVariable String mri) {

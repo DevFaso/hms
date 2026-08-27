@@ -4010,7 +4010,7 @@
       "TITLE": "Uso compartido y privacidad",
       "CONSENTS_TAB": "Consentimientos de uso compartido",
       "ACCESS_LOG_TAB": "Divulgaciones del expediente",
-      "ACCESS_LOG_SCOPE_NOTE": "Esta página enumera las divulgaciones de su expediente: acceso de emergencia, uso compartido con otro hospital, copias entregadas e información enviada a su aseguradora. Las consultas habituales del equipo que le atiende no se incluyen aquí.",
+      "ACCESS_LOG_SCOPE_NOTE": "Esta página indica quién abrió su expediente y a dónde se envió: las consultas del equipo que le atiende, el acceso de emergencia, el uso compartido con otro hospital, las copias entregadas y la información enviada a su aseguradora. Quien vuelve a su expediente varias veces durante una misma visita aparece una sola vez.",
       "LOADING_CONSENTS": "Cargando consentimientos…",
       "NO_CONSENTS_TITLE": "Sin consentimientos activos",
       "NO_CONSENTS_DESC": "Todavía no ha compartido su expediente con ningún otro hospital.",

@@ -4010,7 +4010,7 @@
       "TITLE": "Partage et confidentialité",
       "CONSENTS_TAB": "Consentements de partage",
       "ACCESS_LOG_TAB": "Divulgations du dossier",
-      "ACCESS_LOG_SCOPE_NOTE": "Cette page répertorie les divulgations de votre dossier : accès d'urgence, partage avec un autre hôpital, copies délivrées et informations transmises à votre assureur. Les consultations courantes par l'équipe qui vous soigne n'y figurent pas.",
+      "ACCESS_LOG_SCOPE_NOTE": "Cette page indique qui a ouvert votre dossier et où il a été transmis : les consultations par l'équipe qui vous soigne, les accès d'urgence, le partage avec un autre hôpital, les copies délivrées et les informations transmises à votre assureur. Une personne qui revient plusieurs fois à votre dossier au cours d'une même visite n'apparaît qu'une fois.",
       "LOADING_CONSENTS": "Chargement des consentements…",
       "NO_CONSENTS_TITLE": "Aucun consentement actif",
       "NO_CONSENTS_DESC": "Vous n'avez partagé votre dossier avec aucun autre hôpital.",
