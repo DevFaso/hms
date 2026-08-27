@@ -8,10 +8,12 @@
       <!-- Cross-tenant scope chip — super-admin only
            (docs/super-admin-cross-tenant-design.md). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span>
-        {{ 'LAB_RESULTS.NEW_RESULT' | translate }}
-      </button>
+      @if (canEnterResults()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'LAB_RESULTS.NEW_RESULT' | translate }}
+        </button>
+      }
     </div>
   </div>
 
