@@ -14,6 +14,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
@@ -50,6 +51,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly admissionService = inject(AdmissionService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
+  private readonly departmentLookup = inject(DepartmentLookupService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
@@ -85,7 +87,9 @@ export class AdmissionsComponent implements OnInit {
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
   private allStaff: StaffResponse[] = [];
-  departments = signal<{ id: string; name: string }[]>([]);
+  departments = signal<DepartmentOption[]>([]);
+  departmentsLoading = signal(false);
+  departmentsFailed = signal(false);
 
   // Patient picker
   patientQuery = signal('');
@@ -289,22 +293,34 @@ export class AdmissionsComponent implements OnInit {
     this.loadDepartmentsFor(hospitalId);
   }
 
+  /**
+   * Same fix as the encounters modal: the list used to be derived from
+   * `allStaff`, so a department with nobody assigned to it never appeared.
+   *
+   * <p>Unlike encounters, department stays OPTIONAL here —
+   * AdmissionRequestDTO.departmentId carries no @NotNull, so "any department"
+   * is a legitimate answer on this form and the empty option keeps its
+   * meaning.
+   */
   loadDepartmentsFor(hospitalId: string): void {
     if (!hospitalId) {
       this.departments.set([]);
+      this.departmentsFailed.set(false);
       return;
     }
-    const seen = new Set<string>();
-    const depts = this.allStaff
-      .filter((s) => s.hospitalId === hospitalId && s.departmentId)
-      .reduce<{ id: string; name: string }[]>((acc, s) => {
-        if (!seen.has(s.departmentId!)) {
-          seen.add(s.departmentId!);
-          acc.push({ id: s.departmentId!, name: s.departmentName || s.departmentId! });
-        }
-        return acc;
-      }, []);
-    this.departments.set(depts);
+    this.departmentsLoading.set(true);
+    this.departmentsFailed.set(false);
+    this.departmentLookup.getActiveDepartments(hospitalId).subscribe({
+      next: (depts) => {
+        this.departments.set(depts);
+        this.departmentsLoading.set(false);
+      },
+      error: () => {
+        this.departments.set([]);
+        this.departmentsFailed.set(true);
+        this.departmentsLoading.set(false);
+      },
+    });
   }
 
   openCreate(): void {

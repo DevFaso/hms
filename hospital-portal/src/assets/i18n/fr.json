@@ -2189,7 +2189,14 @@
     "NOTE_COSIGN_PENDING": "En attente de la contre-signature du médecin responsable",
     "COSIGN_NOTE": "Contresigner la note",
     "NOTE_COSIGNING": "Contre-signature…",
-    "NOTE_COSIGNED_AT": "Contresignée"
+    "NOTE_COSIGNED_AT": "Contresignée",
+    "DEPT_CHOOSE": "Sélectionner un département…",
+    "DEPT_LOADING": "Chargement des départements…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Sélectionnez d'abord un hôpital",
+    "DEPT_NONE": "Aucun département actif",
+    "DEPT_NONE_HINT": "Cet hôpital n'a aucun département actif. Un administrateur doit en ajouter un avant de pouvoir créer une consultation.",
+    "DEPT_LOAD_FAILED": "Départements indisponibles",
+    "DEPT_LOAD_FAILED_HINT": "La liste des départements n'a pas pu être chargée. Cela ne signifie pas qu'il n'y en a aucun — veuillez réessayer."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
