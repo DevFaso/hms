@@ -22,7 +22,6 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
-import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.PatientConsentRequestDTO;
@@ -160,7 +159,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final RefillRequestRepository refillRequestRepository;
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
-    private final AuditEventLogService auditEventLogService;
     private final com.example.hms.service.disclosure.DisclosureAccountingService disclosureAccountingService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
@@ -1113,19 +1111,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .startDate(pcp.getStartDate())
                 .endDate(pcp.getEndDate())
                 .current(pcp.isCurrent())
-                .build();
-    }
-
-    /** Map an AuditEventLogResponseDTO to an AccessLogEntry for the patient portal. */
-    private AccessLogEntryDTO toAccessLogEntry(AuditEventLogResponseDTO audit) {
-        return AccessLogEntryDTO.builder()
-                .actor(audit.getUserName())
-                .eventType(audit.getEventType())
-                .entityType(audit.getEntityType())
-                .resourceId(audit.getResourceId())
-                .description(audit.getEventDescription())
-                .status(audit.getStatus())
-                .timestamp(audit.getEventTimestamp())
                 .build();
     }
 

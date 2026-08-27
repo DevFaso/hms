@@ -13,7 +13,6 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
-import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.PatientConsentRequestDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
@@ -47,7 +46,6 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.AppointmentService;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.BillingInvoiceService;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.DischargeSummaryService;
@@ -88,7 +86,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -124,7 +121,6 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DischargeSummaryService dischargeSummaryService;
     @Mock private PatientPrimaryCareService primaryCareService;
-    @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.disclosure.DisclosureAccountingService disclosureAccountingService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
@@ -1180,8 +1176,9 @@ class PatientPortalServiceImplPhase2Test {
             service.getMyAccessLog(auth, pageable);
 
             verify(disclosureAccountingService).getEntries(patientId, null, null, pageable);
-            verify(auditEventLogService, never())
-                    .getAuditLogsByTarget(anyString(), anyString(), any());
+            // No "never called the old query" assertion here: the service no
+            // longer holds an AuditEventLogService at all, so the compiler
+            // enforces that far harder than a mock verification could.
         }
 
         @Test

@@ -29,6 +29,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -91,7 +92,7 @@ class DisclosureAccountingServiceImplTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Collection<AuditEventType>> types =
             ArgumentCaptor.forClass(Collection.class);
-        org.mockito.Mockito.verify(auditRepository)
+        verify(auditRepository)
             .findDisclosuresForPatient(eq(patientId), types.capture(), eq(null), eq(null), eq(pageable));
 
         assertThat(types.getValue())
@@ -187,7 +188,7 @@ class DisclosureAccountingServiceImplTest {
 
         DisclosureAccountingDTO out = service.getAccounting(patientId, from, to, pageable);
 
-        org.mockito.Mockito.verify(auditRepository)
+        verify(auditRepository)
             .findDisclosuresForPatient(eq(patientId), any(), eq(from), eq(to), eq(pageable));
         // Echoed back so a printed report states the window it covers rather
         // than implying it covers everything.
