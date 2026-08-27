@@ -17,6 +17,7 @@ import com.example.hms.mapper.PatientInsuranceMapper;
 import com.example.hms.mapper.PatientProblemMapper;
 import com.example.hms.mapper.PatientSurgicalHistoryMapper;
 import com.example.hms.mapper.PrescriptionMapper;
+import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
@@ -51,6 +52,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -116,6 +118,8 @@ class PatientRecordSharingServiceImplTest {
     @Mock private ObjectMapper objectMapper;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ConsentResolutionService consentResolutionService;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     @InjectMocks
     private PatientRecordSharingServiceImpl service;
@@ -513,6 +517,64 @@ class PatientRecordSharingServiceImplTest {
             service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
 
             verify(auditRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("attributes the release to the clinician who made it, not the patient")
+        void auditNamesTheClinicianNotThePatient() throws Exception {
+            // THE REGRESSION. This row used to be built with
+            // .user(patient.getUser()) -- the subject of the record rather
+            // than whoever released it -- so the patient's own portal told
+            // them THEY had shared their chart with another hospital, and a
+            // reviewer asking "who released this?" had no answer on the row.
+            // Tier 2 item 39.
+            UUID actorId = UUID.randomUUID();
+            User clinician = new User();
+            clinician.setId(actorId);
+            clinician.setUsername("him.clerk");
+            when(roleValidator.getCurrentUserId()).thenReturn(actorId);
+            when(userRepository.findById(actorId)).thenReturn(Optional.of(clinician));
+
+            stubEmptyClinicalData();
+            when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(
+                patientId, fromHospitalId, toHospitalId))
+                .thenReturn(Optional.of(activeConsent));
+
+            service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
+
+            ArgumentCaptor<AuditEventLog> captor = ArgumentCaptor.forClass(AuditEventLog.class);
+            verify(auditRepository).save(captor.capture());
+            AuditEventLog saved = captor.getValue();
+
+            assertThat(saved.getUser()).isNotNull();
+            assertThat(saved.getUser().getId())
+                .as("the audit must name the releaser, not the subject")
+                .isEqualTo(actorId)
+                .isNotEqualTo(patientId);
+            // And it must be findable from the patient's side.
+            assertThat(saved.getPatientId()).isEqualTo(patientId);
+        }
+
+        @Test
+        @DisplayName("leaves the actor null when there is no principal rather than blaming the patient")
+        void auditLeavesActorNullWithoutAPrincipal() throws Exception {
+            // Null becomes actorType=SYSTEM downstream, which is at least
+            // true. Substituting the patient would name the wrong person,
+            // and only one of those two is legible as a gap to whoever
+            // reviews the trail later.
+            when(roleValidator.getCurrentUserId()).thenReturn(null);
+
+            stubEmptyClinicalData();
+            when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(
+                patientId, fromHospitalId, toHospitalId))
+                .thenReturn(Optional.of(activeConsent));
+
+            service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
+
+            ArgumentCaptor<AuditEventLog> captor = ArgumentCaptor.forClass(AuditEventLog.class);
+            verify(auditRepository).save(captor.capture());
+            assertThat(captor.getValue().getUser()).isNull();
+            assertThat(captor.getValue().getPatientId()).isEqualTo(patientId);
         }
     }
 

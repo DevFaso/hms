@@ -35,6 +35,7 @@ import com.example.hms.model.PatientSurgicalHistory;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.PatientImmunization;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AdvanceDirectiveResponseDTO;
 import com.example.hms.payload.dto.EncounterHistoryResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -179,6 +180,14 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final ConsentResolutionService consentResolutionService;
+    /**
+     * Only used to attribute the RECORD_SHARE audit row to the clinician who
+     * released the record. Before Tier 2 item 39 this service had no view of
+     * the security context at all, so the audit row named the patient as the
+     * actor — see {@link #logAuditEvent}.
+     */
+    private final com.example.hms.utility.RoleValidator roleValidator;
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Value("${hms.record.qr-base-url:https://hospital-system.com/patient/}")
     private String qrBaseUrl;
@@ -1390,8 +1399,20 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             String details = rawDetails.length() > 1000 ? rawDetails.substring(0, 997) + "..." : rawDetails;
             log.debug("Full audit details: {}", rawDetails);
 
+            // WHO RELEASED IT. Before Tier 2 item 39 this was
+            // patient.getUser() — the subject of the record, not its
+            // releaser — so the patient's own portal told them THEY had
+            // shared their chart with another hospital. Worse when the
+            // patient has no portal account, which is the common case
+            // here: getUser() is null, AuditEventLog.deriveActorFields()
+            // stamps actorType=SYSTEM / userName="SYSTEM", and a
+            // cross-hospital release of a full chart records no human at
+            // all. A disclosure log that cannot name the discloser is not
+            // a disclosure log.
+            User actor = resolveSharingActor();
+
             AuditEventLog auditLog = AuditEventLog.builder()
-                .user(patient.getUser())
+                .user(actor)
                 .eventType(AuditEventType.RECORD_SHARE)
                 .eventDescription(String.format(
                     "Shared patient record from hospital %s to %s using consent %s",
@@ -1401,6 +1422,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
                 ))
                 .resourceId(patient.getId().toString())
                 .entityType("PATIENT")
+                .patientId(patient.getId())
                 .status(AuditStatus.SUCCESS)
                 .details(details)
                 .build();
@@ -1410,6 +1432,24 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
             log.warn("Failed to serialize audit log details: {}", e.getMessage());
         }
+    }
+
+    /**
+     * The clinician who released the record, or null when there is no
+     * principal on the thread.
+     *
+     * <p>Null is left as null rather than substituted with the patient:
+     * {@link AuditEventLog#deriveActorFields()} will then correctly mark the
+     * row {@code SYSTEM}, which is at least true. Naming the wrong person is
+     * worse than naming nobody, because only one of those is legible as a
+     * gap when somebody reviews the trail.
+     */
+    private User resolveSharingActor() {
+        UUID actorId = roleValidator.getCurrentUserId();
+        if (actorId == null) {
+            return null;
+        }
+        return userRepository.findById(actorId).orElse(null);
     }
 
     // ── Smart resolver ─────────────────────────────────────────────────────

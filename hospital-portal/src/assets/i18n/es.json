@@ -4031,7 +4031,21 @@
       "CONSENT_REVOKE_FAILED": "Error al revocar el consentimiento",
       "LOADING_LOG": "Cargando registro de accesos…",
       "NO_ACCESS_TITLE": "Sin registros de acceso",
-      "NO_ACCESS_DESC": "Nadie ha accedido a su expediente todavía, o el registro de accesos acaba de comenzar."
+      "NO_ACCESS_DESC": "Nadie ha accedido a su expediente todavía, o el registro de accesos acaba de comenzar.",
+      "LOG_FAILED_TITLE": "No se pudo cargar su registro de accesos",
+      "LOG_FAILED_DESC": "No fue posible obtener el registro en este momento. Esto no significa que nadie haya consultado su historial — vuelva a intentarlo.",
+      "LOG_RETRY": "Reintentar",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Acceso de emergencia",
+        "TREATMENT_ACCESS": "Consultado para su atención",
+        "SHARED_WITH_PROVIDER": "Compartido con otro hospital",
+        "INSURANCE": "Enviado a su aseguradora",
+        "COPY_RELEASED": "Se entregó una copia",
+        "IDENTITY_CHANGE": "Historiales fusionados",
+        "UNKNOWN": "Acceso registrado"
+      },
+      "SUMMARY_EMERGENCY": "accesos de emergencia a su historial",
+      "SUMMARY_EXTERNAL": "veces que su historial salió de su equipo asistencial"
     },
     "FAMILY": {
       "TITLE": "Acceso familiar y de representantes",

@@ -13,14 +13,15 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
-import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.PatientConsentRequestDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
+import com.example.hms.enums.DisclosureCategory;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
+import com.example.hms.payload.dto.portal.DisclosureAccountingDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
@@ -45,7 +46,6 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.AppointmentService;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.BillingInvoiceService;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.DischargeSummaryService;
@@ -121,7 +121,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DischargeSummaryService dischargeSummaryService;
     @Mock private PatientPrimaryCareService primaryCareService;
-    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.disclosure.DisclosureAccountingService disclosureAccountingService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -1129,36 +1129,56 @@ class PatientPortalServiceImplPhase2Test {
     class MyAccessLog {
 
         @Test
-        @DisplayName("should return paginated audit entries mapped to AccessLogEntryDTO")
+        @DisplayName("should return paginated access entries for the resolved patient")
         void getAccessLog_success() {
             stubPatientResolution();
 
-            AuditEventLogResponseDTO auditEntry = AuditEventLogResponseDTO.builder()
-                    .userName("nurse.mary")
-                    .eventType("VIEW")
+            AccessLogEntryDTO expected = AccessLogEntryDTO.builder()
+                    .id(UUID.randomUUID())
+                    .actor("nurse.mary")
+                    .actorRole("Nurse")
+                    .hospitalName("City Clinic")
+                    .eventType("PATIENT_ACCESS")
                     .entityType("PATIENT")
                     .resourceId(patientId.toString())
-                    .eventDescription("Viewed patient vitals")
+                    .description("Viewed patient vitals")
                     .status("SUCCESS")
-                    .eventTimestamp(LocalDateTime.of(2026, 2, 10, 14, 30))
+                    .timestamp(LocalDateTime.of(2026, 2, 10, 14, 30))
+                    .category(DisclosureCategory.TREATMENT_ACCESS)
                     .build();
 
             Pageable pageable = PageRequest.of(0, 20);
-            Page<AuditEventLogResponseDTO> auditPage =
-                    new PageImpl<>(List.of(auditEntry), pageable, 1);
-
-            when(auditEventLogService.getAuditLogsByTarget("PATIENT", patientId.toString(), pageable))
-                    .thenReturn(auditPage);
+            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+                    .thenReturn(new PageImpl<>(List.of(expected), pageable, 1));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
 
             assertThat(result.getTotalElements()).isEqualTo(1);
             AccessLogEntryDTO entry = result.getContent().get(0);
             assertThat(entry.getActor()).isEqualTo("nurse.mary");
-            assertThat(entry.getEventType()).isEqualTo("VIEW");
-            assertThat(entry.getDescription()).isEqualTo("Viewed patient vitals");
-            assertThat(entry.getStatus()).isEqualTo("SUCCESS");
+            assertThat(entry.getCategory()).isEqualTo(DisclosureCategory.TREATMENT_ACCESS);
             assertThat(entry.getTimestamp()).isEqualTo(LocalDateTime.of(2026, 2, 10, 14, 30));
+        }
+
+        @Test
+        @DisplayName("asks the disclosure service, not the entityType/resourceId convention")
+        void getAccessLog_usesThePatientKey() {
+            // Tier 2 item 39. This used to call
+            // getAuditLogsByTarget("PATIENT", patientId) -- a convention that
+            // break-the-glass and eligibility rows do not follow, so the
+            // patient's own "who viewed my records" page omitted every
+            // emergency override and every disclosure to an insurer.
+            stubPatientResolution();
+            Pageable pageable = PageRequest.of(0, 20);
+            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+                    .thenReturn(Page.empty(pageable));
+
+            service.getMyAccessLog(auth, pageable);
+
+            verify(disclosureAccountingService).getEntries(patientId, null, null, pageable);
+            // No "never called the old query" assertion here: the service no
+            // longer holds an AuditEventLogService at all, so the compiler
+            // enforces that far harder than a mock verification could.
         }
 
         @Test
@@ -1166,13 +1186,34 @@ class PatientPortalServiceImplPhase2Test {
         void getAccessLog_empty() {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 20);
-            when(auditEventLogService.getAuditLogsByTarget("PATIENT", patientId.toString(), pageable))
+            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
                     .thenReturn(Page.empty(pageable));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
 
             assertThat(result.getTotalElements()).isZero();
             assertThat(result.getContent()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("accounting resolves the patient from the JWT and passes the window through")
+        void getAccounting_resolvesPatientAndWindow() {
+            // The patient id never comes from the request on this surface --
+            // that is what stops one patient reading another's accounting.
+            stubPatientResolution();
+            Pageable pageable = PageRequest.of(0, 20);
+            LocalDateTime from = LocalDateTime.of(2026, 1, 1, 0, 0);
+            LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+            DisclosureAccountingDTO expected =
+                    DisclosureAccountingDTO.builder().totalEvents(4).build();
+            when(disclosureAccountingService.getAccounting(patientId, from, to, pageable))
+                    .thenReturn(expected);
+
+            DisclosureAccountingDTO result =
+                    service.getMyDisclosureAccounting(auth, from, to, pageable);
+
+            assertThat(result).isSameAs(expected);
+            verify(disclosureAccountingService).getAccounting(patientId, from, to, pageable);
         }
     }
 
