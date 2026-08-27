@@ -464,6 +464,16 @@
                 <option [value]="d.id">{{ d.name }}</option>
               }
             </select>
+            <!--
+              Department is optional on an admission (no @NotNull on the DTO),
+              so an empty list is workable — but a FAILED load must not read as
+              "no departments exist". Only the failure is called out.
+            -->
+            @if (departmentsFailed()) {
+              <small class="field-error">{{
+                'ENCOUNTERS.DEPT_LOAD_FAILED_HINT' | translate
+              }}</small>
+            }
           </div>
         </div>
         <div class="field">

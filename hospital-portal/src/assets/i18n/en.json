@@ -2189,7 +2189,14 @@
     "NOTE_COSIGN_PENDING": "Awaiting attending co-signature",
     "COSIGN_NOTE": "Co-sign note",
     "NOTE_COSIGNING": "Co-signing…",
-    "NOTE_COSIGNED_AT": "Co-signed"
+    "NOTE_COSIGNED_AT": "Co-signed",
+    "DEPT_CHOOSE": "Select a department…",
+    "DEPT_LOADING": "Loading departments…",
+    "DEPT_SELECT_HOSPITAL_FIRST": "Select a hospital first",
+    "DEPT_NONE": "No active departments",
+    "DEPT_NONE_HINT": "This hospital has no active departments. An administrator must add one before an encounter can be created.",
+    "DEPT_LOAD_FAILED": "Departments unavailable",
+    "DEPT_LOAD_FAILED_HINT": "The department list could not be loaded. This does not mean there are none — please retry."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

@@ -15,6 +15,7 @@ import {
 } from '../services/encounter.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
+import { DepartmentLookupService } from '../services/department-lookup.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
@@ -37,6 +38,7 @@ function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterRes
 }
 
 describe('EncountersComponent', () => {
+  let deptLookupSpy: jasmine.SpyObj<DepartmentLookupService>;
   let component: EncountersComponent;
   let encounterSpy: jasmine.SpyObj<EncounterService>;
   let hospitalSpy: jasmine.SpyObj<HospitalService>;
@@ -78,6 +80,8 @@ describe('EncountersComponent', () => {
     );
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     const staffSpy = jasmine.createSpyObj('StaffService', ['list']);
+    deptLookupSpy = jasmine.createSpyObj('DepartmentLookupService', ['getActiveDepartments']);
+    deptLookupSpy.getActiveDepartments.and.returnValue(of([]));
     staffSpy.list.and.returnValue(
       of([
         {
@@ -127,6 +131,7 @@ describe('EncountersComponent', () => {
         { provide: EncounterService, useValue: encounterSpy },
         { provide: HospitalService, useValue: hospitalSpy },
         { provide: StaffService, useValue: staffSpy },
+        { provide: DepartmentLookupService, useValue: deptLookupSpy },
         { provide: PatientService, useValue: patientSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: AuthService, useValue: authSpy },
@@ -158,11 +163,52 @@ describe('EncountersComponent', () => {
     expect(component.lockedHospitalName).toBe('City Hospital');
   });
 
-  it('derives unique departments for a hospital from the staff list', () => {
+  it('loads departments from the departments endpoint, not from the staff list', () => {
+    // THE REGRESSION, and the spec that used to guard it read "derives unique
+    // departments for a hospital from the staff list" — it asserted the
+    // broken behaviour as correct. Deriving from staff means a department
+    // with nobody assigned to it is invisible, so a real active department
+    // could be edited in the admin screens and still be unselectable here.
+    // The nurse then had nothing to pick, left the field empty, and the API
+    // rejected the encounter with departmentId: must not be null.
+    deptLookupSpy.getActiveDepartments.and.returnValue(
+      of([
+        { id: 'd9', name: 'General Practices' },
+        { id: 'd1', name: 'ER' },
+      ]),
+    );
     component.ngOnInit();
     component.loadDepartmentsFor('h1');
-    expect(component.departments()).toEqual([{ id: 'd1', name: 'ER' }]);
+
+    expect(deptLookupSpy.getActiveDepartments).toHaveBeenCalledWith('h1');
+    // d9 has no staff assigned; the old staff-derived list could never
+    // produce it.
+    expect(component.departments().map((d) => d.id)).toEqual(['d9', 'd1']);
+  });
+
+  it('does not call the endpoint until a hospital is chosen', () => {
+    component.ngOnInit();
+    deptLookupSpy.getActiveDepartments.calls.reset();
     component.loadDepartmentsFor('');
+    expect(deptLookupSpy.getActiveDepartments).not.toHaveBeenCalled();
+    expect(component.departments()).toEqual([]);
+    expect(component.departmentsFailed()).toBeFalse();
+  });
+
+  it('distinguishes a failed lookup from a hospital with no departments', () => {
+    // An empty dropdown and a failed request look identical to the user but
+    // mean opposite things — one says "there are none", the other says "we
+    // could not ask". Only one of those is the user's problem to solve.
+    deptLookupSpy.getActiveDepartments.and.returnValue(throwError(() => new Error('500')));
+    component.ngOnInit();
+    component.loadDepartmentsFor('h1');
+
+    expect(component.departmentsFailed()).toBeTrue();
+    expect(component.departments()).toEqual([]);
+
+    deptLookupSpy.getActiveDepartments.and.returnValue(of([]));
+    component.loadDepartmentsFor('h1');
+    expect(component.departmentsFailed()).toBeFalse();
     expect(component.departments()).toEqual([]);
   });
 
@@ -194,6 +240,27 @@ describe('EncountersComponent', () => {
     expect(component.noteHistory().length).toBe(0);
   });
 
+  it('sends the chosen department, never an empty string', () => {
+    // The payload used to carry departmentId: "" because the picker's empty
+    // option was selectable and nothing stopped submission. Jackson read that
+    // as null and the DTO's @NotNull rejected the whole request with a field
+    // error the form never surfaced — the user just saw a failure.
+    deptLookupSpy.getActiveDepartments.and.returnValue(
+      of([{ id: 'd9', name: 'General Practices' }]),
+    );
+    component.ngOnInit();
+    encounterSpy.create.and.returnValue(of(mockEncounter()));
+    component.openCreate();
+    component.form.encounterDate = '2026-08-18';
+    component.form.departmentId = 'd9';
+
+    component.submitForm();
+
+    const payload = encounterSpy.create.calls.mostRecent().args[0];
+    expect(payload.departmentId).toBe('d9');
+    expect(payload.departmentId).not.toBe('');
+  });
+
   it('submitForm appends a midnight time to the encounter date', () => {
     component.ngOnInit();
     encounterSpy.create.and.returnValue(of(mockEncounter()));
@@ -205,11 +272,20 @@ describe('EncountersComponent', () => {
     expect(component.showModal()).toBeFalse();
   });
 
-  it('openCreate pre-fills and locks the hospital', () => {
+  it('openCreate pre-fills and locks the hospital, and loads its departments', () => {
+    deptLookupSpy.getActiveDepartments.and.returnValue(
+      of([{ id: 'd9', name: 'General Practices' }]),
+    );
     component.ngOnInit();
+    deptLookupSpy.getActiveDepartments.calls.reset();
+
     component.openCreate();
+
     expect(component.form.hospitalId).toBe('h1');
-    expect(component.departments().length).toBe(1);
+    // Asserting the LOOKUP happened for the locked hospital, not a count that
+    // happened to fall out of the staff list.
+    expect(deptLookupSpy.getActiveDepartments).toHaveBeenCalledWith('h1');
+    expect(component.departments().map((d) => d.id)).toEqual(['d9']);
   });
 
   it('executeDelete deletes and reloads', () => {
