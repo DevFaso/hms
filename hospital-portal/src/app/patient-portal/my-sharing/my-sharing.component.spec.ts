@@ -205,6 +205,33 @@ describe('MySharingComponent', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('.access-summary')).toBeNull();
   });
 
+  it('states what the log covers in every state, including when it is empty', () => {
+    // Routine chart reads emit no audit event, so this list contains only
+    // disclosures. Without the note, an empty page reads as "nobody looked"
+    // and a populated one reads as "this is everyone who looked" — both
+    // false, and about a privacy fact the patient cannot verify elsewhere.
+    //
+    // Pinned across all three states because the plausible regression is
+    // someone tucking the note inside the populated branch, which removes it
+    // from precisely the state where the wrong reading is easiest to form.
+    const note = () => (fixture.nativeElement as HTMLElement).querySelector('.access-scope-note');
+
+    disclosureResponse = () => of(accounting([]));
+    component.switchToAccessLog();
+    fixture.detectChanges();
+    expect(note()).withContext('empty state').toBeTruthy();
+
+    disclosureResponse = () => of(accounting([entry()]));
+    component.retryAccessLog();
+    fixture.detectChanges();
+    expect(note()).withContext('populated state').toBeTruthy();
+
+    disclosureResponse = () => throwError(() => new Error('500'));
+    component.retryAccessLog();
+    fixture.detectChanges();
+    expect(note()).withContext('failure state').toBeTruthy();
+  });
+
   it('falls back to a neutral label when the backend sends no category', () => {
     expect(component.categoryLabelKey(entry({ category: null }))).toBe(
       'PORTAL.SHARING.CATEGORY.UNKNOWN',

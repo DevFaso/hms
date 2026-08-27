@@ -219,6 +219,33 @@
   }
 }
 
+// ── Access-log scope note ────────────────────────────────────
+//
+// Deliberately quiet: this is a clarification, not a warning. Styling it
+// as an alert would imply something went wrong with the patient's record,
+// when the point is only to say what the list below does and does not
+// cover. Colours are literal here to match the rest of this file, which
+// predates the token sweep; #475569 on #f8fafc is ~7:1.
+
+.access-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+}
+
 // ── Access-log summary band ──────────────────────────────────
 //
 // Shown only when there is something to show. A row of zeroes would be
