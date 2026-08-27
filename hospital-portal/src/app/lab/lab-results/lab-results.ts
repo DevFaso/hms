@@ -37,6 +37,46 @@ export class LabResultsComponent implements OnInit {
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
+
+  /**
+   * Mirrors LabResultAuthority.LABORATORY_ROLES + SUPER_ADMIN — the roles the
+   * backend lets enter a result for ANY test.
+   */
+  private static readonly LABORATORY_ROLES: readonly string[] = [
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_MANAGER',
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_QUALITY_MANAGER',
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /** Mirrors LabResultAuthority.POINT_OF_CARE_ROLES. */
+  private static readonly POINT_OF_CARE_ROLES: readonly string[] = [
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+  ];
+
+  /**
+   * Whether to offer "New Result" at all.
+   *
+   * <p>The button used to be unconditional, so it showed for every role the
+   * route admits — including ROLE_ADMIN and ROLE_HOSPITAL_ADMIN, which the
+   * create endpoint does not permit. Those users got a 403 on submit from a
+   * control the page had offered them.
+   *
+   * <p>Bedside roles keep the button. Whether they may enter a result for a
+   * given TEST depends on that test's point-of-care flag and on whether the
+   * hospital has switched enforcement on — neither of which the browser
+   * knows. The backend decides, and its refusal explains itself.
+   */
+  protected canEnterResults(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      ...LabResultsComponent.LABORATORY_ROLES,
+      ...LabResultsComponent.POINT_OF_CARE_ROLES,
+    ]);
+  }
   protected readonly globalView = this.roleContext.globalView;
 
   loading = signal(true);
@@ -219,8 +259,18 @@ export class LabResultsComponent implements OnInit {
         this.saving.set(false);
         this.loadResults();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_ERROR'));
+      error: (err) => {
+        // Surface the server's own message when it has one. The lab entry
+        // guard explains WHY a result was refused and what to do about it
+        // ("ask an administrator to mark this test as point-of-care"), and a
+        // generic "could not save" throws that away and leaves the ward
+        // thinking the system is broken.
+        const serverMessage = err?.error?.message;
+        this.toast.error(
+          typeof serverMessage === 'string' && serverMessage.trim()
+            ? serverMessage
+            : this.translate.instant('LAB_RESULTS.SAVE_ERROR'),
+        );
         this.saving.set(false);
       },
     });

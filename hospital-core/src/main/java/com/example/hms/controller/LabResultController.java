@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.ApiResponseWrapper;
+import com.example.hms.service.lab.LabResultAuthority;
 import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
@@ -63,7 +64,11 @@ public class LabResultController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    // Role alone cannot answer this: whether a bedside role may enter a
+    // result depends on the TEST being point-of-care, and the annotation runs
+    // before the test is loaded. LabResultEntryGuard makes that call in the
+    // service. This stays broad on purpose.
+    @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
@@ -91,7 +96,11 @@ public class LabResultController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    // Role alone cannot answer this: whether a bedside role may enter a
+    // result depends on the TEST being point-of-care, and the annotation runs
+    // before the test is loaded. LabResultEntryGuard makes that call in the
+    // service. This stays broad on purpose.
+    @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
     public ResponseEntity<LabResultResponseDTO> updateLabResult(
             @PathVariable UUID id,
@@ -100,9 +109,18 @@ public class LabResultController {
         return ResponseEntity.ok(labResultService.updateLabResult(id, requestDTO, locale));
     }
 
+    // Releasing is the laboratory attesting that a number is correct and may
+    // be acted on. It is the direct analogue of microbiology's FINALIZE, and
+    // this set mirrors that one exactly. Nurses, midwives and doctors are
+    // deliberately absent: the person who ordered a test is not the person who
+    // should attest to its result. Before this, a nurse could release a
+    // chemistry panel they had no part in — while `sign`, the lesser act, was
+    // already narrower than release.
     @PostMapping("/{id}/release")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE')")
-    @Operation(summary = "Release Lab Result", description = "Marks the lab result as released and ready for downstream workflows.")
+    @PreAuthorize(LabResultAuthority.RELEASE_EXPRESSION)
+    @Operation(summary = "Release Lab Result",
+        description = "Marks the lab result as released and ready for downstream workflows. "
+            + "Laboratory staff only — mirrors microbiology's finalize authority.")
     public ResponseEntity<LabResultResponseDTO> releaseLabResult(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
