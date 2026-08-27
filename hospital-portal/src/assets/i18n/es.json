@@ -1165,7 +1165,8 @@
     "TO_DATE": "Hasta",
     "VIEW": "Ver cita",
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
-    "YES_CANCEL": "Sí, Cancelar"
+    "YES_CANCEL": "Sí, Cancelar",
+    "RESTORE_TO_SCHEDULED": "Restaurar a programada"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -5127,7 +5128,13 @@
     "OFFER_DECLINED": "Oferta rechazada — vuelve a la lista de espera",
     "ACCEPT_OFFER_FAILED": "Error al aceptar la oferta",
     "DECLINE_OFFER_FAILED": "Error al rechazar la oferta",
-    "DEPARTMENT": "Servicio"
+    "DEPARTMENT": "Servicio",
+    "PENDING": "Pendiente",
+    "RESCHEDULED": "Reprogramada",
+    "FAILED": "Fallida",
+    "UNKNOWN": "Desconocido",
+    "CHECK_IN_SUCCESS": "Paciente registrado",
+    "CHECK_IN_FAILED": "Error al registrar la llegada"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

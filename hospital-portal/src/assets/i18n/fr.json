@@ -1165,7 +1165,8 @@
     "TO_DATE": "Date de Fin",
     "VIEW": "Voir le rendez-vous",
     "VIEW_MANAGE_SUBTITLE": "Voir et gérer les détails du rendez-vous",
-    "YES_CANCEL": "Oui, Annuler"
+    "YES_CANCEL": "Oui, Annuler",
+    "RESTORE_TO_SCHEDULED": "Rétablir en programmé"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",
@@ -5127,7 +5128,13 @@
     "OFFER_DECLINED": "Offre refusée — retour en liste d'attente",
     "ACCEPT_OFFER_FAILED": "Échec de l'acceptation de l'offre",
     "DECLINE_OFFER_FAILED": "Échec du refus de l'offre",
-    "DEPARTMENT": "Service"
+    "DEPARTMENT": "Service",
+    "PENDING": "En attente",
+    "RESCHEDULED": "Reprogrammé",
+    "FAILED": "Échec",
+    "UNKNOWN": "Inconnu",
+    "CHECK_IN_SUCCESS": "Patient enregistré",
+    "CHECK_IN_FAILED": "Échec de l'enregistrement"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

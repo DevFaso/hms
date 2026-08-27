@@ -2118,4 +2118,22 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V142 - unstrand RESCHEDULED appointments. The reschedule modal
+         saved the new date together with status RESCHEDULED, which every
+         consumer treats as terminal: no action buttons on the detail
+         page, no check-in icon in the reception queue, and
+         checkInPatient rejects it outright. The result was an
+         appointment with a correct date and time, a patient expected to
+         arrive, and no way to check them in. Moves today-and-later rows
+         to SCHEDULED, which the transition map always allowed and
+         nothing ever performed. Past-dated rows are left alone - those
+         are history, not a queue. Plain UPDATE, no DO block.
+         ================================================================= -->
+    <changeSet id="V142-unstrand-rescheduled-appointments" author="hms-team" runOnChange="false">
+        <sqlFile path="V142__unstrand_rescheduled_appointments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
