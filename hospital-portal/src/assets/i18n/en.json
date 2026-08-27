@@ -2977,7 +2977,27 @@
     "ON_CALL": "On-Call",
     "SLOT_ADMIN": "Slot Administration",
     "TRANSFUSIONS": "Blood Bank",
-    "BED_BOARD": "Bed Board"
+    "BED_BOARD": "Bed Board",
+    "GROUP": {
+      "MY_DAY": "My Day",
+      "PATIENTS_FLOW": "Patients & Flow",
+      "CARE": "Care",
+      "PHARMACY": "Medications & Pharmacy",
+      "DIAGNOSTICS": "Diagnostics",
+      "BILLING": "Billing",
+      "INSIGHTS": "Insights",
+      "ADMINISTRATION": "Administration",
+      "PLATFORM": "Platform",
+      "MY_CARE": "My Care",
+      "MY_HEALTH": "My Health",
+      "MY_RECORDS": "My Records",
+      "MY_BILLING": "Billing",
+      "OTHER": "More"
+    },
+    "SEARCH_LABEL": "Search modules",
+    "SEARCH_PLACEHOLDER": "Search modules...",
+    "SEARCH_CLEAR": "Clear search",
+    "SEARCH_NO_RESULTS": "No module matches \"{{query}}\"."
   },
   "NOTIFICATIONS": {
     "ALL": "All",

@@ -2977,7 +2977,27 @@
     "ON_CALL": "Guardias",
     "SLOT_ADMIN": "Administración de espacios",
     "TRANSFUSIONS": "Banco de sangre",
-    "BED_BOARD": "Tablero de camas"
+    "BED_BOARD": "Tablero de camas",
+    "GROUP": {
+      "MY_DAY": "Mi jornada",
+      "PATIENTS_FLOW": "Pacientes y flujo",
+      "CARE": "Atención",
+      "PHARMACY": "Medicamentos y farmacia",
+      "DIAGNOSTICS": "Diagnóstico",
+      "BILLING": "Facturación",
+      "INSIGHTS": "Análisis",
+      "ADMINISTRATION": "Administración",
+      "PLATFORM": "Plataforma",
+      "MY_CARE": "Mi atención",
+      "MY_HEALTH": "Mi salud",
+      "MY_RECORDS": "Mi expediente",
+      "MY_BILLING": "Facturación",
+      "OTHER": "Más"
+    },
+    "SEARCH_LABEL": "Buscar módulos",
+    "SEARCH_PLACEHOLDER": "Buscar módulos...",
+    "SEARCH_CLEAR": "Borrar la búsqueda",
+    "SEARCH_NO_RESULTS": "Ningún módulo coincide con «{{query}}»."
   },
   "NOTIFICATIONS": {
     "ALL": "Todo",
