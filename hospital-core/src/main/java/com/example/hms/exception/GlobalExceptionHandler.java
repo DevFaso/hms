@@ -109,11 +109,45 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
     }
 
+    /**
+     * Constraint violations from the database.
+     *
+     * <p>The driver's message is logged in full and <b>not</b> returned. It
+     * used to be passed to the caller verbatim, which on a failed nurse-handoff
+     * insert meant the response carried the schema name, the table name, every
+     * column of the rejected row and the PATIENT'S UUID — clinical identifiers
+     * handed to whoever made the request, over a message no user could act on.
+     *
+     * <p>What the caller gets instead names the constraint family in ordinary
+     * words, which is as much as is safely actionable: a duplicate is worth
+     * retrying differently, a missing reference is not. Anything more specific
+     * is in the log, keyed by the same request path.
+     */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Object> handleDataIntegrityViolation(DataIntegrityViolationException ex, WebRequest request) {
-        ex.getMostSpecificCause();
-        String message = ex.getMostSpecificCause().getMessage();
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+        String detail = ex.getMostSpecificCause().getMessage();
+        log.error("Data integrity violation at path {}: {}",
+            request.getDescription(false), detail, ex);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, describeIntegrityViolation(detail), request);
+    }
+
+    /**
+     * Map a driver message onto a sanitised description. Matching is on the
+     * constraint wording rather than on any identifier, so nothing from the
+     * row or the schema can leak through this method.
+     */
+    private String describeIntegrityViolation(String detail) {
+        String lower = detail == null ? "" : detail.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("unique") || lower.contains("duplicate key")) {
+            return "That record already exists.";
+        }
+        if (lower.contains("foreign key")) {
+            return "A referenced record does not exist or is still in use.";
+        }
+        if (lower.contains("not-null") || lower.contains("not null")) {
+            return "A required value is missing. Please contact support if this persists.";
+        }
+        return "The request could not be saved because it violates a data constraint.";
     }
 
     /**

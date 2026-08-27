@@ -92,4 +92,56 @@ class PatientTrackerEventPublisherTest {
                 publisher.publishStatusTransition(encounter, "IN_PROGRESS", "AWAITING_RESULTS"))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    @DisplayName("swallows a dangling lazy reference instead of failing the transition")
+    void swallowsDanglingProxy() {
+        // THE REGRESSION. The guard used to wrap only convertAndSend, leaving
+        // the getHospital()/getDepartment()/getPatient() reads above it
+        // exposed. Those are LAZY proxies and this codebase maps by FIELD
+        // access, so getId() fully initialises them rather than taking
+        // Hibernate's identifier shortcut — and a proxy whose row was deleted
+        // throws EntityNotFoundException. That escaped completeTriage as a
+        // 500 and rolled the status change back: a websocket refresh nobody
+        // was waiting on took the clinical write down with it.
+        //
+        // The existing broker test passed throughout, because it exercised
+        // the one path that was already guarded.
+        Encounter dangling = org.mockito.Mockito.mock(Encounter.class);
+        org.mockito.Mockito.when(dangling.getId()).thenReturn(UUID.randomUUID());
+        org.mockito.Mockito.when(dangling.getHospital())
+                .thenThrow(new jakarta.persistence.EntityNotFoundException(
+                        "Unable to find com.example.hms.model.Hospital with id ..."));
+
+        assertThatCode(() ->
+                publisher.publishStatusTransition(dangling, "ARRIVED", "WAITING_FOR_PHYSICIAN"))
+                .doesNotThrowAnyException();
+
+        verify(messagingTemplate, never()).convertAndSend(
+                org.mockito.ArgumentMatchers.anyString(),
+                (Object) org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("swallows a dangling reference discovered part-way through building the event")
+    void swallowsDanglingProxyAfterHospitalResolves() {
+        // The hospital resolves and the department does not — the event is
+        // half-built when it fails. Still must not surface.
+        Encounter dangling = org.mockito.Mockito.mock(Encounter.class);
+        org.mockito.Mockito.when(dangling.getId()).thenReturn(UUID.randomUUID());
+        org.mockito.Mockito.when(dangling.getHospital()).thenReturn(hospital);
+        org.mockito.Mockito.when(dangling.getDepartment())
+                .thenThrow(new jakarta.persistence.EntityNotFoundException("deleted department"));
+
+        assertThatCode(() ->
+                publisher.publishStatusTransition(dangling, "TRIAGE", "WAITING_FOR_PHYSICIAN"))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("a null encounter is not an error")
+    void nullEncounterIsIgnored() {
+        assertThatCode(() -> publisher.publishStatusTransition(null, "A", "B"))
+                .doesNotThrowAnyException();
+    }
 }

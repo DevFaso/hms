@@ -1,0 +1,54 @@
+-- ============================================================
+-- V143: drop the orphan created_by_staff_id column from
+--       clinical.nurse_handoffs.
+-- ============================================================
+--
+-- WHY THIS EXISTS
+--
+-- Creating an SBAR handoff failed on dev with:
+--
+--   null value in column "created_by_staff_id" of relation
+--   "nurse_handoffs" violates not-null constraint
+--
+-- and the column is not the application's. NO MIGRATION IN THIS
+-- REPOSITORY EVER CREATED IT. V108 and V110 both define
+-- clinical.nurse_handoffs without it, and the NurseHandoff entity has no
+-- field mapped to it — the handoff's author is recorded in
+-- created_by_name.
+--
+-- It is a survivor of the aborted first V108 deployment that V110's own
+-- header describes: that deploy "died mid-changeset and left a
+-- clinical.nurse_handoffs table that does NOT match the NurseHandoff
+-- entity". V108 uses CREATE TABLE IF NOT EXISTS, so once the drifted
+-- table existed the real definition could never be applied; V110 then
+-- repaired the drift ADDITIVELY — it back-filled the columns the entity
+-- needed and had no reason to look for columns the entity does not have.
+-- So the extra NOT NULL column sat there, unmapped and unfillable.
+--
+-- WHY ddl-auto=validate DID NOT CATCH IT
+--
+-- Hibernate validation checks that every MAPPED field has a column. It
+-- does not check the converse. An unmapped NOT NULL column therefore
+-- passes startup cleanly and fails on every single INSERT instead —
+-- which is why the feature booted fine and had simply never worked.
+--
+-- WHY DROP RATHER THAN RELAX
+--
+-- The column cannot hold data. It is NOT NULL and nothing has ever
+-- written it, so every insert that would have populated it failed. There
+-- is nothing to preserve. Leaving it as a nullable orphan would only
+-- move the confusion to whoever reads the schema next.
+--
+-- Recording the handoff's author as a real staff REFERENCE rather than a
+-- name string is a reasonable thing to want, and this migration
+-- deliberately does not do it by accident. That is a feature decision
+-- with its own column, its own backfill and its own handling for authors
+-- who have no Staff row — not something to inherit from a failed deploy.
+--
+-- IF EXISTS: healthy databases (uat/main took the full V108 first time)
+-- never had this column, so there the statement no-ops. Idempotent, and
+-- safe whichever shape a given environment carries.
+-- ============================================================
+
+ALTER TABLE clinical.nurse_handoffs
+    DROP COLUMN IF EXISTS created_by_staff_id;
