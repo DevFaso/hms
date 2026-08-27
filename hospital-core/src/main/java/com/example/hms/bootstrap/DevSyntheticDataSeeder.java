@@ -111,6 +111,17 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     ) {
     }
 
+    /**
+     * Zone the seeded dates are relative to.
+     *
+     * <p>Explicit rather than the JVM default so a container running UTC
+     * and a developer machine in Ouagadougou seed the same dates. The rows
+     * are synthetic, but a licence that expires a day early or a consent
+     * that lapses overnight makes a dev reproduction of a date-sensitive
+     * bug disagree with the machine it was reported from.
+     */
+    private static final java.time.ZoneId SEED_ZONE = java.time.ZoneOffset.UTC;
+
     private static final int ORGANIZATION_TARGET = 2;
     private static final int HOSPITALS_PER_ORG = 2;
     private static final int STAFF_PER_HOSPITAL = 5;
@@ -387,7 +398,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .fromHospital(fromHospital)
             .toHospital(toHospital)
             .consentGiven(true)
-            .consentExpiration(LocalDateTime.now().plusMonths(6))
+            .consentExpiration(LocalDateTime.now(SEED_ZONE).plusMonths(6))
             .purpose("Synthetic developer seed consent for MRN-based sharing")
             .build();
 
@@ -570,7 +581,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .employmentType(employmentType)
             .specialization(specialization)
             .licenseNumber(generateLicense(jobTitle.name()))
-            .startDate(LocalDate.now().minusYears(2))
+            .startDate(LocalDate.now(SEED_ZONE).minusYears(2))
             .name(user.getFirstName() + " " + user.getLastName())
             .active(true)
             .build();
@@ -605,7 +616,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .employmentType(input.employmentType())
             .specialization(input.specialization())
             .licenseNumber(generateLicense(roleSuffix))
-            .startDate(LocalDate.now().minusMonths(18))
+            .startDate(LocalDate.now(SEED_ZONE).minusMonths(18))
             .name(user.getFirstName() + " " + user.getLastName())
             .active(true)
             .build();
@@ -643,7 +654,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             return;
         }
 
-        LocalDate baseDate = LocalDate.now().minusDays(14);
+        LocalDate baseDate = LocalDate.now(SEED_ZONE).minusDays(14);
         for (int offset = existingPatients.size(); offset < PATIENTS_PER_HOSPITAL; offset++) {
             int patientOrdinal = offset + 1;
             createPatientGraph(organization, hospital, hospitalIndex, patientOrdinal, baseDate,
@@ -659,7 +670,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         User user = createUser("patient", firstName, lastName);
         addGlobalRole(user, roleCache.get("ROLE_PATIENT"));
 
-        LocalDate dob = LocalDate.now().minusYears(20L + (patientSequence.get() % 25)).minusDays(patientOrdinal);
+        LocalDate dob = LocalDate.now(SEED_ZONE).minusYears(20L + (patientSequence.get() % 25)).minusDays(patientOrdinal);
         String phone = user.getPhoneNumber();
         String email = user.getEmail();
 
@@ -738,8 +749,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .groupNumber("HMO-PLATINUM")
             .subscriberName(patient.getFirstName() + " " + patient.getLastName())
             .subscriberRelationship("SELF")
-            .effectiveDate(LocalDate.now().minusYears(1))
-            .expirationDate(LocalDate.now().plusYears(1))
+            .effectiveDate(LocalDate.now(SEED_ZONE).minusYears(1))
+            .expirationDate(LocalDate.now(SEED_ZONE).plusYears(1))
             .linkedByUserId(assignment.getUser() != null ? assignment.getUser().getId() : null)
             .linkedAs("STAFF")
             .payerCode("BSHLD")
@@ -798,8 +809,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .hospital(hospital)
             .encounter(encounter)
             .invoiceNumber(invoiceNumber)
-            .invoiceDate(LocalDate.now().minusDays(2))
-            .dueDate(LocalDate.now().plusDays(28))
+            .invoiceDate(LocalDate.now(SEED_ZONE).minusDays(2))
+            .dueDate(LocalDate.now(SEED_ZONE).plusDays(28))
             .totalAmount(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
             .amountPaid(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
             .status(InvoiceStatus.SENT)
@@ -882,7 +893,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
 
         SeededTreatment selection = seededTreatments.get(patientOrdinal % seededTreatments.size());
         Staff performer = selection.performer() != null ? selection.performer() : staffBundle.doctor();
-        LocalDateTime performedAt = Optional.ofNullable(encounter.getEncounterDate()).orElse(LocalDateTime.now());
+        LocalDateTime performedAt = Optional.ofNullable(encounter.getEncounterDate()).orElse(LocalDateTime.now(SEED_ZONE));
 
         EncounterTreatment encounterTreatment = EncounterTreatment.builder()
             .encounter(encounter)
@@ -1173,7 +1184,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
             .assignmentCode(generateGlobalAssignmentCode(role))
             .description("Global assignment for " + role.getCode())
-            .startDate(LocalDate.now().minusMonths(1))
+            .startDate(LocalDate.now(SEED_ZONE).minusMonths(1))
             .user(user)
             .role(role)
             .active(true)
@@ -1302,7 +1313,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
             .assignmentCode(assignmentCode)
             .description(role.getCode() + " assignment for " + hospital.getCode())
-            .startDate(LocalDate.now().minusMonths(18))
+            .startDate(LocalDate.now(SEED_ZONE).minusMonths(18))
             .registeredBy(registeredBy)
             .user(user)
             .hospital(hospital)

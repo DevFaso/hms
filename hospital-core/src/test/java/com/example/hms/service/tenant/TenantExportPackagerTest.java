@@ -11,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,18 +26,23 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TenantExportPackagerTest {
 
     @Mock private RegionPolicyService regionPolicyService;
+    @Mock private com.example.hms.repository.TenantExportRepository exportRepository;
 
     private TenantExportPackager packager;
 
     @BeforeEach
     void setUp() {
-        packager = new TenantExportPackager(regionPolicyService);
+        packager = new TenantExportPackager(regionPolicyService, exportRepository);
     }
 
     private Organization sampleOrg() {
@@ -185,5 +191,97 @@ class TenantExportPackagerTest {
             assertThat(alpIdx).isLessThan(midIdx);
             assertThat(midIdx).isLessThan(zedIdx);
         }
+    }
+
+    // ── The archive must contain the tenant's data (not just its metadata) ──
+
+    private static String entry(Path zip, String name) throws IOException {
+        try (ZipFile zf = new ZipFile(zip.toFile())) {
+            return new String(zf.getInputStream(zf.getEntry(name)).readAllBytes());
+        }
+    }
+
+    @Test
+    void patientsAreActuallyExported(@TempDir Path tmp) throws IOException {
+        // THE REGRESSION. patients / staff / encounters / appointments /
+        // audit_events were written as permanently empty placeholders — "real
+        // content drops in via a follow-up" that never came. TenantPurgeExecutor
+        // packages, encrypts, then DELETES the tenant, so this archive was the
+        // only surviving copy and it held none of the records, while stamping
+        // itself "GDPR Article 20 — Right to data portability".
+        Organization org = sampleOrg();
+        UUID patientId = UUID.randomUUID();
+        when(exportRepository.exportPatients(anyCollection(),
+                any()))
+            .thenReturn(java.util.List.<Object[]>of(new Object[] {
+                patientId, "Awa", "Traore", java.time.LocalDate.of(1990, 1, 1),
+                "F", "+22670000000", "awa@test.bf", "Ouagadougou", "BF"
+            }))
+            .thenReturn(java.util.List.<Object[]>of());
+
+        Path out = tmp.resolve("with-data.zip");
+        packager.packageOrganization(org, out);
+
+        String body = entry(out, "patients.ndjson");
+        assertThat(body).contains(patientId.toString()).contains("Traore");
+    }
+
+    @Test
+    void manifestCountsMatchWhatWasWritten(@TempDir Path tmp) throws IOException {
+        // The manifest said 0 for every table and was telling the truth about
+        // an archive that should not have been empty. It has to keep telling
+        // the truth now that the tables have rows.
+        Organization org = sampleOrg();
+        when(exportRepository.exportEncounters(anyCollection(),
+                any()))
+            .thenReturn(java.util.List.of(
+                new Object[] {UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                    "OUTPATIENT", java.time.LocalDateTime.now(), "COMPLETED", "cough"},
+                new Object[] {UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                    "OUTPATIENT", java.time.LocalDateTime.now(), "COMPLETED", "fever"}))
+            .thenReturn(java.util.List.<Object[]>of());
+
+        Path out = tmp.resolve("counts.zip");
+        packager.packageOrganization(org, out);
+
+        JsonNode manifest = new ObjectMapper().readTree(entry(out, "manifest.json"));
+        assertThat(manifest.get("record_counts_by_table").get("encounters.ndjson").asLong())
+            .isEqualTo(2L);
+        assertThat(entry(out, "encounters.ndjson").lines().count()).isEqualTo(2L);
+    }
+
+    @Test
+    void everyTableEntryIsPresentEvenWhenEmpty(@TempDir Path tmp) throws IOException {
+        // A consumer must not have to handle "missing entries" — the original
+        // reason placeholders existed. Keep that property now they carry data.
+        Organization org = sampleOrg();
+        Path out = tmp.resolve("shape.zip");
+        packager.packageOrganization(org, out);
+
+        try (ZipFile zf = new ZipFile(out.toFile())) {
+            for (String name : new String[] {"patients.ndjson", "staff.ndjson",
+                    "encounters.ndjson", "appointments.ndjson", "audit_events.ndjson"}) {
+                assertThat(zf.getEntry(name)).as("%s must exist", name).isNotNull();
+            }
+        }
+    }
+
+    @Test
+    void tenantScopeComesFromTheOrgsHospitalsNotTheSecurityContext(@TempDir Path tmp) throws IOException {
+        // The export runs from a scheduled purge with no principal on the
+        // thread, so it must never depend on tenant context to decide scope.
+        // Every query is handed the hospital ids explicitly.
+        Organization org = sampleOrg();
+        UUID hospitalId = org.getHospitals().iterator().next().getId();
+        Path out = tmp.resolve("scope.zip");
+
+        packager.packageOrganization(org, out);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<java.util.Collection<UUID>> ids =
+            ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(exportRepository, atLeastOnce())
+            .exportPatients(ids.capture(), any());
+        assertThat(ids.getValue()).containsExactly(hospitalId);
     }
 }

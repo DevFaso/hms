@@ -60,6 +60,12 @@ public class DicomWebHttpClient implements DicomWebClient {
     private final DicomProxyProperties properties;
     private final RestClient restClient;
 
+    // Two constructors exist (the second is the package-private seam the
+    // tests inject a RestClient through), so Spring has no way to pick one
+    // and would fail to start this bean. It has never bitten because the
+    // whole component is behind @ConditionalOnProperty on the dicom-proxy
+    // flag — latent, not harmless.
+    @org.springframework.beans.factory.annotation.Autowired
     public DicomWebHttpClient(DicomProxyProperties properties) {
         this(properties, RestClient.builder().requestFactory(buildRequestFactory()).build());
     }
