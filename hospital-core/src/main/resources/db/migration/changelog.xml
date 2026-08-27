@@ -2136,4 +2136,22 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V143 - drop the orphan created_by_staff_id column from
+         clinical.nurse_handoffs. No migration in this repo ever created
+         it and no entity maps it; it survived the aborted first V108
+         deploy that V110's header describes, and V110's repair was
+         additive so it never looked for extra columns. Being unmapped
+         and NOT NULL, it passed ddl-auto=validate (which only checks
+         mapped->exists) and failed every INSERT instead, so creating a
+         handoff had never once worked. Nothing to preserve: NOT NULL
+         plus never-written means the column is empty everywhere.
+         IF EXISTS, so healthy databases no-op.
+         ================================================================= -->
+    <changeSet id="V143-nurse-handoffs-drop-orphan-staff-column" author="hms-team" runOnChange="false">
+        <sqlFile path="V143__nurse_handoffs_drop_orphan_staff_column.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

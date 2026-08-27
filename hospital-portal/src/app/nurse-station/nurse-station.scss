@@ -1228,3 +1228,73 @@
     font-size: 1.1rem;
   }
 }
+
+/* ── Modal card shell ─────────────────────────────────────────
+ *
+ * The handoff modal was markup-complete but invisible: it uses
+ * .modal-card / .modal-header / .modal-body / .modal-close, and this file
+ * styled none of them. Only .modal-medium matched, which sets a max-width
+ * and nothing else — so the card had a width, no background, no padding
+ * and no shadow, and the form appeared to float directly on the dimmed
+ * page behind it.
+ *
+ * .modal-content (further up) belongs to the hold/refuse modal and is a
+ * different class; the handoff markup was copied from patient-detail,
+ * which styles .modal-card locally. Matching that so the two read the
+ * same.
+ */
+
+.modal-card {
+  background: #fff;
+  border: none;
+  border-radius: 16px;
+  width: 100%;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  padding: 0;
+  /* A long SBAR form must not run off a short screen. */
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #111827;
+  }
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #4b5563;
+  cursor: pointer;
+
+  &:hover {
+    background: #e5e7eb;
+  }
+}
+
+.modal-body {
+  padding: 20px 24px;
+  /* The five SBAR fields are taller than most viewports; scroll the body
+     rather than the page, so the header and the actions stay reachable. */
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
