@@ -59,6 +59,7 @@ public class LabResultServiceImpl implements LabResultService {
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
     private final LabResultRepository labResultRepository;
+    private final com.example.hms.service.lab.LabResultEntryGuard labResultEntryGuard;
     private final LabOrderRepository labOrderRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final LabResultMapper labResultMapper;
@@ -77,6 +78,14 @@ public class LabResultServiceImpl implements LabResultService {
                 .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
+
+        // Who may record THIS test's result. Role alone cannot answer it: a
+        // nurse recording a bedside glucose is doing their job, and the same
+        // nurse typing in a chemistry panel is not. The gate reads the test's
+        // point-of-care flag, which is why it lives here rather than in the
+        // controller annotation — the annotation runs before the order and
+        // its test are loaded.
+        labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
 
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, hospital.getId());
@@ -172,6 +181,12 @@ public class LabResultServiceImpl implements LabResultService {
                 && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
+
+        // Amending a result is entering one. Same gate — otherwise a bedside
+        // role blocked from creating a lab-performed result could simply
+        // overwrite an existing one instead.
+        labResultEntryGuard.requireMayEnterResult(
+            labResult.getLabOrder() != null ? labResult.getLabOrder().getLabTestDefinition() : null);
 
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));

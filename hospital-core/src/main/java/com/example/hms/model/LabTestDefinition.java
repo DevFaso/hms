@@ -109,6 +109,24 @@ public class LabTestDefinition extends BaseEntity {
     @Builder.Default
     private boolean active = true;
 
+    /**
+     * True when this test is performed at the bedside rather than in the
+     * laboratory — glucometer, urine dipstick, rapid malaria, haemoglobin.
+     *
+     * <p>Governs who may enter a result for it. Nurses and midwives may enter
+     * point-of-care results, because they are the ones who ran the test;
+     * laboratory staff may enter any. Before this existed, a nurse could
+     * create, edit and release a result for a chemistry panel they had no
+     * part in.
+     *
+     * <p>Never seeded. Which tests are point-of-care varies by site, by the
+     * devices on hand and by local protocol, so each hospital's laboratory
+     * marks its own. Defaults false, which fails closed on an authority
+     * question.
+     */
+    @Column(name = "point_of_care", nullable = false)
+    private boolean pointOfCare = false;
+
     @Convert(converter = LabTestReferenceRangeConverter.class)
     @Column(name = "reference_ranges", columnDefinition = "TEXT")
     @Builder.Default
