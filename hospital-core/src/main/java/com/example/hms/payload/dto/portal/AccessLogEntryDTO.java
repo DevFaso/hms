@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.portal;
 
+import com.example.hms.enums.DisclosureCategory;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,4 +40,24 @@ public class AccessLogEntryDTO {
 
     @Schema(description = "When the access occurred")
     private LocalDateTime timestamp;
+
+    @Schema(description = "Role the actor held when they accessed the record.", example = "Doctor")
+    private String actorRole;
+
+    @Schema(description = "Hospital where the access happened.", example = "General Hospital")
+    private String hospitalName;
+
+    /**
+     * What this access means to the patient, from
+     * {@link com.example.hms.enums.DisclosureCategory}. Carries the
+     * distinction the raw event type cannot: {@code PATIENT_ACCESS} is a
+     * clinician opening the chart in one case and a disclosure to an
+     * insurance scheme in another.
+     */
+    @Schema(description = "Patient-facing classification of the access.", example = "EMERGENCY_ACCESS")
+    private DisclosureCategory category;
+
+    @Schema(description = "True when the record went to someone outside the treating team "
+        + "(another hospital, an insurer, or out as a file).", example = "true")
+    private boolean externalDisclosure;
 }

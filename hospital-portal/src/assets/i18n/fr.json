@@ -4030,7 +4030,21 @@
       "CONSENT_REVOKE_FAILED": "Échec de la révocation du consentement",
       "LOADING_LOG": "Chargement du journal d'accès…",
       "NO_ACCESS_TITLE": "Aucun enregistrement d'accès",
-      "NO_ACCESS_DESC": "Personne n'a encore accédé à votre dossier, ou la journalisation vient de débuter."
+      "NO_ACCESS_DESC": "Personne n'a encore accédé à votre dossier, ou la journalisation vient de débuter.",
+      "LOG_FAILED_TITLE": "Impossible de charger votre journal d'accès",
+      "LOG_FAILED_DESC": "Le relevé n'a pas pu être récupéré pour le moment. Cela ne signifie pas que personne n'a consulté votre dossier — veuillez réessayer.",
+      "LOG_RETRY": "Réessayer",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Accès d'urgence",
+        "TREATMENT_ACCESS": "Consulté pour vos soins",
+        "SHARED_WITH_PROVIDER": "Partagé avec un autre hôpital",
+        "INSURANCE": "Transmis à votre assurance",
+        "COPY_RELEASED": "Une copie a été délivrée",
+        "IDENTITY_CHANGE": "Dossiers fusionnés",
+        "UNKNOWN": "Accès enregistré"
+      },
+      "SUMMARY_EMERGENCY": "accès d'urgence à votre dossier",
+      "SUMMARY_EXTERNAL": "fois où votre dossier est sorti de votre équipe soignante"
     },
     "FAMILY": {
       "TITLE": "Accès famille et mandataire",

@@ -148,6 +148,56 @@ public interface AuditEventLogRepository
                                                      @Param("eventTypes") Collection<AuditEventType> eventTypes,
                                                      Pageable pageable);
 
+    /**
+     * Patient-scoped disclosure accounting (Tier 2 item 39). Keys on the
+     * {@code patient_id} column V141 added, <b>not</b> on the older
+     * {@code (entityType='PATIENT', resourceId=patientId)} convention —
+     * break-the-glass rows key on the session id and eligibility rows on the
+     * check id, so the convention never returned either, and emergency
+     * access to a chart was invisible on the patient's own access list.
+     *
+     * <p>Event types are filtered by the caller against
+     * {@link com.example.hms.enums.DisclosureCategory#accountableEventTypes()}
+     * so that keying a new event type by patient does not silently publish it
+     * to patients.
+     *
+     * <p>Date bounds are both nullable; a null bound is ignored.
+     */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE "
+           + "a.patientId = :patientId "
+           + "AND a.eventType IN :eventTypes "
+           + "AND (:fromDate IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (:toDate IS NULL OR a.eventTimestamp <= :toDate) "
+           + "ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
+    Page<AuditEventLog> findDisclosuresForPatient(@Param("patientId") UUID patientId,
+                                                  @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                  @Param("fromDate") LocalDateTime fromDate,
+                                                  @Param("toDate") LocalDateTime toDate,
+                                                  Pageable pageable);
+
+    /**
+     * Per-category counts for one patient over the same window, so the
+     * report can headline "2 emergency accesses, 1 release to another
+     * hospital" without paging the whole history client-side. Grouped on
+     * {@code (eventType, entityType)} because those two together are what
+     * {@link com.example.hms.enums.DisclosureCategory#classify} needs —
+     * {@code PATIENT_ACCESS} means a chart open or an insurance disclosure
+     * depending on the entity type, and collapsing on event type alone would
+     * merge them.
+     */
+    @Query("SELECT a.eventType AS eventType, a.entityType AS entityType, COUNT(a) AS cnt "
+           + "FROM AuditEventLog a "
+           + "WHERE a.patientId = :patientId "
+           + "AND a.eventType IN :eventTypes "
+           + "AND (:fromDate IS NULL OR a.eventTimestamp >= :fromDate) "
+           + "AND (:toDate IS NULL OR a.eventTimestamp <= :toDate) "
+           + "GROUP BY a.eventType, a.entityType")
+    List<Object[]> countDisclosureCategoriesForPatient(@Param("patientId") UUID patientId,
+                                                       @Param("eventTypes") Collection<AuditEventType> eventTypes,
+                                                       @Param("fromDate") LocalDateTime fromDate,
+                                                       @Param("toDate") LocalDateTime toDate);
+
     /** Counterpart of {@link #findByDateRangeAndEventTypeIn} — everything not in the set. */
     @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
            "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +

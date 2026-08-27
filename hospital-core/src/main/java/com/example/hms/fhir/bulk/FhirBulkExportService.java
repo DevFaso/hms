@@ -300,6 +300,10 @@ public class FhirBulkExportService {
                 .entityType(AUDIT_ENTITY_TYPE)
                 .resourceId(job.getId() == null ? null : job.getId().toString())
                 .eventDescription(description)
+                // No patientId: a bulk export is population-scoped and the
+                // job row is the right key. Per-patient attribution for
+                // exports comes from PatientEverythingService's
+                // PATIENT_EXPORT rows, which are keyed on the patient.
                 .build();
             auditEventLogService.logEvent(request);
         } catch (RuntimeException ex) {

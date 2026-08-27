@@ -161,6 +161,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
     private final AuditEventLogService auditEventLogService;
+    private final com.example.hms.service.disclosure.DisclosureAccountingService disclosureAccountingService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final DepartmentRepository departmentRepository;
@@ -803,12 +804,35 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     // ── Access log (who viewed my records) ───────────────────────────────
 
+    /**
+     * Who viewed my records.
+     *
+     * <p>Used to call {@code getAuditLogsByTarget("PATIENT", patientId)},
+     * which matches on the convention {@code entityType='PATIENT'} +
+     * {@code resourceId=patientId}. Three of the six emitters that write
+     * patient-related audit rows do not follow it — break-the-glass keys on
+     * the session id, eligibility on the check id — so the page a patient
+     * opens to see who read their chart omitted every emergency override and
+     * every disclosure to an insurer, and said nothing about it.
+     * {@link DisclosureAccountingService} reads the {@code patient_id} key
+     * V141 added instead. Tier 2 item 39.
+     */
     @Override
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return auditEventLogService.getAuditLogsByTarget("PATIENT", patientId.toString(), pageable)
-                .map(this::toAccessLogEntry);
+        return disclosureAccountingService.getEntries(patientId, null, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.DisclosureAccountingDTO getMyDisclosureAccounting(
+                                                             Authentication auth,
+                                                             java.time.LocalDateTime from,
+                                                             java.time.LocalDateTime to,
+                                                             Pageable pageable) {
+        UUID patientId = resolvePatientId(auth);
+        return disclosureAccountingService.getAccounting(patientId, from, to, pageable);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

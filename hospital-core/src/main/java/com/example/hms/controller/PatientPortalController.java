@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
+import com.example.hms.payload.dto.portal.DisclosureAccountingDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.HealthSummaryDTO;
@@ -57,6 +58,7 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -75,6 +77,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -469,6 +472,25 @@ public class PatientPortalController {
             Authentication auth, @PageableDefault(size = 20) Pageable pageable) {
         Page<AccessLogEntryDTO> logs = portalService.getMyAccessLog(auth, pageable);
         return ResponseEntity.ok(ApiResponseWrapper.success(logs));
+    }
+
+    @Operation(summary = "Accounting of disclosures",
+            description = "Who has seen, received or exported my record over a date window, "
+                + "classified and counted by category. Includes emergency break-the-glass "
+                + "access and disclosures to insurers, which the plain access log did not "
+                + "surface before Tier 2 item 39.")
+    @GetMapping("/disclosures")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<DisclosureAccountingDTO>> getMyDisclosures(
+            Authentication auth,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @PageableDefault(size = 20) Pageable pageable) {
+        DisclosureAccountingDTO accounting =
+            portalService.getMyDisclosureAccounting(auth, from, to, pageable);
+        return ResponseEntity.ok(ApiResponseWrapper.success(accounting));
     }
 
     // ── Proxy / Family Access ─────────────────────────────────────────────

@@ -150,6 +150,19 @@ public interface PatientPortalService {
     // ── Access log (who viewed my records) ───────────────────────────────
     Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable);
 
+    /**
+     * Accounting of disclosures over a window — the same events as
+     * {@link #getMyAccessLog}, plus per-category counts across the whole
+     * window so the surface can lead with the handful that went outside the
+     * treating team rather than burying them under routine chart opens.
+     * Tier 2 item 39.
+     */
+    com.example.hms.payload.dto.portal.DisclosureAccountingDTO getMyDisclosureAccounting(
+        Authentication auth,
+        java.time.LocalDateTime from,
+        java.time.LocalDateTime to,
+        Pageable pageable);
+
     // ══════════════════════════════════════════════════════════════════════
     // PHASE 3 — Proxy / Family Access
     // ══════════════════════════════════════════════════════════════════════

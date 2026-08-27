@@ -131,7 +131,8 @@ class AuditEventLogTest {
                 ActorType.USER,                // actorType
                 "John Doe",                    // actorLabel
                 null,                          // impersonatorUserId (MVP-4)
-                null                           // impersonatorUsername (MVP-4)
+                null,                          // impersonatorUsername (MVP-4)
+                null                           // patientId (V141, Tier 2 item 39)
             );
 
             assertAll(

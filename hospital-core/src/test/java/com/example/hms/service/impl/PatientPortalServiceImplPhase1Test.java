@@ -109,6 +109,7 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private DischargeSummaryService dischargeSummaryService;
     @Mock private PatientPrimaryCareService primaryCareService;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.disclosure.DisclosureAccountingService disclosureAccountingService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private com.example.hms.repository.DepartmentRepository departmentRepository;
@@ -754,31 +755,32 @@ class PatientPortalServiceImplPhase1Test {
     class GetMyAccessLog {
 
         @Test
-        @DisplayName("should map audit log entries to AccessLogEntryDTOs")
+        @DisplayName("should return the disclosure service's entries for the resolved patient")
         void getMyAccessLog_mapsEntries() {
             stubPatientResolution();
             Pageable pageable = PageRequest.of(0, 10);
 
-            AuditEventLogResponseDTO auditEntry = new AuditEventLogResponseDTO();
-            auditEntry.setUserName("dr.martin");
-            auditEntry.setEventType("PATIENT_RECORD_VIEWED");
-            auditEntry.setEntityType("PATIENT");
-            auditEntry.setResourceId(patientId.toString());
-            auditEntry.setEventDescription("Doctor viewed patient record");
-            auditEntry.setStatus("SUCCESS");
-            auditEntry.setEventTimestamp(LocalDateTime.now());
+            AccessLogEntryDTO entry = AccessLogEntryDTO.builder()
+                    .id(UUID.randomUUID())
+                    .actor("dr.martin")
+                    .eventType("PATIENT_ACCESS")
+                    .entityType("PATIENT")
+                    .resourceId(patientId.toString())
+                    .description("Doctor viewed patient record")
+                    .status("SUCCESS")
+                    .timestamp(LocalDateTime.now())
+                    .build();
 
-            Page<AuditEventLogResponseDTO> auditPage = new PageImpl<>(List.of(auditEntry));
-            when(auditEventLogService.getAuditLogsByTarget("PATIENT", patientId.toString(), pageable))
-                    .thenReturn(auditPage);
+            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+                    .thenReturn(new PageImpl<>(List.of(entry)));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);
 
             assertThat(result.getContent()).hasSize(1);
-            AccessLogEntryDTO entry = result.getContent().get(0);
-            assertThat(entry.getActor()).isEqualTo("dr.martin");
-            assertThat(entry.getEventType()).isEqualTo("PATIENT_RECORD_VIEWED");
-            assertThat(entry.getDescription()).isEqualTo("Doctor viewed patient record");
+            AccessLogEntryDTO out = result.getContent().get(0);
+            assertThat(out.getActor()).isEqualTo("dr.martin");
+            assertThat(out.getEventType()).isEqualTo("PATIENT_ACCESS");
+            assertThat(out.getDescription()).isEqualTo("Doctor viewed patient record");
         }
     }
 
