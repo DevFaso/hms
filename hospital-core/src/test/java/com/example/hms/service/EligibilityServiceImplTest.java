@@ -200,6 +200,33 @@ class EligibilityServiceImplTest {
         }
 
         @Test
+        @DisplayName("stamps the patient so the check reaches their disclosure list")
+        void auditCarriesThePatientKey() {
+            // An eligibility check sends the patient's identity and coverage
+            // to an outside scheme. That is a disclosure to a third party,
+            // not internal treatment access -- but the row keys on the CHECK
+            // id (entityType=EligibilityCheck), so the patient's own "who
+            // viewed my records" list, which matched on
+            // (entityType='PATIENT', resourceId=patientId), never showed it.
+            // Tier 2 item 39 / V141.
+            stubLookups();
+
+            service.submit(baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001"));
+
+            ArgumentCaptor<AuditEventRequestDTO> auditCaptor =
+                ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditService, times(1)).logEvent(auditCaptor.capture());
+            AuditEventRequestDTO emitted = auditCaptor.getValue();
+
+            assertThat(emitted.getPatientId())
+                .as("without this the disclosure is invisible to the patient it concerns")
+                .isEqualTo(patientId);
+            // The check key stays -- the patient key is an addition, not a
+            // replacement, and the row is still an EligibilityCheck audit.
+            assertThat(emitted.getEntityType()).isEqualTo("EligibilityCheck");
+        }
+
+        @Test
         @DisplayName("missing patient throws ResourceNotFoundException; no save / audit")
         void missingPatient() {
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));

@@ -4030,7 +4030,21 @@
       "CONSENT_REVOKE_FAILED": "Failed to revoke consent",
       "LOADING_LOG": "Loading access log…",
       "NO_ACCESS_TITLE": "No Access Records",
-      "NO_ACCESS_DESC": "Nobody has accessed your records yet, or access logging has just started."
+      "NO_ACCESS_DESC": "Nobody has accessed your records yet, or access logging has just started.",
+      "LOG_FAILED_TITLE": "Couldn't load your access log",
+      "LOG_FAILED_DESC": "We couldn't reach the record right now. This does not mean nobody has viewed your records — please try again.",
+      "LOG_RETRY": "Try again",
+      "CATEGORY": {
+        "EMERGENCY_ACCESS": "Emergency access",
+        "TREATMENT_ACCESS": "Viewed for your care",
+        "SHARED_WITH_PROVIDER": "Shared with another hospital",
+        "INSURANCE": "Sent to your insurer",
+        "COPY_RELEASED": "A copy was released",
+        "IDENTITY_CHANGE": "Records merged",
+        "UNKNOWN": "Access recorded"
+      },
+      "SUMMARY_EMERGENCY": "emergency accesses to your record",
+      "SUMMARY_EXTERNAL": "times your record went outside your care team"
     },
     "FAMILY": {
       "TITLE": "Family & Proxy Access",

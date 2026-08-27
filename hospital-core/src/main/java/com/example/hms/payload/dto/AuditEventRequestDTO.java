@@ -57,6 +57,19 @@ public class AuditEventRequestDTO {
     @Schema(description = "Entity type of the target resource (e.g., PATIENT, APPOINTMENT).", example = "PATIENT")
     private String entityType;
 
+    /**
+     * Patient this event concerns. Set it whenever the event touches one,
+     * <b>especially</b> when {@code entityType} is something other than
+     * {@code PATIENT} — those are exactly the rows that used to fall out
+     * of "who viewed my records" (Tier 2 item 39). Left null, the service
+     * falls back to the {@code entityType=PATIENT} convention, so an
+     * emitter that already follows that needs no change.
+     */
+    @Schema(description = "Patient this event concerns. Set explicitly when entityType is not PATIENT "
+        + "(e.g. BREAK_GLASS_SESSION, EligibilityCheck) so the event still reaches the patient's "
+        + "disclosure list.", example = "123e4567-e89b-12d3-a456-426614174000")
+    private UUID patientId;
+
     @Schema(description = "Real super-admin user id when this event was performed under a support-impersonation token (MVP-4). Null for normal sessions.")
     private UUID impersonatorUserId;
 

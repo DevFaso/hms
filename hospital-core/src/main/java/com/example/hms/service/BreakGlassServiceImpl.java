@@ -310,6 +310,11 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .resourceId(sessionId != null ? sessionId.toString() : null)
             .entityType("BREAK_GLASS_SESSION")
             .resourceName(patient != null ? "Patient " + patient.getId() : null)
+            // The row keys on the SESSION, which is right for a session
+            // audit — but it meant emergency access to a chart never
+            // reached the patient's own "who viewed my records" list, the
+            // one category that list exists for. V141 / Tier 2 item 39.
+            .patientId(patient != null ? patient.getId() : null)
             .status(status)
             .build();
         try {

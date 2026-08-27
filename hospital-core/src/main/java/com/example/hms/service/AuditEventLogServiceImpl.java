@@ -158,10 +158,43 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .eventTimestamp(java.time.LocalDateTime.now())
                 .impersonatorUserId(impersonatorUserId)
                 .impersonatorUsername(impersonatorUsername)
+                .patientId(resolvePatientKey(requestDTO, resourceId))
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
         return auditMapper.toDto(saved);
+    }
+
+    /**
+     * The patient this event concerns (V141 / Tier 2 item 39).
+     *
+     * <p>An explicit {@code patientId} always wins. Absent one, fall back to
+     * the pre-V141 convention — {@code entityType = "PATIENT"} means the
+     * resource id <i>is</i> the patient — so the emitters that already
+     * followed it keep working untouched. The emitters that did not follow
+     * it (break-the-glass keys on the session, eligibility on the check)
+     * are the ones that now pass the id explicitly; they are why the
+     * column exists.
+     *
+     * <p>The parse is guarded because {@code resourceId} is free text and
+     * {@link #doLogEvent} substitutes the literal {@code "Unknown Resource"}
+     * when it is blank.
+     */
+    private UUID resolvePatientKey(AuditEventRequestDTO requestDTO, String resolvedResourceId) {
+        if (requestDTO.getPatientId() != null) {
+            return requestDTO.getPatientId();
+        }
+        if (!"PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
+            return null;
+        }
+        // A PATIENT-typed row whose resource id is not a UUID keeps the event
+        // and loses only the key. Never the other way round.
+        UUID parsed = parseUuidOrNull(resolvedResourceId);
+        if (parsed == null) {
+            log.debug("[AUDIT] entityType=PATIENT but resourceId is not a UUID ({}) — no patient key",
+                resolvedResourceId);
+        }
+        return parsed;
     }
 
     /**
@@ -256,8 +289,32 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         if ((resourceName != null && !resourceName.isBlank()) || resourceId == null || resourceId.isBlank()) {
             return resourceName;
         }
-        return patientRepository.findById(UUID.fromString(resourceId))
+        // Guarded. This used to be a bare UUID.fromString(resourceId), and a
+        // PATIENT-typed event whose resource id was not a UUID threw
+        // IllegalArgumentException here — which logEvent catches and
+        // swallows, so the AUDIT ROW WAS SILENTLY DROPPED. An audit trail
+        // that discards writes it cannot label is the worst failure mode
+        // available to it: the event is gone, and nothing anywhere says so.
+        // Falling back to the raw id is what the .orElse below already
+        // intended for the not-found case. Found by the V141 tests.
+        UUID parsed = parseUuidOrNull(resourceId);
+        if (parsed == null) {
+            return resourceId;
+        }
+        return patientRepository.findById(parsed)
             .map(Patient::getFullName).orElse(resourceId);
+    }
+
+    /** {@link UUID#fromString} without the throw. */
+    private UUID parseUuidOrNull(String candidate) {
+        if (candidate == null || candidate.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(candidate.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     /**

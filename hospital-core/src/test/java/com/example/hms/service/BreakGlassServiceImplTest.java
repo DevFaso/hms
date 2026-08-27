@@ -7,6 +7,7 @@ import com.example.hms.model.BreakGlassSession;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
 import com.example.hms.payload.dto.BreakGlassRevokeRequestDTO;
 import com.example.hms.payload.dto.BreakGlassSessionResponseDTO;
@@ -136,6 +137,44 @@ class BreakGlassServiceImplTest {
             assertThat(out.getReason()).startsWith("Unconscious");
 
             verify(auditService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("stamps the patient on the audit row so emergency access reaches the patient's own list")
+        void declareStampsPatientOnAuditRow() {
+            // THE REGRESSION. These rows carry entityType=BREAK_GLASS_SESSION
+            // and resourceId=<session id>, and the patient portal's "who
+            // viewed my records" list queried
+            // (entityType='PATIENT', resourceId=patientId). So every
+            // emergency override of a chart was invisible to the patient it
+            // happened to -- the one category that list exists for -- with
+            // nothing on the page saying it was partial. The old test here
+            // only asserted logEvent was called at all, which is why the
+            // payload could be wrong for as long as it was. Tier 2 item 39.
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+
+            service.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build());
+
+            ArgumentCaptor<AuditEventRequestDTO> audit =
+                ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditService).logEvent(audit.capture());
+
+            assertThat(audit.getValue().getPatientId())
+                .as("without this the row never reaches the patient's disclosure list")
+                .isEqualTo(patientId);
+            // The session key stays: it is still a session audit, and the
+            // patient key is an addition rather than a replacement.
+            assertThat(audit.getValue().getEntityType()).isEqualTo("BREAK_GLASS_SESSION");
         }
 
         @Test
