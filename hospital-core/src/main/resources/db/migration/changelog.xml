@@ -2098,20 +2098,23 @@
     </changeSet>
 
     <!-- =================================================================
-         V142 - unstrand RESCHEDULED appointments. The reschedule modal
-         saved the new date together with status RESCHEDULED, which every
-         consumer treats as terminal: no action buttons on the detail
-         page, no check-in icon in the reception queue, and
-         checkInPatient rejects it outright. The result was an
-         appointment with a correct date and time, a patient expected to
-         arrive, and no way to check them in. Moves today-and-later rows
-         to SCHEDULED, which the transition map always allowed and
-         nothing ever performed. Past-dated rows are left alone - those
-         are history, not a queue. Plain UPDATE, no DO block.
+         V141 - patient key on the audit ledger. The patient portal
+         already shipped a "who viewed my records" tab; it queried
+         (target_entity_type='PATIENT', target_resource_id=patientId),
+         which is a convention only three of the six patient-related
+         emitters follow. Break-the-glass keys on the SESSION id and
+         eligibility checks on the CHECK id, so emergency access to a
+         chart - the one category the page exists for - never appeared
+         on it, and neither did disclosures to an insurance scheme.
+         Adds the column the query should have had, backfills the three
+         shapes whose patient is derivable, and leaves the rest NULL
+         rather than implying completeness. No FK: audit rows must
+         outlive purged patients. DO block, so splitStatements="false".
          ================================================================= -->
-    <changeSet id="V142-unstrand-rescheduled-appointments" author="hms-team" runOnChange="false">
-        <sqlFile path="V142__unstrand_rescheduled_appointments.sql"
+    <changeSet id="V141-audit-patient-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V141__audit_patient_key.sql"
                  relativeToChangelogFile="true"
+                 splitStatements="false"
                  stripComments="false"/>
     </changeSet>
 

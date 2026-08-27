@@ -242,6 +242,12 @@ public class EligibilityServiceImpl implements EligibilityService {
                 .userName(caller != null ? caller.getUsername() : null)
                 .hospitalName(hospital.getName())
                 .resourceName(patient.getId() != null ? patient.getId().toString() : null)
+                // An eligibility check sends the patient's identity and
+                // coverage to an outside scheme. That is a disclosure to a
+                // third party, not internal treatment access, so it belongs
+                // on the patient's list — and keyed on the check id it never
+                // got there. V141 / Tier 2 item 39.
+                .patientId(patient.getId())
                 .eventDescription("Eligibility " + check.getCheckType()
                     + " against scheme " + check.getScheme()
                     + " — status=" + check.getStatus()
