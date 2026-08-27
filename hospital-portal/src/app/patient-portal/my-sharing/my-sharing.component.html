@@ -136,6 +136,16 @@
 
   <!-- ACCESS LOG TAB -->
   @if (activeTab() === 'access-log') {
+    <!--
+      Shown above every state, including the empty one. What this page can
+      report is narrower than "who viewed my records" implies: routine chart
+      reads emit no audit event, so listing only disclosures without saying so
+      reads as "nobody else looked".
+    -->
+    <p class="access-scope-note">
+      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      {{ 'PORTAL.SHARING.ACCESS_LOG_SCOPE_NOTE' | translate }}
+    </p>
     @if (loadingLog()) {
       <div class="portal-loading">
         <div class="portal-spinner"></div>
