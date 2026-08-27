@@ -101,6 +101,11 @@ public class DispenseServiceImpl implements DispenseService {
      */
     @Lazy
     @Autowired
+    // NOSONAR java:S6813 — constructor injection is not merely discouraged
+    // here, it is impossible: a bean cannot be handed itself while it is
+    // still being constructed. See the note above; @Lazy + field injection
+    // is the documented Spring idiom for self-invocation through the proxy.
+    @SuppressWarnings("java:S6813")
     private DispenseServiceImpl self;
 
     private static final String AUDIT_ENTITY = "DISPENSE";
