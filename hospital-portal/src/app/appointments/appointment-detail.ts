@@ -8,10 +8,11 @@ import {
   AppointmentUpsertRequest,
   AppointmentStatus,
 } from '../services/appointment.service';
+import { ReceptionService } from '../reception/reception.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
@@ -26,13 +27,26 @@ const STATUS_UPDATE_ROLES: readonly string[] = [
   'ROLE_SUPER_ADMIN',
 ];
 
-/** Roles that can navigate to the Reception cockpit for check-in. */
+/**
+ * Roles that can check a patient in from this page.
+ *
+ * <p>Must stay a subset of what the backend's {@code POST /reception/check-in}
+ * accepts — this list only decides whether the button is drawn.
+ */
 const CHECK_IN_ROLES: readonly string[] = [
   'ROLE_RECEPTIONIST',
   'ROLE_HOSPITAL_ADMIN',
   'ROLE_ADMIN',
   'ROLE_SUPER_ADMIN',
 ];
+
+/**
+ * Statuses a patient can be checked in from. Mirrors the guard in
+ * {@code ReceptionServiceImpl.checkInPatient}, which rejects anything else
+ * with an IllegalStateException — drawing the button for a status the API
+ * refuses would just move the failure one click later.
+ */
+const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED'];
 
 @Component({
   selector: 'app-appointment-detail',
@@ -46,6 +60,8 @@ export class AppointmentDetailComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly appointmentService = inject(AppointmentService);
   private readonly toast = inject(ToastService);
+  private readonly receptionService = inject(ReceptionService);
+  private readonly translate = inject(TranslateService);
   protected readonly permissions = inject(PermissionService);
   private readonly auth = inject(AuthService);
 
@@ -89,7 +105,12 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   get canCheckIn(): boolean {
-    return CHECK_IN_ROLES.some((r) => this.currentUserRoles.includes(r));
+    const appt = this.appointment();
+    if (!appt) return false;
+    return (
+      CHECK_IN_ELIGIBLE.includes(appt.status) &&
+      CHECK_IN_ROLES.some((r) => this.currentUserRoles.includes(r))
+    );
   }
 
   /** True once the current date/time is at or past the appointment's start time. */
@@ -129,6 +150,7 @@ export class AppointmentDetailComponent implements OnInit {
     const map: Record<AppointmentStatus, string> = {
       SCHEDULED: 'status-scheduled',
       CONFIRMED: 'status-confirmed',
+      CHECKED_IN: 'status-checked-in',
       IN_PROGRESS: 'status-in-progress',
       COMPLETED: 'status-completed',
       CANCELLED: 'status-cancelled',
@@ -182,7 +204,20 @@ export class AppointmentDetailComponent implements OnInit {
       appointmentDate: this.rescheduleDate,
       startTime: this.rescheduleStart,
       endTime: this.rescheduleEnd,
-      status: 'RESCHEDULED',
+      // SCHEDULED, not RESCHEDULED. A moved appointment is a LIVE appointment
+      // at a new time — the patient is expected to turn up and be checked in.
+      // Writing RESCHEDULED here stranded it: every consumer treats that
+      // status as terminal, so the detail page drew no action buttons, the
+      // reception queue drew no check-in icon, and the backend's
+      // checkInPatient rejected it outright. The appointment kept its date
+      // and lost every way to act on it. The backend's own transition map
+      // already says RESCHEDULED -> {SCHEDULED, CONFIRMED, CANCELLED}, i.e.
+      // it was always meant to be passed through, and nothing passed it.
+      //
+      // Landing on SCHEDULED rather than keeping CONFIRMED is deliberate: the
+      // patient confirmed a DIFFERENT time, so that confirmation no longer
+      // means anything and should be asked for again.
+      status: 'SCHEDULED',
       patientId: appt.patientId,
       staffId: appt.staffId,
       hospitalId: appt.hospitalId,
@@ -244,6 +279,18 @@ export class AppointmentDetailComponent implements OnInit {
     this.updateStatus('NO_SHOW');
   }
 
+  /**
+   * Put a legacy RESCHEDULED appointment back into play.
+   *
+   * <p>Reschedule now lands on SCHEDULED directly, so this only exists for
+   * rows written before that fix. Without it those appointments have a date,
+   * a time, an expected patient, and no action anywhere that can move them
+   * on.
+   */
+  markAsScheduled(): void {
+    this.updateStatus('SCHEDULE');
+  }
+
   private updateStatus(action: string): void {
     this.saving.set(true);
     this.appointmentService.updateStatus(this.appointmentId, action).subscribe({
@@ -263,7 +310,45 @@ export class AppointmentDetailComponent implements OnInit {
     void this.router.navigate(['/appointments']);
   }
 
-  goToCheckIn(): void {
+  /**
+   * Check the patient in.
+   *
+   * <p>This used to be {@code router.navigate(['/reception'])} and nothing
+   * else — a button sitting in the same action bar as Confirm, Complete and
+   * No Show, all of which call the API, that silently changed nothing. It did
+   * not even pass the appointment id, so reception could not pre-select the
+   * patient either.
+   *
+   * <p>What it has to do is real work, because check-in is what creates the
+   * {@code Encounter(ARRIVED)} that the Patient Tracker board is built from.
+   * No check-in, no encounter, and the board stays empty however many times
+   * somebody presses the button.
+   */
+  checkIn(): void {
+    const appt = this.appointment();
+    if (!appt || this.saving()) return;
+
+    this.saving.set(true);
+    this.receptionService.checkInPatient({ appointmentId: this.appointmentId }).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
+        // Re-read rather than patching the status locally: check-in also
+        // stamps checkedInAt and creates the encounter, and the row the
+        // server has is the one that matters.
+        this.loadAppointment(this.appointmentId);
+        this.saving.set(false);
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'),
+        );
+        this.saving.set(false);
+      },
+    });
+  }
+
+  /** Open the Reception cockpit — for the co-pay, insurance and consent steps. */
+  goToReception(): void {
     void this.router.navigate(['/reception']);
   }
 }

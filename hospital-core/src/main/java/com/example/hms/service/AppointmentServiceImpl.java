@@ -116,8 +116,18 @@ public class AppointmentServiceImpl implements AppointmentService {
     static {
         Map<AppointmentStatus, Set<AppointmentStatus>> m = new EnumMap<>(AppointmentStatus.class);
         m.put(AppointmentStatus.PENDING,     EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
-        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED));
-        m.put(AppointmentStatus.CONFIRMED,   EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW));
+        // SCHEDULED is reachable from CONFIRMED because moving a confirmed
+        // appointment to a new time invalidates the confirmation — the patient
+        // agreed to a DIFFERENT slot, and being asked again is the point.
+        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED));
+        m.put(AppointmentStatus.CONFIRMED,   EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW));
+        // CHECKED_IN had NO entry at all. ReceptionServiceImpl.checkInPatient
+        // sets it directly on the entity, bypassing this map, so check-in
+        // worked — but getOrDefault then returned an empty set for every
+        // subsequent action, and a checked-in appointment could never be
+        // completed, marked no-show or cancelled. It sat CHECKED_IN forever
+        // while the encounter carried the clinical workflow on alone.
+        m.put(AppointmentStatus.CHECKED_IN,  EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW, AppointmentStatus.CANCELLED));
         m.put(AppointmentStatus.IN_PROGRESS, EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.FAILED, AppointmentStatus.NO_SHOW));
         m.put(AppointmentStatus.RESCHEDULED, EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
         m.put(AppointmentStatus.COMPLETED,   EnumSet.noneOf(AppointmentStatus.class));
@@ -131,6 +141,27 @@ public class AppointmentServiceImpl implements AppointmentService {
     /** Statuses that require the appointment time window to have started. */
     private static final Set<AppointmentStatus> REQUIRES_APPOINTMENT_STARTED =
         EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW);
+
+    /**
+     * Reject a status change on the update path that the state machine would
+     * not allow.
+     *
+     * <p>Permissive in two places on purpose. A null requested status means
+     * the caller is editing something else and not touching status; an
+     * unchanged status is a no-op, not a self-transition. Only an actual move
+     * is checked, so ordinary edits — reason, notes, the date and time of a
+     * reschedule — pass through untouched.
+     */
+    private void requireValidStatusChange(AppointmentStatus current, AppointmentStatus requested) {
+        if (requested == null || requested == current) {
+            return;
+        }
+        Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
+        if (!allowed.contains(requested)) {
+            throw new BusinessException(
+                String.format("Cannot transition from %s to %s", current, requested));
+        }
+    }
 
     /* =======================
        Helpers
@@ -548,6 +579,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalTime   oldStart = existing.getStartTime();
         LocalTime   oldEnd   = existing.getEndTime();
 
+        // The update path used to write request.getStatus() straight onto the
+        // entity with no transition check at all, while
+        // confirmOrCancelAppointment validated every move. That asymmetry is
+        // how the reschedule modal parked appointments in RESCHEDULED — a
+        // status the state machine says must be passed through, reached by a
+        // route that never consulted the state machine. A rule enforced on one
+        // of two write paths is not a rule.
+        requireValidStatusChange(existing.getStatus(), request.getStatus());
+
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
@@ -598,6 +638,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         AppointmentStatus newStatus;
         switch (action.toLowerCase()) {
             case "confirm"    -> newStatus = AppointmentStatus.CONFIRMED;
+            // Puts a RESCHEDULED appointment back into play. Reschedule now
+            // lands on SCHEDULED directly, so this is for rows written before
+            // that fix — without it they have a date, a time, and no action
+            // anywhere in the product that can move them on.
+            case "schedule"   -> newStatus = AppointmentStatus.SCHEDULED;
             case "cancel"     -> newStatus = AppointmentStatus.CANCELLED;
             case "complete"   -> newStatus = AppointmentStatus.COMPLETED;
             case "no_show"    -> newStatus = AppointmentStatus.NO_SHOW;

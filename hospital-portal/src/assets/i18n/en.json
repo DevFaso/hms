@@ -1165,7 +1165,8 @@
     "TO_DATE": "To Date",
     "VIEW": "View appointment",
     "VIEW_MANAGE_SUBTITLE": "View and manage appointment details",
-    "YES_CANCEL": "Yes, Cancel"
+    "YES_CANCEL": "Yes, Cancel",
+    "RESTORE_TO_SCHEDULED": "Restore to Scheduled"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Appointment calendar",
@@ -5113,7 +5114,13 @@
     "OFFER_DECLINED": "Offer declined — entry returned to waiting",
     "ACCEPT_OFFER_FAILED": "Failed to accept the offer",
     "DECLINE_OFFER_FAILED": "Failed to decline the offer",
-    "DEPARTMENT": "Department"
+    "DEPARTMENT": "Department",
+    "PENDING": "Pending",
+    "RESCHEDULED": "Rescheduled",
+    "FAILED": "Failed",
+    "UNKNOWN": "Unknown",
+    "CHECK_IN_SUCCESS": "Patient checked in",
+    "CHECK_IN_FAILED": "Check-in failed"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
