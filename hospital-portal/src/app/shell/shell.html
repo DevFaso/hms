@@ -29,39 +29,99 @@
       </button>
     </div>
 
-    <nav class="sidebar-nav" aria-label="Primary navigation">
-      @for (item of navItems(); track item.route; let i = $index) {
-        <a
-          class="nav-item"
-          [class.dragging]="dragIndex() === i"
-          [class.drag-over]="dragOverIndex() === i && dragIndex() !== i"
-          [routerLink]="item.route"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
-          draggable="true"
-          [attr.aria-grabbed]="dragIndex() === i"
-          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
-          (click)="closeOverlays()"
-          (keydown)="onNavKeydown($event, i)"
-          (dragstart)="onDragStart($event, i)"
-          (dragover)="onDragOver($event, i)"
-          (dragleave)="onDragLeave()"
-          (drop)="onDrop($event, i)"
-          (dragend)="onDragEnd()"
-        >
-          <span
-            class="drag-handle material-symbols-outlined"
-            title="Drag to reorder"
-            aria-hidden="true"
-            >drag_indicator</span
+    <!--
+      Module search. Hidden while collapsed: the rail is icon-width, so a text
+      field there would be unusable rather than merely cramped.
+    -->
+    @if (!sidebarCollapsed()) {
+      <div class="nav-search">
+        <span class="material-symbols-outlined nav-search-icon" aria-hidden="true">search</span>
+        <!--
+          The label is visually hidden rather than absent. A placeholder is not
+          an accessible name — it disappears on first keystroke and several
+          screen readers never announce it at all.
+        -->
+        <label class="sr-only" for="nav-search-input">{{ 'NAV.SEARCH_LABEL' | translate }}</label>
+        <input
+          id="nav-search-input"
+          class="nav-search-input"
+          type="search"
+          autocomplete="off"
+          [value]="navSearch()"
+          [placeholder]="'NAV.SEARCH_PLACEHOLDER' | translate"
+          (input)="onNavSearchInput($event)"
+        />
+        @if (navSearch()) {
+          <button
+            type="button"
+            class="nav-search-clear"
+            [attr.aria-label]="'NAV.SEARCH_CLEAR' | translate"
+            [title]="'NAV.SEARCH_CLEAR' | translate"
+            (click)="clearNavSearch()"
           >
-          <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
-          @if (!sidebarCollapsed()) {
-            <span class="nav-label">{{
-              item.translationKey ? (item.translationKey | translate) : item.label
-            }}</span>
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        }
+      </div>
+    }
+
+    <nav class="sidebar-nav" aria-label="Primary navigation">
+      @for (group of navGroups(); track group.id) {
+        <!--
+          role="group" + aria-labelledby so the heading names the set for a
+          screen reader instead of being a stray line of text between links.
+        -->
+        <div class="nav-group" role="group" [attr.aria-labelledby]="'nav-group-' + group.id">
+          <h2
+            class="nav-group-title"
+            [id]="'nav-group-' + group.id"
+            [class.sr-only]="sidebarCollapsed()"
+          >
+            {{ group.translationKey | translate }}
+          </h2>
+          @for (entry of group.entries; track entry.item.route) {
+            <a
+              class="nav-item"
+              [class.dragging]="dragIndex() === entry.flatIndex"
+              [class.drag-over]="
+                dragOverIndex() === entry.flatIndex && dragIndex() !== entry.flatIndex
+              "
+              [routerLink]="entry.item.route"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ exact: entry.item.route === '/dashboard' }"
+              draggable="true"
+              [attr.aria-grabbed]="dragIndex() === entry.flatIndex"
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              (click)="closeOverlays()"
+              (keydown)="onNavKeydown($event, entry.flatIndex)"
+              (dragstart)="onDragStart($event, entry.flatIndex)"
+              (dragover)="onDragOver($event, entry.flatIndex)"
+              (dragleave)="onDragLeave()"
+              (drop)="onDrop($event, entry.flatIndex)"
+              (dragend)="onDragEnd()"
+            >
+              <span
+                class="drag-handle material-symbols-outlined"
+                title="Drag to reorder"
+                aria-hidden="true"
+                >drag_indicator</span
+              >
+              <span class="material-symbols-outlined nav-icon">{{ entry.item.icon }}</span>
+              @if (!sidebarCollapsed()) {
+                <span class="nav-label">{{
+                  entry.item.translationKey
+                    ? (entry.item.translationKey | translate)
+                    : entry.item.label
+                }}</span>
+              }
+            </a>
           }
-        </a>
+        </div>
+      }
+      @if (navSearchEmpty()) {
+        <p class="nav-no-results" role="status">
+          {{ 'NAV.SEARCH_NO_RESULTS' | translate: { query: navSearch() } }}
+        </p>
       }
     </nav>
 

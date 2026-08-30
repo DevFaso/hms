@@ -2977,7 +2977,27 @@
     "ON_CALL": "Gardes",
     "SLOT_ADMIN": "Administration des créneaux",
     "TRANSFUSIONS": "Banque de sang",
-    "BED_BOARD": "Tableau des lits"
+    "BED_BOARD": "Tableau des lits",
+    "GROUP": {
+      "MY_DAY": "Ma journée",
+      "PATIENTS_FLOW": "Patients et flux",
+      "CARE": "Soins",
+      "PHARMACY": "Médicaments et pharmacie",
+      "DIAGNOSTICS": "Diagnostics",
+      "BILLING": "Facturation",
+      "INSIGHTS": "Analyses",
+      "ADMINISTRATION": "Administration",
+      "PLATFORM": "Plateforme",
+      "MY_CARE": "Mes soins",
+      "MY_HEALTH": "Ma santé",
+      "MY_RECORDS": "Mon dossier",
+      "MY_BILLING": "Facturation",
+      "OTHER": "Autres"
+    },
+    "SEARCH_LABEL": "Rechercher un module",
+    "SEARCH_PLACEHOLDER": "Rechercher un module...",
+    "SEARCH_CLEAR": "Effacer la recherche",
+    "SEARCH_NO_RESULTS": "Aucun module ne correspond à « {{query}} »."
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",

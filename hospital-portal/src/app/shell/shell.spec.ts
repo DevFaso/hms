@@ -15,6 +15,7 @@ import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
 import { DowntimeService } from '../services/downtime.service';
 import { NavOrderService } from './nav-order.service';
+import { navGroupForRoute } from './nav-groups';
 
 interface NavItem {
   route: string;
@@ -35,7 +36,7 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     wildcardPermission: boolean;
     /** When set, hasPermission answers from this list instead of the wildcard. */
     permissions?: string[];
-  }): { items: NavItem[] } {
+  }): { items: NavItem[]; component: ShellComponent } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
       'hasAnyRole',
@@ -107,7 +108,9 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const items = (
       fixture.componentInstance as unknown as { baseNavItems: () => NavItem[] }
     ).baseNavItems();
-    return { items };
+    // The component comes back too so the grouping and search tests below can
+    // drive the real computeds without rendering the whole shell.
+    return { items, component: fixture.componentInstance };
   }
 
   afterEach(() => TestBed.resetTestingModule());
@@ -448,6 +451,133 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(routes).not.toContain('/my-notifications');
     expect(routes).not.toContain('/notifications');
   });
+
+  // ── Grouping and module search ───────────────────────────────────────
+
+  it('files every nav entry a role can reach under a real group', () => {
+    // The enforcement. A route missing from NAV_GROUP_BY_ROUTE still renders
+    // — under "More" — rather than vanishing, because a nav entry that
+    // disappears for want of one line in a lookup table is the
+    // built-but-unreachable failure this codebase keeps producing. That
+    // fallback is a safety net, not a place for things to live, so anything
+    // landing in it fails here.
+    //
+    // Super-admin with wildcard permissions plus the patient nav together
+    // reach every entry the shell can build.
+    // TestBed allows one configuration per instantiation, so each pass resets
+    // before the next builds its own component.
+    const staff = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    }).items;
+    TestBed.resetTestingModule();
+    const admin = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    }).items;
+    TestBed.resetTestingModule();
+    const patient = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    }).items;
+
+    const ungrouped = [...staff, ...admin, ...patient]
+      .map((i) => i.route)
+      .filter((route) => navGroupForRoute(route) === 'OTHER');
+
+    expect(ungrouped)
+      .withContext(
+        `these routes have no entry in NAV_GROUP_BY_ROUTE and fell back to "More": ${[
+          ...new Set(ungrouped),
+        ].join(', ')}`,
+      )
+      .toEqual([]);
+  });
+
+  it('groups the nav and drops groups the role holds nothing in', () => {
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    // navItems is filled by a constructor effect, and these tests skip
+    // detectChanges on purpose (ngOnInit opens websockets and idle timers).
+    // Seeding it drives the grouping computed directly.
+    component.navItems.set(items as never);
+
+    const ids = component.navGroups().map((g) => g.id);
+    expect(ids).toContain('MY_HEALTH');
+    // A patient holds no staff modules, so those headings must not render as
+    // titles over empty space.
+    expect(ids).not.toContain('PHARMACY');
+    expect(ids).not.toContain('PLATFORM');
+    expect(component.navGroups().every((g) => g.entries.length > 0)).toBeTrue();
+  });
+
+  it('keeps flatIndex pointing at the real position in navItems', () => {
+    // Reorder persists a flat route order, so the handlers must be given the
+    // flat index. Handing them the template's group-relative $index would
+    // scramble the saved order the first time anyone dragged anything —
+    // silently, and only for users who had reordered.
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+
+    const flat = component.navItems();
+    for (const group of component.navGroups()) {
+      for (const entry of group.entries) {
+        expect(flat[entry.flatIndex]?.route).toBe(entry.item.route);
+      }
+    }
+  });
+
+  it('narrows the nav to the modules that match', () => {
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+
+    // "admin" rather than a clinical term: this role's nav is the one the
+    // harness can build with wildcard permissions, and a search that matched
+    // nothing would pass a weaker assertion by accident.
+    component.navSearch.set('admin');
+    const routes = component.navGroups().flatMap((g) => g.entries.map((e) => e.item.route));
+
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes).toContain('/admin');
+    // Narrowing, not merely reordering — the point of the box. Both of these
+    // are in this role's nav and neither matches, so their absence is the
+    // filter working rather than a permission hiding them.
+    expect(routes).not.toContain('/dashboard');
+    expect(routes).not.toContain('/patients');
+  });
+
+  it('reports no match rather than rendering an empty sidebar', () => {
+    // An empty nav with no explanation reads as a broken app, and the state is
+    // easy to reach by typo.
+    const { items, component } = createComponent({
+      activeRole: 'ROLE_ADMIN',
+      roles: ['ROLE_ADMIN'],
+      wildcardPermission: true,
+    });
+    component.navItems.set(items as never);
+
+    component.navSearch.set('zzzzz-no-such-module');
+    expect(component.navGroups()).toEqual([]);
+    expect(component.navSearchEmpty()).toBeTrue();
+
+    component.clearNavSearch();
+    expect(component.navSearchEmpty()).toBeFalse();
+    expect(component.navGroups().length).toBeGreaterThan(0);
+  });
 });
 
 /**
@@ -589,6 +719,67 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
 
     expect(shell.navItems().map((i) => i.route)).toEqual(['/a', '/b', '/c']);
     expect(persistedOrders).toEqual([]);
+  });
+
+  // ── Now that the nav renders in groups ───────────────────────────────
+  //
+  // The tests above use /a /b /c, which are in no group and therefore share
+  // the fallback one — so they never exercise a boundary. These use real
+  // routes from different groups.
+
+  it('stops at the group boundary instead of moving an item nothing can see move', () => {
+    // A group is decided by the route, not by position, so crossing the
+    // boundary in the flat array would reorder the data and change nothing on
+    // screen. The keystroke would read as broken.
+    const { shell, persistedOrders } = createShell();
+    shell.navItems.set([
+      { route: '/dashboard' } as never, // MY_DAY
+      { route: '/appointments' } as never, // MY_DAY
+      { route: '/patients' } as never, // PATIENTS_FLOW
+    ]);
+
+    // Last item of MY_DAY, pressed downward.
+    shell.onNavKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true }), 1);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual([
+      '/dashboard',
+      '/appointments',
+      '/patients',
+    ]);
+    expect(persistedOrders).toEqual([]);
+  });
+
+  it('moves to the next item of the same group, stepping over another group', () => {
+    const { shell, persistedOrders } = createShell();
+    shell.navItems.set([
+      { route: '/dashboard' } as never, // MY_DAY
+      { route: '/patients' } as never, // PATIENTS_FLOW
+      { route: '/appointments' } as never, // MY_DAY
+    ]);
+
+    shell.onNavKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true }), 0);
+
+    expect(shell.navItems().map((i) => i.route)).toEqual([
+      '/patients',
+      '/appointments',
+      '/dashboard',
+    ]);
+    expect(persistedOrders.length).toBe(1);
+  });
+
+  it('still persists a flat route order, which is what NavOrderService replays', () => {
+    const { shell, persistedOrders } = createShell();
+    shell.navItems.set([
+      { route: '/dashboard' } as never,
+      { route: '/appointments' } as never,
+      { route: '/patients' } as never,
+    ]);
+
+    shell.onNavKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown', altKey: true }), 0);
+
+    // Grouping is applied at render time, so persistence stays a flat list —
+    // no migration of anything already in localStorage.
+    expect(persistedOrders[0]).toEqual(['/appointments', '/dashboard', '/patients']);
   });
 });
 
