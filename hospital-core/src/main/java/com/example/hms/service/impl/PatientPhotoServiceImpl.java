@@ -70,7 +70,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         // pointing at nothing.
         //
         // Uniqueness is the whole guarantee, deliberately with nothing behind
-        // it. A defensive `if (!filename.equals(previousPath))` on the delete
+        // it. A defensive comparison of the new name against the previous one
         // was written first and then removed: it can only fire on a UUID
         // collision, so it is a branch no test can reach, and an untestable
         // branch guarding an impossible case is worse than the invariant

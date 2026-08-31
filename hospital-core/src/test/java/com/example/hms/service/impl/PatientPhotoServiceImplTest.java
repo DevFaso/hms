@@ -97,7 +97,7 @@ class PatientPhotoServiceImplTest {
     }
 
     @Test
-    void rapidReplacementsNeverCollideAndNeverLoseTheStoredFile() throws Exception {
+    void rapidReplacementsNeverCollideAndNeverLoseTheStoredFile() {
         // The bug this pins. Filenames were built from
         // System.currentTimeMillis(), so replacing a photo inside the same
         // millisecond as the previous one produced an identical name: the copy
