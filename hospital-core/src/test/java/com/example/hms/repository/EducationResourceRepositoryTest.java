@@ -35,15 +35,25 @@ class EducationResourceRepositoryTest {
 
     @Test
     void shouldFindActiveResourcesForHospitalOrderedByCreatedAt() {
-        EducationResource olderResource = createResource("Older Resource", EducationCategory.PRENATAL_CARE, EducationResourceType.ARTICLE, hospitalId);
-        olderResource.setCreatedAt(LocalDateTime.now().minusDays(2));
-        olderResource.setUpdatedAt(LocalDateTime.now().minusDays(2));
-        persistResource(olderResource);
+        // The two setCreatedAt calls this test used to make were silently
+        // discarded: BaseEntity's @PrePersist overwrites createdAt with now()
+        // on every insert, so both rows landed microseconds apart instead of
+        // two days. Whenever the two timestamps rounded to the same value the
+        // ORDER BY had nothing to sort on and returned insertion order, which
+        // is why this failed intermittently in a full suite run and never in
+        // isolation.
+        //
+        // createdAt is also @Column(updatable = false), so JPA cannot backdate
+        // it after the fact either. A native update is the only way to give
+        // this test the data it always meant to have.
+        EducationResource olderResource = persistResource(createResource(
+            "Older Resource", EducationCategory.PRENATAL_CARE, EducationResourceType.ARTICLE, hospitalId));
+        EducationResource newerResource = persistResource(createResource(
+            "Newer Resource", EducationCategory.PRENATAL_CARE, EducationResourceType.VIDEO, hospitalId));
 
-        EducationResource newerResource = createResource("Newer Resource", EducationCategory.PRENATAL_CARE, EducationResourceType.VIDEO, hospitalId);
-        newerResource.setCreatedAt(LocalDateTime.now());
-        newerResource.setUpdatedAt(LocalDateTime.now());
-        persistResource(newerResource);
+        backdateCreatedAt(olderResource.getId(), LocalDateTime.now().minusDays(2));
+        backdateCreatedAt(newerResource.getId(), LocalDateTime.now());
+        entityManager.clear();
 
         List<EducationResource> results = educationResourceRepository.findByHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(hospitalId);
 
@@ -151,6 +161,19 @@ class EducationResourceRepositoryTest {
             .createdAt(now)
             .updatedAt(now)
             .build();
+    }
+
+    /**
+     * Set {@code created_at} past both the @PrePersist callback and the
+     * {@code updatable = false} mapping, so a test about ordering by that
+     * column can actually control it.
+     */
+    private void backdateCreatedAt(UUID resourceId, LocalDateTime createdAt) {
+        entityManager.getEntityManager()
+            .createNativeQuery("UPDATE clinical.education_resources SET created_at = :createdAt WHERE id = :id")
+            .setParameter("createdAt", createdAt)
+            .setParameter("id", resourceId)
+            .executeUpdate();
     }
 
     private EducationResource persistResource(EducationResource resource) {
