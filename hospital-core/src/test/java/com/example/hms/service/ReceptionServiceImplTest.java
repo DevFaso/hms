@@ -99,6 +99,7 @@ class ReceptionServiceImplTest {
     @Mock private AppointmentSlotRepository slotRepo;
     @Mock private SlotInventoryService slotInventoryService;
     @Mock private PatientOutreachNotifier outreachNotifier;
+    @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
 
@@ -134,6 +135,14 @@ class ReceptionServiceImplTest {
 
         // @Value field — never injected by Mockito, and a null language tag NPEs.
         org.springframework.test.util.ReflectionTestUtils.setField(service, "outreachLocale", "en");
+        // These tests are about the desk workflow, not the language. Hand back
+        // the caller's own fallback so they behave exactly as before the
+        // resolver existed; the language decision is asserted in
+        // PatientLocaleResolverTest and AppointmentReminderServiceTest.
+        org.mockito.Mockito.lenient()
+            .when(patientLocaleResolver.resolve(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

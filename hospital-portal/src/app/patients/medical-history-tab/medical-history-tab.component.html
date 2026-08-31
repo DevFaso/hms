@@ -454,7 +454,23 @@
           </div>
           <div class="field">
             <label for="sh-language">{{ 'MED_HISTORY.LANGUAGE' | translate }}</label>
-            <input id="sh-language" type="text" [(ngModel)]="socialForm.preferredLanguage" />
+            <!--
+              A fixed list rather than free text. This drives which language a
+              patient's reminders are sent in, and typed answers arrived as
+              "French", "francais" and "FR" — readable by a person, not by a
+              dispatcher. The local languages are listed even though no message
+              bundle can render them yet: a field that cannot record "this
+              patient reads Moore" can never show anyone that a Moore bundle
+              is worth commissioning.
+            -->
+            <select id="sh-language" [(ngModel)]="socialForm.preferredLanguage">
+              <option value="">{{ 'MED_HISTORY.LANGUAGE_UNSPECIFIED' | translate }}</option>
+              @for (language of preferredLanguages; track language) {
+                <option [value]="language">
+                  {{ 'MED_HISTORY.LANGUAGES.' + language | translate }}
+                </option>
+              }
+            </select>
           </div>
         </div>
         <div class="checkbox-row">
