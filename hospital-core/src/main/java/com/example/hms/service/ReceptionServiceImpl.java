@@ -88,6 +88,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
     private final AppointmentRepository appointmentRepo;
+    private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     private final EncounterRepository encounterRepo;
     private final PatientInsuranceRepository insuranceRepo;
     private final BillingInvoiceRepository invoiceRepo;
@@ -764,7 +765,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         try {
             String hospitalName = entry.getHospital() != null && entry.getHospital().getName() != null
                     ? entry.getHospital().getName() : "";
-            Locale locale = Locale.forLanguageTag(outreachLocale);
+            // Configured locale is the fallback; a patient who stated a
+            // language we can render gets it.
+            Locale locale = patientLocaleResolver.resolve(
+                    entry.getPatient(), Locale.forLanguageTag(outreachLocale));
             String message = messageSource.getMessage("sms.waitlist.offer",
                     new Object[]{
                         slot.getStartAt().toLocalDate().format(DATE_FMT),

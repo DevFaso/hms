@@ -6835,7 +6835,16 @@
     "STATUS_COMPLETED": "Complétée",
     "STATUS_NOT_DONE": "Non faite",
     "STATUS_REFUSED": "Refusée",
-    "STATUS_ENTERED_IN_ERROR": "Saisie par erreur"
+    "STATUS_ENTERED_IN_ERROR": "Saisie par erreur",
+    "LANGUAGE_UNSPECIFIED": "Non précisé",
+    "LANGUAGES": {
+      "fr": "Français",
+      "en": "Anglais",
+      "es": "Espagnol",
+      "bm": "Bambara",
+      "dyu": "Dioula",
+      "mos": "Mooré"
+    }
   },
   "MATERNITY": {
     "LABOR_TAB": "Travail et accouchement",
