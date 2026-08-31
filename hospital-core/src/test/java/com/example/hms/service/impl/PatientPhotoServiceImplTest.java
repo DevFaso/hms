@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -93,6 +94,38 @@ class PatientPhotoServiceImplTest {
         assertThat(patient.getPhotoFilePath()).isNotEqualTo(firstFile);
         assertThat(Files.exists(tempDir.resolve(firstFile))).isFalse();
         assertThat(Files.exists(tempDir.resolve(patient.getPhotoFilePath()))).isTrue();
+    }
+
+    @Test
+    void rapidReplacementsNeverCollideAndNeverLoseTheStoredFile() throws Exception {
+        // The bug this pins. Filenames were built from
+        // System.currentTimeMillis(), so replacing a photo inside the same
+        // millisecond as the previous one produced an identical name: the copy
+        // wrote the file and deleteQuietly(previousPath) then deleted the very
+        // file it had just written, leaving photoFilePath pointing at nothing.
+        // A double-clicked upload button is enough to reach it.
+        //
+        // replacingDeletesThePreviousFile above only caught this by luck —
+        // whether two uploads land in the same millisecond is a matter of
+        // timing, which is exactly why it failed intermittently in a full
+        // suite run and passed on its own. Twenty-five uploads in a tight loop
+        // make the collision near-certain with a millisecond clock and
+        // impossible with a random suffix.
+        Set<String> namesSeen = new HashSet<>();
+
+        for (int i = 0; i < 25; i++) {
+            service.upload(patientId, hospitalId, jpeg("photo" + i + ".jpg", new byte[] {(byte) i}));
+
+            String stored = patient.getPhotoFilePath();
+            assertThat(namesSeen.add(stored))
+                .as("upload %s reused the filename %s", i, stored)
+                .isTrue();
+            // The invariant that actually matters: the record never points at
+            // a file that is not there.
+            assertThat(Files.exists(tempDir.resolve(stored)))
+                .as("upload %s left photoFilePath pointing at a missing file", i)
+                .isTrue();
+        }
     }
 
     @Test

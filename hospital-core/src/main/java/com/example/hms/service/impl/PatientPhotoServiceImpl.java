@@ -61,7 +61,15 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         validate(file);
 
         String extension = extensionOf(file.getOriginalFilename());
-        String filename = patientId + "_photo_" + System.currentTimeMillis() + extension;
+        // A random suffix, not a timestamp. This was
+        // System.currentTimeMillis(), which collides whenever a photo is
+        // replaced inside the same millisecond as the one before it -- a
+        // double-clicked upload is enough. The new name then equalled the old,
+        // so the copy below wrote the file and deleteQuietly(previousPath)
+        // deleted the very file it had just written, leaving photoFilePath
+        // pointing at nothing. The guard on the delete covers the same case
+        // belt-and-braces; this makes it unreachable.
+        String filename = patientId + "_photo_" + UUID.randomUUID() + extension;
         try {
             Files.createDirectories(photoDir);
             Path target = photoDir.resolve(filename).normalize();
@@ -76,7 +84,12 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             patient.setPhotoContentType(file.getContentType());
             patient.setPhotoUpdatedAt(now);
             patientRepository.save(patient);
-            deleteQuietly(previousPath);
+            // Never delete the file just written. Unreachable now that names
+            // are random, and cheap enough to keep as the thing that makes the
+            // invariant explicit rather than a property of the name generator.
+            if (!filename.equals(previousPath)) {
+                deleteQuietly(previousPath);
+            }
             return now;
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to store the patient photo", e);
