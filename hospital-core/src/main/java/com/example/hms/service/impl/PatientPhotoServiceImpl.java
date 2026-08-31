@@ -67,8 +67,15 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
         // double-clicked upload is enough. The new name then equalled the old,
         // so the copy below wrote the file and deleteQuietly(previousPath)
         // deleted the very file it had just written, leaving photoFilePath
-        // pointing at nothing. The guard on the delete covers the same case
-        // belt-and-braces; this makes it unreachable.
+        // pointing at nothing.
+        //
+        // Uniqueness is the whole guarantee, deliberately with nothing behind
+        // it. A defensive `if (!filename.equals(previousPath))` on the delete
+        // was written first and then removed: it can only fire on a UUID
+        // collision, so it is a branch no test can reach, and an untestable
+        // branch guarding an impossible case is worse than the invariant
+        // stated plainly here and pinned by
+        // rapidReplacementsNeverCollideAndNeverLoseTheStoredFile.
         String filename = patientId + "_photo_" + UUID.randomUUID() + extension;
         try {
             Files.createDirectories(photoDir);
@@ -84,12 +91,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             patient.setPhotoContentType(file.getContentType());
             patient.setPhotoUpdatedAt(now);
             patientRepository.save(patient);
-            // Never delete the file just written. Unreachable now that names
-            // are random, and cheap enough to keep as the thing that makes the
-            // invariant explicit rather than a property of the name generator.
-            if (!filename.equals(previousPath)) {
-                deleteQuietly(previousPath);
-            }
+            deleteQuietly(previousPath);
             return now;
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to store the patient photo", e);
