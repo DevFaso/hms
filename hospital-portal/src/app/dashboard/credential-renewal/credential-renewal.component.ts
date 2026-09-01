@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  computed,
   effect,
   inject,
   input,
@@ -66,7 +65,6 @@ export class CredentialRenewalComponent {
    * The expiry is the only required field, so it is the only thing that can
    * block the save. Everything else is deliberately optional.
    */
-  protected readonly canSave = computed(() => this.expiryDate().trim().length > 0);
 
   private readonly credentialing = inject(CredentialingService);
   private readonly toast = inject(ToastService);
@@ -93,12 +91,17 @@ export class CredentialRenewalComponent {
 
   protected save(): void {
     const t = this.target();
-    if (!t || !this.canSave() || this.saving()) return;
+    // No expiry check: an expiry was mandatory until V145, and credentialing
+    // here is a diploma on file, which has no end date.
+    if (!t || this.saving()) return;
 
     this.saving.set(true);
     this.credentialing
       .recordRenewal(t.staffId, {
-        expiryDate: this.expiryDate().trim(),
+        // Empty means "does not expire", which the backend stores as null —
+        // a positive statement, not missing data. Sending "" would fail date
+        // binding rather than mean anything.
+        expiryDate: this.expiryDate().trim() || null,
         licenseNumber: this.licenseNumber().trim() || undefined,
         issuingAuthority: this.issuingAuthority().trim() || undefined,
         note: this.note().trim() || undefined,

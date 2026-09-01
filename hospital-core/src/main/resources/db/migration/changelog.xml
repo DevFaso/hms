@@ -2177,4 +2177,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V145 - a credential does not have to expire. V140 modelled
+         credentialing on a renewable licence and made expiry_date NOT NULL
+         on the strength of it. Clinicians in this deployment are
+         credentialed on their diploma, which has no expiry, so the
+         constraint made the credentialing screen unable to record the one
+         thing it exists for - an administrator had to invent a date. Only
+         the expiry becomes optional; the history table, which answers "was
+         this clinician qualified on the day they prescribed that", is
+         untouched and matters the same either way. Plain ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V145-credential-expiry-optional" author="hms-team" runOnChange="false">
+        <sqlFile path="V145__credential_expiry_optional.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

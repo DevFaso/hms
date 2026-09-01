@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto;
 
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,10 +24,16 @@ import java.time.LocalDate;
 public class CredentialRenewalRequestDTO {
 
     /**
-     * The new expiry. Required: a renewal with no end date is not a renewal,
-     * it is a deletion of the expiry rule.
+     * The expiry being recorded. Optional.
+     *
+     * <p>Leave it null for a qualification that does not expire — a diploma,
+     * which is how clinicians are credentialed in this deployment. It was
+     * mandatory until V145, which meant an administrator filing a diploma had
+     * to invent a date that does not exist.
+     *
+     * <p>Supplying one is still supported and still starts the alert ladder,
+     * for a registration that genuinely renews.
      */
-    @NotNull
     private LocalDate expiryDate;
 
     /**

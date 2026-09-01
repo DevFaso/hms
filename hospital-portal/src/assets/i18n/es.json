@@ -8402,6 +8402,8 @@
     "TOAST": {
       "RENEWED": "Renovación registrada",
       "RENEW_FAILED": "No se ha podido registrar la renovación"
-    }
+    },
+    "EXPIRY_HINT": "Dejar vacío si la cualificación no caduca (un diploma).",
+    "NO_EXPIRY": "No caduca"
   }
 }

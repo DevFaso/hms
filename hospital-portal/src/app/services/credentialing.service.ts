@@ -16,7 +16,7 @@ export interface CredentialRenewal {
   previousLicenseNumber: string | null;
   previousExpiryDate: string | null;
   licenseNumber: string | null;
-  expiryDate: string;
+  expiryDate: string | null;
   issuingAuthority: string | null;
   note: string | null;
   recordedByUserId: string | null;
@@ -26,7 +26,7 @@ export interface CredentialRenewal {
 
 export interface CredentialRenewalRequest {
   /** Required — a renewal with no end date is a deletion of the expiry rule. */
-  expiryDate: string;
+  expiryDate: string | null;
   /** Omit to keep the number already on file; most renewals reissue the same one. */
   licenseNumber?: string;
   issuingAuthority?: string;
