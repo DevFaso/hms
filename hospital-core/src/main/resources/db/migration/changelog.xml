@@ -2194,4 +2194,21 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V146 - disease registries / programme cohorts (Tier 2 item 35).
+         The six programmes national reporting asks about (HIV, TB, malaria,
+         hypertension, diabetes, ANC) had no registry - "who is in the
+         programme" lived on paper. One ACTIVE enrolment per (patient,
+         hospital, program) via a PARTIAL unique index so closed episodes
+         accumulate as history; next_expected_visit is the column item 36's
+         defaulter tracing will read. visit_cadence_days has no default on
+         purpose - a cadence is clinical protocol, typed in by the
+         clinician, never fabricated by the schema. Plain DDL, no DO block.
+         ================================================================= -->
+    <changeSet id="V146-program-enrollments" author="hms-team" runOnChange="false">
+        <sqlFile path="V146__program_enrollments.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

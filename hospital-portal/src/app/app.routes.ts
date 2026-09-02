@@ -329,6 +329,25 @@ export const routes: Routes = [
         ],
       },
 
+      // Disease registries (Tier 2 item 35). Role set mirrors the
+      // @PreAuthorize on ProgramRegistryController / ProgramEnrollmentController
+      // exactly - the clinical write set, MIDWIFE included because ANC is one
+      // of the six programmes. A broader guard here would land users on 403s.
+      {
+        path: 'registries',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./registries/registries').then((m) => m.RegistriesComponent),
+      },
+
       // Staff
       {
         path: 'staff',

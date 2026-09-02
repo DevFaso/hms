@@ -514,6 +514,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN'],
       },
       {
+        // Tier 2 item 35. Mirrors the RoleGuard on /registries, which
+        // mirrors the controller @PreAuthorize - the clinical write set.
+        icon: 'diversity_3',
+        label: 'Disease Registries',
+        translationKey: 'NAV.REGISTRIES',
+        route: '/registries',
+        roles: [
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_DOCTOR',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
+      },
+      {
         icon: 'pregnant_woman',
         label: 'Maternity',
         translationKey: 'NAV.MATERNITY',

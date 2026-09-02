@@ -63,6 +63,13 @@ public enum AuditEventType {
     LAB_RESULT_RELEASED,
     IMAGING_ORDER_CREATED,
     IMAGING_RESULT_UPDATED,
+    // Disease-programme registries (Tier 2 item 35). Care-management
+    // writes, not disclosures: none is whitelisted in DisclosureCategory,
+    // so keying them by patient serves the internal audit views without
+    // publishing them to the patient-facing disclosure log.
+    PROGRAM_ENROLLED,
+    PROGRAM_STATUS_CHANGED,
+    PROGRAM_VISIT_RECORDED,
 
     // Data operations
     ACCESS,

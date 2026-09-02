@@ -139,6 +139,12 @@ test.describe('a11y smoke (axe-core) — authenticated surfaces', () => {
     await runAxe(page, '/patient-tracker');
   });
 
+  test('disease registries have no serious/critical violations', async ({ page }) => {
+    // Tier 2 item 35. Storage state carries SuperAdmin, which the
+    // /registries RoleGuard admits.
+    await runAxe(page, '/registries');
+  });
+
   test('AVS surface (my-medications) has no serious/critical violations', async ({ page }) => {
     // Patient-portal route. Storage state in chromium project carries
     // SuperAdmin which has cross-role read access; the role guard
