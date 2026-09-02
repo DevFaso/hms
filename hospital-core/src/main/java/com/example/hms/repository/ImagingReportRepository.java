@@ -37,6 +37,16 @@ public interface ImagingReportRepository extends JpaRepository<ImagingReport, UU
     List<ImagingReport> findByImagingOrder_IdInAndLatestVersionIsTrue(Collection<UUID> imagingOrderIds);
 
     /**
+     * FHIR DiagnosticReport search (Tier 2 item 42): the patient's latest
+     * report versions, paged over REPORTS rather than candidate orders — a
+     * cap applied to orders would let a run of resultless recent orders push
+     * older valid reports out of the window entirely.
+     */
+    org.springframework.data.domain.Page<ImagingReport>
+        findByImagingOrder_Patient_IdAndHospital_IdAndLatestVersionIsTrueOrderByPerformedAtDesc(
+            UUID patientId, UUID hospitalId, org.springframework.data.domain.Pageable pageable);
+
+    /**
      * Fallback batch lookup for orders whose reports were not flagged with
      * {@code latest_version=true} — the chart-review aggregator picks the
      * highest {@code reportVersion} per order from this list in memory.

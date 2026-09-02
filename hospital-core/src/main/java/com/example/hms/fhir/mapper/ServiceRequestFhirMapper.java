@@ -47,21 +47,34 @@ public class ServiceRequestFhirMapper {
             sr.setEncounter(new Reference("Encounter/" + src.getEncounter().getId()));
         }
         sr.setAuthoredOnElement(dateTime(src.getOrderDatetime()));
-        if (src.getOrderingStaff() != null && src.getOrderingStaff().getUser() != null) {
-            var user = src.getOrderingStaff().getUser();
-            String name = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
-                + (user.getLastName() == null ? "" : user.getLastName())).trim();
-            if (!name.isEmpty()) {
-                sr.setRequester(new Reference().setDisplay(name));
-            }
-        }
-        if (src.getClinicalIndication() != null && !src.getClinicalIndication().isBlank()) {
-            sr.addReasonCode(new CodeableConcept().setText(src.getClinicalIndication()));
-        }
-        if (src.getNotes() != null && !src.getNotes().isBlank()) {
-            sr.addNote().setText(src.getNotes());
-        }
+        setRequester(sr, src);
+        addReason(sr, src.getClinicalIndication());
+        addNote(sr, src.getNotes());
         return sr;
+    }
+
+    private static void setRequester(ServiceRequest sr, LabOrder src) {
+        if (src.getOrderingStaff() == null || src.getOrderingStaff().getUser() == null) {
+            return;
+        }
+        var user = src.getOrderingStaff().getUser();
+        String name = ((user.getFirstName() == null ? "" : user.getFirstName()) + " "
+            + (user.getLastName() == null ? "" : user.getLastName())).trim();
+        if (!name.isEmpty()) {
+            sr.setRequester(new Reference().setDisplay(name));
+        }
+    }
+
+    private static void addReason(ServiceRequest sr, String reason) {
+        if (reason != null && !reason.isBlank()) {
+            sr.addReasonCode(new CodeableConcept().setText(reason));
+        }
+    }
+
+    private static void addNote(ServiceRequest sr, String note) {
+        if (note != null && !note.isBlank()) {
+            sr.addNote().setText(note);
+        }
     }
 
     public ServiceRequest toFhir(ImagingOrder src) {
@@ -70,9 +83,7 @@ public class ServiceRequestFhirMapper {
         sr.setId("imgorder-" + src.getId());
         sr.setStatus(mapImagingStatus(src.getStatus()));
         sr.setIntent(ServiceRequest.ServiceRequestIntent.ORDER);
-        sr.setPriority(src.getPriority() == ImagingOrderPriority.URGENT
-            ? ServiceRequest.ServiceRequestPriority.URGENT
-            : ServiceRequest.ServiceRequestPriority.ROUTINE);
+        sr.setPriority(mapImagingPriority(src.getPriority()));
         sr.addCategory(new CodeableConcept().addCoding(new Coding()
             .setSystem("http://snomed.info/sct")
             .setCode("363679005")
@@ -94,12 +105,8 @@ public class ServiceRequestFhirMapper {
             sr.setSubject(new Reference("Patient/" + src.getPatient().getId()));
         }
         sr.setAuthoredOnElement(dateTime(src.getOrderedAt()));
-        if (src.getClinicalQuestion() != null && !src.getClinicalQuestion().isBlank()) {
-            sr.addReasonCode(new CodeableConcept().setText(src.getClinicalQuestion()));
-        }
-        if (src.getSpecialInstructions() != null && !src.getSpecialInstructions().isBlank()) {
-            sr.addNote().setText(src.getSpecialInstructions());
-        }
+        addReason(sr, src.getClinicalQuestion());
+        addNote(sr, src.getSpecialInstructions());
         return sr;
     }
 
@@ -127,6 +134,21 @@ public class ServiceRequestFhirMapper {
                 ServiceRequest.ServiceRequestStatus.ACTIVE;
             case COMPLETED, RESULTS_AVAILABLE -> ServiceRequest.ServiceRequestStatus.COMPLETED;
             case CANCELLED -> ServiceRequest.ServiceRequestStatus.REVOKED;
+        };
+    }
+
+    /**
+     * All three values survive the mapping. The first cut collapsed STAT to
+     * routine via a two-way ternary — understating the urgency of a valid
+     * order is the one direction a priority mapping must never fail in.
+     */
+    private static ServiceRequest.ServiceRequestPriority mapImagingPriority(
+        ImagingOrderPriority priority) {
+        if (priority == null) return ServiceRequest.ServiceRequestPriority.ROUTINE;
+        return switch (priority) {
+            case STAT -> ServiceRequest.ServiceRequestPriority.STAT;
+            case URGENT -> ServiceRequest.ServiceRequestPriority.URGENT;
+            case ROUTINE -> ServiceRequest.ServiceRequestPriority.ROUTINE;
         };
     }
 

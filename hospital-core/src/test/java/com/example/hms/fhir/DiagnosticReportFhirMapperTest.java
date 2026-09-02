@@ -5,13 +5,18 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.MicroCultureStatus;
 import com.example.hms.enums.MicroGrowthResult;
 import com.example.hms.fhir.mapper.DiagnosticReportFhirMapper;
+import com.example.hms.enums.MicroSusceptibilityInterpretation;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.ImagingReport;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.MicroCultureResult;
+import com.example.hms.model.MicroIsolate;
+import com.example.hms.model.MicroSusceptibility;
 import com.example.hms.model.Patient;
 import org.hl7.fhir.r4.model.DiagnosticReport;
+import org.hl7.fhir.r4.model.Narrative;
+import org.hl7.fhir.r4.model.Observation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -95,24 +100,77 @@ class DiagnosticReportFhirMapperTest {
             .isEqualTo("Observation/labresult-" + r.getId());
     }
 
-    @Test
-    @DisplayName("a culture carries MB category, growth and gram stain in the conclusion")
-    void microCulture() {
+    private static MicroCultureResult culture(MicroCultureStatus status,
+                                              MicroGrowthResult growth) {
         MicroCultureResult culture = new MicroCultureResult();
         culture.setId(UUID.randomUUID());
-        culture.setStatus(MicroCultureStatus.CORRECTED);
-        culture.setGrowthResult(MicroGrowthResult.NO_GROWTH);
-        culture.setGramStain("Gram-negative rods");
+        culture.setStatus(status);
+        culture.setGrowthResult(growth);
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
         culture.setPatient(patient);
+        return culture;
+    }
 
-        DiagnosticReport report = mapper.toFhir(culture);
+    @Test
+    @DisplayName("a culture carries MB category, growth and gram stain in the conclusion")
+    void microCulture() {
+        MicroCultureResult src = culture(MicroCultureStatus.CORRECTED, MicroGrowthResult.NO_GROWTH);
+        src.setGramStain("Gram-negative rods");
 
-        assertThat(report.getIdElement().getIdPart()).isEqualTo("micro-" + culture.getId());
+        DiagnosticReport report = mapper.toFhir(src, List.of(), List.of());
+
+        assertThat(report.getIdElement().getIdPart()).isEqualTo("micro-" + src.getId());
         assertThat(report.getStatus()).isEqualTo(DiagnosticReport.DiagnosticReportStatus.CORRECTED);
         assertThat(report.getCategory().get(0).getCoding().get(0).getCode()).isEqualTo("MB");
         assertThat(report.getConclusion()).isEqualTo("NO GROWTH; Gram stain: Gram-negative rods");
+    }
+
+    @Test
+    @DisplayName("a positive culture carries its organism and antibiogram, not just the word GROWTH")
+    void microCultureCarriesIsolatesAndAntibiogram() {
+        MicroCultureResult src = culture(MicroCultureStatus.FINAL, MicroGrowthResult.GROWTH);
+
+        MicroIsolate isolate = new MicroIsolate();
+        isolate.setId(UUID.randomUUID());
+        isolate.setOrganismName("Escherichia coli");
+        isolate.setGrowthQuantity("Heavy growth");
+        isolate.setCultureResult(src);
+
+        MicroSusceptibility sus = new MicroSusceptibility();
+        sus.setId(UUID.randomUUID());
+        sus.setIsolate(isolate);
+        sus.setAntibioticName("Ciprofloxacin");
+        sus.setInterpretation(MicroSusceptibilityInterpretation.RESISTANT);
+        sus.setMicValue("4");
+
+        DiagnosticReport report = mapper.toFhir(src, List.of(isolate), List.of(sus));
+
+        // Organism + antibiogram ride as contained Observations referenced
+        // from result[], so the report is self-sufficient.
+        assertThat(report.getContained()).hasSize(2);
+        assertThat(report.getResult()).hasSize(2);
+        Observation organism = (Observation) report.getContained().get(0);
+        assertThat(organism.getCode().getText()).isEqualTo("Escherichia coli");
+        Observation panel = (Observation) report.getContained().get(1);
+        assertThat(panel.getCode().getText()).isEqualTo("Ciprofloxacin");
+        assertThat(panel.getInterpretationFirstRep().getCodingFirstRep().getCode()).isEqualTo("R");
+        assertThat(panel.getValue().primitiveValue()).contains("MIC 4");
+        assertThat(panel.getDerivedFromFirstRep().getReference())
+            .isEqualTo("#iso-" + isolate.getId());
+    }
+
+    @Test
+    @DisplayName("culture notes are escaped into a status-carrying narrative, never raw XHTML")
+    void microNotesAreEscaped() {
+        MicroCultureResult src = culture(MicroCultureStatus.FINAL, MicroGrowthResult.GROWTH);
+        src.setNotes("A & B <script>alert(1)</script>");
+
+        DiagnosticReport report = mapper.toFhir(src, List.of(), List.of());
+
+        assertThat(report.getText().getStatus()).isEqualTo(Narrative.NarrativeStatus.ADDITIONAL);
+        String div = report.getText().getDivAsString();
+        assertThat(div).contains("&amp;").doesNotContain("<script>");
     }
 
     @Test
@@ -137,6 +195,11 @@ class DiagnosticReportFhirMapperTest {
         assertThat(report.getConclusion()).isEqualTo("No acute intracranial abnormality.");
         assertThat(report.getSubject().getReference())
             .isEqualTo("Patient/" + patient.getId());
+        // Technique and findings are the body of the read — they must be in
+        // the narrative or the report does not expose what it claims to.
+        assertThat(report.getText().getStatus()).isEqualTo(Narrative.NarrativeStatus.ADDITIONAL);
+        assertThat(report.getText().getDivAsString())
+            .contains("Long narrative that is NOT the conclusion.");
     }
 
     @Test

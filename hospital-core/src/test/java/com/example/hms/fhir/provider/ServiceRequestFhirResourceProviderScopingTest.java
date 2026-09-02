@@ -67,8 +67,9 @@ class ServiceRequestFhirResourceProviderScopingTest {
     @DisplayName("no hospital scope is a hard 403 before any repository is touched")
     void readWithoutScopeIsForbidden() {
         HospitalContextHolder.clear();
-        assertThrows(ForbiddenOperationException.class,
-            () -> provider.read(new IdType("imgorder-" + UUID.randomUUID())));
+        IdType id = new IdType("imgorder-" + UUID.randomUUID());
+
+        assertThrows(ForbiddenOperationException.class, () -> provider.read(id));
         verifyNoInteractions(labOrderRepository, imagingOrderRepository);
     }
 
@@ -86,9 +87,9 @@ class ServiceRequestFhirResourceProviderScopingTest {
         // unstubbed mapper returns null and hides a deleted tenant filter.
         org.mockito.Mockito.lenient().when(mapper.toFhir(foreign))
             .thenReturn(new ServiceRequest());
+        IdType id = new IdType("imgorder-" + orderId);
 
-        assertThrows(ResourceNotFoundException.class,
-            () -> provider.read(new IdType("imgorder-" + orderId)));
+        assertThrows(ResourceNotFoundException.class, () -> provider.read(id));
         verifyNoInteractions(mapper);
     }
 

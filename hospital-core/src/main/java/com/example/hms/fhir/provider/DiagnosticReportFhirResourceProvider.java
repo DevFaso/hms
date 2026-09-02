@@ -8,13 +8,17 @@ import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import com.example.hms.fhir.mapper.DiagnosticReportFhirMapper;
-import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.LabOrder;
-import com.example.hms.repository.ImagingOrderRepository;
+import com.example.hms.model.LabResult;
+import com.example.hms.model.MicroCultureResult;
+import com.example.hms.model.MicroIsolate;
+import com.example.hms.model.MicroSusceptibility;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.MicroCultureResultRepository;
+import com.example.hms.repository.MicroIsolateRepository;
+import com.example.hms.repository.MicroSusceptibilityRepository;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.IdType;
 import org.springframework.data.domain.PageRequest;
@@ -22,7 +26,9 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * FHIR R4 {@code DiagnosticReport} provider (Tier 2 item 42), sourced from
@@ -52,7 +58,8 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
     private final MicroCultureResultRepository microCultureRepository;
-    private final ImagingOrderRepository imagingOrderRepository;
+    private final MicroIsolateRepository microIsolateRepository;
+    private final MicroSusceptibilityRepository microSusceptibilityRepository;
     private final ImagingReportRepository imagingReportRepository;
     private final DiagnosticReportFhirMapper mapper;
 
@@ -60,14 +67,16 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
         LabOrderRepository labOrderRepository,
         LabResultRepository labResultRepository,
         MicroCultureResultRepository microCultureRepository,
-        ImagingOrderRepository imagingOrderRepository,
+        MicroIsolateRepository microIsolateRepository,
+        MicroSusceptibilityRepository microSusceptibilityRepository,
         ImagingReportRepository imagingReportRepository,
         DiagnosticReportFhirMapper mapper
     ) {
         this.labOrderRepository = labOrderRepository;
         this.labResultRepository = labResultRepository;
         this.microCultureRepository = microCultureRepository;
-        this.imagingOrderRepository = imagingOrderRepository;
+        this.microIsolateRepository = microIsolateRepository;
+        this.microSusceptibilityRepository = microSusceptibilityRepository;
         this.imagingReportRepository = imagingReportRepository;
         this.mapper = mapper;
     }
@@ -97,7 +106,7 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
             if (uuid == null) throw new ResourceNotFoundException(id);
             return microCultureRepository.findById(uuid)
                 .filter(c -> c.getHospital() != null && hospitalId.equals(c.getHospital().getId()))
-                .map(mapper::toFhir)
+                .map(this::mapCulture)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }
         if (idPart.startsWith(IMAGING_PREFIX)) {
@@ -125,37 +134,70 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
         // Lab: one report per order that has at least one result row. An
         // order with nothing reportable yet is a ServiceRequest, not a
         // DiagnosticReport — emitting empty "registered" reports for every
-        // open order would bury the real ones.
-        for (LabOrder order : labOrderRepository
+        // open order would bury the real ones. Results for the whole page
+        // are fetched in ONE query and grouped, not one query per order.
+        List<LabOrder> orders = labOrderRepository
             .findByPatient_IdAndHospital_IdOrderByOrderDatetimeDesc(
-                patientId, hospitalId, PageRequest.of(0, MAX_PER_PATIENT))) {
-            var results = labResultRepository.findByLabOrder_Id(order.getId());
+                patientId, hospitalId, PageRequest.of(0, MAX_PER_PATIENT))
+            .getContent();
+        Map<UUID, List<LabResult>> resultsByOrder = orders.isEmpty()
+            ? Map.of()
+            : labResultRepository.findByLabOrder_IdIn(orders.stream().map(LabOrder::getId).toList())
+                .stream()
+                .filter(r -> r.getLabOrder() != null && r.getLabOrder().getId() != null)
+                .collect(Collectors.groupingBy(r -> r.getLabOrder().getId()));
+        for (LabOrder order : orders) {
+            List<LabResult> results = resultsByOrder.getOrDefault(order.getId(), List.of());
             if (results.isEmpty()) continue;
             DiagnosticReport mapped = mapper.toFhir(order, results);
             if (mapped != null) out.add(mapped);
         }
 
-        microCultureRepository.findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(
+        // Micro: cultures for the page, isolates for all of them in one
+        // query, susceptibilities for all isolates in one more.
+        List<MicroCultureResult> cultures = microCultureRepository
+            .findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(
                 patientId, hospitalId, PageRequest.of(0, MAX_PER_PATIENT))
-            .forEach(c -> {
-                DiagnosticReport mapped = mapper.toFhir(c);
+            .getContent();
+        Map<UUID, List<MicroIsolate>> isolatesByCulture = cultures.isEmpty()
+            ? Map.of()
+            : microIsolateRepository.findByCultureResult_IdInOrderByIsolateNumberAscCreatedAtAsc(
+                    cultures.stream().map(MicroCultureResult::getId).toList())
+                .stream()
+                .filter(i -> i.getCultureResult() != null && i.getCultureResult().getId() != null)
+                .collect(Collectors.groupingBy(i -> i.getCultureResult().getId()));
+        List<UUID> isolateIds = isolatesByCulture.values().stream()
+            .flatMap(List::stream).map(MicroIsolate::getId).toList();
+        List<MicroSusceptibility> susceptibilities = isolateIds.isEmpty()
+            ? List.of()
+            : microSusceptibilityRepository.findByIsolate_IdInOrderByAntibioticNameAsc(isolateIds);
+        for (MicroCultureResult culture : cultures) {
+            DiagnosticReport mapped = mapper.toFhir(culture,
+                isolatesByCulture.getOrDefault(culture.getId(), List.of()), susceptibilities);
+            if (mapped != null) out.add(mapped);
+        }
+
+        // Imaging: paged over latest REPORT versions directly — a cap
+        // applied to candidate orders would let a run of resultless recent
+        // orders push older valid reports out of the window entirely.
+        imagingReportRepository
+            .findByImagingOrder_Patient_IdAndHospital_IdAndLatestVersionIsTrueOrderByPerformedAtDesc(
+                patientId, hospitalId, PageRequest.of(0, MAX_PER_PATIENT))
+            .forEach(r -> {
+                DiagnosticReport mapped = mapper.toFhir(r);
                 if (mapped != null) out.add(mapped);
             });
-
-        // Imaging: via the patient's orders, latest report versions only.
-        List<UUID> orderIds = imagingOrderRepository
-            .findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(
-                patientId, hospitalId, PageRequest.of(0, MAX_PER_PATIENT))
-            .map(ImagingOrder::getId)
-            .toList();
-        if (!orderIds.isEmpty()) {
-            imagingReportRepository.findByImagingOrder_IdInAndLatestVersionIsTrue(orderIds)
-                .forEach(r -> {
-                    DiagnosticReport mapped = mapper.toFhir(r);
-                    if (mapped != null) out.add(mapped);
-                });
-        }
         return out;
+    }
+
+    private DiagnosticReport mapCulture(MicroCultureResult culture) {
+        List<MicroIsolate> isolates = microIsolateRepository
+            .findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(culture.getId());
+        List<MicroSusceptibility> susceptibilities = isolates.isEmpty()
+            ? List.of()
+            : microSusceptibilityRepository.findByIsolate_IdInOrderByAntibioticNameAsc(
+                isolates.stream().map(MicroIsolate::getId).toList());
+        return mapper.toFhir(culture, isolates, susceptibilities);
     }
 
     private static UUID requireHospitalScope() {

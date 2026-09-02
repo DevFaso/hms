@@ -99,6 +99,18 @@ class ServiceRequestFhirMapperTest {
     }
 
     @Test
+    @DisplayName("a STAT imaging order stays STAT - understating urgency is the one forbidden direction")
+    void imagingStatSurvives() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(UUID.randomUUID());
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setPriority(ImagingOrderPriority.STAT);
+
+        assertThat(mapper.toFhir(order).getPriority())
+            .isEqualTo(ServiceRequest.ServiceRequestPriority.STAT);
+    }
+
+    @Test
     @DisplayName("RESULTS_AVAILABLE is a completed request - the report side takes over from there")
     void imagingResultsAvailableIsCompleted() {
         ImagingOrder order = new ImagingOrder();
