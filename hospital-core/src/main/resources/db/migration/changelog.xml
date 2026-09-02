@@ -2228,4 +2228,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V148 - read-path indexes for the FHIR Appointment + Slot
+         providers (Tier 2 item 43). New composite read shapes; with
+         ddl-auto=validate an entity @Index creates nothing in production,
+         so the migration is the only thing that does. V121's partial
+         open-slot index cannot serve the all-status inventory window.
+         Plain CREATE INDEX, no DO block.
+         ================================================================= -->
+    <changeSet id="V148-fhir-scheduling-read-indexes" author="hms-team" runOnChange="false">
+        <sqlFile path="V148__fhir_scheduling_read_indexes.sql"
+                 relativeToChangelogFile="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
