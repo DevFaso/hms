@@ -48,6 +48,10 @@ import java.util.stream.Collectors;
  * not-found.
  */
 @Component
+// Read-only TX (retrofit of the item-42 providers): open-in-view=false, so
+// the mappers' lazy walks after the repository call were a latent
+// LazyInitializationException on every read - same fix as the item-43 pair.
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_PER_PATIENT = 200;

@@ -61,11 +61,16 @@ class AppointmentSlotFhirMapperTest {
     @Test
     @DisplayName("every lifecycle state maps, and the judgement calls hold")
     void appointmentStatusMapping() {
-        // RESCHEDULED rows are the superseded booking; FAILED never happened.
+        // RESCHEDULED rows are the superseded booking. IN_PROGRESS and
+        // FAILED both mean the visit BEGAN (the lifecycle reaches FAILED
+        // from IN_PROGRESS), and FHIR's fulfilled tracks the slot being
+        // consumed, not the clinical outcome.
         assertThat(appointmentMapper.toFhir(appointment(AppointmentStatus.RESCHEDULED)).getStatus())
             .isEqualTo(Appointment.AppointmentStatus.CANCELLED);
+        assertThat(appointmentMapper.toFhir(appointment(AppointmentStatus.IN_PROGRESS)).getStatus())
+            .isEqualTo(Appointment.AppointmentStatus.FULFILLED);
         assertThat(appointmentMapper.toFhir(appointment(AppointmentStatus.FAILED)).getStatus())
-            .isEqualTo(Appointment.AppointmentStatus.ENTEREDINERROR);
+            .isEqualTo(Appointment.AppointmentStatus.FULFILLED);
         assertThat(appointmentMapper.toFhir(appointment(AppointmentStatus.NO_SHOW)).getStatus())
             .isEqualTo(Appointment.AppointmentStatus.NOSHOW);
         assertThat(appointmentMapper.toFhir(appointment(AppointmentStatus.CHECKED_IN)).getStatus())

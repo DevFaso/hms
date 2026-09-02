@@ -25,6 +25,11 @@ import java.util.UUID;
  * scope is required, and another hospital's row collapses to not-found.
  */
 @Component
+// Read-only TX: open-in-view=false, so without it the mapper's walk over
+// lazily loaded associations happens after the repository transaction has
+// closed and throws LazyInitializationException on perfectly valid reads.
+// readOnly also keeps the query eligible for read-replica routing.
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class AppointmentFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_PER_PATIENT = 200;
@@ -53,12 +58,18 @@ public class AppointmentFhirResourceProvider implements IResourceProvider {
             .orElseThrow(() -> new ResourceNotFoundException(id));
     }
 
+    /**
+     * Patient search only, on purpose. FHIR's {@code actor} names ANY
+     * participant — treating an actor UUID as a patient id would silently
+     * miss a practitioner's appointments or match an unrelated patient, so
+     * the parameter is not offered rather than half-honoured.
+     */
     @Search
     public List<Appointment> search(
         @OptionalParam(name = "patient") ReferenceParam patient,
-        @OptionalParam(name = "actor") ReferenceParam actor
+        @OptionalParam(name = "subject") ReferenceParam subject
     ) {
-        UUID patientId = FhirIds.fromReference(patient != null ? patient : actor);
+        UUID patientId = FhirIds.fromReference(patient != null ? patient : subject);
         if (patientId == null) return List.of();
         UUID hospitalId = FhirTenancy.requireHospitalScope("Appointment");
         return appointmentRepository

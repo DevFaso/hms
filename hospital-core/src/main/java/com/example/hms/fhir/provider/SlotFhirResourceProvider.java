@@ -30,6 +30,9 @@ import java.util.UUID;
  * scheduling client is actually asking.
  */
 @Component
+// Read-only TX — see AppointmentFhirResourceProvider: open-in-view=false
+// makes post-transaction lazy walks throw; readOnly keeps replica routing.
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class SlotFhirResourceProvider implements IResourceProvider {
 
     private static final int MAX_SLOTS = 500;
@@ -66,17 +69,29 @@ public class SlotFhirResourceProvider implements IResourceProvider {
     public List<Slot> search(@OptionalParam(name = "start") DateRangeParam start) {
         UUID hospitalId = FhirTenancy.requireHospitalScope("Slot");
         LocalDate today = LocalDate.now(clock);
-        LocalDate from = today;
-        LocalDate to = today.plusDays(DEFAULT_WINDOW_DAYS);
-        if (start != null) {
-            if (start.getLowerBoundAsInstant() != null) {
-                from = start.getLowerBoundAsInstant().toInstant()
-                    .atZone(ZoneId.systemDefault()).toLocalDate();
-            }
-            if (start.getUpperBoundAsInstant() != null) {
-                to = start.getUpperBoundAsInstant().toInstant()
-                    .atZone(ZoneId.systemDefault()).toLocalDate();
-            }
+        LocalDate lower = start != null && start.getLowerBoundAsInstant() != null
+            ? start.getLowerBoundAsInstant().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            : null;
+        LocalDate upper = start != null && start.getUpperBoundAsInstant() != null
+            ? start.getUpperBoundAsInstant().toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
+            : null;
+        // A one-sided range derives its missing edge from the bound that WAS
+        // given, not from today: start=ge<nextMonth> with a today-anchored
+        // upper edge is an inverted window that silently returns nothing.
+        LocalDate from;
+        LocalDate to;
+        if (lower == null && upper == null) {
+            from = today;
+            to = today.plusDays(DEFAULT_WINDOW_DAYS);
+        } else if (upper == null) {
+            from = lower;
+            to = lower.plusDays(DEFAULT_WINDOW_DAYS);
+        } else if (lower == null) {
+            from = upper.minusDays(DEFAULT_WINDOW_DAYS);
+            to = upper;
+        } else {
+            from = lower;
+            to = upper;
         }
         return slotRepository.findByHospital_IdAndSlotDateBetweenOrderByStartAtAsc(
                 hospitalId, from, to, PageRequest.of(0, MAX_SLOTS))
