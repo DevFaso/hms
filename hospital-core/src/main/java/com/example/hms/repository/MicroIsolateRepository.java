@@ -12,5 +12,9 @@ public interface MicroIsolateRepository extends JpaRepository<MicroIsolate, UUID
 
     List<MicroIsolate> findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(UUID cultureResultId);
 
+    /** FHIR DiagnosticReport search (Tier 2 item 42): isolates for a whole page of cultures. */
+    List<MicroIsolate> findByCultureResult_IdInOrderByIsolateNumberAscCreatedAtAsc(
+        java.util.Collection<UUID> cultureResultIds);
+
     long countByCultureResult_Id(UUID cultureResultId);
 }

@@ -35,4 +35,9 @@ public interface MicroCultureResultRepository extends JpaRepository<MicroCulture
                                              Pageable pageable);
 
     List<MicroCultureResult> findByLabOrder_IdOrderByCreatedAtDesc(UUID labOrderId);
+
+    /** FHIR DiagnosticReport search (Tier 2 item 42): one patient's cultures, tenant-scoped. */
+    org.springframework.data.domain.Page<MicroCultureResult>
+        findByPatient_IdAndHospital_IdOrderByCreatedAtDesc(
+            UUID patientId, UUID hospitalId, org.springframework.data.domain.Pageable pageable);
 }
