@@ -61,11 +61,6 @@ export class CredentialRenewalComponent {
   protected readonly historyLoading = signal(false);
   protected readonly historyFailed = signal(false);
 
-  /**
-   * The expiry is the only required field, so it is the only thing that can
-   * block the save. Everything else is deliberately optional.
-   */
-
   private readonly credentialing = inject(CredentialingService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);

@@ -48,6 +48,7 @@ public class StaffMapper {
         dto.setEmploymentType(staff.getEmploymentType());
         dto.setSpecialization(parseSpecialization(staff.getSpecialization()));
         dto.setLicenseNumber(staff.getLicenseNumber());
+        dto.setLicenseExpiryDate(staff.getLicenseExpiryDate());
         dto.setStartDate(staff.getStartDate());
         dto.setEndDate(staff.getEndDate());
         dto.setActive(staff.isActive());

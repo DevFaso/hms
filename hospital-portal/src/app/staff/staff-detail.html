@@ -162,7 +162,36 @@
               <span class="label">{{ 'STAFF.LICENSE_NUMBER' | translate }}</span>
               <span class="value">{{ s.licenseNumber ?? '—' }}</span>
             </div>
+            <div class="info-row">
+              <span class="label">{{ 'CREDENTIALING.CURRENT_EXPIRY' | translate }}</span>
+              <!--
+                A missing expiry reads as "does not expire", not as a blank.
+                It is the normal state for a diploma, and rendering it empty
+                made a correctly credentialed clinician look unrecorded.
+              -->
+              <span class="value" data-testid="staff-license-expiry">
+                @if (s.licenseExpiryDate) {
+                  {{ formatDate(s.licenseExpiryDate) }}
+                } @else {
+                  {{ 'CREDENTIALING.NO_EXPIRY' | translate }}
+                }
+              </span>
+            </div>
           </div>
+
+          @if (canRecordCredentials()) {
+            <div class="card-actions">
+              <button
+                type="button"
+                class="cred-record-btn"
+                (click)="openCredentialing()"
+                data-testid="open-credentialing"
+              >
+                <span class="material-symbols-outlined">verified_user</span>
+                {{ 'CREDENTIALING.RECORD_RENEWAL' | translate }}
+              </button>
+            </div>
+          }
         </div>
 
         <div class="info-card">
@@ -394,5 +423,16 @@
         }
       </div>
     }
+
+    <!--
+      Same dialog the dashboard opens from a licence-expiry alert. Mounted
+      here because that alert list can only contain staff who already have an
+      expiry, which excludes every clinician credentialed on a diploma.
+    -->
+    <app-credential-renewal
+      [target]="credentialTarget()"
+      (renewed)="onCredentialRecorded()"
+      (closed)="closeCredentialing()"
+    />
   }
 </div>
