@@ -5144,6 +5144,7 @@
     "RECALL_TYPE_OTHER": "Other",
     "RECALL_SOURCE_CHECKOUT": "Checkout",
     "RECALL_SOURCE_MANUAL": "Manual",
+    "RECALL_SOURCE_PROGRAM_RULE": "Programme rule",
     "LOAD_SLOTS_FAILED": "Failed to load open slots",
     "SELECT_SLOT": "Select a slot",
     "SELECT_SLOT_FIRST": "Select a slot first",

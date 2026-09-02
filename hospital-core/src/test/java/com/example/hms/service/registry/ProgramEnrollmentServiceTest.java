@@ -24,8 +24,11 @@ import com.example.hms.payload.dto.registry.ProgramStatusUpdateDTO;
 import com.example.hms.payload.dto.registry.ProgramVisitDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.enums.RecallStatus;
+import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.repository.ProgramEnrollmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
 import java.time.Clock;
@@ -65,6 +68,7 @@ class ProgramEnrollmentServiceTest {
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
+    @Mock private PatientRecallRepository recallRepository;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditService;
 
@@ -79,7 +83,7 @@ class ProgramEnrollmentServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new ProgramEnrollmentService(enrollmentRepository, patientRepository,
-            hospitalRepository, staffRepository, roleValidator,
+            hospitalRepository, staffRepository, recallRepository, roleValidator,
             new ProgramEnrollmentMapper(), auditService, clock);
 
         hospitalId = UUID.randomUUID();
@@ -415,6 +419,49 @@ class ProgramEnrollmentServiceTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("last recorded");
         verify(enrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("recording a visit closes the tracing recall that was chasing it")
+    void visitClosesOpenTracingRecall() {
+        asClinicianAtHospital();
+        ProgramEnrollment enrollment = activeEnrollment();
+        UUID enrollmentId = UUID.randomUUID();
+        when(enrollmentRepository.findById(enrollmentId)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        PatientRecall openRecall = PatientRecall.builder()
+            .status(RecallStatus.NOTIFIED).build();
+        when(recallRepository.findByProgramEnrollment_IdAndStatusIn(any(), any()))
+            .thenReturn(java.util.List.of(openRecall));
+
+        service.recordVisit(patientId, enrollmentId, null);
+
+        // CLOSED, not CANCELLED: the visit the recall was chasing happened.
+        assertThat(openRecall.getStatus()).isEqualTo(RecallStatus.CLOSED);
+        assertThat(openRecall.getClosedAt()).isNotNull();
+        verify(recallRepository).save(openRecall);
+    }
+
+    @Test
+    @DisplayName("closing an enrolment cancels its tracing recall - DECEASED must never be chased")
+    void closingEnrollmentCancelsTracingRecall() {
+        asClinicianAtHospital();
+        ProgramEnrollment enrollment = activeEnrollment();
+        UUID enrollmentId = UUID.randomUUID();
+        when(enrollmentRepository.findById(enrollmentId)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        PatientRecall openRecall = PatientRecall.builder()
+            .status(RecallStatus.PENDING).build();
+        when(recallRepository.findByProgramEnrollment_IdAndStatusIn(any(), any()))
+            .thenReturn(java.util.List.of(openRecall));
+
+        service.updateStatus(patientId, enrollmentId,
+            statusRequest(ProgramEnrollmentStatus.DECEASED, "Reported by family"));
+
+        // CANCELLED, not CLOSED: the visit did not happen, the need lapsed -
+        // and the outreach sweep must never text a family about it.
+        assertThat(openRecall.getStatus()).isEqualTo(RecallStatus.CANCELLED);
+        verify(recallRepository).save(openRecall);
     }
 
     // ── registry ────────────────────────────────────────────────────────

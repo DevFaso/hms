@@ -61,6 +61,22 @@ public interface ProgramEnrollmentRepository extends JpaRepository<ProgramEnroll
     Optional<ProgramEnrollment> findByPatientIdAndHospitalIdAndProgramAndStatus(
         UUID patientId, UUID hospitalId, CareProgram program, ProgramEnrollmentStatus status);
 
+    /**
+     * The care-gap sweep's read (Tier 2 item 36): every ACTIVE enrolment
+     * whose expected visit has passed. Deliberately NOT hospital-scoped,
+     * the licence-sweep precedent: the sweep runs on a scheduler with no
+     * request context, never returns a row to a user, and turns rows into
+     * recalls that carry the row's own hospital.
+     */
+    @EntityGraph(attributePaths = {"patient", "hospital"})
+    @Query("""
+        SELECT e FROM ProgramEnrollment e
+        WHERE e.status = com.example.hms.enums.ProgramEnrollmentStatus.ACTIVE
+          AND e.nextExpectedVisit < :today
+        ORDER BY e.nextExpectedVisit ASC
+    """)
+    List<ProgramEnrollment> findOverdueActive(@Param("today") java.time.LocalDate today);
+
     /** Registry header counts: how many enrolments per status in one programme. */
     @Query("""
         SELECT e.status, COUNT(e) FROM ProgramEnrollment e

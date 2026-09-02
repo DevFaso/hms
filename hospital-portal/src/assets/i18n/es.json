@@ -5144,6 +5144,7 @@
     "RECALL_TYPE_OTHER": "Otro",
     "RECALL_SOURCE_CHECKOUT": "Fin de visita",
     "RECALL_SOURCE_MANUAL": "Manual",
+    "RECALL_SOURCE_PROGRAM_RULE": "Regla de programa",
     "LOAD_SLOTS_FAILED": "Error al cargar los huecos disponibles",
     "SELECT_SLOT": "Seleccionar un hueco",
     "SELECT_SLOT_FIRST": "Seleccione primero un hueco",
