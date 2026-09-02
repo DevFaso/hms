@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,6 +44,18 @@ public interface PatientRecallRepository extends JpaRepository<PatientRecall, UU
 
     /** Scoped single-row load — the 404-not-403 tenancy idiom. */
     Optional<PatientRecall> findByIdAndHospital_Id(UUID id, UUID hospitalId);
+
+    /**
+     * The care-gap dedupe check (Tier 2 item 36): has this missed
+     * expected-visit date already produced a tracing recall — in ANY status,
+     * so a recall the desk closed without a visit is not recreated and the
+     * sweep never fights the desk.
+     */
+    boolean existsByProgramEnrollment_IdAndDueDate(UUID programEnrollmentId, LocalDate dueDate);
+
+    /** Open tracing recalls for one enrolment — closed by a recorded visit, cancelled by a closed enrolment. */
+    List<PatientRecall> findByProgramEnrollment_IdAndStatusIn(
+        UUID programEnrollmentId, Collection<RecallStatus> statuses);
 
     /**
      * Open recalls for one patient (Tier 2 item 29).

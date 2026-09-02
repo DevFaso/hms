@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.CareProgram;
 import com.example.hms.enums.ProgramEnrollmentStatus;
+import com.example.hms.enums.RecallStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ProgramEnrollmentMapper;
@@ -20,6 +21,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProgramEnrollmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -65,10 +68,15 @@ public class ProgramEnrollmentService {
     /** Registry page-size ceiling: a cohort read is a page, never a dump. */
     static final int MAX_REGISTRY_PAGE = 200;
 
+    /** The tracing-recall states a lifecycle change still owns. */
+    private static final java.util.Set<RecallStatus> OPEN_RECALL_STATUSES =
+        java.util.Set.of(RecallStatus.PENDING, RecallStatus.NOTIFIED, RecallStatus.SCHEDULED);
+
     private final ProgramEnrollmentRepository enrollmentRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
+    private final PatientRecallRepository recallRepository;
     private final RoleValidator roleValidator;
     private final ProgramEnrollmentMapper mapper;
     private final AuditEventLogService auditService;
@@ -143,6 +151,11 @@ public class ProgramEnrollmentService {
             enrollment.setStatus(ProgramEnrollmentStatus.ACTIVE);
             enrollment.setClosedOn(null);
             enrollment.setClosureReason(null);
+            // Closing auto-CANCELLED the tracing recall, which permanently
+            // consumed the (enrolment, due date) dedupe key - the sweep will
+            // never recreate it. If the missed date is unchanged and still
+            // owed, re-opening the enrolment re-opens the recall with it.
+            restoreCancelledTracingRecall(enrollment);
         } else {
             if (reason == null) {
                 throw new BusinessException(
@@ -152,6 +165,11 @@ public class ProgramEnrollmentService {
             enrollment.setStatus(target);
             enrollment.setClosedOn(LocalDate.now(clock));
             enrollment.setClosureReason(reason);
+            // A closed enrolment owes no tracing. CANCELLED, not CLOSED:
+            // the visit did not happen, the need lapsed. For DECEASED this
+            // is the line that stops the outreach sweep from texting a
+            // family about a missed programme visit.
+            resolveOpenTracingRecalls(enrollment, RecallStatus.CANCELLED);
         }
 
         ProgramEnrollment saved = enrollmentRepository.save(enrollment);
@@ -192,6 +210,9 @@ public class ProgramEnrollmentService {
 
         enrollment.setLastVisitOn(visitDate);
         enrollment.setNextExpectedVisit(visitDate.plusDays(enrollment.getVisitCadenceDays()));
+        // The visit the tracing recall was chasing happened - leaving the
+        // recall open would have the desk pursue a patient who came.
+        resolveOpenTracingRecalls(enrollment, RecallStatus.CLOSED);
         ProgramEnrollment saved = enrollmentRepository.save(enrollment);
         emitAudit(AuditEventType.PROGRAM_VISIT_RECORDED, saved,
             saved.getProgram() + " visit on " + visitDate + ", next expected "
@@ -255,6 +276,37 @@ public class ProgramEnrollmentService {
             .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
             .filter(e -> e.getPatient() != null && patientId.equals(e.getPatient().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("program.enrollment.notfound"));
+    }
+
+    /**
+     * The inverse of the CANCELLED interlock, for the same missed date only.
+     * Status back to PENDING; {@code notifiedAt} is deliberately kept, so
+     * the patient is not texted a second time for a date they were already
+     * notified about - the desk worklist is the surface that re-engages.
+     */
+    private void restoreCancelledTracingRecall(ProgramEnrollment enrollment) {
+        if (enrollment.getNextExpectedVisit() == null) {
+            return;
+        }
+        var cancelled = recallRepository.findByProgramEnrollment_IdAndStatusIn(
+            enrollment.getId(), java.util.Set.of(RecallStatus.CANCELLED));
+        for (var recall : cancelled) {
+            if (enrollment.getNextExpectedVisit().equals(recall.getDueDate())) {
+                recall.setStatus(RecallStatus.PENDING);
+                recall.setClosedAt(null);
+                recallRepository.save(recall);
+            }
+        }
+    }
+
+    private void resolveOpenTracingRecalls(ProgramEnrollment enrollment, RecallStatus outcome) {
+        var open = recallRepository.findByProgramEnrollment_IdAndStatusIn(
+            enrollment.getId(), OPEN_RECALL_STATUSES);
+        for (var recall : open) {
+            recall.setStatus(outcome);
+            recall.setClosedAt(LocalDateTime.now(clock));
+            recallRepository.save(recall);
+        }
     }
 
     private Staff resolveCurrentStaff(UUID hospitalId) {

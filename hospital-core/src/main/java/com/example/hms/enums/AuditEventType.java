@@ -70,6 +70,8 @@ public enum AuditEventType {
     PROGRAM_ENROLLED,
     PROGRAM_STATUS_CHANGED,
     PROGRAM_VISIT_RECORDED,
+    /** The care-gap sweep created a tracing recall - a system write, no human actor. */
+    PROGRAM_DEFAULTER_TRACED,
 
     // Data operations
     ACCESS,
