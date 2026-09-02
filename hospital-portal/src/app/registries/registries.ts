@@ -1,40 +1,64 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, catchError, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { Subject, Subscription, forkJoin, of, switchMap } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 import {
   CareProgram,
   EnrollRequest,
   ProgramEnrollment,
   ProgramEnrollmentStatus,
+  ProgramRegistryPage,
   ProgramRegistryService,
 } from '../services/program-registry.service';
-import { PatientService, PatientResponse } from '../services/patient.service';
+import { PatientResponse } from '../services/patient.service';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
 
+interface RegistryLoad {
+  rows: ProgramEnrollment[];
+  totalRows: number;
+  rowsFailed: boolean;
+  counts: Partial<Record<ProgramEnrollmentStatus, number>>;
+  countsFailed: boolean;
+}
+
 /**
  * Disease-programme registries (Tier 2 item 35).
  *
- * <p>One programme at a time, overdue-first — the server orders the list so
+ * <p>One programme at a time, overdue-first — the server orders the page so
  * the top row is the patient most in need of tracing. Enrolment, visit
  * recording and status outcomes all happen here; outreach to the overdue is
  * item 36, deliberately not this screen.
+ *
+ * <p>Loads run through a single switchMap so a slow response for a
+ * previously selected programme can never overwrite the current one, and a
+ * failed counts request renders as "unavailable", never as zeros — an
+ * outage must not read as an empty cohort.
  */
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './registries.html',
   styleUrl: './registries.scss',
 })
-export class RegistriesComponent implements OnInit {
+export class RegistriesComponent implements OnInit, OnDestroy {
   private readonly registryService = inject(ProgramRegistryService);
-  private readonly patientService = inject(PatientService);
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -49,25 +73,33 @@ export class RegistriesComponent implements OnInit {
     'DECEASED',
   ];
 
+  /** One page is plenty for a facility cohort; the server caps at 200 anyway. */
+  private static readonly PAGE_SIZE = 200;
+
   activeProgram = signal<CareProgram>('HIV');
   statusFilter = signal<StatusFilter>('ACTIVE');
 
   rows = signal<ProgramEnrollment[]>([]);
+  totalRows = signal(0);
   counts = signal<Partial<Record<ProgramEnrollmentStatus, number>>>({});
+  countsFailed = signal(false);
   loading = signal(false);
   loadFailed = signal(false);
   actingOnId = signal<string | null>(null);
 
   overdueCount = computed(() => this.rows().filter((r) => r.overdueDays > 0).length);
+  truncated = computed(() => this.totalRows() > this.rows().length);
+
+  /** Hospital scope for the picker — the super-admin-aware one, not the primary. */
+  readonly pickerHospitalId = computed(() => this.roleCtx.effectiveHospitalIdForRequest());
+
+  private readonly load$ = new Subject<{ program: CareProgram; status: StatusFilter }>();
+  private loadSub?: Subscription;
 
   /* ── Enrol modal ── */
   showEnrollForm = signal(false);
   saving = signal(false);
-  patientQuery = signal('');
-  patientResults = signal<PatientResponse[]>([]);
   selectedPatient = signal<PatientResponse | null>(null);
-  private readonly patientSearch$ = new Subject<string>();
-
   enrolledOn = signal('');
   cadenceDays = signal<number | null>(null);
   notes = signal('');
@@ -77,20 +109,55 @@ export class RegistriesComponent implements OnInit {
   newStatus = signal<ProgramEnrollmentStatus>('COMPLETED');
   statusReason = signal('');
 
+  /* ── Dialog focus management ── */
+  private readonly enrollDialog = viewChild<ElementRef<HTMLElement>>('enrollDialog');
+  private readonly statusDialog = viewChild<ElementRef<HTMLElement>>('statusDialog');
+  private dialogOpener: HTMLElement | null = null;
+
   ngOnInit(): void {
-    const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
-    this.patientSearch$
+    this.loadSub = this.load$
       .pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        switchMap((q) => {
-          if (!q || q.length < 2) return of([]);
-          return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));
+        // switchMap: only the LATEST selection may update the view. Without
+        // it, a slow HIV response finishing after a quick TB one would
+        // display HIV rows under the TB tab.
+        switchMap(({ program, status }) => {
+          this.loading.set(true);
+          this.loadFailed.set(false);
+          const page = this.registryService
+            .registry(program, status, 0, RegistriesComponent.PAGE_SIZE)
+            .pipe(
+              map((p: ProgramRegistryPage) => ({
+                rows: p.content,
+                totalRows: p.totalElements,
+                rowsFailed: false,
+              })),
+              catchError(() => of({ rows: [], totalRows: 0, rowsFailed: true })),
+            );
+          const counts = this.registryService.counts(program).pipe(
+            map((c) => ({ counts: c, countsFailed: false })),
+            catchError(() => of({ counts: {}, countsFailed: true })),
+          );
+          return forkJoin([page, counts]).pipe(map(([p, c]): RegistryLoad => ({ ...p, ...c })));
         }),
       )
-      .subscribe((results) => this.patientResults.set(results as PatientResponse[]));
+      .subscribe((result) => {
+        this.rows.set(result.rows);
+        this.totalRows.set(result.totalRows);
+        this.loadFailed.set(result.rowsFailed);
+        // On failure the previous counts are kept visible but flagged —
+        // stale-and-marked beats zeros pretending to be data.
+        this.countsFailed.set(result.countsFailed);
+        if (!result.countsFailed) {
+          this.counts.set(result.counts);
+        }
+        this.loading.set(false);
+      });
 
     this.load();
+  }
+
+  ngOnDestroy(): void {
+    this.loadSub?.unsubscribe();
   }
 
   setProgram(program: CareProgram): void {
@@ -106,27 +173,7 @@ export class RegistriesComponent implements OnInit {
   }
 
   load(): void {
-    const program = this.activeProgram();
-    this.loading.set(true);
-    this.loadFailed.set(false);
-    this.registryService.registry(program, this.statusFilter()).subscribe({
-      next: (list) => {
-        this.rows.set(list);
-        this.loading.set(false);
-      },
-      error: () => {
-        // An explicit failure state, never an empty registry: "nobody is
-        // enrolled" and "we could not load the registry" are opposite
-        // statements to a programme coordinator.
-        this.rows.set([]);
-        this.loading.set(false);
-        this.loadFailed.set(true);
-      },
-    });
-    this.registryService.counts(program).subscribe({
-      next: (c) => this.counts.set(c),
-      error: () => this.counts.set({}),
-    });
+    this.load$.next({ program: this.activeProgram(), status: this.statusFilter() });
   }
 
   countFor(status: ProgramEnrollmentStatus): number {
@@ -135,31 +182,25 @@ export class RegistriesComponent implements OnInit {
 
   /* ── Enrol ── */
 
-  openEnrollForm(): void {
+  openEnrollForm(event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.selectedPatient.set(null);
-    this.patientQuery.set('');
-    this.patientResults.set([]);
     this.enrolledOn.set('');
     // No prefilled cadence: it is clinical protocol the clinician knows and
     // the server refuses to guess. An empty box asks; a silent 30 asserts.
     this.cadenceDays.set(null);
     this.notes.set('');
     this.showEnrollForm.set(true);
+    this.focusDialogSoon(() => this.enrollDialog()?.nativeElement);
   }
 
   closeEnrollForm(): void {
     this.showEnrollForm.set(false);
+    this.restoreOpenerFocus();
   }
 
-  onPatientQueryChange(value: string): void {
-    this.patientQuery.set(value);
-    this.patientSearch$.next(value);
-  }
-
-  selectPatient(p: PatientResponse): void {
-    this.selectedPatient.set(p);
-    this.patientQuery.set(p.firstName + ' ' + p.lastName);
-    this.patientResults.set([]);
+  onPatientSelected(patient: PatientResponse | null): void {
+    this.selectedPatient.set(patient);
   }
 
   submitEnroll(): void {
@@ -183,7 +224,7 @@ export class RegistriesComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('REGISTRIES.ENROLLED'));
         this.saving.set(false);
-        this.showEnrollForm.set(false);
+        this.closeEnrollForm();
         this.load();
       },
       error: (err) => {
@@ -217,14 +258,17 @@ export class RegistriesComponent implements OnInit {
 
   /* ── Status ── */
 
-  openStatusModal(row: ProgramEnrollment): void {
+  openStatusModal(row: ProgramEnrollment, event?: Event): void {
+    this.dialogOpener = (event?.currentTarget as HTMLElement) ?? null;
     this.statusTarget.set(row);
     this.newStatus.set(row.status === 'ACTIVE' ? 'COMPLETED' : 'ACTIVE');
     this.statusReason.set('');
+    this.focusDialogSoon(() => this.statusDialog()?.nativeElement);
   }
 
   closeStatusModal(): void {
     this.statusTarget.set(null);
+    this.restoreOpenerFocus();
   }
 
   submitStatus(): void {
@@ -246,7 +290,7 @@ export class RegistriesComponent implements OnInit {
         next: () => {
           this.toast.success(this.translate.instant('REGISTRIES.STATUS_UPDATED'));
           this.saving.set(false);
-          this.statusTarget.set(null);
+          this.closeStatusModal();
           this.load();
         },
         error: (err) => {
@@ -260,6 +304,36 @@ export class RegistriesComponent implements OnInit {
 
   statusClass(status: ProgramEnrollmentStatus): string {
     return 'reg-status-' + status.toLowerCase();
+  }
+
+  /* ── Dialog focus: move in on open, cycle on Tab, restore on close ── */
+
+  trapTab(event: KeyboardEvent, dialog: HTMLElement): void {
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((el) => !el.hasAttribute('disabled'));
+    if (focusables.length === 0) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  private focusDialogSoon(resolve: () => HTMLElement | undefined): void {
+    // The dialog renders on the next change-detection pass.
+    setTimeout(() => resolve()?.focus(), 0);
+  }
+
+  private restoreOpenerFocus(): void {
+    this.dialogOpener?.focus();
+    this.dialogOpener = null;
   }
 
   private extractMessage(err: unknown): string | null {

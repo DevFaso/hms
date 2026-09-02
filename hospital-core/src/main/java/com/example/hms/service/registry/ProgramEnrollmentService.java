@@ -1,13 +1,17 @@
 package com.example.hms.service.registry;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.CareProgram;
 import com.example.hms.enums.ProgramEnrollmentStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.mapper.ProgramEnrollmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.ProgramEnrollment;
 import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.registry.ProgramEnrollmentRequestDTO;
 import com.example.hms.payload.dto.registry.ProgramEnrollmentResponseDTO;
 import com.example.hms.payload.dto.registry.ProgramStatusUpdateDTO;
@@ -16,15 +20,18 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProgramEnrollmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.SecurityUtils;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -44,17 +51,27 @@ import java.util.UUID;
  * <p>Tenancy: 404-not-403 throughout (#483's stance). A patient not
  * registered at the caller's hospital is indistinguishable from one that
  * does not exist, and so is another hospital's enrolment row.
+ *
+ * <p>Every successful write emits a best-effort audit event keyed by
+ * patient. Best-effort as everywhere else: an audit failure must never
+ * undo a recorded enrolment — but "best-effort" is about the emission, not
+ * the intent; the request log is not an actor/resource trail.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ProgramEnrollmentService {
 
+    /** Registry page-size ceiling: a cohort read is a page, never a dump. */
+    static final int MAX_REGISTRY_PAGE = 200;
+
     private final ProgramEnrollmentRepository enrollmentRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final RoleValidator roleValidator;
+    private final ProgramEnrollmentMapper mapper;
+    private final AuditEventLogService auditService;
     private final Clock clock;
 
     @Transactional
@@ -90,6 +107,9 @@ public class ProgramEnrollmentService {
 
         log.info("Programme enrolment: patient {} into {} at hospital {} (cadence {}d)",
             patientId, request.getProgram(), hospitalId, request.getVisitCadenceDays());
+        emitAudit(AuditEventType.PROGRAM_ENROLLED, saved,
+            "Enrolled in " + saved.getProgram() + " (cadence " + saved.getVisitCadenceDays()
+                + "d, from " + enrolledOn + ")");
         return toDto(saved, hospitalId);
     }
 
@@ -99,8 +119,9 @@ public class ProgramEnrollmentService {
         UUID hospitalId = requireHospital();
         ProgramEnrollment enrollment = requireEnrollmentInTenant(enrollmentId, patientId, hospitalId);
 
+        ProgramEnrollmentStatus previous = enrollment.getStatus();
         ProgramEnrollmentStatus target = request.getStatus();
-        if (enrollment.getStatus() == target) {
+        if (previous == target) {
             throw new BusinessException("The enrolment is already in that state.");
         }
 
@@ -136,6 +157,8 @@ public class ProgramEnrollmentService {
         ProgramEnrollment saved = enrollmentRepository.save(enrollment);
         log.info("Programme enrolment {} -> {} (patient {}, {})",
             enrollmentId, target, patientId, enrollment.getProgram());
+        emitAudit(AuditEventType.PROGRAM_STATUS_CHANGED, saved,
+            saved.getProgram() + " enrolment " + previous + " -> " + target);
         return toDto(saved, hospitalId);
     }
 
@@ -155,20 +178,38 @@ public class ProgramEnrollmentService {
         if (visitDate.isBefore(enrollment.getEnrolledOn())) {
             throw new BusinessException("A programme visit cannot predate the enrolment.");
         }
+        // lastVisitOn/nextExpectedVisit summarize the LATEST visit. A
+        // backfilled earlier visit would move nextExpectedVisit backwards
+        // and mark an adherent patient overdue — refused rather than
+        // silently reordered, because there is no visit history table to
+        // absorb it (deliberately: the summary pair is all item 36 needs).
+        if (enrollment.getLastVisitOn() != null
+            && visitDate.isBefore(enrollment.getLastVisitOn())) {
+            throw new BusinessException(
+                "A visit before the last recorded one (" + enrollment.getLastVisitOn()
+                    + ") cannot be recorded - the registry tracks the latest visit.");
+        }
 
         enrollment.setLastVisitOn(visitDate);
         enrollment.setNextExpectedVisit(visitDate.plusDays(enrollment.getVisitCadenceDays()));
-        return toDto(enrollmentRepository.save(enrollment), hospitalId);
+        ProgramEnrollment saved = enrollmentRepository.save(enrollment);
+        emitAudit(AuditEventType.PROGRAM_VISIT_RECORDED, saved,
+            saved.getProgram() + " visit on " + visitDate + ", next expected "
+                + saved.getNextExpectedVisit());
+        return toDto(saved, hospitalId);
     }
 
     @Transactional(readOnly = true)
-    public List<ProgramEnrollmentResponseDTO> registry(CareProgram program,
-                                                       ProgramEnrollmentStatus status) {
+    public Page<ProgramEnrollmentResponseDTO> registry(CareProgram program,
+                                                       ProgramEnrollmentStatus status,
+                                                       int page, int size) {
         UUID hospitalId = requireHospital();
         ProgramEnrollmentStatus effective = status != null ? status : ProgramEnrollmentStatus.ACTIVE;
-        return enrollmentRepository.findRegistry(hospitalId, program, effective).stream()
-            .map(e -> toDto(e, hospitalId))
-            .toList();
+        int boundedSize = Math.min(Math.max(size, 1), MAX_REGISTRY_PAGE);
+        LocalDate today = LocalDate.now(clock);
+        return enrollmentRepository.findRegistry(hospitalId, program, effective,
+                PageRequest.of(Math.max(page, 0), boundedSize))
+            .map(e -> mapper.toDto(e, hospitalId, today));
     }
 
     @Transactional(readOnly = true)
@@ -185,8 +226,9 @@ public class ProgramEnrollmentService {
     public List<ProgramEnrollmentResponseDTO> patientEnrollments(UUID patientId) {
         UUID hospitalId = requireHospital();
         requirePatientInTenant(patientId, hospitalId);
+        LocalDate today = LocalDate.now(clock);
         return enrollmentRepository.findByPatient(hospitalId, patientId).stream()
-            .map(e -> toDto(e, hospitalId))
+            .map(e -> mapper.toDto(e, hospitalId, today))
             .toList();
     }
 
@@ -223,42 +265,30 @@ public class ProgramEnrollmentService {
         return staffRepository.findByUserIdAndHospitalId(userId, hospitalId).orElse(null);
     }
 
-    // ── mapping ─────────────────────────────────────────────────────────
-
     private ProgramEnrollmentResponseDTO toDto(ProgramEnrollment e, UUID hospitalId) {
-        Patient patient = e.getPatient();
-        String enrolledByName = null;
-        if (e.getEnrolledBy() != null && e.getEnrolledBy().getUser() != null) {
-            var user = e.getEnrolledBy().getUser();
-            enrolledByName = (user.getFirstName() + " " + user.getLastName()).trim();
+        return mapper.toDto(e, hospitalId, LocalDate.now(clock));
+    }
+
+    /** Best-effort: an audit failure must never undo a recorded enrolment. */
+    private void emitAudit(AuditEventType type, ProgramEnrollment enrollment, String description) {
+        try {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(type)
+                .status(AuditStatus.SUCCESS)
+                .entityType("ProgramEnrollment")
+                .resourceId(enrollment.getId() != null ? enrollment.getId().toString() : null)
+                .userId(roleValidator.getCurrentUserId())
+                .userName(SecurityUtils.getCurrentUsername())
+                .hospitalName(enrollment.getHospital() != null
+                    ? enrollment.getHospital().getName() : null)
+                .patientId(enrollment.getPatient() != null
+                    ? enrollment.getPatient().getId() : null)
+                .eventDescription(description)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit audit for ProgramEnrollment {}: {}",
+                enrollment.getId(), ex.getMessage());
         }
-        long overdueDays = 0;
-        if (e.getStatus() == ProgramEnrollmentStatus.ACTIVE) {
-            LocalDate today = LocalDate.now(clock);
-            if (e.getNextExpectedVisit() != null && e.getNextExpectedVisit().isBefore(today)) {
-                overdueDays = ChronoUnit.DAYS.between(e.getNextExpectedVisit(), today);
-            }
-        }
-        return ProgramEnrollmentResponseDTO.builder()
-            .id(e.getId())
-            .hospitalId(e.getHospital().getId())
-            .patientId(patient.getId())
-            .patientName(patient.getFullName())
-            .mrn(patient.getMrnForHospital(hospitalId))
-            .phoneNumber(patient.getPhoneNumberPrimary())
-            .program(e.getProgram())
-            .status(e.getStatus())
-            .enrolledOn(e.getEnrolledOn())
-            .enrolledByName(enrolledByName)
-            .visitCadenceDays(e.getVisitCadenceDays())
-            .lastVisitOn(e.getLastVisitOn())
-            .nextExpectedVisit(e.getNextExpectedVisit())
-            .overdueDays(overdueDays)
-            .notes(e.getNotes())
-            .closedOn(e.getClosedOn())
-            .closureReason(e.getClosureReason())
-            .createdAt(e.getCreatedAt())
-            .build();
     }
 
     private static String trimToNull(String value) {

@@ -8459,6 +8459,8 @@
     "REOPEN_HINT": "Reabrir borra el motivo de cierre. Use las notas para el contexto.",
     "REASON_REQUIRED": "Cerrar una inscripción requiere un motivo.",
     "STATUS_UPDATED": "Estado actualizado.",
-    "ACTION_FAILED": "No se pudo completar la acción."
+    "ACTION_FAILED": "No se pudo completar la acción.",
+    "COUNTS_UNAVAILABLE": "Recuentos no disponibles — se muestran los últimos valores conocidos.",
+    "SHOWING_FIRST": "Mostrando las primeras {{shown}} inscripciones de {{total}}."
   }
 }

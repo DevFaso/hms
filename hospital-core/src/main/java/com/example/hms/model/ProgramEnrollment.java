@@ -2,7 +2,9 @@ package com.example.hms.model;
 
 import com.example.hms.enums.CareProgram;
 import com.example.hms.enums.ProgramEnrollmentStatus;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -102,15 +104,19 @@ public class ProgramEnrollment extends BaseEntity {
     @Column(name = "next_expected_visit", nullable = false)
     private LocalDate nextExpectedVisit;
 
+    /** Clinical narrative, so encrypted at rest; TEXT because AES-GCM+Base64 outgrows the plaintext cap. */
     @Size(max = 500)
-    @Column(name = "notes", length = 500)
+    @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     /** Set when the enrolment leaves ACTIVE, alongside the closed status. */
     @Column(name = "closed_on")
     private LocalDate closedOn;
 
+    /** Also a clinical narrative ("traced twice by phone..."), encrypted like the notes. */
     @Size(max = 500)
-    @Column(name = "closure_reason", length = 500)
+    @Column(name = "closure_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String closureReason;
 }

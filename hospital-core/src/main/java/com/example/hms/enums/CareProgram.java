@@ -15,7 +15,7 @@ package com.example.hms.enums;
  * guideline edition and by the facility's own policy. Hardcoding "every 30
  * days" per programme would be this codebase fabricating clinical guidance —
  * the V120/WHO-data rule. The cadence is typed in per enrolment by the
- * clinician who knows the protocol; the UI merely suggests a starting value.
+ * clinician who knows the protocol; the UI requires it and suggests nothing.
  */
 public enum CareProgram {
     HIV,

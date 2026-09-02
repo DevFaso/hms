@@ -238,8 +238,10 @@
   }
 }
 
+// #64748b, not the lighter grey: 13px text needs 4.5:1 on white (WCAG AA)
+// and #94a3b8 only reaches 2.56:1.
 .muted {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .overdue-chip {
@@ -301,7 +303,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .col-actions {
@@ -396,33 +398,23 @@
 
 .hint {
   font-size: 0.6875rem;
-  color: #94a3b8;
+  color: #64748b;
 }
 
-.patient-results {
-  list-style: none;
-  margin: -0.5rem 0 0.875rem;
-  padding: 0;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  max-height: 180px;
-  overflow-y: auto;
+.counts-unavailable {
+  font-size: 0.75rem;
+  color: #b45309;
+  font-weight: 600;
+}
 
-  li button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 0.5rem 0.75rem;
-    border: none;
-    background: #fff;
-    font-size: 0.8125rem;
-    color: #1e293b;
-    cursor: pointer;
+.chip-count--unavailable {
+  color: #64748b;
+}
 
-    &:hover {
-      background: #f5f3ff;
-    }
-  }
+.truncation-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
 .modal-actions {

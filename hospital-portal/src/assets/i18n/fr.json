@@ -8459,6 +8459,8 @@
     "REOPEN_HINT": "La réouverture efface le motif de clôture. Utilisez les notes pour le contexte.",
     "REASON_REQUIRED": "La clôture d'une inscription exige un motif.",
     "STATUS_UPDATED": "Statut mis à jour.",
-    "ACTION_FAILED": "L'action n'a pas pu être effectuée."
+    "ACTION_FAILED": "L'action n'a pas pu être effectuée.",
+    "COUNTS_UNAVAILABLE": "Comptes indisponibles — dernières valeurs connues affichées.",
+    "SHOWING_FIRST": "Affichage des {{shown}} premières inscriptions sur {{total}}."
   }
 }

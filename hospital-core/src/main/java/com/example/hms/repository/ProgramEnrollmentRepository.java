@@ -3,6 +3,8 @@ package com.example.hms.repository;
 import com.example.hms.enums.CareProgram;
 import com.example.hms.enums.ProgramEnrollmentStatus;
 import com.example.hms.model.ProgramEnrollment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -17,11 +19,18 @@ import java.util.UUID;
 public interface ProgramEnrollmentRepository extends JpaRepository<ProgramEnrollment, UUID> {
 
     /**
-     * The registry: every enrolment in one programme at one hospital, one
-     * status at a time. Overdue-first, then by next expected visit, so the
-     * top of the screen is the patient most in need of tracing.
+     * The registry page: one programme at one hospital, one status at a
+     * time. Overdue-first (next expected visit ascending), so page 0 row 0
+     * is the patient most in need of tracing. Paged rather than a List —
+     * a cohort is unbounded, and one request must not serialize every
+     * enrolled patient's identity at once.
+     *
+     * <p>The graph reaches through the patient's hospital registrations
+     * because the mapper renders the MRN; without it, N rows meant N
+     * lazy registration queries.
      */
-    @EntityGraph(attributePaths = {"patient", "enrolledBy", "enrolledBy.user"})
+    @EntityGraph(attributePaths = {"patient", "patient.hospitalRegistrations",
+        "patient.hospitalRegistrations.hospital", "enrolledBy", "enrolledBy.user"})
     @Query("""
         SELECT e FROM ProgramEnrollment e
         WHERE e.hospital.id = :hospitalId
@@ -29,13 +38,15 @@ public interface ProgramEnrollmentRepository extends JpaRepository<ProgramEnroll
           AND e.status = :status
         ORDER BY e.nextExpectedVisit ASC, e.enrolledOn ASC
     """)
-    List<ProgramEnrollment> findRegistry(
+    Page<ProgramEnrollment> findRegistry(
         @Param("hospitalId") UUID hospitalId,
         @Param("program") CareProgram program,
-        @Param("status") ProgramEnrollmentStatus status);
+        @Param("status") ProgramEnrollmentStatus status,
+        Pageable pageable);
 
     /** One patient's enrolments at one hospital, every programme and state. */
-    @EntityGraph(attributePaths = {"patient", "enrolledBy", "enrolledBy.user"})
+    @EntityGraph(attributePaths = {"patient", "patient.hospitalRegistrations",
+        "patient.hospitalRegistrations.hospital", "enrolledBy", "enrolledBy.user"})
     @Query("""
         SELECT e FROM ProgramEnrollment e
         WHERE e.hospital.id = :hospitalId

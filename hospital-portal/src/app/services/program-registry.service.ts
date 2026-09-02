@@ -38,6 +38,15 @@ export interface EnrollRequest {
   notes?: string;
 }
 
+/** One page of a cohort — the Spring Page shape, narrowed to what the screen uses. */
+export interface ProgramRegistryPage {
+  content: ProgramEnrollment[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
 export interface StatusUpdateRequest {
   status: ProgramEnrollmentStatus;
   /** Required for every closed state; refused for a move back to ACTIVE. */
@@ -52,10 +61,12 @@ export class ProgramRegistryService {
   registry(
     program: CareProgram,
     status?: ProgramEnrollmentStatus,
-  ): Observable<ProgramEnrollment[]> {
-    let params = new HttpParams();
+    page = 0,
+    size = 100,
+  ): Observable<ProgramRegistryPage> {
+    let params = new HttpParams().set('page', page).set('size', size);
     if (status) params = params.set('status', status);
-    return this.http.get<ProgramEnrollment[]>(`/programs/${program}/registry`, { params });
+    return this.http.get<ProgramRegistryPage>(`/programs/${program}/registry`, { params });
   }
 
   counts(program: CareProgram): Observable<Partial<Record<ProgramEnrollmentStatus, number>>> {

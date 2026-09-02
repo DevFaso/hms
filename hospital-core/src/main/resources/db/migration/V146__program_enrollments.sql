@@ -36,9 +36,12 @@ CREATE TABLE IF NOT EXISTS clinical.program_enrollments (
     visit_cadence_days  INTEGER      NOT NULL,
     last_visit_on       DATE,
     next_expected_visit DATE         NOT NULL,
-    notes               VARCHAR(500),
+    -- TEXT, not VARCHAR(500): both carry patient-specific clinical narrative,
+    -- so the app encrypts them (EncryptedStringConverter), and the AES-GCM +
+    -- Base64 payload outgrows the 500-character plaintext cap the DTO enforces.
+    notes               TEXT,
     closed_on           DATE,
-    closure_reason      VARCHAR(500),
+    closure_reason      TEXT,
     created_by          VARCHAR(255),
     created_at          TIMESTAMP    NOT NULL DEFAULT now(),
     updated_at          TIMESTAMP    NOT NULL DEFAULT now(),

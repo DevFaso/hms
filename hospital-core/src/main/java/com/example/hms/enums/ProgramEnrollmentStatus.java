@@ -3,8 +3,9 @@ package com.example.hms.enums;
 /**
  * Where a programme enrolment stands (Tier 2 item 35).
  *
- * <p>ACTIVE is the only state the registry counts and the only one the
- * care-gap sweep (item 36) will trace. The closed states are deliberately
+ * <p>ACTIVE is the current-care cohort — the care-gap denominator and the
+ * only state item 36's sweep will trace. Every state is countable and
+ * listable for reporting. The closed states are deliberately
  * distinct rather than one CLOSED + reason text, because they answer
  * different reporting questions: LOST_TO_FOLLOW_UP is the defaulter-tracing
  * outcome national programmes ask facilities to count, TRANSFERRED_OUT keeps

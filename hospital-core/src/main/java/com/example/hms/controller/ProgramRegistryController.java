@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,13 +46,17 @@ public class ProgramRegistryController {
     private final ProgramEnrollmentService enrollmentService;
 
     @GetMapping("/{program}/registry")
-    @Operation(summary = "The registry for one programme",
+    @Operation(summary = "The registry for one programme, paged",
         description = "ACTIVE enrolments by default; pass a status for the closed cohorts. "
-            + "Overdue-first, so the top of the list is the patient most in need of tracing.")
-    public ResponseEntity<List<ProgramEnrollmentResponseDTO>> registry(
+            + "Overdue-first, so page 0 row 0 is the patient most in need of tracing. "
+            + "Paged (size capped server-side) because a cohort is unbounded and one "
+            + "request must not serialize every enrolled patient at once.")
+    public ResponseEntity<org.springframework.data.domain.Page<ProgramEnrollmentResponseDTO>> registry(
         @PathVariable CareProgram program,
-        @RequestParam(required = false) ProgramEnrollmentStatus status) {
-        return ResponseEntity.ok(enrollmentService.registry(program, status));
+        @RequestParam(required = false) ProgramEnrollmentStatus status,
+        @RequestParam(defaultValue = "0") int page,
+        @RequestParam(defaultValue = "100") int size) {
+        return ResponseEntity.ok(enrollmentService.registry(program, status, page, size));
     }
 
     @GetMapping("/{program}/registry/counts")

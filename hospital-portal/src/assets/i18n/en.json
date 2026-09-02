@@ -8459,6 +8459,8 @@
     "REOPEN_HINT": "Re-opening clears the closure outcome. Use the enrolment notes for context.",
     "REASON_REQUIRED": "Closing an enrolment needs a reason.",
     "STATUS_UPDATED": "Status updated.",
-    "ACTION_FAILED": "The action could not be completed."
+    "ACTION_FAILED": "The action could not be completed.",
+    "COUNTS_UNAVAILABLE": "Counts unavailable — showing the last known values.",
+    "SHOWING_FIRST": "Showing the first {{shown}} of {{total}} enrolments."
   }
 }

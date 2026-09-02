@@ -4,20 +4,27 @@
       <h1>{{ 'REGISTRIES.TITLE' | translate }}</h1>
       <p class="subtitle">{{ 'REGISTRIES.SUBTITLE' | translate }}</p>
     </div>
-    <button type="button" class="btn-primary" (click)="openEnrollForm()" data-testid="open-enroll">
+    <button
+      type="button"
+      class="btn-primary"
+      (click)="openEnrollForm($event)"
+      data-testid="open-enroll"
+    >
       <span class="material-symbols-outlined">person_add</span>
       {{ 'REGISTRIES.ENROLL' | translate }}
     </button>
   </div>
 
-  <!-- Programme tabs -->
-  <div class="program-tabs" role="tablist">
+  <!-- Programme filter. Plain toggle buttons, not the ARIA tab pattern:
+       these filter one table rather than switching panels, and half a
+       tablist (roles without roving tabindex or arrow keys) reads worse
+       to assistive tech than honest pressed buttons. -->
+  <div class="program-tabs">
     @for (p of programs; track p) {
       <button
         type="button"
         class="program-tab"
-        role="tab"
-        [attr.aria-selected]="activeProgram() === p"
+        [attr.aria-pressed]="activeProgram() === p"
         [class.active]="activeProgram() === p"
         (click)="setProgram(p)"
       >
@@ -32,12 +39,25 @@
       <button
         type="button"
         class="status-chip"
+        [attr.aria-pressed]="statusFilter() === s"
         [class.active]="statusFilter() === s"
         (click)="setStatusFilter(s)"
       >
         {{ 'REGISTRIES.STATUS.' + s | translate }}
-        <span class="chip-count">{{ countFor(s) }}</span>
+        @if (!countsFailed()) {
+          <span class="chip-count">{{ countFor(s) }}</span>
+        } @else {
+          <!-- A failed counts request must not render as zeros: zero is a
+               clinical statement ("nobody is lost to follow-up"), and an
+               outage is not entitled to make it. -->
+          <span class="chip-count chip-count--unavailable" aria-hidden="true">—</span>
+        }
       </button>
+    }
+    @if (countsFailed()) {
+      <span class="counts-unavailable" data-testid="counts-unavailable">
+        {{ 'REGISTRIES.COUNTS_UNAVAILABLE' | translate }}
+      </span>
     }
     @if (statusFilter() === 'ACTIVE' && overdueCount() > 0) {
       <span class="overdue-summary" data-testid="overdue-summary">
@@ -72,6 +92,11 @@
   }
 
   @if (!loading() && !loadFailed() && rows().length > 0) {
+    @if (truncated()) {
+      <p class="truncation-note" data-testid="truncation-note">
+        {{ 'REGISTRIES.SHOWING_FIRST' | translate: { shown: rows().length, total: totalRows() } }}
+      </p>
+    }
     <div class="table-wrap">
       <table class="registry-table">
         <thead>
@@ -145,7 +170,7 @@
                   type="button"
                   class="btn-row"
                   [disabled]="actingOnId() !== null"
-                  (click)="openStatusModal(row)"
+                  (click)="openStatusModal(row, $event)"
                   data-testid="change-status"
                 >
                   <span class="material-symbols-outlined">swap_horiz</span>
@@ -163,10 +188,14 @@
   @if (showEnrollForm()) {
     <div class="modal-backdrop" (click)="closeEnrollForm()" aria-hidden="true"></div>
     <div
+      #enrollDialog
       class="modal"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       [attr.aria-label]="'REGISTRIES.ENROLL_TITLE' | translate"
+      (keydown.escape)="closeEnrollForm()"
+      (keydown.tab)="trapTab($any($event), enrollDialog)"
       data-testid="enroll-modal"
     >
       <h2>
@@ -174,29 +203,20 @@
         {{ 'REGISTRIES.PROGRAM.' + activeProgram() | translate }}
       </h2>
 
-      <label class="field">
+      <label class="field" for="registry-patient-picker">
         <span>{{ 'REGISTRIES.PATIENT' | translate }} *</span>
-        <input
-          type="text"
-          name="regPatientQuery"
-          [ngModel]="patientQuery()"
-          (ngModelChange)="onPatientQueryChange($event)"
-          [placeholder]="'REGISTRIES.PATIENT_SEARCH_PLACEHOLDER' | translate"
-          autocomplete="off"
-          data-testid="patient-query"
-        />
       </label>
-      @if (patientResults().length > 0) {
-        <ul class="patient-results" role="listbox">
-          @for (p of patientResults(); track p.id) {
-            <li>
-              <button type="button" role="option" aria-selected="false" (click)="selectPatient(p)">
-                {{ p.firstName }} {{ p.lastName }}
-              </button>
-            </li>
-          }
-        </ul>
-      }
+      <!-- The shared picker, not a hand-rolled typeahead: it owns the
+           debounced /patients/search + /patients/lookup pair (the
+           ?search param was never implemented server-side), the chip
+           idiom that makes a stale selection impossible, and the
+           super-admin-aware hospital scope. -->
+      <app-patient-picker
+        inputId="registry-patient-picker"
+        [hospitalId]="pickerHospitalId()"
+        [selected]="selectedPatient()"
+        (selectedChange)="onPatientSelected($event)"
+      />
 
       <label class="field">
         <span>{{ 'REGISTRIES.ENROLLED_ON' | translate }}</span>
@@ -262,10 +282,14 @@
   @if (statusTarget(); as target) {
     <div class="modal-backdrop" (click)="closeStatusModal()" aria-hidden="true"></div>
     <div
+      #statusDialog
       class="modal"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       [attr.aria-label]="'REGISTRIES.CHANGE_STATUS' | translate"
+      (keydown.escape)="closeStatusModal()"
+      (keydown.tab)="trapTab($any($event), statusDialog)"
       data-testid="status-modal"
     >
       <h2>{{ 'REGISTRIES.CHANGE_STATUS' | translate }} — {{ target.patientName }}</h2>
