@@ -178,7 +178,7 @@ export interface RecallResponse {
   encounterId: string | null;
   recallType: RecallType;
   status: RecallStatus;
-  source: 'CHECKOUT' | 'MANUAL';
+  source: 'CHECKOUT' | 'MANUAL' | 'PROGRAM_RULE';
   dueDate: string;
   reason: string;
   notes: string | null;

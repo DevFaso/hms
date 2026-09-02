@@ -2212,6 +2212,20 @@
     </changeSet>
 
     <!-- =================================================================
+         V147 - care-gap worklist + defaulter tracing (Tier 2 item 36).
+         A care gap is structurally a recall with a rule behind it instead
+         of a clinician, so tracing rides the entire existing recall
+         pipeline; this adds only the enrolment link plus the partial
+         unique index that makes the dedupe rule (one tracing recall per
+         missed expected-visit date) a database fact rather than an
+         application promise. Contains a DO $$ block (guarded FK add), so
+         stripComments=false and splitStatements behaviour as V128.
+         ================================================================= -->
+    <changeSet id="V147-care-gap-recalls" author="hms-team" runOnChange="false">
+        <sqlFile path="V147__care_gap_recalls.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+
          V148 - read-path indexes for the FHIR Appointment + Slot
          providers (Tier 2 item 43). New composite read shapes; with
          ddl-auto=validate an entity @Index creates nothing in production,

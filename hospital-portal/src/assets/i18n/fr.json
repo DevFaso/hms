@@ -5144,6 +5144,7 @@
     "RECALL_TYPE_OTHER": "Autre",
     "RECALL_SOURCE_CHECKOUT": "Fin de visite",
     "RECALL_SOURCE_MANUAL": "Manuel",
+    "RECALL_SOURCE_PROGRAM_RULE": "Règle de programme",
     "LOAD_SLOTS_FAILED": "Échec du chargement des créneaux disponibles",
     "SELECT_SLOT": "Sélectionner un créneau",
     "SELECT_SLOT_FIRST": "Sélectionnez d'abord un créneau",
