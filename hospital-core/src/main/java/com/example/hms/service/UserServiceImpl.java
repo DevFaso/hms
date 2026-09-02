@@ -448,7 +448,10 @@ public class UserServiceImpl implements UserService {
                 + " belongs to a deleted account. Use the user list's Deleted filter to "
                 + "restore it, or register with a different " + field + ".");
         }
-        return new ConflictException(field + ":" + identifier + " is already registered.");
+        // "taken" for usernames, "registered" for contact identifiers - the
+        // wording each field always had.
+        String suffix = "username".equals(field) ? " is already taken." : " is already registered.";
+        return new ConflictException(field + ":" + identifier + suffix);
     }
 
     /** Record audit + emit creation event only for brand-new users. */
@@ -944,18 +947,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted) {
+    public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
+                                            boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(includeDeleted, pageable);
+        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
-                                            boolean includeDeleted) {
+                                            boolean includeDeleted, boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(name, role, email, includeDeleted, pageable);
+        Page<User> users = userRepository.searchUsers(
+            name, role, email, includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 

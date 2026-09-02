@@ -24,13 +24,17 @@ public interface UserService {
     void restoreUser(UUID id);
 
     /**
-     * @param includeDeleted also return soft-deleted rows. Honoured only for
-     *        the roles that can restore them; the controller gates it.
+     * @param includeDeleted also return soft-deleted rows
+     * @param onlyDeleted    return ONLY soft-deleted rows — the ghost
+     *                       worklist, so the Deleted view pages server-side
+     *                       instead of filtering one mixed page client-side.
+     *                       Both flags are gated by the controller.
      */
-    Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted);
+    Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
+                                     boolean onlyDeleted);
 
     Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
-                                     boolean includeDeleted);
+                                     boolean includeDeleted, boolean onlyDeleted);
 
     boolean verifyEmail(String email, String token);
 

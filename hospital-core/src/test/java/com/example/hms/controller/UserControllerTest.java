@@ -25,6 +25,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -187,32 +188,46 @@ class UserControllerTest {
     }
 
     @Test
-    void includeDeleted_isHonouredForHospitalAdmin() throws Exception {
-        when(userService.getAllUsers(0, 10, true))
+    void includeDeleted_isHonouredForSuperAdmin() throws Exception {
+        when(userService.getAllUsers(0, 10, true, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("superadmin", "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, true, false);
+    }
+
+    @Test
+    void onlyDeleted_pagesTheGhostWorklistForSuperAdmin() throws Exception {
+        when(userService.getAllUsers(0, 10, false, true))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("superadmin", "ROLE_SUPER_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("onlyDeleted", "true"))
+            .andExpect(status().isOk());
+
+        verify(userService).getAllUsers(0, 10, false, true);
+    }
+
+    @Test
+    void includeDeleted_isSilentlyIgnoredForHospitalAdmin() throws Exception {
+        // The user directory is global, so honouring this for a
+        // hospital-scoped admin would let one tenant enumerate another
+        // tenant's deleted identities. Silently the live view - the
+        // parameter is a capability, not a promise.
+        when(userService.getAllUsers(0, 10, false, false))
                 .thenReturn(org.springframework.data.domain.Page.empty());
         authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("includeDeleted", "true"))
+                .get("/users").param("includeDeleted", "true").param("onlyDeleted", "true"))
             .andExpect(status().isOk());
 
-        org.mockito.Mockito.verify(userService).getAllUsers(0, 10, true);
-    }
-
-    @Test
-    void includeDeleted_isSilentlyIgnoredForOtherRoles() throws Exception {
-        // A ghost account's existence is admin information: a receptionist
-        // asking for deleted rows gets the live view, not an error - the
-        // parameter is a capability, not a promise.
-        when(userService.getAllUsers(0, 10, false))
-                .thenReturn(org.springframework.data.domain.Page.empty());
-        authenticateAs("reception", "ROLE_RECEPTIONIST");
-
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("includeDeleted", "true"))
-            .andExpect(status().isOk());
-
-        org.mockito.Mockito.verify(userService).getAllUsers(0, 10, false);
+        verify(userService).getAllUsers(0, 10, false, false);
     }
 
     @Test
