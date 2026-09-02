@@ -1,0 +1,322 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1>{{ 'REGISTRIES.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'REGISTRIES.SUBTITLE' | translate }}</p>
+    </div>
+    <button type="button" class="btn-primary" (click)="openEnrollForm()" data-testid="open-enroll">
+      <span class="material-symbols-outlined">person_add</span>
+      {{ 'REGISTRIES.ENROLL' | translate }}
+    </button>
+  </div>
+
+  <!-- Programme tabs -->
+  <div class="program-tabs" role="tablist">
+    @for (p of programs; track p) {
+      <button
+        type="button"
+        class="program-tab"
+        role="tab"
+        [attr.aria-selected]="activeProgram() === p"
+        [class.active]="activeProgram() === p"
+        (click)="setProgram(p)"
+      >
+        {{ 'REGISTRIES.PROGRAM.' + p | translate }}
+      </button>
+    }
+  </div>
+
+  <!-- Status chips: counts across the whole programme, filter on click -->
+  <div class="status-chips">
+    @for (s of statuses; track s) {
+      <button
+        type="button"
+        class="status-chip"
+        [class.active]="statusFilter() === s"
+        (click)="setStatusFilter(s)"
+      >
+        {{ 'REGISTRIES.STATUS.' + s | translate }}
+        <span class="chip-count">{{ countFor(s) }}</span>
+      </button>
+    }
+    @if (statusFilter() === 'ACTIVE' && overdueCount() > 0) {
+      <span class="overdue-summary" data-testid="overdue-summary">
+        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+        {{ 'REGISTRIES.OVERDUE_COUNT' | translate: { count: overdueCount() } }}
+      </span>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && loadFailed()) {
+    <div class="error-state" data-testid="registry-error">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ 'REGISTRIES.LOAD_FAILED' | translate }}</p>
+      <button type="button" class="btn-secondary" (click)="load()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !loadFailed() && rows().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">group_off</span>
+      <p>{{ 'REGISTRIES.EMPTY' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && !loadFailed() && rows().length > 0) {
+    <div class="table-wrap">
+      <table class="registry-table">
+        <thead>
+          <tr>
+            <th>{{ 'REGISTRIES.COL_PATIENT' | translate }}</th>
+            <th>{{ 'REGISTRIES.COL_ENROLLED' | translate }}</th>
+            <th>{{ 'REGISTRIES.COL_CADENCE' | translate }}</th>
+            <th>{{ 'REGISTRIES.COL_LAST_VISIT' | translate }}</th>
+            <th>{{ 'REGISTRIES.COL_NEXT_VISIT' | translate }}</th>
+            <th>{{ 'REGISTRIES.COL_STATUS' | translate }}</th>
+            <th class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr [class.overdue-row]="row.overdueDays > 0">
+              <td>
+                <div class="patient-cell">
+                  <span class="patient-name">{{ row.patientName }}</span>
+                  <span class="patient-meta">
+                    @if (row.mrn) {
+                      {{ row.mrn }}
+                    }
+                    @if (row.phoneNumber) {
+                      · {{ row.phoneNumber }}
+                    }
+                  </span>
+                </div>
+              </td>
+              <td>{{ row.enrolledOn | date: 'mediumDate' }}</td>
+              <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
+              <td>
+                @if (row.lastVisitOn) {
+                  {{ row.lastVisitOn | date: 'mediumDate' }}
+                } @else {
+                  <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
+                }
+              </td>
+              <td>
+                {{ row.nextExpectedVisit | date: 'mediumDate' }}
+                @if (row.overdueDays > 0) {
+                  <span class="overdue-chip" data-testid="overdue-chip">
+                    {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}
+                  </span>
+                }
+              </td>
+              <td>
+                <span class="status-badge" [ngClass]="statusClass(row.status)">
+                  {{ 'REGISTRIES.STATUS.' + row.status | translate }}
+                </span>
+                @if (row.closureReason) {
+                  <span class="closure-reason" [title]="row.closureReason">
+                    {{ row.closureReason }}
+                  </span>
+                }
+              </td>
+              <td class="col-actions">
+                @if (row.status === 'ACTIVE') {
+                  <button
+                    type="button"
+                    class="btn-row"
+                    [disabled]="actingOnId() !== null"
+                    (click)="recordVisit(row)"
+                    data-testid="record-visit"
+                  >
+                    <span class="material-symbols-outlined">event_available</span>
+                    {{ 'REGISTRIES.RECORD_VISIT' | translate }}
+                  </button>
+                }
+                <button
+                  type="button"
+                  class="btn-row"
+                  [disabled]="actingOnId() !== null"
+                  (click)="openStatusModal(row)"
+                  data-testid="change-status"
+                >
+                  <span class="material-symbols-outlined">swap_horiz</span>
+                  {{ 'REGISTRIES.CHANGE_STATUS' | translate }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Enrol modal -->
+  @if (showEnrollForm()) {
+    <div class="modal-backdrop" (click)="closeEnrollForm()" aria-hidden="true"></div>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'REGISTRIES.ENROLL_TITLE' | translate"
+      data-testid="enroll-modal"
+    >
+      <h2>
+        {{ 'REGISTRIES.ENROLL_TITLE' | translate }} —
+        {{ 'REGISTRIES.PROGRAM.' + activeProgram() | translate }}
+      </h2>
+
+      <label class="field">
+        <span>{{ 'REGISTRIES.PATIENT' | translate }} *</span>
+        <input
+          type="text"
+          name="regPatientQuery"
+          [ngModel]="patientQuery()"
+          (ngModelChange)="onPatientQueryChange($event)"
+          [placeholder]="'REGISTRIES.PATIENT_SEARCH_PLACEHOLDER' | translate"
+          autocomplete="off"
+          data-testid="patient-query"
+        />
+      </label>
+      @if (patientResults().length > 0) {
+        <ul class="patient-results" role="listbox">
+          @for (p of patientResults(); track p.id) {
+            <li>
+              <button type="button" role="option" aria-selected="false" (click)="selectPatient(p)">
+                {{ p.firstName }} {{ p.lastName }}
+              </button>
+            </li>
+          }
+        </ul>
+      }
+
+      <label class="field">
+        <span>{{ 'REGISTRIES.ENROLLED_ON' | translate }}</span>
+        <input
+          type="date"
+          name="regEnrolledOn"
+          [ngModel]="enrolledOn()"
+          (ngModelChange)="enrolledOn.set($event)"
+        />
+        <small class="hint">{{ 'REGISTRIES.ENROLLED_ON_HINT' | translate }}</small>
+      </label>
+
+      <label class="field">
+        <span>{{ 'REGISTRIES.CADENCE' | translate }} *</span>
+        <input
+          type="number"
+          name="regCadence"
+          min="1"
+          max="365"
+          [ngModel]="cadenceDays()"
+          (ngModelChange)="cadenceDays.set($event)"
+          data-testid="cadence-input"
+        />
+        <!--
+          No prefilled value. The cadence is clinical protocol - it varies by
+          programme phase and guideline edition - and a silently prefilled 30
+          becomes the de-facto protocol for every enrolment. The clinician
+          who knows the protocol types it; the hint says only what the field
+          means, not what number belongs in it.
+        -->
+        <small class="hint">{{ 'REGISTRIES.CADENCE_HINT' | translate }}</small>
+      </label>
+
+      <label class="field">
+        <span>{{ 'REGISTRIES.NOTES' | translate }}</span>
+        <textarea
+          name="regNotes"
+          rows="2"
+          maxlength="500"
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"
+        ></textarea>
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeEnrollForm()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="saving()"
+          (click)="submitEnroll()"
+          data-testid="submit-enroll"
+        >
+          {{ (saving() ? 'COMMON.SAVING' : 'REGISTRIES.ENROLL') | translate }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Status modal -->
+  @if (statusTarget(); as target) {
+    <div class="modal-backdrop" (click)="closeStatusModal()" aria-hidden="true"></div>
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'REGISTRIES.CHANGE_STATUS' | translate"
+      data-testid="status-modal"
+    >
+      <h2>{{ 'REGISTRIES.CHANGE_STATUS' | translate }} — {{ target.patientName }}</h2>
+
+      <label class="field">
+        <span>{{ 'REGISTRIES.NEW_STATUS' | translate }}</span>
+        <select
+          name="regNewStatus"
+          [ngModel]="newStatus()"
+          (ngModelChange)="newStatus.set($event)"
+          data-testid="status-select"
+        >
+          @for (s of statuses; track s) {
+            @if (s !== target.status) {
+              <option [value]="s">{{ 'REGISTRIES.STATUS.' + s | translate }}</option>
+            }
+          }
+        </select>
+      </label>
+
+      @if (newStatus() !== 'ACTIVE') {
+        <label class="field">
+          <span>{{ 'REGISTRIES.CLOSURE_REASON' | translate }} *</span>
+          <textarea
+            name="regStatusReason"
+            rows="2"
+            maxlength="500"
+            [ngModel]="statusReason()"
+            (ngModelChange)="statusReason.set($event)"
+            [placeholder]="'REGISTRIES.CLOSURE_REASON_PLACEHOLDER' | translate"
+            data-testid="status-reason"
+          ></textarea>
+        </label>
+      } @else {
+        <p class="hint">{{ 'REGISTRIES.REOPEN_HINT' | translate }}</p>
+      }
+
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="closeStatusModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          [disabled]="saving()"
+          (click)="submitStatus()"
+          data-testid="submit-status"
+        >
+          {{ (saving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
+        </button>
+      </div>
+    </div>
+  }
+</div>
