@@ -5,7 +5,6 @@ import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.ImagingOrder;
 import com.example.hms.model.LabOrder;
-import com.example.hms.model.LabTestDefinition;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.Reference;
@@ -29,8 +28,6 @@ import java.util.Date;
 @Component
 public class ServiceRequestFhirMapper {
 
-    private static final String LOINC = "http://loinc.org";
-
     public ServiceRequest toFhir(LabOrder src) {
         if (src == null || src.getId() == null) return null;
         ServiceRequest sr = new ServiceRequest();
@@ -42,7 +39,7 @@ public class ServiceRequestFhirMapper {
             .setSystem("http://snomed.info/sct")
             .setCode("108252007")
             .setDisplay("Laboratory procedure")));
-        sr.setCode(labCode(src.getLabTestDefinition()));
+        sr.setCode(LabCodes.codeFor(src.getLabTestDefinition(), "Laboratory order"));
         if (src.getPatient() != null && src.getPatient().getId() != null) {
             sr.setSubject(new Reference("Patient/" + src.getPatient().getId()));
         }
@@ -141,30 +138,6 @@ public class ServiceRequestFhirMapper {
             case "ASAP" -> ServiceRequest.ServiceRequestPriority.ASAP;
             default -> ServiceRequest.ServiceRequestPriority.ROUTINE;
         };
-    }
-
-    private static CodeableConcept labCode(LabTestDefinition def) {
-        CodeableConcept code = new CodeableConcept();
-        if (def == null) {
-            code.setText("Laboratory order");
-            return code;
-        }
-        if (def.getName() != null) code.setText(def.getName());
-        // Same coding order as ObservationFhirMapper: LOINC primary when
-        // bound, the local formulary code kept as a secondary identifier.
-        if (def.getLoincCode() != null && !def.getLoincCode().isBlank()) {
-            code.addCoding(new Coding()
-                .setSystem(LOINC)
-                .setCode(def.getLoincCode())
-                .setDisplay(def.getLoincDisplay() != null ? def.getLoincDisplay() : def.getName()));
-        }
-        if (def.getTestCode() != null && !def.getTestCode().isBlank()) {
-            code.addCoding(new Coding()
-                .setSystem("urn:hms:lab:test-code")
-                .setCode(def.getTestCode())
-                .setDisplay(def.getName()));
-        }
-        return code;
     }
 
     private static org.hl7.fhir.r4.model.DateTimeType dateTime(LocalDateTime value) {

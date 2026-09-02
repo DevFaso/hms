@@ -6,7 +6,6 @@ import ca.uhn.fhir.rest.annotation.Read;
 import ca.uhn.fhir.rest.annotation.Search;
 import ca.uhn.fhir.rest.param.ReferenceParam;
 import ca.uhn.fhir.rest.server.IResourceProvider;
-import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import com.example.hms.fhir.mapper.DiagnosticReportFhirMapper;
 import com.example.hms.model.ImagingOrder;
@@ -16,10 +15,8 @@ import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.MicroCultureResultRepository;
-import com.example.hms.security.context.HospitalContextHolder;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.IdType;
-import org.hl7.fhir.r4.model.OperationOutcome;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
@@ -162,16 +159,6 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
     }
 
     private static UUID requireHospitalScope() {
-        UUID hospitalId = HospitalContextHolder.getContextOrEmpty().getActiveHospitalId();
-        if (hospitalId == null) {
-            OperationOutcome outcome = new OperationOutcome();
-            outcome.addIssue()
-                .setSeverity(OperationOutcome.IssueSeverity.ERROR)
-                .setCode(OperationOutcome.IssueType.FORBIDDEN)
-                .setDiagnostics("FHIR DiagnosticReport reads require an active hospital scope; "
-                    + "supply X-Hospital-Id or authenticate as a hospital-scoped user.");
-            throw new ForbiddenOperationException("An active hospital scope is required.", outcome);
-        }
-        return hospitalId;
+        return FhirTenancy.requireHospitalScope("DiagnosticReport");
     }
 }

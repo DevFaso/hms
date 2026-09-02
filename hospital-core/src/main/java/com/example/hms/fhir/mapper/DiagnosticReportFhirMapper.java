@@ -6,7 +6,6 @@ import com.example.hms.enums.MicroCultureStatus;
 import com.example.hms.model.ImagingReport;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
-import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.MicroCultureResult;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
@@ -42,7 +41,6 @@ public class DiagnosticReportFhirMapper {
 
     /** HL7 v2-0074 diagnostic service sections — the standard category axis. */
     private static final String V2_0074 = "http://terminology.hl7.org/CodeSystem/v2-0074";
-    private static final String LOINC = "http://loinc.org";
 
     // ── Lab order + results ─────────────────────────────────────────────
 
@@ -52,7 +50,7 @@ public class DiagnosticReportFhirMapper {
         report.setId("laborder-" + order.getId());
         report.setStatus(labStatus(order, results));
         report.addCategory(category("LAB", "Laboratory"));
-        report.setCode(labCode(order.getLabTestDefinition()));
+        report.setCode(LabCodes.codeFor(order.getLabTestDefinition(), "Laboratory report"));
         if (order.getPatient() != null && order.getPatient().getId() != null) {
             report.setSubject(new Reference("Patient/" + order.getPatient().getId()));
         }
@@ -202,28 +200,6 @@ public class DiagnosticReportFhirMapper {
     private static CodeableConcept category(String code, String display) {
         return new CodeableConcept().addCoding(new Coding()
             .setSystem(V2_0074).setCode(code).setDisplay(display));
-    }
-
-    private static CodeableConcept labCode(LabTestDefinition def) {
-        CodeableConcept code = new CodeableConcept();
-        if (def == null) {
-            code.setText("Laboratory report");
-            return code;
-        }
-        if (def.getName() != null) code.setText(def.getName());
-        if (def.getLoincCode() != null && !def.getLoincCode().isBlank()) {
-            code.addCoding(new Coding()
-                .setSystem(LOINC)
-                .setCode(def.getLoincCode())
-                .setDisplay(def.getLoincDisplay() != null ? def.getLoincDisplay() : def.getName()));
-        }
-        if (def.getTestCode() != null && !def.getTestCode().isBlank()) {
-            code.addCoding(new Coding()
-                .setSystem("urn:hms:lab:test-code")
-                .setCode(def.getTestCode())
-                .setDisplay(def.getName()));
-        }
-        return code;
     }
 
     private static DateTimeType dateTime(LocalDateTime value) {
