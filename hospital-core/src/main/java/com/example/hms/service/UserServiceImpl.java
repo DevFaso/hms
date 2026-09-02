@@ -287,14 +287,26 @@ public class UserServiceImpl implements UserService {
                 throw new IllegalArgumentException("Email is required for staff and admin accounts.");
             }
             // Non-patient roles: strict global uniqueness.
-            if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
-                throw new ConflictException("username:Username '" + username + "' is already taken.");
+            // Each identifier can be held by a SOFT-DELETED account: the row
+            // keeps its unique email/username/phone, so "already registered"
+            // used to point at a user nobody could see - the list filtered
+            // deleted rows out while these checks counted them. The message
+            // now says which case it is, and the deleted view + Restore
+            // button in the user list are the way out.
+            if (username != null) {
+                userRepository.findByUsername(username).ifPresent(existing -> {
+                    throw conflictFor("username", "Username '" + username + "'", existing);
+                });
             }
-            if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
-                throw new ConflictException("email:Email '" + email + "' is already registered.");
+            if (email != null) {
+                userRepository.findByEmail(email).ifPresent(existing -> {
+                    throw conflictFor("email", "Email '" + email + "'", existing);
+                });
             }
-            if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
-                throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
+            if (phone != null && !phone.isBlank()) {
+                userRepository.findByPhoneNumber(phone).ifPresent(existing -> {
+                    throw conflictFor("phone", "Phone number '" + phone + "'", existing);
+                });
             }
         }
 
@@ -422,6 +434,24 @@ public class UserServiceImpl implements UserService {
                 staffRepository.save(staff);
             }
         }
+    }
+
+    /**
+     * The identifier is taken either by a live account or by a soft-deleted
+     * one. Only one of those is visible in the default user list, so the
+     * message must say which - "already registered" against an invisible
+     * row is a dead end the administrator cannot act on.
+     */
+    private static ConflictException conflictFor(String field, String identifier, User existing) {
+        if (existing.isDeleted()) {
+            return new ConflictException(field + ":" + identifier
+                + " belongs to a deleted account. Use the user list's Deleted filter to "
+                + "restore it, or register with a different " + field + ".");
+        }
+        // "taken" for usernames, "registered" for contact identifiers - the
+        // wording each field always had.
+        String suffix = "username".equals(field) ? " is already taken." : " is already registered.";
+        return new ConflictException(field + ":" + identifier + suffix);
     }
 
     /** Record audit + emit creation event only for brand-new users. */
@@ -917,17 +947,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserSummaryDTO> getAllUsers(int page, int size) {
+    public Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted,
+                                            boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllPaged(pageable);
+        Page<User> users = userRepository.findAllPaged(includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size) {
+    public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
+                                            boolean includeDeleted, boolean onlyDeleted) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.searchUsers(name, role, email, pageable);
+        Page<User> users = userRepository.searchUsers(
+            name, role, email, includeDeleted, onlyDeleted, pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
