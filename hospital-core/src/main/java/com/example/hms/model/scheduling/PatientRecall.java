@@ -57,7 +57,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
-@ToString(exclude = {"patient", "hospital", "department", "preferredProvider", "encounter", "linkedAppointment"})
+@ToString(exclude = {"patient", "hospital", "department", "preferredProvider", "encounter", "linkedAppointment", "programEnrollment"})
 public class PatientRecall extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

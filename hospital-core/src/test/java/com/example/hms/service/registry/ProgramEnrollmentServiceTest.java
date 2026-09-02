@@ -3,6 +3,7 @@ package com.example.hms.service.registry;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -462,6 +463,38 @@ class ProgramEnrollmentServiceTest {
         // and the outreach sweep must never text a family about it.
         assertThat(openRecall.getStatus()).isEqualTo(RecallStatus.CANCELLED);
         verify(recallRepository).save(openRecall);
+    }
+
+    @Test
+    @DisplayName("re-opening restores the auto-cancelled tracing recall for the still-missed date")
+    void reopenRestoresCancelledTracingRecall() {
+        // Closing consumed the (enrolment, due date) dedupe key by
+        // auto-cancelling the recall; the sweep will never recreate it. If
+        // the enrolment was closed in error and the date is still owed, the
+        // recall must come back with it.
+        asClinicianAtHospital();
+        ProgramEnrollment enrollment = activeEnrollment();
+        enrollment.setStatus(ProgramEnrollmentStatus.WITHDRAWN);
+        UUID enrollmentId = UUID.randomUUID();
+        when(enrollmentRepository.findById(enrollmentId)).thenReturn(Optional.of(enrollment));
+        when(enrollmentRepository.findByPatientIdAndHospitalIdAndProgramAndStatus(
+            any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(enrollmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        PatientRecall cancelled = PatientRecall.builder()
+            .status(RecallStatus.CANCELLED)
+            .dueDate(enrollment.getNextExpectedVisit())
+            .build();
+        cancelled.setClosedAt(java.time.LocalDateTime.now());
+        when(recallRepository.findByProgramEnrollment_IdAndStatusIn(
+            any(), eq(java.util.Set.of(RecallStatus.CANCELLED))))
+            .thenReturn(java.util.List.of(cancelled));
+
+        service.updateStatus(patientId, enrollmentId,
+            statusRequest(ProgramEnrollmentStatus.ACTIVE, null));
+
+        assertThat(cancelled.getStatus()).isEqualTo(RecallStatus.PENDING);
+        assertThat(cancelled.getClosedAt()).isNull();
+        verify(recallRepository).save(cancelled);
     }
 
     // ── registry ────────────────────────────────────────────────────────

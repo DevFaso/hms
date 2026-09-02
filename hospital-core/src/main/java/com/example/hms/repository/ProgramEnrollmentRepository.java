@@ -62,20 +62,33 @@ public interface ProgramEnrollmentRepository extends JpaRepository<ProgramEnroll
         UUID patientId, UUID hospitalId, CareProgram program, ProgramEnrollmentStatus status);
 
     /**
-     * The care-gap sweep's read (Tier 2 item 36): every ACTIVE enrolment
-     * whose expected visit has passed. Deliberately NOT hospital-scoped,
-     * the licence-sweep precedent: the sweep runs on a scheduler with no
-     * request context, never returns a row to a user, and turns rows into
-     * recalls that carry the row's own hospital.
+     * The care-gap sweep's candidate read (Tier 2 item 36): every ACTIVE
+     * enrolment whose expected visit has passed AND whose missed date has
+     * not already produced a recall. The NOT EXISTS lives in the query so
+     * historical defaulters — whose recalls were closed without a visit —
+     * drop out of the candidate set instead of being refetched and
+     * exists-checked every night forever. Paged; the caller consumes the
+     * frontier rather than iterating page numbers.
+     *
+     * <p>Deliberately NOT hospital-scoped, the licence-sweep precedent: the
+     * sweep runs on a scheduler with no request context, never returns a
+     * row to a user, and turns rows into recalls carrying their own hospital.
      */
     @EntityGraph(attributePaths = {"patient", "hospital"})
     @Query("""
         SELECT e FROM ProgramEnrollment e
         WHERE e.status = com.example.hms.enums.ProgramEnrollmentStatus.ACTIVE
-          AND e.nextExpectedVisit < :today
+          AND e.nextExpectedVisit < :cutoff
+          AND NOT EXISTS (
+              SELECT 1 FROM PatientRecall r
+              WHERE r.programEnrollment.id = e.id
+                AND r.dueDate = e.nextExpectedVisit
+          )
         ORDER BY e.nextExpectedVisit ASC
     """)
-    List<ProgramEnrollment> findOverdueActive(@Param("today") java.time.LocalDate today);
+    List<ProgramEnrollment> findUntracedOverdueActive(
+        @Param("cutoff") java.time.LocalDate cutoff,
+        org.springframework.data.domain.Pageable pageable);
 
     /** Registry header counts: how many enrolments per status in one programme. */
     @Query("""

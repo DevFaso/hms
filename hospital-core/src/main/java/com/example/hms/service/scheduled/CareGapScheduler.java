@@ -28,7 +28,9 @@ public class CareGapScheduler {
 
     private final CareGapTraceService careGapTraceService;
 
-    @Scheduled(cron = "${hms.care-gaps.cron:0 30 5 * * *}")
+    // Zone pinned: a cron without one runs in the JVM's default zone, and
+    // "05:30 UTC" in the docs would quietly mean 05:30 host-local.
+    @Scheduled(cron = "${hms.care-gaps.cron:0 30 5 * * *}", zone = "${hms.care-gaps.zone:UTC}")
     public void runSweep() {
         try {
             careGapTraceService.traceDefaulters();

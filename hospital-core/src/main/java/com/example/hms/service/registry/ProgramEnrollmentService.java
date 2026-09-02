@@ -151,6 +151,11 @@ public class ProgramEnrollmentService {
             enrollment.setStatus(ProgramEnrollmentStatus.ACTIVE);
             enrollment.setClosedOn(null);
             enrollment.setClosureReason(null);
+            // Closing auto-CANCELLED the tracing recall, which permanently
+            // consumed the (enrolment, due date) dedupe key - the sweep will
+            // never recreate it. If the missed date is unchanged and still
+            // owed, re-opening the enrolment re-opens the recall with it.
+            restoreCancelledTracingRecall(enrollment);
         } else {
             if (reason == null) {
                 throw new BusinessException(
@@ -271,6 +276,27 @@ public class ProgramEnrollmentService {
             .filter(e -> e.getHospital() != null && hospitalId.equals(e.getHospital().getId()))
             .filter(e -> e.getPatient() != null && patientId.equals(e.getPatient().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("program.enrollment.notfound"));
+    }
+
+    /**
+     * The inverse of the CANCELLED interlock, for the same missed date only.
+     * Status back to PENDING; {@code notifiedAt} is deliberately kept, so
+     * the patient is not texted a second time for a date they were already
+     * notified about - the desk worklist is the surface that re-engages.
+     */
+    private void restoreCancelledTracingRecall(ProgramEnrollment enrollment) {
+        if (enrollment.getNextExpectedVisit() == null) {
+            return;
+        }
+        var cancelled = recallRepository.findByProgramEnrollment_IdAndStatusIn(
+            enrollment.getId(), java.util.Set.of(RecallStatus.CANCELLED));
+        for (var recall : cancelled) {
+            if (enrollment.getNextExpectedVisit().equals(recall.getDueDate())) {
+                recall.setStatus(RecallStatus.PENDING);
+                recall.setClosedAt(null);
+                recallRepository.save(recall);
+            }
+        }
     }
 
     private void resolveOpenTracingRecalls(ProgramEnrollment enrollment, RecallStatus outcome) {
