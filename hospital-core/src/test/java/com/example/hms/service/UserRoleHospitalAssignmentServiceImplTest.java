@@ -118,6 +118,26 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(assignmentRepository).findByAssignmentCode(VALID_CODE);
     }
 
+    @Test
+    void verifyAssignmentByCode_activatesBothTheAssignmentAndTheUser() {
+        // Since option A (2026-09-02), admin-registered accounts - staff AND
+        // patients - start inactive, and this call is the ONE thing that
+        // makes them usable. If it stopped activating either row, every new
+        // registration would be locked out with a green 200 behind it.
+        assignee.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignee.isActive()).isTrue();
+        verify(userRepository).save(assignee);
+    }
+
     // -----------------------------------------------------------------------
     // 2. Wrong / incorrect confirmation PIN → BusinessException
     // -----------------------------------------------------------------------

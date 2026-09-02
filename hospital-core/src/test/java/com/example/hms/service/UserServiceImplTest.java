@@ -288,6 +288,47 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an admin-registered staff account starts INACTIVE - the emailed code gates something real")
+        void staffStartInactiveUntilVerified() {
+            // Option A (2026-09-02). Until then staff were activated up
+            // front while the system still mailed them a verification code
+            // that gated nothing. Login is refused while inactive
+            // (CustomUserDetails.isEnabled), and verifyAssignmentByCode()
+            // is the single activation path for user and assignment alike.
+            when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
+            when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            when(roleRepository.findByCode("ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.of(superAdminRole));
+            when(passwordEncoder.encode(any())).thenReturn("encoded");
+
+            AdminSignupRequest req = buildRequest("newstaff", "staff@hospital.com", "+1234567899");
+            // SUPER_ADMIN: the one staff role registrable without a hospital
+            // context, which keeps this fixture out of JWT-resolution stubs.
+            req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+            // The flow continues past user creation into role/assignment
+            // wiring this fixture does not stub - the assertion below is on
+            // the persisted user, which is captured before that point.
+            try {
+                userService.createUserWithRolesAndHospital(req);
+            } catch (RuntimeException ignored) {
+                // downstream wiring not stubbed; irrelevant to the invariant
+            }
+
+            org.mockito.ArgumentCaptor<User> captor =
+                org.mockito.ArgumentCaptor.forClass(User.class);
+            verify(userRepository).saveAndFlush(captor.capture());
+            assertThat(captor.getValue().isActive())
+                .as("staff must start inactive until the emailed code is verified")
+                .isFalse();
+        }
+
+        @Test
         @DisplayName("staff/admin accounts still require an email (phone-first applies to patients only)")
         void rejectsStaffWithoutEmail() {
             AdminSignupRequest req = buildRequest("newuser", null, "+1234567890");

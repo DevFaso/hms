@@ -489,13 +489,10 @@ public class UserServiceImpl implements UserService {
         for (Role r : roles) {
             addUserRoleIfAbsent(user.getId(), r.getId());
 
-            boolean isPatientRole = ROLE_PATIENT.equalsIgnoreCase(r.getCode())
-                    || "PATIENT".equalsIgnoreCase(r.getName());
+            log.info("[ASSIGN] {} -> user={} hospitalId={} (inactive until code verification)",
+                    r.getCode(), user.getUsername(), staffContextHospitalId);
 
-            log.info("[ASSIGN] {} -> user={} hospitalId={} active={}",
-                    r.getCode(), user.getUsername(), staffContextHospitalId, !isPatientRole);
-
-            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, !isPatientRole));
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId));
         }
         return result;
     }
@@ -598,15 +595,20 @@ public class UserServiceImpl implements UserService {
 
         boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
+        // EVERY admin-registered account starts inactive - staff exactly like
+        // patients. Product decision 2026-09-02 (option A): the emailed
+        // confirmation code must gate something real. Until now staff were
+        // activated up front while the system still mailed them a
+        // verification code that gated nothing - activation theater. Login
+        // is refused while inactive (CustomUserDetails.isEnabled), and
+        // verifyAssignmentByCode() activates BOTH the assignment and the
+        // user once the assignee proves they own the mailbox. The bootstrap
+        // first-super-admin path is separate and untouched.
+        u.setActive(false);
         if (isPatient) {
-            // Patient accounts start inactive — must verify email first
-            u.setActive(false);
+            // Patients additionally keep the legacy email-link token.
             u.setActivationToken(UUID.randomUUID().toString());
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
-        } else {
-            // Admin-registered staff/admin accounts are immediately active.
-            // The admin vouches for them and sends credentials via welcome email.
-            u.setActive(true);
         }
 
         if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
@@ -832,33 +834,27 @@ public class UserServiceImpl implements UserService {
         return "Unknown User";
     }
 
-    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId, boolean active) {
+    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId) {
         UUID roleId = role.getId();
 
         // avoid duplicates
         if (!assignmentService.isRoleAlreadyAssigned(userId, hospitalId, roleId)) {
+            // active=false for everyone: enforceRoleScopeConstraints holds
+            // staff inactive until the emailed code is verified, and the
+            // pre-approval override that used to force staff assignments
+            // active here was exactly what made the verification email
+            // theater (option A decision, 2026-09-02).
             assignmentService.assignRole(UserRoleHospitalAssignmentRequestDTO.builder()
                     .userId(userId)
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
-                    .active(active) // 👈 PATIENT => false
+                    .active(false)
                     .build());
         }
 
-        // fetch the assignment we now expect to exist
-        UserRoleHospitalAssignment assignment = assignmentRepository
+        return assignmentRepository
                 .findFirstByUserIdAndHospitalIdAndRoleId(userId, hospitalId, roleId)
                 .orElseThrow(() -> new IllegalStateException("Assignment was not persisted as expected"));
-
-        // Admin-register creates assignments that should be immediately active.
-        // enforceRoleScopeConstraints may have forced active=false for the
-        // email-confirmation workflow, but admin-created users are pre-approved.
-        if (active && !Boolean.TRUE.equals(assignment.getActive())) {
-            assignment.setActive(true);
-            assignmentRepository.save(assignment);
-        }
-
-        return assignment;
     }
 
     private UUID extractHospitalIdFromJwt() {
