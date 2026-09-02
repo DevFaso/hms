@@ -164,12 +164,17 @@ export class UserListComponent implements OnInit, OnDestroy {
     const term = this.searchTerm.trim();
     const hasServerFilter = !!this.roleFilter || !!term;
 
+    // Always ask for deleted rows on this screen: it is the admin surface
+    // the Restore button lives on, and without them the Deleted filter was
+    // a dead control - a ghost account could hold a unique email while
+    // being invisible everywhere an administrator could look.
     const request$ = hasServerFilter
       ? this.userService.search(page, 20, {
           ...(this.roleFilter ? { role: this.roleFilter } : {}),
           ...(term ? { name: term } : {}),
+          includeDeleted: true,
         })
-      : this.userService.list(page, 20);
+      : this.userService.list(page, 20, true);
 
     request$.subscribe({
       next: (res) => {

@@ -166,6 +166,55 @@ class UserControllerTest {
             .andExpect(status().isNoContent());
     }
 
+    // -------------------------------------------------------------------------
+    // includeDeleted — visibility follows restore rights
+    // -------------------------------------------------------------------------
+
+    private void authenticateAs(String username, String... authorities) {
+        // Directly on the holder: the slice runs with addFilters=false, so
+        // neither request.getUserPrincipal() nor the request-post-processor
+        // route reaches the controller. Same thread, so this is what
+        // canSeeDeleted() reads.
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    username, "n/a", AuthorityUtils.createAuthorityList(authorities)));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurityContext() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void includeDeleted_isHonouredForHospitalAdmin() throws Exception {
+        when(userService.getAllUsers(0, 10, true))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true"))
+            .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(userService).getAllUsers(0, 10, true);
+    }
+
+    @Test
+    void includeDeleted_isSilentlyIgnoredForOtherRoles() throws Exception {
+        // A ghost account's existence is admin information: a receptionist
+        // asking for deleted rows gets the live view, not an error - the
+        // parameter is a capability, not a promise.
+        when(userService.getAllUsers(0, 10, false))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        authenticateAs("reception", "ROLE_RECEPTIONIST");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get("/users").param("includeDeleted", "true"))
+            .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(userService).getAllUsers(0, 10, false);
+    }
+
     @Test
     void restoreUser_serviceThrows_propagatesError() throws Exception {
         UUID id = UUID.randomUUID();

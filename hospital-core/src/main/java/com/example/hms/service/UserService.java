@@ -23,9 +23,14 @@ public interface UserService {
 
     void restoreUser(UUID id);
 
-    Page<UserSummaryDTO> getAllUsers(int page, int size);
+    /**
+     * @param includeDeleted also return soft-deleted rows. Honoured only for
+     *        the roles that can restore them; the controller gates it.
+     */
+    Page<UserSummaryDTO> getAllUsers(int page, int size, boolean includeDeleted);
 
-    Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size);
+    Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
+                                     boolean includeDeleted);
 
     boolean verifyEmail(String email, String token);
 

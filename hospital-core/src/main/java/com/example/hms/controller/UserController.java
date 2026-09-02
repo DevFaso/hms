@@ -133,12 +133,32 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
-    @Operation(summary = "Get all users with pagination (summary view)")
+    @Operation(summary = "Get all users with pagination (summary view)",
+        description = "includeDeleted=true also returns soft-deleted accounts, so they can be "
+            + "found and restored. Honoured only for SUPER_ADMIN / HOSPITAL_ADMIN - the roles "
+            + "that hold the restore endpoint; everyone else silently gets the live-only view.")
     @GetMapping
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(userService.getAllUsers(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "false") boolean includeDeleted) {
+        return ResponseEntity.ok(
+            userService.getAllUsers(page, size, includeDeleted && canSeeDeleted()));
+    }
+
+    /**
+     * Deleted-account visibility follows restore rights: the deleted view
+     * exists so a ghost holding a unique email can be restored, and showing
+     * it to roles that cannot act on it would only leak account history.
+     */
+    private boolean canSeeDeleted() {
+        // From the SecurityContext, not a method-injected Authentication: the
+        // latter rides request.getUserPrincipal(), which is only populated by
+        // the security filter chain and is null in filterless slices.
+        Set<String> authorities = extractAuthorities(
+            org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication());
+        return authorities.contains("ROLE_SUPER_ADMIN") || authorities.contains("ROLE_HOSPITAL_ADMIN");
     }
 
     @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
@@ -170,7 +190,9 @@ public class UserController {
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String email,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(userService.searchUsers(name, role, email, page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "false") boolean includeDeleted) {
+        return ResponseEntity.ok(userService.searchUsers(
+            name, role, email, page, size, includeDeleted && canSeeDeleted()));
     }
 }

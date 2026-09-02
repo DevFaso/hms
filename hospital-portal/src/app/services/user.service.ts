@@ -61,8 +61,14 @@ export interface AdminRegisterRequest {
 export class UserService {
   private readonly http = inject(HttpClient);
 
-  list(page = 0, size = 20): Observable<UserSummaryPage> {
-    const params = new HttpParams().set('page', String(page)).set('size', String(size));
+  /**
+   * includeDeleted also returns soft-deleted accounts so the Deleted filter
+   * and Restore button have rows to act on. The server honours it only for
+   * SUPER_ADMIN / HOSPITAL_ADMIN; other callers silently get the live view.
+   */
+  list(page = 0, size = 20, includeDeleted = false): Observable<UserSummaryPage> {
+    let params = new HttpParams().set('page', String(page)).set('size', String(size));
+    if (includeDeleted) params = params.set('includeDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users', { params });
   }
 
@@ -73,12 +79,13 @@ export class UserService {
   search(
     page = 0,
     size = 20,
-    filters: { name?: string; role?: string; email?: string } = {},
+    filters: { name?: string; role?: string; email?: string; includeDeleted?: boolean } = {},
   ): Observable<UserSummaryPage> {
     let params = new HttpParams().set('page', String(page)).set('size', String(size));
     if (filters.name) params = params.set('name', filters.name);
     if (filters.role) params = params.set('role', filters.role);
     if (filters.email) params = params.set('email', filters.email);
+    if (filters.includeDeleted) params = params.set('includeDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users/search', { params });
   }
 
