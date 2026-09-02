@@ -2225,7 +2225,10 @@
         <sqlFile path="V147__care_gap_recalls.sql"
                  relativeToChangelogFile="true"
                  splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
 
+    <!-- =================================================================
          V148 - read-path indexes for the FHIR Appointment + Slot
          providers (Tier 2 item 43). New composite read shapes; with
          ddl-auto=validate an entity @Index creates nothing in production,
