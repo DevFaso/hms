@@ -72,6 +72,11 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     List<Appointment> findByHospital_IdAndPatient_Id(UUID hospitalId, UUID patientId);
 
+    /** FHIR Appointment search (Tier 2 item 43): newest first, capped by the caller. */
+    org.springframework.data.domain.Page<Appointment>
+        findByHospital_IdAndPatient_IdOrderByAppointmentDateDescStartTimeDesc(
+            UUID hospitalId, UUID patientId, org.springframework.data.domain.Pageable pageable);
+
     List<Appointment> findByCreatedBy_Id(UUID userId);
 
     List<Appointment> findByHospital_IdAndCreatedBy_Id(UUID hospitalId, UUID userId);

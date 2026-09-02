@@ -52,6 +52,12 @@ public interface AppointmentSlotRepository extends JpaRepository<AppointmentSlot
     /** Holds whose window has passed, for the reclaim sweep. */
     List<AppointmentSlot> findByStatusAndHeldUntilBefore(SlotStatus status, LocalDateTime cutoff);
 
+    /** FHIR Slot search (Tier 2 item 43): the inventory over a date window, tenant-scoped. */
+    org.springframework.data.domain.Page<AppointmentSlot>
+        findByHospital_IdAndSlotDateBetweenOrderByStartAtAsc(
+            UUID hospitalId, java.time.LocalDate from, java.time.LocalDate to,
+            org.springframework.data.domain.Pageable pageable);
+
     /** The slot an appointment was booked from, for free-on-cancel (P3 #22). */
     java.util.Optional<AppointmentSlot> findByAppointment_Id(UUID appointmentId);
 }
