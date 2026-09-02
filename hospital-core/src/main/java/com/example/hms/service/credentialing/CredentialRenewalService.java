@@ -61,8 +61,13 @@ public class CredentialRenewalService {
     /**
      * Record a renewal and move the staff member's live credential forward.
      *
-     * @param staffId          whose licence
-     * @param expiryDate       the new expiry — required, see the entity
+     * @param staffId          whose credential
+     * @param expiryDate       the new expiry, or null for a qualification
+     *                         that does not expire — see the entity. A null
+     *                         also CLEARS any expiry already on the staff
+     *                         row, which is the point: it says this person is
+     *                         credentialed on something that has no end date,
+     *                         and it takes them out of the expiry sweep.
      * @param licenseNumber    null keeps the number already on file, because
      *                         most renewals reissue the same number
      * @param issuingAuthority null keeps what is on file, same reasoning
@@ -84,10 +89,6 @@ public class CredentialRenewalService {
                 && staff.getHospital() != null
                 && !hospitalId.equals(staff.getHospital().getId())) {
             throw new ResourceNotFoundException("staff.notfound");
-        }
-
-        if (expiryDate == null) {
-            throw new BusinessException("A renewal must carry the new expiry date.");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -113,7 +114,7 @@ public class CredentialRenewalService {
         // but not always: an administrator correcting a date entered wrong
         // needs to be able to. So it is allowed and the history makes the
         // shortening visible rather than silent.
-        if (previousExpiry != null && !expiryDate.isAfter(previousExpiry)) {
+        if (expiryDate != null && previousExpiry != null && !expiryDate.isAfter(previousExpiry)) {
             log.warn("Credential renewal for staff {} does not extend the licence "
                 + "({} -> {}). Allowed as a correction; recorded in the history.",
                 staffId, previousExpiry, expiryDate);
@@ -148,8 +149,9 @@ public class CredentialRenewalService {
             .recordedAt(now)
             .build();
 
-        log.info("Credential renewal recorded for staff {} by user {} — expiry {} -> {}",
-            staffId, currentUserId, previousExpiry, expiryDate);
+        log.info("Credential recorded for staff {} by user {} — expiry {} -> {}",
+            staffId, currentUserId, previousExpiry,
+            expiryDate != null ? expiryDate : "none (does not expire)");
         return renewalRepository.save(renewal);
     }
 

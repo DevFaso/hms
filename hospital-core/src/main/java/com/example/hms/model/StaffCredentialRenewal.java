@@ -81,10 +81,20 @@ public class StaffCredentialRenewal extends BaseEntity {
     private String licenseNumber;
 
     /**
-     * The new expiry. Not nullable: a renewal with no end date is not a
-     * renewal, it is a deletion of the expiry rule.
+     * The expiry being recorded, or null for a qualification that does not
+     * expire.
+     *
+     * <p>V140 made this NOT NULL, reasoning that a renewal with no end date
+     * is not a renewal. True where practice is licensed on a renewable term;
+     * not how this deployment works. Clinicians here are credentialed on
+     * their diploma, and a diploma has no expiry — so the constraint stopped
+     * the screen recording the one thing it is for.
+     *
+     * <p>A null here is a positive statement, "does not expire", rather than
+     * missing data. The expiry sweep filters on
+     * {@code licenseExpiryDate IS NOT NULL} and so skips it by design.
      */
-    @Column(name = "expiry_date", nullable = false)
+    @Column(name = "expiry_date")
     private LocalDate expiryDate;
 
     @Column(name = "issuing_authority", length = 200)

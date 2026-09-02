@@ -8402,6 +8402,8 @@
     "TOAST": {
       "RENEWED": "Renouvellement enregistré",
       "RENEW_FAILED": "Impossible d'enregistrer le renouvellement"
-    }
+    },
+    "EXPIRY_HINT": "Laisser vide si la qualification n'expire pas (un diplôme).",
+    "NO_EXPIRY": "N'expire pas"
   }
 }

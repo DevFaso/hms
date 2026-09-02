@@ -94,11 +94,22 @@ describe('CredentialRenewalComponent (Tier 2 item 40)', () => {
     expect(service.history).toHaveBeenCalledOnceWith('staff-1');
   });
 
-  it('refuses to save without a new expiry date', () => {
+  it('records a qualification with no expiry date', () => {
+    // This test used to assert the opposite: an expiry was mandatory, so
+    // saving without one was refused. Clinicians in this deployment are
+    // credentialed on a diploma, which has no expiry, so that rule made the
+    // form unable to record the thing it exists for. V145 made it optional.
     open();
     component['save']();
 
-    expect(service.recordRenewal).not.toHaveBeenCalled();
+    expect(service.recordRenewal).toHaveBeenCalledOnceWith('staff-1', {
+      // null, not '' — a positive "does not expire" the backend stores as
+      // null, where an empty string would fail date binding.
+      expiryDate: null,
+      licenseNumber: undefined,
+      issuingAuthority: undefined,
+      note: undefined,
+    });
   });
 
   it('sends only the fields that were filled in', () => {

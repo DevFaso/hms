@@ -8402,6 +8402,8 @@
     "TOAST": {
       "RENEWED": "Credential renewal recorded",
       "RENEW_FAILED": "Could not record the renewal"
-    }
+    },
+    "EXPIRY_HINT": "Leave empty if the qualification does not expire (a diploma).",
+    "NO_EXPIRY": "Does not expire"
   }
 }
