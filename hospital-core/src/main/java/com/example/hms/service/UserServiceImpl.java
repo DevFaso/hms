@@ -405,6 +405,9 @@ public class UserServiceImpl implements UserService {
                         .build());
             } catch (Exception e) {
                 log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+                // Fixed detail: exception messages can embed the raw address
+                // (EmailServiceImpl.validateAddresses does) and this DTO
+                // leaves the server; the transport error stays in the log.
                 com.example.hms.utility.ActivationDeliveryTracker.record(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
                         .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
@@ -413,7 +416,7 @@ public class UserServiceImpl implements UserService {
                             ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
                             : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
                         .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
-                        .detail(e.getMessage())
+                        .detail("send failed — transport error in server logs")
                         .build());
             }
         }

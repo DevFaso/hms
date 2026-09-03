@@ -10,7 +10,11 @@ import {
 import { UserService } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
-import { deliveryWarningKeys } from '../shared/delivery-warnings';
+import {
+  deliveryWarningKeys,
+  hasActivationSent,
+  NotificationDeliveryStatus,
+} from '../shared/delivery-warnings';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
@@ -339,6 +343,7 @@ export class PatientFormComponent implements OnInit {
     const email = this.form.email?.trim() || undefined;
     let createdUserId: string | null = null;
     let deliveryWarnings: string[] = [];
+    let deliveryReport: NotificationDeliveryStatus[] = [];
     this.userService
       .adminRegister({
         username,
@@ -354,7 +359,8 @@ export class PatientFormComponent implements OnInit {
         switchMap((user) => {
           createdUserId = user.id;
           this.form.userId = user.id;
-          deliveryWarnings = deliveryWarningKeys(user.activationDelivery);
+          deliveryReport = user.activationDelivery ?? [];
+          deliveryWarnings = deliveryWarningKeys(deliveryReport);
           const payload: PatientCreateRequest = {
             ...this.form,
             email,
@@ -374,17 +380,16 @@ export class PatientFormComponent implements OnInit {
       )
       .subscribe({
         next: (patient) => {
-          // The backend now REPORTS what was delivered, so don't claim a
-          // channel the report contradicts: with any delivery warning the
-          // success toast stays neutral and the warning says what failed.
-          const successKey =
-            deliveryWarnings.length > 0
-              ? 'PATIENTS.REGISTERED_SUCCESS'
-              : email
-                ? 'PATIENTS.REGISTERED_EMAIL_SENT'
-                : this.otpAvailable
-                  ? 'PATIENTS.REGISTERED_SMS_SENT'
-                  : 'PATIENTS.REGISTERED_SUCCESS';
+          // Claim a channel ONLY when the report proves that channel's
+          // activation message was SENT. An empty report means nothing was
+          // attempted (e.g. re-registering an identity that already has its
+          // assignment) — the old entered-email/OTP-config heuristic turned
+          // exactly that into a false "email sent" claim.
+          const successKey = hasActivationSent(deliveryReport, 'EMAIL')
+            ? 'PATIENTS.REGISTERED_EMAIL_SENT'
+            : hasActivationSent(deliveryReport, 'SMS')
+              ? 'PATIENTS.REGISTERED_SMS_SENT'
+              : 'PATIENTS.REGISTERED_SUCCESS';
           this.toast.success(this.translate.instant(successKey));
           for (const key of deliveryWarnings) {
             this.toast.warning(this.translate.instant(key));

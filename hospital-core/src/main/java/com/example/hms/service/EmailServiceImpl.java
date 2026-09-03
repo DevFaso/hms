@@ -21,13 +21,22 @@ public class EmailServiceImpl implements EmailService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
-    /**
-     * Empty on deployments where MAIL_USER was never set — the SMTP host
-     * requires auth, so every send is doomed before it starts. Used only to
-     * label delivery-report outcomes; sends are still attempted regardless.
-     */
+    // SMTP readiness inputs, mirroring StartupSubsystemLogger.announceMail():
+    // host required; auth=false permits a username-less relay; auth=true
+    // requires BOTH username and password. Used only to label delivery-report
+    // outcomes (NOT_CONFIGURED vs FAILED); sends are still attempted.
+    @Value("${spring.mail.host:}")
+    private String configuredMailHost;
+
     @Value("${spring.mail.username:}")
     private String configuredMailUsername;
+
+    @Value("${spring.mail.password:}")
+    private String configuredMailPassword;
+
+    /** Spring Boot's default when the property is unset is auth ON. */
+    @Value("${spring.mail.properties.mail.smtp.auth:true}")
+    private String smtpAuthProperty;
 
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
     private static final String GENERIC_GREETING = "there";
@@ -110,7 +119,16 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public boolean deliversRealEmail() {
-        return configuredMailUsername != null && !configuredMailUsername.isBlank();
+        if (configuredMailHost == null || configuredMailHost.isBlank()) {
+            return false;
+        }
+        boolean authEnabled = !"false".equalsIgnoreCase(smtpAuthProperty);
+        if (!authEnabled) {
+            // Unauthenticated relay — credentials are not required.
+            return true;
+        }
+        return configuredMailUsername != null && !configuredMailUsername.isBlank()
+            && configuredMailPassword != null && !configuredMailPassword.isBlank();
     }
 
     @Override

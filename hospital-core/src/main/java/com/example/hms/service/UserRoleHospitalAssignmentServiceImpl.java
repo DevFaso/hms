@@ -1500,9 +1500,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String hospitalDisplay = resolveHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
-            notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode);
-            notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode);
+            // The assignee's activation SMS goes FIRST and each FYI send is
+            // isolated: a throwing registrar/hospital notification used to
+            // abort the whole method before the one SMS that matters was even
+            // attempted — and before any SMS outcome could be recorded.
             notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
+            try {
+                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode);
+            } catch (RuntimeException e) {
+                log.warn("⚠️ Registrar FYI SMS failed for assignment '{}': {}", assignment.getId(), e.getMessage());
+            }
+            try {
+                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode);
+            } catch (RuntimeException e) {
+                log.warn("⚠️ Hospital FYI SMS failed for assignment '{}': {}", assignment.getId(), e.getMessage());
+            }
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
         }
@@ -1599,10 +1611,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 real ? null : "SMS transport disabled — mock channel only logs");
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send confirmation SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            // detail is a FIXED string: exception messages can embed the raw
+            // recipient (validateAddresses does exactly that for email) and
+            // this DTO leaves the server. The transport error stays in logs.
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
                 NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
                 NotificationDeliveryStatusDTO.OUTCOME_FAILED,
-                ActivationDeliveryTracker.maskPhone(phone), ex.getMessage());
+                ActivationDeliveryTracker.maskPhone(phone), DETAIL_SEE_SERVER_LOGS);
         }
     }
 
@@ -1655,7 +1670,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
                 NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
                 NotificationDeliveryStatusDTO.OUTCOME_FAILED,
-                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), ex.getMessage());
+                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), DETAIL_SEE_SERVER_LOGS);
         }
     }
 
@@ -1713,15 +1728,23 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
             User assignee = assignment.getUser();
+            // Fixed detail — see the SMS catch above for why getMessage() is
+            // banned from this DTO.
+            boolean configured = emailService.deliversRealEmail();
             recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
                 NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
-                emailService.deliversRealEmail()
+                configured
                     ? NotificationDeliveryStatusDTO.OUTCOME_FAILED
                     : NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
                 ActivationDeliveryTracker.maskEmail(assignee != null ? assignee.getEmail() : null),
-                ex.getMessage());
+                configured ? DETAIL_SEE_SERVER_LOGS : DETAIL_MAIL_NOT_CONFIGURED);
         }
     }
+
+    private static final String DETAIL_SEE_SERVER_LOGS =
+        "send failed — transport error in server logs";
+    private static final String DETAIL_MAIL_NOT_CONFIGURED =
+        "mail transport not configured on this deployment";
 
     /** Shorthand for {@link ActivationDeliveryTracker#record} — no-op unless a controller armed collection. */
     private void recordDelivery(String channel, String purpose, String outcome, String target, String detail) {

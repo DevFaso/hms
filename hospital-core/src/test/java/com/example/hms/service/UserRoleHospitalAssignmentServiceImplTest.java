@@ -317,7 +317,48 @@ class UserRoleHospitalAssignmentServiceImplTest {
             assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
                 .filteredOn(r -> "EMAIL".equals(r.getChannel()))
                 .singleElement()
-                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("FAILED"));
+                .satisfies(r -> {
+                    assertThat(r.getOutcome()).isEqualTo("FAILED");
+                    // The raw exception text must never reach the response:
+                    // validateAddresses embeds the FULL unmasked address in
+                    // its message, so detail is a fixed operator hint.
+                    assertThat(r.getDetail()).doesNotContain("mailbox unavailable");
+                });
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_assigneeSmsStillGoesOutWhenAnFyiSmsThrows() {
+        // The registrar/hospital FYI messages are couriers of convenience;
+        // a throwing FYI send used to abort the whole SMS block before the
+        // one activation SMS that matters was even attempted.
+        assignee.setPhoneNumber("+22670123456");
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setPhoneNumber("+22699999999");
+        assignment.setRegisteredBy(registrar);
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        // One doAnswer, not doThrow(eq(...)): under STRICT_STUBS a call with
+        // non-matching args to a stubbed method throws PotentialStubbingProblem,
+        // which the production catch would record as a FAILED assignee send.
+        org.mockito.Mockito.doAnswer(inv -> {
+            if ("+22699999999".equals(inv.getArgument(0))) {
+                throw new RuntimeException("gateway down");
+            }
+            return null;
+        }).when(smsService).send(any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "SMS".equals(r.getChannel())
+                    && "ACTIVATION".equals(r.getPurpose()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("MOCKED"));
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
         }

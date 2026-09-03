@@ -2018,10 +2018,13 @@
     "PHARMACY_CLAIMS_DESC": "Demandes pour cet hôpital"
   },
   "DELIVERY": {
+    "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
     "EMAIL_FAILED": "Le compte a été créé, mais l'e-mail d'activation n'a pas pu être envoyé. Utilisez « Renvoyer le code » une fois le problème résolu.",
     "EMAIL_NOT_CONFIGURED": "L'envoi d'e-mails n'est pas configuré sur ce serveur — le code d'activation n'a pas été envoyé par e-mail.",
+    "NOTHING_TO_SEND": "Aucune notification n'a été envoyée — rien n'est en attente d'envoi pour cette affectation.",
     "SMS_FAILED": "Le SMS d'activation n'a pas pu être envoyé.",
-    "SMS_NOT_CONFIGURED": "L'envoi de SMS est désactivé sur ce serveur — aucun SMS d'activation n'a été envoyé."
+    "SMS_NOT_CONFIGURED": "L'envoi de SMS est désactivé sur ce serveur — aucun SMS d'activation n'a été envoyé.",
+    "WELCOME_EMAIL_FAILED": "L'e-mail de bienvenue contenant les identifiants n'a pas pu être envoyé."
   },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personnel Actif",

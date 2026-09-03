@@ -14,7 +14,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { RoleService, RoleResponse } from '../services/role.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { deliveryWarningKeys } from '../shared/delivery-warnings';
+import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
@@ -332,14 +332,18 @@ export class AdminAssignmentsComponent implements OnInit {
   resendNotification(row: AssignmentResponse): void {
     this.service.resendNotification(row.id).subscribe({
       next: (report) => {
-        // "Sent" only when it actually went somewhere; otherwise say why not
-        // instead of the old unconditional success over a dead transport.
-        const warnings = deliveryWarningKeys(report);
-        if (warnings.length === 0) {
+        // "Sent" only on a proven SENT outcome: an empty report (nothing
+        // attempted) or a NO_CONTACT-only report must not recreate the old
+        // false-positive success toast.
+        if (hasActivationSent(report)) {
           this.toast.success(this.translate.instant('ASSIGN_ADMIN.NOTIFICATION_SENT'));
         }
+        const warnings = deliveryWarningKeys(report);
         for (const key of warnings) {
           this.toast.warning(this.translate.instant(key));
+        }
+        if (!hasActivationSent(report) && warnings.length === 0) {
+          this.toast.info(this.translate.instant('DELIVERY.NOTHING_TO_SEND'));
         }
       },
       error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
