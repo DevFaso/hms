@@ -47,6 +47,33 @@ class EmailServiceImplTest {
     }
 
     // =========================================================================
+    // deliversRealEmail — the delivery report's NOT_CONFIGURED vs FAILED split
+    // =========================================================================
+
+    @Nested
+    @DisplayName("deliversRealEmail")
+    class DeliversRealEmail {
+
+        @Test
+        @DisplayName("false while MAIL_USER is unset, true once configured; interface defaults true")
+        void reflectsConfiguredMailUsername() {
+            ReflectionTestUtils.setField(emailService, "configuredMailUsername", "");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail())
+                .as("empty MAIL_USER means every authenticated send is doomed")
+                .isFalse();
+
+            ReflectionTestUtils.setField(emailService, "configuredMailUsername", "noreply@e-keneya.com");
+            org.assertj.core.api.Assertions.assertThat(emailService.deliversRealEmail()).isTrue();
+
+            // The interface default is the contract for implementations that
+            // never report transport state: assume real, never NOT_CONFIGURED.
+            EmailService defaults = org.mockito.Mockito.mock(EmailService.class,
+                org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Answers.CALLS_REAL_METHODS));
+            org.assertj.core.api.Assertions.assertThat(defaults.deliversRealEmail()).isTrue();
+        }
+    }
+
+    // =========================================================================
     // sendPasswordResetEmail
     // =========================================================================
 
