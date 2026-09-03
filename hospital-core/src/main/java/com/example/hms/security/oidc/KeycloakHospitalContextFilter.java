@@ -1,5 +1,6 @@
 package com.example.hms.security.oidc;
 
+import com.example.hms.repository.UserRepository;
 import com.example.hms.security.IdleSessionGate;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -46,11 +47,14 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
 
     private final KeycloakHospitalContextResolver resolver;
     private final IdleSessionGate idleSessionGate;
+    private final UserRepository userRepository;
 
     public KeycloakHospitalContextFilter(KeycloakHospitalContextResolver resolver,
-                                         IdleSessionGate idleSessionGate) {
+                                         IdleSessionGate idleSessionGate,
+                                         UserRepository userRepository) {
         this.resolver = resolver;
         this.idleSessionGate = idleSessionGate;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -61,6 +65,20 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
         try {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             if (auth instanceof JwtAuthenticationToken jwtAuth && auth.isAuthenticated()) {
+                // ── Local verification gate (option A, 2026-09-02) ────────
+                // A Keycloak token proves the IdP authenticated the caller,
+                // but verification state lives on the LOCAL row: accounts
+                // start inactive until the emailed code is entered, and the
+                // legacy path enforces that via CustomUserDetails.isEnabled().
+                // Until Phase C mirrors enable/disable into the realm, an
+                // inactive or soft-deleted local account must be just as
+                // unusable under OIDC. No local row means a Keycloak-only
+                // identity (pre-provisioning) — allowed, as before.
+                if (localAccountBlocked(jwtAuth.getName())) {
+                    log.warn("[OIDC] Refusing request — local account is inactive or deleted");
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    return;
+                }
                 HospitalContext context = resolver.resolve(jwtAuth.getToken(), jwtAuth.getAuthorities());
                 // Apply the same X-Hospital-Id header override the legacy
                 // JwtAuthenticationFilter applies, so multi-hospital users
@@ -100,5 +118,22 @@ public class KeycloakHospitalContextFilter extends OncePerRequestFilter {
                 HospitalContextHolder.clear();
             }
         }
+    }
+
+    /**
+     * The principal name is {@code preferred_username}, falling back to
+     * {@code email} then {@code sub} (see KeycloakJwtAuthenticationConverter),
+     * so the lookup mirrors that order. One extra query per OIDC request —
+     * the same price the legacy path already pays in
+     * {@code CustomUserDetailsService.loadUserByUsername}.
+     */
+    private boolean localAccountBlocked(String principalName) {
+        if (principalName == null || principalName.isBlank()) {
+            return false;
+        }
+        return userRepository.findByUsernameIgnoreCase(principalName)
+            .or(() -> userRepository.findByEmail(principalName.toLowerCase(java.util.Locale.ROOT)))
+            .map(user -> !user.isActive() || user.isDeleted())
+            .orElse(false);
     }
 }

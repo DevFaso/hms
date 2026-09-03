@@ -646,12 +646,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     locale));
         }
 
-        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
-        UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
+        // Registrar confirmation presents the SAME confirmation code the
+        // assignee received, so it completes verification outright. Since
+        // option A every account starts inactive; a confirm that only stamped
+        // confirmationVerifiedAt would trip verifyAssignmentByCode's
+        // already-verified branch and the assignee could never activate
+        // through the advertised path.
+        activateVerifiedAssignment(assignment, "registrar confirmation");
 
-        recordAssignmentConfirmationAudit(saved, actor);
-        log.info("✅ Assignment '{}' confirmed by actor '{}'", saved.getId(), actor.getId());
-        return toDtoWithLinks(saved);
+        recordAssignmentConfirmationAudit(assignment, actor);
+        log.info("✅ Assignment '{}' confirmed by actor '{}'", assignment.getId(), actor.getId());
+        return toDtoWithLinks(assignment);
     }
 
     @Override
@@ -709,8 +714,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
                     Locale.getDefault())));
 
-        // Idempotent: already verified → build DTO from existing state (no save)
-        if (assignment.getConfirmationVerifiedAt() != null) {
+        // Idempotent: already verified AND active → existing state (no save).
+        // A verified-but-INACTIVE row is the wedged state a pre-fix registrar
+        // confirm left behind (timestamp stamped, nothing activated); it falls
+        // through so the code check below still gates and the activation
+        // finishes what that confirm intended.
+        if (assignment.getConfirmationVerifiedAt() != null
+                && Boolean.TRUE.equals(assignment.getActive())) {
             log.info("⏭️ Assignment '{}' is already verified — returning current public view.", sanitizedCode);
             return buildPublicViewDTO(assignment, null, null);
         }
@@ -721,7 +731,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
         String tempPassword = assignment.getTempPlainPassword();
 
-        activateVerifiedAssignment(assignment, sanitizedCode);
+        activateVerifiedAssignment(assignment, "assignee code entry");
 
         // Include credentials if this was a new-user assignment (temp creds were set)
         String exposedUsername = tempPassword != null ? tempUsername : null;
@@ -762,13 +772,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String sanitizedCode) {
-        // Mark the assignment as verified AND activate it
-        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+    private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String source) {
+        // Mark the assignment as verified AND activate it. An existing
+        // timestamp is preserved: the healing path re-runs activation for
+        // rows an older registrar confirm stamped without activating.
+        if (assignment.getConfirmationVerifiedAt() == null) {
+            assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+        }
         assignment.setActive(true);
         assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
-        log.info("✅ Assignment '{}' self-verified and activated by assignee.", sanitizedCode);
+        log.info("✅ Assignment '{}' verified and activated via {}.", assignment.getId(), source);
 
         // Activate the user account if it was pending assignment verification
         User user = assignment.getUser();

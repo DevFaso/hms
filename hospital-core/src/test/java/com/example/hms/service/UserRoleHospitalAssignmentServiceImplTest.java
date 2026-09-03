@@ -118,6 +118,83 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(assignmentRepository).findByAssignmentCode(VALID_CODE);
     }
 
+    @Test
+    void verifyAssignmentByCode_verifiedButInactive_finishesTheActivation() {
+        // The wedged state an older registrar confirm left behind:
+        // confirmationVerifiedAt stamped, nothing activated. The idempotent
+        // branch must NOT swallow this - the assignee still holds the code,
+        // so verification completes the activation instead of locking the
+        // account out forever.
+        assignee.setActive(false);
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now().minusDays(1));
+        assignment.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignee.isActive()).isTrue();
+    }
+
+    @Test
+    void confirmAssignment_byRegistrar_activatesBothTheAssignmentAndTheUser() {
+        // Registrar confirmation presents the same code the assignee
+        // received, so it must complete verification outright: stamping only
+        // confirmationVerifiedAt used to trip verifyAssignmentByCode's
+        // already-verified branch, and the assignee could then never
+        // activate through the advertised path.
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("registrar");
+        assignment.setRegisteredBy(registrar);
+        assignee.setActive(false);
+
+        org.springframework.security.core.context.SecurityContextHolder.getContext()
+            .setAuthentication(new org.springframework.security.authentication
+                .UsernamePasswordAuthenticationToken("registrar", "n/a", java.util.List.of()));
+        try {
+            when(assignmentRepository.findById(assignment.getId()))
+                .thenReturn(Optional.of(assignment));
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "registrar", "registrar", null))
+                .thenReturn(Optional.of(registrar));
+            when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.confirmAssignment(assignment.getId(), VALID_PIN);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignee.isActive()).isTrue();
+        verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void verifyAssignmentByCode_activatesBothTheAssignmentAndTheUser() {
+        // Since option A (2026-09-02), admin-registered accounts - staff AND
+        // patients - start inactive, and this call is the ONE thing that
+        // makes them usable. If it stopped activating either row, every new
+        // registration would be locked out with a green 200 behind it.
+        assignee.setActive(false);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE))
+            .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(assignment.getConfirmationVerifiedAt()).isNotNull();
+        assertThat(assignee.isActive()).isTrue();
+        verify(userRepository).save(assignee);
+    }
+
     // -----------------------------------------------------------------------
     // 2. Wrong / incorrect confirmation PIN → BusinessException
     // -----------------------------------------------------------------------

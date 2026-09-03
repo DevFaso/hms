@@ -288,6 +288,73 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("an admin-registered staff account starts INACTIVE - the emailed code gates something real")
+        void staffStartInactiveUntilVerified() {
+            // Option A (2026-09-02). Until then staff were activated up
+            // front while the system still mailed them a verification code
+            // that gated nothing. Login is refused while inactive
+            // (CustomUserDetails.isEnabled); verifyAssignmentByCode() and
+            // the registrar's confirmAssignment() are the activation paths
+            // for user and assignment alike. Registration runs to
+            // COMPLETION here so a regression that force-activates the
+            // assignment downstream cannot hide behind an early exception.
+            when(userRepository.findByUsername("newstaff")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("staff@hospital.com")).thenReturn(Optional.empty());
+            when(userRepository.findByPhoneNumber("+1234567899")).thenReturn(Optional.empty());
+            when(userRepository.saveAndFlush(any(User.class))).thenAnswer(inv -> {
+                User u = inv.getArgument(0);
+                if (u.getId() == null) u.setId(UUID.randomUUID());
+                return u;
+            });
+            when(roleRepository.findByCode("ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.of(superAdminRole));
+            when(passwordEncoder.encode(any())).thenReturn("encoded");
+
+            UserRoleHospitalAssignment createdAssignment = new UserRoleHospitalAssignment();
+            createdAssignment.setId(UUID.randomUUID());
+            createdAssignment.setRole(superAdminRole);
+            createdAssignment.setActive(false);
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(
+                    any(), org.mockito.ArgumentMatchers.isNull(), any()))
+                .thenReturn(Optional.of(createdAssignment));
+            when(userRepository.findByIdWithRolesAndProfiles(any(UUID.class)))
+                .thenAnswer(inv -> {
+                    User reloaded = new User();
+                    reloaded.setId(inv.getArgument(0));
+                    return Optional.of(reloaded);
+                });
+            when(userMapper.toResponseDTO(any(), any())).thenReturn(new UserResponseDTO());
+
+            AdminSignupRequest req = buildRequest("newstaff", "staff@hospital.com", "+1234567899");
+            // SUPER_ADMIN: the one staff role registrable without a hospital
+            // context, which keeps this fixture out of JWT-resolution stubs.
+            req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(req);
+            assertThat(result).as("registration must run to completion").isNotNull();
+
+            org.mockito.ArgumentCaptor<User> userCaptor =
+                org.mockito.ArgumentCaptor.forClass(User.class);
+            verify(userRepository).saveAndFlush(userCaptor.capture());
+            assertThat(userCaptor.getValue().isActive())
+                .as("staff must start inactive until the emailed code is verified")
+                .isFalse();
+
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO>
+                assignCaptor = org.mockito.ArgumentCaptor.forClass(
+                    com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO.class);
+            verify(assignmentService).assignRole(assignCaptor.capture());
+            assertThat(assignCaptor.getValue().getActive())
+                .as("the assignment request must also start inactive")
+                .isFalse();
+
+            // The old pre-approval override force-activated the reloaded
+            // assignment and saved it; that save must never come back.
+            assertThat(createdAssignment.getActive()).isFalse();
+            verify(assignmentRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
         @DisplayName("staff/admin accounts still require an email (phone-first applies to patients only)")
         void rejectsStaffWithoutEmail() {
             AdminSignupRequest req = buildRequest("newuser", null, "+1234567890");
