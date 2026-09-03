@@ -52,6 +52,19 @@
           }}</span>
         </div>
       </div>
+      @if (canDownloadRecord()) {
+        <button
+          type="button"
+          class="btn-secondary wristband-btn"
+          data-testid="download-record"
+          (click)="downloadRecord()"
+          [disabled]="recordDownloadLoading()"
+          [title]="'PATIENTS.DOWNLOAD_RECORD_TITLE' | translate"
+        >
+          <span class="material-symbols-outlined">download</span>
+          {{ 'PATIENTS.DOWNLOAD_RECORD' | translate }}
+        </button>
+      }
       @if (canPrintWristband()) {
         <button
           type="button"

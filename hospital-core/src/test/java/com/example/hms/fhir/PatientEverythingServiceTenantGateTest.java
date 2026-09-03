@@ -138,6 +138,33 @@ class PatientEverythingServiceTenantGateTest {
         verify(patientMapper, never()).toFhir(any(Patient.class));
     }
 
+    @Test
+    @DisplayName("fullRecordForDownload bypasses the everything flag — but NOT the hospital-scope gate")
+    void downloadBypassesTheFlagButNotTheScopeGate() {
+        // Flag OFF: the FHIR-facing operation is closed, yet the portal
+        // download must still work. Getting ForbiddenOperationException
+        // (the NEXT gate) instead of MethodNotAllowedException proves the
+        // flag was bypassed while the tenancy contract stayed intact.
+        properties.getEverything().setEnabled(false);
+        HospitalContextHolder.setContext(HospitalContext.empty());
+        assertThatThrownBy(() -> service.fullRecordForDownload(patientId))
+            .isInstanceOf(ForbiddenOperationException.class);
+    }
+
+    @Test
+    @DisplayName("fullRecordForDownload still collapses a cross-tenant patient to 404 with zero PHI rendered")
+    void downloadStillEnforcesTheRegistrationGate() {
+        properties.getEverything().setEnabled(false);
+        setActiveHospital();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(new Patient()));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, activeHospitalId))
+            .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.fullRecordForDownload(patientId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(patientMapper, never()).toFhir(any(Patient.class));
+    }
+
     // Happy-path "registered patient renders the Bundle" is covered
     // end-to-end by PatientEverythingEnabledIT — exercising it via
     // mocks here would require stubbing every per-resource page query

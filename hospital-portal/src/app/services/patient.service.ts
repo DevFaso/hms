@@ -254,6 +254,11 @@ export class PatientService {
     return this.http.get<PatientResponse[]>('/patients', { params });
   }
 
+  /** Tier 2 item 44 — the chart's record download (was print-only). */
+  downloadFhirRecord(id: string): Observable<Blob> {
+    return this.http.get(`/patients/${id}/fhir-record`, { responseType: 'blob' });
+  }
+
   getById(id: string, hospitalId?: string): Observable<PatientResponse> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);

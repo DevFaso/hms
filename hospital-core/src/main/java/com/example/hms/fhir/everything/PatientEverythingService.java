@@ -137,6 +137,7 @@ public class PatientEverythingService {
      */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId) {
+        ensureEnabled();
         return doEverythingForPatient(patientId,
             PatientEverythingParams.of(null, null, null, null));
     }
@@ -147,7 +148,55 @@ public class PatientEverythingService {
      */
     @Transactional(readOnly = true)
     public Bundle everythingForPatient(UUID patientId, PatientEverythingParams params) {
+        ensureEnabled();
         return doEverythingForPatient(patientId, params);
+    }
+
+    /**
+     * Tier 2 item 44 — the portal's "download my record" export. Pages
+     * through every section at {@link PatientEverythingParams#MAX_COUNT}
+     * and merges into ONE bundle, because a downloaded file cannot follow
+     * a {@code next} link. Deliberately NOT behind
+     * {@code app.fhir.operations.everything.enabled}: that flag gates the
+     * EXTERNAL FHIR operation surface, while this is an internal,
+     * role-gated, audited portal endpoint — tenancy and the registration
+     * gate still apply on every page. Each page emits its own audit row,
+     * so the export trail shows exactly what left the system.
+     */
+    @Transactional(readOnly = true)
+    public Bundle fullRecordForDownload(UUID patientId) {
+        Bundle merged = null;
+        Integer cursor = null;
+        // Hard page cap: 40 pages x 500/section is far beyond any real
+        // record, and it turns a cursor bug into a bounded file instead of
+        // an unbounded loop.
+        for (int page = 0; page < 40; page++) {
+            Bundle chunk = doEverythingForPatient(patientId,
+                PatientEverythingParams.of(null, null, PatientEverythingParams.MAX_COUNT, cursor));
+            if (merged == null) {
+                merged = chunk;
+            } else {
+                chunk.getEntry().forEach(merged.getEntry()::add);
+            }
+            cursor = nextCursorOf(chunk);
+            if (cursor == null) break;
+        }
+        merged.getLink().removeIf(l -> "next".equals(l.getRelation()));
+        merged.setTotal(merged.getEntry().size());
+        return merged;
+    }
+
+    /** Reads the {@code _page} cursor back out of the bundle's own next link. Package-visible for its test. */
+    static Integer nextCursorOf(Bundle bundle) {
+        return bundle.getLink().stream()
+            .filter(l -> "next".equals(l.getRelation()) && l.getUrl() != null)
+            .findFirst()
+            .map(l -> {
+                java.util.regex.Matcher m =
+                    java.util.regex.Pattern.compile("_page=(\\d+)").matcher(l.getUrl());
+                return m.find() ? Integer.valueOf(m.group(1)) : null;
+            })
+            .orElse(null);
     }
 
     /**
@@ -156,7 +205,6 @@ public class PatientEverythingService {
      * through Spring's proxy without self-calling — Sonar S2229.
      */
     private Bundle doEverythingForPatient(UUID patientId, PatientEverythingParams params) {
-        ensureEnabled();
         UUID hospitalId = resolveHospitalScopeOrForbid();
         Patient patient = loadAndVerifyTenantOwnedPatient(patientId, hospitalId);
 

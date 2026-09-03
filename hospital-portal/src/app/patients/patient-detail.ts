@@ -16,7 +16,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientChartComponent } from './patient-chart/patient-chart.component';
 import {
   CHART_REVIEW_VIEW_ROLES,
@@ -90,6 +90,7 @@ export class PatientDetailComponent implements OnInit {
   private readonly sharingService = inject(RecordSharingService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   protected readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly printService = inject(PrintLabelService);
@@ -200,6 +201,42 @@ export class PatientDetailComponent implements OnInit {
       'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
+  }
+
+  /* ── FHIR record download (Tier 2 #44) ── */
+  recordDownloadLoading = signal(false);
+
+  /** Mirrors PatientRecordExportController.EXPORT_ROLES exactly — a full
+   *  record export is a wider disclosure than a chart tab, so the
+   *  receptionist chart roles do not carry over. */
+  canDownloadRecord(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  downloadRecord(): void {
+    if (this.recordDownloadLoading()) return;
+    this.recordDownloadLoading.set(true);
+    this.patientService.downloadFhirRecord(this.patientId).subscribe({
+      next: (blob) => {
+        this.recordDownloadLoading.set(false);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `patient-record-${this.patientId}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.recordDownloadLoading.set(false);
+        this.toast.error(this.translate.instant('PATIENTS.DOWNLOAD_RECORD_FAILED'));
+      },
+    });
   }
 
   /* ── Wristband printing (P3 #23b) ── */
