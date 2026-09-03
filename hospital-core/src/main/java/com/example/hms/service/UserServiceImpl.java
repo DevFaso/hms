@@ -396,8 +396,28 @@ public class UserServiceImpl implements UserService {
                     user.getUsername(), request.getPassword(),
                     roleName, hospitalName);
                 log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+                com.example.hms.utility.ActivationDeliveryTracker.report(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                        .outcome(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_SENT)
+                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                        .build());
             } catch (Exception e) {
                 log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+                // Fixed detail: exception messages can embed the raw address
+                // (EmailServiceImpl.validateAddresses does) and this DTO
+                // leaves the server; the transport error stays in the log.
+                com.example.hms.utility.ActivationDeliveryTracker.report(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                        .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
+                        .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
+                        .outcome(emailService.deliversRealEmail()
+                            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED)
+                        .target(com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()))
+                        .detail("send failed — transport error in server logs")
+                        .build());
             }
         }
 

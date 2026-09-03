@@ -17,6 +17,8 @@ import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.UserRoleId;
 import com.example.hms.payload.dto.AssignmentMinimalDTO;
+import com.example.hms.payload.dto.NotificationDeliveryStatusDTO;
+import com.example.hms.utility.ActivationDeliveryTracker;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentResponseDTO;
@@ -1498,11 +1500,30 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String hospitalDisplay = resolveHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
-            notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode);
-            notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode);
+            // The assignee's activation SMS goes FIRST and each FYI send is
+            // isolated: a throwing registrar/hospital notification used to
+            // abort the whole method before the one SMS that matters was even
+            // attempted — and before any SMS outcome could be recorded.
             notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
+            sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
+                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode));
+            sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->
+                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode));
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * FYI messages are couriers of convenience: a failure is logged, never
+     * propagated, so it can neither abort the assignee's activation SMS nor
+     * pollute the delivery report.
+     */
+    private void sendFyiSmsQuietly(UUID assignmentId, String audience, Runnable send) {
+        try {
+            send.run();
+        } catch (RuntimeException e) {
+            log.warn("⚠️ {} FYI SMS failed for assignment '{}': {}", audience, assignmentId, e.getMessage());
         }
     }
 
@@ -1563,10 +1584,17 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         String phone = user.getPhoneNumber();
         if (phone == null || phone.isBlank()) {
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
             return;
         }
         if (confirmationCode == null || confirmationCode.isBlank()) {
             log.warn("⚠️ Confirmation code missing for assignment '{}'; skipping SMS confirmation message to user", assignment.getId());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_FAILED,
+                ActivationDeliveryTracker.maskPhone(phone), "confirmation code missing");
             return;
         }
         String message = String.format(
@@ -1576,7 +1604,28 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             confirmationCode,
             assignmentCode
         );
-        sendSmsSilently(phone, message);
+        // Own try/catch: this is the one SMS the ACTIVATION depends on, so
+        // its outcome must not be lumped in with the registrar/hospital FYI
+        // messages the outer catch covers.
+        try {
+            sendSmsSilently(phone, message);
+            boolean real = smsService.deliversRealSms();
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                real ? NotificationDeliveryStatusDTO.OUTCOME_SENT
+                     : NotificationDeliveryStatusDTO.OUTCOME_MOCKED,
+                ActivationDeliveryTracker.maskPhone(phone),
+                real ? null : "SMS transport disabled — mock channel only logs");
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to send confirmation SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            // detail is a FIXED string: exception messages can embed the raw
+            // recipient (validateAddresses does exactly that for email) and
+            // this DTO leaves the server. The transport error stays in logs.
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_FAILED,
+                ActivationDeliveryTracker.maskPhone(phone), DETAIL_SEE_SERVER_LOGS);
+        }
     }
 
     private String buildConfirmationSuffix(String confirmationCode) {
@@ -1603,6 +1652,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (!smsService.deliversRealSms()) {
             log.warn("⚠️ No real SMS channel configured — one-time credentials for assignment '{}' were NOT delivered; "
                 + "the patient can still activate via the staff-read confirmation code.", assignment.getId());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
+                NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
+                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()),
+                "no real SMS channel — one-time credentials were not delivered");
             return;
         }
         String message = String.format(
@@ -1610,7 +1664,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             user.getUsername(),
             tempPassword
         );
-        sendSmsSilently(user.getPhoneNumber(), message);
+        // Own try/catch: an SMS failure here must not be misfiled as an
+        // EMAIL outcome by sendAssignmentEmailNotification's catch.
+        try {
+            sendSmsSilently(user.getPhoneNumber(), message);
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
+                NotificationDeliveryStatusDTO.OUTCOME_SENT,
+                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), null);
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to send credentials SMS for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
+                NotificationDeliveryStatusDTO.OUTCOME_FAILED,
+                ActivationDeliveryTracker.maskPhone(user.getPhoneNumber()), DETAIL_SEE_SERVER_LOGS);
+        }
     }
 
     private void sendAssignmentEmailNotification(UserRoleHospitalAssignment assignment) {
@@ -1625,6 +1693,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 // Phone-first patients have no email: deliver the one-time
                 // credentials over SMS instead. The confirmation code already
                 // goes out separately via sendAssignmentSmsNotifications.
+                // NO_CONTACT is informational, not a warning — the portal
+                // only alerts on FAILED / NOT_CONFIGURED / MOCKED.
+                recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
+                    NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                    NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
                 sendCredentialsSmsFallback(assignment, user);
                 return;
             }
@@ -1632,6 +1705,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String confirmationCode = assignment.getConfirmationCode();
             if (confirmationCode == null || confirmationCode.isBlank()) {
                 log.warn("⚠️ Confirmation code missing for assignment '{}'; skipping email notification", assignment.getId());
+                recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
+                    NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                    NotificationDeliveryStatusDTO.OUTCOME_FAILED,
+                    ActivationDeliveryTracker.maskEmail(email), "confirmation code missing");
                 return;
             }
 
@@ -1651,9 +1728,40 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 assignment.getTempPlainPassword() != null ? user.getUsername() : null,
                 assignment.getTempPlainPassword()
             );
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                NotificationDeliveryStatusDTO.OUTCOME_SENT,
+                ActivationDeliveryTracker.maskEmail(email), null);
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
+            User assignee = assignment.getUser();
+            // Fixed detail — see the SMS catch above for why getMessage() is
+            // banned from this DTO.
+            boolean configured = emailService.deliversRealEmail();
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_EMAIL,
+                NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION,
+                configured
+                    ? NotificationDeliveryStatusDTO.OUTCOME_FAILED
+                    : NotificationDeliveryStatusDTO.OUTCOME_NOT_CONFIGURED,
+                ActivationDeliveryTracker.maskEmail(assignee != null ? assignee.getEmail() : null),
+                configured ? DETAIL_SEE_SERVER_LOGS : DETAIL_MAIL_NOT_CONFIGURED);
         }
+    }
+
+    private static final String DETAIL_SEE_SERVER_LOGS =
+        "send failed — transport error in server logs";
+    private static final String DETAIL_MAIL_NOT_CONFIGURED =
+        "mail transport not configured on this deployment";
+
+    /** Shorthand for {@link ActivationDeliveryTracker#report} — no-op unless a controller armed collection. */
+    private void recordDelivery(String channel, String purpose, String outcome, String target, String detail) {
+        ActivationDeliveryTracker.report(NotificationDeliveryStatusDTO.builder()
+            .channel(channel)
+            .purpose(purpose)
+            .outcome(outcome)
+            .target(target)
+            .detail(detail)
+            .build());
     }
 
     private void recordAssignmentAudit(UserRoleHospitalAssignment assignment) {

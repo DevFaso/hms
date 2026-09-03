@@ -7,6 +7,16 @@ import java.util.Locale;
 @SuppressWarnings("java:S107") // Email API methods require many template parameters by nature
 public interface EmailService {
 
+    /**
+     * True when this deployment can actually hand mail to an SMTP server.
+     * Mirrors {@link SmsService#deliversRealSms()}: callers use it to tell
+     * "the send failed" apart from "there is no transport to send with",
+     * so the registrar-facing delivery report can say which one it was.
+     */
+    default boolean deliversRealEmail() {
+        return true;
+    }
+
     void sendAppointmentRescheduledEmail(
         String to,
         String patientName,

@@ -2017,6 +2017,15 @@
     "PHARMACY_CLAIMS": "Pharmacy Claims",
     "PHARMACY_CLAIMS_DESC": "Claims at this hospital"
   },
+  "DELIVERY": {
+    "CREDENTIALS_NOT_DELIVERED": "The one-time login credentials could not be sent to the patient.",
+    "EMAIL_FAILED": "The account was created, but the activation email could not be delivered. Use “Resend code” once the problem is fixed.",
+    "EMAIL_NOT_CONFIGURED": "Email sending is not configured on this server — the activation code was not emailed.",
+    "NOTHING_TO_SEND": "No notification was sent — this assignment has nothing pending to deliver.",
+    "SMS_FAILED": "The activation SMS could not be delivered.",
+    "SMS_NOT_CONFIGURED": "SMS sending is disabled on this server — no activation SMS was sent.",
+    "WELCOME_EMAIL_FAILED": "The welcome email with login details could not be delivered."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Active Staff",
     "APPOINTMENTS": "Appointments",

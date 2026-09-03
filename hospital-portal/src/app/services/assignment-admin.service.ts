@@ -13,6 +13,8 @@ import { PageResponse } from './maternity.service';
  * Responses are @JsonInclude(NON_NULL) — most fields may be absent.
  */
 
+import { NotificationDeliveryStatus } from '../shared/delivery-warnings';
+
 export interface AssignmentResponse {
   id: string;
   assignmentCode?: string;
@@ -33,6 +35,8 @@ export interface AssignmentResponse {
   confirmationSentAt?: string;
   confirmationVerifiedAt?: string;
   confirmationVerified: boolean;
+  /** Present after regenerate-with-resend: did the new code go anywhere? */
+  activationDelivery?: NotificationDeliveryStatus[];
   registeredByUserId?: string;
   registeredByUserName?: string;
   profileCompletionUrl?: string;
@@ -157,8 +161,13 @@ export class AssignmentAdminService {
     });
   }
 
-  resendNotification(id: string): Observable<void> {
-    return this.http.post<void>(`${this.baseUrl}/${id}/resend-notification`, null);
+  resendNotification(id: string): Observable<NotificationDeliveryStatus[]> {
+    // The endpoint returns the per-channel delivery report (it used to be a
+    // 204 that looked identical whether or not any transport existed).
+    return this.http.post<NotificationDeliveryStatus[]>(
+      `${this.baseUrl}/${id}/resend-notification`,
+      null,
+    );
   }
 
   /** Soft path — sets active=false, idempotent. */

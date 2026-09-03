@@ -84,8 +84,19 @@ public class UserController {
             if (badRequest != null) return badRequest;
         }
 
-        UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
-        return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
+        // Delivery outcomes are recorded by the send paths — including the
+        // AFTER_COMMIT assignment listener, which runs on this thread after
+        // the service transaction commits and before we resume — so the
+        // registrar learns HERE when the activation message went nowhere,
+        // instead of a green 201 over a silent WARN log.
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
+            dto.setActivationDelivery(com.example.hms.utility.ActivationDeliveryTracker.close());
+            return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
     }
 
     private Set<String> extractAuthorities(Authentication auth) {
