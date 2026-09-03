@@ -76,7 +76,8 @@ class DocumentReferenceFhirResourceProviderTest {
     @DisplayName("no active hospital scope → 403, nothing queried")
     void noScopeForbidden() {
         HospitalContextHolder.setContext(HospitalContext.empty());
-        assertThatThrownBy(() -> provider.read(new IdType("DocumentReference", "upl-" + UUID.randomUUID())))
+        IdType id = new IdType("DocumentReference", "upl-" + UUID.randomUUID());
+        assertThatThrownBy(() -> provider.read(id))
             .isInstanceOf(ForbiddenOperationException.class);
         verifyNoInteractions(uploadedDocumentRepository, dischargeSummaryRepository, mapper);
     }
@@ -90,7 +91,8 @@ class DocumentReferenceFhirResourceProviderTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> provider.read(new IdType("DocumentReference", "upl-" + doc.getId())))
+        IdType id = new IdType("DocumentReference", "upl-" + doc.getId());
+        assertThatThrownBy(() -> provider.read(id))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(mapper);
     }
@@ -103,7 +105,8 @@ class DocumentReferenceFhirResourceProviderTest {
         doc.setDeletedAt(java.time.LocalDateTime.now());
         when(uploadedDocumentRepository.findById(doc.getId())).thenReturn(Optional.of(doc));
 
-        assertThatThrownBy(() -> provider.read(new IdType("DocumentReference", "upl-" + doc.getId())))
+        IdType id = new IdType("DocumentReference", "upl-" + doc.getId());
+        assertThatThrownBy(() -> provider.read(id))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(mapper);
     }
@@ -115,7 +118,8 @@ class DocumentReferenceFhirResourceProviderTest {
         DischargeSummary summary = dischargeSummary(UUID.randomUUID());
         when(dischargeSummaryRepository.findById(summary.getId())).thenReturn(Optional.of(summary));
 
-        assertThatThrownBy(() -> provider.read(new IdType("DocumentReference", "discharge-" + summary.getId())))
+        IdType id = new IdType("DocumentReference", "discharge-" + summary.getId());
+        assertThatThrownBy(() -> provider.read(id))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(mapper);
     }
@@ -142,7 +146,7 @@ class DocumentReferenceFhirResourceProviderTest {
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(Optional.empty());
         when(dischargeSummaryRepository
-            .findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
+            .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
             .thenReturn(List.of());
 
         List<DocumentReference> out = provider.search(new ReferenceParam("Patient/" + patientId), null);
@@ -157,11 +161,11 @@ class DocumentReferenceFhirResourceProviderTest {
         setScope();
         when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
-        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNull(
+        when(uploadedDocumentRepository.findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
                 org.mockito.ArgumentMatchers.eq(patientId), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(uploadedDoc())));
         when(dischargeSummaryRepository
-            .findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
+            .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
             .thenReturn(List.of(dischargeSummary(hospitalId)));
 
         List<DocumentReference> out = provider.search(new ReferenceParam("Patient/" + patientId), null);

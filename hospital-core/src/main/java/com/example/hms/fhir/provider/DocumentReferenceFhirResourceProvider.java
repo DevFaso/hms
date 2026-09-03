@@ -111,7 +111,8 @@ public class DocumentReferenceFhirResourceProvider implements IResourceProvider 
         // and a foreign patient collapses to an empty list, never an error.
         if (patientVisibleAt(patientId, hospitalId)) {
             uploadedDocumentRepository
-                .findByPatient_IdAndDeletedAtIsNull(patientId, PageRequest.of(0, MAX_PER_PATIENT))
+                .findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                    patientId, PageRequest.of(0, MAX_PER_PATIENT))
                 .forEach(d -> {
                     DocumentReference mapped = mapper.toFhir(d);
                     if (mapped != null) out.add(mapped);
@@ -119,7 +120,7 @@ public class DocumentReferenceFhirResourceProvider implements IResourceProvider 
         }
 
         dischargeSummaryRepository
-            .findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId)
+            .findWithAssociationsByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId)
             .stream()
             .limit(MAX_PER_PATIENT)
             .forEach(s -> {

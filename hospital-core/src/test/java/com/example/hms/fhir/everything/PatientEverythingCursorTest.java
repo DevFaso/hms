@@ -24,6 +24,35 @@ class PatientEverythingCursorTest {
     }
 
     @Test
+    @DisplayName("appendNewEntries drops entries already seen on earlier pages")
+    void appendNewEntriesDeduplicatesByTypeAndId() {
+        // Unpaged sections used to re-emit in full on every cursor
+        // iteration; the merge must not let a repeat masquerade as data.
+        org.hl7.fhir.r4.model.Condition c1 = new org.hl7.fhir.r4.model.Condition();
+        c1.setId("cond-1");
+        org.hl7.fhir.r4.model.Condition c1Again = new org.hl7.fhir.r4.model.Condition();
+        c1Again.setId("cond-1");
+        org.hl7.fhir.r4.model.Condition c2 = new org.hl7.fhir.r4.model.Condition();
+        c2.setId("cond-2");
+
+        Bundle merged = new Bundle();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        Bundle first = new Bundle();
+        first.addEntry().setResource(c1);
+        PatientEverythingService.appendNewEntries(merged, first, seen);
+
+        Bundle second = new Bundle();
+        second.addEntry().setResource(c1Again);
+        second.addEntry().setResource(c2);
+        PatientEverythingService.appendNewEntries(merged, second, seen);
+
+        assertThat(merged.getEntry()).hasSize(2);
+        assertThat(merged.getEntry().stream()
+                .map(e -> e.getResource().getIdElement().getIdPart()))
+            .containsExactly("cond-1", "cond-2");
+    }
+
+    @Test
     @DisplayName("no next link, or one without a _page, means the loop stops")
     void missingOrMalformedCursorStopsTheLoop() {
         assertThat(PatientEverythingService.nextCursorOf(new Bundle())).isNull();

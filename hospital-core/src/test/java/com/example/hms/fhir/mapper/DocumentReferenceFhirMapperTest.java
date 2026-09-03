@@ -58,12 +58,17 @@ class DocumentReferenceFhirMapperTest {
         assertThat(attachment.getContentType()).isEqualTo("application/pdf");
         assertThat(attachment.getTitle()).isEqualTo("cbc-2026.pdf");
         assertThat(attachment.getSize()).isEqualTo(48_211);
-        assertThat(attachment.getUrl()).isEqualTo("https://api.e-keneya.com/uploads/doc-123.pdf");
-        // The two things that must never leak: the server-side path, and a
-        // SHA-256 published in attachment.hash (R4 defines hash as SHA-1).
+        // Metadata ONLY: the stored fileUrl is dead legacy (/uploads served
+        // permitAll once) and the only live download route is the patient's
+        // own /me surface — a staff/FHIR link would 404 or resurrect an
+        // unauthenticated PHI path. No url, no server path, no SHA-256 in
+        // attachment.hash (R4 defines hash as SHA-1).
+        assertThat(attachment.getUrl()).isNull();
         String serialized = ca.uhn.fhir.context.FhirContext.forR4Cached()
             .newJsonParser().encodeResourceToString(doc);
-        assertThat(serialized).doesNotContain("secret-server-path");
+        assertThat(serialized)
+            .doesNotContain("secret-server-path")
+            .doesNotContain("uploads/doc-123.pdf");
         assertThat(attachment.getHash()).isNull();
     }
 
@@ -105,6 +110,9 @@ class DocumentReferenceFhirMapperTest {
 
         assertThat(doc.getIdElement().getIdPart()).isEqualTo("discharge-" + src.getId());
         assertThat(doc.getType().getCodingFirstRep().getCode()).isEqualTo("18842-5");
+        assertThat(doc.getDocStatus())
+            .as("an un-finalized summary must read PRELIMINARY — it can still change")
+            .isEqualTo(DocumentReference.ReferredDocumentStatus.PRELIMINARY);
         assertThat(doc.getSubject().getReference()).isEqualTo("Patient/" + patientId);
         var attachment = doc.getContentFirstRep().getAttachment();
         assertThat(attachment.getContentType()).isEqualTo("text/plain");
@@ -114,5 +122,18 @@ class DocumentReferenceFhirMapperTest {
             .contains("Disposition:", "HOME")
             .contains("Follow-up:", "Return in 7 days for review.")
             .doesNotContain("Diet:");
+    }
+
+    @Test
+    @DisplayName("a finalized discharge summary reads docStatus FINAL")
+    void finalizedDischargeSummaryReadsFinal() {
+        DischargeSummary src = DischargeSummary.builder()
+            .dischargeDate(LocalDate.of(2026, 9, 1))
+            .isFinalized(true)
+            .build();
+        src.setId(UUID.randomUUID());
+
+        assertThat(mapper.toFhir(src).getDocStatus())
+            .isEqualTo(DocumentReference.ReferredDocumentStatus.FINAL);
     }
 }
