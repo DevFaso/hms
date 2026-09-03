@@ -79,7 +79,7 @@ class UserControllerTest {
         UserResponseDTO response = new UserResponseDTO();
         response.setId(UUID.randomUUID());
         when(userService.createUserWithRolesAndHospital(any())).thenAnswer(inv -> {
-            com.example.hms.utility.ActivationDeliveryTracker.record(
+            com.example.hms.utility.ActivationDeliveryTracker.report(
                 com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
                     .channel("EMAIL").purpose("ACTIVATION").outcome("NOT_CONFIGURED")
                     .target("s***@example.com").build());

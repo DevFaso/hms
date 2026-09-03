@@ -396,7 +396,7 @@ public class UserServiceImpl implements UserService {
                     user.getUsername(), request.getPassword(),
                     roleName, hospitalName);
                 log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
-                com.example.hms.utility.ActivationDeliveryTracker.record(
+                com.example.hms.utility.ActivationDeliveryTracker.report(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
                         .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
                         .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)
@@ -408,7 +408,7 @@ public class UserServiceImpl implements UserService {
                 // Fixed detail: exception messages can embed the raw address
                 // (EmailServiceImpl.validateAddresses does) and this DTO
                 // leaves the server; the transport error stays in the log.
-                com.example.hms.utility.ActivationDeliveryTracker.record(
+                com.example.hms.utility.ActivationDeliveryTracker.report(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
                         .channel(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.CHANNEL_EMAIL)
                         .purpose(com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME)

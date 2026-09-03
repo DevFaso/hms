@@ -118,7 +118,7 @@ class UserRoleHospitalAssignmentControllerTest {
         // the admin can see a dead transport at the moment of the resend.
         java.util.UUID assignmentId = java.util.UUID.randomUUID();
         org.mockito.Mockito.doAnswer(inv -> {
-            com.example.hms.utility.ActivationDeliveryTracker.record(
+            com.example.hms.utility.ActivationDeliveryTracker.report(
                 com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
                     .channel("SMS").purpose("ACTIVATION").outcome("MOCKED")
                     .target("+226*****56").build());

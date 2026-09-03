@@ -1505,18 +1505,25 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // abort the whole method before the one SMS that matters was even
             // attempted — and before any SMS outcome could be recorded.
             notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
-            try {
-                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode);
-            } catch (RuntimeException e) {
-                log.warn("⚠️ Registrar FYI SMS failed for assignment '{}': {}", assignment.getId(), e.getMessage());
-            }
-            try {
-                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode);
-            } catch (RuntimeException e) {
-                log.warn("⚠️ Hospital FYI SMS failed for assignment '{}': {}", assignment.getId(), e.getMessage());
-            }
+            sendFyiSmsQuietly(assignment.getId(), "Registrar", () ->
+                notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode));
+            sendFyiSmsQuietly(assignment.getId(), "Hospital", () ->
+                notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode));
         } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * FYI messages are couriers of convenience: a failure is logged, never
+     * propagated, so it can neither abort the assignee's activation SMS nor
+     * pollute the delivery report.
+     */
+    private void sendFyiSmsQuietly(UUID assignmentId, String audience, Runnable send) {
+        try {
+            send.run();
+        } catch (RuntimeException e) {
+            log.warn("⚠️ {} FYI SMS failed for assignment '{}': {}", audience, assignmentId, e.getMessage());
         }
     }
 
@@ -1746,9 +1753,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DETAIL_MAIL_NOT_CONFIGURED =
         "mail transport not configured on this deployment";
 
-    /** Shorthand for {@link ActivationDeliveryTracker#record} — no-op unless a controller armed collection. */
+    /** Shorthand for {@link ActivationDeliveryTracker#report} — no-op unless a controller armed collection. */
     private void recordDelivery(String channel, String purpose, String outcome, String target, String detail) {
-        ActivationDeliveryTracker.record(NotificationDeliveryStatusDTO.builder()
+        ActivationDeliveryTracker.report(NotificationDeliveryStatusDTO.builder()
             .channel(channel)
             .purpose(purpose)
             .outcome(outcome)

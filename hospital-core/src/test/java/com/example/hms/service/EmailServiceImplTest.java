@@ -18,6 +18,8 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.withSettings;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -91,8 +93,8 @@ class EmailServiceImplTest {
         void interfaceDefaultsTrue() {
             // The contract for implementations that never report transport
             // state: assume real, never NOT_CONFIGURED.
-            EmailService defaults = org.mockito.Mockito.mock(EmailService.class,
-                org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Answers.CALLS_REAL_METHODS));
+            EmailService defaults = mock(EmailService.class,
+                withSettings().defaultAnswer(org.mockito.Answers.CALLS_REAL_METHODS));
             org.assertj.core.api.Assertions.assertThat(defaults.deliversRealEmail()).isTrue();
         }
     }

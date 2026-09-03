@@ -30,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -275,7 +277,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assignee.setPhoneNumber("+22670123456");
         when(assignmentRepository.findById(assignment.getId()))
             .thenReturn(Optional.of(assignment));
-        org.mockito.Mockito.doThrow(new RuntimeException("SMTP auth failed"))
+        doThrow(new RuntimeException("SMTP auth failed"))
             .when(emailService).sendRoleAssignmentConfirmationEmail(
                 any(), any(), any(), any(), any(), any(), any(), any(), any());
 
@@ -307,7 +309,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findById(assignment.getId()))
             .thenReturn(Optional.of(assignment));
         when(emailService.deliversRealEmail()).thenReturn(true);
-        org.mockito.Mockito.doThrow(new RuntimeException("mailbox unavailable"))
+        doThrow(new RuntimeException("mailbox unavailable"))
             .when(emailService).sendRoleAssignmentConfirmationEmail(
                 any(), any(), any(), any(), any(), any(), any(), any(), any());
 
@@ -344,7 +346,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         // One doAnswer, not doThrow(eq(...)): under STRICT_STUBS a call with
         // non-matching args to a stubbed method throws PotentialStubbingProblem,
         // which the production catch would record as a FAILED assignee send.
-        org.mockito.Mockito.doAnswer(inv -> {
+        doAnswer(inv -> {
             if ("+22699999999".equals(inv.getArgument(0))) {
                 throw new RuntimeException("gateway down");
             }

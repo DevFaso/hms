@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * The tracker is the only channel that carries delivery outcomes across the
  * AFTER_COMMIT boundary back to the registrar's response, so its arm/disarm
- * contract is load-bearing: recording while unarmed must be a no-op (bulk
+ * contract is load-bearing: reporting while unarmed must be a no-op (bulk
  * flows on pooled threads), and close() must always disarm (no bleed into
  * the next request on the same thread).
  */
@@ -22,19 +22,19 @@ class ActivationDeliveryTrackerTest {
 
     @Test
     void recordsOnlyWhileArmedAndCloseDisarms() {
-        ActivationDeliveryTracker.record(status("EMAIL"));
+        ActivationDeliveryTracker.report(status("EMAIL"));
         assertThat(ActivationDeliveryTracker.close())
-            .as("recording while unarmed must collect nothing")
+            .as("reporting while unarmed must collect nothing")
             .isEmpty();
 
         ActivationDeliveryTracker.open();
-        ActivationDeliveryTracker.record(status("EMAIL"));
-        ActivationDeliveryTracker.record(status("SMS"));
+        ActivationDeliveryTracker.report(status("EMAIL"));
+        ActivationDeliveryTracker.report(status("SMS"));
         assertThat(ActivationDeliveryTracker.close()).hasSize(2);
 
-        ActivationDeliveryTracker.record(status("SMS"));
+        ActivationDeliveryTracker.report(status("SMS"));
         assertThat(ActivationDeliveryTracker.close())
-            .as("close() must disarm — a later record on the same thread is dropped")
+            .as("close() must disarm — a later report on the same thread is dropped")
             .isEmpty();
     }
 

@@ -17,7 +17,7 @@ import java.util.List;
  * can cross that boundary without rewriting the whole event chain; a
  * thread-local armed by the controller can.</p>
  *
- * <p>Leak safety: {@link #record} is a no-op unless the request explicitly
+ * <p>Leak safety: {@link #report} is a no-op unless the request explicitly
  * {@link #open()}ed collection, and {@link #close()} always removes the
  * thread-local — so flows that never arm it (bulk import, background jobs)
  * cannot bleed outcomes into a later request served by the same pooled
@@ -36,8 +36,8 @@ public final class ActivationDeliveryTracker {
         COLLECTED.set(new ArrayList<>());
     }
 
-    /** Record one delivery outcome; silently ignored when not armed. */
-    public static void record(NotificationDeliveryStatusDTO status) {
+    /** Report one delivery outcome; silently ignored when not armed. */
+    public static void report(NotificationDeliveryStatusDTO status) {
         List<NotificationDeliveryStatusDTO> list = COLLECTED.get();
         if (list != null && status != null) {
             list.add(status);
