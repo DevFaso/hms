@@ -61,6 +61,46 @@ class UserControllerTest {
     // -------------------------------------------------------------------------
 
     @Test
+    void adminRegister_surfacesActivationDeliveryReportToTheRegistrar() throws Exception {
+        // The send paths record outcomes while the controller has the tracker
+        // armed (the AFTER_COMMIT listener runs on this same thread); the
+        // drained report must ride the 201 body so a dead transport is no
+        // longer a green success. The stub records mid-call exactly like the
+        // real send path does.
+        AdminSignupRequest req = new AdminSignupRequest();
+        req.setUsername("newstaff");
+        req.setEmail("staff@example.com");
+        req.setPassword("Password1!");
+        req.setFirstName("New");
+        req.setLastName("Staff");
+        req.setPhoneNumber("+22670000002");
+        req.setRoleNames(Set.of("ROLE_SUPER_ADMIN"));
+
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        when(userService.createUserWithRolesAndHospital(any())).thenAnswer(inv -> {
+            com.example.hms.utility.ActivationDeliveryTracker.record(
+                com.example.hms.payload.dto.NotificationDeliveryStatusDTO.builder()
+                    .channel("EMAIL").purpose("ACTIVATION").outcome("NOT_CONFIGURED")
+                    .target("s***@example.com").build());
+            return response;
+        });
+
+        mockMvc.perform(post("/users/admin-register")
+                .with(SecurityMockMvcRequestPostProcessors.authentication(
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "tiego", "pw",
+                        AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(req)))
+            .andExpect(status().isCreated())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.activationDelivery[0].outcome").value("NOT_CONFIGURED"))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.activationDelivery[0].channel").value("EMAIL"));
+    }
+
+    @Test
     void adminRegister_superAdmin_withoutHospital_returns201() throws Exception {
         AdminSignupRequest req = new AdminSignupRequest();
         req.setUsername("superadmin");

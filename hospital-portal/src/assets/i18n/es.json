@@ -2017,6 +2017,12 @@
     "PHARMACY_CLAIMS": "Reclamaciones de farmacia",
     "PHARMACY_CLAIMS_DESC": "Reclamaciones de este hospital"
   },
+  "DELIVERY": {
+    "EMAIL_FAILED": "La cuenta se creó, pero el correo de activación no pudo entregarse. Use «Reenviar código» cuando se resuelva el problema.",
+    "EMAIL_NOT_CONFIGURED": "El envío de correo no está configurado en este servidor — el código de activación no se envió por correo.",
+    "SMS_FAILED": "El SMS de activación no pudo entregarse.",
+    "SMS_NOT_CONFIGURED": "El envío de SMS está deshabilitado en este servidor — no se envió ningún SMS de activación."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personal Activo",
     "APPOINTMENTS": "Citas",

@@ -2017,6 +2017,12 @@
     "PHARMACY_CLAIMS": "Pharmacy Claims",
     "PHARMACY_CLAIMS_DESC": "Claims at this hospital"
   },
+  "DELIVERY": {
+    "EMAIL_FAILED": "The account was created, but the activation email could not be delivered. Use “Resend code” once the problem is fixed.",
+    "EMAIL_NOT_CONFIGURED": "Email sending is not configured on this server — the activation code was not emailed.",
+    "SMS_FAILED": "The activation SMS could not be delivered.",
+    "SMS_NOT_CONFIGURED": "SMS sending is disabled on this server — no activation SMS was sent."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Active Staff",
     "APPOINTMENTS": "Appointments",

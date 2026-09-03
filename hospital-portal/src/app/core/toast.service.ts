@@ -32,4 +32,10 @@ export class ToastService {
   info(msg: string): void {
     this.push('info', msg);
   }
+
+  warning(msg: string): void {
+    // Slightly longer than the default: a delivery warning arrives right
+    // after a success toast and must outlive it to be read.
+    this.push('warning', msg, 8000);
+  }
 }

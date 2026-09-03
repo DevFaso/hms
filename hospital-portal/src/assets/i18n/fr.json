@@ -2017,6 +2017,12 @@
     "PHARMACY_CLAIMS": "Demandes de remboursement",
     "PHARMACY_CLAIMS_DESC": "Demandes pour cet hôpital"
   },
+  "DELIVERY": {
+    "EMAIL_FAILED": "Le compte a été créé, mais l'e-mail d'activation n'a pas pu être envoyé. Utilisez « Renvoyer le code » une fois le problème résolu.",
+    "EMAIL_NOT_CONFIGURED": "L'envoi d'e-mails n'est pas configuré sur ce serveur — le code d'activation n'a pas été envoyé par e-mail.",
+    "SMS_FAILED": "Le SMS d'activation n'a pas pu être envoyé.",
+    "SMS_NOT_CONFIGURED": "L'envoi de SMS est désactivé sur ce serveur — aucun SMS d'activation n'a été envoyé."
+  },
   "DEPARTMENTS": {
     "ACTIVE_STAFF": "Personnel Actif",
     "APPOINTMENTS": "Rendez-vous",

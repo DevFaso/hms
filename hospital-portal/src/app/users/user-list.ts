@@ -7,6 +7,7 @@ import { UserService, UserSummary, AdminRegisterRequest } from '../services/user
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { deliveryWarningKeys } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
@@ -393,10 +394,18 @@ export class UserListComponent implements OnInit, OnDestroy {
       : this.userService.adminRegister(payload as AdminRegisterRequest);
 
     op.subscribe({
-      next: () => {
+      next: (saved) => {
         this.toast.success(
           this.translate.instant(existing ? 'USERS.TOAST.UPDATED' : 'USERS.TOAST.CREATED'),
         );
+        // The account exists either way — but a dead mail/SMS transport used
+        // to hide behind this very success toast. Warn the registrar so they
+        // know to use "Resend code" once the transport is fixed.
+        if (!existing) {
+          for (const key of deliveryWarningKeys(saved.activationDelivery)) {
+            this.toast.warning(this.translate.instant(key));
+          }
+        }
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);

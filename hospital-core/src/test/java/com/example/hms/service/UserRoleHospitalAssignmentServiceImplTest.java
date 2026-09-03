@@ -264,6 +264,78 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getTempPlainPassword()).isNull();
     }
 
+    // ---- Delivery report: the registrar must learn when nothing was sent ----
+
+    @Test
+    void sendNotifications_reportsDeadTransportsInsteadOfSilence() {
+        // The dev-outage shape: MAIL_USER unset (SMTP send throws, mock
+        // reports deliversRealEmail=false) and the mock SMS channel. The
+        // report must say NOT_CONFIGURED / MOCKED — before this existed the
+        // API returned a green 200 over a swallowed WARN log.
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.doThrow(new RuntimeException("SMTP auth failed"))
+            .when(emailService).sendRoleAssignmentConfirmationEmail(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            var report = com.example.hms.utility.ActivationDeliveryTracker.close();
+            assertThat(report)
+                .extracting(
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getChannel,
+                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getOutcome)
+                .containsExactlyInAnyOrder(
+                    org.assertj.core.groups.Tuple.tuple("EMAIL", "NOT_CONFIGURED"),
+                    org.assertj.core.groups.Tuple.tuple("SMS", "MOCKED"));
+            assertThat(report)
+                .as("targets are masked, never the raw address/number")
+                .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getTarget)
+                .containsExactlyInAnyOrder("j***@hospital.com", "+226*****56");
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_reportsFailedWhenARealTransportRefused() {
+        // Same throw, but the transport IS configured — the report must say
+        // FAILED (retry material) rather than NOT_CONFIGURED (ops material).
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(emailService.deliversRealEmail()).thenReturn(true);
+        org.mockito.Mockito.doThrow(new RuntimeException("mailbox unavailable"))
+            .when(emailService).sendRoleAssignmentConfirmationEmail(
+                any(), any(), any(), any(), any(), any(), any(), any(), any());
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            assertThat(com.example.hms.utility.ActivationDeliveryTracker.close())
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> assertThat(r.getOutcome()).isEqualTo("FAILED"));
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
+    void sendNotifications_recordsNothingWhenNoControllerArmedTheTracker() {
+        // Bulk import and background flows never arm collection; a pooled
+        // thread must not accumulate outcomes for a later request to drain.
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId());
+
+        assertThat(com.example.hms.utility.ActivationDeliveryTracker.close()).isEmpty();
+    }
+
     // ---- Tenant isolation: GET /assignments listing ----
 
     @Test

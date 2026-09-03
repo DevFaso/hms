@@ -24,6 +24,8 @@ export interface UserSummaryPage {
   number: number;
 }
 
+import { NotificationDeliveryStatus } from '../shared/delivery-warnings';
+
 export interface UserDetail {
   id: string;
   username: string;
@@ -36,6 +38,8 @@ export interface UserDetail {
   roles: string[];
   createdAt: string;
   updatedAt: string;
+  /** Present on admin-register responses: did the activation message go anywhere? */
+  activationDelivery?: NotificationDeliveryStatus[];
 }
 
 export interface AdminRegisterRequest {

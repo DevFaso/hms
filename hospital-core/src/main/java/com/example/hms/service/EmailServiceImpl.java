@@ -21,6 +21,14 @@ public class EmailServiceImpl implements EmailService {
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
+    /**
+     * Empty on deployments where MAIL_USER was never set — the SMTP host
+     * requires auth, so every send is doomed before it starts. Used only to
+     * label delivery-report outcomes; sends are still attempted regardless.
+     */
+    @Value("${spring.mail.username:}")
+    private String configuredMailUsername;
+
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
     private static final String GENERIC_GREETING = "there";
     /** Opening wrapper for the body column of every templated email. */
@@ -99,6 +107,11 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private final JavaMailSender mailSender;
+
+    @Override
+    public boolean deliversRealEmail() {
+        return configuredMailUsername != null && !configuredMailUsername.isBlank();
+    }
 
     @Override
     public void sendAppointmentConfirmationEmail(String to, String patientName, String hospitalName, String staffName, String appointmentDate, String appointmentTime, String hospitalEmail, String hospitalPhone, String rescheduleLink, String cancelLink) {
